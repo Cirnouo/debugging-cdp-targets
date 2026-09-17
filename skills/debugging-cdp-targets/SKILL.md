@@ -32,7 +32,9 @@ emits one JSON object unless `invoke` returns the selected tool format.
 4. Add `--enable-extensions` only for Chrome extension installation, listing,
    reload, removal, action triggering, or extension service-worker inspection.
    The runner must pass its browser, CLI, category, and command capability
-   gates. Never request any PWA category; PWA mode is unsupported.
+   gates. Pass this as a runner option alongside `--target-adapter chrome`;
+   never wrap it in `--launch-argument`. Never request any PWA category; PWA
+   mode is unsupported.
 5. Start the verified session:
 
 ```powershell
