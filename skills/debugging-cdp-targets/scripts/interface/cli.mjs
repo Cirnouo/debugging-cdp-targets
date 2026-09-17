@@ -37,6 +37,18 @@ export function parseCli(argv) {
 
     const options = {};
     const repeated = { launchArguments: [], workspaces: [] };
+    const allowedOptions = action === 'start'
+        ? new Set([
+            '--executable-path',
+            '--target-adapter',
+            '--base-port',
+            '--launch-argument',
+            '--workspace',
+            '--enable-extensions',
+            '--startup-timeout-seconds',
+            '--package-spec',
+        ])
+        : new Set(['--disposition']);
     const takeValue = (index, inline) => {
         if (inline !== undefined) return { value: inline, next: index };
         if (index + 1 >= argv.length) fail('ARGUMENT_VALUE_REQUIRED', `A value is required for ${argv[index]}.`);
@@ -48,6 +60,7 @@ export function parseCli(argv) {
         const name = separator >= 0 ? token.slice(0, separator) : token;
         const inline = separator >= 0 ? token.slice(separator + 1) : undefined;
         if (/^--category-?pwa$/i.test(name)) fail('PWA_CATEGORY_UNSUPPORTED', 'The PWA category is unsupported with a verified browserUrl session.');
+        if (!allowedOptions.has(name)) fail('ARGUMENT_INVALID', `Argument '${name}' is not valid for ${action}.`);
         if (name === '--enable-extensions') {
             if (inline !== undefined) fail('ARGUMENT_INVALID', '--enable-extensions does not take a value.');
             options.enableExtensions = true;

@@ -9,7 +9,7 @@ import { inspectManagedTarget } from '../skills/debugging-cdp-targets/scripts/ap
 import { fileURLToPath } from 'node:url';
 
 import { SessionError } from '../skills/debugging-cdp-targets/scripts/shared/errors.mjs';
-import { buildCliRuntimePaths, getSkillRoot, getDefaultStatePath, withSessionLock } from '../skills/debugging-cdp-targets/scripts/adapters/local-data.mjs';
+import { buildCliRuntimePaths, getSkillRoot, getDefaultLockEndpoint, getDefaultStatePath, withSessionLock } from '../skills/debugging-cdp-targets/scripts/adapters/local-data.mjs';
 import { buildDaemonArguments, buildScopedCliArguments, buildToolCliArguments, getDaemonSessionId, parseDaemonStatus, parseToolInvocation, resolveExtensionMode, resolveStopDaemonAction, validateDaemonStatus } from '../skills/debugging-cdp-targets/scripts/domains/devtools-bridge/contracts.mjs';
 import { buildNpxEnvironment, getNpxPackageRoot, selectNpxLaunch } from '../skills/debugging-cdp-targets/scripts/adapters/official-cli.mjs';
 import { buildTargetArguments, findLoopbackPort, isVerifiedPortRace, runPortTransaction, validateCdpContract, validateRootSnapshot } from '../skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs';
@@ -104,6 +104,20 @@ test('new final entry runs from any working directory', () => {
 
 test('Invoke rejects options placed before its tool delimiter', () => {
     assert.throws(() => parseCli(['invoke', '--target-kind', 'Chrome', '--', 'list_pages']), { code: 'ARGUMENT_INVALID' });
+});
+
+test('lifecycle actions reject options owned by another action', () => {
+    assert.throws(
+        () => parseCli(['start', '--disposition', 'Close']),
+        (error) => error.code === 'ARGUMENT_INVALID',
+    );
+    for (const arguments_ of [
+        ['stop', '--target-adapter', 'chrome', '--disposition', 'Keep'],
+        ['stop', '--enable-extensions', '--disposition', 'Keep'],
+        ['stop', '--base-port', '9333', '--disposition', 'Keep'],
+    ]) {
+        assert.throws(() => parseCli(arguments_), (error) => error.code === 'ARGUMENT_INVALID');
+    }
 });
 
 test('target inspection requires explicit root absence and a complete listener snapshot', async () => {
@@ -934,6 +948,24 @@ test('resume compensates a final state-write failure by stopping the newly start
     assert.equal(JSON.parse(await readFile(statePath, 'utf8')).status, 'detached');
 });
 
+test('resume preserves the active daemon identity when validation and safe stop both fail', async () => {
+    const statePath = await temporaryStatePath();
+    await writeFile(statePath, JSON.stringify(literalState({ status: 'detached', daemonProcessId: 0 })), 'utf8');
+    await assert.rejects(
+        resumeManagedSession({
+            statePath,
+            validateTarget: async () => true,
+            startDaemon: async () => 8765,
+            validateDaemon: async () => false,
+            stopDaemon: async () => { throw new Error('identity mismatch'); },
+        }),
+        (error) => error.code === 'DAEMON_IDENTITY_MISMATCH',
+    );
+    const recovery = JSON.parse(await readFile(statePath, 'utf8'));
+    assert.equal(recovery.status, 'active');
+    assert.equal(recovery.daemonProcessId, 8765);
+});
+
 test('Keep state-write failure leaves an externally recoverable active record after daemon stop', async () => {
     const statePath = await temporaryStatePath();
     await writeFile(statePath, JSON.stringify(literalState()), 'utf8');
@@ -1028,6 +1060,36 @@ test('Start rollback preserves recovery state and leaves the target open when da
     assert.equal(closeCalls, 0);
     assert.equal(removeCalls, 0);
     assert.equal(writes.at(-1).status, 'active');
+});
+
+test('Start rollback retains a discovered daemon PID when its identity is mismatched', async () => {
+    const statePath = await temporaryStatePath();
+    const detached = createSessionRecord(literalState({ status: 'detached', daemonProcessId: 0 }));
+    const mismatchedArguments = buildDaemonArguments(detached).arguments.map((value) => (
+        value.startsWith('--browserUrl=') ? '--browserUrl=http://127.0.0.1:65534' : value
+    ));
+    let stopCalls = 0;
+    const writes = [];
+    const result = await rollbackManagedStart({
+        statePath,
+        detached,
+        getDaemonStatus: async () => ({
+            running: true,
+            processId: 7654,
+            version: detached.resolvedPackageVersion,
+            arguments: mismatchedArguments,
+        }),
+        stopDaemon: async () => { stopCalls += 1; },
+        closeTarget: async () => assert.fail('an unverified daemon must keep the target open'),
+        writeState: async (_path, value) => { writes.push(value); },
+        processExists: true,
+    });
+    assert.equal(stopCalls, 0);
+    assert.equal(result.daemonCleanupConfirmed, false);
+    assert.equal(result.recoveryState.status, 'active');
+    assert.equal(result.recoveryState.daemonProcessId, 7654);
+    assert.equal(writes.at(-1).status, 'active');
+    assert.equal(writes.at(-1).daemonProcessId, 7654);
 });
 
 test('Start rollback closes the target and removes state only after daemon absence is confirmed', async () => {
@@ -1207,7 +1269,7 @@ test('skill root is derived from the module URL, not cwd or a Codex path', () =>
 });
 
 test('per-user named-pipe lock serializes mutations and is released by the operating system', async () => {
-    const lockEndpoint = `\\\\.\\pipe\\debugging-chromium-apps-test-${process.pid}-${Date.now()}`;
+    const lockEndpoint = `\\\\.\\pipe\\debugging-cdp-targets-test-${process.pid}-${Date.now()}`;
     let releaseFirst;
     let enteredFirst;
     const entered = new Promise((resolve) => { enteredFirst = resolve; });
@@ -1227,4 +1289,13 @@ test('per-user named-pipe lock serializes mutations and is released by the opera
     releaseFirst();
     assert.equal(await first, 'first');
     assert.equal(await withSessionLock({ lockEndpoint }, async () => 'reacquired'), 'reacquired');
+});
+
+test('default lock endpoint uses the new per-user namespace and stable identity inputs', () => {
+    const first = getDefaultLockEndpoint({ username: 'Alice', localDataRoot: 'C:\\Users\\Alice\\AppData\\Local\\debugging-cdp-targets' });
+    const same = getDefaultLockEndpoint({ username: 'Alice', localDataRoot: 'C:\\Users\\Alice\\AppData\\Local\\debugging-cdp-targets' });
+    const otherUser = getDefaultLockEndpoint({ username: 'Bob', localDataRoot: 'C:\\Users\\Bob\\AppData\\Local\\debugging-cdp-targets' });
+    assert.match(first, /^\\\\\.\\pipe\\debugging-cdp-targets-[0-9a-f]{24}$/);
+    assert.equal(first, same);
+    assert.notEqual(first, otherUser);
 });

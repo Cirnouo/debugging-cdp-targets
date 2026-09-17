@@ -4,7 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawn, spawnSync } from 'node:child_process';
 import { SessionError, fail } from '../shared/errors.mjs';
-import { isIntegerInRange, closeServer } from '../shared/values.mjs';
+import { isIntegerInRange } from '../shared/values.mjs';
+import { closeServer } from './runtime.mjs';
 import { getSkillRoot, assertFile } from './local-data.mjs';
 
 export function processExists(processId) {

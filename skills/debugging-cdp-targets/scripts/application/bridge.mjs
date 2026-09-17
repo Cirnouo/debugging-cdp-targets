@@ -1,5 +1,5 @@
 import { fail } from '../shared/errors.mjs';
-import { sleep } from '../shared/values.mjs';
+import { sleep } from '../adapters/runtime.mjs';
 import { parseSemver, validatePackageSpec } from '../shared/semver.mjs';
 import { createSessionRecord } from '../domains/managed-session/record.mjs';
 import { getDaemonSessionId, buildDaemonArguments, validateDaemonStatus } from '../domains/devtools-bridge/contracts.mjs';

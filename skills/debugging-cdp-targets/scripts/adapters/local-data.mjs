@@ -7,7 +7,7 @@ import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/pro
 import { fileURLToPath } from 'node:url';
 import { SessionError, fail } from '../shared/errors.mjs';
 import { createSessionRecord } from '../domains/managed-session/record.mjs';
-import { closeServer } from '../shared/values.mjs';
+import { closeServer } from './runtime.mjs';
 
 export function getSkillRoot() {
     return path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
@@ -38,9 +38,15 @@ export function buildCliRuntimePaths({ localAppData = process.env.LOCALAPPDATA, 
     };
 }
 
-export function getDefaultLockEndpoint() {
+export function getDefaultLockEndpoint({
+    username = os.userInfo().username,
+    localDataRoot = getLocalDataRoot(),
+} = {}) {
+    if (typeof username !== 'string' || username.length === 0 || typeof localDataRoot !== 'string' || localDataRoot.length === 0) {
+        fail('SESSION_LOCK_INVALID', 'The lock identity requires a Windows username and local data root.');
+    }
     const identity = createHash('sha256')
-        .update(`${os.userInfo().username}\0${getLocalDataRoot()}`)
+        .update(`${username}\0${localDataRoot}`)
         .digest('hex')
         .slice(0, 24);
     return `\\\\.\\pipe\\debugging-cdp-targets-${identity}`;
@@ -50,6 +56,11 @@ export function getChromeProfilePath() {
     const userProfile = process.env.USERPROFILE;
     if (!userProfile) fail('USERPROFILE_UNAVAILABLE', 'USERPROFILE is required to locate the dedicated Chrome profile.');
     return path.join(userProfile, '.cache', 'chrome-devtools-mcp', 'chrome-profile');
+}
+
+export async function ensureDirectory(directoryPath) {
+    await mkdir(directoryPath, { recursive: true });
+    return directoryPath;
 }
 
 export async function readSessionRecord(statePath = getDefaultStatePath()) {

@@ -1,11 +1,10 @@
 import path from 'node:path';
-import { mkdir } from 'node:fs/promises';
 import { fail } from '../shared/errors.mjs';
 import { validateNewRootSnapshot, runPortTransaction, buildTargetArguments, isLoopbackAddress, isVerifiedPortRace, validateCdpContract } from '../domains/cdp-target/policy.mjs';
 import { createSessionRecord } from '../domains/managed-session/record.mjs';
 import { resolveStopTargetAction, classifyInspectedSession } from '../domains/managed-session/lifecycle.mjs';
 import { resolveExtensionMode, resolveStopDaemonAction } from '../domains/devtools-bridge/contracts.mjs';
-import { getDefaultStatePath, getChromeProfilePath, readSessionRecord, writeSessionRecord, removeSessionRecord, withSessionLock } from '../adapters/local-data.mjs';
+import { ensureDirectory, getDefaultStatePath, getChromeProfilePath, readSessionRecord, writeSessionRecord, removeSessionRecord, withSessionLock } from '../adapters/local-data.mjs';
 import { processExists, probeLoopbackPort, getWindowsSnapshot, closeTargetGracefully, spawnTarget } from '../adapters/windows-target.mjs';
 import { runNpx, preparePinnedCli, runOfficialCli, getOfficialDaemonStatus, invokeOfficialTool } from '../adapters/official-cli.mjs';
 import { reconcileMissingTarget, invokeGuardedTool, stopManagedSession, resumeManagedSession, rollbackManagedStart } from './session-lifecycle.mjs';
@@ -52,7 +51,7 @@ export async function startManagedSession(options, statePath = getDefaultStatePa
     });
     await preparePinnedCli(version.version);
     const chromeProfilePath = getChromeProfilePath();
-    if (options.targetAdapter === 'chrome') await mkdir(chromeProfilePath, { recursive: true });
+    if (options.targetAdapter === 'chrome') await ensureDirectory(chromeProfilePath);
     const transaction = await runPortTransaction({
         probe: probeLoopbackPort,
         basePort: options.basePort,

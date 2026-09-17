@@ -1,11 +1,11 @@
 import path from 'node:path';
-import process from 'node:process';
 import { fail } from '../shared/errors.mjs';
-import { isIntegerInRange, sleep } from '../shared/values.mjs';
+import { isIntegerInRange } from '../shared/values.mjs';
 import { validateRootSnapshot, validateCdpContract } from '../domains/cdp-target/policy.mjs';
 import { assertFile, assertDirectory } from '../adapters/local-data.mjs';
 import { processExists, getWindowsSnapshot, getCdpVersion } from '../adapters/windows-target.mjs';
 import { getNpxLaunch } from '../adapters/official-cli.mjs';
+import { getRuntimePlatform, sleep } from '../adapters/runtime.mjs';
 import { POLL_INTERVAL_MILLISECONDS } from '../shared/constants.mjs';
 
 export async function waitForCdp(port, rootProcessId, timeoutSeconds) {
@@ -71,7 +71,7 @@ export async function validateManagedTarget(state) {
 }
 
 export async function assertStartEnvironment(options) {
-    if (process.platform !== 'win32') fail('WINDOWS_REQUIRED', 'This Skill supports Windows only.');
+    if (getRuntimePlatform() !== 'win32') fail('WINDOWS_REQUIRED', 'This Skill supports Windows only.');
     if (!options.executablePath || !path.isAbsolute(options.executablePath)) fail('EXECUTABLE_INVALID', 'ExecutablePath must be an existing absolute file path.');
     await assertFile(options.executablePath, 'EXECUTABLE_INVALID', 'ExecutablePath must be an existing absolute file path.');
     if (!['chrome', 'generic-cdp'].includes(options.targetAdapter)) fail('TARGET_ADAPTER_INVALID', 'Target adapter must be chrome or generic-cdp.');

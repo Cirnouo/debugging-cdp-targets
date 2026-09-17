@@ -122,9 +122,28 @@ export async function resumeManagedSession({
     const daemonProcessId = Number(started?.processId ?? started?.ProcessId ?? started);
     const active = createSessionRecord({ ...state, status: 'active', daemonProcessId });
     if (!await validateDaemon(active)) {
-        try { await stopDaemon(active); } catch { /* Preserve the validation failure. */ }
+        let stopError;
+        try {
+            await stopDaemon(active);
+        } catch (error) {
+            stopError = error;
+        }
+        if (stopError) {
+            let stateWriteError;
+            try {
+                await writeState(statePath, active);
+            } catch (error) {
+                stateWriteError = error;
+            }
+            fail('DAEMON_IDENTITY_MISMATCH', 'The restarted daemon failed identity validation and could not be confirmed stopped. Its active recovery identity was retained when possible.', {
+                daemonProcessId,
+                stopCause: stopError.message,
+                recoveryStatePersisted: !stateWriteError,
+                ...(stateWriteError ? { stateCause: stateWriteError.message } : {}),
+            });
+        }
         await writeState(statePath, createSessionRecord({ ...state, status: 'detached', daemonProcessId: 0 }));
-        fail('DAEMON_IDENTITY_MISMATCH', 'The restarted daemon failed identity validation.');
+        fail('DAEMON_IDENTITY_MISMATCH', 'The restarted daemon failed identity validation and was safely stopped.');
     }
     try {
         await writeState(statePath, active);
@@ -164,11 +183,11 @@ export async function rollbackManagedStart({
             daemonCleanupConfirmed = true;
         } else {
             const candidate = createSessionRecord({ ...detached, status: 'active', daemonProcessId: status.processId });
+            recoveryState = candidate;
             const identity = validateDaemonStatus({ state: candidate, status, processExists: processIsPresent });
             if (!identity.valid) {
                 throw new SessionError('DAEMON_IDENTITY_MISMATCH', `The startup daemon cannot be rolled back safely (${identity.reason}).`);
             }
-            recoveryState = candidate;
             await stopDaemon(candidate);
             const after = await getDaemonStatus(detached);
             daemonCleanupConfirmed = !after.running;
