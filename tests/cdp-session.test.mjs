@@ -8,6 +8,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
     buildCliRuntimePaths,
+    getChromeProfilePath,
     getDefaultLockEndpoint,
     getDefaultStatePath,
     getSkillRoot,
@@ -483,6 +484,18 @@ test('generic-cdp launch arguments do not gain a user-data-dir', () => {
     assert.equal(
         args.some((argument) => argument.startsWith('--user-data-dir=')),
         false,
+    );
+});
+
+test('generic-cdp profile resolution does not depend on USERPROFILE', () => {
+    assert.equal(getChromeProfilePath('generic-cdp', ''), undefined);
+    assert.equal(
+        getChromeProfilePath('chrome', 'C:\\Users\\tester'),
+        'C:\\Users\\tester\\.cache\\chrome-devtools-mcp\\chrome-profile',
+    );
+    assert.throws(
+        () => getChromeProfilePath('chrome', ''),
+        (error) => error.code === 'USERPROFILE_UNAVAILABLE',
     );
 });
 

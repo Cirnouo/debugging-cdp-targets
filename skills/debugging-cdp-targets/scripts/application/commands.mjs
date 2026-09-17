@@ -102,7 +102,7 @@ export async function startManagedSession(options, statePath = getDefaultStatePa
         runNpx,
     });
     await preparePinnedCli(version.version);
-    const chromeProfilePath = getChromeProfilePath();
+    const chromeProfilePath = getChromeProfilePath(options.targetAdapter);
     if (options.targetAdapter === 'chrome') await ensureDirectory(chromeProfilePath);
     const transaction = await runPortTransaction({
         probe: probeLoopbackPort,

@@ -58,11 +58,11 @@ export function getDefaultLockEndpoint({ username = os.userInfo().username, loca
     return `\\\\.\\pipe\\debugging-cdp-targets-${identity}`;
 }
 
-export function getChromeProfilePath() {
-    const userProfile = process.env.USERPROFILE;
+export function getChromeProfilePath(targetAdapter = 'chrome', userProfile = process.env.USERPROFILE) {
+    if (targetAdapter !== 'chrome') return undefined;
     if (!userProfile)
         fail('USERPROFILE_UNAVAILABLE', 'USERPROFILE is required to locate the dedicated Chrome profile.');
-    return path.join(userProfile, '.cache', 'chrome-devtools-mcp', 'chrome-profile');
+    return path.win32.join(userProfile, '.cache', 'chrome-devtools-mcp', 'chrome-profile');
 }
 
 export async function ensureDirectory(directoryPath) {
