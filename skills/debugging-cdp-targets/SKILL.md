@@ -1,6 +1,6 @@
 ---
 name: debugging-cdp-targets
-description: Use when inspecting or debugging a local Chrome, Chromium/Electron application, Obsidian renderer, or compatible CDP target on Windows, especially for extension workers or a resumable inspection session.
+description: Use when inspecting or debugging a local application's CDP renderer on Windows—Google Chrome itself or a compatible Chromium/Electron application such as Obsidian—especially for extension workers or a resumable inspection session.
 license: MIT
 metadata:
     version: "0.1.0"
