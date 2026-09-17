@@ -143,6 +143,13 @@ test('rejects every import syntax that can cross domain or adapter boundaries', 
         ['domain template dynamic import', 'const fs = await import(`node:fs`);\n', /domain.*node:fs/i],
         ['domain namespace re-export', 'export * as io from "node:fs/promises";\n', /domain.*node:fs\/promises/i],
         ['domain compact import', 'import{readFile}from"node:fs";\n', /domain.*node:fs/i],
+        [
+            'domain hex-escaped import',
+            'import { readFile } from "node:\\x66s/promises";\n',
+            /module specifier.*escape/i,
+        ],
+        ['domain unicode-escaped re-export', 'export * from "node:\\u0066s";\n', /module specifier.*escape/i],
+        ['domain escaped dynamic import', 'const fs = await import("node:\\u0066s");\n', /module specifier.*escape/i],
         ['domain compact namespace re-export', 'export*as io from"node:fs/promises";\n', /domain.*node:fs\/promises/i],
         [
             'domain computed dynamic import',
@@ -228,6 +235,29 @@ test('rejects process termination APIs and concrete non-loopback addresses', () 
         snapshot.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = source;
         assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
     }
+});
+
+test('keeps JavaScript regex literals separate from comments during safety analysis', () => {
+    const dangerous = validSnapshot();
+    dangerous.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = [
+        'export const slash = /\\//; process.kill(42, "SIGKILL");',
+        '',
+    ].join('\n');
+    assert.match(auditRepositorySnapshot(dangerous).join('\n'), /force-kill|termination/i);
+
+    const divisionThenRegex = validSnapshot();
+    divisionThenRegex.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] =
+        'export const result = left / /\\//.test(text); process.kill(42, "SIGKILL");\n';
+    assert.match(auditRepositorySnapshot(divisionThenRegex).join('\n'), /force-kill|termination/i);
+
+    const documented = validSnapshot();
+    documented.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = [
+        'export const quotes = /["\']/;',
+        '// Never call child.kill() or bind 0.0.0.0.',
+        'export const bind = "127.0.0.1";',
+        '',
+    ].join('\n');
+    assert.deepEqual(auditRepositorySnapshot(documented), []);
 });
 
 test('allows signal-zero probes and safety language in comments or runtime guidance', () => {
@@ -385,6 +415,20 @@ test('enforces payload paths, required licenses, ignored sensitive files, and co
             (snapshot) =>
                 (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
                     '\nSee [the missing file][missing].\n\n[missing]: references/missing.md\n'),
+            /relative reference.*missing/i,
+        ],
+        [
+            'escaping multiline reference-style payload link',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
+                    '\nSee [the package][package].\n\n[package]:\n  ../../package.json\n'),
+            /relative reference.*remain inside.*payload/i,
+        ],
+        [
+            'missing multiline reference-style payload link',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
+                    '\nSee [the missing file][missing].\n\n[missing]:\n  references/missing.md\n'),
             /relative reference.*missing/i,
         ],
     ];

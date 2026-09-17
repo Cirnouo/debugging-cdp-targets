@@ -26,6 +26,20 @@ function recordErrors(message) {
     return validateCommitRecords([{ sha: 'fixture', message, parentCount: 1 }]);
 }
 
+function sanitizedGitEnvironment(environment = process.env, overrides = {}) {
+    return {
+        ...Object.fromEntries(
+            Object.entries(environment).filter(
+                ([key]) =>
+                    !key.toUpperCase().startsWith('GITHUB_') &&
+                    !key.toUpperCase().startsWith('GIT_') &&
+                    !key.toUpperCase().startsWith('NODE_TEST_'),
+            ),
+        ),
+        ...overrides,
+    };
+}
+
 test('builds a pull request audit for title, source branch, and commit range', () => {
     const event = {
         pull_request: {
@@ -122,6 +136,7 @@ test('runs the workflow_dispatch checker from a detached GitHub checkout', async
     const eventPath = path.join(temporaryDirectory, 'event.json');
     await writeFile(eventPath, '{}\n', 'utf8');
     try {
+        const fixtureEnvironment = sanitizedGitEnvironment();
         for (const arguments_ of [
             ['init', '--initial-branch=main'],
             ['config', 'user.name', 'CI Fixture'],
@@ -141,15 +156,11 @@ test('runs the workflow_dispatch checker from a detached GitHub checkout', async
             const gitResult = spawnSync('git', arguments_, {
                 cwd: temporaryDirectory,
                 encoding: 'utf8',
+                env: fixtureEnvironment,
                 windowsHide: true,
             });
             assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
         }
-        const fixtureEnvironment = Object.fromEntries(
-            Object.entries(process.env).filter(
-                ([key]) => !key.toUpperCase().startsWith('GITHUB_') && !key.toUpperCase().startsWith('GIT_'),
-            ),
-        );
         const checkerPath = path.join(root, 'tooling/check-commits.mjs');
         const result = spawnSync(process.execPath, [checkerPath], {
             cwd: temporaryDirectory,
@@ -234,6 +245,7 @@ test('rejects trailing header whitespace when commitlint rejects it', () => {
 test('preserves trailing header whitespace when reading Git history for commitlint', async () => {
     const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-commit-whitespace-'));
     try {
+        const fixtureEnvironment = sanitizedGitEnvironment();
         for (const arguments_ of [
             ['init', '--initial-branch=main'],
             ['config', 'user.name', 'CI Fixture'],
@@ -253,16 +265,12 @@ test('preserves trailing header whitespace when reading Git history for commitli
             const gitResult = spawnSync('git', arguments_, {
                 cwd: temporaryDirectory,
                 encoding: 'utf8',
+                env: fixtureEnvironment,
                 windowsHide: true,
             });
             assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
         }
 
-        const fixtureEnvironment = Object.fromEntries(
-            Object.entries(process.env).filter(
-                ([key]) => !key.toUpperCase().startsWith('GITHUB_') && !key.toUpperCase().startsWith('GIT_'),
-            ),
-        );
         const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.mjs')], {
             cwd: temporaryDirectory,
             encoding: 'utf8',
@@ -277,5 +285,69 @@ test('preserves trailing header whitespace when reading Git history for commitli
         assert.match(result.stderr, /header.*whitespace/i);
     } finally {
         await rm(temporaryDirectory, { force: true, recursive: true });
+    }
+});
+
+test('Git fixtures ignore inherited repository redirection variables', async () => {
+    const sentinelDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-git-sentinel-'));
+    const cleanEnvironment = sanitizedGitEnvironment();
+    try {
+        for (const arguments_ of [
+            ['init', '--initial-branch=main'],
+            ['config', 'user.name', 'Sentinel User'],
+            ['config', 'user.email', 'sentinel@example.invalid'],
+            [
+                '-c',
+                'commit.gpgSign=false',
+                '-c',
+                'core.hooksPath=.git/no-hooks',
+                'commit',
+                '--allow-empty',
+                '--message',
+                'test(tooling): create sentinel repository',
+            ],
+        ]) {
+            const result = spawnSync('git', arguments_, {
+                cwd: sentinelDirectory,
+                encoding: 'utf8',
+                env: cleanEnvironment,
+                windowsHide: true,
+            });
+            assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+        }
+
+        const nested = spawnSync(
+            process.execPath,
+            ['--test', '--test-name-pattern=^runs the workflow_dispatch checker', fileURLToPath(import.meta.url)],
+            {
+                cwd: repositoryRoot,
+                encoding: 'utf8',
+                env: {
+                    ...cleanEnvironment,
+                    GIT_DIR: path.join(sentinelDirectory, '.git'),
+                    GIT_WORK_TREE: sentinelDirectory,
+                },
+                windowsHide: true,
+            },
+        );
+        const sentinelName = spawnSync('git', ['config', 'user.name'], {
+            cwd: sentinelDirectory,
+            encoding: 'utf8',
+            env: cleanEnvironment,
+            windowsHide: true,
+        }).stdout.trim();
+        const sentinelCount = spawnSync('git', ['rev-list', '--count', 'HEAD'], {
+            cwd: sentinelDirectory,
+            encoding: 'utf8',
+            env: cleanEnvironment,
+            windowsHide: true,
+        }).stdout.trim();
+
+        assert.equal(nested.status, 0, `${nested.stdout}\n${nested.stderr}`);
+        assert.match(nested.stdout, /runs the workflow_dispatch checker/);
+        assert.equal(sentinelName, 'Sentinel User');
+        assert.equal(sentinelCount, '1');
+    } finally {
+        await rm(sentinelDirectory, { force: true, recursive: true });
     }
 });

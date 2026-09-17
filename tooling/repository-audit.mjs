@@ -106,9 +106,17 @@ function auditMappingKeys(value, allowedKeys, label, errors) {
     }
 }
 
+function canStartRegularExpression(prefix) {
+    const trimmed = prefix.trimEnd();
+    if (trimmed.length === 0) return true;
+    if ('([{:;,=!?&|+-*%^~<>/'.includes(trimmed.at(-1))) return true;
+    return /\b(?:await|case|delete|do|else|in|instanceof|new|of|return|throw|typeof|void|yield)$/.test(trimmed);
+}
+
 function stripJavaScriptComments(source) {
     let result = '';
     let state = 'code';
+    let regularExpressionClass = false;
     for (let index = 0; index < source.length; index += 1) {
         const character = source[index];
         const next = source[index + 1];
@@ -128,6 +136,20 @@ function stripJavaScriptComments(source) {
                 state = 'code';
             } else {
                 result += character === '\n' ? '\n' : ' ';
+            }
+            continue;
+        }
+        if (state === 'regular-expression') {
+            result += character;
+            if (character === '\\' && next !== undefined) {
+                result += next;
+                index += 1;
+            } else if (character === '[') {
+                regularExpressionClass = true;
+            } else if (character === ']') {
+                regularExpressionClass = false;
+            } else if (character === '/' && !regularExpressionClass) {
+                state = 'code';
             }
             continue;
         }
@@ -155,6 +177,10 @@ function stripJavaScriptComments(source) {
             result += '  ';
             index += 1;
             state = 'block-comment';
+        } else if (character === '/' && canStartRegularExpression(result)) {
+            result += character;
+            regularExpressionClass = false;
+            state = 'regular-expression';
         } else {
             result += character;
             if (character === "'") state = 'single-quote';
@@ -168,22 +194,48 @@ function stripJavaScriptComments(source) {
 function javascriptSyntaxView(source) {
     const uncommented = stripJavaScriptComments(source);
     let result = '';
-    let quote = null;
+    let state = 'code';
+    let regularExpressionClass = false;
     for (let index = 0; index < uncommented.length; index += 1) {
         const character = uncommented[index];
-        if (quote !== null) {
+        const next = uncommented[index + 1];
+        if (state === 'single-quote' || state === 'double-quote' || state === 'template') {
             if (character === '\\' && uncommented[index + 1] !== undefined) {
                 result += '  ';
                 index += 1;
             } else {
                 result += character === '\n' ? '\n' : ' ';
-                if (character === quote) quote = null;
+                if (
+                    (state === 'single-quote' && character === "'") ||
+                    (state === 'double-quote' && character === '"') ||
+                    (state === 'template' && character === '`')
+                ) {
+                    state = 'code';
+                }
+            }
+            continue;
+        }
+        if (state === 'regular-expression') {
+            result += character === '\n' ? '\n' : ' ';
+            if (character === '\\' && next !== undefined) {
+                result += ' ';
+                index += 1;
+            } else if (character === '[') {
+                regularExpressionClass = true;
+            } else if (character === ']') {
+                regularExpressionClass = false;
+            } else if (character === '/' && !regularExpressionClass) {
+                state = 'code';
             }
             continue;
         }
         if (character === "'" || character === '"' || character === '`') {
-            result += ' ';
-            quote = character;
+            result += 'x';
+            state = character === "'" ? 'single-quote' : character === '"' ? 'double-quote' : 'template';
+        } else if (character === '/' && canStartRegularExpression(result)) {
+            result += 'x';
+            regularExpressionClass = false;
+            state = 'regular-expression';
         } else {
             result += character;
         }
@@ -319,6 +371,7 @@ function moduleSpecifiers(source) {
         }
     }
     return {
+        escapedSpecifiers: [...new Set(specifiers.filter((specifier) => specifier.includes('\\')))],
         nonStaticDynamicImports,
         specifiers: [...new Set(specifiers)],
     };
@@ -572,8 +625,11 @@ function auditRuntime(files, errors) {
         }
         const moduleAnalysis = isJavaScriptRuntime(filePath)
             ? moduleSpecifiers(inspectedSource)
-            : { nonStaticDynamicImports: [], specifiers: [] };
+            : { escapedSpecifiers: [], nonStaticDynamicImports: [], specifiers: [] };
         const imports = moduleAnalysis.specifiers;
+        if (moduleAnalysis.escapedSpecifiers.length > 0) {
+            errors.push(`${filePath}: module specifier escape sequences are forbidden; use the decoded literal path.`);
+        }
         const unsupportedDynamicImport = moduleAnalysis.nonStaticDynamicImports.find(
             (argument) => !isApprovedComputedDynamicImport(filePath, argument),
         );
@@ -711,7 +767,7 @@ function auditSkill(files, skillMetadata, openaiMetadata, errors) {
             continue;
         }
         const targets = [...source.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)].map((match) => match[1]);
-        for (const match of source.matchAll(/^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:<([^>\r\n]+)>|(\S+))/gm)) {
+        for (const match of source.matchAll(/^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:\n[ \t]+)?(?:<([^>\r\n]+)>|(\S+))/gm)) {
             targets.push(match[1] ?? match[2]);
         }
         for (const rawTarget of targets) {
