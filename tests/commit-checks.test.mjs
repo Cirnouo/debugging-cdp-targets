@@ -6,7 +6,25 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { buildCommitCheckRequest, validateCommitRecords } from '../tooling/check-commits.mjs';
+import { buildCommitCheckRequest, resolveAuditBranch, validateCommitRecords } from '../tooling/check-commits.mjs';
+
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const commitlintCli = fileURLToPath(new URL('../node_modules/@commitlint/cli/cli.js', import.meta.url));
+
+function commitlintAccepts(message) {
+    const result = spawnSync(process.execPath, [commitlintCli, '--config', 'commitlint.config.mjs'], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        input: message,
+        windowsHide: true,
+    });
+    assert.equal(result.error, undefined);
+    return result.status === 0;
+}
+
+function recordErrors(message) {
+    return validateCommitRecords([{ sha: 'fixture', message, parentCount: 1 }]);
+}
 
 test('builds a pull request audit for title, source branch, and commit range', () => {
     const event = {
@@ -73,12 +91,21 @@ test('builds a local audit over current ancestry', () => {
     });
 });
 
-test('builds a workflow dispatch audit from the checked-out branch', () => {
+test('builds a workflow dispatch audit from its explicit event branch', () => {
+    const currentBranch = resolveAuditBranch({
+        environment: {
+            GITHUB_REF: 'refs/heads/main',
+            GITHUB_REF_NAME: 'main',
+            GITHUB_REF_TYPE: 'branch',
+        },
+        event: {},
+        eventName: 'workflow_dispatch',
+    });
     assert.deepEqual(
         buildCommitCheckRequest({
             eventName: 'workflow_dispatch',
             event: {},
-            currentBranch: 'main',
+            currentBranch,
         }),
         {
             branches: ['main'],
@@ -89,24 +116,69 @@ test('builds a workflow dispatch audit from the checked-out branch', () => {
     );
 });
 
-test('runs the commit checker for a workflow_dispatch event fixture', async () => {
+test('runs the workflow_dispatch checker from a detached GitHub checkout', async () => {
     const root = fileURLToPath(new URL('../', import.meta.url));
     const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-workflow-dispatch-'));
     const eventPath = path.join(temporaryDirectory, 'event.json');
     await writeFile(eventPath, '{}\n', 'utf8');
     try {
-        const result = spawnSync(process.execPath, ['tooling/check-commits.mjs'], {
-            cwd: root,
+        for (const arguments_ of [
+            ['init', '--initial-branch=main'],
+            ['config', 'user.name', 'CI Fixture'],
+            ['config', 'user.email', 'ci-fixture@example.invalid'],
+            [
+                '-c',
+                'commit.gpgSign=false',
+                '-c',
+                'core.hooksPath=.git/no-hooks',
+                'commit',
+                '--allow-empty',
+                '--message',
+                'test(tooling): create dispatch fixture',
+            ],
+            ['checkout', '--detach', 'HEAD'],
+        ]) {
+            const gitResult = spawnSync('git', arguments_, {
+                cwd: temporaryDirectory,
+                encoding: 'utf8',
+                windowsHide: true,
+            });
+            assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
+        }
+        const fixtureEnvironment = Object.fromEntries(
+            Object.entries(process.env).filter(
+                ([key]) => !key.toUpperCase().startsWith('GITHUB_') && !key.toUpperCase().startsWith('GIT_'),
+            ),
+        );
+        const checkerPath = path.join(root, 'tooling/check-commits.mjs');
+        const result = spawnSync(process.execPath, [checkerPath], {
+            cwd: temporaryDirectory,
             encoding: 'utf8',
             env: {
-                ...process.env,
+                ...fixtureEnvironment,
                 GITHUB_EVENT_NAME: 'workflow_dispatch',
                 GITHUB_EVENT_PATH: eventPath,
+                GITHUB_REF: 'refs/heads/main',
+                GITHUB_REF_NAME: 'main',
+                GITHUB_REF_TYPE: 'branch',
             },
             windowsHide: true,
         });
         assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
         assert.match(result.stdout, /audit passed/i);
+
+        const missingRef = spawnSync(process.execPath, [checkerPath], {
+            cwd: temporaryDirectory,
+            encoding: 'utf8',
+            env: {
+                ...fixtureEnvironment,
+                GITHUB_EVENT_NAME: 'workflow_dispatch',
+                GITHUB_EVENT_PATH: eventPath,
+            },
+            windowsHide: true,
+        });
+        assert.equal(missingRef.status, 1, `${missingRef.stdout}\n${missingRef.stderr}`);
+        assert.match(missingRef.stderr, /workflow_dispatch.*explicit branch ref.*detached/i);
     } finally {
         await rm(temporaryDirectory, { force: true, recursive: true });
     }
@@ -122,6 +194,88 @@ test('validates ordinary commit records and skips only topology-proven merges', 
     );
     assert.match(
         validateCommitRecords([{ sha: 'fake', message: "Merge branch 'topic'", parentCount: 1 }]).join('\n'),
-        /fake.*type/i,
+        /fake:[\s\S]*type/i,
     );
+});
+
+test('keeps ordinary footer separation in parity with commitlint', () => {
+    for (const footer of ['Refs: #123', 'Closes #123', 'Reviewed-by: Example <reviewer@example.com>']) {
+        const separated = `feat(tooling): describe validation\n\nbody details\n\n${footer}`;
+        const unseparated = `feat(tooling): describe validation\n\nbody details\n${footer}`;
+
+        assert.equal(commitlintAccepts(separated), true, footer);
+        assert.deepEqual(recordErrors(separated), [], footer);
+        assert.equal(commitlintAccepts(unseparated), false, footer);
+        assert.notDeepEqual(recordErrors(unseparated), [], footer);
+    }
+});
+
+test('accepts URL-only long body lines when commitlint accepts them', () => {
+    const message = `docs(tooling): link validation reference\n\nhttps://example.com/${'a'.repeat(120)}`;
+
+    assert.equal(commitlintAccepts(message), true);
+    assert.deepEqual(recordErrors(message), []);
+});
+
+test('accepts backtick-leading subjects when commitlint accepts them', () => {
+    const message = 'docs(tooling): `API` validation behavior';
+
+    assert.equal(commitlintAccepts(message), true);
+    assert.deepEqual(recordErrors(message), []);
+});
+
+test('rejects trailing header whitespace when commitlint rejects it', () => {
+    const message = 'fix(tooling): reject trailing whitespace   ';
+
+    assert.equal(commitlintAccepts(message), false);
+    assert.notDeepEqual(recordErrors(message), []);
+});
+
+test('preserves trailing header whitespace when reading Git history for commitlint', async () => {
+    const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-commit-whitespace-'));
+    try {
+        for (const arguments_ of [
+            ['init', '--initial-branch=main'],
+            ['config', 'user.name', 'CI Fixture'],
+            ['config', 'user.email', 'ci-fixture@example.invalid'],
+            [
+                '-c',
+                'commit.gpgSign=false',
+                '-c',
+                'core.hooksPath=.git/no-hooks',
+                'commit',
+                '--allow-empty',
+                '--cleanup=verbatim',
+                '--message',
+                'fix(tooling): reject trailing whitespace   ',
+            ],
+        ]) {
+            const gitResult = spawnSync('git', arguments_, {
+                cwd: temporaryDirectory,
+                encoding: 'utf8',
+                windowsHide: true,
+            });
+            assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
+        }
+
+        const fixtureEnvironment = Object.fromEntries(
+            Object.entries(process.env).filter(
+                ([key]) => !key.toUpperCase().startsWith('GITHUB_') && !key.toUpperCase().startsWith('GIT_'),
+            ),
+        );
+        const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.mjs')], {
+            cwd: temporaryDirectory,
+            encoding: 'utf8',
+            env: {
+                ...fixtureEnvironment,
+                GITHUB_EVENT_NAME: '',
+                GITHUB_EVENT_PATH: '',
+            },
+            windowsHide: true,
+        });
+        assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+        assert.match(result.stderr, /header.*whitespace/i);
+    } finally {
+        await rm(temporaryDirectory, { force: true, recursive: true });
+    }
 });

@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+
 export const COMMIT_TYPES = Object.freeze([
     'build',
     'chore',
@@ -39,63 +44,44 @@ export const BRANCH_PREFIXES = Object.freeze([
     'codex',
 ]);
 
-const commitHeaderPattern = /^(?<type>[a-z]+)\((?<scope>[^)]+)\)(?<breaking>!)?: (?<subject>.+)$/;
 const kebabPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const semverPattern =
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/;
+const require = createRequire(import.meta.url);
+const commitlintCli = require('@commitlint/cli');
+const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
+const commitlintConfig = fileURLToPath(new URL('../commitlint.config.mjs', import.meta.url));
 
 export function validateCommitMessage(message, options = {}) {
     if (options.isMerge === true) {
         return [];
     }
 
-    const normalized = message.replace(/\r\n?/g, '\n').trimEnd();
-    const [header = '', ...rest] = normalized.split('\n');
-    const errors = [];
-    const match = commitHeaderPattern.exec(header);
-
-    if (header.length > 100) {
-        errors.push('Commit header must not exceed 100 characters.');
+    const result = spawnSync(
+        process.execPath,
+        [commitlintCli, '--config', commitlintConfig, '--cwd', repositoryRoot, '--color=false'],
+        {
+            encoding: 'utf8',
+            input: message,
+            windowsHide: true,
+        },
+    );
+    if (result.error) {
+        throw result.error;
+    }
+    if (result.status === 0) {
+        return [];
     }
 
-    if (!match) {
-        errors.push('Commit header must use type(lowercase-kebab-scope): nonempty subject.');
-    } else {
-        const { type, scope, subject } = match.groups;
-        if (!COMMIT_TYPES.includes(type)) {
-            errors.push(`Commit type must be one of: ${COMMIT_TYPES.join(', ')}.`);
-        }
-        if (!kebabPattern.test(scope) || !COMMIT_SCOPES.includes(scope)) {
-            errors.push(`Commit scope must be one lowercase kebab scope from: ${COMMIT_SCOPES.join(', ')}.`);
-        }
-        if (subject.trim().length === 0) {
-            errors.push('Commit subject must not be empty.');
-        }
-        if (subject.endsWith('.')) {
-            errors.push('Commit subject must not end with a period.');
-        }
-        if (/^[^A-Za-z]*[A-Z]/.test(subject)) {
-            errors.push('Commit subject must use lower-case sentence style.');
-        }
+    const output = [result.stdout, result.stderr]
+        .filter((value) => typeof value === 'string' && value.trim().length > 0)
+        .join('\n')
+        .trim();
+    if (result.status !== 1) {
+        throw new Error(output || `commitlint exited with status ${result.status}.`);
     }
 
-    if (rest.length > 0 && rest[0] !== '') {
-        errors.push('Commit body or footer must be preceded by a blank line.');
-    }
-
-    for (const line of rest.slice(1)) {
-        if (line.length > 100) {
-            errors.push('Commit body and footer lines must not exceed 100 characters.');
-            break;
-        }
-    }
-
-    const footerIndex = rest.findIndex((line) => /^BREAKING CHANGE:\s*\S/.test(line));
-    if (footerIndex > 0 && rest[footerIndex - 1] !== '') {
-        errors.push('Commit footer must be preceded by a blank line.');
-    }
-
-    return errors;
+    return [output || 'Commit message violates the repository commitlint configuration.'];
 }
 
 export function validateBranchName(branchName) {

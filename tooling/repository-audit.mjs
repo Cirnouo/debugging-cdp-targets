@@ -106,17 +106,231 @@ function auditMappingKeys(value, allowedKeys, label, errors) {
     }
 }
 
+function stripJavaScriptComments(source) {
+    let result = '';
+    let state = 'code';
+    for (let index = 0; index < source.length; index += 1) {
+        const character = source[index];
+        const next = source[index + 1];
+        if (state === 'line-comment') {
+            if (character === '\n') {
+                result += '\n';
+                state = 'code';
+            } else {
+                result += ' ';
+            }
+            continue;
+        }
+        if (state === 'block-comment') {
+            if (character === '*' && next === '/') {
+                result += '  ';
+                index += 1;
+                state = 'code';
+            } else {
+                result += character === '\n' ? '\n' : ' ';
+            }
+            continue;
+        }
+        if (state === 'single-quote' || state === 'double-quote' || state === 'template') {
+            result += character;
+            if (character === '\\' && next !== undefined) {
+                result += next;
+                index += 1;
+                continue;
+            }
+            if (
+                (state === 'single-quote' && character === "'") ||
+                (state === 'double-quote' && character === '"') ||
+                (state === 'template' && character === '`')
+            ) {
+                state = 'code';
+            }
+            continue;
+        }
+        if (character === '/' && next === '/') {
+            result += '  ';
+            index += 1;
+            state = 'line-comment';
+        } else if (character === '/' && next === '*') {
+            result += '  ';
+            index += 1;
+            state = 'block-comment';
+        } else {
+            result += character;
+            if (character === "'") state = 'single-quote';
+            if (character === '"') state = 'double-quote';
+            if (character === '`') state = 'template';
+        }
+    }
+    return result;
+}
+
+function javascriptSyntaxView(source) {
+    const uncommented = stripJavaScriptComments(source);
+    let result = '';
+    let quote = null;
+    for (let index = 0; index < uncommented.length; index += 1) {
+        const character = uncommented[index];
+        if (quote !== null) {
+            if (character === '\\' && uncommented[index + 1] !== undefined) {
+                result += '  ';
+                index += 1;
+            } else {
+                result += character === '\n' ? '\n' : ' ';
+                if (character === quote) quote = null;
+            }
+            continue;
+        }
+        if (character === "'" || character === '"' || character === '`') {
+            result += ' ';
+            quote = character;
+        } else {
+            result += character;
+        }
+    }
+    return result;
+}
+
+function stripPowerShellComments(source) {
+    let result = '';
+    let state = 'code';
+    for (let index = 0; index < source.length; index += 1) {
+        const character = source[index];
+        const next = source[index + 1];
+        if (state === 'line-comment') {
+            if (character === '\n') {
+                result += '\n';
+                state = 'code';
+            } else {
+                result += ' ';
+            }
+            continue;
+        }
+        if (state === 'block-comment') {
+            if (character === '#' && next === '>') {
+                result += '  ';
+                index += 1;
+                state = 'code';
+            } else {
+                result += character === '\n' ? '\n' : ' ';
+            }
+            continue;
+        }
+        if (state === 'single-quote' || state === 'double-quote') {
+            result += character;
+            if (state === 'single-quote' && character === "'" && next === "'") {
+                result += next;
+                index += 1;
+                continue;
+            }
+            if (state === 'double-quote' && character === '`' && next !== undefined) {
+                result += next;
+                index += 1;
+                continue;
+            }
+            if ((state === 'single-quote' && character === "'") || (state === 'double-quote' && character === '"')) {
+                state = 'code';
+            }
+            continue;
+        }
+        if (character === '<' && next === '#') {
+            result += '  ';
+            index += 1;
+            state = 'block-comment';
+        } else if (character === '#') {
+            result += ' ';
+            state = 'line-comment';
+        } else {
+            result += character;
+            if (character === "'") state = 'single-quote';
+            if (character === '"') state = 'double-quote';
+        }
+    }
+    return result;
+}
+
+function isJavaScriptRuntime(filePath) {
+    return ['.cjs', '.js', '.mjs'].includes(path.posix.extname(filePath));
+}
+
+function isExecutableRuntime(filePath) {
+    return ['.cjs', '.js', '.mjs', '.ps1', '.psd1', '.psm1', '.sh'].includes(path.posix.extname(filePath));
+}
+
+function sourceWithoutComments(filePath, source) {
+    if (isJavaScriptRuntime(filePath)) return stripJavaScriptComments(source);
+    if (['.ps1', '.psd1', '.psm1'].includes(path.posix.extname(filePath))) {
+        return stripPowerShellComments(source);
+    }
+    return source;
+}
+
+function dynamicImportArguments(source) {
+    const arguments_ = [];
+    const starts = source.matchAll(/\bimport\s*\(/g);
+    for (const start of starts) {
+        const opening = source.indexOf('(', start.index);
+        let depth = 1;
+        let quote = null;
+        for (let index = opening + 1; index < source.length; index += 1) {
+            const character = source[index];
+            if (quote !== null) {
+                if (character === '\\' && source[index + 1] !== undefined) {
+                    index += 1;
+                } else if (character === quote) {
+                    quote = null;
+                }
+                continue;
+            }
+            if (character === "'" || character === '"' || character === '`') {
+                quote = character;
+            } else if (character === '(') {
+                depth += 1;
+            } else if (character === ')') {
+                depth -= 1;
+                if (depth === 0) {
+                    arguments_.push(source.slice(opening + 1, index).trim());
+                    break;
+                }
+            }
+        }
+    }
+    return arguments_;
+}
+
 function moduleSpecifiers(source) {
     const specifiers = [];
     const patterns = [
-        /\bimport\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/g,
-        /\bexport\s+(?:\*|\{[^}]*\})\s+from\s+["']([^"']+)["']/g,
-        /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+        /\bimport\s*(?!\s*\()(?:(?:[^;"']|\n)*?\bfrom\s*)?["']([^"']+)["']/g,
+        /\bexport\s*(?:\*\s*(?:as\s+[$\w]+\s*)?|\{[^}]*\})\s*from\s*["']([^"']+)["']/g,
     ];
     for (const pattern of patterns) {
         for (const match of source.matchAll(pattern)) specifiers.push(match[1]);
     }
-    return [...new Set(specifiers)];
+    const nonStaticDynamicImports = [];
+    for (const argument of dynamicImportArguments(source)) {
+        const quoted = /^(?:"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)')$/.exec(argument);
+        const templated = /^`([^`$\\]*(?:\\.[^`$\\]*)*)`$/.exec(argument);
+        const specifier = quoted?.[1] ?? quoted?.[2] ?? templated?.[1];
+        if (specifier === undefined) {
+            nonStaticDynamicImports.push(argument);
+        } else {
+            specifiers.push(specifier);
+        }
+    }
+    return {
+        nonStaticDynamicImports,
+        specifiers: [...new Set(specifiers)],
+    };
+}
+
+function isApprovedComputedDynamicImport(filePath, argument) {
+    if (filePath !== `${SKILL_ROOT}/scripts/adapters/official-cli.mjs`) return false;
+    return [
+        'pathToFileURL(runtime.clientModule).href',
+        'pathToFileURL(runtime.daemonUtilsModule).href',
+        'pathToFileURL(runtime.commandSchemaModule).href',
+    ].includes(argument.replaceAll(/\s/g, ''));
 }
 
 function resolveRuntimeLayer(filePath, specifier) {
@@ -155,6 +369,24 @@ function hasTerminationApi(source) {
         const arguments_ = match[1].split(',').map((argument) => argument.trim());
         if (/\bprocess\s*$/.test(prefix) && arguments_.length >= 2 && arguments_[1] === '0') continue;
         return true;
+    }
+    const importedBindings = new Set();
+    for (const match of source.matchAll(
+        /\bimport\s*(?:[$\w]+\s*,\s*)?\{([^}]*)\}\s*from\s*["'](?:node:)?process["']/g,
+    )) {
+        for (const imported of match[1].split(',')) {
+            const binding = /^\s*kill(?:\s+as\s+([$\w]+))?\s*$/.exec(imported);
+            if (binding) importedBindings.add(binding[1] ?? 'kill');
+        }
+    }
+    for (const binding of importedBindings) {
+        const escapedBinding = binding.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const calls = new RegExp(`\\b${escapedBinding}\\s*\\(([^)]*)\\)`, 'g');
+        for (const match of source.matchAll(calls)) {
+            const arguments_ = match[1].split(',').map((argument) => argument.trim());
+            if (arguments_.length >= 2 && arguments_[1] === '0') continue;
+            return true;
+        }
     }
     return false;
 }
@@ -325,17 +557,29 @@ function auditRuntime(files, errors) {
         if (!entrySource.startsWith('#!/usr/bin/env node\n')) {
             errors.push('scripts/cdp-session.mjs must retain its Node shebang.');
         }
-        if (!hasDirectExecutionGuard(entrySource)) {
+        if (!hasDirectExecutionGuard(javascriptSyntaxView(entrySource))) {
             errors.push('scripts/cdp-session.mjs must retain a direct-execution guard.');
         }
     }
     for (const [filePath, source] of runtimeEntries) {
+        if (!isExecutableRuntime(filePath)) continue;
+        const inspectedSource = sourceWithoutComments(filePath, source);
         const isEntry = filePath === entryPath;
-        const hasExecutableMarker = source.startsWith('#!') || hasDirectExecutionGuard(source);
+        const syntaxSource = isJavaScriptRuntime(filePath) ? javascriptSyntaxView(source) : inspectedSource;
+        const hasExecutableMarker = source.startsWith('#!') || hasDirectExecutionGuard(syntaxSource);
         if (hasExecutableMarker && !isEntry) {
             errors.push(`${filePath}: only cdp-session.mjs may have a shebang or direct-execution guard.`);
         }
-        const imports = moduleSpecifiers(source);
+        const moduleAnalysis = isJavaScriptRuntime(filePath)
+            ? moduleSpecifiers(inspectedSource)
+            : { nonStaticDynamicImports: [], specifiers: [] };
+        const imports = moduleAnalysis.specifiers;
+        const unsupportedDynamicImport = moduleAnalysis.nonStaticDynamicImports.find(
+            (argument) => !isApprovedComputedDynamicImport(filePath, argument),
+        );
+        if (unsupportedDynamicImport) {
+            errors.push(`${filePath}: dynamic import must use a static string or template literal module specifier.`);
+        }
         if (filePath.includes('/domains/')) {
             const forbidden = imports.find(
                 (specifier) =>
@@ -370,14 +614,14 @@ function auditRuntime(files, errors) {
                 errors.push(`${filePath}: interface code must enter through application, not ${forbidden}.`);
             }
         }
-        if (hasTerminationApi(source)) {
+        if (hasTerminationApi(inspectedSource)) {
             errors.push(`${filePath}: forbidden force-kill or process-termination command/API detected.`);
         }
-        const externalAddress = externalNetworkLiteral(source);
+        const externalAddress = externalNetworkLiteral(inspectedSource);
         if (externalAddress) {
             errors.push(`${filePath}: CDP binding must remain loopback-only; found ${externalAddress}.`);
         }
-        if (/--(?:category-?pwa|no-category-?pwa)(?:=|\b)/i.test(source)) {
+        if (/--(?:category-?pwa|no-category-?pwa)(?:=|\b)/i.test(inspectedSource)) {
             errors.push(`${filePath}: forbidden PWA category option detected.`);
         }
     }
@@ -447,7 +691,10 @@ function auditSkill(files, skillMetadata, openaiMetadata, errors) {
     if (typeof shortDescription !== 'string' || shortDescription.length < 25 || shortDescription.length > 64) {
         errors.push('OpenAI metadata short_description must be a 25-64 character string.');
     }
-    if (!openaiMetadata?.interface?.default_prompt?.includes('$debugging-cdp-targets')) {
+    const defaultPrompt = openaiMetadata?.interface?.default_prompt;
+    if (typeof defaultPrompt !== 'string') {
+        errors.push('OpenAI default prompt must be a string that references $debugging-cdp-targets.');
+    } else if (!defaultPrompt.includes('$debugging-cdp-targets')) {
         errors.push('OpenAI default prompt must reference $debugging-cdp-targets.');
     }
     if (!isMapping(openaiMetadata?.policy)) {
@@ -463,8 +710,12 @@ function auditSkill(files, skillMetadata, openaiMetadata, errors) {
         if (!filePath.startsWith(`${SKILL_ROOT}/`) || !filePath.endsWith('.md')) {
             continue;
         }
-        for (const match of source.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)) {
-            const target = match[1].split('#', 1)[0];
+        const targets = [...source.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)].map((match) => match[1]);
+        for (const match of source.matchAll(/^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:<([^>\r\n]+)>|(\S+))/gm)) {
+            targets.push(match[1] ?? match[2]);
+        }
+        for (const rawTarget of targets) {
+            const target = rawTarget.trim().split('#', 1)[0];
             if (!target || target.startsWith('#') || /^[a-z]+:/i.test(target)) {
                 continue;
             }

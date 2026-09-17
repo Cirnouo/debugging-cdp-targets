@@ -140,8 +140,23 @@ test('rejects every import syntax that can cross domain or adapter boundaries', 
             /domain.*node:fs\/promises/i,
         ],
         ['domain bare dynamic import', 'const fs = await import("fs");\n', /domain.*fs/i],
+        ['domain template dynamic import', 'const fs = await import(`node:fs`);\n', /domain.*node:fs/i],
+        ['domain namespace re-export', 'export * as io from "node:fs/promises";\n', /domain.*node:fs\/promises/i],
+        ['domain compact import', 'import{readFile}from"node:fs";\n', /domain.*node:fs/i],
+        ['domain compact namespace re-export', 'export*as io from"node:fs/promises";\n', /domain.*node:fs\/promises/i],
+        [
+            'domain computed dynamic import',
+            'const fs = await import(`node:' + '$' + '{moduleName}`);\n',
+            /dynamic import.*static/i,
+        ],
         ['domain interface import', 'export * from "../../interface/cli.mjs";\n', /domain.*interface/i],
         ['adapter interface re-export', 'export * from "../interface/cli.mjs";\n', /adapter.*interface/i],
+        [
+            'adapter namespace re-export',
+            'export * as interfaceLayer from "../interface/cli.mjs";\n',
+            /adapter.*interface/i,
+        ],
+        ['adapter computed dynamic import', 'const module = await import(specifier);\n', /dynamic import.*static/i],
     ];
 
     for (const [name, source, pattern] of cases) {
@@ -173,6 +188,15 @@ test('requires one public entry and rejects alternate direct-execution guards el
         (filePath) => filePath !== 'skills/debugging-cdp-targets/scripts/cdp-session.mjs',
     );
     assert.match(auditRepositorySnapshot(missing).join('\n'), /cdp-session\.mjs.*required public entry/i);
+
+    const commentOnly = validSnapshot();
+    commentOnly.files['skills/debugging-cdp-targets/scripts/cdp-session.mjs'] = [
+        '#!/usr/bin/env node',
+        '// import.meta.main and process.argv[1] are documentation, not a guard.',
+        'const example = "import.meta.url === invokedPath";',
+        '',
+    ].join('\n');
+    assert.match(auditRepositorySnapshot(commentOnly).join('\n'), /cdp-session\.mjs.*direct-execution guard/i);
 });
 
 test('rejects process termination APIs and concrete non-loopback addresses', () => {
@@ -182,6 +206,21 @@ test('rejects process termination APIs and concrete non-loopback addresses', () 
         ['child kill', 'child.kill();\n', /force-kill|termination/i],
         ['object Kill', 'target.Kill();\n', /force-kill|termination/i],
         ['chained object Kill', 'getTarget().Kill();\n', /force-kill|termination/i],
+        [
+            'named process kill',
+            'import { kill } from "node:process";\nexport function terminate(pid) { kill(pid, "SIGKILL"); }\n',
+            /force-kill|termination/i,
+        ],
+        [
+            'aliased process kill',
+            'import { kill as terminate } from "node:process";\nterminate(42, "SIGKILL");\n',
+            /force-kill|termination/i,
+        ],
+        [
+            'compact aliased process kill',
+            'import{kill as terminate}from"node:process";\nterminate(42, "SIGKILL");\n',
+            /force-kill|termination/i,
+        ],
         ['external IPv4 bind', 'export const bind = "192.168.1.5";\n', /loopback/i],
     ];
     for (const [name, source, pattern] of cases) {
@@ -189,6 +228,28 @@ test('rejects process termination APIs and concrete non-loopback addresses', () 
         snapshot.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = source;
         assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
     }
+});
+
+test('allows signal-zero probes and safety language in comments or runtime guidance', () => {
+    const snapshot = validSnapshot();
+    snapshot.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = [
+        'import { kill } from "node:process";',
+        '// Never call child.kill() or bind 0.0.0.0; import.meta.main is also forbidden.',
+        '/* Do not generate --category-pwa or invoke Stop-Process. */',
+        'export function exists(pid) { return kill(pid, 0); }',
+        '',
+    ].join('\n');
+    snapshot.files['skills/debugging-cdp-targets/scripts/adapters/README.md'] +=
+        'Do not use `import.meta.main` or bind to `0.0.0.0`.\n';
+    snapshot.files['skills/debugging-cdp-targets/scripts/adapters/AGENTS.md'] +=
+        'Never call `Stop-Process`, `taskkill`, or `child.kill()` here.\n';
+    snapshot.files['skills/debugging-cdp-targets/scripts/windows-cdp-helper.ps1'] = [
+        '# Never invoke Stop-Process or bind 0.0.0.0.',
+        '<# Do not add taskkill or --category-pwa. #>',
+        'param()',
+        '',
+    ].join('\n');
+    assert.deepEqual(auditRepositorySnapshot(snapshot), []);
 });
 
 test('rejects every legacy public identifier from the user README and payload', () => {
@@ -260,6 +321,14 @@ test('parses and validates the Skill and OpenAI YAML schemas', () => {
                     'dependencies:\n    mcp:\n        - chrome-devtools\n'),
             /OpenAI metadata.*unsupported.*dependencies/i,
         ],
+        ...['["$debugging-cdp-targets"]', '123', '{ value: "$debugging-cdp-targets" }', 'null'].map((value) => [
+            `OpenAI default prompt wrong type ${value}`,
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/agents/openai.yaml'] = snapshot.files[
+                    'skills/debugging-cdp-targets/agents/openai.yaml'
+                ].replace('default_prompt: "Use $debugging-cdp-targets safely."', `default_prompt: ${value}`)),
+            /OpenAI default prompt.*string/i,
+        ]),
     ];
     for (const [name, mutate, pattern] of cases) {
         const snapshot = validSnapshot();
@@ -303,6 +372,20 @@ test('enforces payload paths, required licenses, ignored sensitive files, and co
                     'skills/debugging-cdp-targets/SKILL.md'
                 ].replace('references/obsidian.md', '../../package.json')),
             /relative reference.*remain inside.*payload/i,
+        ],
+        [
+            'escaping reference-style payload link',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
+                    '\nSee [the package][package].\n\n[package]: ../../package.json\n'),
+            /relative reference.*remain inside.*payload/i,
+        ],
+        [
+            'missing reference-style payload link',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
+                    '\nSee [the missing file][missing].\n\n[missing]: references/missing.md\n'),
+            /relative reference.*missing/i,
         ],
     ];
     for (const [name, mutate, pattern] of cases) {
