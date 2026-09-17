@@ -110,6 +110,21 @@ function canStartRegularExpression(prefix) {
     const trimmed = prefix.trimEnd();
     if (trimmed.length === 0) return true;
     if ('([{:;,=!?&|+-*%^~<>/'.includes(trimmed.at(-1))) return true;
+    if (trimmed.endsWith('}')) return true;
+    if (trimmed.endsWith(')')) {
+        let depth = 0;
+        for (let index = trimmed.length - 1; index >= 0; index -= 1) {
+            if (trimmed[index] === ')') {
+                depth += 1;
+            } else if (trimmed[index] === '(') {
+                depth -= 1;
+                if (depth === 0) {
+                    const beforeParenthesis = trimmed.slice(0, index).trimEnd();
+                    return /\b(?:catch|for|if|switch|while|with)$/.test(beforeParenthesis);
+                }
+            }
+        }
+    }
     return /\b(?:await|case|delete|do|else|in|instanceof|new|of|return|throw|typeof|void|yield)$/.test(trimmed);
 }
 
@@ -767,7 +782,9 @@ function auditSkill(files, skillMetadata, openaiMetadata, errors) {
             continue;
         }
         const targets = [...source.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)].map((match) => match[1]);
-        for (const match of source.matchAll(/^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:\n[ \t]+)?(?:<([^>\r\n]+)>|(\S+))/gm)) {
+        for (const match of source.matchAll(
+            /^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:\n[ \t]{0,3})?(?:<([^>\r\n]+)>|(\S+))/gm,
+        )) {
             targets.push(match[1] ?? match[2]);
         }
         for (const rawTarget of targets) {

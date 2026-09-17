@@ -250,6 +250,17 @@ test('keeps JavaScript regex literals separate from comments during safety analy
         'export const result = left / /\\//.test(text); process.kill(42, "SIGKILL");\n';
     assert.match(auditRepositorySnapshot(divisionThenRegex).join('\n'), /force-kill|termination/i);
 
+    for (const [name, prefix] of [
+        ['if statement', 'if (ready)'],
+        ['while statement', 'while (ready)'],
+        ['closed block', 'if (ready) {}'],
+    ]) {
+        const controlStatement = validSnapshot();
+        controlStatement.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] =
+            `${prefix} /\\//.test(text); process.kill(42, "SIGKILL");\n`;
+        assert.match(auditRepositorySnapshot(controlStatement).join('\n'), /force-kill|termination/i, name);
+    }
+
     const documented = validSnapshot();
     documented.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = [
         'export const quotes = /["\']/;',
@@ -430,6 +441,13 @@ test('enforces payload paths, required licenses, ignored sensitive files, and co
                 (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
                     '\nSee [the missing file][missing].\n\n[missing]:\n  references/missing.md\n'),
             /relative reference.*missing/i,
+        ],
+        [
+            'escaping unindented multiline reference-style payload link',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
+                    '\nSee [the package][package].\n\n[package]:\n../../package.json\n'),
+            /relative reference.*remain inside.*payload/i,
         ],
     ];
     for (const [name, mutate, pattern] of cases) {
