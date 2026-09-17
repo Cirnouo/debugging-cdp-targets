@@ -106,12 +106,16 @@ function auditMappingKeys(value, allowedKeys, label, errors) {
     }
 }
 
-function canStartRegularExpression(prefix) {
+const JAVASCRIPT_LEXICAL_UNCERTAINTY = '__REPOSITORY_AUDIT_UNCERTAIN_SLASH__';
+
+function classifyRegularExpressionContext(prefix) {
     const trimmed = prefix.trimEnd();
-    if (trimmed.length === 0) return true;
-    if ('([{:;,=!?&|+-*%^~<>/'.includes(trimmed.at(-1))) return true;
-    if (trimmed.endsWith('}')) return true;
+    if (trimmed.length === 0) return 'regex';
+    if (trimmed.endsWith('++') || trimmed.endsWith('--')) return 'division';
+    if ('([{:;,=!?&|+-*%^~<>/'.includes(trimmed.at(-1))) return 'regex';
+    if (trimmed.endsWith('}')) return 'ambiguous';
     if (trimmed.endsWith(')')) {
+        if (/['"`]/.test(trimmed)) return 'ambiguous';
         let depth = 0;
         for (let index = trimmed.length - 1; index >= 0; index -= 1) {
             if (trimmed[index] === ')') {
@@ -120,12 +124,17 @@ function canStartRegularExpression(prefix) {
                 depth -= 1;
                 if (depth === 0) {
                     const beforeParenthesis = trimmed.slice(0, index).trimEnd();
-                    return /\b(?:catch|for|if|switch|while|with)$/.test(beforeParenthesis);
+                    return /\b(?:catch|for(?:\s+await)?|if|switch|while|with)$/.test(beforeParenthesis)
+                        ? 'regex'
+                        : 'division';
                 }
             }
         }
+        return 'ambiguous';
     }
-    return /\b(?:await|case|delete|do|else|in|instanceof|new|of|return|throw|typeof|void|yield)$/.test(trimmed);
+    return /\b(?:await|case|delete|do|else|in|instanceof|new|of|return|throw|typeof|void|yield)$/.test(trimmed)
+        ? 'regex'
+        : 'division';
 }
 
 function stripJavaScriptComments(source) {
@@ -192,10 +201,15 @@ function stripJavaScriptComments(source) {
             result += '  ';
             index += 1;
             state = 'block-comment';
-        } else if (character === '/' && canStartRegularExpression(result)) {
-            result += character;
-            regularExpressionClass = false;
-            state = 'regular-expression';
+        } else if (character === '/') {
+            const context = classifyRegularExpressionContext(result);
+            if (context === 'regex') {
+                result += character;
+                regularExpressionClass = false;
+                state = 'regular-expression';
+            } else {
+                result += context === 'ambiguous' ? `${JAVASCRIPT_LEXICAL_UNCERTAINTY}/` : character;
+            }
         } else {
             result += character;
             if (character === "'") state = 'single-quote';
@@ -247,10 +261,15 @@ function javascriptSyntaxView(source) {
         if (character === "'" || character === '"' || character === '`') {
             result += 'x';
             state = character === "'" ? 'single-quote' : character === '"' ? 'double-quote' : 'template';
-        } else if (character === '/' && canStartRegularExpression(result)) {
-            result += 'x';
-            regularExpressionClass = false;
-            state = 'regular-expression';
+        } else if (character === '/') {
+            const context = classifyRegularExpressionContext(result);
+            if (context === 'regex') {
+                result += 'x';
+                regularExpressionClass = false;
+                state = 'regular-expression';
+            } else {
+                result += context === 'ambiguous' ? JAVASCRIPT_LEXICAL_UNCERTAINTY : character;
+            }
         } else {
             result += character;
         }
@@ -632,6 +651,11 @@ function auditRuntime(files, errors) {
     for (const [filePath, source] of runtimeEntries) {
         if (!isExecutableRuntime(filePath)) continue;
         const inspectedSource = sourceWithoutComments(filePath, source);
+        if (inspectedSource.includes(JAVASCRIPT_LEXICAL_UNCERTAINTY)) {
+            errors.push(
+                `${filePath}: JavaScript slash syntax is ambiguous to the repository audit; rewrite it into an explicit statement before merging.`,
+            );
+        }
         const isEntry = filePath === entryPath;
         const syntaxSource = isJavaScriptRuntime(filePath) ? javascriptSyntaxView(source) : inspectedSource;
         const hasExecutableMarker = source.startsWith('#!') || hasDirectExecutionGuard(syntaxSource);
@@ -782,9 +806,7 @@ function auditSkill(files, skillMetadata, openaiMetadata, errors) {
             continue;
         }
         const targets = [...source.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)].map((match) => match[1]);
-        for (const match of source.matchAll(
-            /^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:\n[ \t]{0,3})?(?:<([^>\r\n]+)>|(\S+))/gm,
-        )) {
+        for (const match of source.matchAll(/^[ ]{0,3}\[[^\]\r\n]+]:[ \t]*(?:\n[ \t]*)?(?:<([^>\r\n]+)>|(\S+))/gm)) {
             targets.push(match[1] ?? match[2]);
         }
         for (const rawTarget of targets) {

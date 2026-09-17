@@ -250,16 +250,45 @@ test('keeps JavaScript regex literals separate from comments during safety analy
         'export const result = left / /\\//.test(text); process.kill(42, "SIGKILL");\n';
     assert.match(auditRepositorySnapshot(divisionThenRegex).join('\n'), /force-kill|termination/i);
 
-    for (const [name, prefix] of [
-        ['if statement', 'if (ready)'],
-        ['while statement', 'while (ready)'],
-        ['closed block', 'if (ready) {}'],
+    for (const [name, prefix, pattern] of [
+        ['if statement', 'if (ready)', /force-kill|termination/i],
+        ['while statement', 'while (ready)', /force-kill|termination/i],
+        ['closed block', 'if (ready) {}', /slash syntax.*ambiguous/i],
     ]) {
         const controlStatement = validSnapshot();
         controlStatement.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] =
             `${prefix} /\\//.test(text); process.kill(42, "SIGKILL");\n`;
-        assert.match(auditRepositorySnapshot(controlStatement).join('\n'), /force-kill|termination/i, name);
+        assert.match(auditRepositorySnapshot(controlStatement).join('\n'), pattern, name);
     }
+
+    for (const [name, source] of [
+        [
+            'opening parenthesis inside condition string',
+            "if (text.includes('(')) /\\//.test(text); process.kill(42);\n",
+        ],
+        [
+            'closing parenthesis inside condition string',
+            "if (text.includes(')')) /\\//.test(text); process.kill(42);\n",
+        ],
+        ['for-await control statement', 'for await (const item of iterable) /\\//.test(item); process.kill(42);\n'],
+    ]) {
+        const complexControl = validSnapshot();
+        complexControl.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = source;
+        assert.notDeepEqual(auditRepositorySnapshot(complexControl), [], name);
+    }
+
+    const postfixDivision = validSnapshot();
+    postfixDivision.files['skills/debugging-cdp-targets/scripts/shared/constants.mjs'] +=
+        "const average = count++ / total; import.meta.main && console.log('extra entry');\n";
+    assert.match(auditRepositorySnapshot(postfixDivision).join('\n'), /only.*cdp-session\.mjs.*direct/i);
+
+    const divisionThenComment = validSnapshot();
+    divisionThenComment.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = [
+        'export const average = count++ / total;',
+        '// Never call process.kill(42) or bind to 0.0.0.0.',
+        '',
+    ].join('\n');
+    assert.deepEqual(auditRepositorySnapshot(divisionThenComment), []);
 
     const documented = validSnapshot();
     documented.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = [
@@ -455,6 +484,20 @@ test('enforces payload paths, required licenses, ignored sensitive files, and co
         mutate(snapshot);
         snapshot.trackedFiles = Object.keys(snapshot.files);
         assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
+    }
+});
+
+test('audits CommonMark continuation indentation for reference destinations', () => {
+    for (const spaces of [0, 1, 3, 4, 8]) {
+        for (const [name, target, pattern] of [
+            ['escaping', '../../package.json', /relative reference.*remain inside.*payload/i],
+            ['missing', 'references/missing.md', /relative reference.*missing/i],
+        ]) {
+            const snapshot = validSnapshot();
+            snapshot.files['skills/debugging-cdp-targets/SKILL.md'] +=
+                `\nSee [target][target].\n\n[target]:\n${' '.repeat(spaces)}${target}\n`;
+            assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, `${name} with ${spaces} spaces`);
+        }
     }
 });
 
