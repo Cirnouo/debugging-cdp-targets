@@ -1,33 +1,75 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { inspectManagedTarget } from '../skills/debugging-cdp-targets/scripts/application/target.mjs';
 import { fileURLToPath } from 'node:url';
-
-import { SessionError } from '../skills/debugging-cdp-targets/scripts/shared/errors.mjs';
-import { buildCliRuntimePaths, getSkillRoot, getDefaultLockEndpoint, getDefaultStatePath, withSessionLock } from '../skills/debugging-cdp-targets/scripts/adapters/local-data.mjs';
-import { buildDaemonArguments, buildScopedCliArguments, buildToolCliArguments, getDaemonSessionId, parseDaemonStatus, parseToolInvocation, resolveExtensionMode, resolveStopDaemonAction, validateDaemonStatus } from '../skills/debugging-cdp-targets/scripts/domains/devtools-bridge/contracts.mjs';
-import { buildNpxEnvironment, getNpxPackageRoot, selectNpxLaunch } from '../skills/debugging-cdp-targets/scripts/adapters/official-cli.mjs';
-import { buildTargetArguments, findLoopbackPort, isVerifiedPortRace, runPortTransaction, validateCdpContract, validateRootSnapshot } from '../skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs';
-import { canDiscardStaleState, classifyInspectedSession, classifySession, resolveStopTargetAction } from '../skills/debugging-cdp-targets/scripts/domains/managed-session/lifecycle.mjs';
-import { createSessionRecord } from '../skills/debugging-cdp-targets/scripts/domains/managed-session/record.mjs';
-import { invokeGuardedTool, rollbackManagedStart, resumeManagedSession, stopManagedSession } from '../skills/debugging-cdp-targets/scripts/application/session-lifecycle.mjs';
-import { parseCli } from '../skills/debugging-cdp-targets/scripts/interface/cli.mjs';
+import {
+    buildCliRuntimePaths,
+    getDefaultLockEndpoint,
+    getDefaultStatePath,
+    getSkillRoot,
+    withSessionLock,
+} from '../skills/debugging-cdp-targets/scripts/adapters/local-data.mjs';
+import {
+    buildNpxEnvironment,
+    getNpxPackageRoot,
+    selectNpxLaunch,
+} from '../skills/debugging-cdp-targets/scripts/adapters/official-cli.mjs';
 import { probeLoopbackPort } from '../skills/debugging-cdp-targets/scripts/adapters/windows-target.mjs';
 import { resolvePackageVersion } from '../skills/debugging-cdp-targets/scripts/application/bridge.mjs';
+import {
+    invokeGuardedTool,
+    resumeManagedSession,
+    rollbackManagedStart,
+    stopManagedSession,
+} from '../skills/debugging-cdp-targets/scripts/application/session-lifecycle.mjs';
+import { inspectManagedTarget } from '../skills/debugging-cdp-targets/scripts/application/target.mjs';
+import {
+    buildTargetArguments,
+    findLoopbackPort,
+    isVerifiedPortRace,
+    runPortTransaction,
+    validateCdpContract,
+    validateRootSnapshot,
+} from '../skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs';
+import {
+    buildDaemonArguments,
+    buildScopedCliArguments,
+    buildToolCliArguments,
+    getDaemonSessionId,
+    parseDaemonStatus,
+    parseToolInvocation,
+    resolveExtensionMode,
+    resolveStopDaemonAction,
+    validateDaemonStatus,
+} from '../skills/debugging-cdp-targets/scripts/domains/devtools-bridge/contracts.mjs';
+import {
+    canDiscardStaleState,
+    classifyInspectedSession,
+    classifySession,
+    resolveStopTargetAction,
+} from '../skills/debugging-cdp-targets/scripts/domains/managed-session/lifecycle.mjs';
+import { createSessionRecord } from '../skills/debugging-cdp-targets/scripts/domains/managed-session/record.mjs';
+import { parseCli } from '../skills/debugging-cdp-targets/scripts/interface/cli.mjs';
+import { SessionError } from '../skills/debugging-cdp-targets/scripts/shared/errors.mjs';
 
 test('new adapter vocabulary accepts both strategies and rejects legacy input', () => {
     for (const targetAdapter of ['chrome', 'generic-cdp']) {
         assert.equal(parseCli(['start', '--target-adapter', targetAdapter]).targetAdapter, targetAdapter);
     }
     for (const value of ['Chrome', 'ChromiumApp', 'other']) {
-        assert.throws(() => parseCli(['start', '--target-adapter', value]), (error) => error.code === 'TARGET_ADAPTER_INVALID');
+        assert.throws(
+            () => parseCli(['start', '--target-adapter', value]),
+            (error) => error.code === 'TARGET_ADAPTER_INVALID',
+        );
     }
-    assert.throws(() => parseCli(['start', '--target-kind', 'Chrome']), (error) => error.code === 'ARGUMENT_INVALID');
+    assert.throws(
+        () => parseCli(['start', '--target-kind', 'Chrome']),
+        (error) => error.code === 'ARGUMENT_INVALID',
+    );
 });
 
 test('new records persist targetAdapter without legacy fields', () => {
@@ -37,10 +79,19 @@ test('new records persist targetAdapter without legacy fields', () => {
 });
 
 test('new per-user layout is deterministic with a separate retained cache', () => {
-    assert.equal(getDefaultStatePath({ localAppData: 'C:\\Users\\Tester\\AppData\\Local' }), 'C:\\Users\\Tester\\AppData\\Local\\debugging-cdp-targets\\state\\session.json');
-    assert.equal(buildCliRuntimePaths({ localAppData: 'C:\\Users\\Tester\\AppData\\Local' }).root, 'C:\\Users\\Tester\\AppData\\Local\\debugging-cdp-targets\\cache\\chrome-devtools-cli');
+    assert.equal(
+        getDefaultStatePath({ localAppData: 'C:\\Users\\Tester\\AppData\\Local' }),
+        'C:\\Users\\Tester\\AppData\\Local\\debugging-cdp-targets\\state\\session.json',
+    );
+    assert.equal(
+        buildCliRuntimePaths({ localAppData: 'C:\\Users\\Tester\\AppData\\Local' }).root,
+        'C:\\Users\\Tester\\AppData\\Local\\debugging-cdp-targets\\cache\\chrome-devtools-cli',
+    );
     for (const localAppData of ['', 'relative', 'C:relative', '\\relative', null]) {
-        assert.throws(() => getDefaultStatePath({ localAppData }), (error) => error.code === 'LOCALAPPDATA_INVALID');
+        assert.throws(
+            () => getDefaultStatePath({ localAppData }),
+            (error) => error.code === 'LOCALAPPDATA_INVALID',
+        );
     }
 });
 
@@ -52,7 +103,12 @@ test('new state removal prunes only the empty state directory and retains cache'
     await mkdir(path.dirname(cachePath), { recursive: true });
     await writeFile(statePath, JSON.stringify(literalState()));
     await writeFile(cachePath, 'keep');
-    await stopManagedSession({ statePath, disposition: 'Close', stopDaemon: async () => {}, closeTarget: async () => true });
+    await stopManagedSession({
+        statePath,
+        disposition: 'Close',
+        stopDaemon: async () => {},
+        closeTarget: async () => true,
+    });
     await assert.rejects(access(path.dirname(statePath)), { code: 'ENOENT' });
     assert.equal(await readFile(cachePath, 'utf8'), 'keep');
 });
@@ -63,14 +119,17 @@ const absentDaemon = { running: false, processId: 0, version: '', arguments: [] 
 test('new Resume clears a proven absent target without launching a replacement', async () => {
     const statePath = await temporaryStatePath();
     await writeFile(statePath, JSON.stringify(literalState({ status: 'detached', daemonProcessId: 0 })));
-    await assert.rejects(resumeManagedSession({
-        statePath,
-        validateTarget: async () => false,
-        inspectTarget: async () => absentTarget,
-        getDaemonStatus: async () => absentDaemon,
-        startDaemon: async () => assert.fail('must not launch'),
-        validateDaemon: async () => false,
-    }), (error) => error.code === 'TARGET_EXITED' && error.details.sessionCleared === true);
+    await assert.rejects(
+        resumeManagedSession({
+            statePath,
+            validateTarget: async () => false,
+            inspectTarget: async () => absentTarget,
+            getDaemonStatus: async () => absentDaemon,
+            startDaemon: async () => assert.fail('must not launch'),
+            validateDaemon: async () => false,
+        }),
+        (error) => error.code === 'TARGET_EXITED' && error.details.sessionCleared === true,
+    );
     await assert.rejects(access(statePath), { code: 'ENOENT' });
 });
 
@@ -81,15 +140,25 @@ for (const duringInvoke of [false, true]) {
         await writeFile(statePath, JSON.stringify(state));
         let inspections = 0;
         let calls = 0;
-        await assert.rejects(invokeGuardedTool({
-            state, statePath, toolArguments: ['list_pages'],
-            validateTarget: async () => duringInvoke && inspections++ === 0,
-            inspectTarget: async () => duringInvoke && inspections++ === 0 ? { status: 'valid' } : absentTarget,
-            getDaemonStatus: async () => absentDaemon,
-            validateDaemon: async () => true,
-            runNpx: async () => { calls += 1; return { exitCode: 0 }; },
-        }), (error) => error.code === (duringInvoke ? 'TARGET_EXITED_DURING_INVOKE' : 'TARGET_EXITED')
-            && error.details.sessionCleared === true && error.details.toolMayHaveExecuted === duringInvoke);
+        await assert.rejects(
+            invokeGuardedTool({
+                state,
+                statePath,
+                toolArguments: ['list_pages'],
+                validateTarget: async () => duringInvoke && inspections++ === 0,
+                inspectTarget: async () => (duringInvoke && inspections++ === 0 ? { status: 'valid' } : absentTarget),
+                getDaemonStatus: async () => absentDaemon,
+                validateDaemon: async () => true,
+                runNpx: async () => {
+                    calls += 1;
+                    return { exitCode: 0 };
+                },
+            }),
+            (error) =>
+                error.code === (duringInvoke ? 'TARGET_EXITED_DURING_INVOKE' : 'TARGET_EXITED') &&
+                error.details.sessionCleared === true &&
+                error.details.toolMayHaveExecuted === duringInvoke,
+        );
         assert.equal(calls, duringInvoke ? 1 : 0);
         await assert.rejects(access(statePath), { code: 'ENOENT' });
     });
@@ -103,7 +172,9 @@ test('new final entry runs from any working directory', () => {
 });
 
 test('Invoke rejects options placed before its tool delimiter', () => {
-    assert.throws(() => parseCli(['invoke', '--target-kind', 'Chrome', '--', 'list_pages']), { code: 'ARGUMENT_INVALID' });
+    assert.throws(() => parseCli(['invoke', '--target-kind', 'Chrome', '--', 'list_pages']), {
+        code: 'ARGUMENT_INVALID',
+    });
 });
 
 test('lifecycle actions reject options owned by another action', () => {
@@ -116,28 +187,51 @@ test('lifecycle actions reject options owned by another action', () => {
         ['stop', '--enable-extensions', '--disposition', 'Keep'],
         ['stop', '--base-port', '9333', '--disposition', 'Keep'],
     ]) {
-        assert.throws(() => parseCli(arguments_), (error) => error.code === 'ARGUMENT_INVALID');
+        assert.throws(
+            () => parseCli(arguments_),
+            (error) => error.code === 'ARGUMENT_INVALID',
+        );
     }
 });
 
 test('target inspection requires explicit root absence and a complete listener snapshot', async () => {
-    for (const snapshot of [null, {}, { root: {}, listeners: [] }, { root: { exists: false } }, { root: { exists: false }, listeners: null }]) {
-        const result = await inspectManagedTarget(literalState({ rootProcessId: process.pid }), { getSnapshot: async () => snapshot });
+    for (const snapshot of [
+        null,
+        {},
+        { root: {}, listeners: [] },
+        { root: { exists: false } },
+        { root: { exists: false }, listeners: null },
+    ]) {
+        const result = await inspectManagedTarget(literalState({ rootProcessId: process.pid }), {
+            getSnapshot: async () => snapshot,
+        });
         assert.equal(result.status, 'unverifiable');
     }
-    const absent = await inspectManagedTarget(literalState(), { getSnapshot: async () => ({ root: { exists: false }, listeners: [] }) });
+    const absent = await inspectManagedTarget(literalState(), {
+        getSnapshot: async () => ({ root: { exists: false }, listeners: [] }),
+    });
     assert.equal(absent.status, 'absent');
-    const occupied = await inspectManagedTarget(literalState(), { getSnapshot: async () => ({ root: { exists: false }, listeners: [{ localAddress: '127.0.0.1', owningProcess: 9999 }] }) });
+    const occupied = await inspectManagedTarget(literalState(), {
+        getSnapshot: async () => ({
+            root: { exists: false },
+            listeners: [{ localAddress: '127.0.0.1', owningProcess: 9999 }],
+        }),
+    });
     assert.equal(occupied.status, 'mismatch');
 });
 
 test('Resume reconciles an absent active record before requiring detached state', async () => {
     const statePath = await temporaryStatePath();
     await writeFile(statePath, JSON.stringify(literalState()));
-    await assert.rejects(resumeManagedSession({
-        statePath, inspectTarget: async () => absentTarget, getDaemonStatus: async () => absentDaemon,
-        startDaemon: async () => assert.fail('must not launch'),
-    }), (error) => error.code === 'TARGET_EXITED' && error.details.sessionCleared);
+    await assert.rejects(
+        resumeManagedSession({
+            statePath,
+            inspectTarget: async () => absentTarget,
+            getDaemonStatus: async () => absentDaemon,
+            startDaemon: async () => assert.fail('must not launch'),
+        }),
+        (error) => error.code === 'TARGET_EXITED' && error.details.sessionCleared,
+    );
     await assert.rejects(access(statePath), { code: 'ENOENT' });
 });
 
@@ -145,10 +239,20 @@ test('Invoke reconciles an absent detached record before requiring active state'
     const statePath = await temporaryStatePath();
     const state = literalState({ status: 'detached', daemonProcessId: 0 });
     await writeFile(statePath, JSON.stringify(state));
-    await assert.rejects(invokeGuardedTool({
-        state, statePath, toolArguments: ['list_pages'], inspectTarget: async () => absentTarget,
-        getDaemonStatus: async () => absentDaemon, runNpx: async () => assert.fail('must not invoke'),
-    }), (error) => error.code === 'TARGET_EXITED' && error.details.sessionCleared && error.details.toolMayHaveExecuted === false);
+    await assert.rejects(
+        invokeGuardedTool({
+            state,
+            statePath,
+            toolArguments: ['list_pages'],
+            inspectTarget: async () => absentTarget,
+            getDaemonStatus: async () => absentDaemon,
+            runNpx: async () => assert.fail('must not invoke'),
+        }),
+        (error) =>
+            error.code === 'TARGET_EXITED' &&
+            error.details.sessionCleared &&
+            error.details.toolMayHaveExecuted === false,
+    );
     await assert.rejects(access(statePath), { code: 'ENOENT' });
 });
 
@@ -157,7 +261,12 @@ for (const scenario of ['matching', 'mismatch', 'unverifiable', 'stop-failed', '
         const statePath = await temporaryStatePath();
         const state = literalState({ status: 'detached', daemonProcessId: 0 });
         await writeFile(statePath, JSON.stringify(state));
-        const running = { running: true, processId: 4343, version: '1.9.0', arguments: buildDaemonArguments(state).arguments };
+        const running = {
+            running: true,
+            processId: 4343,
+            version: '1.9.0',
+            arguments: buildDaemonArguments(state).arguments,
+        };
         let stopped = false;
         const operation = resumeManagedSession({
             statePath,
@@ -181,23 +290,34 @@ for (const scenario of ['matching', 'mismatch', 'unverifiable', 'stop-failed', '
             assert.equal(stopped, true);
             await assert.rejects(access(statePath), { code: 'ENOENT' });
         } else {
-            await assert.rejects(operation, (error) => ['DAEMON_IDENTITY_MISMATCH', 'DAEMON_IDENTITY_UNVERIFIABLE', 'DAEMON_STOP_FAILED'].includes(error.code));
+            await assert.rejects(operation, (error) =>
+                ['DAEMON_IDENTITY_MISMATCH', 'DAEMON_IDENTITY_UNVERIFIABLE', 'DAEMON_STOP_FAILED'].includes(error.code),
+            );
             assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')), state);
             if (['mismatch', 'unverifiable'].includes(scenario)) assert.equal(stopped, false);
         }
     });
 }
 
-for (const inspection of [{ status: 'mismatch', reason: 'root-absent-listener-present' }, { status: 'unverifiable' }, { status: 'absent', reason: 'unknown' }]) {
+for (const inspection of [
+    { status: 'mismatch', reason: 'root-absent-listener-present' },
+    { status: 'unverifiable' },
+    { status: 'absent', reason: 'unknown' },
+]) {
     test(`new Resume retains state for target ${inspection.status}/${inspection.reason}`, async () => {
         const statePath = await temporaryStatePath();
         const state = literalState({ status: 'detached', daemonProcessId: 0 });
         await writeFile(statePath, JSON.stringify(state));
-        await assert.rejects(resumeManagedSession({
-            statePath, inspectTarget: async () => inspection, validateTarget: async () => false,
-            getDaemonStatus: async () => assert.fail('unproven absence cannot clean up a daemon'),
-            startDaemon: async () => assert.fail('must not launch'),
-        }), { code: 'TARGET_IDENTITY_MISMATCH' });
+        await assert.rejects(
+            resumeManagedSession({
+                statePath,
+                inspectTarget: async () => inspection,
+                validateTarget: async () => false,
+                getDaemonStatus: async () => assert.fail('unproven absence cannot clean up a daemon'),
+                startDaemon: async () => assert.fail('must not launch'),
+            }),
+            { code: 'TARGET_IDENTITY_MISMATCH' },
+        );
         assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')), state);
     });
 }
@@ -322,13 +442,16 @@ test('a released-probe race requires a foreign IPv4 owner and never hides exposu
     assert.equal(isVerifiedPortRace({ snapshot, failureCode: 'TARGET_EXITED' }), true);
     assert.equal(isVerifiedPortRace({ snapshot, failureCode: 'CDP_TIMEOUT' }), true);
     assert.equal(isVerifiedPortRace({ snapshot, failureCode: 'TARGET_START_FAILED' }), false);
-    assert.equal(isVerifiedPortRace({
-        snapshot: {
-            ...snapshot,
-            listeners: [...snapshot.listeners, { localAddress: '0.0.0.0', owningProcess: 8001 }],
-        },
-        failureCode: 'CDP_TIMEOUT',
-    }), false);
+    assert.equal(
+        isVerifiedPortRace({
+            snapshot: {
+                ...snapshot,
+                listeners: [...snapshot.listeners, { localAddress: '0.0.0.0', owningProcess: 8001 }],
+            },
+            failureCode: 'CDP_TIMEOUT',
+        }),
+        false,
+    );
 });
 
 test('Chrome launch arguments include the exact persistent profile and loopback switches', () => {
@@ -355,7 +478,10 @@ test('generic-cdp launch arguments do not gain a user-data-dir', () => {
         launchArguments: [],
         chromeProfilePath: 'C:\\profile',
     });
-    assert.equal(args.some((argument) => argument.startsWith('--user-data-dir=')), false);
+    assert.equal(
+        args.some((argument) => argument.startsWith('--user-data-dir=')),
+        false,
+    );
 });
 
 test('generic-cdp may receive an application-supported user-data-dir without weakening runner-owned CDP switches', () => {
@@ -380,7 +506,13 @@ test('caller-supplied remote debugging switches are rejected', () => {
         ['--no-default-browser-check'],
     ]) {
         assert.throws(
-            () => buildTargetArguments({ targetAdapter: 'chrome', port: 9223, launchArguments, chromeProfilePath: 'C:\\profile' }),
+            () =>
+                buildTargetArguments({
+                    targetAdapter: 'chrome',
+                    port: 9223,
+                    launchArguments,
+                    chromeProfilePath: 'C:\\profile',
+                }),
             (error) => error.code === 'RUNNER_ARGUMENT_CONFLICT',
         );
     }
@@ -400,14 +532,17 @@ test('latest is resolved once and converted to an exact package version', async 
 });
 
 test('npx launch falls back to a PATH executable when the current Node runtime has no bundled npm', () => {
-    assert.deepEqual(selectNpxLaunch({
-        processExecutable: 'C:\\CodexRuntime\\node.exe',
-        adjacentNpxExists: false,
-        pathCandidates: ['C:\\NodeShims\\npx.exe'],
-    }), {
-        executable: 'C:\\NodeShims\\npx.exe',
-        prefixArguments: [],
-    });
+    assert.deepEqual(
+        selectNpxLaunch({
+            processExecutable: 'C:\\CodexRuntime\\node.exe',
+            adjacentNpxExists: false,
+            pathCandidates: ['C:\\NodeShims\\npx.exe'],
+        }),
+        {
+            executable: 'C:\\NodeShims\\npx.exe',
+            prefixArguments: [],
+        },
+    );
 });
 
 test('official package resolution uses a task-independent runtime and deterministic exact cache path', () => {
@@ -437,7 +572,10 @@ test('package resolution rejects every package except official latest or an exac
         await assert.rejects(
             resolvePackageVersion({
                 packageSpec,
-                runNpx: async () => { called = true; return { exitCode: 0, stdout: '1.9.0', stderr: '' }; },
+                runNpx: async () => {
+                    called = true;
+                    return { exitCode: 0, stdout: '1.9.0', stderr: '' };
+                },
             }),
             (error) => error.code === 'PACKAGE_SPEC_INVALID',
         );
@@ -461,7 +599,12 @@ test('tool CLI calls carry only the scoped session identity, never start-only op
     const state = literalState();
     const arguments_ = buildToolCliArguments({ state, toolArguments: ['list_pages', '--output-format=json'] });
     assert.deepEqual(arguments_.slice(-2), ['list_pages', '--output-format=json']);
-    assert.equal(arguments_.some((argument) => /browserUrl|workspace|usage-statistics|performance-crux|categoryExtensions/i.test(argument)), false);
+    assert.equal(
+        arguments_.some((argument) =>
+            /browserUrl|workspace|usage-statistics|performance-crux|categoryExtensions/i.test(argument),
+        ),
+        false,
+    );
     assert.equal(arguments_.includes(`--sessionId=${getDaemonSessionId(state)}`), true);
 });
 
@@ -522,10 +665,7 @@ test('no-console preload hides only the npm command shell that launches chrome-d
 });
 
 test('ordinary tasks explicitly disable extension tools', () => {
-    assert.deepEqual(
-        resolveExtensionMode({ requested: false }),
-        { enabled: false, reason: 'not-requested' },
-    );
+    assert.deepEqual(resolveExtensionMode({ requested: false }), { enabled: false, reason: 'not-requested' });
 });
 
 test('capable Chrome and MCP allow requested extension tools', () => {
@@ -544,14 +684,78 @@ test('capable Chrome and MCP allow requested extension tools', () => {
 
 test('extension mode fails closed when any capability gate is absent', () => {
     const cases = [
-        { targetAdapter: 'chrome', browserProduct: 'Chrome/148.0.0.0', browserMajorVersion: 148, resolvedPackageVersion: '1.9.0', startHelp: '--categoryExtensions', startHelpExitCode: 0, extensionCommandsAvailable: true },
-        { targetAdapter: 'chrome', browserProduct: 'Chrome/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '0.21.9', startHelp: '--categoryExtensions', startHelpExitCode: 0, extensionCommandsAvailable: true },
-        { targetAdapter: 'chrome', browserProduct: 'Chrome/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '0.22.0-beta.1', startHelp: '--categoryExtensions', startHelpExitCode: 0, extensionCommandsAvailable: true },
-        { targetAdapter: 'generic-cdp', browserProduct: 'Obsidian/1.13.6 Chrome/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '1.9.0', startHelp: '--categoryExtensions', startHelpExitCode: 0, extensionCommandsAvailable: true },
-        { targetAdapter: 'chrome', browserProduct: 'Chromium/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '1.9.0', startHelp: '--categoryExtensions', startHelpExitCode: 0, extensionCommandsAvailable: true },
-        { targetAdapter: 'chrome', browserProduct: 'Chrome/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '1.9.0', startHelp: 'other options', startHelpExitCode: 0, extensionCommandsAvailable: true },
-        { targetAdapter: 'chrome', browserProduct: 'Chrome/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '1.9.0', startHelp: 'error: --categoryExtensions unsupported', startHelpExitCode: 1, extensionCommandsAvailable: true },
-        { targetAdapter: 'chrome', browserProduct: 'Chrome/153.0.0.0', browserMajorVersion: 153, resolvedPackageVersion: '1.9.0', startHelp: '--categoryExtensions', startHelpExitCode: 0, extensionCommandsAvailable: false },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chrome/148.0.0.0',
+            browserMajorVersion: 148,
+            resolvedPackageVersion: '1.9.0',
+            startHelp: '--categoryExtensions',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chrome/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '0.21.9',
+            startHelp: '--categoryExtensions',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chrome/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '0.22.0-beta.1',
+            startHelp: '--categoryExtensions',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'generic-cdp',
+            browserProduct: 'Obsidian/1.13.6 Chrome/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '1.9.0',
+            startHelp: '--categoryExtensions',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chromium/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '1.9.0',
+            startHelp: '--categoryExtensions',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chrome/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '1.9.0',
+            startHelp: 'other options',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chrome/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '1.9.0',
+            startHelp: 'error: --categoryExtensions unsupported',
+            startHelpExitCode: 1,
+            extensionCommandsAvailable: true,
+        },
+        {
+            targetAdapter: 'chrome',
+            browserProduct: 'Chrome/153.0.0.0',
+            browserMajorVersion: 153,
+            resolvedPackageVersion: '1.9.0',
+            startHelp: '--categoryExtensions',
+            startHelpExitCode: 0,
+            extensionCommandsAvailable: false,
+        },
     ];
     for (const capabilities of cases) {
         assert.throws(
@@ -575,7 +779,10 @@ test('daemon arguments pin the package, set explicit extension mode, and never i
     assert.equal(result.arguments.includes('--categoryExtensions=false'), true);
     assert.equal(result.arguments.includes('--workspace=C:\\One'), true);
     assert.equal(result.arguments.includes('--workspace=C:\\Two'), true);
-    assert.equal(result.arguments.some((argument) => argument.toLowerCase().includes('categorypwa')), false);
+    assert.equal(
+        result.arguments.some((argument) => argument.toLowerCase().includes('categorypwa')),
+        false,
+    );
 });
 
 test('current official daemon status format and JSON args are parsed', () => {
@@ -672,20 +879,71 @@ test('CDP contract rejects missing websocket, wrong port, foreign owner, and exp
     };
     const cases = [
         [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: '' } }, 'CDP_WEBSOCKET_MISSING'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9999/devtools/browser/x' } }, 'CDP_WEBSOCKET_PORT_MISMATCH'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://192.0.2.10:9223/devtools/browser/x' } }, 'CDP_WEBSOCKET_HOST_MISMATCH'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'wss://127.0.0.1:9223/devtools/browser/x' } }, 'CDP_WEBSOCKET_INVALID'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://user:secret@127.0.0.1:9223/devtools/browser/x' } }, 'CDP_WEBSOCKET_INVALID'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/unexpected' } }, 'CDP_WEBSOCKET_INVALID'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/x/extra' } }, 'CDP_WEBSOCKET_INVALID'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/x?token=1' } }, 'CDP_WEBSOCKET_INVALID'],
-        [{ ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/x#fragment' } }, 'CDP_WEBSOCKET_INVALID'],
+        [
+            { ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9999/devtools/browser/x' } },
+            'CDP_WEBSOCKET_PORT_MISMATCH',
+        ],
+        [
+            {
+                ...base,
+                endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://192.0.2.10:9223/devtools/browser/x' },
+            },
+            'CDP_WEBSOCKET_HOST_MISMATCH',
+        ],
+        [
+            {
+                ...base,
+                endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'wss://127.0.0.1:9223/devtools/browser/x' },
+            },
+            'CDP_WEBSOCKET_INVALID',
+        ],
+        [
+            {
+                ...base,
+                endpoint: {
+                    ...base.endpoint,
+                    webSocketDebuggerUrl: 'ws://user:secret@127.0.0.1:9223/devtools/browser/x',
+                },
+            },
+            'CDP_WEBSOCKET_INVALID',
+        ],
+        [
+            { ...base, endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/unexpected' } },
+            'CDP_WEBSOCKET_INVALID',
+        ],
+        [
+            {
+                ...base,
+                endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/x/extra' },
+            },
+            'CDP_WEBSOCKET_INVALID',
+        ],
+        [
+            {
+                ...base,
+                endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/x?token=1' },
+            },
+            'CDP_WEBSOCKET_INVALID',
+        ],
+        [
+            {
+                ...base,
+                endpoint: { ...base.endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/x#fragment' },
+            },
+            'CDP_WEBSOCKET_INVALID',
+        ],
         [{ ...base, listeners: [{ localAddress: '127.0.0.1', owningProcess: 6000 }] }, 'CDP_OWNER_MISMATCH'],
-        [{ ...base, listeners: [...base.listeners, { localAddress: '::1', owningProcess: 6000 }] }, 'CDP_OWNER_MISMATCH'],
+        [
+            { ...base, listeners: [...base.listeners, { localAddress: '::1', owningProcess: 6000 }] },
+            'CDP_OWNER_MISMATCH',
+        ],
         [{ ...base, listeners: [...base.listeners, { localAddress: '0.0.0.0', owningProcess: 5001 }] }, 'CDP_EXPOSED'],
     ];
     for (const [input, code] of cases) {
-        assert.throws(() => validateCdpContract(input), (error) => error.code === code);
+        assert.throws(
+            () => validateCdpContract(input),
+            (error) => error.code === code,
+        );
     }
 });
 
@@ -721,7 +979,22 @@ test('root snapshot validation binds path, Windows session, and creation time', 
             (error) => error.code === 'TARGET_IDENTITY_MISMATCH',
         );
     }
-    assert.equal(validateRootSnapshot({ snapshot: { ...valid, root: { ...valid.root, productName: 'Obsidian', companyName: 'Dynalist Inc.', originalFilename: 'Obsidian.exe' } }, targetAdapter: 'generic-cdp', ...expected }), true);
+    assert.equal(
+        validateRootSnapshot({
+            snapshot: {
+                ...valid,
+                root: {
+                    ...valid.root,
+                    productName: 'Obsidian',
+                    companyName: 'Dynalist Inc.',
+                    originalFilename: 'Obsidian.exe',
+                },
+            },
+            targetAdapter: 'generic-cdp',
+            ...expected,
+        }),
+        true,
+    );
 });
 
 test('session record contains only approved non-sensitive fields', () => {
@@ -732,7 +1005,10 @@ test('session record contains only approved non-sensitive fields', () => {
 
 test('session records reject untrusted package selectors before they can be persisted or executed', () => {
     assert.throws(
-        () => createSessionRecord(literalState({ requestedPackageSpec: 'chrome-devtools-mcp@https://user:secret@example.test/x.tgz' })),
+        () =>
+            createSessionRecord(
+                literalState({ requestedPackageSpec: 'chrome-devtools-mcp@https://user:secret@example.test/x.tgz' }),
+            ),
         (error) => error.code === 'PACKAGE_SPEC_INVALID',
     );
     assert.throws(
@@ -773,23 +1049,56 @@ test('persisted workspace paths remain readable after the workspace itself disap
 
 test('state classification covers none, active, detached, and stale', async () => {
     assert.equal((await classifySession({ state: null })).status, 'none');
-    assert.equal((await classifySession({ state: literalState(), validateTarget: async () => true, validateDaemon: async () => true })).status, 'active');
-    assert.equal((await classifySession({ state: literalState({ status: 'detached', daemonProcessId: 0 }), validateTarget: async () => true, validateDaemon: async () => false })).status, 'detached');
-    assert.equal((await classifySession({ state: literalState(), validateTarget: async () => false, validateDaemon: async () => false })).status, 'stale');
+    assert.equal(
+        (
+            await classifySession({
+                state: literalState(),
+                validateTarget: async () => true,
+                validateDaemon: async () => true,
+            })
+        ).status,
+        'active',
+    );
+    assert.equal(
+        (
+            await classifySession({
+                state: literalState({ status: 'detached', daemonProcessId: 0 }),
+                validateTarget: async () => true,
+                validateDaemon: async () => false,
+            })
+        ).status,
+        'detached',
+    );
+    assert.equal(
+        (
+            await classifySession({
+                state: literalState(),
+                validateTarget: async () => false,
+                validateDaemon: async () => false,
+            })
+        ).status,
+        'stale',
+    );
 });
 
 test('inspection classification exposes an unexpected detached daemon and an absent active target as stale', () => {
     const detached = literalState({ status: 'detached', daemonProcessId: 0 });
-    assert.equal(classifyInspectedSession({
-        state: detached,
-        targetInspection: { status: 'valid' },
-        daemonInspection: { status: 'absent' },
-    }).status, 'detached');
-    assert.equal(classifyInspectedSession({
-        state: detached,
-        targetInspection: { status: 'valid' },
-        daemonInspection: { status: 'mismatch', reason: 'pid-mismatch' },
-    }).status, 'stale');
+    assert.equal(
+        classifyInspectedSession({
+            state: detached,
+            targetInspection: { status: 'valid' },
+            daemonInspection: { status: 'absent' },
+        }).status,
+        'detached',
+    );
+    assert.equal(
+        classifyInspectedSession({
+            state: detached,
+            targetInspection: { status: 'valid' },
+            daemonInspection: { status: 'mismatch', reason: 'pid-mismatch' },
+        }).status,
+        'stale',
+    );
     const active = literalState();
     const absentTarget = classifyInspectedSession({
         state: active,
@@ -802,7 +1111,10 @@ test('inspection classification exposes an unexpected detached daemon and an abs
 });
 
 test('stale state is discarded only after target and daemon absence are both confirmed', () => {
-    assert.equal(canDiscardStaleState({ targetInspection: { status: 'absent' }, daemonInspection: { status: 'absent' } }), true);
+    assert.equal(
+        canDiscardStaleState({ targetInspection: { status: 'absent' }, daemonInspection: { status: 'absent' } }),
+        true,
+    );
     for (const [targetStatus, daemonStatus] of [
         ['unverifiable', 'absent'],
         ['mismatch', 'absent'],
@@ -811,10 +1123,13 @@ test('stale state is discarded only after target and daemon absence are both con
         ['valid', 'absent'],
         ['absent', 'valid'],
     ]) {
-        assert.equal(canDiscardStaleState({
-            targetInspection: { status: targetStatus },
-            daemonInspection: { status: daemonStatus },
-        }), false);
+        assert.equal(
+            canDiscardStaleState({
+                targetInspection: { status: targetStatus },
+                daemonInspection: { status: daemonStatus },
+            }),
+            false,
+        );
     }
 });
 
@@ -826,7 +1141,10 @@ test('guarded Invoke refuses to call CLI when daemon identity is absent', async 
             toolArguments: ['list_pages', '--output-format=json'],
             validateTarget: async () => true,
             validateDaemon: async () => false,
-            runNpx: async () => { called = true; return { exitCode: 0, stdout: '[]', stderr: '' }; },
+            runNpx: async () => {
+                called = true;
+                return { exitCode: 0, stdout: '[]', stderr: '' };
+            },
             stopDaemon: async () => {},
         }),
         (error) => error.code === 'DAEMON_IDENTITY_MISMATCH',
@@ -844,7 +1162,9 @@ test('guarded Invoke never stops a daemon whose identity changed during a post-c
             validateTarget: async () => true,
             validateDaemon: async () => ++validations === 1,
             runNpx: async () => ({ exitCode: 0, stdout: '[]', stderr: '' }),
-            stopDaemon: async () => { stopped = true; },
+            stopDaemon: async () => {
+                stopped = true;
+            },
         }),
         (error) => error.code === 'DAEMON_IDENTITY_MISMATCH',
     );
@@ -860,7 +1180,10 @@ test('guarded Invoke verifies target identity before and after the tool call', a
             toolArguments: ['list_pages', '--output-format=json'],
             validateTarget: async () => ++targetValidations === 1,
             validateDaemon: async () => true,
-            runNpx: async () => { called = true; return { exitCode: 0, stdout: '[]', stderr: '' }; },
+            runNpx: async () => {
+                called = true;
+                return { exitCode: 0, stdout: '[]', stderr: '' };
+            },
             stopDaemon: async () => assert.fail('a target mismatch must not stop any daemon'),
         }),
         (error) => error.code === 'TARGET_IDENTITY_MISMATCH',
@@ -874,7 +1197,10 @@ test('guarded Invoke verifies target identity before and after the tool call', a
             toolArguments: ['list_pages', '--output-format=json'],
             validateTarget: async () => false,
             validateDaemon: async () => true,
-            runNpx: async () => { called = true; return { exitCode: 0, stdout: '[]', stderr: '' }; },
+            runNpx: async () => {
+                called = true;
+                return { exitCode: 0, stdout: '[]', stderr: '' };
+            },
             stopDaemon: async () => {},
         }),
         (error) => error.code === 'TARGET_IDENTITY_MISMATCH',
@@ -891,7 +1217,10 @@ test('lifecycle transitions active to detached to active to closed without a for
         statePath,
         disposition: 'Keep',
         stopDaemon: async () => {},
-        closeTarget: async () => { closeCalls += 1; return true; },
+        closeTarget: async () => {
+            closeCalls += 1;
+            return true;
+        },
     });
     assert.equal(kept.status, 'detached');
     assert.equal(closeCalls, 0);
@@ -909,7 +1238,10 @@ test('lifecycle transitions active to detached to active to closed without a for
         statePath,
         disposition: 'Close',
         stopDaemon: async () => {},
-        closeTarget: async () => { closeCalls += 1; return true; },
+        closeTarget: async () => {
+            closeCalls += 1;
+            return true;
+        },
     });
     assert.equal(closed.status, 'closed');
     assert.equal(closeCalls, 1);
@@ -937,10 +1269,17 @@ test('resume compensates a final state-write failure by stopping the newly start
         resumeManagedSession({
             statePath,
             validateTarget: async () => true,
-            startDaemon: async () => { daemonRunning = true; return 9876; },
+            startDaemon: async () => {
+                daemonRunning = true;
+                return 9876;
+            },
             validateDaemon: async () => daemonRunning,
-            stopDaemon: async () => { daemonRunning = false; },
-            writeState: async () => { throw new Error('disk full'); },
+            stopDaemon: async () => {
+                daemonRunning = false;
+            },
+            writeState: async () => {
+                throw new Error('disk full');
+            },
         }),
         (error) => error.code === 'STATE_WRITE_FAILED_RECOVERED',
     );
@@ -957,7 +1296,9 @@ test('resume preserves the active daemon identity when validation and safe stop 
             validateTarget: async () => true,
             startDaemon: async () => 8765,
             validateDaemon: async () => false,
-            stopDaemon: async () => { throw new Error('identity mismatch'); },
+            stopDaemon: async () => {
+                throw new Error('identity mismatch');
+            },
         }),
         (error) => error.code === 'DAEMON_IDENTITY_MISMATCH',
     );
@@ -974,9 +1315,13 @@ test('Keep state-write failure leaves an externally recoverable active record af
         stopManagedSession({
             statePath,
             disposition: 'Keep',
-            stopDaemon: async () => { stopCalls += 1; },
+            stopDaemon: async () => {
+                stopCalls += 1;
+            },
             closeTarget: async () => true,
-            writeState: async () => { throw new Error('disk full'); },
+            writeState: async () => {
+                throw new Error('disk full');
+            },
         }),
         (error) => error.code === 'STATE_WRITE_FAILED_RECOVERABLE',
     );
@@ -986,10 +1331,10 @@ test('Keep state-write failure leaves an externally recoverable active record af
 
 test('Stop recovery safely handles a daemon missing from active state or matching a detached session', () => {
     const active = literalState();
-    assert.deepEqual(
-        resolveStopDaemonAction({ state: active, status: { running: false }, processExists: true }),
-        { action: 'none', reason: 'not-running' },
-    );
+    assert.deepEqual(resolveStopDaemonAction({ state: active, status: { running: false }, processExists: true }), {
+        action: 'none',
+        reason: 'not-running',
+    });
 
     const detached = literalState({ status: 'detached', daemonProcessId: 0 });
     const matchingStatus = {
@@ -1006,7 +1351,12 @@ test('Stop recovery safely handles a daemon missing from active state or matchin
 
     const mismatch = resolveStopDaemonAction({
         state: detached,
-        status: { ...matchingStatus, arguments: matchingStatus.arguments.map((value) => value.startsWith('--browserUrl=') ? '--browserUrl=http://127.0.0.1:65534' : value) },
+        status: {
+            ...matchingStatus,
+            arguments: matchingStatus.arguments.map((value) =>
+                value.startsWith('--browserUrl=') ? '--browserUrl=http://127.0.0.1:65534' : value,
+            ),
+        },
         processExists: true,
     });
     assert.deepEqual(mismatch, { action: 'reject', reason: 'browser-url-mismatch' });
@@ -1025,10 +1375,13 @@ test('Stop recovery can stop a matching daemon after the target vanished without
         action: 'manage-target',
         requireOwnedListener: false,
     });
-    assert.deepEqual(resolveStopTargetAction({ status: 'mismatch', processIdentityValid: false, reason: 'root-validation-failed' }), {
-        action: 'reject',
-        requireOwnedListener: false,
-    });
+    assert.deepEqual(
+        resolveStopTargetAction({ status: 'mismatch', processIdentityValid: false, reason: 'root-validation-failed' }),
+        {
+            action: 'reject',
+            requireOwnedListener: false,
+        },
+    );
 });
 
 test('Start rollback preserves recovery state and leaves the target open when daemon stop is unconfirmed', async () => {
@@ -1047,10 +1400,19 @@ test('Start rollback preserves recovery state and leaves the target open when da
             version: detached.resolvedPackageVersion,
             arguments: buildDaemonArguments(detached).arguments,
         }),
-        stopDaemon: async () => { throw new Error('named pipe unavailable'); },
-        closeTarget: async () => { closeCalls += 1; return true; },
-        writeState: async (_path, value) => { writes.push(value); },
-        removeState: async () => { removeCalls += 1; },
+        stopDaemon: async () => {
+            throw new Error('named pipe unavailable');
+        },
+        closeTarget: async () => {
+            closeCalls += 1;
+            return true;
+        },
+        writeState: async (_path, value) => {
+            writes.push(value);
+        },
+        removeState: async () => {
+            removeCalls += 1;
+        },
         processExists: true,
     });
     assert.equal(result.daemonCleanupConfirmed, false);
@@ -1065,9 +1427,9 @@ test('Start rollback preserves recovery state and leaves the target open when da
 test('Start rollback retains a discovered daemon PID when its identity is mismatched', async () => {
     const statePath = await temporaryStatePath();
     const detached = createSessionRecord(literalState({ status: 'detached', daemonProcessId: 0 }));
-    const mismatchedArguments = buildDaemonArguments(detached).arguments.map((value) => (
-        value.startsWith('--browserUrl=') ? '--browserUrl=http://127.0.0.1:65534' : value
-    ));
+    const mismatchedArguments = buildDaemonArguments(detached).arguments.map((value) =>
+        value.startsWith('--browserUrl=') ? '--browserUrl=http://127.0.0.1:65534' : value,
+    );
     let stopCalls = 0;
     const writes = [];
     const result = await rollbackManagedStart({
@@ -1079,9 +1441,13 @@ test('Start rollback retains a discovered daemon PID when its identity is mismat
             version: detached.resolvedPackageVersion,
             arguments: mismatchedArguments,
         }),
-        stopDaemon: async () => { stopCalls += 1; },
+        stopDaemon: async () => {
+            stopCalls += 1;
+        },
         closeTarget: async () => assert.fail('an unverified daemon must keep the target open'),
-        writeState: async (_path, value) => { writes.push(value); },
+        writeState: async (_path, value) => {
+            writes.push(value);
+        },
         processExists: true,
     });
     assert.equal(stopCalls, 0);
@@ -1102,8 +1468,13 @@ test('Start rollback closes the target and removes state only after daemon absen
         detached,
         getDaemonStatus: async () => ({ running: false, processId: 0, version: '', arguments: [] }),
         stopDaemon: async () => assert.fail('an absent daemon must not be stopped'),
-        closeTarget: async () => { closeCalls += 1; return true; },
-        removeState: async () => { removeCalls += 1; },
+        closeTarget: async () => {
+            closeCalls += 1;
+            return true;
+        },
+        removeState: async () => {
+            removeCalls += 1;
+        },
     });
     assert.equal(result.daemonCleanupConfirmed, true);
     assert.equal(result.targetClosed, true);
@@ -1119,8 +1490,12 @@ test('Start rollback reports close and state persistence failures without losing
         detached,
         getDaemonStatus: async () => ({ running: false, processId: 0, version: '', arguments: [] }),
         stopDaemon: async () => assert.fail('an absent daemon must not be stopped'),
-        closeTarget: async () => { throw new Error('window refused close'); },
-        writeState: async () => { throw new Error('disk full'); },
+        closeTarget: async () => {
+            throw new Error('window refused close');
+        },
+        writeState: async () => {
+            throw new Error('disk full');
+        },
     });
     assert.equal(result.daemonCleanupConfirmed, true);
     assert.equal(result.targetClosed, false);
@@ -1129,14 +1504,28 @@ test('Start rollback reports close and state persistence failures without losing
     assert.equal(result.stateWriteError.message, 'disk full');
 });
 
-test('Windows helper snapshots include executable product identity metadata', { skip: process.platform !== 'win32' }, () => {
+test('Windows helper snapshots include executable product identity metadata', {
+    skip: process.platform !== 'win32',
+}, () => {
     const helper = path.join(getSkillRoot(), 'scripts', 'windows-cdp-helper.ps1');
-    const result = spawnSync('powershell.exe', [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper,
-        '-Action', 'Snapshot',
-        '-RootProcessId', String(process.pid),
-        '-Port', '65534',
-    ], { encoding: 'utf8', windowsHide: true });
+    const result = spawnSync(
+        'powershell.exe',
+        [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            helper,
+            '-Action',
+            'Snapshot',
+            '-RootProcessId',
+            String(process.pid),
+            '-Port',
+            '65534',
+        ],
+        { encoding: 'utf8', windowsHide: true },
+    );
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout.trim());
     assert.equal(output.root.exists, true);
@@ -1150,13 +1539,19 @@ for (const commandName of ['Get-Process', 'Get-NetTCPConnection']) {
     test(`Windows helper retains uncertainty when ${commandName} fails`, { skip: process.platform !== 'win32' }, () => {
         const helper = path.join(getSkillRoot(), 'scripts', 'windows-cdp-helper.ps1').replaceAll("'", "''");
         const command = `function ${commandName} { [CmdletBinding()] param([int] $Id, [string] $State, [int] $LocalPort); Write-Error 'forced-inspection-failure' }; & '${helper}' -Action Snapshot -RootProcessId 2147483000 -Port 65534`;
-        const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], { encoding: 'utf8', windowsHide: true });
+        const result = spawnSync(
+            'powershell.exe',
+            ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+            { encoding: 'utf8', windowsHide: true },
+        );
         assert.equal(result.status, 1, result.stderr || result.stdout);
         assert.equal(JSON.parse(result.stdout.trim()).errorCode, 'WINDOWS_HELPER_FAILED');
     });
 }
 
-test('Windows helper does not report closed when the root vanished but the CDP port still listens', { skip: process.platform !== 'win32' }, async (t) => {
+test('Windows helper does not report closed when the root vanished but the CDP port still listens', {
+    skip: process.platform !== 'win32',
+}, async (t) => {
     const server = net.createServer();
     await new Promise((resolve, reject) => {
         server.once('error', reject);
@@ -1165,28 +1560,57 @@ test('Windows helper does not report closed when the root vanished but the CDP p
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const { port } = server.address();
     const helper = path.join(getSkillRoot(), 'scripts', 'windows-cdp-helper.ps1');
-    const result = spawnSync('powershell.exe', [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper,
-        '-Action', 'Close',
-        '-RootProcessId', '2147483000',
-        '-Port', String(port),
-        '-ExecutablePath', 'C:\\missing.exe',
-        '-StartedAtUtc', new Date().toISOString(),
-    ], { encoding: 'utf8', windowsHide: true });
+    const result = spawnSync(
+        'powershell.exe',
+        [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            helper,
+            '-Action',
+            'Close',
+            '-RootProcessId',
+            '2147483000',
+            '-Port',
+            String(port),
+            '-ExecutablePath',
+            'C:\\missing.exe',
+            '-StartedAtUtc',
+            new Date().toISOString(),
+        ],
+        { encoding: 'utf8', windowsHide: true },
+    );
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout.trim());
     assert.equal(output.closed, false);
     assert.equal(output.reason, 'listener-present');
 
-    const relaxed = spawnSync('powershell.exe', [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper,
-        '-Action', 'Close',
-        '-RootProcessId', '2147483000',
-        '-Port', String(port),
-        '-ExecutablePath', 'C:\\missing.exe',
-        '-StartedAtUtc', new Date().toISOString(),
-        '-ListenerPolicy', 'ProcessIdentityOnly',
-    ], { encoding: 'utf8', windowsHide: true });
+    const relaxed = spawnSync(
+        'powershell.exe',
+        [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            helper,
+            '-Action',
+            'Close',
+            '-RootProcessId',
+            '2147483000',
+            '-Port',
+            String(port),
+            '-ExecutablePath',
+            'C:\\missing.exe',
+            '-StartedAtUtc',
+            new Date().toISOString(),
+            '-ListenerPolicy',
+            'ProcessIdentityOnly',
+        ],
+        { encoding: 'utf8', windowsHide: true },
+    );
     assert.equal(relaxed.status, 0, relaxed.stderr);
     const relaxedOutput = JSON.parse(relaxed.stdout.trim());
     assert.equal(relaxedOutput.closed, true);
@@ -1194,10 +1618,10 @@ test('Windows helper does not report closed when the root vanished but the CDP p
 });
 
 test('CLI parser preserves raw official tool arguments after -- and rejects PWA category', () => {
-    assert.deepEqual(
-        parseCli(['invoke', '--', 'list_pages', '--output-format=json']),
-        { action: 'invoke', toolArguments: ['list_pages', '--output-format=json'] },
-    );
+    assert.deepEqual(parseCli(['invoke', '--', 'list_pages', '--output-format=json']), {
+        action: 'invoke',
+        toolArguments: ['list_pages', '--output-format=json'],
+    });
     assert.throws(
         () => parseCli(['start', '--categoryPwa=true']),
         (error) => error.code === 'PWA_CATEGORY_UNSUPPORTED',
@@ -1232,10 +1656,10 @@ test('CLI parser preserves raw official tool arguments after -- and rejects PWA 
         () => parseCli(['invoke', '--', '--categoryPwa=true']),
         (error) => error.code === 'PWA_CATEGORY_UNSUPPORTED',
     );
-    assert.deepEqual(
-        parseCli(['invoke', '--', 'evaluate_script', '() => "categoryPwa"']),
-        { action: 'invoke', toolArguments: ['evaluate_script', '() => "categoryPwa"'] },
-    );
+    assert.deepEqual(parseCli(['invoke', '--', 'evaluate_script', '() => "categoryPwa"']), {
+        action: 'invoke',
+        toolArguments: ['evaluate_script', '() => "categoryPwa"'],
+    });
 });
 
 test('tool invocation parsing uses the pinned package command schema without a CLI auto-start path', () => {
@@ -1248,14 +1672,23 @@ test('tool invocation parsing uses the pinned package command schema without a C
             },
         },
     };
-    assert.deepEqual(parseToolInvocation({
-        commands,
-        toolArguments: ['evaluate_script', '() => document.title', '--pageId=7', '--waitForStableDom=false', '--output-format=json'],
-    }), {
-        tool: 'evaluate_script',
-        args: { function: '() => document.title', pageId: 7, waitForStableDom: false },
-        outputFormat: 'json',
-    });
+    assert.deepEqual(
+        parseToolInvocation({
+            commands,
+            toolArguments: [
+                'evaluate_script',
+                '() => document.title',
+                '--pageId=7',
+                '--waitForStableDom=false',
+                '--output-format=json',
+            ],
+        }),
+        {
+            tool: 'evaluate_script',
+            args: { function: '() => document.title', pageId: 7, waitForStableDom: false },
+            outputFormat: 'json',
+        },
+    );
     assert.throws(
         () => parseToolInvocation({ commands, toolArguments: ['missing_tool'] }),
         (error) => error.code === 'TOOL_COMMAND_INVALID',
@@ -1272,15 +1705,22 @@ test('per-user named-pipe lock serializes mutations and is released by the opera
     const lockEndpoint = `\\\\.\\pipe\\debugging-cdp-targets-test-${process.pid}-${Date.now()}`;
     let releaseFirst;
     let enteredFirst;
-    const entered = new Promise((resolve) => { enteredFirst = resolve; });
-    const hold = new Promise((resolve) => { releaseFirst = resolve; });
-    const first = withSessionLock({
-        lockEndpoint,
-    }, async () => {
-        enteredFirst();
-        await hold;
-        return 'first';
+    const entered = new Promise((resolve) => {
+        enteredFirst = resolve;
     });
+    const hold = new Promise((resolve) => {
+        releaseFirst = resolve;
+    });
+    const first = withSessionLock(
+        {
+            lockEndpoint,
+        },
+        async () => {
+            enteredFirst();
+            await hold;
+            return 'first';
+        },
+    );
     await entered;
     await assert.rejects(
         withSessionLock({ lockEndpoint }, async () => 'second'),
@@ -1292,9 +1732,18 @@ test('per-user named-pipe lock serializes mutations and is released by the opera
 });
 
 test('default lock endpoint uses the new per-user namespace and stable identity inputs', () => {
-    const first = getDefaultLockEndpoint({ username: 'Alice', localDataRoot: 'C:\\Users\\Alice\\AppData\\Local\\debugging-cdp-targets' });
-    const same = getDefaultLockEndpoint({ username: 'Alice', localDataRoot: 'C:\\Users\\Alice\\AppData\\Local\\debugging-cdp-targets' });
-    const otherUser = getDefaultLockEndpoint({ username: 'Bob', localDataRoot: 'C:\\Users\\Bob\\AppData\\Local\\debugging-cdp-targets' });
+    const first = getDefaultLockEndpoint({
+        username: 'Alice',
+        localDataRoot: 'C:\\Users\\Alice\\AppData\\Local\\debugging-cdp-targets',
+    });
+    const same = getDefaultLockEndpoint({
+        username: 'Alice',
+        localDataRoot: 'C:\\Users\\Alice\\AppData\\Local\\debugging-cdp-targets',
+    });
+    const otherUser = getDefaultLockEndpoint({
+        username: 'Bob',
+        localDataRoot: 'C:\\Users\\Bob\\AppData\\Local\\debugging-cdp-targets',
+    });
     assert.match(first, /^\\\\\.\\pipe\\debugging-cdp-targets-[0-9a-f]{24}$/);
     assert.equal(first, same);
     assert.notEqual(first, otherUser);

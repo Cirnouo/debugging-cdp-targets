@@ -1,12 +1,12 @@
+import { spawn, spawnSync } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import process from 'node:process';
-import { spawn, spawnSync } from 'node:child_process';
-import { SessionError, fail } from '../shared/errors.mjs';
+import { fail, SessionError } from '../shared/errors.mjs';
 import { isIntegerInRange } from '../shared/values.mjs';
+import { assertFile, getSkillRoot } from './local-data.mjs';
 import { closeServer } from './runtime.mjs';
-import { getSkillRoot, assertFile } from './local-data.mjs';
 
 export function processExists(processId) {
     if (!Number.isInteger(processId) || processId <= 0) return false;
@@ -32,8 +32,8 @@ export async function listenProbe(port, host, ipv6Only = false) {
             const status = occupiedCodes.has(error.code)
                 ? 'occupied'
                 : unsupportedCodes.has(error.code)
-                    ? 'unsupported'
-                    : 'error';
+                  ? 'unsupported'
+                  : 'error';
             finish({ status, message: error.message, code: error.code });
         });
         server.listen({ host, port, exclusive: true, ipv6Only }, () => {
@@ -72,7 +72,16 @@ export function helperPath() {
 export async function invokeWindowsHelper(action, parameters) {
     const helper = helperPath();
     await assertFile(helper, 'WINDOWS_HELPER_MISSING', `The Windows helper is missing at ${helper}.`);
-    const arguments_ = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', action];
+    const arguments_ = [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        helper,
+        '-Action',
+        action,
+    ];
     for (const [name, value] of Object.entries(parameters)) {
         if (value === undefined || value === null) continue;
         arguments_.push(`-${name}`, String(value));
@@ -88,10 +97,18 @@ export async function invokeWindowsHelper(action, parameters) {
     try {
         output = JSON.parse(String(result.stdout).trim());
     } catch (error) {
-        fail('WINDOWS_HELPER_FAILED', 'The Windows helper did not return one JSON object.', { stdout: result.stdout, stderr: result.stderr, cause: error.message });
+        fail('WINDOWS_HELPER_FAILED', 'The Windows helper did not return one JSON object.', {
+            stdout: result.stdout,
+            stderr: result.stderr,
+            cause: error.message,
+        });
     }
     if (result.status !== 0 || output.ok === false) {
-        fail(output.errorCode || 'WINDOWS_HELPER_FAILED', output.message || result.stderr || 'The Windows helper failed.', output.details);
+        fail(
+            output.errorCode || 'WINDOWS_HELPER_FAILED',
+            output.message || result.stderr || 'The Windows helper failed.',
+            output.details,
+        );
     }
     return output;
 }
@@ -114,28 +131,42 @@ export async function closeTargetGracefully(state, timeoutSeconds = 10, requireO
 
 export async function getCdpVersion(port, timeoutMilliseconds = 1000) {
     return new Promise((resolve, reject) => {
-        const request = http.get({
-            hostname: '127.0.0.1',
-            port,
-            path: '/json/version',
-            agent: false,
-            timeout: timeoutMilliseconds,
-        }, (response) => {
-            const chunks = [];
-            response.setEncoding('utf8');
-            response.on('data', (chunk) => chunks.push(chunk));
-            response.on('end', () => {
-                if (response.statusCode !== 200) {
-                    reject(new SessionError('CDP_HTTP_ERROR', `The CDP endpoint returned HTTP ${response.statusCode}.`));
-                    return;
-                }
-                try {
-                    resolve(JSON.parse(chunks.join('')));
-                } catch (error) {
-                    reject(new SessionError('CDP_RESPONSE_INVALID', 'The CDP version endpoint returned invalid JSON.', { cause: error.message }));
-                }
-            });
-        });
+        const request = http.get(
+            {
+                hostname: '127.0.0.1',
+                port,
+                path: '/json/version',
+                agent: false,
+                timeout: timeoutMilliseconds,
+            },
+            (response) => {
+                const chunks = [];
+                response.setEncoding('utf8');
+                response.on('data', (chunk) => chunks.push(chunk));
+                response.on('end', () => {
+                    if (response.statusCode !== 200) {
+                        reject(
+                            new SessionError(
+                                'CDP_HTTP_ERROR',
+                                `The CDP endpoint returned HTTP ${response.statusCode}.`,
+                            ),
+                        );
+                        return;
+                    }
+                    try {
+                        resolve(JSON.parse(chunks.join('')));
+                    } catch (error) {
+                        reject(
+                            new SessionError(
+                                'CDP_RESPONSE_INVALID',
+                                'The CDP version endpoint returned invalid JSON.',
+                                { cause: error.message },
+                            ),
+                        );
+                    }
+                });
+            },
+        );
         request.once('timeout', () => request.destroy(new Error('CDP request timed out.')));
         request.once('error', reject);
     });

@@ -11,7 +11,11 @@ export function resolveStopTargetAction(targetInspection) {
     return { action: 'reject', requireOwnedListener: false };
 }
 
-export async function classifySession({ state, validateTarget = async () => false, validateDaemon = async () => false }) {
+export async function classifySession({
+    state,
+    validateTarget = async () => false,
+    validateDaemon = async () => false,
+}) {
     if (!state) return { status: 'none', targetValid: false, daemonValid: false };
     const targetValid = Boolean(await validateTarget(state));
     const daemonValid = state.status === 'active' ? Boolean(await validateDaemon(state)) : false;

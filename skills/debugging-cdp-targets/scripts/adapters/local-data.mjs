@@ -1,12 +1,12 @@
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { SessionError, fail } from '../shared/errors.mjs';
 import { createSessionRecord } from '../domains/managed-session/record.mjs';
+import { fail, SessionError } from '../shared/errors.mjs';
 import { closeServer } from './runtime.mjs';
 
 export function getSkillRoot() {
@@ -14,7 +14,11 @@ export function getSkillRoot() {
 }
 
 export function getLocalDataRoot(localAppData = process.env.LOCALAPPDATA) {
-    if (typeof localAppData !== 'string' || !/^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)/.test(localAppData) || /[\u0000-\u001f]/.test(localAppData)) {
+    if (
+        typeof localAppData !== 'string' ||
+        !/^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)/.test(localAppData) ||
+        /[\u0000-\u001f]/.test(localAppData)
+    ) {
         fail('LOCALAPPDATA_INVALID', 'LOCALAPPDATA must be a fully qualified Windows directory.');
     }
     return path.win32.join(localAppData, 'debugging-cdp-targets');
@@ -24,7 +28,10 @@ export function getDefaultStatePath({ localAppData = process.env.LOCALAPPDATA } 
     return path.win32.join(getLocalDataRoot(localAppData), 'state', 'session.json');
 }
 
-export function buildCliRuntimePaths({ localAppData = process.env.LOCALAPPDATA, baseDirectory = path.win32.join(getLocalDataRoot(localAppData), 'cache', 'chrome-devtools-cli') } = {}) {
+export function buildCliRuntimePaths({
+    localAppData = process.env.LOCALAPPDATA,
+    baseDirectory = path.win32.join(getLocalDataRoot(localAppData), 'cache', 'chrome-devtools-cli'),
+} = {}) {
     if (typeof baseDirectory !== 'string' || !path.isAbsolute(baseDirectory)) {
         fail('CLI_RUNTIME_INVALID', 'The CLI runtime directory must be absolute.');
     }
@@ -38,23 +45,23 @@ export function buildCliRuntimePaths({ localAppData = process.env.LOCALAPPDATA, 
     };
 }
 
-export function getDefaultLockEndpoint({
-    username = os.userInfo().username,
-    localDataRoot = getLocalDataRoot(),
-} = {}) {
-    if (typeof username !== 'string' || username.length === 0 || typeof localDataRoot !== 'string' || localDataRoot.length === 0) {
+export function getDefaultLockEndpoint({ username = os.userInfo().username, localDataRoot = getLocalDataRoot() } = {}) {
+    if (
+        typeof username !== 'string' ||
+        username.length === 0 ||
+        typeof localDataRoot !== 'string' ||
+        localDataRoot.length === 0
+    ) {
         fail('SESSION_LOCK_INVALID', 'The lock identity requires a Windows username and local data root.');
     }
-    const identity = createHash('sha256')
-        .update(`${username}\0${localDataRoot}`)
-        .digest('hex')
-        .slice(0, 24);
+    const identity = createHash('sha256').update(`${username}\0${localDataRoot}`).digest('hex').slice(0, 24);
     return `\\\\.\\pipe\\debugging-cdp-targets-${identity}`;
 }
 
 export function getChromeProfilePath() {
     const userProfile = process.env.USERPROFILE;
-    if (!userProfile) fail('USERPROFILE_UNAVAILABLE', 'USERPROFILE is required to locate the dedicated Chrome profile.');
+    if (!userProfile)
+        fail('USERPROFILE_UNAVAILABLE', 'USERPROFILE is required to locate the dedicated Chrome profile.');
     return path.join(userProfile, '.cache', 'chrome-devtools-mcp', 'chrome-profile');
 }
 
@@ -99,11 +106,10 @@ export async function removeSessionRecord(statePath) {
     }
 }
 
-export async function withSessionLock({
-    lockEndpoint = getDefaultLockEndpoint(),
-} = {}, operation) {
+export async function withSessionLock({ lockEndpoint = getDefaultLockEndpoint() } = {}, operation) {
     if (typeof operation !== 'function') fail('SESSION_LOCK_INVALID', 'A locked operation is required.');
-    if (typeof lockEndpoint !== 'string' || lockEndpoint.length === 0) fail('SESSION_LOCK_INVALID', 'A named-pipe lock endpoint is required.');
+    if (typeof lockEndpoint !== 'string' || lockEndpoint.length === 0)
+        fail('SESSION_LOCK_INVALID', 'A named-pipe lock endpoint is required.');
     const server = net.createServer();
     try {
         await new Promise((resolve, reject) => {
@@ -120,8 +126,11 @@ export async function withSessionLock({
             server.listen(lockEndpoint);
         });
     } catch (error) {
-        if (error?.code === 'EADDRINUSE') fail('SESSION_BUSY', 'Another session operation is active for this Windows user.');
-        fail('SESSION_LOCK_UNVERIFIABLE', 'The per-user named-pipe lock could not be acquired.', { cause: error.message });
+        if (error?.code === 'EADDRINUSE')
+            fail('SESSION_BUSY', 'Another session operation is active for this Windows user.');
+        fail('SESSION_LOCK_UNVERIFIABLE', 'The per-user named-pipe lock could not be acquired.', {
+            cause: error.message,
+        });
     }
 
     try {

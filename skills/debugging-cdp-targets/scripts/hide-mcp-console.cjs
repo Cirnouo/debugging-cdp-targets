@@ -7,16 +7,16 @@ const path = require('node:path');
 function normalizeSpawnOptions(command, arguments_, options) {
     if (!Array.isArray(arguments_) || !options || typeof options !== 'object') return options;
     const commandName = path.basename(String(command)).toLowerCase();
-    const isChromeDevtoolsCommandShell = (commandName === 'cmd.exe' || commandName === 'cmd')
-        && arguments_.some((argument) => /(?:^|[\\/\s"])(?:chrome-devtools)(?:\.cmd)?(?=$|[\s"])/i.test(String(argument)));
+    const isChromeDevtoolsCommandShell =
+        (commandName === 'cmd.exe' || commandName === 'cmd') &&
+        arguments_.some((argument) => /(?:^|[\\/\s"])(?:chrome-devtools)(?:\.cmd)?(?=$|[\s"])/i.test(String(argument)));
     if (isChromeDevtoolsCommandShell && options.windowsHide !== true) {
         return { ...options, windowsHide: true };
     }
 
     const entryPoint = arguments_.find((argument) => /(?:^|[\\/])chrome-devtools-mcp\.js$/i.test(String(argument)));
-    const isViaCliServer = (commandName === 'node.exe' || commandName === 'node')
-        && entryPoint
-        && arguments_.includes('--viaCli');
+    const isViaCliServer =
+        (commandName === 'node.exe' || commandName === 'node') && entryPoint && arguments_.includes('--viaCli');
     if (!isViaCliServer || options.windowsHide !== true || !Array.isArray(options.stdio)) return options;
 
     const stdio = [...options.stdio];

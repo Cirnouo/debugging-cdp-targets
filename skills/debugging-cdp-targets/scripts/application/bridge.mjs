@@ -1,11 +1,24 @@
-import { fail } from '../shared/errors.mjs';
+import {
+    getOfficialDaemonStatus,
+    invokeOfficialTool,
+    loadOfficialCliRuntime,
+    spawnOfficialCliDetached,
+} from '../adapters/official-cli.mjs';
 import { sleep } from '../adapters/runtime.mjs';
-import { parseSemver, validatePackageSpec } from '../shared/semver.mjs';
-import { createSessionRecord } from '../domains/managed-session/record.mjs';
-import { getDaemonSessionId, buildDaemonArguments, validateDaemonStatus } from '../domains/devtools-bridge/contracts.mjs';
 import { processExists } from '../adapters/windows-target.mjs';
-import { spawnOfficialCliDetached, loadOfficialCliRuntime, getOfficialDaemonStatus, invokeOfficialTool } from '../adapters/official-cli.mjs';
-import { DEFAULT_STARTUP_TIMEOUT_SECONDS, DEFAULT_PACKAGE_SPEC, POLL_INTERVAL_MILLISECONDS } from '../shared/constants.mjs';
+import {
+    buildDaemonArguments,
+    getDaemonSessionId,
+    validateDaemonStatus,
+} from '../domains/devtools-bridge/contracts.mjs';
+import { createSessionRecord } from '../domains/managed-session/record.mjs';
+import {
+    DEFAULT_PACKAGE_SPEC,
+    DEFAULT_STARTUP_TIMEOUT_SECONDS,
+    POLL_INTERVAL_MILLISECONDS,
+} from '../shared/constants.mjs';
+import { fail } from '../shared/errors.mjs';
+import { parseSemver, validatePackageSpec } from '../shared/semver.mjs';
 
 export async function resolvePackageVersion({ packageSpec = DEFAULT_PACKAGE_SPEC, runNpx }) {
     if (typeof runNpx !== 'function') fail('NPX_EXECUTOR_REQUIRED', 'A safe npx executor is required.');
@@ -48,10 +61,13 @@ export async function stopOfficialDaemon(state) {
     }
     const runtime = await loadOfficialCliRuntime(state.resolvedPackageVersion);
     let response;
-    try { response = await runtime.sendCommand({ method: 'stop' }, getDaemonSessionId(state)); } catch (error) {
+    try {
+        response = await runtime.sendCommand({ method: 'stop' }, getDaemonSessionId(state));
+    } catch (error) {
         fail('DAEMON_STOP_FAILED', 'The pinned official client could not stop its daemon.', { cause: error.message });
     }
-    if (!response?.success) fail('DAEMON_STOP_FAILED', 'The daemon rejected its stop request.', { error: response?.error });
+    if (!response?.success)
+        fail('DAEMON_STOP_FAILED', 'The daemon rejected its stop request.', { error: response?.error });
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {
         if (!runtime.isDaemonRunning(getDaemonSessionId(state))) return;
@@ -62,7 +78,8 @@ export async function stopOfficialDaemon(state) {
 
 export async function startOfficialDaemon(state, timeoutSeconds = DEFAULT_STARTUP_TIMEOUT_SECONDS) {
     const before = await getOfficialDaemonStatus(state);
-    if (before.running) fail('DAEMON_ALREADY_RUNNING', `A chrome-devtools daemon is already running as PID ${before.processId}.`);
+    if (before.running)
+        fail('DAEMON_ALREADY_RUNNING', `A chrome-devtools daemon is already running as PID ${before.processId}.`);
     const launch = buildDaemonArguments(state);
     await spawnOfficialCliDetached(state.resolvedPackageVersion, launch.arguments);
     const deadline = Date.now() + timeoutSeconds * 1000;
@@ -71,25 +88,43 @@ export async function startOfficialDaemon(state, timeoutSeconds = DEFAULT_STARTU
         try {
             status = await getOfficialDaemonStatus(state);
             if (status.running) break;
-        } catch { /* The daemon may still be starting. */ }
+        } catch {
+            /* The daemon may still be starting. */
+        }
         await sleep(POLL_INTERVAL_MILLISECONDS);
     }
-    if (!status?.running) fail('DAEMON_START_FAILED', 'The chrome-devtools daemon did not become ready before the timeout.');
+    if (!status?.running)
+        fail('DAEMON_START_FAILED', 'The chrome-devtools daemon did not become ready before the timeout.');
     const active = createSessionRecord({ ...state, status: 'active', daemonProcessId: status.processId });
     const identity = validateDaemonStatus({ state: active, status, processExists });
     if (!identity.valid) {
-        fail('DAEMON_IDENTITY_MISMATCH', `The started daemon did not match the requested session (${identity.reason}).`);
+        fail(
+            'DAEMON_IDENTITY_MISMATCH',
+            `The started daemon did not match the requested session (${identity.reason}).`,
+        );
     }
     const pages = await invokeOfficialTool(active, ['list_pages', '--output-format=json']);
     if (pages.exitCode !== 0) {
-        try { await stopOfficialDaemon(active); } catch { /* Report list_pages failure. */ }
-        fail('DAEMON_CONNECTION_FAILED', 'The daemon started but list_pages could not reach the verified target.', { stderr: pages.stderr.trim() });
+        try {
+            await stopOfficialDaemon(active);
+        } catch {
+            /* Report list_pages failure. */
+        }
+        fail('DAEMON_CONNECTION_FAILED', 'The daemon started but list_pages could not reach the verified target.', {
+            stderr: pages.stderr.trim(),
+        });
     }
-    try { JSON.parse(pages.stdout); } catch {
-        try { await stopOfficialDaemon(active); } catch { /* Report invalid handshake. */ }
+    try {
+        JSON.parse(pages.stdout);
+    } catch {
+        try {
+            await stopOfficialDaemon(active);
+        } catch {
+            /* Report invalid handshake. */
+        }
         fail('DAEMON_CONNECTION_FAILED', 'The list_pages handshake did not return JSON.');
     }
-    if (!await validateDaemonIdentity(active)) {
+    if (!(await validateDaemonIdentity(active))) {
         fail('DAEMON_IDENTITY_MISMATCH', 'The daemon identity changed during its connection handshake.');
     }
     return status.processId;

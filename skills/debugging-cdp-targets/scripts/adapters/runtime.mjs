@@ -1,4 +1,4 @@
-import process from "node:process";
+import process from 'node:process';
 
 export async function closeServer(server) {
     if (!server) return;

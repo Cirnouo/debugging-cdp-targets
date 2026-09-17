@@ -1,21 +1,23 @@
 import { createHash } from 'node:crypto';
-import { fail } from '../../shared/errors.mjs';
-import { isIntegerInRange, normalizePath } from '../../shared/values.mjs';
-import { parseSemver, semverAtLeast } from '../../shared/semver.mjs';
-import { createSessionRecord } from '../managed-session/record.mjs';
 import { MINIMUM_EXTENSION_CHROME_MAJOR, MINIMUM_EXTENSION_MCP_VERSION } from '../../shared/constants.mjs';
+import { fail } from '../../shared/errors.mjs';
+import { parseSemver, semverAtLeast } from '../../shared/semver.mjs';
+import { isIntegerInRange, normalizePath } from '../../shared/values.mjs';
+import { createSessionRecord } from '../managed-session/record.mjs';
 
 export function getDaemonSessionId(state) {
     const rootProcessId = Number(state?.rootProcessId);
     const port = Number(state?.port);
     const startedAtUtc = String(state?.startedAtUtc || '');
-    if (!Number.isInteger(rootProcessId) || rootProcessId <= 0 || !isIntegerInRange(port, 1, 65535) || !Number.isFinite(Date.parse(startedAtUtc))) {
+    if (
+        !Number.isInteger(rootProcessId) ||
+        rootProcessId <= 0 ||
+        !isIntegerInRange(port, 1, 65535) ||
+        !Number.isFinite(Date.parse(startedAtUtc))
+    ) {
         fail('DAEMON_SESSION_ID_INVALID', 'A verified target identity is required to derive the daemon session ID.');
     }
-    return createHash('sha256')
-        .update(`${rootProcessId}\0${port}\0${startedAtUtc}`)
-        .digest('hex')
-        .slice(0, 32);
+    return createHash('sha256').update(`${rootProcessId}\0${port}\0${startedAtUtc}`).digest('hex').slice(0, 32);
 }
 
 export function buildScopedCliArguments({ resolvedPackageVersion, state, commandArguments }) {
@@ -23,10 +25,7 @@ export function buildScopedCliArguments({ resolvedPackageVersion, state, command
     if (!Array.isArray(commandArguments) || commandArguments.length === 0) {
         fail('CLI_ARGUMENTS_INVALID', 'At least one scoped chrome-devtools CLI command is required.');
     }
-    return [
-        `--sessionId=${getDaemonSessionId(state)}`,
-        ...commandArguments,
-    ];
+    return [`--sessionId=${getDaemonSessionId(state)}`, ...commandArguments];
 }
 
 export function resolveExtensionMode({
@@ -40,17 +39,21 @@ export function resolveExtensionMode({
     extensionCommandsAvailable,
 }) {
     if (!requested) return { enabled: false, reason: 'not-requested' };
-    const supported = targetAdapter === 'chrome'
-        && /^Chrome\/\d+/i.test(String(browserProduct))
-        && Number.isInteger(browserMajorVersion)
-        && browserMajorVersion >= MINIMUM_EXTENSION_CHROME_MAJOR
-        && typeof resolvedPackageVersion === 'string'
-        && semverAtLeast(resolvedPackageVersion, MINIMUM_EXTENSION_MCP_VERSION)
-        && startHelpExitCode === 0
-        && /(?:^|\s)--categoryExtensions(?:[=\s]|$)/m.test(String(startHelp))
-        && extensionCommandsAvailable === true;
+    const supported =
+        targetAdapter === 'chrome' &&
+        /^Chrome\/\d+/i.test(String(browserProduct)) &&
+        Number.isInteger(browserMajorVersion) &&
+        browserMajorVersion >= MINIMUM_EXTENSION_CHROME_MAJOR &&
+        typeof resolvedPackageVersion === 'string' &&
+        semverAtLeast(resolvedPackageVersion, MINIMUM_EXTENSION_MCP_VERSION) &&
+        startHelpExitCode === 0 &&
+        /(?:^|\s)--categoryExtensions(?:[=\s]|$)/m.test(String(startHelp)) &&
+        extensionCommandsAvailable === true;
     if (!supported) {
-        fail('EXTENSIONS_UNSUPPORTED', 'Extension tools require Google Chrome 149 or newer and a compatible chrome-devtools-mcp CLI with extension commands.');
+        fail(
+            'EXTENSIONS_UNSUPPORTED',
+            'Extension tools require Google Chrome 149 or newer and a compatible chrome-devtools-mcp CLI with extension commands.',
+        );
     }
     return { enabled: true, reason: 'supported' };
 }
@@ -66,17 +69,20 @@ export function buildDaemonRuntimeOptions({ port, workspaces, extensionsEnabled 
     return options;
 }
 
-export function buildDaemonArguments({ resolvedPackageVersion, port, workspaces, extensionsEnabled, ...stateIdentity }) {
+export function buildDaemonArguments({
+    resolvedPackageVersion,
+    port,
+    workspaces,
+    extensionsEnabled,
+    ...stateIdentity
+}) {
     parseSemver(resolvedPackageVersion);
     if (!isIntegerInRange(port, 1, 65535)) fail('PORT_INVALID', 'The daemon browser port is invalid.');
     const packageSpec = `chrome-devtools-mcp@${resolvedPackageVersion}`;
     const arguments_ = buildScopedCliArguments({
         resolvedPackageVersion,
         state: { ...stateIdentity, port },
-        commandArguments: [
-            'start',
-            ...buildDaemonRuntimeOptions({ port, workspaces, extensionsEnabled }),
-        ],
+        commandArguments: ['start', ...buildDaemonRuntimeOptions({ port, workspaces, extensionsEnabled })],
     });
     return { packageSpec, arguments: arguments_ };
 }
@@ -111,7 +117,9 @@ export function coerceToolValue(name, definition, value) {
             try {
                 const parsed = JSON.parse(stringValue);
                 if (Array.isArray(parsed)) return parsed;
-            } catch { /* Report the stable validation error below. */ }
+            } catch {
+                /* Report the stable validation error below. */
+            }
             fail('TOOL_ARGUMENT_INVALID', `${name} must be an array or a repeated option.`);
         }
         return [stringValue];
@@ -129,14 +137,16 @@ export function parseToolInvocation({ commands, toolArguments }) {
     }
     const [tool, ...tokens] = toolArguments;
     const command = commands[tool];
-    if (!command || typeof command !== 'object') fail('TOOL_COMMAND_INVALID', `Unknown official DevTools tool '${tool}'.`);
+    if (!command || typeof command !== 'object')
+        fail('TOOL_COMMAND_INVALID', `Unknown official DevTools tool '${tool}'.`);
     const definitions = Object.entries(command.args || {});
     const required = definitions.filter(([, definition]) => definition.required === true);
     const args = {};
     let tokenIndex = 0;
     for (const [name, definition] of required) {
         const value = tokens[tokenIndex];
-        if (value === undefined || String(value).startsWith('--')) fail('TOOL_ARGUMENT_REQUIRED', `Tool ${tool} requires positional argument ${name}.`);
+        if (value === undefined || String(value).startsWith('--'))
+            fail('TOOL_ARGUMENT_REQUIRED', `Tool ${tool} requires positional argument ${name}.`);
         args[name] = coerceToolValue(name, definition, value);
         tokenIndex += 1;
     }
@@ -152,7 +162,8 @@ export function parseToolInvocation({ commands, toolArguments }) {
     );
     while (tokenIndex < tokens.length) {
         const token = String(tokens[tokenIndex]);
-        if (!token.startsWith('--')) fail('TOOL_ARGUMENT_INVALID', `Unexpected positional argument '${token}' for tool ${tool}.`);
+        if (!token.startsWith('--'))
+            fail('TOOL_ARGUMENT_INVALID', `Unexpected positional argument '${token}' for tool ${tool}.`);
         const separator = token.indexOf('=');
         const rawName = token.slice(2, separator >= 0 ? separator : undefined);
         let rawValue = separator >= 0 ? token.slice(separator + 1) : undefined;
@@ -180,7 +191,8 @@ export function parseToolInvocation({ commands, toolArguments }) {
             }
         }
         const parsedValue = coerceToolValue(option.name, option.definition, rawValue);
-        if (option.definition.type === 'array' && Array.isArray(args[option.name])) args[option.name].push(...parsedValue);
+        if (option.definition.type === 'array' && Array.isArray(args[option.name]))
+            args[option.name].push(...parsedValue);
         else args[option.name] = parsedValue;
         tokenIndex += 1;
     }
@@ -192,8 +204,8 @@ export function parseDaemonStatus(result) {
     if (/^chrome-devtools-mcp daemon is not running\.$/im.test(output)) {
         return { running: false, processId: 0, version: '', arguments: [] };
     }
-    const detailMatch = output.match(/pid=(\d+).*?\bversion=([^\s]+)/i)
-        || output.match(/PID\s*:\s*(\d+).*?Version\s*:\s*([^\s]+)/is);
+    const detailMatch =
+        output.match(/pid=(\d+).*?\bversion=([^\s]+)/i) || output.match(/PID\s*:\s*(\d+).*?Version\s*:\s*([^\s]+)/is);
     const argsMatch = output.match(/^args=(\[[^\r\n]*\])$/im);
     if (!detailMatch || !argsMatch) {
         fail('DAEMON_STATUS_INVALID', 'The official CLI returned an unrecognized daemon status.', {
@@ -229,8 +241,24 @@ export function daemonArgumentValue(arguments_, names) {
 }
 
 export function daemonExtensionMode(arguments_) {
-    if (arguments_.some((argument) => argument === '--no-category-extensions' || argument === '--category-extensions=false' || argument === '--categoryExtensions=false')) return false;
-    if (arguments_.some((argument) => argument === '--category-extensions' || argument === '--category-extensions=true' || argument === '--categoryExtensions=true')) return true;
+    if (
+        arguments_.some(
+            (argument) =>
+                argument === '--no-category-extensions' ||
+                argument === '--category-extensions=false' ||
+                argument === '--categoryExtensions=false',
+        )
+    )
+        return false;
+    if (
+        arguments_.some(
+            (argument) =>
+                argument === '--category-extensions' ||
+                argument === '--category-extensions=true' ||
+                argument === '--categoryExtensions=true',
+        )
+    )
+        return true;
     return undefined;
 }
 
@@ -254,13 +282,18 @@ export function validateDaemonStatus({ state, status, processExists: processIsPr
     if (status.version !== state.resolvedPackageVersion) return { valid: false, reason: 'version-mismatch' };
     const browserUrl = daemonArgumentValue(status.arguments, ['--browser-url', '--browserUrl']);
     if (browserUrl !== `http://127.0.0.1:${state.port}`) return { valid: false, reason: 'browser-url-mismatch' };
-    if (daemonExtensionMode(status.arguments) !== state.extensionsEnabled) return { valid: false, reason: 'extension-mode-mismatch' };
-    if (!status.arguments.includes('--no-usage-statistics')) return { valid: false, reason: 'usage-statistics-enabled' };
-    if (!status.arguments.includes('--no-performance-crux')) return { valid: false, reason: 'performance-crux-enabled' };
-    if (status.arguments.some((argument) => /^--(?:category-?pwa|no-category-?pwa)(?:=|$)/i.test(argument))) return { valid: false, reason: 'pwa-category-present' };
+    if (daemonExtensionMode(status.arguments) !== state.extensionsEnabled)
+        return { valid: false, reason: 'extension-mode-mismatch' };
+    if (!status.arguments.includes('--no-usage-statistics'))
+        return { valid: false, reason: 'usage-statistics-enabled' };
+    if (!status.arguments.includes('--no-performance-crux'))
+        return { valid: false, reason: 'performance-crux-enabled' };
+    if (status.arguments.some((argument) => /^--(?:category-?pwa|no-category-?pwa)(?:=|$)/i.test(argument)))
+        return { valid: false, reason: 'pwa-category-present' };
     const expectedWorkspaces = [...state.workspaces].map(normalizePath).sort();
     const actualWorkspaces = daemonWorkspaces(status.arguments).map(normalizePath).sort();
-    if (JSON.stringify(actualWorkspaces) !== JSON.stringify(expectedWorkspaces)) return { valid: false, reason: 'workspace-mismatch' };
+    if (JSON.stringify(actualWorkspaces) !== JSON.stringify(expectedWorkspaces))
+        return { valid: false, reason: 'workspace-mismatch' };
     return { valid: true, reason: 'valid' };
 }
 

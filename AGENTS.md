@@ -6,12 +6,12 @@ documentation. Read only the domain you are changing after this index; a nearer
 
 ## Commands
 
+- Frozen dependency install: `pnpm install --frozen-lockfile`
 - Focused runtime tests: `node --test tests/cdp-session.test.mjs`
-- Coverage gate: `node --experimental-test-coverage --test-coverage-lines=52 --test-coverage-branches=71 --test-coverage-functions=61 --test tests/cdp-session.test.mjs`
+- Full tests: `pnpm test`
+- Coverage gate: `pnpm test:coverage`
+- Complete push verification: `pnpm verify:push`
 - Skill validation: `python -X utf8 %USERPROFILE%\.codex\skills\.system\skill-creator\scripts\quick_validate.py skills\debugging-cdp-targets`
-
-Task 3 introduces package scripts, hooks, CI, and repository validators. Until
-then, use the direct commands above.
 
 ## Non-negotiable boundaries
 

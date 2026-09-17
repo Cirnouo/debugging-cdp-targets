@@ -1,14 +1,17 @@
 import process from 'node:process';
+import { DEFAULT_BASE_PORT, DEFAULT_PACKAGE_SPEC, DEFAULT_STARTUP_TIMEOUT_SECONDS } from '../shared/constants.mjs';
 import { fail } from '../shared/errors.mjs';
-import { DEFAULT_BASE_PORT, DEFAULT_STARTUP_TIMEOUT_SECONDS, DEFAULT_PACKAGE_SPEC } from '../shared/constants.mjs';
 
 export function parseCli(argv) {
-    if (!Array.isArray(argv) || argv.length === 0) fail('ACTION_REQUIRED', 'Choose start, resume, invoke, status, or stop.');
+    if (!Array.isArray(argv) || argv.length === 0)
+        fail('ACTION_REQUIRED', 'Choose start, resume, invoke, status, or stop.');
     const action = String(argv[0]).toLowerCase();
-    if (!['start', 'resume', 'invoke', 'status', 'stop'].includes(action)) fail('ACTION_INVALID', `Unknown action '${argv[0]}'.`);
+    if (!['start', 'resume', 'invoke', 'status', 'stop'].includes(action))
+        fail('ACTION_INVALID', `Unknown action '${argv[0]}'.`);
     if (action === 'invoke') {
         const delimiter = argv.indexOf('--');
-        if (delimiter < 0 || delimiter === argv.length - 1) fail('TOOL_ARGUMENT_REQUIRED', 'Invoke requires -- followed by official CLI tool arguments.');
+        if (delimiter < 0 || delimiter === argv.length - 1)
+            fail('TOOL_ARGUMENT_REQUIRED', 'Invoke requires -- followed by official CLI tool arguments.');
         if (delimiter !== 1) fail('ARGUMENT_INVALID', 'Invoke does not accept options before --.');
         const toolArguments = argv.slice(delimiter + 1);
         if (/^--(?:category-?pwa|no-category-?pwa)(?:=|$)/i.test(toolArguments[0])) {
@@ -21,8 +24,15 @@ export function parseCli(argv) {
             fail('TOOL_COMMAND_INVALID', 'Invoke accepts DevTools tools, not daemon lifecycle commands.');
         }
         for (const argument of toolArguments.slice(1)) {
-            if (/^--(?:session-?id|browser-?url|ws-?endpoint|ws-?headers|auto-?connect|workspace|filesystem-?root|category-?extensions|usage-?statistics|performance-?crux|executable-?path|user-?data-?dir|chrome-?arg|ignore-?default-?chrome-?arg|isolated)(?:=|$)/i.test(argument)) {
-                fail('RUNNER_ARGUMENT_CONFLICT', 'Invoke arguments must not override runner-owned daemon identity, connection, privacy, or workspace options.');
+            if (
+                /^--(?:session-?id|browser-?url|ws-?endpoint|ws-?headers|auto-?connect|workspace|filesystem-?root|category-?extensions|usage-?statistics|performance-?crux|executable-?path|user-?data-?dir|chrome-?arg|ignore-?default-?chrome-?arg|isolated)(?:=|$)/i.test(
+                    argument,
+                )
+            ) {
+                fail(
+                    'RUNNER_ARGUMENT_CONFLICT',
+                    'Invoke arguments must not override runner-owned daemon identity, connection, privacy, or workspace options.',
+                );
             }
             if (/^--(?:category-?pwa|no-category-?pwa)(?:=|$)/i.test(argument)) {
                 fail('PWA_CATEGORY_UNSUPPORTED', 'The PWA category is unsupported with a verified browserUrl session.');
@@ -37,18 +47,19 @@ export function parseCli(argv) {
 
     const options = {};
     const repeated = { launchArguments: [], workspaces: [] };
-    const allowedOptions = action === 'start'
-        ? new Set([
-            '--executable-path',
-            '--target-adapter',
-            '--base-port',
-            '--launch-argument',
-            '--workspace',
-            '--enable-extensions',
-            '--startup-timeout-seconds',
-            '--package-spec',
-        ])
-        : new Set(['--disposition']);
+    const allowedOptions =
+        action === 'start'
+            ? new Set([
+                  '--executable-path',
+                  '--target-adapter',
+                  '--base-port',
+                  '--launch-argument',
+                  '--workspace',
+                  '--enable-extensions',
+                  '--startup-timeout-seconds',
+                  '--package-spec',
+              ])
+            : new Set(['--disposition']);
     const takeValue = (index, inline) => {
         if (inline !== undefined) return { value: inline, next: index };
         if (index + 1 >= argv.length) fail('ARGUMENT_VALUE_REQUIRED', `A value is required for ${argv[index]}.`);
@@ -59,7 +70,8 @@ export function parseCli(argv) {
         const separator = token.indexOf('=');
         const name = separator >= 0 ? token.slice(0, separator) : token;
         const inline = separator >= 0 ? token.slice(separator + 1) : undefined;
-        if (/^--category-?pwa$/i.test(name)) fail('PWA_CATEGORY_UNSUPPORTED', 'The PWA category is unsupported with a verified browserUrl session.');
+        if (/^--category-?pwa$/i.test(name))
+            fail('PWA_CATEGORY_UNSUPPORTED', 'The PWA category is unsupported with a verified browserUrl session.');
         if (!allowedOptions.has(name)) fail('ARGUMENT_INVALID', `Argument '${name}' is not valid for ${action}.`);
         if (name === '--enable-extensions') {
             if (inline !== undefined) fail('ARGUMENT_INVALID', '--enable-extensions does not take a value.');
@@ -70,18 +82,34 @@ export function parseCli(argv) {
         index = valueResult.next;
         const value = valueResult.value;
         switch (name) {
-            case '--executable-path': options.executablePath = value; break;
+            case '--executable-path':
+                options.executablePath = value;
+                break;
             case '--target-adapter':
-                if (!['chrome', 'generic-cdp'].includes(value)) fail('TARGET_ADAPTER_INVALID', 'Target adapter must be chrome or generic-cdp.');
+                if (!['chrome', 'generic-cdp'].includes(value))
+                    fail('TARGET_ADAPTER_INVALID', 'Target adapter must be chrome or generic-cdp.');
                 options.targetAdapter = value;
                 break;
-            case '--base-port': options.basePort = Number(value); break;
-            case '--launch-argument': repeated.launchArguments.push(value); break;
-            case '--workspace': repeated.workspaces.push(value); break;
-            case '--startup-timeout-seconds': options.startupTimeoutSeconds = Number(value); break;
-            case '--package-spec': options.packageSpec = value; break;
-            case '--disposition': options.disposition = value; break;
-            default: fail('ARGUMENT_INVALID', `Unknown argument '${name}'.`);
+            case '--base-port':
+                options.basePort = Number(value);
+                break;
+            case '--launch-argument':
+                repeated.launchArguments.push(value);
+                break;
+            case '--workspace':
+                repeated.workspaces.push(value);
+                break;
+            case '--startup-timeout-seconds':
+                options.startupTimeoutSeconds = Number(value);
+                break;
+            case '--package-spec':
+                options.packageSpec = value;
+                break;
+            case '--disposition':
+                options.disposition = value;
+                break;
+            default:
+                fail('ARGUMENT_INVALID', `Unknown argument '${name}'.`);
         }
     }
     if (action === 'start') {

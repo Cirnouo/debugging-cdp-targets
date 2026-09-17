@@ -16,15 +16,16 @@ Run:
 
 ```powershell
 node --test tests/cdp-session.test.mjs
-node --experimental-test-coverage --test-coverage-lines=52 --test-coverage-branches=71 --test-coverage-functions=61 --test tests/cdp-session.test.mjs
+pnpm test
+pnpm test:coverage
+pnpm verify:push
 ```
 
 The minimum coverage floors are 52% lines, 71% branches, and 61% functions.
 
 ## Enforcement
 
-Task 3 owns package scripts, format/lint configuration, repository validators,
-Git hooks, and CI. Those gates must derive from these policies, remain
-non-destructive, and run on supported Windows and Ubuntu environments where
-applicable. Hooks do not replace fresh manual verification before a completion
-claim, commit, or release.
+Package scripts, format/lint configuration, repository validators, Git hooks,
+and CI derive from these policies, remain non-destructive, and run on supported
+Windows and Ubuntu environments where applicable. Hooks do not replace fresh
+manual verification before a completion claim, commit, or release.

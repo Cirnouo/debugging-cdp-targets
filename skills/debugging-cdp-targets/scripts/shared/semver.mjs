@@ -1,5 +1,5 @@
-import { fail } from './errors.mjs';
 import { SEMVER_PATTERN } from './constants.mjs';
+import { fail } from './errors.mjs';
 
 export function parseSemver(value) {
     const normalized = String(value).trim();
@@ -42,9 +42,8 @@ export function semverAtLeast(actual, minimum) {
 
 export function validatePackageSpec(packageSpec) {
     const prefix = 'chrome-devtools-mcp@';
-    const selector = typeof packageSpec === 'string' && packageSpec.startsWith(prefix)
-        ? packageSpec.slice(prefix.length)
-        : '';
+    const selector =
+        typeof packageSpec === 'string' && packageSpec.startsWith(prefix) ? packageSpec.slice(prefix.length) : '';
     if (selector !== 'latest' && !SEMVER_PATTERN.test(selector)) {
         fail('PACKAGE_SPEC_INVALID', 'PackageSpec must be chrome-devtools-mcp@latest or an exact semantic version.');
     }
