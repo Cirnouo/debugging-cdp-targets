@@ -1,0 +1,6 @@
+interface:
+    display_name: "Debugging CDP Targets"
+    short_description: "Safely inspect local CDP targets on Windows"
+    default_prompt: "Use $debugging-cdp-targets to start or resume a verified local CDP session, inspect the requested target, and obtain an explicit Close or Keep choice when finished."
+policy:
+    allow_implicit_invocation: true
