@@ -5,7 +5,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const SKILL_NAME = 'debugging-cdp-targets';
+import { SKILL_NAME, validatePayloadFileInventory } from './payload-policy.mjs';
+
 const repositoryOnlyNames = new Set([
     '.github',
     '.husky',
@@ -22,17 +23,48 @@ const repositoryOnlyNames = new Set([
 
 export function parseDiscoveredSkills(output) {
     const plain = output.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\u001b\[\?\d+[hl]/g, '');
-    const names = [];
-    for (const line of plain.split(/\r?\n/)) {
-        const candidate = line
-            .trim()
-            .replace(/^[^a-z0-9]*/, '')
-            .trim();
-        if (/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(candidate) && !names.includes(candidate)) {
-            names.push(candidate);
+    const lines = plain.split(/\r?\n/);
+    const reportedCountMatch = plain.match(/\bFound\s+(\d+)\s+skills?\b/i);
+    const start = lines.findIndex((line) => /Available Skills/i.test(line));
+    const candidates = [];
+    for (const line of start < 0 ? [] : lines.slice(start + 1)) {
+        if (/Use\s+--skill\b/i.test(line)) break;
+        const withoutMarker = line.replace(/^\s*(?:[|│┃])/, '');
+        const indentation = withoutMarker.match(/^ */)?.[0].length ?? 0;
+        const candidate = withoutMarker.trim();
+        if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(candidate)) {
+            candidates.push({ indentation, name: candidate });
         }
     }
-    return names;
+    const skillIndentation =
+        candidates.length > 0 ? Math.min(...candidates.map((candidate) => candidate.indentation)) : 0;
+    const names = candidates
+        .filter((candidate) => candidate.indentation === skillIndentation)
+        .map((candidate) => candidate.name);
+    return {
+        reportedCount: reportedCountMatch ? Number.parseInt(reportedCountMatch[1], 10) : null,
+        names,
+    };
+}
+
+export function validateDiscoveredSkills(discovery, expectedName = SKILL_NAME) {
+    const errors = [];
+    if (!Number.isInteger(discovery.reportedCount)) {
+        errors.push('Skills CLI discovery did not report a numeric Skill count.');
+    } else if (discovery.reportedCount !== discovery.names.length) {
+        errors.push(
+            `Skills CLI count mismatch: reported ${discovery.reportedCount}, emitted ${discovery.names.length}.`,
+        );
+    }
+    if (new Set(discovery.names).size !== discovery.names.length) {
+        errors.push('Skills CLI discovery emitted a duplicate Skill name.');
+    }
+    if (discovery.names.length !== 1 || discovery.names[0] !== expectedName) {
+        errors.push(
+            `Skills CLI discovery must return exactly ${expectedName}; found ${discovery.names.join(', ') || 'none'}.`,
+        );
+    }
+    return errors;
 }
 
 export function compareDistributionTrees(source, installed) {
@@ -98,9 +130,8 @@ export async function auditDistribution(root) {
     const cliPath = path.join(root, 'node_modules', 'skills', 'bin', 'cli.mjs');
     const discoveryOutput = runSkills(cliPath, ['add', root, '--list'], root);
     const discovered = parseDiscoveredSkills(discoveryOutput);
-    if (JSON.stringify(discovered) !== JSON.stringify([SKILL_NAME])) {
-        return [`Skills CLI discovery must return exactly ${SKILL_NAME}; found ${discovered.join(', ') || 'none'}.`];
-    }
+    const discoveryErrors = validateDiscoveredSkills(discovered);
+    if (discoveryErrors.length > 0) return discoveryErrors;
 
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), `${SKILL_NAME}-install-`));
     try {
@@ -111,7 +142,10 @@ export async function auditDistribution(root) {
         );
         const sourceRoot = path.join(root, 'skills', SKILL_NAME);
         const installedRoot = path.join(temporaryRoot, '.agents', 'skills', SKILL_NAME);
-        return compareDistributionTrees(await readTree(sourceRoot), await readTree(installedRoot));
+        const source = await readTree(sourceRoot);
+        const inventoryErrors = validatePayloadFileInventory(source.keys());
+        if (inventoryErrors.length > 0) return inventoryErrors;
+        return compareDistributionTrees(source, await readTree(installedRoot));
     } finally {
         await rm(temporaryRoot, { recursive: true, force: true });
     }

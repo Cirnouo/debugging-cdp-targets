@@ -1,9 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readlinkSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, readlinkSync } from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseDocument } from 'yaml';
 
-const SKILL_ROOT = 'skills/debugging-cdp-targets';
+import { SKILL_ROOT, validatePayloadFileInventory } from './payload-policy.mjs';
+
 const EXPECTED_VERSION = '0.1.0';
 const EXPECTED_NODE = '24.21.0';
 const EXPECTED_PNPM = '12.4.2';
@@ -62,14 +65,122 @@ function isExemptDirectory(directory) {
     return exemptDirectoryPrefixes.some((prefix) => directory === prefix || directory.startsWith(`${prefix}/`));
 }
 
-function scalarFromYaml(source, key) {
-    const match = source.match(new RegExp(`^\\s*${key}:\\s*["']?([^"'\\n]+)["']?\\s*$`, 'm'));
-    return match?.[1]?.trim();
+function isMapping(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function skillFrontmatter(source) {
+function parseYamlMapping(source, label, errors) {
+    let document;
+    try {
+        document = parseDocument(source, { merge: false, uniqueKeys: true });
+    } catch (error) {
+        errors.push(`${label} must be valid YAML: ${error.message}`);
+        return null;
+    }
+    if (document.errors.length > 0) {
+        errors.push(`${label} must be valid YAML: ${document.errors.map((error) => error.message).join('; ')}`);
+        return null;
+    }
+    const value = document.toJS({ maxAliasCount: 0 });
+    if (!isMapping(value)) {
+        errors.push(`${label} must be a YAML mapping.`);
+        return null;
+    }
+    return value;
+}
+
+function parseSkillFrontmatter(source, errors) {
     const match = source.match(/^---\n(?<frontmatter>[\s\S]*?)\n---(?:\n|$)/);
-    return match?.groups?.frontmatter ?? '';
+    if (!match) {
+        errors.push('Skill frontmatter must be present and delimited by YAML fences.');
+        return null;
+    }
+    return parseYamlMapping(match.groups.frontmatter, 'Skill frontmatter YAML', errors);
+}
+
+function auditMappingKeys(value, allowedKeys, label, errors) {
+    if (!isMapping(value)) return;
+    const unsupported = Object.keys(value).filter((key) => !allowedKeys.includes(key));
+    if (unsupported.length > 0) {
+        errors.push(`${label} contains unsupported key(s): ${unsupported.join(', ')}.`);
+    }
+}
+
+function moduleSpecifiers(source) {
+    const specifiers = [];
+    const patterns = [
+        /\bimport\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/g,
+        /\bexport\s+(?:\*|\{[^}]*\})\s+from\s+["']([^"']+)["']/g,
+        /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+    ];
+    for (const pattern of patterns) {
+        for (const match of source.matchAll(pattern)) specifiers.push(match[1]);
+    }
+    return [...new Set(specifiers)];
+}
+
+function resolveRuntimeLayer(filePath, specifier) {
+    if (!specifier.startsWith('.')) return null;
+    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(filePath), specifier));
+    const relative = resolved.slice(`${SKILL_ROOT}/scripts/`.length);
+    const [layer] = relative.split('/');
+    return ['adapters', 'application', 'domains', 'interface', 'shared'].includes(layer) ? layer : null;
+}
+
+function isForbiddenDomainDependency(specifier) {
+    const normalized = specifier.replace(/^node:/, '');
+    const root = normalized.split('/')[0];
+    return (
+        ['child_process', 'fs', 'http', 'https', 'net', 'os', 'process'].includes(root) || /powershell/i.test(specifier)
+    );
+}
+
+function hasDirectExecutionGuard(source) {
+    if (/\bimport\.meta\.main\b/.test(source)) return true;
+    if (/\b(?:require\.main\s*={2,3}\s*module|module\s*={2,3}\s*require\.main)\b/.test(source)) return true;
+    if (/\bimport\.meta\.url\s*={2,3}/.test(source) || /={2,3}\s*import\.meta\.url\b/.test(source)) return true;
+    return (
+        /fileURLToPath\s*\(\s*import\.meta\.url\s*\)/.test(source) &&
+        /process\.argv\s*\[\s*1\s*]/.test(source) &&
+        /(?:={2,3}|!==?)/.test(source)
+    );
+}
+
+function hasTerminationApi(source) {
+    if (/\b(?:Stop-Process|taskkill(?:\.exe)?|tskill(?:\.exe)?|TerminateProcess|TerminateJobObject)\b/i.test(source)) {
+        return true;
+    }
+    for (const match of source.matchAll(/\.kill\s*\(([^)]*)\)/gi)) {
+        const prefix = source.slice(Math.max(0, match.index - 32), match.index);
+        const arguments_ = match[1].split(',').map((argument) => argument.trim());
+        if (/\bprocess\s*$/.test(prefix) && arguments_.length >= 2 && arguments_[1] === '0') continue;
+        return true;
+    }
+    return false;
+}
+
+function externalNetworkLiteral(source) {
+    for (const match of source.matchAll(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g)) {
+        const address = match[0];
+        if (net.isIP(address) === 4 && address !== '127.0.0.1') return address;
+    }
+    for (const match of source.matchAll(/["'`]([^"'`\r\n]+)["'`]/g)) {
+        const value = match[1].replace(/^\[|]$/g, '');
+        if (net.isIP(value) === 6 && value !== '::1') return value;
+    }
+    return null;
+}
+
+function legacyIdentifiers() {
+    return [
+        ['debugging', 'chromium', 'apps'].join('-'),
+        ['chromium', 'devtools', 'session'].join('-'),
+        `--${['target', 'kind'].join('-')}`,
+        ['target', 'Kind'].join(''),
+        ['Target', 'Kind'].join(''),
+        ['Chromium', 'App'].join(''),
+        ['agent', 'debugging', 'chromium', 'apps'].join('-'),
+    ];
 }
 
 export function validateTextStyle(filePath, source) {
@@ -132,7 +243,7 @@ function auditSymlink(snapshot, errors) {
     }
 }
 
-function auditVersions(files, errors) {
+function auditVersions(files, skillMetadata, errors) {
     let packageData;
     try {
         packageData = JSON.parse(files['package.json'] ?? '');
@@ -140,13 +251,11 @@ function auditVersions(files, errors) {
         errors.push(`package.json must be valid JSON: ${error.message}`);
         return;
     }
-    const skillSource = files[`${SKILL_ROOT}/SKILL.md`] ?? '';
-    const frontmatter = skillFrontmatter(skillSource);
     const changelog = files['CHANGELOG.md'] ?? '';
     const mise = files['mise.toml'] ?? '';
     const actual = {
         'package version': packageData.version,
-        'Skill version': scalarFromYaml(frontmatter, 'version'),
+        'Skill version': skillMetadata?.metadata?.version,
         'changelog version': changelog.match(/^## \[(\d+\.\d+\.\d+)]/m)?.[1],
         'package Node engine': packageData.engines?.node,
         'mise Node version': mise.match(/^node\s*=\s*["']([^"']+)["']/m)?.[1],
@@ -195,6 +304,12 @@ function auditVersions(files, errors) {
 }
 
 function auditLicenses(files, errors) {
+    if (typeof files.LICENSE !== 'string' || files.LICENSE.length === 0) {
+        errors.push('Root LICENSE is required.');
+    }
+    if (typeof files[`${SKILL_ROOT}/LICENSE`] !== 'string' || files[`${SKILL_ROOT}/LICENSE`].length === 0) {
+        errors.push('Payload LICENSE is required.');
+    }
     if (files.LICENSE !== files[`${SKILL_ROOT}/LICENSE`]) {
         errors.push('Root and production payload MIT licenses must be byte-identical.');
     }
@@ -202,48 +317,81 @@ function auditLicenses(files, errors) {
 
 function auditRuntime(files, errors) {
     const runtimeEntries = Object.entries(files).filter(([filePath]) => filePath.startsWith(`${SKILL_ROOT}/scripts/`));
+    const entryPath = `${SKILL_ROOT}/scripts/cdp-session.mjs`;
+    const entrySource = files[entryPath];
+    if (typeof entrySource !== 'string' || entrySource.length === 0) {
+        errors.push('scripts/cdp-session.mjs is the required public entry.');
+    } else {
+        if (!entrySource.startsWith('#!/usr/bin/env node\n')) {
+            errors.push('scripts/cdp-session.mjs must retain its Node shebang.');
+        }
+        if (!hasDirectExecutionGuard(entrySource)) {
+            errors.push('scripts/cdp-session.mjs must retain a direct-execution guard.');
+        }
+    }
     for (const [filePath, source] of runtimeEntries) {
-        const isEntry = filePath === `${SKILL_ROOT}/scripts/cdp-session.mjs`;
-        const hasExecutableMarker = source.startsWith('#!') || source.includes('import.meta.url ===');
+        const isEntry = filePath === entryPath;
+        const hasExecutableMarker = source.startsWith('#!') || hasDirectExecutionGuard(source);
         if (hasExecutableMarker && !isEntry) {
             errors.push(`${filePath}: only cdp-session.mjs may have a shebang or direct-execution guard.`);
         }
+        const imports = moduleSpecifiers(source);
         if (filePath.includes('/domains/')) {
-            const imports = [...source.matchAll(/(?:from\s+|import\s*)["']([^"']+)["']/g)].map((match) => match[1]);
-            const forbidden = imports.find((specifier) =>
-                /(^node:(?:child_process|fs|http|https|net|os|process)$)|(?:powershell)|(?:\/application\/)|(?:\/adapters\/)/i.test(
-                    specifier,
-                ),
+            const forbidden = imports.find(
+                (specifier) =>
+                    isForbiddenDomainDependency(specifier) ||
+                    ['adapters', 'application', 'interface'].includes(resolveRuntimeLayer(filePath, specifier)),
             );
             if (forbidden) {
                 errors.push(`${filePath}: domain must not import I/O dependency ${forbidden}.`);
             }
         }
-        if (filePath.includes('/adapters/') && /["'][^"']*\/application\//.test(source)) {
-            errors.push(`${filePath}: adapter must not import application code.`);
+        if (filePath.includes('/adapters/')) {
+            const forbidden = imports.find((specifier) =>
+                ['application', 'interface'].includes(resolveRuntimeLayer(filePath, specifier)),
+            );
+            if (forbidden) {
+                errors.push(`${filePath}: adapter must not import application or interface code ${forbidden}.`);
+            }
         }
-        const unsafeProcessKill = [...source.matchAll(/process\.kill\(([^)]*)\)/g)].some((match) => {
-            const arguments_ = match[1].split(',').map((argument) => argument.trim());
-            return arguments_.length < 2 || arguments_[1] !== '0';
-        });
-        if (/taskkill(?:\.exe)?[^\n]*\/F|Stop-Process[^\n]*-Force/i.test(source) || unsafeProcessKill) {
-            errors.push(`${filePath}: forbidden force-kill command or API detected.`);
+        if (filePath.includes('/shared/')) {
+            const forbidden = imports.find((specifier) =>
+                ['adapters', 'application', 'domains', 'interface'].includes(resolveRuntimeLayer(filePath, specifier)),
+            );
+            if (forbidden) {
+                errors.push(`${filePath}: shared code must not import higher layer ${forbidden}.`);
+            }
         }
-        if (/0\.0\.0\.0|\[::\]|["']::["']/.test(source)) {
-            errors.push(`${filePath}: CDP binding must remain loopback-only.`);
+        if (filePath.includes('/interface/')) {
+            const forbidden = imports.find((specifier) =>
+                ['adapters', 'domains'].includes(resolveRuntimeLayer(filePath, specifier)),
+            );
+            if (forbidden) {
+                errors.push(`${filePath}: interface code must enter through application, not ${forbidden}.`);
+            }
+        }
+        if (hasTerminationApi(source)) {
+            errors.push(`${filePath}: forbidden force-kill or process-termination command/API detected.`);
+        }
+        const externalAddress = externalNetworkLiteral(source);
+        if (externalAddress) {
+            errors.push(`${filePath}: CDP binding must remain loopback-only; found ${externalAddress}.`);
         }
         if (/--(?:category-?pwa|no-category-?pwa)(?:=|\b)/i.test(source)) {
             errors.push(`${filePath}: forbidden PWA category option detected.`);
         }
     }
 
-    const publicFiles = Object.entries(files).filter(
-        ([filePath]) => filePath.startsWith(`${SKILL_ROOT}/`) && !filePath.endsWith('/AGENTS.md'),
-    );
-    for (const [filePath, source] of publicFiles) {
-        const oldIdentifier = ['--target-kind', 'targetKind'].find((identifier) => source.includes(identifier));
-        if (oldIdentifier) {
-            errors.push(`${filePath}: old public identifier ${oldIdentifier} must not ship.`);
+    for (const [filePath, source] of Object.entries(files)) {
+        const lines = source.split('\n');
+        for (const [index, line] of lines.entries()) {
+            const identifier = legacyIdentifiers().find((candidate) => line.includes(candidate));
+            if (!identifier) continue;
+            const explicitNegativeTestExemption = [lines[index - 1], line, lines[index + 1]].some((candidate) =>
+                candidate?.includes('audit-allow-legacy: negative-test'),
+            );
+            if (filePath.startsWith('tests/') && explicitNegativeTestExemption) continue;
+            errors.push(`${filePath}:${index + 1}: legacy public identifier ${identifier} must not ship.`);
         }
     }
 
@@ -260,34 +408,54 @@ function auditRuntime(files, errors) {
     }
 }
 
-function auditSkill(files, errors) {
+function auditSkill(files, skillMetadata, openaiMetadata, errors) {
     const skillPath = `${SKILL_ROOT}/SKILL.md`;
     const skill = files[skillPath] ?? '';
-    const frontmatter = skillFrontmatter(skill);
-    if (scalarFromYaml(frontmatter, 'name') !== 'debugging-cdp-targets') {
+    auditMappingKeys(skillMetadata, ['name', 'description', 'license', 'metadata'], 'Skill frontmatter', errors);
+    auditMappingKeys(skillMetadata?.metadata, ['version'], 'Skill metadata', errors);
+    if (skillMetadata?.name !== 'debugging-cdp-targets') {
         errors.push('Skill name must match its debugging-cdp-targets folder.');
     }
-    if (scalarFromYaml(frontmatter, 'license') !== 'MIT') {
+    if (typeof skillMetadata?.description !== 'string' || skillMetadata.description.trim().length === 0) {
+        errors.push('Skill description must be a non-empty string.');
+    }
+    if (skillMetadata?.license !== 'MIT') {
         errors.push('Skill license metadata must be MIT.');
     }
-    if (scalarFromYaml(frontmatter, 'version') !== EXPECTED_VERSION) {
+    if (!isMapping(skillMetadata?.metadata) || skillMetadata.metadata.version !== EXPECTED_VERSION) {
         errors.push(`Skill metadata version must be ${EXPECTED_VERSION}.`);
     }
     if (!/Compatibility:.*Windows 10 or later.*Node\.js 24\.21\.0.*npx/i.test(skill)) {
         errors.push('Skill compatibility must name Windows 10 or later, Node.js 24.21.0, and npx.');
     }
 
-    const openai = files[`${SKILL_ROOT}/agents/openai.yaml`] ?? '';
-    if (scalarFromYaml(openai, 'display_name') !== 'Debugging CDP Targets') {
+    auditMappingKeys(openaiMetadata, ['interface', 'policy'], 'OpenAI metadata', errors);
+    auditMappingKeys(
+        openaiMetadata?.interface,
+        ['display_name', 'short_description', 'default_prompt'],
+        'OpenAI interface metadata',
+        errors,
+    );
+    auditMappingKeys(openaiMetadata?.policy, ['allow_implicit_invocation'], 'OpenAI policy metadata', errors);
+    if (!isMapping(openaiMetadata?.interface)) {
+        errors.push('OpenAI metadata must contain an interface mapping.');
+    }
+    if (openaiMetadata?.interface?.display_name !== 'Debugging CDP Targets') {
         errors.push('OpenAI metadata display_name must be Debugging CDP Targets.');
     }
-    if (!scalarFromYaml(openai, 'short_description')) {
-        errors.push('OpenAI metadata must provide short_description.');
+    const shortDescription = openaiMetadata?.interface?.short_description;
+    if (typeof shortDescription !== 'string' || shortDescription.length < 25 || shortDescription.length > 64) {
+        errors.push('OpenAI metadata short_description must be a 25-64 character string.');
     }
-    if (!scalarFromYaml(openai, 'default_prompt')?.includes('$debugging-cdp-targets')) {
+    if (!openaiMetadata?.interface?.default_prompt?.includes('$debugging-cdp-targets')) {
         errors.push('OpenAI default prompt must reference $debugging-cdp-targets.');
     }
-    if (scalarFromYaml(openai, 'allow_implicit_invocation') !== 'true') {
+    if (!isMapping(openaiMetadata?.policy)) {
+        errors.push('OpenAI metadata must contain a policy mapping.');
+    }
+    if (typeof openaiMetadata?.policy?.allow_implicit_invocation !== 'boolean') {
+        errors.push('OpenAI allow_implicit_invocation must be a boolean.');
+    } else if (openaiMetadata.policy.allow_implicit_invocation !== true) {
         errors.push('OpenAI metadata must allow implicit invocation.');
     }
 
@@ -297,10 +465,18 @@ function auditSkill(files, errors) {
         }
         for (const match of source.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)) {
             const target = match[1].split('#', 1)[0];
-            if (!target || /^(?:[a-z]+:|\/)/i.test(target)) {
+            if (!target || target.startsWith('#') || /^[a-z]+:/i.test(target)) {
+                continue;
+            }
+            if (target.startsWith('/')) {
+                errors.push(`${filePath}: relative reference ${target} must remain inside the Skill payload.`);
                 continue;
             }
             const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(filePath), target));
+            if (resolved !== SKILL_ROOT && !resolved.startsWith(`${SKILL_ROOT}/`)) {
+                errors.push(`${filePath}: relative reference ${target} must remain inside the Skill payload.`);
+                continue;
+            }
             if (!(resolved in files)) {
                 errors.push(`${filePath}: relative reference ${target} is missing.`);
             }
@@ -308,23 +484,27 @@ function auditSkill(files, errors) {
     }
 }
 
-function auditInventory(files, errors) {
+function auditInventory(files, physicalPayloadFiles, invalidPayloadEntries, errors) {
     const skillManifests = Object.keys(files).filter((filePath) => filePath.endsWith('/SKILL.md'));
     if (skillManifests.length !== 1 || skillManifests[0] !== `${SKILL_ROOT}/SKILL.md`) {
         errors.push(
             `Repository must discover exactly one Skill at ${SKILL_ROOT}/SKILL.md}; found ${skillManifests.join(', ') || 'none'}.`,
         );
     }
-    const allowedTopLevelFiles = new Set(['AGENTS.md', 'LICENSE', 'README.md', 'SKILL.md']);
-    for (const filePath of Object.keys(files)) {
-        if (!filePath.startsWith(`${SKILL_ROOT}/`)) {
-            continue;
+    for (const invalid of invalidPayloadEntries) {
+        errors.push(`${invalid}: production payload must contain ordinary files and directories only.`);
+    }
+    const auditedPayloadFiles = new Set(Object.keys(files).filter((filePath) => filePath.startsWith(`${SKILL_ROOT}/`)));
+    for (const filePath of physicalPayloadFiles) {
+        if (!auditedPayloadFiles.has(filePath)) {
+            errors.push(
+                `Production payload: ${filePath.slice(SKILL_ROOT.length + 1)} must be tracked or non-ignored so its contents are audited.`,
+            );
         }
-        const relative = filePath.slice(SKILL_ROOT.length + 1);
-        const [first] = relative.split('/');
-        if (!allowedTopLevelFiles.has(relative) && !['agents', 'references', 'scripts'].includes(first)) {
-            errors.push(`${filePath}: production payload contains repository-only file ${relative}.`);
-        }
+    }
+    const relativeFiles = physicalPayloadFiles.map((filePath) => filePath.slice(SKILL_ROOT.length + 1));
+    for (const error of validatePayloadFileInventory(relativeFiles)) {
+        errors.push(`Production payload: ${error}`);
     }
 }
 
@@ -335,12 +515,23 @@ export function auditRepositorySnapshot(snapshot) {
     const normalizedSnapshot = {
         ...snapshot,
         files,
+        invalidPayloadEntries: (snapshot.invalidPayloadEntries ?? []).map(normalize),
+        physicalPayloadFiles: (
+            snapshot.physicalPayloadFiles ??
+            Object.keys(files).filter((filePath) => filePath.startsWith(`${SKILL_ROOT}/`))
+        ).map(normalize),
         trackedFiles: snapshot.trackedFiles.map(normalize),
     };
     const errors = [];
+    const skillMetadata = parseSkillFrontmatter(files[`${SKILL_ROOT}/SKILL.md`] ?? '', errors);
+    const openaiMetadata = parseYamlMapping(
+        files[`${SKILL_ROOT}/agents/openai.yaml`] ?? '',
+        'OpenAI metadata YAML',
+        errors,
+    );
     auditDirectories(normalizedSnapshot, errors);
     auditSymlink(normalizedSnapshot, errors);
-    auditVersions(files, errors);
+    auditVersions(files, skillMetadata, errors);
     auditLicenses(files, errors);
     for (const [filePath, source] of Object.entries(files)) {
         if (filePath === 'CLAUDE.md') {
@@ -349,9 +540,32 @@ export function auditRepositorySnapshot(snapshot) {
         errors.push(...validateTextStyle(filePath, source));
     }
     auditRuntime(files, errors);
-    auditSkill(files, errors);
-    auditInventory(files, errors);
+    auditSkill(files, skillMetadata, openaiMetadata, errors);
+    auditInventory(files, normalizedSnapshot.physicalPayloadFiles, normalizedSnapshot.invalidPayloadEntries, errors);
     return errors;
+}
+
+function readPhysicalPayload(root) {
+    const payloadRoot = path.join(root, ...SKILL_ROOT.split('/'));
+    const files = [];
+    const invalidEntries = [];
+    if (!existsSync(payloadRoot)) return { files, invalidEntries };
+
+    function visit(directory, relative = '') {
+        for (const entry of readdirSync(directory, { withFileTypes: true })) {
+            const relativePath = relative ? `${relative}/${entry.name}` : entry.name;
+            const absolutePath = path.join(directory, entry.name);
+            if (entry.isDirectory()) {
+                visit(absolutePath, relativePath);
+            } else if (entry.isFile()) {
+                files.push(`${SKILL_ROOT}/${relativePath}`);
+            } else {
+                invalidEntries.push(`${SKILL_ROOT}/${relativePath}`);
+            }
+        }
+    }
+    visit(payloadRoot);
+    return { files, invalidEntries };
 }
 
 export function createRepositorySnapshot(root) {
@@ -382,7 +596,15 @@ export function createRepositorySnapshot(root) {
             files[filePath] = readFileSync(absolute, 'utf8');
         }
     }
-    return { files, symlinks, trackedFiles, trackedModes };
+    const physicalPayload = readPhysicalPayload(root);
+    return {
+        files,
+        symlinks,
+        trackedFiles,
+        trackedModes,
+        physicalPayloadFiles: physicalPayload.files,
+        invalidPayloadEntries: physicalPayload.invalidEntries,
+    };
 }
 
 function run() {

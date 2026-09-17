@@ -84,7 +84,10 @@ function run() {
     if (process.env.GITHUB_EVENT_PATH) {
         event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
     }
-    const currentBranch = event ? undefined : git(root, ['branch', '--show-current']);
+    const currentBranch =
+        process.env.GITHUB_EVENT_NAME === 'pull_request' || process.env.GITHUB_EVENT_NAME === 'push'
+            ? undefined
+            : git(root, ['branch', '--show-current']);
     const request = buildCommitCheckRequest({
         event,
         eventName: process.env.GITHUB_EVENT_NAME,

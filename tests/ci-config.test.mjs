@@ -11,6 +11,7 @@ const workflow = parse(source);
 test('CI workflow has read-only triggers, concurrency, and exact job display names', () => {
     assert.equal(Object.hasOwn(workflow.on, 'push'), true);
     assert.deepEqual(workflow.on.pull_request.branches, ['main']);
+    assert.deepEqual(workflow.on.pull_request.types, ['opened', 'reopened', 'synchronize', 'edited']);
     assert.equal(Object.hasOwn(workflow.on, 'workflow_dispatch'), true);
     assert.deepEqual(workflow.permissions, { contents: 'read' });
     assert.equal(workflow.concurrency['cancel-in-progress'], true);

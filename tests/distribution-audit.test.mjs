@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compareDistributionTrees, parseDiscoveredSkills } from '../tooling/distribution-audit.mjs';
+import {
+    compareDistributionTrees,
+    parseDiscoveredSkills,
+    validateDiscoveredSkills,
+} from '../tooling/distribution-audit.mjs';
 
 test('parses exactly the Skill names emitted by Skills CLI discovery', () => {
     const output = [
@@ -10,15 +14,42 @@ test('parses exactly the Skill names emitted by Skills CLI discovery', () => {
         'debugging-cdp-targets',
         'Use when inspecting a CDP renderer.',
     ].join('\n');
-    assert.deepEqual(parseDiscoveredSkills(output), ['debugging-cdp-targets']);
+    assert.deepEqual(parseDiscoveredSkills(output), {
+        reportedCount: 1,
+        names: ['debugging-cdp-targets'],
+    });
 });
 
-test('rejects Skills CLI discovery with missing or additional Skills', () => {
-    assert.notDeepEqual(parseDiscoveredSkills('Found 0 skills\n'), ['debugging-cdp-targets']);
-    assert.deepEqual(parseDiscoveredSkills('Found 2 skills\ndebugging-cdp-targets\nother-skill\n'), [
-        'debugging-cdp-targets',
-        'other-skill',
-    ]);
+test('preserves legal single-word names and duplicate discovery records', () => {
+    assert.deepEqual(
+        parseDiscoveredSkills(
+            'Found 3 skills\nAvailable Skills\n    solo\n      description\n    debugging-cdp-targets\n      description\n    solo\n',
+        ),
+        {
+            reportedCount: 3,
+            names: ['solo', 'debugging-cdp-targets', 'solo'],
+        },
+    );
+});
+
+test('rejects reported-count mismatches, duplicates, missing, and additional Skills', () => {
+    assert.match(validateDiscoveredSkills({ reportedCount: 2, names: ['debugging-cdp-targets'] }).join('\n'), /count/i);
+    assert.match(
+        validateDiscoveredSkills({
+            reportedCount: 2,
+            names: ['debugging-cdp-targets', 'debugging-cdp-targets'],
+        }).join('\n'),
+        /duplicate/i,
+    );
+    assert.notDeepEqual(validateDiscoveredSkills({ reportedCount: 0, names: [] }), []);
+    assert.notDeepEqual(
+        validateDiscoveredSkills({
+            reportedCount: 2,
+            names: ['debugging-cdp-targets', 'other'],
+        }),
+        [],
+    );
+    assert.deepEqual(validateDiscoveredSkills({ reportedCount: 1, names: ['debugging-cdp-targets'] }), []);
 });
 
 test('accepts a byte-identical copied Skill payload', () => {

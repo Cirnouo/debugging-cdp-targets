@@ -61,13 +61,14 @@ test('new adapter vocabulary accepts both strategies and rejects legacy input', 
         assert.equal(parseCli(['start', '--target-adapter', targetAdapter]).targetAdapter, targetAdapter);
     }
     for (const value of ['Chrome', 'ChromiumApp', 'other']) {
+        // audit-allow-legacy: negative-test
         assert.throws(
             () => parseCli(['start', '--target-adapter', value]),
             (error) => error.code === 'TARGET_ADAPTER_INVALID',
         );
     }
     assert.throws(
-        () => parseCli(['start', '--target-kind', 'Chrome']),
+        () => parseCli(['start', '--target-kind', 'Chrome']), // audit-allow-legacy: negative-test
         (error) => error.code === 'ARGUMENT_INVALID',
     );
 });
@@ -75,7 +76,7 @@ test('new adapter vocabulary accepts both strategies and rejects legacy input', 
 test('new records persist targetAdapter without legacy fields', () => {
     const record = createSessionRecord(literalState({ targetAdapter: 'chrome' }));
     assert.equal(record.targetAdapter, 'chrome');
-    assert.equal(Object.hasOwn(record, 'targetKind'), false);
+    assert.equal(Object.hasOwn(record, 'targetKind'), false); // audit-allow-legacy: negative-test
 });
 
 test('new per-user layout is deterministic with a separate retained cache', () => {
@@ -173,6 +174,7 @@ test('new final entry runs from any working directory', () => {
 
 test('Invoke rejects options placed before its tool delimiter', () => {
     assert.throws(() => parseCli(['invoke', '--target-kind', 'Chrome', '--', 'list_pages']), {
+        // audit-allow-legacy: negative-test
         code: 'ARGUMENT_INVALID',
     });
 });

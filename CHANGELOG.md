@@ -25,11 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- None.
+- Made manual CI commit checks resolve the checked-out branch and rerun pull
+  request governance after title edits.
+- Aligned the shared commit validator with commitlint body, footer, and subject
+  rules.
 
 ### Security
 
-- None.
+- Hardened payload, metadata, source-boundary, process-termination, listener,
+  legacy-identifier, local-link, and Skills CLI discovery audits against
+  syntax and ignored-file bypasses.
 
 ## [0.1.0] - 2026-09-17
 

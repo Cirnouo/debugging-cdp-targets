@@ -74,10 +74,25 @@ export function validateCommitMessage(message, options = {}) {
         if (subject.endsWith('.')) {
             errors.push('Commit subject must not end with a period.');
         }
+        if (/^[^A-Za-z]*[A-Z]/.test(subject)) {
+            errors.push('Commit subject must use lower-case sentence style.');
+        }
     }
 
     if (rest.length > 0 && rest[0] !== '') {
         errors.push('Commit body or footer must be preceded by a blank line.');
+    }
+
+    for (const line of rest.slice(1)) {
+        if (line.length > 100) {
+            errors.push('Commit body and footer lines must not exceed 100 characters.');
+            break;
+        }
+    }
+
+    const footerIndex = rest.findIndex((line) => /^BREAKING CHANGE:\s*\S/.test(line));
+    if (footerIndex > 0 && rest[footerIndex - 1] !== '') {
+        errors.push('Commit footer must be preceded by a blank line.');
     }
 
     return errors;

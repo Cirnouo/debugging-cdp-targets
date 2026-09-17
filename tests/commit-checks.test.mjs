@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { buildCommitCheckRequest, validateCommitRecords } from '../tooling/check-commits.mjs';
 
@@ -66,6 +71,45 @@ test('builds a local audit over current ancestry', () => {
         range: 'HEAD',
         includeAncestors: true,
     });
+});
+
+test('builds a workflow dispatch audit from the checked-out branch', () => {
+    assert.deepEqual(
+        buildCommitCheckRequest({
+            eventName: 'workflow_dispatch',
+            event: {},
+            currentBranch: 'main',
+        }),
+        {
+            branches: ['main'],
+            directMessages: [],
+            range: 'HEAD',
+            includeAncestors: true,
+        },
+    );
+});
+
+test('runs the commit checker for a workflow_dispatch event fixture', async () => {
+    const root = fileURLToPath(new URL('../', import.meta.url));
+    const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-workflow-dispatch-'));
+    const eventPath = path.join(temporaryDirectory, 'event.json');
+    await writeFile(eventPath, '{}\n', 'utf8');
+    try {
+        const result = spawnSync(process.execPath, ['tooling/check-commits.mjs'], {
+            cwd: root,
+            encoding: 'utf8',
+            env: {
+                ...process.env,
+                GITHUB_EVENT_NAME: 'workflow_dispatch',
+                GITHUB_EVENT_PATH: eventPath,
+            },
+            windowsHide: true,
+        });
+        assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+        assert.match(result.stdout, /audit passed/i);
+    } finally {
+        await rm(temporaryDirectory, { force: true, recursive: true });
+    }
 });
 
 test('validates ordinary commit records and skips only topology-proven merges', () => {

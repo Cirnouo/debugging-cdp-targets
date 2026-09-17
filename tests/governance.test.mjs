@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { validateBranchName, validateCommitMessage } from '../tooling/governance.mjs';
 
@@ -17,6 +19,20 @@ const validScopes = [
     'dependencies',
     'release',
 ];
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+const commitlintCli = fileURLToPath(new URL('../node_modules/@commitlint/cli/cli.js', import.meta.url));
+
+function commitlintAccepts(message) {
+    const result = spawnSync(process.execPath, [commitlintCli, '--config', 'commitlint.config.mjs'], {
+        cwd: root,
+        encoding: 'utf8',
+        input: message,
+        windowsHide: true,
+    });
+    assert.equal(result.error, undefined);
+    return result.status === 0;
+}
 
 test('accepts every approved Conventional Commit type and scope', () => {
     const types = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'revert', 'style', 'test'];
@@ -51,6 +67,19 @@ test('rejects malformed commit messages with actionable errors', () => {
 
     for (const [message, expected] of invalid) {
         assert.match(validateCommitMessage(message).join('\n'), new RegExp(expected, 'i'));
+    }
+});
+
+test('keeps the shared validator in parity with commitlint for body, footer, and subject rules', () => {
+    const invalid = [
+        'feat(skill): Add feature',
+        `feat(skill): change contract\n\n${'x'.repeat(101)}`,
+        'feat(skill): change contract\n\nbody details\nBREAKING CHANGE: callers must migrate',
+    ];
+
+    for (const message of invalid) {
+        assert.equal(commitlintAccepts(message), false, message);
+        assert.notDeepEqual(validateCommitMessage(message), [], message);
     }
 });
 

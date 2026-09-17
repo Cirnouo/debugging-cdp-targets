@@ -53,7 +53,6 @@ function validSnapshot() {
             4,
         )}\n`,
         'skills/README.md': '# Skills\n',
-        'skills/debugging-cdp-targets/AGENTS.md': '# Skill rules\n',
         'skills/debugging-cdp-targets/LICENSE': license,
         'skills/debugging-cdp-targets/README.md': '# Payload\n',
         'skills/debugging-cdp-targets/SKILL.md': [
@@ -94,21 +93,35 @@ function validSnapshot() {
             '',
         ].join('\n'),
         'skills/debugging-cdp-targets/scripts/adapters/README.md': '# Adapters\n',
+        'skills/debugging-cdp-targets/scripts/adapters/AGENTS.md': '# Adapter rules\n',
         'skills/debugging-cdp-targets/scripts/adapters/runtime.mjs':
             'import process from "node:process";\nexport { process };\n',
+        'skills/debugging-cdp-targets/scripts/application/AGENTS.md': '# Application rules\n',
+        'skills/debugging-cdp-targets/scripts/application/README.md': '# Application\n',
+        'skills/debugging-cdp-targets/scripts/domains/AGENTS.md': '# Domain rules\n',
         'skills/debugging-cdp-targets/scripts/domains/README.md': '# Domains\n',
-        'skills/debugging-cdp-targets/scripts/domains/policy.mjs': 'export const bind = "127.0.0.1";\n',
+        'skills/debugging-cdp-targets/scripts/domains/cdp-target/AGENTS.md': '# CDP target rules\n',
+        'skills/debugging-cdp-targets/scripts/domains/cdp-target/README.md': '# CDP target\n',
+        'skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs': 'export const bind = "127.0.0.1";\n',
+        'skills/debugging-cdp-targets/scripts/hide-mcp-console.cjs': 'module.exports = {};\n',
+        'skills/debugging-cdp-targets/scripts/interface/AGENTS.md': '# Interface rules\n',
+        'skills/debugging-cdp-targets/scripts/interface/README.md': '# Interface\n',
         'skills/debugging-cdp-targets/scripts/shared/README.md': '# Shared\n',
+        'skills/debugging-cdp-targets/scripts/shared/AGENTS.md': '# Shared rules\n',
         'skills/debugging-cdp-targets/scripts/shared/constants.mjs': [
             'export const APPROVED_STATE_FIELDS = Object.freeze([',
             ...approvedFields.map((field) => `    "${field}",`),
             ']);',
             '',
         ].join('\n'),
+        'skills/debugging-cdp-targets/scripts/windows-cdp-helper.ps1': 'param()\n',
     };
 
     return {
         files,
+        physicalPayloadFiles: Object.keys(files).filter((filePath) =>
+            filePath.startsWith('skills/debugging-cdp-targets/'),
+        ),
         trackedFiles: Object.keys(files),
         trackedModes: { 'CLAUDE.md': '120000' },
         symlinks: { 'CLAUDE.md': 'AGENTS.md' },
@@ -117,6 +130,187 @@ function validSnapshot() {
 
 test('accepts a repository snapshot satisfying every audit', () => {
     assert.deepEqual(auditRepositorySnapshot(validSnapshot()), []);
+});
+
+test('rejects every import syntax that can cross domain or adapter boundaries', () => {
+    const cases = [
+        [
+            'domain node subpath re-export',
+            'export { readFile } from "node:fs/promises";\n',
+            /domain.*node:fs\/promises/i,
+        ],
+        ['domain bare dynamic import', 'const fs = await import("fs");\n', /domain.*fs/i],
+        ['domain interface import', 'export * from "../../interface/cli.mjs";\n', /domain.*interface/i],
+        ['adapter interface re-export', 'export * from "../interface/cli.mjs";\n', /adapter.*interface/i],
+    ];
+
+    for (const [name, source, pattern] of cases) {
+        const snapshot = validSnapshot();
+        const target = name.startsWith('adapter')
+            ? 'skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'
+            : 'skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs';
+        snapshot.files[target] = source;
+        assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
+    }
+});
+
+test('requires one public entry and rejects alternate direct-execution guards elsewhere', () => {
+    const alternateGuards = [
+        'if (import.meta.main) { await main(); }\n',
+        'if (fileURLToPath(import.meta.url) === process.argv[1]) { await main(); }\n',
+        'if (require.main === module) { main(); }\n',
+    ];
+    for (const source of alternateGuards) {
+        const snapshot = validSnapshot();
+        snapshot.files['skills/debugging-cdp-targets/scripts/shared/constants.mjs'] += source;
+        assert.match(auditRepositorySnapshot(snapshot).join('\n'), /only.*cdp-session\.mjs.*direct/i);
+    }
+
+    const missing = validSnapshot();
+    delete missing.files['skills/debugging-cdp-targets/scripts/cdp-session.mjs'];
+    missing.trackedFiles = Object.keys(missing.files);
+    missing.physicalPayloadFiles = missing.physicalPayloadFiles.filter(
+        (filePath) => filePath !== 'skills/debugging-cdp-targets/scripts/cdp-session.mjs',
+    );
+    assert.match(auditRepositorySnapshot(missing).join('\n'), /cdp-session\.mjs.*required public entry/i);
+});
+
+test('rejects process termination APIs and concrete non-loopback addresses', () => {
+    const cases = [
+        ['Stop-Process', 'Stop-Process -Id $Pid\n', /force-kill|termination/i],
+        ['taskkill', 'const command = "taskkill /PID 42";\n', /force-kill|termination/i],
+        ['child kill', 'child.kill();\n', /force-kill|termination/i],
+        ['object Kill', 'target.Kill();\n', /force-kill|termination/i],
+        ['chained object Kill', 'getTarget().Kill();\n', /force-kill|termination/i],
+        ['external IPv4 bind', 'export const bind = "192.168.1.5";\n', /loopback/i],
+    ];
+    for (const [name, source, pattern] of cases) {
+        const snapshot = validSnapshot();
+        snapshot.files['skills/debugging-cdp-targets/scripts/adapters/runtime.mjs'] = source;
+        assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
+    }
+});
+
+test('rejects every legacy public identifier from the user README and payload', () => {
+    const legacy = [
+        'debugging-chromium-apps', // audit-allow-legacy: negative-test
+        'chromium-devtools-session', // audit-allow-legacy: negative-test
+        '--target-kind', // audit-allow-legacy: negative-test
+        'targetKind', // audit-allow-legacy: negative-test
+        'TargetKind', // audit-allow-legacy: negative-test
+        'ChromiumApp', // audit-allow-legacy: negative-test
+        'agent-debugging-chromium-apps', // audit-allow-legacy: negative-test
+    ];
+    for (const identifier of legacy) {
+        for (const filePath of ['README.md', 'skills/debugging-cdp-targets/README.md']) {
+            const snapshot = validSnapshot();
+            snapshot.files[filePath] += `${identifier}\n`;
+            assert.match(
+                auditRepositorySnapshot(snapshot).join('\n'),
+                /legacy public identifier/i,
+                `${filePath}: ${identifier}`,
+            );
+        }
+    }
+});
+
+test('parses and validates the Skill and OpenAI YAML schemas', () => {
+    const cases = [
+        [
+            'malformed Skill metadata',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] = snapshot.files[
+                    'skills/debugging-cdp-targets/SKILL.md'
+                ].replace('metadata:', 'metadata: [')),
+            /Skill frontmatter.*YAML/i,
+        ],
+        [
+            'empty Skill description',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] = snapshot.files[
+                    'skills/debugging-cdp-targets/SKILL.md'
+                ].replace('description: Use when debugging local CDP targets.', 'description: ""')),
+            /Skill description.*non-empty/i,
+        ],
+        [
+            'OpenAI interface at wrong level',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/agents/openai.yaml'] = [
+                    'display_name: "Debugging CDP Targets"',
+                    'short_description: "Safely inspect local CDP targets on Windows"',
+                    'default_prompt: "Use $debugging-cdp-targets safely."',
+                    'policy:',
+                    '    allow_implicit_invocation: true',
+                    '',
+                ].join('\n')),
+            /OpenAI metadata.*interface/i,
+        ],
+        [
+            'OpenAI boolean encoded as string',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/agents/openai.yaml'] = snapshot.files[
+                    'skills/debugging-cdp-targets/agents/openai.yaml'
+                ].replace('allow_implicit_invocation: true', 'allow_implicit_invocation: "true"')),
+            /allow_implicit_invocation.*boolean/i,
+        ],
+        [
+            'OpenAI dependency outside the supported schema',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/agents/openai.yaml'] +=
+                    'dependencies:\n    mcp:\n        - chrome-devtools\n'),
+            /OpenAI metadata.*unsupported.*dependencies/i,
+        ],
+    ];
+    for (const [name, mutate, pattern] of cases) {
+        const snapshot = validSnapshot();
+        mutate(snapshot);
+        assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
+    }
+});
+
+test('enforces payload paths, required licenses, ignored sensitive files, and contained links', () => {
+    const cases = [
+        [
+            'repository policy inside scripts',
+            (snapshot) => {
+                const filePath = 'skills/debugging-cdp-targets/scripts/docs/policy.md';
+                snapshot.files[filePath] = '# Policy\n';
+                snapshot.physicalPayloadFiles.push(filePath);
+            },
+            /payload.*scripts\/docs\/policy\.md/i,
+        ],
+        [
+            'ignored environment file',
+            (snapshot) => snapshot.physicalPayloadFiles.push('skills/debugging-cdp-targets/scripts/.env'),
+            /payload.*scripts\/\.env/i,
+        ],
+        [
+            'ignored source-shaped file',
+            (snapshot) =>
+                snapshot.physicalPayloadFiles.push('skills/debugging-cdp-targets/scripts/adapters/secret.mjs'),
+            /payload.*secret\.mjs.*tracked/i,
+        ],
+        ['missing root license', (snapshot) => delete snapshot.files.LICENSE, /root LICENSE.*required/i],
+        [
+            'missing payload license',
+            (snapshot) => delete snapshot.files['skills/debugging-cdp-targets/LICENSE'],
+            /payload LICENSE.*required/i,
+        ],
+        [
+            'escaping payload link',
+            (snapshot) =>
+                (snapshot.files['skills/debugging-cdp-targets/SKILL.md'] = snapshot.files[
+                    'skills/debugging-cdp-targets/SKILL.md'
+                ].replace('references/obsidian.md', '../../package.json')),
+            /relative reference.*remain inside.*payload/i,
+        ],
+    ];
+    for (const [name, mutate, pattern] of cases) {
+        const snapshot = validSnapshot();
+        mutate(snapshot);
+        snapshot.trackedFiles = Object.keys(snapshot.files);
+        assert.match(auditRepositorySnapshot(snapshot).join('\n'), pattern, name);
+    }
 });
 
 test('reports each repository policy violation with an actionable message', () => {
@@ -187,7 +381,7 @@ test('reports each repository policy violation with an actionable message', () =
         [
             'domain I/O import',
             (snapshot) =>
-                (snapshot.files['skills/debugging-cdp-targets/scripts/domains/policy.mjs'] =
+                (snapshot.files['skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs'] =
                     'import fs from "node:fs";\nexport { fs };\n'),
             /domain.*node:fs/i,
         ],
@@ -200,8 +394,8 @@ test('reports each repository policy violation with an actionable message', () =
         ],
         [
             'old identifier',
-            (snapshot) => (snapshot.files['skills/debugging-cdp-targets/README.md'] += 'Use --target-kind Chrome.\n'),
-            /old public identifier.*--target-kind/i,
+            (snapshot) => (snapshot.files['skills/debugging-cdp-targets/README.md'] += 'Use --target-kind Chrome.\n'), // audit-allow-legacy: negative-test
+            /legacy public identifier/i,
         ],
         [
             'force kill',
@@ -213,7 +407,7 @@ test('reports each repository policy violation with an actionable message', () =
         [
             'external binding',
             (snapshot) =>
-                (snapshot.files['skills/debugging-cdp-targets/scripts/domains/policy.mjs'] =
+                (snapshot.files['skills/debugging-cdp-targets/scripts/domains/cdp-target/policy.mjs'] =
                     'export const bind = "0.0.0.0";\n'),
             /loopback/i,
         ],
@@ -266,7 +460,11 @@ test('reports each repository policy violation with an actionable message', () =
         ],
         [
             'repository file in payload',
-            (snapshot) => (snapshot.files['skills/debugging-cdp-targets/package.json'] = '{}\n'),
+            (snapshot) => {
+                const filePath = 'skills/debugging-cdp-targets/package.json';
+                snapshot.files[filePath] = '{}\n';
+                snapshot.physicalPayloadFiles.push(filePath);
+            },
             /production payload.*package\.json/i,
         ],
         [
