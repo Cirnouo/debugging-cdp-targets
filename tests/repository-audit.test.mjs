@@ -270,6 +270,7 @@ test('keeps JavaScript regex literals separate from comments during safety analy
             'closing parenthesis inside condition string',
             "if (text.includes(')')) /\\//.test(text); process.kill(42);\n",
         ],
+        ['parenthesis inside condition regex', 'if (/\\(/.test(text)) /\\//.test(text); process.kill(42);\n'],
         ['for-await control statement', 'for await (const item of iterable) /\\//.test(item); process.kill(42);\n'],
     ]) {
         const complexControl = validSnapshot();

@@ -115,7 +115,7 @@ function classifyRegularExpressionContext(prefix) {
     if ('([{:;,=!?&|+-*%^~<>/'.includes(trimmed.at(-1))) return 'regex';
     if (trimmed.endsWith('}')) return 'ambiguous';
     if (trimmed.endsWith(')')) {
-        if (/['"`]/.test(trimmed)) return 'ambiguous';
+        if (["'", '"', '`', '/'].some((token) => trimmed.includes(token))) return 'ambiguous';
         let depth = 0;
         for (let index = trimmed.length - 1; index >= 0; index -= 1) {
             if (trimmed[index] === ')') {
