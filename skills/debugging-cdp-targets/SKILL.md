@@ -61,7 +61,10 @@ On `ok: false`, report `errorCode`, `message`, and details; do not bypass the
 runner. If a missing-target result says `sessionCleared: true`, the runner has
 removed safe-to-discard state and has not launched a replacement. Treat
 `toolMayHaveExecuted: true` as an uncertain side effect and do not retry the tool
-without confirmation.
+without confirmation. When the exited target's session was cleared, no managed
+instance remains: do not run `stop` or offer Close/Keep for that vanished
+instance. Start a replacement only after the user explicitly chooses to
+continue.
 
 State is fixed at
 `%LOCALAPPDATA%\debugging-cdp-targets\state\session.json`; the CLI cache is a
