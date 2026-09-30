@@ -17,7 +17,7 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
     assert.equal(workflow.concurrency['cancel-in-progress'], true);
     assert.deepEqual(
         Object.values(workflow.jobs).map((job) => job.name),
-        ['Commit messages', 'Quality', 'Windows tests'],
+        ['Commit messages', 'Quality', 'Windows tests', `Portable tests (\${{ matrix.os }})`],
     );
     assert.equal(workflow.jobs['windows-tests'].needs, 'quality');
 });
@@ -29,7 +29,7 @@ test('CI workflow uses only the approved action pins and uploads no artifacts', 
         'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 9);
+    assert.equal(uses.length, 12);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
