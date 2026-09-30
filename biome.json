@@ -6,7 +6,7 @@
         "useIgnoreFile": true
     },
     "files": {
-        "includes": ["**", "!**/.husky/_", "!**/.superpowers"]
+        "includes": ["**", "!**/.husky/_", "!**/.superpowers", "!**/plugins/debugging-cdp-targets/dist"]
     },
     "formatter": {
         "enabled": true,

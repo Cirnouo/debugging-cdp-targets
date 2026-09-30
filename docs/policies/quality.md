@@ -1,31 +1,32 @@
 # Quality, hooks, and CI
 
-## Maintained text
+Use four spaces, UTF-8, LF, a final newline, and no tabs. Biome formats/lints
+JavaScript and JSON; repository text checks cover YAML, Markdown, PowerShell,
+TOML, and shell. Generated lockfile indentation is exempt.
 
-Use UTF-8, LF, a final newline, four spaces, and no tabs in maintained source,
-configuration, scripts, and documentation. `.editorconfig` and
-`.gitattributes` are the shared format sources.
+Develop changed behavior test-first. Regression tests use isolated fake CDP
+targets; never download packages or launch user browsers in the default suite.
+Explicit integration smoke commands are separate. Keep coverage floors at
+52% lines, 71% branches, and 61% functions across production modules.
 
-## Tests and coverage
+Run focused Node tests, then pnpm verify:push: formatting, lint, syntax,
+coverage, repository audit, deterministic build, distribution, and Git rules.
+pnpm build:plugin regenerates committed bundles; check:build is read-only.
 
-Develop domain behavior test-first and observe the focused test fail for the
-expected reason before implementation. The regression suite must not launch or
-close real user applications or download packages.
+Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
+pre-commit uses lint-staged's default stash/partial-staging protection; safe
+Biome writes are limited to staged JS/JSON, other text is audited read-only.
+pre-push runs verify:push. --no-verify and HUSKY=0 can bypass local hooks.
 
-Run:
+CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
+cancellation of superseded ref runs. Commit messages validates topology, PR
+titles, and source branches; Quality checks policy and coverage; Windows tests
+parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
+fake CDP on Linux/macOS. No account data or profiles are uploaded.
 
-```powershell
-node --test tests/cdp-session.test.mjs
-pnpm test
-pnpm test:coverage
-pnpm verify:push
-```
-
-The minimum coverage floors are 52% lines, 71% branches, and 61% functions.
-
-## Enforcement
-
-Package scripts, format/lint configuration, repository validators, Git hooks,
-and CI derive from these policies, remain non-destructive, and run on supported
-Windows and Ubuntu environments where applicable. Hooks do not replace fresh
-manual verification before a completion claim, commit, or release.
+After CI succeeds on GitHub, the user may enable a main Ruleset requiring PRs,
+up-to-date branches, linear history, no force pushes/deletion, and strict
+required checks: Commit messages, Quality, Windows tests, and both Portable
+tests matrix checks. Keep squash merge only. Actions runs after GitHub accepts
+a push, not before; pre-push is the local pre-transfer gate. This change does
+not alter GitHub settings.

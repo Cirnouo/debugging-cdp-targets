@@ -1,0 +1,10 @@
+# Runtime source
+
+- `interface/`: MCP bootstrap and local control CLI composition.
+- `application/`: current-target lifecycle and runtime orchestration.
+- `domains/`: pure launch and CDP identity/port rules.
+- `adapters/`: local IPC, CDP transport, official Server, process/OS I/O.
+- `shared/`: cross-layer constants.
+- `AGENTS.md`: dependency and stdout constraints.
+
+Generated installable code lives in plugins/debugging-cdp-targets/dist.

@@ -1,6 +1,6 @@
 # ADR 0002: Use one Node entry with domain modules
 
-- Status: Accepted
+- Status: Superseded by ADR 0005 for runtime entry and bridge design
 - Date: 2026-09-17
 
 ## Context

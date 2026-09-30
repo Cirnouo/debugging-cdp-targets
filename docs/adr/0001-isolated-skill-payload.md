@@ -1,6 +1,6 @@
 # ADR 0001: Isolate the installable Skill payload
 
-- Status: Accepted
+- Status: Superseded by ADR 0005 for distribution
 - Date: 2026-09-17
 
 ## Context

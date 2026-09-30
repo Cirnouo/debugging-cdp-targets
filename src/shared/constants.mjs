@@ -1,0 +1,17 @@
+export const LOOPBACK = '127.0.0.1';
+export const DEFAULT_BASE_PORT = 9222;
+export const MAX_PORT = 65535;
+export const FIRST_USER_PORT = 1024;
+export const REQUEST_TIMEOUT_MS = 5_000;
+export const CONTROL_TIMEOUT_MS = 45_000;
+export const STARTUP_TIMEOUT_MS = 20_000;
+export const POLL_INTERVAL_MS = 200;
+export const CLOSE_TIMEOUT_SECONDS = 10;
+export const MAX_HTTP_BYTES = 8 * 1024 * 1024;
+export const MAX_CONTROL_BYTES = 64 * 1024;
+export const TARGET_KINDS = Object.freeze(['chrome', 'generic-cdp']);
+export const DISPOSITIONS = Object.freeze(['Close', 'Keep']);
+export const PACKAGE_NAME = 'chrome-devtools-mcp';
+export const PACKAGE_VERSION = '1.9.0';
+export const PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
+export const NPM_REGISTRY = 'https://registry.npmjs.org';

@@ -1,6 +1,6 @@
 # ADR 0004: Use explicit target adapters
 
-- Status: Accepted
+- Status: Superseded by ADR 0005 for generic target launch contracts
 - Date: 2026-09-17
 
 ## Context

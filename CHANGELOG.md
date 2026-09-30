@@ -1,71 +1,33 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes are recorded here using Keep a Changelog and SemVer.
+Version 0.1.0 remains under development; no release has been published.
 
 ## [Unreleased]
 
 ### Added
 
-- None.
+- Codex Plugin and local Marketplace catalog with bundled Node runtime.
+- Direct official chrome-devtools-mcp 1.9.0 stdio tools.
+- Temporary control channel for status, start, switch, and stop.
+- Stable loopback CDP entry with verified targets and explicit Close/Keep.
+- Safe launch-command templates, environment expansion, and port selection.
+- Portable process layout and simulated CDP coverage.
 
 ### Changed
 
-- None.
-
-### Deprecated
-
-- None.
-
-### Removed
-
-- None.
-
-### Fixed
-
-- Made manual CI commit checks resolve the checked-out branch and rerun pull
-  request governance after title edits.
-- Aligned the shared commit validator with commitlint body, footer, and subject
-  rules.
-
-### Security
-
-- Hardened payload, metadata, source-boundary, process-termination, listener,
-  legacy-identifier, local-link, and Skills CLI discovery audits against
-  syntax and ignored-file bypasses.
-
-## [0.1.0] - 2026-09-17
-
-### Added
-
-- Installable `debugging-cdp-targets` Skill with Chrome and generic CDP target
-  adapters, a managed session runner, Obsidian guidance, and local governance.
-- Verified loopback CDP, official DevTools daemon identity, explicit Close/Keep
-  lifecycle, isolated LOCALAPPDATA state/cache, and opt-in Chrome extension mode.
-
-### Changed
-
-- Initial public release; no earlier published behavior was changed.
-
-### Deprecated
-
-- None.
+- Chrome recommendations enable extension tools and disable usage statistics
+  and CrUX, with explicit connection-level environment overrides.
+- Source and implementation rules now live outside the installable Skill.
+- Shared vocabulary now lives in docs/domain-language.md.
 
 ### Removed
 
-- Experimental root-level Skill discovery surface after migration to the
-  isolated payload.
-
-### Fixed
-
-- None.
+- Unreleased experimental DevTools CLI daemon, Invoke, Resume, saved sessions,
+  and application-specific Obsidian instructions.
+- Skills CLI and standalone npm distribution plans.
 
 ### Security
 
-- Disabled official CLI usage statistics and CrUX lookup, rejected PWA category
-  mode, and prohibited forced target termination.
-
-[Unreleased]: https://github.com/Cirnouo/debugging-cdp-targets/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Cirnouo/debugging-cdp-targets/releases/tag/v0.1.0
+- Fail closed on listener/process mismatch; never force-kill or take over
+  applications. Report failed normal shutdown for manual recovery.

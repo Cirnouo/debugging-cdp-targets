@@ -1,2 +1,4 @@
+allowBuilds:
+    esbuild: true
 minimumReleaseAgeExclude:
     - skills@1.6.0

@@ -1,6 +1,6 @@
 # ADR 0003: Manage one session in fixed LOCALAPPDATA state
 
-- Status: Accepted
+- Status: Superseded by ADR 0005; no persisted session state
 - Date: 2026-09-17
 
 ## Context

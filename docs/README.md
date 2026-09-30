@@ -1,11 +1,8 @@
-# Repository documentation
+# Documentation
 
-This directory owns contributor-facing repository policy and durable
-architecture decisions.
+- `domain-language.md` defines the shared vocabulary.
+- `policies/` contains repository-wide contribution requirements.
+- `adr/` records architecture decisions and superseded decisions.
 
-- `policies/` defines contribution, documentation, quality, release, and
-  security requirements.
-- `adr/` records accepted architectural decisions and their consequences.
-
-User-facing installation and operation guidance remains in the root
-`README.md`; domain vocabulary remains in `CONTEXT.md`.
+Installation and operation belong in the user-facing root README. Source
+implementation rules belong next to their code, not in this glossary.

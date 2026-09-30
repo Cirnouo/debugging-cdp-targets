@@ -1,22 +1,16 @@
-# Repository tooling
+# Tooling
 
-This directory owns the repository's non-destructive governance, syntax,
-repository, Git, and distribution validators.
+- `build-plugin.mjs` bundles runtime and copies required licenses/helpers.
+- `repository-audit.mjs` checks text, AST layer boundaries, versions, docs,
+  symlink, and production safety.
+- `distribution-audit.mjs` checks physical Plugin inventory and byte-identical
+  packaging into a disposable directory; this is not a Codex install claim.
+- `payload-policy.mjs` owns the exact Plugin file allowlist.
+- `governance.mjs` owns commit type/scope and branch grammar.
+- `check-commits.mjs` validates Git topology/event ranges.
+- `check-scripts.mjs` parses Node and Windows PowerShell source.
+- `check-text-style.mjs` audits staged non-Biome text.
+- `AGENTS.md` specifies validator safety and independent evidence.
 
-- `AGENTS.md` defines the local test-first, non-destructive, cross-platform
-  implementation constraints for validators.
-- `check-commits.mjs` resolves local or GitHub event ranges, delegates commit
-  messages to the same commitlint configuration used by the hook, and validates
-  branch names through the shared grammar.
-- `check-scripts.mjs` syntax-checks maintained JavaScript and parses the Windows
-  helper with the required PowerShell engines.
-- `check-text-style.mjs` applies the shared text-style validator to lint-staged
-  file arguments without modifying them.
-- `distribution-audit.mjs` verifies Skills CLI discovery and a temporary copied
-  installation byte-for-byte.
-- `governance.mjs` owns commit types, scopes, branch-name grammar, and the
-  fail-closed commitlint process adapter used by CI.
-- `payload-policy.mjs` owns the explicit installable-payload path inventory and
-  required-file set shared by repository and distribution audits.
-- `repository-audit.mjs` enforces repository, payload, metadata, privacy, and
-  source-boundary invariants.
+Use package scripts for supported checks. Tooling never mutates user state or
+publishes artifacts.

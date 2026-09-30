@@ -1,144 +1,143 @@
 # Debugging CDP Targets
 
-Debugging CDP Targets is an installable Agent Skill for inspecting a newly
-launched local Chrome or compatible Chromium/Electron renderer on Windows. It
-wraps the official Chrome DevTools CLI in a verified, resumable session instead
-of attaching to an unrelated process or letting the CLI launch an unmanaged
-browser.
+A Codex Plugin that connects Codex directly to the official Chrome DevTools MCP
+Server over stdio, while helping you launch and switch local debugging targets.
+The Plugin does not wrap MCP tools: page inspection, network diagnostics, and
+extension tools are the upstream tools.
 
-## Requirements
+Version 0.1.0 is under development and has not been released.
 
-- Windows 10 or Windows 11.
-- Node.js 24.21.0 with `node` and `npx` on `PATH`.
-- An absolute path to the target application's executable.
-- A supported agent and the [Skills CLI](https://github.com/vercel-labs/skills).
+## Requirements and compatibility
 
-The runner downloads and pins the official `chrome-devtools-mcp` package through
-`npx` when a session starts. The repository itself has no runtime npm
-dependencies.
+Install Node 24.21.0 with npm/npx available on PATH. No global npm package or
+mise dependency is required. Package acquisition needs internet access once;
+the official Server is pinned to chrome-devtools-mcp 1.9.0.
 
-## Install
+The target must support a command-line option that opens a **browser-level
+Chrome DevTools Protocol endpoint** on a selected port. Chrome is the
+known-compatible target. Other CDP-capable applications are best effort: being
+built with Electron, Tauri, or WebView2 does not prove compatibility.
 
-Install the Skill in the current project:
+Windows has real-process verification and Chrome smoke coverage. Linux and
+macOS have portable code and simulated CDP tests, but real application sessions
+have not been validated. They also require `ps` and `lsof`.
+
+## Install in Codex
+
+Add this repository as a local Marketplace source:
 
 ```powershell
-npx skills add Cirnouo/debugging-cdp-targets --skill debugging-cdp-targets
+codex plugin marketplace add Cirnouo/debugging-cdp-targets
 ```
 
-Add `--global` for a user-level installation. Update or remove it with:
+Then install it in Codex's Plugin browser or with
+`codex plugin add debugging-cdp-targets@debugging-cdp-targets`, and enable its
+MCP connection in a new conversation. Until the implementation is
+pushed to GitHub, use a local checkout instead:
 
 ```powershell
-npx skills update debugging-cdp-targets
-npx skills remove debugging-cdp-targets
+codex plugin marketplace add "D:\Projects\Personal\debugging-cdp-targets"
 ```
 
-Use the matching `--global` option when managing a global installation.
+Refresh a Git source with `codex plugin marketplace upgrade`. Uninstall with
+`codex plugin remove debugging-cdp-targets@debugging-cdp-targets` before removing its Marketplace with
+`codex plugin marketplace remove debugging-cdp-targets`. The GitHub command
+cannot install unpushed changes. No npm package or Skills CLI installation is
+needed; this distribution is a Codex Plugin, not a standalone cross-Agent Skill.
 
-## Security model
+## Use
 
-The runner launches a new target and owns its complete lifecycle. It chooses a
-free port transactionally, binds CDP to IPv4 loopback, verifies the process
-path, creation time, Windows session, listener owner, browser identity, WebSocket
-endpoint, daemon PID, pinned package version, workspaces, and privacy switches.
-It never attaches to, replaces, or terminates a pre-existing application.
+Ask Codex to use `$debugging-cdp-targets` and describe what you want to debug.
+The MCP connection starts with **no target**. It must not silently open Chrome.
 
-All mutations are serialized per Windows user. Shutdown requests a normal
-window close; the runner never uses a forced process kill. Official CLI usage
-statistics and CrUX lookup are disabled. PWA category mode is always rejected
-because it is incompatible with the verified browser URL used by the session.
+The Agent uses a separate control command to launch the application, then calls
+the official MCP tools directly. For manual control, resolve the installed Plugin
+root and run:
 
-## Supported target adapters
-
-| Adapter | Intended target | Notes |
-| --- | --- | --- |
-| `chrome` | Google Chrome | Requires Windows file metadata identifying Google Chrome and uses a dedicated persistent Chrome profile. |
-| `generic-cdp` | Compatible Chromium/Electron renderer, including Obsidian | Best-effort support; the application must honor the runner-owned CDP switches and expose a compatible endpoint. |
-
-Tauri-built programs are applications, not a single renderer implementation.
-Some use WebView2 and require activation or adapter behavior that is not
-implemented in version 0.1.0. `generic-cdp` is not a universal Tauri adapter.
-
-Extension mode is opt-in with `--enable-extensions`. It is available only for a
-verified Google Chrome target when the browser version, official CLI version,
-category flag, and required extension commands all pass capability checks. Use
-it only for extension installation, listing, reload, removal, action triggering,
-or extension service-worker inspection.
-
-## Session lifecycle
-
-The public runner is `scripts/cdp-session.mjs` inside the installed Skill.
-
-1. `status` reports `none`, `active`, `detached`, or `stale` without changing the
-   session.
-2. `start` launches one verified target and one official DevTools daemon.
-3. `invoke -- <tool> ...` sends a validated tool call through that daemon.
-4. `stop --disposition Keep` stops the daemon but leaves the target open as a
-   detached session; `resume` revalidates it and restarts only the daemon.
-5. `stop --disposition Close` stops the daemon and requests a normal target
-   window close.
-
-Every completed task requires an explicit Close or Keep choice. There is no
-default disposition. If the target disappears, the runner reports whether it
-cleared the session and whether an in-flight tool may have executed; it never
-starts a replacement target automatically.
-
-## Local data and privacy
-
-Session state is fixed at:
-
-```text
-%LOCALAPPDATA%\debugging-cdp-targets\state\session.json
+```powershell
+node "<plugin-root>/dist/control.mjs" status
+node "<plugin-root>/dist/control.mjs" start --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
+node "<plugin-root>/dist/control.mjs" stop --disposition Close
 ```
 
-The isolated npm runtime and package cache are under:
+Use `--target-kind generic-cdp` for another known CDP-capable application.
+Provide the complete command with an absolute executable path. Quote paths with
+spaces. The command is parsed into argv, **not executed by a shell**: pipes,
+redirects, command substitution, and shell scripts are not supported. Environment
+variables `%NAME%` and `${NAME}` expand within individual arguments.
 
-```text
-%LOCALAPPDATA%\debugging-cdp-targets\cache\chrome-devtools-cli
+`{port}` becomes the selected free, non-reserved port. It can appear after a
+space, equals sign, or colon, according to your application's option syntax.
+Without it, the Plugin appends `--remote-debugging-port=<port>`. Use
+`--base-port 9222` to choose the first candidate; occupied and OS-excluded ports
+are skipped. An explicit Chromium debugging port conflicting with the selected
+port is rejected. Custom option names require a correct `{port}` template.
+
+## Chrome recommendations
+
+Without an explicit override, Chrome uses
+`%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` on Windows, or
+`~/.cache/chrome-devtools-mcp/chrome-profile` on Unix. Supply
+`--user-data-dir` to use another dedicated profile. Do not reuse a profile
+already locked by another Chrome process.
+
+The Server enables extension tools and disables usage statistics and CrUX.
+Only use extension tools with compatible Google Chrome (149 or newer);
+their presence in the catalog does not mean another application supports them.
+Explicit Plugin environment overrides are:
+
+- `DCT_EXTENSIONS=true|false`
+- `DCT_USAGE_STATISTICS=true|false`
+- `DCT_PERFORMANCE_CRUX=true|false`
+
+Changing these requires restarting the MCP connection. The default avoids
+upstream usage reporting and external CrUX lookups; the Server remains an
+upstream dependency, not a guarantee about every future tool's network behavior.
+
+## Switching, keeping, and closing
+
+Version 0.1.0 supports one active Plugin MCP connection per operating-system
+user. Disconnect it before enabling the Plugin in another conversation; a second
+connection is refused rather than sharing or replacing the first controller.
+Within that connection, only one target is attached. Before switching or finishing,
+the Agent asks you to choose **Close** or **Keep**; there is no implicit choice.
+
+- Close requests normal shutdown of the verified process this Plugin launched.
+  It never escalates to a force kill.
+- Keep disconnects control and preserves the application and its CDP port.
+  Other local processes can still control that application.
+- Switch uses `switch --launch-command ... --disposition Close|Keep`.
+  In-flight CDP requests block switching. After switching, the Agent must call
+  `list_pages` again and discard all previous page IDs.
+
+There is no session file, list of sessions, cross-conversation Resume, or
+automatic attachment to an existing browser. An unexpected, handled MCP
+disconnect attempts normal shutdown; force-terminating the Plugin cannot
+guarantee cleanup.
+
+## Data and recovery
+
+Target identity and command arguments exist only in memory. The temporary
+named pipe/Unix socket is a control channel, not a saved session. The package
+cache is separate: on Windows it is below
+`%LOCALAPPDATA%\debugging-cdp-targets\cache\mcp-server`; on Unix,
+`~/.cache/debugging-cdp-targets/cache/mcp-server`. It can be deleted while no
+connection is using it; the next connection must download the package again.
+The Chrome profile intentionally retains browser data and is not this cache.
+
+CDP is a high-privilege interface. Both the stable router and verified target
+must listen on loopback only. This is not a security boundary against malicious
+software running as your user. Never expose or tunnel the ports to a network.
+
+If normal shutdown fails, use the reported PID and port to inspect the exact
+application and close it manually. On Windows:
+
+```powershell
+Get-Process -Id <reported-pid>
+Get-NetTCPConnection -State Listen -LocalPort <reported-port>
 ```
 
-Deleting that cache while no session is running does not reset managed state;
-it causes the official CLI package to be downloaded and verified again on the
-next start. Do not delete the state file to recover a live or stale session—use
-`status` and the runner's lifecycle commands.
-
-Chrome keeps its dedicated profile at
-`%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile`. Keeping a session
-leaves its loopback CDP listener available to other local processes until the
-application closes.
-
-The state record contains only approved process/session identity, adapter,
-package version, extension mode, and authorized workspace paths. It does not
-store launch arguments, tool calls or results, page data, cookies, headers,
-secrets, or user input.
-
-## Limitations
-
-- One managed session per Windows user.
-- New targets only; no takeover of an already running application.
-- Renderer-level DOM, CSS, console, network, screenshot, interaction, and basic
-  performance inspection. Electron main-process/Node Inspector, native dialogs,
-  tray/taskbar UI, mobile targets, and full breakpoint stepping are out of scope.
-- Electron support is best effort because the upstream CLI formally targets
-  Chrome.
-- Full Chrome DevTools MCP configuration and a dedicated Tauri/WebView2 adapter
-  are future extension points, not implemented features.
-
-## Troubleshooting
-
-- Run `status` first. `active` can invoke tools, `detached` can resume, and
-  `stale` requires identity-safe recovery rather than deleting state.
-- On `{ "ok": false }`, report the returned `errorCode`, `message`, and details.
-  Do not bypass a failed validation with a direct browser or daemon command.
-- `SESSION_ALREADY_MANAGED` means the single session is already active or
-  detached. Finish, close, or resume it before starting another target.
-- `TARGET_EXITED` means the target vanished before a tool ran;
-  `TARGET_EXITED_DURING_INVOKE` means the tool may have executed before the
-  target vanished. Check `sessionCleared` and `toolMayHaveExecuted`.
-- For Obsidian, close any existing instance normally before starting if its
-  single-instance forwarding prevents the new process from exposing CDP.
-- For capability or protocol failures, record the application, renderer, CDP,
-  and official CLI versions before changing application code.
-
-## License
-
-[MIT](LICENSE) © 2026 Cirnouo.
+On Linux/macOS use `ps -p <pid>` and `lsof -nP -iTCP:<port> -sTCP:LISTEN`.
+Closing a window does not release the port if its owning process remains alive.
+Old experimental session directories and standalone Skills are not migrated or
+deleted by this Plugin.

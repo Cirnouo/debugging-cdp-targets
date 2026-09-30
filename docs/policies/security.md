@@ -1,29 +1,27 @@
-# CDP, session, cache, privacy, and security
+# CDP and lifecycle security
 
-The runtime manages one newly launched target and one verified DevTools daemon
-per Windows user. State is fixed at
-`%LOCALAPPDATA%\debugging-cdp-targets\state\session.json`; the isolated CLI
-runtime is under `%LOCALAPPDATA%\debugging-cdp-targets\cache\chrome-devtools-cli`.
-The Chrome profile remains separate under
-`%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile`.
+The Plugin permits one active MCP connection per OS user and one current target
+in that connection's memory. It creates
+no persistent session record, Resume workflow, or CLI daemon. An isolated
+package cache is not a session and cannot authorize attaching to a process.
 
-Preserve all of these boundaries:
+Validate executable path, launch creation time, user/session, process tree,
+loopback listener ownership, and browser-level WebSocket endpoint. Never
+connect to an unverified or pre-existing target. Skip occupied, privileged, and
+OS-excluded ports; distinguish a probe race from a failed application launch.
 
-- Bind CDP to loopback and verify target path, creation time, Windows session,
-  listener ownership, product, version endpoint, and WebSocket identity.
-- Bind the daemon to PID, exact package version, browser URL, adapter capability,
-  workspace set, and disabled usage-statistics/CrUX switches.
-- Never attach to, close, replace, or take over a pre-existing or mismatched
-  process. Never force-kill. Normal close failure remains recoverable state for
-  manual closure.
-- Reconcile disappearance only when root-process and listener absence are both
-  proven. Never start a replacement target during Resume or Invoke.
-- Keep extension tools opt-in and Chrome-only behind capability gates. Reject all
-  PWA category spellings.
-- Persist only approved session identity. Never persist launch arguments,
-  headers, cookies, secrets, page data, user input, or tool calls/results.
+The official Server directly inherits MCP stdin/stdout. Bootstrap diagnostics
+go to stderr only. The CDP router forwards CDP, not MCP, and disconnects old
+WebSockets on switch. Do not log commands, page data, cookies, network/console
+data, secrets, or tool calls.
 
-Deleting the CLI cache does not reset session state and causes a fresh verified
-package download on a later Start. Never use state or cache deletion as a live
-session recovery shortcut. A kept target retains a loopback CDP listener that
-other local processes can reach; disclose that consequence to the user.
+Require an explicit user Close/Keep choice. Close requests normal shutdown;
+failure reports PID/port and never escalates. Keep leaves local CDP reachable.
+Unexpected handled disconnect attempts normal close; force termination cannot
+guarantee it. Preserve old experimental state and global installations unless
+the user separately authorizes cleanup.
+
+Server defaults enable extensions and disable usage statistics and CrUX.
+Only compatible Chrome may use extension tools. Explicit environment overrides
+require a new MCP connection. Do not permit arbitrary Server arguments to
+override connection identity or inject a shell.

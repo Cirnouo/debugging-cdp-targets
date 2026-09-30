@@ -1,13 +1,12 @@
-# Architecture decision records
+# Architecture decisions
 
-This directory owns accepted, durable architecture decisions.
+- `0001-isolated-skill-payload.md`: historical standalone Skill distribution.
+- `0002-runtime-architecture.md`: historical Node/helper and CLI layout.
+- `0003-managed-session-state.md`: historical persisted single session.
+- `0004-target-adapters.md`: historical adapter boundaries.
+- `0005-direct-stdio-plugin.md`: accepted current Plugin, direct stdio, transient
+  control, generic targets, and bundled runtime; supersedes the affected parts
+  of 0001–0004.
 
-- `0001-isolated-skill-payload.md` isolates the installable distribution.
-- `0002-runtime-architecture.md` selects Node, a thin Windows helper, one public
-  entry, and domain-oriented modules.
-- `0003-managed-session-state.md` fixes one session in LOCALAPPDATA.
-- `0004-target-adapters.md` defines adapter boundaries and rejects a universal
-  Tauri claim.
-
-New ADRs use the next four-digit number and record context, decision, and
-consequences. Implementation rules remain in local `AGENTS.md` files.
+Old ADRs retain decision history, not current implementation rules. Add numbered
+records for durable decisions; keep local implementation rules beside code.

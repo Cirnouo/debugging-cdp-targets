@@ -1,39 +1,27 @@
 # Contributor entry point
 
-Use four spaces, never tabs, and LF for maintained source, configuration, and
-documentation. Read only the domain you are changing after this index; a nearer
-`AGENTS.md` overrides this file for its directory.
+Use four spaces, UTF-8, LF, and no tabs. Preserve unrelated work. Read the
+nearest source AGENTS.md and only the relevant policies before editing.
 
-## Commands
+## Boundaries
 
-- Frozen dependency install: `pnpm install --frozen-lockfile`
-- Focused runtime tests: `node --test tests/cdp-session.test.mjs`
-- Full tests: `pnpm test`
-- Coverage gate: `pnpm test:coverage`
-- Complete push verification: `pnpm verify:push`
-- Skill validation: `python -X utf8 %USERPROFILE%\.codex\skills\.system\skill-creator\scripts\quick_validate.py skills\debugging-cdp-targets`
+- Official MCP owns tools and inherits stdin/stdout directly. Do not create a
+  MCP proxy, custom DevTools tools, CLI daemon, or persistent session state.
+- Manage one newly launched target per connection. Verify process, listener,
+  and endpoint identity; bind only loopback. Never take over existing targets.
+- Ask Close/Keep before switch or stop. Normal close only; no force kill.
+- Keep 0.1.0 unreleased. Never push, publish, tag, open a PR, or modify user
+  config/global Skills/old state without explicit authorization.
 
-## Non-negotiable boundaries
+## Navigation and commands
 
-- Preserve one managed session per Windows user, fixed LOCALAPPDATA state,
-  loopback-only CDP, process/listener/endpoint/daemon identity validation, and a
-  required Close/Keep disposition.
-- Never attach to, replace, force-kill, or silently clean up a pre-existing or
-  identity-mismatched target. Never auto-start a replacement after disappearance.
-- Keep `scripts/cdp-session.mjs` as the only public entry. `chrome` and
-  `generic-cdp` are the only adapters; PWA mode remains rejected. Do not claim
-  universal Tauri/WebView2 support.
-- Do not persist sensitive inputs or outputs. Keep usage statistics and CrUX
-  disabled.
-- Do not push, tag, publish, modify remotes, or create releases without an
-  explicit request.
+- [Domain language](docs/domain-language.md)
+- [Policies](docs/policies/README.md)
+- [Decisions](docs/adr/README.md)
+- [Source](src/README.md)
+- [Plugin instructions](plugins/debugging-cdp-targets/skills/debugging-cdp-targets/SKILL.md)
+- [Tests](tests/README.md) and [tooling](tooling/README.md)
 
-## Context map
-
-- [Glossary](CONTEXT.md)
-- [Repository policies](docs/policies/README.md)
-- [Architecture decisions](docs/adr/README.md)
-- [Installable Skill](skills/debugging-cdp-targets/SKILL.md)
-- [Runtime source map](skills/debugging-cdp-targets/scripts/README.md)
-- [Tests](tests/README.md)
-- [Tooling and quality policy](docs/policies/quality.md)
+Use Node 24.21.0 and pnpm 12.4.2. Run focused tests first, then
+`pnpm verify:push`. Build committed runtime with `pnpm build:plugin`;
+`pnpm check:build` verifies it without writing. Domain changes are test-first.

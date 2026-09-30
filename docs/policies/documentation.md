@@ -1,26 +1,16 @@
 # Documentation ownership
 
-## Audiences
+The root README is for users: installation, operation, compatibility, privacy,
+and troubleshooting. docs/domain-language.md defines terms only. Repository
+requirements belong here; implementation constraints belong in the nearest
+source AGENTS.md; decisions belong in docs/adr.
 
-- The root `README.md` is user-facing: installation, operation, security,
-  privacy, limitations, and troubleshooting only.
-- `CONTEXT.md` is a single-context glossary. It defines domain language and
-  contains no implementation rules.
-- `docs/policies/` owns repository-wide contribution requirements.
-- `docs/adr/` records accepted architectural decisions.
-- The installable payload owns agent workflow and target-specific references.
+Every human-maintained non-root directory has a README naming its immediate
+files and subdirectories. Generated dependency, Git, coverage, and test-output
+directories are exempt. The committed Plugin dist directory includes a README
+because it is a supported installation surface, although its code is generated.
 
-## Directory documentation
-
-Every tracked, human-maintained non-root directory must contain a `README.md`
-that names its direct files/subdirectories and states their ownership. Generated,
-dependency, internal tool-output, and test-result directories are exempt.
-
-Source implementation rules belong in the nearest relevant `AGENTS.md`. Add or
-update a local file when a module needs rules that should not affect siblings;
-do not centralize module boundaries in repository policy. Keep `CLAUDE.md` as a
-relative symlink to the root `AGENTS.md`, never a copied file or text placeholder.
-
-Keep relative links valid, names consistent with the glossary, and examples
-aligned with the public CLI. Update user documentation and changelog entries in
-the same change as affected behavior.
+Keep root CLAUDE.md a real relative symlink to AGENTS.md, Git mode 120000.
+Maintain progressive disclosure rather than copying all policies everywhere.
+Plugin instructions must be concise and application-agnostic. Do not collect
+application-specific debugging recipes; Agents explore after connecting.

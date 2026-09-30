@@ -1,9 +1,10 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const helperPath = 'skills/debugging-cdp-targets/scripts/windows-cdp-helper.ps1';
+const helperPath = 'src/adapters/windows-cdp-helper.ps1';
 const powershellParser = [
     '$tokens = $null',
     '$parseErrors = $null',
@@ -34,7 +35,7 @@ function maintainedFiles(root) {
         encoding: 'utf8',
     })
         .split('\0')
-        .filter(Boolean)
+        .filter((file) => file && existsSync(path.join(root, file)))
         .map((filePath) => filePath.replaceAll('\\', '/'));
 }
 
