@@ -141,3 +141,17 @@ On Linux/macOS use `ps -p <pid>` and `lsof -nP -iTCP:<port> -sTCP:LISTEN`.
 Closing a window does not release the port if its owning process remains alive.
 Old experimental session directories and standalone Skills are not migrated or
 deleted by this Plugin.
+
+## Dependency security
+
+Build CI checks the complete repository dependency graph and a separately
+resolved copy of the pinned official Server dependency graph for known
+vulnerabilities and npm registry signatures. High/critical findings normally
+block builds; any temporary exception requires an exact, evidenced review and
+expires within 30 days. Failed signature or registry checks cannot be waived.
+Dependency scripts are disabled before this CI gate.
+
+These are point-in-time build checks, not a promise that every dependency is
+safe. The Server is downloaded separately when you run the Plugin; its future
+resolved dependencies may differ from those checked in CI. This change adds no
+runtime audit, telemetry, security-service account, or browser activity.

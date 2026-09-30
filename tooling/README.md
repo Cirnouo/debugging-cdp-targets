@@ -10,6 +10,9 @@
 - `check-commits.mjs` validates Git topology/event ranges.
 - `check-scripts.mjs` parses Node and Windows PowerShell source.
 - `check-text-style.mjs` audits staged non-Biome text.
+- `check-security.mjs` runs the opt-in, network-dependent supply-chain gate.
+- `security/` owns complete lock inventories, audit/exception policy,
+  fingerprints, and disposable official Server dependency scans.
 - `AGENTS.md` specifies validator safety and independent evidence.
 
 Use package scripts for supported checks. Tooling never mutates user state or

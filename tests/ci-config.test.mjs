@@ -17,8 +17,10 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
     assert.equal(workflow.concurrency['cancel-in-progress'], true);
     assert.deepEqual(
         Object.values(workflow.jobs).map((job) => job.name),
-        ['Commit messages', 'Quality', 'Windows tests', `Portable tests (\${{ matrix.os }})`],
+        ['Supply chain security', 'Commit messages', 'Quality', 'Windows tests', `Portable tests (\${{ matrix.os }})`],
     );
+    assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
+    assert.equal(workflow.jobs.quality.needs, 'supply-chain-security');
     assert.equal(workflow.jobs['windows-tests'].needs, 'quality');
 });
 
@@ -29,12 +31,25 @@ test('CI workflow uses only the approved action pins and uploads no artifacts', 
         'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 12);
+    assert.equal(uses.length, 15);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
     assert.match(source, /# v6\.0\.10/);
     assert.doesNotMatch(source, /upload-artifact/i);
+});
+
+test('security gate audits before any reviewed dependency builds and cannot ignore failures', () => {
+    const security = workflow.jobs['supply-chain-security'];
+    assert.ok(security);
+    const runs = security.steps.map((step) => step.run).filter(Boolean);
+    assert.deepEqual(runs, ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm check:security']);
+    assert.equal(Object.hasOwn(security, 'continue-on-error'), false);
+    assert.equal(
+        security.steps.some((step) => step['continue-on-error'] === true),
+        false,
+    );
+    assert.doesNotMatch(runs.join('\n'), /ignore-registry-errors|audit.*--prod|audit.*--fix/);
 });
 
 test('CI jobs run their required frozen-install and verification commands', () => {

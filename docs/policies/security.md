@@ -25,3 +25,7 @@ Server defaults enable extensions and disable usage statistics and CrUX.
 Only compatible Chrome may use extension tools. Explicit environment overrides
 require a new MCP connection. Do not permit arbitrary Server arguments to
 override connection identity or inject a shell.
+
+Dependency installation and build-time audit requirements are specified in
+[supply-chain.md](supply-chain.md). They do not authorize changing the runtime
+package acquisition design or claim that future downloads are risk-free.

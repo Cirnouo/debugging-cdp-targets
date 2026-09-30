@@ -16,3 +16,7 @@ Repository and distribution audits must fail closed on malformed, ignored, or
 unexpected payload content. Do not execute payload code during static audits,
 do not download dependencies in tests, and do not mutate Git history, user
 state, browser profiles, or globally installed Skills.
+
+Supply-chain implementations additionally follow `security/AGENTS.md`.
+`check:security` is an explicit network gate, not part of default tests or
+verify:push. Do not auto-relax installation trust on failure.

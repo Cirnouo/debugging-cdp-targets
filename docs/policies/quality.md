@@ -30,3 +30,10 @@ required checks: Commit messages, Quality, Windows tests, and both Portable
 tests matrix checks. Keep squash merge only. Actions runs after GitHub accepts
 a push, not before; pre-push is the local pre-transfer gate. This change does
 not alter GitHub settings.
+
+Supply chain security is the first CI gate: script-disabled frozen install,
+full dependency vulnerability/signature audits, and narrowly reviewed exceptions
+under [supply-chain policy](supply-chain.md). Commit messages and Quality require
+its success before normal installation/builds. Add Supply chain security to the
+future strict required checks. `pnpm check:security` requires network access and
+is deliberately separate from offline regression tests and verify:push.

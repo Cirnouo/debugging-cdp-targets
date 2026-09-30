@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { parse } from 'yaml';
+import { validateInstallPolicy } from '../tooling/security/security-evidence.mjs';
 
 const rootUrl = new URL('../', import.meta.url);
 const packageData = JSON.parse(await readFile(new URL('package.json', rootUrl), 'utf8'));
@@ -19,12 +21,15 @@ test('package scripts expose every writing and non-writing quality gate', () => 
         'check:repo',
         'check:distribution',
         'check:commits',
+        'check:security',
         'verify:push',
     ];
     for (const script of required) {
         assert.equal(typeof packageData.scripts[script], 'string', script);
     }
     assert.doesNotMatch(packageData.scripts['verify:push'], /format(?::write)?(?:\s|$)/);
+    assert.doesNotMatch(packageData.scripts['verify:push'], /check:security/);
+    assert.doesNotMatch(packageData.scripts.test, /check:security/);
     for (const gate of [
         'format:check',
         'lint',
@@ -36,6 +41,12 @@ test('package scripts expose every writing and non-writing quality gate', () => 
     ]) {
         assert.match(packageData.scripts['verify:push'], new RegExp(gate.replace(':', '\\:')));
     }
+});
+
+test('committed dependency installation policy cannot bypass the security gate', async () => {
+    const policy = parse(await readFile(new URL('pnpm-workspace.yaml', rootUrl), 'utf8'));
+    assert.doesNotThrow(() => validateInstallPolicy(policy));
+    assert.deepEqual(policy.overrides, { '@types/node': '24.19.0' });
 });
 
 test('Biome owns JavaScript and JSON with repository formatting policy', () => {

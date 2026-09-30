@@ -10,6 +10,9 @@
 - `commit-checks.test.mjs`, `governance.test.mjs` validate Git rules/topology.
 - `ci-config.test.mjs`, `toolchain-config.test.mjs`, `script-checks.test.mjs`
   check automation, package gates, and syntax plans.
+- `supply-chain.test.mjs` covers complete multi-document inventories, fail-closed
+  audit/signature reports, exact bounded exceptions, installed graphs and
+  script-free upstream isolation with fake process execution; it never downloads.
 - `fixtures/` owns isolated CDP processes.
 - `smoke/` owns opt-in official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
