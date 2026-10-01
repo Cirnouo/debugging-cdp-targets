@@ -1,11 +1,15 @@
-# Continuous integration workflows
+# GitHub Actions workflows
 
 This directory owns GitHub Actions workflows.
 
 - `ci.yml` validates commit governance, repository quality, Windows behavior,
-  portable simulated CDP, and the Plugin distribution on pushes, manual runs, and pull
+  portable simulated CDP, and the Plugin distribution on branch pushes, manual runs, and pull
   request open/reopen/synchronize/title-edit events without uploading runtime
   data or artifacts.
+- `release.yml` runs that same-commit CI through `workflow_call` for newly
+  created `v<major>.<minor>.<patch>` tag pushes. Only its downstream publish job
+  has `contents: write`; all checks remain read-only. Tag updates, deletion,
+  forced pushes, prereleases and build metadata do not publish.
 
 Supply chain security validates and audits the complete repository lockfile
 before creating an installation tree, using a committed standalone Node checker.
@@ -21,3 +25,26 @@ typechecking before their regression tests. Windows additionally parses the
 PowerShell helper with both 5.1 and 7; portable tests remain simulated CDP, not
 claims of real Linux/macOS application acceptance. The first security entry is
 generated JavaScript so lockfile preflight needs no installed dependencies.
+
+Release publication additionally requires an annotated tag whose peeled commit
+matches the event and checkout and is an ancestor of `origin/main`, agreeing
+Package/Plugin/Skill versions, and one nonempty, ISO-dated Changelog entry.
+The annotated tag object must match the original push event both locally and
+on GitHub, including when a replacement points to the same commit. Release API
+requests use the existing verified tag without `target_commitish`, so historical
+main commits do not request an additional workflow-writing permission.
+The English body uses What's Changed with the Changelog's category headings,
+then generated New Contributors when present, then Full Changelog. Generated
+PR change lists are discarded. The previous tag comes from GitHub's latest
+published full release; the first release links to its tag's commit history.
+GitHub renders its native Contributors footer from user mentions in the notes.
+
+The publisher creates a draft before publishing, resumes matching drafts found
+through paginated authenticated release listings, and skips published releases
+without editing them. Failures leave drafts for a rerun and never delete tags
+or releases. Same-tag runs queue instead of cancelling publication. Only
+GitHub's automatic source ZIP/TAR.GZ links are provided; no custom assets are
+uploaded. The publish step receives only the built-in GitHub token, with no
+additional secrets or immutable-release setting checks. The repository setting
+must be enabled separately before publication. See the release policy for
+pre-tag installation acceptance and first-publication authorization.

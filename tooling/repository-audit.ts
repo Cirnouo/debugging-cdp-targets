@@ -7,6 +7,7 @@ import type { Node } from '@babel/types';
 import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import { PLUGIN_ROOT } from './payload-policy.ts';
+import { validateVersionAgreement } from './version-policy.ts';
 
 export function validateTextStyle(file: string, source: string) {
     const errors = [];
@@ -203,12 +204,7 @@ export function auditRepository(root: string) {
         !isRecord(frontmatter.metadata)
     )
         return [...errors, 'Malformed repository metadata.'];
-    if (
-        packageData.version !== '0.1.0' ||
-        plugin.version !== packageData.version ||
-        frontmatter?.metadata?.version !== packageData.version
-    )
-        errors.push('Package, Plugin, and Skill versions must agree at unreleased 0.1.0.');
+    errors.push(...validateVersionAgreement(packageData.version, plugin.version, frontmatter.metadata.version));
     if (
         frontmatter?.name !== plugin.name ||
         frontmatter?.license !== 'MIT' ||

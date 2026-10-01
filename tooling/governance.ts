@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { isSemVer } from './version-policy.ts';
 
 export const COMMIT_TYPES = Object.freeze([
     'build',
@@ -45,8 +46,6 @@ export const BRANCH_PREFIXES = Object.freeze([
 ]);
 
 const kebabPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const semverPattern =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/;
 const require = createRequire(import.meta.url);
 const loadedCli: unknown = require('@commitlint/cli');
 if (typeof loadedCli !== 'string') throw new Error('Invalid commitlint CLI entry.');
@@ -92,7 +91,7 @@ export function validateBranchName(branchName: string) {
     }
 
     if (branchName.startsWith('release/')) {
-        return semverPattern.test(branchName.slice('release/'.length))
+        return isSemVer(branchName.slice('release/'.length))
             ? []
             : ['Release branches must use release/<semver> with SemVer punctuation.'];
     }

@@ -1,43 +1,36 @@
 # Changelog
 
-All notable changes are recorded here using Keep a Changelog and SemVer.
+Notable net changes from the previous published version are recorded here
+using Keep a Changelog and SemVer. The initial version uses an empty baseline.
 Version 0.1.0 remains under development; no release has been published.
 
 ## [Unreleased]
 
 ### Added
 
-- Codex Plugin and local Marketplace catalog with bundled Node runtime.
-- Direct official chrome-devtools-mcp 1.9.0 stdio tools.
-- Temporary control channel for status, start, switch, and stop.
-- Stable loopback CDP entry with verified targets and explicit Close/Keep.
-- Safe launch-command templates, environment expansion, and port selection.
-- Portable process layout and simulated CDP coverage.
-
-### Changed
-
-- Chrome recommendations enable extension tools and disable usage statistics
-  and CrUX, with explicit connection-level environment overrides.
-- Source and implementation rules now live outside the installable Skill.
-- Shared vocabulary now lives in docs/domain-language.md.
-
-### Removed
-
-- Remove the empty root skills directory tree left by the Plugin migration;
-  retain the Plugin's active Skill payload.
-- Unreleased experimental DevTools CLI daemon, Invoke, Resume, saved sessions,
-  and application-specific Obsidian instructions.
-- Skills CLI and standalone npm distribution plans.
+- Codex Plugin and local Marketplace catalog with a bundled Node runtime and
+  application-agnostic debugging instructions.
+- Tag-triggered GitHub source releases with Changelog-based notes, new
+  contributor attribution, and required security and cross-platform CI gates.
+- Direct access to official chrome-devtools-mcp 1.9.0 tools over stdio.
+- Local status, start, switch, and stop commands for one current target, with
+  explicit Close/Keep choices and a stable CDP connection entry.
+- Shell-free launch-command templates with environment expansion and selection
+  of a free, non-reserved debugging port.
+- Chrome presets for a dedicated browser profile and extension debugging, with
+  usage statistics and CrUX disabled by default and explicit overrides.
+- Verified Windows Chrome operation; Linux/macOS simulated CDP coverage, without
+  a claim of verified real-application compatibility on those platforms.
 
 ### Security
 
-- Add a script-disabled Supply chain security CI gate for complete repository
+- Target process, listener, and endpoint identity verification, loopback-only
+  CDP connections, and fail-closed handling of identity mismatches.
+- Normal target shutdown only, without force-killing or taking over existing
+  applications; failed shutdown reports support manual recovery.
+- Script-disabled Supply chain security CI gate for complete repository
   and isolated official Server vulnerability/signature audits.
-- Require explicit release cooldown and no-downgrade installation trust; allow
-  only the reviewed esbuild installation script after the audit gate.
-- Add exact, fingerprint-bound review exceptions with a maximum 30-day lifetime;
+- Strict release cooldown and no-downgrade dependency trust, with only the
+  reviewed esbuild installation script allowed after the audit gate.
+- Exact, fingerprint-bound review exceptions with a maximum 30-day lifetime;
   signature, registry and scan failures cannot be waived.
-- Refresh the development dependency graph with reviewed Node 24 types instead
-  of the trust-rejected undici-types 6.21.0 chain, without trust exclusions.
-- Fail closed on listener/process mismatch; never force-kill or take over
-  applications. Report failed normal shutdown for manual recovery.

@@ -26,6 +26,12 @@ titles, and source branches; Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
 
+The tag-triggered Release workflow reuses the same-commit read-only CI gates.
+Only the downstream publication job receives contents write permission, and
+only its publisher step receives the built-in token. Same-tag Release runs
+queue; ordinary CI still cancels superseded ref runs. Release automation follows
+the separate release policy and uploads no custom assets.
+
 Maintained runtime, tools, tests, fixtures, smoke and commitlint configuration
 are TypeScript; Node 24.21.0 runs their erasable syntax natively. The shared
 tsconfig uses strict NodeNext, noEmit, explicit TypeScript extensions,

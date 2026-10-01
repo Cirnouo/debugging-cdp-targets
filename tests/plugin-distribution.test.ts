@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../src/shared/errors.ts';
+import { isSemVer } from '../tooling/version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pluginRoot = path.join(root, 'plugins', 'debugging-cdp-targets');
@@ -13,7 +14,9 @@ test('portable plugin registers the official MCP through one stdio bootstrap', a
     const mcp: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'mcp.json'), 'utf8'));
     assert.ok(isRecord(manifest) && isRecord(mcp) && isRecord(mcp.mcpServers));
     assert.equal(manifest.name, 'debugging-cdp-targets');
-    assert.equal(manifest.version, '0.1.0');
+    const packageData: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    assert.ok(isRecord(packageData) && isSemVer(packageData.version));
+    assert.equal(manifest.version, packageData.version);
     assert.deepEqual(mcp.mcpServers['chrome-devtools'], {
         type: 'stdio',
         command: 'node',

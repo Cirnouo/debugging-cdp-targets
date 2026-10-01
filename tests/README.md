@@ -10,6 +10,11 @@
 - `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
+- `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
+- `release.test.ts` checks tag/event identity, dated Changelog extraction,
+  English notes, paginated draft recovery and fail-closed publication with
+  simulated GitHub I/O and disposable Git fixtures. It never changes this
+  repository's tags or creates real GitHub Releases.
 - `supply-chain.test.ts` covers complete multi-document inventories, fail-closed
   audit/signature reports, exact bounded exceptions, installed graphs and
   lockfile preflight and upstream review-before-install with fake process

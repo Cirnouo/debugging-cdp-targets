@@ -63,6 +63,8 @@ const workflow = readWorkflow(source);
 
 test('CI workflow has read-only triggers, concurrency, and exact job display names', () => {
     assert.equal(Object.hasOwn(workflow.on, 'push'), true);
+    assert.deepEqual(workflow.on.push, { branches: ['**'] });
+    assert.equal(Object.hasOwn(workflow.on, 'workflow_call'), true);
     assert.deepEqual(workflow.on.pull_request.branches, ['main']);
     assert.deepEqual(workflow.on.pull_request.types, ['opened', 'reopened', 'synchronize', 'edited']);
     assert.equal(Object.hasOwn(workflow.on, 'workflow_dispatch'), true);
@@ -75,6 +77,56 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
     assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
     assert.equal(workflow.jobs.quality.needs, 'supply-chain-security');
     assert.equal(workflow.jobs['windows-tests'].needs, 'quality');
+});
+
+test('release workflow publishes only new stable-version tags after the same-commit reusable CI', async () => {
+    const releaseSource = await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+    const release: unknown = parse(releaseSource);
+    assert.ok(isRecord(release) && isRecord(release.on) && isRecord(release.jobs));
+    assert.deepEqual(release.on, { push: { tags: ['v[0-9]+.[0-9]+.[0-9]+'] } });
+    assert.deepEqual(release.permissions, { contents: 'read' });
+    assert.deepEqual(release.concurrency, { group: `release-\${{ github.ref }}`, 'cancel-in-progress': false });
+    const verify: unknown = release.jobs.verify;
+    const publish: unknown = release.jobs.publish;
+    assert.ok(isRecord(verify) && isRecord(publish) && Array.isArray(publish.steps));
+    assert.equal(verify.uses, './.github/workflows/ci.yml');
+    assert.equal(verify.if, 'github.event.created && !github.event.deleted && !github.event.forced');
+    assert.deepEqual(verify.permissions, { contents: 'read' });
+    assert.equal(publish.needs, 'verify');
+    assert.equal(publish['runs-on'], 'ubuntu-latest');
+    assert.deepEqual(publish.permissions, { contents: 'write' });
+    assert.equal(publish['continue-on-error'], undefined);
+    const steps: Record<string, unknown>[] = [];
+    for (const value of publish.steps) {
+        assert.ok(isRecord(value));
+        assert.equal(value['continue-on-error'], undefined);
+        steps.push(value);
+    }
+    const checkout = steps.find((step) => String(step.uses).startsWith('actions/checkout@'));
+    assert.deepEqual(checkout?.with, { 'fetch-depth': 0, ref: `\${{ github.sha }}`, 'persist-credentials': false });
+    const approved = new Set([
+        'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+        'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+        'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
+    ]);
+    for (const step of steps.filter((step) => step.uses !== undefined)) assert.ok(approved.has(String(step.uses)));
+    assert.deepEqual(steps.find((step) => String(step.uses).startsWith('pnpm/action-setup@'))?.with, {
+        version: '12.4.2',
+    });
+    assert.deepEqual(steps.find((step) => String(step.uses).startsWith('actions/setup-node@'))?.with, {
+        'node-version': '24.21.0',
+        cache: 'pnpm',
+    });
+    const install = steps.findIndex((step) => step.run === 'pnpm install --frozen-lockfile');
+    const publishStep = steps.findIndex((step) => step.run === 'node tooling/release.ts');
+    assert.ok(install >= 0 && publishStep > install);
+    assert.deepEqual(steps[publishStep]?.env, { GH_TOKEN: `\${{ github.token }}` });
+    assert.doesNotMatch(
+        releaseSource,
+        /immutable-releases|upload-artifact|upload-release|secrets\.|always\(|continue-on-error/,
+    );
+    assert.match(releaseSource, /PNPM_CONFIG_IGNORE_PNPMFILE: "true"/);
+    assert.match(releaseSource, /PNPM_CONFIG_CONFIG_DEPENDENCIES: "\{\}"/);
 });
 
 test('CI workflow uses only the approved action pins and uploads no artifacts', () => {
