@@ -12,6 +12,8 @@ Explicit integration smoke commands are separate. Keep coverage floors at
 Run focused Node tests, then pnpm verify:push: formatting, lint, syntax,
 coverage, repository audit, deterministic build, distribution, and Git rules.
 pnpm build:plugin regenerates committed bundles; check:build is read-only.
+pnpm build:security regenerates the standalone audit entry;
+check:security:build is an offline, read-only comparison in verify:push.
 
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection; safe
@@ -31,8 +33,10 @@ tests matrix checks. Keep squash merge only. Actions runs after GitHub accepts
 a push, not before; pre-push is the local pre-transfer gate. This change does
 not alter GitHub settings.
 
-Supply chain security is the first CI gate: script-disabled frozen install,
-full dependency vulnerability/signature audits, and narrowly reviewed exceptions
+Supply chain security is the first CI gate: dependency-free lockfile preflight
+with full vulnerability/signature audits, script/hook-disabled frozen install,
+installed-tree verification, repeat audits and reproducible audit tooling, with
+narrowly reviewed exceptions
 under [supply-chain policy](supply-chain.md). Commit messages and Quality require
 its success before normal installation/builds. Add Supply chain security to the
 future strict required checks. `pnpm check:security` requires network access and

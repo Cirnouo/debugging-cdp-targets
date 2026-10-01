@@ -22,13 +22,15 @@ test('package scripts expose every writing and non-writing quality gate', () => 
         'check:distribution',
         'check:commits',
         'check:security',
+        'build:security',
+        'check:security:build',
         'verify:push',
     ];
     for (const script of required) {
         assert.equal(typeof packageData.scripts[script], 'string', script);
     }
     assert.doesNotMatch(packageData.scripts['verify:push'], /format(?::write)?(?:\s|$)/);
-    assert.doesNotMatch(packageData.scripts['verify:push'], /check:security/);
+    assert.doesNotMatch(packageData.scripts['verify:push'], /check:security(?:\s|$)/);
     assert.doesNotMatch(packageData.scripts.test, /check:security/);
     for (const gate of [
         'format:check',
@@ -38,6 +40,7 @@ test('package scripts expose every writing and non-writing quality gate', () => 
         'check:repo',
         'check:distribution',
         'check:commits',
+        'check:security:build',
     ]) {
         assert.match(packageData.scripts['verify:push'], new RegExp(gate.replace(':', '\\:')));
     }

@@ -12,7 +12,10 @@
   check automation, package gates, and syntax plans.
 - `supply-chain.test.mjs` covers complete multi-document inventories, fail-closed
   audit/signature reports, exact bounded exceptions, installed graphs and
-  script-free upstream isolation with fake process execution; it never downloads.
+  lockfile preflight and upstream review-before-install with fake process
+  execution; it never downloads.
+- `security-build.test.mjs` checks the standalone auditor without node_modules,
+  its bundled license, CLI rejection and read-only generated-artifact comparison.
 - `fixtures/` owns isolated CDP processes.
 - `smoke/` owns opt-in official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.

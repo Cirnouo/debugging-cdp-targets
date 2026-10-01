@@ -6,7 +6,13 @@
         "useIgnoreFile": true
     },
     "files": {
-        "includes": ["**", "!**/.husky/_", "!**/.superpowers", "!**/plugins/debugging-cdp-targets/dist"]
+        "includes": [
+            "**",
+            "!**/.husky/_",
+            "!**/.superpowers",
+            "!**/plugins/debugging-cdp-targets/dist",
+            "!tooling/security/dist/check-security.mjs"
+        ]
     },
     "formatter": {
         "enabled": true,

@@ -2,11 +2,18 @@
 
 - `audit-policy.mjs` validates every pnpm lockfile document, full audit and
   signature reports, and narrowly reviewed vulnerability exceptions.
-- `security-evidence.mjs` checks installation policy and installed graph
+- `security-evidence.mjs` checks installation policy, manifest/lock agreement and installed graph
   completeness, and computes code/configuration/dependency SHA-256 evidence.
 - `security-runner.mjs` executes pnpm without a shell and audits both the
-  repository and a disposable, script-disabled official Server dependency tree.
+  repository and a disposable, script-disabled official Server dependency tree;
+  upstream vulnerability review precedes actual installation.
+  All pnpm calls disable pnpmfile hooks and configuration-dependency loading.
+- `dist/` contains the committed standalone checker and original YAML license
+  so CI can audit before installing project dependencies.
 - `AGENTS.md` defines fail-closed implementation and test requirements.
 
-Run the public repository command `pnpm check:security`; these modules are not
+Run `pnpm check:security` for full installed-tree checks, or the standalone
+entry with `--phase lockfile --root .` for repository-only pre-install checks.
+Use `pnpm build:security` to generate and `pnpm check:security:build` to verify
+the bundle without writing. These modules are not
 Plugin runtime code and do not belong in the installable payload.

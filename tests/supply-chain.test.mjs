@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,6 +15,7 @@ import {
 } from '../tooling/security/audit-policy.mjs';
 import {
     fingerprintInputs,
+    INSTALL_POLICY,
     validateInstallPolicy,
     verifyInstalledTree,
 } from '../tooling/security/security-evidence.mjs';
@@ -101,6 +102,212 @@ function waiver() {
 function findings(severity = 'high') {
     return assessAudit({ stdout: JSON.stringify(audit(severity)), exitCode: 1 }, inventory);
 }
+
+async function lockProject() {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-preflight-'));
+    execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+    await mkdir(path.join(root, 'docs/policies'), { recursive: true });
+    await mkdir(path.join(root, 'src'), { recursive: true });
+    await writeFile(path.join(root, 'src/evidence.mjs'), 'export const safe = true;\n');
+    await writeFile(path.join(root, 'docs/policies/security-exceptions.json'), '{"schemaVersion":1,"exceptions":[]}');
+    await writeFile(path.join(root, 'package.json'), '{"devDependencies":{"ws":"8.22.0"}}');
+    await writeFile(path.join(root, 'pnpm-lock.yaml'), lock);
+    await writeFile(
+        path.join(root, 'pnpm-workspace.yaml'),
+        stringify({ ...INSTALL_POLICY, allowBuilds: { 'esbuild@0.28.2': true } }),
+    );
+    return root;
+}
+
+function isolatedExecutor(calls, severity = 'high', failure) {
+    return async (args, { cwd }) => {
+        calls.push({ args, cwd });
+        if (args[0] === 'config')
+            return { exitCode: 0, stdout: JSON.stringify({ ...INSTALL_POLICY, allowBuilds: {} }) };
+        if (args[0] === 'install') {
+            assert.equal(args.includes('--lockfile-only'), true, 'a blocked upstream tree must never be installed');
+            await writeFile(path.join(cwd, 'pnpm-lock.yaml'), upstreamLock);
+            return { exitCode: 0, stdout: '' };
+        }
+        if (failure === 'network') throw new Error('registry unreachable');
+        if (failure === 'malformed') return { exitCode: 0, stdout: '{' };
+        if (args.includes('signatures'))
+            return {
+                exitCode: failure === 'signature' ? 1 : 0,
+                stdout: JSON.stringify({
+                    audited: 3,
+                    verified: failure === 'signature' ? 2 : 3,
+                    missing: [],
+                    invalid: [],
+                }),
+            };
+        const report = audit(severity, '1.9.0');
+        report.advisories[1].module_name = 'chrome-devtools-mcp';
+        if (failure === 'coverage') report.metadata.totalDependencies = 0;
+        return { exitCode: 1, stdout: JSON.stringify(report) };
+    };
+}
+
+test('lockfile preflight audits all dependencies without an installed tree or upstream resolution', async () => {
+    const root = await lockProject();
+    const calls = [];
+    try {
+        const before = await readFile(path.join(root, 'pnpm-lock.yaml'));
+        const result = await checkSecurity(root, {
+            phase: 'lockfile',
+            now,
+            async execute(args, { cwd }) {
+                assert.equal(cwd, root);
+                assert.equal(args.includes('--ignore-pnpmfile'), true);
+                assert.equal(args.includes('--config.configDependencies={}'), true);
+                calls.push(args);
+                if (args[0] === 'config')
+                    return {
+                        exitCode: 0,
+                        stdout: JSON.stringify({ ...INSTALL_POLICY, allowBuilds: { 'esbuild@0.28.2': true } }),
+                    };
+                if (args[0] === 'install') {
+                    assert.equal(args.includes('--lockfile-only'), true);
+                    assert.equal(args.includes('--frozen-lockfile'), true);
+                    assert.equal(args.includes('--ignore-scripts'), true);
+                    return { exitCode: 0, stdout: '' };
+                }
+                if (args.includes('signatures'))
+                    return { exitCode: 0, stdout: '{"audited":3,"verified":3,"invalid":[],"missing":[]}' };
+                return { exitCode: 1, stdout: JSON.stringify(audit('moderate')) };
+            },
+        });
+        assert.equal(result.ok, true);
+        assert.deepEqual(Object.keys(result.scopes), ['repository']);
+        assert.deepEqual(
+            calls.map((args) => args[0]),
+            ['config', 'install', 'audit', 'audit'],
+        );
+        assert.equal(result.scopes.repository.reported[0].severity, 'moderate');
+        assert.deepEqual(before, await readFile(path.join(root, 'pnpm-lock.yaml')));
+        await assert.rejects(access(path.join(root, 'node_modules')), /ENOENT/);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+test('preflight rejects manifest mismatches before executing pnpm', async () => {
+    const root = await lockProject();
+    let calls = 0;
+    try {
+        await writeFile(path.join(root, 'package.json'), '{"devDependencies":{"ws":"8.21.0"}}');
+        await assert.rejects(
+            checkSecurity(root, {
+                phase: 'lockfile',
+                execute: async () => {
+                    calls++;
+                    throw new Error('must not execute');
+                },
+            }),
+            /importer|declaration|manifest/i,
+        );
+        assert.equal(calls, 0);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+test('preflight rejects executable configuration dependencies before any pnpm command', async () => {
+    for (const location of ['pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
+        const root = await lockProject();
+        let calls = 0;
+        try {
+            if (location === 'pnpm-lock.yaml') {
+                await writeFile(
+                    path.join(root, location),
+                    lock.replace(
+                        'packageManagerDependencies:',
+                        'configDependencies: {plugin: 1.0.0}\n    packageManagerDependencies:',
+                    ),
+                );
+            } else {
+                await writeFile(
+                    path.join(root, location),
+                    stringify({ ...INSTALL_POLICY, configDependencies: { plugin: '1.0.0' } }),
+                );
+            }
+            await assert.rejects(
+                checkSecurity(root, {
+                    phase: 'lockfile',
+                    execute: async () => {
+                        calls++;
+                        throw new Error('must not execute');
+                    },
+                }),
+                /configuration dependencies/i,
+            );
+            assert.equal(calls, 0);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    }
+});
+
+test('lock-only validation cannot create an installation tree or mutate locked inputs', async () => {
+    for (const change of ['node_modules', 'pnpm-lock.yaml', 'package.json']) {
+        const root = await lockProject();
+        try {
+            await assert.rejects(
+                checkSecurity(root, {
+                    phase: 'lockfile',
+                    async execute(args) {
+                        if (args[0] === 'config')
+                            return {
+                                exitCode: 0,
+                                stdout: JSON.stringify({ ...INSTALL_POLICY, allowBuilds: { 'esbuild@0.28.2': true } }),
+                            };
+                        assert.equal(args[0], 'install');
+                        if (change === 'node_modules') await mkdir(path.join(root, change));
+                        else await writeFile(path.join(root, change), '{}');
+                        return { exitCode: 0, stdout: '' };
+                    },
+                }),
+                /changed|created|installation/i,
+            );
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    }
+});
+
+test('upstream high findings are blocked before installation, including without a review callback', async () => {
+    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'dct-blocked-upstream-'));
+    const calls = [];
+    try {
+        const result = await scanUpstream({ temporaryRoot, execute: isolatedExecutor(calls) });
+        assert.equal(result.findings[0].severity, 'high');
+        assert.equal(result.installed, false);
+        assert.equal(calls.filter(({ args }) => args[0] === 'install').length, 1);
+        await assert.rejects(access(calls[0].cwd), /ENOENT/);
+    } finally {
+        await rm(temporaryRoot, { recursive: true, force: true });
+    }
+});
+
+test('upstream signature, network, malformed and incomplete audits never proceed to installation', async () => {
+    for (const failure of ['signature', 'network', 'malformed', 'coverage']) {
+        const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'dct-failed-upstream-'));
+        const calls = [];
+        try {
+            await assert.rejects(
+                scanUpstream({ temporaryRoot, execute: isolatedExecutor(calls, 'moderate', failure) }),
+            );
+            assert.equal(calls.filter(({ args }) => args[0] === 'install').length, 1);
+            assert.equal(
+                calls.some(({ args }) => args[0] === 'audit'),
+                true,
+            );
+            await assert.rejects(access(calls[0].cwd), /ENOENT/);
+        } finally {
+            await rm(temporaryRoot, { recursive: true, force: true });
+        }
+    }
+});
 
 test('lock inventory reads every YAML document including package-manager and optional dependencies', () => {
     assert.deepEqual(readLockInventory(lock).packages, inventory);
@@ -203,13 +410,22 @@ test('waivers reject expired, future, wildcard, duplicated, incomplete or more-t
     assert.throws(() => validateExceptions({ schemaVersion: 1, exceptions: [waiver(), waiver()] }, now));
 });
 
-test('upstream scanning is isolated, script-free, uses the shared exact version and never runs its bin', async () => {
+test('upstream reviews the isolated lock before installation and never runs its bin', async () => {
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'dct-security-test-'));
     const calls = [];
+    let reviewed = false;
     try {
         const result = await scanUpstream({
             temporaryRoot,
+            async review(result) {
+                await assert.rejects(access(path.join(calls[0].cwd, 'node_modules')), /ENOENT/);
+                assert.equal(result.findings[0].severity, 'moderate');
+                reviewed = true;
+                return { blocked: [] };
+            },
             async execute(args, options) {
+                assert.equal(args.includes('--ignore-pnpmfile'), true);
+                assert.equal(args.includes('--config.configDependencies={}'), true);
                 calls.push({ args, cwd: options.cwd });
                 if (args[0] === 'install') {
                     const manifest = JSON.parse(await readFile(path.join(options.cwd, 'package.json'), 'utf8'));
@@ -220,7 +436,12 @@ test('upstream scanning is isolated, script-free, uses the shared exact version 
                     assert.ok(args.some((arg) => arg.startsWith(`--store-dir=${options.cwd}`)));
                     assert.ok(options.env.NPM_CONFIG_USERCONFIG.startsWith(options.cwd));
                     assert.ok(options.env.XDG_CONFIG_HOME.startsWith(options.cwd));
-                    await writeFile(path.join(options.cwd, 'pnpm-lock.yaml'), upstreamLock);
+                    if (args.includes('--lockfile-only')) {
+                        await writeFile(path.join(options.cwd, 'pnpm-lock.yaml'), upstreamLock);
+                        return { stdout: '', exitCode: 0 };
+                    }
+                    assert.equal(reviewed, true, 'upstream approval must precede installation');
+                    assert.equal(args.includes('--frozen-lockfile'), true);
                     await mkdir(path.join(options.cwd, 'node_modules/.pnpm'), { recursive: true });
                     await writeFile(
                         path.join(options.cwd, 'node_modules/.pnpm/lock.yaml'),
@@ -249,7 +470,10 @@ test('upstream scanning is isolated, script-free, uses the shared exact version 
             },
         });
         assert.equal(result.findings[0].severity, 'moderate');
-        assert.equal(calls.length, 4);
+        assert.deepEqual(
+            calls.map(({ args }) => args[0]),
+            ['config', 'install', 'audit', 'audit', 'install'],
+        );
         assert.equal(
             calls.every(({ args }) => !args.includes('--version') && !args.includes('exec')),
             true,
@@ -289,6 +513,7 @@ test('installation policy has no cooldown exemptions, ignored advisories or trus
         { ignoredOptionalDependencies: ['helper'] },
         { allowBuilds: { '*': true } },
         { onlyBuiltDependencies: ['anything'] },
+        { configDependencies: { plugin: '1.0.0' } },
     ]) {
         assert.throws(() => validateInstallPolicy({ ...safe, ...changed }));
     }
@@ -333,7 +558,7 @@ test('installed tree evidence includes development and optional dependencies, no
     }
 });
 
-test('failed isolated installs never proceed to audit and clean only their created workspace', async () => {
+test('failed isolated lock resolution never proceeds to audit and cleans only its created workspace', async () => {
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'dct-security-test-'));
     await writeFile(path.join(temporaryRoot, 'sentinel'), 'keep');
     let calls = 0;
@@ -346,7 +571,7 @@ test('failed isolated installs never proceed to audit and clean only their creat
                     return { stdout: '', exitCode: 1 };
                 },
             }),
-            /install/i,
+            /configuration|resolution/i,
         );
         assert.equal(calls, 1);
         assert.equal(await readFile(path.join(temporaryRoot, 'sentinel'), 'utf8'), 'keep');
@@ -359,6 +584,8 @@ test('public gate reports both full trees and rejects evidence changing during a
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-gate-'));
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'dct-upstream-'));
     let omitOptional = false;
+    let upstreamSeverity = 'moderate';
+    let upstreamInstalls = 0;
     async function tree(directory, source) {
         await writeFile(path.join(directory, 'pnpm-lock.yaml'), source);
         await mkdir(path.join(directory, 'node_modules/.pnpm'), { recursive: true });
@@ -391,7 +618,11 @@ test('public gate reports both full trees and rejects evidence changing during a
         let mutate = false;
         async function execute(args, { cwd }) {
             if (args[0] === 'install') {
-                await tree(cwd, upstreamLock);
+                if (args.includes('--lockfile-only')) await writeFile(path.join(cwd, 'pnpm-lock.yaml'), upstreamLock);
+                else {
+                    upstreamInstalls++;
+                    await tree(cwd, upstreamLock);
+                }
                 return { exitCode: 0, stdout: '' };
             }
             if (args[0] === 'config')
@@ -404,7 +635,7 @@ test('public gate reports both full trees and rejects evidence changing during a
                     await writeFile(path.join(root, 'src/evidence.mjs'), 'export const safe = false;\n');
                 return { exitCode: 0, stdout: '{"audited":3,"verified":3,"invalid":[],"missing":[]}' };
             }
-            const report = audit(cwd === root ? 'high' : 'moderate', cwd === root ? '8.22.0' : '1.9.0');
+            const report = audit(cwd === root ? 'high' : upstreamSeverity, cwd === root ? '8.22.0' : '1.9.0');
             if (cwd !== root) report.advisories[1].module_name = 'chrome-devtools-mcp';
             return { exitCode: 1, stdout: JSON.stringify(report) };
         }
@@ -437,6 +668,25 @@ test('public gate reports both full trees and rejects evidence changing during a
         approvedReview.exceptions[0].evidence = ['src/evidence.mjs'];
         await writeFile(exceptionPath, JSON.stringify(approvedReview));
         assert.equal((await checkSecurity(root, { temporaryRoot, execute, now })).ok, true);
+        upstreamSeverity = 'high';
+        const installedCount = upstreamInstalls;
+        const blockedUpstream = await checkSecurity(root, { temporaryRoot, execute, now });
+        assert.equal(blockedUpstream.scopes.upstream.blocked.length, 1);
+        assert.equal(upstreamInstalls, installedCount, 'high finding must block before upstream installation');
+        approvedReview.exceptions.push({
+            ...waiver(),
+            package: 'chrome-devtools-mcp',
+            version: '1.9.0',
+            scope: 'upstream',
+            evidence: ['src/evidence.mjs'],
+            fingerprints: blockedUpstream.scopes.upstream.fingerprints,
+        });
+        await writeFile(exceptionPath, JSON.stringify(approvedReview));
+        const releasedUpstream = await checkSecurity(root, { temporaryRoot, execute, now });
+        assert.equal(releasedUpstream.ok, true);
+        assert.equal(releasedUpstream.scopes.upstream.waived.length, 1);
+        assert.equal(upstreamInstalls, installedCount + 1);
+        upstreamSeverity = 'moderate';
         const beforeConfig = result.scopes.repository.fingerprints.configuration;
         await writeFile(path.join(root, 'plugins/fixture/mcp.json'), '{"env":{"changed":true}}');
         await assert.rejects(checkSecurity(root, { temporaryRoot, execute, now }), /fingerprint/i);

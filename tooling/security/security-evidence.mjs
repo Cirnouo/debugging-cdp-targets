@@ -3,7 +3,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { NPM_REGISTRY } from '../../src/shared/constants.mjs';
-import { readLockInventory } from './audit-policy.mjs';
+import { readLockInventory, validateConfigurationDependencies } from './audit-policy.mjs';
 
 export const INSTALL_POLICY = Object.freeze({
     minimumReleaseAge: 1440,
@@ -16,6 +16,7 @@ export const INSTALL_POLICY = Object.freeze({
 });
 
 export function validateInstallPolicy(config, isolated = false) {
+    validateConfigurationDependencies(config.configDependencies);
     for (const [key, value] of Object.entries(INSTALL_POLICY)) {
         if (config[key] !== value) throw new Error(`Unsafe installation policy: ${key}`);
     }
@@ -70,19 +71,9 @@ export function canonical(value) {
 function graph(doc) {
     return canonical({ importers: doc.importers, packages: doc.packages, snapshots: doc.snapshots });
 }
-export async function verifyInstalledTree(root, inventory) {
-    const modules = parse(await readFile(path.join(root, 'node_modules/.modules.yaml'), 'utf8'));
-    for (const group of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-        if (modules.included?.[group] !== true) throw new Error(`Installed tree excluded ${group}.`);
-    }
-    const installed = readLockInventory(await readFile(path.join(root, 'node_modules/.pnpm/lock.yaml'), 'utf8'));
+export async function verifyLockManifest(root, inventory) {
     const runtime = inventory.documents.filter((doc) => !doc.importers['.'].packageManagerDependencies);
-    if (
-        runtime.length !== 1 ||
-        installed.documents.length !== 1 ||
-        JSON.stringify(graph(runtime[0])) !== JSON.stringify(graph(installed.documents[0]))
-    )
-        throw new Error('Installed dependency graph differs from lockfile.');
+    if (runtime.length !== 1) throw new Error('Lockfile must have exactly one runtime dependency graph.');
     const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     for (const group of ['dependencies', 'devDependencies', 'optionalDependencies']) {
         const expected = manifest[group] ?? {};
@@ -91,8 +82,22 @@ export async function verifyInstalledTree(root, inventory) {
             Object.keys(expected).length !== Object.keys(actual).length ||
             Object.entries(expected).some(([name, version]) => actual[name]?.specifier !== version)
         )
-            throw new Error(`Installed importer differs from ${group}.`);
+            throw new Error(`Lockfile importer differs from manifest ${group}.`);
     }
+    return runtime[0];
+}
+export async function verifyInstalledTree(root, inventory) {
+    const runtime = await verifyLockManifest(root, inventory);
+    const modules = parse(await readFile(path.join(root, 'node_modules/.modules.yaml'), 'utf8'));
+    for (const group of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+        if (modules.included?.[group] !== true) throw new Error(`Installed tree excluded ${group}.`);
+    }
+    const installed = readLockInventory(await readFile(path.join(root, 'node_modules/.pnpm/lock.yaml'), 'utf8'));
+    if (
+        installed.documents.length !== 1 ||
+        JSON.stringify(graph(runtime)) !== JSON.stringify(graph(installed.documents[0]))
+    )
+        throw new Error('Installed dependency graph differs from lockfile.');
 }
 
 async function hashFiles(root, files) {

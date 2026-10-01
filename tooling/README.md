@@ -1,6 +1,8 @@
 # Tooling
 
 - `build-plugin.mjs` bundles runtime and copies required licenses/helpers.
+- `build-security.mjs` builds and read-only verifies the dependency-free CI
+  audit entry and its YAML license.
 - `repository-audit.mjs` checks text, AST layer boundaries, versions, docs,
   symlink, and production safety.
 - `distribution-audit.mjs` checks physical Plugin inventory and byte-identical

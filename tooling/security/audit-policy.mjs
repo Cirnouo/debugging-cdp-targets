@@ -28,6 +28,13 @@ function identity(key) {
     return { name: match[1], version: match[2] };
 }
 
+export function validateConfigurationDependencies(value) {
+    demand(
+        value === undefined || (object(value) && Object.keys(value).length === 0),
+        'Unreviewed configuration dependencies are prohibited.',
+    );
+}
+
 export function readLockInventory(source) {
     const parsed = parseAllDocuments(source);
     demand(parsed.length > 0 && parsed.every((doc) => doc.errors.length === 0), 'Malformed lockfile YAML.');
@@ -42,6 +49,7 @@ export function readLockInventory(source) {
                 object(doc.snapshots),
             'Incomplete lockfile inventory.',
         );
+        validateConfigurationDependencies(doc.configDependencies);
         const packageKeys = new Set();
         for (const [key, value] of Object.entries(doc.packages)) {
             const { name, version } = identity(key);
@@ -80,6 +88,7 @@ export function readLockInventory(source) {
             }
         }
         for (const importer of Object.values(doc.importers)) {
+            validateConfigurationDependencies(importer.configDependencies);
             for (const field of [
                 'dependencies',
                 'devDependencies',

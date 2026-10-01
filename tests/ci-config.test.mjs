@@ -42,8 +42,15 @@ test('CI workflow uses only the approved action pins and uploads no artifacts', 
 test('security gate audits before any reviewed dependency builds and cannot ignore failures', () => {
     const security = workflow.jobs['supply-chain-security'];
     assert.ok(security);
+    assert.equal(security.env.PNPM_CONFIG_IGNORE_PNPMFILE, 'true');
+    assert.equal(security.env.PNPM_CONFIG_CONFIG_DEPENDENCIES, '{}');
     const runs = security.steps.map((step) => step.run).filter(Boolean);
-    assert.deepEqual(runs, ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm check:security']);
+    assert.deepEqual(runs, [
+        'node tooling/security/dist/check-security.mjs --phase lockfile --root .',
+        'pnpm install --frozen-lockfile --ignore-scripts',
+        'pnpm check:security',
+        'pnpm check:security:build',
+    ]);
     assert.equal(Object.hasOwn(security, 'continue-on-error'), false);
     assert.equal(
         security.steps.some((step) => step['continue-on-error'] === true),

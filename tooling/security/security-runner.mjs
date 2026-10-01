@@ -1,15 +1,25 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { stringify } from 'yaml';
+import { parse, stringify } from 'yaml';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../../src/shared/constants.mjs';
-import { assessAudit, readLockInventory, validateSignatures } from './audit-policy.mjs';
-import { INSTALL_POLICY, validateInstallPolicy, verifyInstalledTree } from './security-evidence.mjs';
+import {
+    assessAudit,
+    readLockInventory,
+    validateConfigurationDependencies,
+    validateSignatures,
+} from './audit-policy.mjs';
+import {
+    INSTALL_POLICY,
+    validateInstallPolicy,
+    verifyInstalledTree,
+    verifyLockManifest,
+} from './security-evidence.mjs';
 
 const exec = promisify(execFile);
-const AUDIT_OPTIONS = [`--registry=${NPM_REGISTRY}`];
+const AUDIT_OPTIONS = ['--ignore-pnpmfile', '--config.configDependencies={}', `--registry=${NPM_REGISTRY}`];
 const PROCESS_OPTIONS = {
     windowsHide: true,
     shell: false,
@@ -36,11 +46,16 @@ export async function executePnpm(args, options) {
     }
 }
 
-async function auditTree(root, inventory, execute, env, isolated = false) {
-    const options = { cwd: root, env };
-    const effective = await execute(['config', 'list', '--json', ...AUDIT_OPTIONS], options);
+async function verifyConfiguration(root, execute, env, isolated = false) {
+    const workspace = parse(await readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8'));
+    validateConfigurationDependencies(workspace.configDependencies);
+    const effective = await execute(['config', 'list', '--json', ...AUDIT_OPTIONS], { cwd: root, env });
     if (effective.exitCode !== 0) throw new Error('Cannot verify effective pnpm audit configuration.');
     validateInstallPolicy(JSON.parse(effective.stdout), isolated);
+}
+
+async function auditTree(root, inventory, execute, env) {
+    const options = { cwd: root, env };
     const vulnerabilities = await execute(['audit', '--json', '--audit-level=info', ...AUDIT_OPTIONS], options);
     const findings = assessAudit(vulnerabilities, inventory.packages);
     const signatures = await execute(['audit', 'signatures', '--json', ...AUDIT_OPTIONS], options);
@@ -52,13 +67,58 @@ async function auditTree(root, inventory, execute, env, isolated = false) {
     };
 }
 
-export async function scanRepository({ root, execute = executePnpm }) {
+async function hasInstallation(root) {
+    try {
+        await lstat(path.join(root, 'node_modules'));
+        return true;
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        return false;
+    }
+}
+
+async function lockedInputs(root) {
+    return Promise.all(
+        ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].map((file) => readFile(path.join(root, file))),
+    );
+}
+
+async function assertUnchangedInputs(root, before) {
+    const after = await lockedInputs(root);
+    if (before.some((bytes, index) => !bytes.equals(after[index])))
+        throw new Error('Locked inputs changed during validation or installation.');
+}
+
+export async function scanRepository({ root, phase = 'complete', execute = executePnpm }) {
     const inventory = readLockInventory(await readFile(path.join(root, 'pnpm-lock.yaml'), 'utf8'));
-    await verifyInstalledTree(root, inventory);
+    await verifyLockManifest(root, inventory);
+    await verifyConfiguration(root, execute, process.env);
+    if (phase === 'lockfile') {
+        const before = await lockedInputs(root);
+        const installedBefore = await hasInstallation(root);
+        const validation = await execute(
+            [
+                'install',
+                '--lockfile-only',
+                '--frozen-lockfile',
+                '--ignore-scripts',
+                '--config.managePackageManagerVersions=false',
+                ...AUDIT_OPTIONS,
+            ],
+            { cwd: root, env: process.env },
+        );
+        if (validation.exitCode !== 0)
+            throw new Error(`Frozen lockfile validation failed: ${validation.stderr ?? validation.stdout}`);
+        await assertUnchangedInputs(root, before);
+        if (!installedBefore && (await hasInstallation(root)))
+            throw new Error('Lock-only validation created an installation tree.');
+    } else {
+        await verifyInstalledTree(root, inventory);
+    }
     return auditTree(root, inventory, execute, process.env);
 }
 
-export async function scanUpstream({ temporaryRoot = os.tmpdir(), execute = executePnpm } = {}) {
+export async function scanUpstream({ temporaryRoot = os.tmpdir(), execute = executePnpm, review } = {}) {
     const root = await mkdtemp(path.join(temporaryRoot, 'debugging-cdp-targets-security-'));
     try {
         const manifest = {
@@ -86,28 +146,41 @@ export async function scanUpstream({ temporaryRoot = os.tmpdir(), execute = exec
             NPM_CONFIG_GLOBALCONFIG: path.join(root, 'global-npmrc'),
             XDG_CONFIG_HOME: path.join(root, 'configuration'),
         });
-        const installation = await execute(
-            [
-                'install',
-                '--ignore-scripts',
-                '--ignore-workspace',
-                '--config.managePackageManagerVersions=false',
-                `--store-dir=${path.join(root, 'store')}`,
-                ...AUDIT_OPTIONS,
-            ],
-            { cwd: root, env },
-        );
-        if (installation.exitCode !== 0)
-            throw new Error(`Isolated upstream install failed: ${installation.stderr ?? installation.stdout}`);
+        await verifyConfiguration(root, execute, env, true);
+        const installArguments = [
+            'install',
+            '--ignore-scripts',
+            '--ignore-workspace',
+            '--config.managePackageManagerVersions=false',
+            `--store-dir=${path.join(root, 'store')}`,
+            ...AUDIT_OPTIONS,
+        ];
+        const resolution = await execute([...installArguments, '--lockfile-only'], { cwd: root, env });
+        if (resolution.exitCode !== 0)
+            throw new Error(`Isolated upstream lock resolution failed: ${resolution.stderr ?? resolution.stdout}`);
+        if (await hasInstallation(root)) throw new Error('Upstream lock resolution created an installation tree.');
         const inventory = readLockInventory(await readFile(path.join(root, 'pnpm-lock.yaml'), 'utf8'));
+        await verifyLockManifest(root, inventory);
         const runtime = inventory.documents.find((doc) => doc.importers['.'].dependencies?.[PACKAGE_NAME]);
         if (
             runtime?.importers['.'].dependencies[PACKAGE_NAME].specifier !== PACKAGE_VERSION ||
             !inventory.packages.some((pkg) => pkg.name === PACKAGE_NAME && pkg.version === PACKAGE_VERSION)
         )
             throw new Error('Isolated upstream version differs from shared configuration.');
+        const before = await lockedInputs(root);
+        const result = await auditTree(root, inventory, execute, env);
+        const decision = review
+            ? await review(result)
+            : { blocked: result.findings.filter((finding) => ['high', 'critical'].includes(finding.severity)) };
+        if (!decision || !Array.isArray(decision.blocked)) throw new Error('Invalid upstream review decision.');
+        await assertUnchangedInputs(root, before);
+        if (decision.blocked.length) return { ...result, installed: false };
+        const installation = await execute([...installArguments, '--frozen-lockfile'], { cwd: root, env });
+        if (installation.exitCode !== 0)
+            throw new Error(`Isolated upstream install failed: ${installation.stderr ?? installation.stdout}`);
+        await assertUnchangedInputs(root, before);
         await verifyInstalledTree(root, inventory);
-        return await auditTree(root, inventory, execute, env, true);
+        return { ...result, installed: true };
     } finally {
         // Only this invocation's mkdtemp directory, never a user cache or a caller-owned root.
         await rm(root, { recursive: true, force: true });

@@ -20,3 +20,5 @@ state, browser profiles, or globally installed Skills.
 Supply-chain implementations additionally follow `security/AGENTS.md`.
 `check:security` is an explicit network gate, not part of default tests or
 verify:push. Do not auto-relax installation trust on failure.
+`check:security:build` is an offline generated-artifact comparison and belongs
+in verify:push; it must never perform registry audits or download dependencies.

@@ -2,9 +2,12 @@
 
 ## Installation and scan order
 
-Use pnpm 12.4.2 and the frozen lockfile. CI's Supply chain security job installs
-with `--ignore-scripts` before auditing; Commit messages and Quality depend on
-its success. Windows and Portable tests remain downstream of Quality. No
+Use pnpm 12.4.2 and the frozen lockfile. CI's Supply chain security job first
+validates and audits the repository lockfile using the committed standalone Node
+checker without project dependencies. It then installs with `--ignore-scripts`,
+verifies the installed graph and full audits, and checks the standalone build
+against its maintained source. Commit messages and Quality depend on its
+success. Windows and Portable tests remain downstream of Quality. No
 continue-on-error, always-run build, registry-error suppression, or audit repair
 is permitted. All third-party Actions must use reviewed full commit SHAs.
 
@@ -21,8 +24,24 @@ loader's unrestricted type peer with Node 24 and avoids its trust-rejected
 undici-types 6.21.0 chain. This is a dependency update, not a trust exception.
 Changing the override requires graph review and normal compatibility gates.
 
-`pnpm check:security` requires the public npm registry and network access. It
-runs `pnpm audit --json --audit-level=info` and `pnpm audit signatures --json`
+The standalone entry takes `--phase lockfile --root .` from the repository root.
+This phase checks manifest/lock agreement and effective policy, then executes
+`pnpm install --lockfile-only --frozen-lockfile --ignore-scripts` and registry
+audits. The lock-only command must leave locked inputs unchanged and must not
+create an installation tree. This phase never resolves the official MCP tree.
+
+All audit/configuration/lock/install subprocesses explicitly disable pnpmfile
+hooks and config-dependency loading. The security job also sets
+`PNPM_CONFIG_IGNORE_PNPMFILE=true` and `PNPM_CONFIG_CONFIG_DEPENDENCIES={}` so
+its ordinary install and pnpm script invocations have the same boundary.
+`--ignore-scripts` alone disables lifecycle scripts, not executable pnpm hooks.
+Reject nonempty or malformed configDependencies in the workspace and every
+lock document before invoking pnpm; this project has no reviewed configuration
+dependencies. These controls must not weaken the remaining effective policy.
+
+`pnpm check:security` retains complete installed-tree checking and requires the
+public npm registry and network access. Both phases
+run `pnpm audit --json --audit-level=info` and `pnpm audit signatures --json`
 for the complete dependency graph, including development, optional, transitive,
 build-time, and package-manager dependencies across all YAML documents. It
 checks the installed runtime graph and dependency groups against the lockfile.
@@ -31,9 +50,13 @@ zero/partial coverage, malformed reports, missing/invalid signatures, unknown
 identities, ignored findings, command failures, and network failures all block.
 No vulnerability exception can bypass these failures.
 
-The same command installs the shared-constant exact official MCP version into a
-new disposable pnpm project with scripts disabled, isolated configuration and
-store, then audits its graph. It never executes the Server/bin/version command,
+The complete command resolves the shared-constant exact official MCP version
+into a new disposable lockfile with scripts disabled, isolated configuration and
+store. It validates and audits this lockfile, evaluates vulnerability exceptions
+with current fingerprints, and only then performs a script-disabled frozen
+install and verifies the installed graph. Blocked or unverifiable findings do
+not permit actual installation. The approved inputs must remain unchanged.
+It never executes the Server/bin/version command,
 starts a browser, or reads the user's runtime cache. All disposable files are
 removed after the check. This measures the upstream dependency graph resolved
 at CI time, not a guarantee about a future runtime npx download. Audit tooling,
@@ -87,7 +110,17 @@ document why that is not yet possible when requesting a temporary waiver.
 Default unit tests and `verify:push` stay offline with respect to audit services.
 Run `check:security` separately before dependency/build changes are merged.
 Reports are diagnostic evidence at a point in time, not an absolute security
-claim: signatures do not certify that package contents are benign.
+claim: signatures do not certify that package contents are benign. In the pinned
+pnpm implementation, both registry audits derive package identities from the
+lockfile, not local package bytes; signature success is not independent local
+file authentication. Frozen installation enforces pnpm tarball integrity, while
+the installed-tree comparison independently checks graph and inclusion evidence.
+
+`pnpm build:security` regenerates the committed standalone checker and original
+parser license; `pnpm check:security:build` verifies them without writing or
+network access. This offline check belongs in verify:push. Generated code is
+checked for reproducibility, not manually formatted; maintained audit source
+remains subject to normal tests and unchanged coverage floors.
 
 After this workflow has run successfully on GitHub, the user should add
 **Supply chain security** to main's strict required checks alongside existing

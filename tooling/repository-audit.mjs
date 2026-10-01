@@ -120,7 +120,8 @@ export function auditRepository(root) {
         if (!files.has(`${directory}/README.md`))
             errors.push(`${directory}: add README.md describing immediate contents.`);
     for (const [file, source] of files) {
-        if (!file.startsWith(`${PLUGIN_ROOT}/dist/`)) errors.push(...validateTextStyle(file, source));
+        if (!file.startsWith(`${PLUGIN_ROOT}/dist/`) && file !== 'tooling/security/dist/check-security.mjs')
+            errors.push(...validateTextStyle(file, source));
         if (/^src\/.+\.(?:mjs|cjs)$/.test(file)) errors.push(...validateRuntimeSource(file, source));
         if (
             /^src\/(?:interface|application|domains|adapters|shared)\//.test(file) &&

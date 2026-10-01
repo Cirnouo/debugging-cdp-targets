@@ -23,6 +23,9 @@ jobs:
     supply-chain-security:
         name: Supply chain security
         runs-on: ubuntu-latest
+        env:
+            PNPM_CONFIG_IGNORE_PNPMFILE: "true"
+            PNPM_CONFIG_CONFIG_DEPENDENCIES: "{}"
         steps:
             -   name: Check out repository
                 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,10 +38,14 @@ jobs:
                 with:
                     node-version: 24.21.0
                     cache: pnpm
+            -   name: Validate and audit lockfile before installation
+                run: node tooling/security/dist/check-security.mjs --phase lockfile --root .
             -   name: Install without dependency lifecycle scripts
                 run: pnpm install --frozen-lockfile --ignore-scripts
             -   name: Check full dependency trees and registry signatures
                 run: pnpm check:security
+            -   name: Verify standalone security checker matches its source
+                run: pnpm check:security:build
 
     commit-messages:
         name: Commit messages

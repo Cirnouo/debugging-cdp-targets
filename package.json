@@ -22,8 +22,10 @@
         "build:plugin": "node tooling/build-plugin.mjs",
         "check:build": "node tooling/build-plugin.mjs --check",
         "check:commits": "node tooling/check-commits.mjs",
-        "check:security": "node tooling/check-security.mjs",
-        "verify:push": "pnpm format:check && pnpm lint && pnpm check:scripts && pnpm test:coverage && pnpm check:repo && pnpm check:build && pnpm check:distribution && pnpm check:commits"
+        "check:security": "node tooling/check-security.mjs --root .",
+        "build:security": "node tooling/build-security.mjs",
+        "check:security:build": "node tooling/build-security.mjs --check",
+        "verify:push": "pnpm format:check && pnpm lint && pnpm check:scripts && pnpm test:coverage && pnpm check:repo && pnpm check:build && pnpm check:security:build && pnpm check:distribution && pnpm check:commits"
     },
     "lint-staged": {
         "*.{js,cjs,mjs,json}": "biome check --write --no-errors-on-unmatched",
