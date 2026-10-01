@@ -25,3 +25,5 @@ nearest source AGENTS.md and only the relevant policies before editing.
 Use Node 24.21.0 and pnpm 12.4.2. Run focused tests first, then
 `pnpm verify:push`. Build committed runtime with `pnpm build:plugin`;
 `pnpm check:build` verifies it without writing. Domain changes are test-first.
+Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
+generated JavaScript is distribution output, never a handwritten fallback.

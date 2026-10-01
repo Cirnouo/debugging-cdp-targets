@@ -7,6 +7,8 @@
 - `0005-direct-stdio-plugin.md`: accepted current Plugin, direct stdio, transient
   control, generic targets, and bundled runtime; supersedes the affected parts
   of 0001–0004.
+- `0006-native-typescript.md`: native erasable TypeScript, independent strict
+  typechecking, direct AST auditing and dependency-free JavaScript delivery.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

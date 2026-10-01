@@ -7365,13 +7365,25 @@ var require_dist = __commonJS({
   }
 });
 
-// tooling/check-security.mjs
+// tooling/check-security.ts
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { lstat as lstat3, readFile as readFile3 } from "node:fs/promises";
 import path3 from "node:path";
 import { fileURLToPath } from "node:url";
 
-// tooling/security/audit-policy.mjs
+// src/shared/errors.ts
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function errorCode(error) {
+  return isRecord(error) && typeof error.code === "string" ? error.code : void 0;
+}
+
+// tooling/security/audit-policy.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SEVERITIES = ["info", "low", "moderate", "high", "critical"];
 var SCOPES = ["repository", "upstream"];
@@ -7396,7 +7408,10 @@ function nonempty(value) {
 }
 function identity(key) {
   const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+)@([^()]+)(?:\(.*\))?$/.exec(key);
-  demand(match && PACKAGE.test(match[1]) && VERSION.test(match[2]), `Non-registry or unpinned dependency: ${key}`);
+  demand(
+    match?.[1] && match[2] && PACKAGE.test(match[1]) && VERSION.test(match[2]),
+    `Non-registry or unpinned dependency: ${key}`
+  );
   return { name: match[1], version: match[2] };
 }
 function validateConfigurationDependencies(value) {
@@ -7408,24 +7423,26 @@ function validateConfigurationDependencies(value) {
 function readLockInventory(source) {
   const parsed = (0, import_yaml.parseAllDocuments)(source);
   demand(parsed.length > 0 && parsed.every((doc) => doc.errors.length === 0), "Malformed lockfile YAML.");
-  const documents = parsed.map((doc) => doc.toJS());
+  const values = parsed.map((doc) => doc.toJS());
+  const documents = [];
   const all = /* @__PURE__ */ new Map();
-  for (const doc of documents) {
+  for (const doc of values) {
     demand(
-      object(doc) && doc.lockfileVersion === "9.0" && object(doc.importers?.["."]) && object(doc.packages) && object(doc.snapshots),
+      object(doc) && doc.lockfileVersion === "9.0" && object(doc.importers) && object(doc.importers["."]) && object(doc.packages) && object(doc.snapshots),
       "Incomplete lockfile inventory."
     );
     validateConfigurationDependencies(doc.configDependencies);
     const packageKeys = /* @__PURE__ */ new Set();
     for (const [key, value] of Object.entries(doc.packages)) {
       const { name, version } = identity(key);
-      const integrity = value?.resolution?.integrity;
+      demand(object(value) && object(value.resolution), `Invalid resolution: ${key}`);
+      const integrity = value.resolution.integrity;
       demand(
         nonempty(integrity) && /^sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}$/.test(integrity),
         `Missing registry integrity: ${key}`
       );
       demand(
-        !value.resolution.tarball || value.resolution.tarball.startsWith("https://registry.npmjs.org/"),
+        !value.resolution.tarball || typeof value.resolution.tarball === "string" && value.resolution.tarball.startsWith("https://registry.npmjs.org/"),
         `Non-standard dependency source: ${key}`
       );
       const previous = all.get(`${name}@${version}`);
@@ -7443,8 +7460,12 @@ function readLockInventory(source) {
     );
     demand(snapshotKeys.size === packageKeys.size, "Lockfile graph omits packages.");
     for (const snapshot of Object.values(doc.snapshots)) {
+      demand(object(snapshot), "Invalid dependency snapshot.");
       for (const field of ["dependencies", "optionalDependencies"]) {
-        for (const [name, version] of Object.entries(snapshot[field] ?? {})) {
+        const dependencies = snapshot[field] ?? {};
+        demand(object(dependencies), "Invalid snapshot dependencies.");
+        for (const [name, version] of Object.entries(dependencies)) {
+          demand(typeof version === "string", "Invalid dependency version.");
           const item = identity(`${name}@${version}`);
           demand(
             packageKeys.has(`${item.name}@${item.version}`),
@@ -7454,6 +7475,7 @@ function readLockInventory(source) {
       }
     }
     for (const importer of Object.values(doc.importers)) {
+      demand(object(importer), "Invalid lock importer.");
       validateConfigurationDependencies(importer.configDependencies);
       for (const field of [
         "dependencies",
@@ -7461,7 +7483,13 @@ function readLockInventory(source) {
         "optionalDependencies",
         "packageManagerDependencies"
       ]) {
-        for (const [name, value] of Object.entries(importer[field] ?? {})) {
+        const dependencies = importer[field] ?? {};
+        demand(object(dependencies), "Invalid importer dependencies.");
+        for (const [name, value] of Object.entries(dependencies)) {
+          demand(
+            object(value) && typeof value.version === "string" && (value.specifier === void 0 || typeof value.specifier === "string"),
+            "Invalid importer reference."
+          );
           const item = identity(`${name}@${value.version}`);
           demand(
             packageKeys.has(`${item.name}@${item.version}`),
@@ -7470,6 +7498,13 @@ function readLockInventory(source) {
         }
       }
     }
+    documents.push({
+      ...doc,
+      lockfileVersion: "9.0",
+      importers: doc.importers,
+      packages: doc.packages,
+      snapshots: doc.snapshots
+    });
   }
   demand(all.size > 0, "Empty dependency inventory.");
   return {
@@ -7505,16 +7540,18 @@ function assessAudit(result, inventory) {
     "Audit coverage differs from complete lock inventory."
   );
   keys(data.metadata.vulnerabilities, SEVERITIES, "vulnerability counts");
-  const counts = Object.fromEntries(SEVERITIES.map((severity) => [severity, 0]));
+  const counts = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
   const findings = /* @__PURE__ */ new Map();
   for (const advisory of Object.values(data.advisories)) {
     demand(
-      SEVERITIES.includes(advisory.severity) && PACKAGE.test(advisory.module_name) && GHSA.test(advisory.github_advisory_id) && nonempty(advisory.title),
+      object(advisory) && typeof advisory.severity === "string" && SEVERITIES.some((severity2) => severity2 === advisory.severity) && typeof advisory.module_name === "string" && typeof advisory.github_advisory_id === "string" && PACKAGE.test(advisory.module_name) && GHSA.test(advisory.github_advisory_id) && nonempty(advisory.title),
       "Invalid advisory identity or severity."
     );
     demand(Array.isArray(advisory.findings) && advisory.findings.length > 0, "Advisory omits affected versions.");
-    counts[advisory.severity]++;
+    const severity = advisory.severity;
+    counts[severity]++;
     for (const finding of advisory.findings) {
+      demand(object(finding) && typeof finding.version === "string", "Invalid affected version.");
       demand(
         inventory.some((pkg) => pkg.name === advisory.module_name && pkg.version === finding.version),
         "Advisory version not in inventory."
@@ -7527,12 +7564,12 @@ function assessAudit(result, inventory) {
         ghsa: advisory.github_advisory_id,
         package: advisory.module_name,
         version: finding.version,
-        severity: advisory.severity,
+        severity,
         title: advisory.title
       };
       const key = `${item.ghsa}:${item.package}:${item.version}`;
       demand(
-        !findings.has(key) || findings.get(key).severity === item.severity,
+        !findings.has(key) || findings.get(key)?.severity === item.severity,
         "Conflicting advisory severities."
       );
       findings.set(key, item);
@@ -7593,7 +7630,7 @@ function validateExceptions(data, now = /* @__PURE__ */ new Date()) {
       "exception"
     );
     demand(
-      GHSA.test(item.ghsa) && typeof item.package === "string" && PACKAGE.test(item.package) && VERSION.test(item.version) && SCOPES.includes(item.scope),
+      typeof item.ghsa === "string" && typeof item.version === "string" && typeof item.scope === "string" && GHSA.test(item.ghsa) && typeof item.package === "string" && PACKAGE.test(item.package) && VERSION.test(item.version) && SCOPES.includes(item.scope),
       "Exception needs an exact GHSA, package, version and scope."
     );
     for (const field of ["reason", "triggerConditions", "reviewedBy"])
@@ -7625,11 +7662,20 @@ function validateExceptions(data, now = /* @__PURE__ */ new Date()) {
 }
 function evaluateFindings(findings, exceptions, contexts) {
   const scope = Object.keys(contexts)[0];
-  demand(Object.keys(contexts).length === 1 && SCOPES.includes(scope), "Choose exactly one audit scope.");
-  const result = { blocked: [], waived: [], reported: findings.map((item) => ({ ...item, scope })) };
+  demand(Object.keys(contexts).length === 1 && scope && SCOPES.includes(scope), "Choose exactly one audit scope.");
+  const checkedScope = scope;
+  const context = contexts[checkedScope];
+  demand(context, "Missing audit context.");
+  const result = {
+    blocked: [],
+    waived: [],
+    reported: findings.map((item) => ({ ...item, scope: checkedScope }))
+  };
   for (const exception of exceptions.filter((item) => item.scope === scope)) {
     demand(
-      Object.keys(exception.fingerprints).every((key) => exception.fingerprints[key] === contexts[scope][key]),
+      ["code", "configuration", "dependencies"].every(
+        (key) => exception.fingerprints[key] === context[key]
+      ),
       "Exception evidence fingerprint changed; review required."
     );
   }
@@ -7643,13 +7689,13 @@ function evaluateFindings(findings, exceptions, contexts) {
   return result;
 }
 
-// tooling/security/security-evidence.mjs
+// tooling/security/security-evidence.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { createHash } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 
-// src/shared/constants.mjs
+// src/shared/constants.ts
 var MAX_HTTP_BYTES = 8 * 1024 * 1024;
 var MAX_CONTROL_BYTES = 64 * 1024;
 var TARGET_KINDS = Object.freeze(["chrome", "generic-cdp"]);
@@ -7659,7 +7705,7 @@ var PACKAGE_VERSION = "1.9.0";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
-// tooling/security/security-evidence.mjs
+// tooling/security/security-evidence.ts
 var INSTALL_POLICY = Object.freeze({
   minimumReleaseAge: 1440,
   minimumReleaseAgeStrict: true,
@@ -7670,6 +7716,7 @@ var INSTALL_POLICY = Object.freeze({
   strictDepBuilds: true
 });
 function validateInstallPolicy(config, isolated = false) {
+  if (!isRecord(config)) throw new Error("Invalid installation policy.");
   validateConfigurationDependencies(config.configDependencies);
   for (const [key, value] of Object.entries(INSTALL_POLICY)) {
     if (config[key] !== value) throw new Error(`Unsafe installation policy: ${key}`);
@@ -7687,10 +7734,13 @@ function validateInstallPolicy(config, isolated = false) {
   ]) {
     if (Object.hasOwn(config, key)) throw new Error(`Installation bypass is prohibited: ${key}`);
   }
+  if (config.auditConfig !== void 0 && !isRecord(config.auditConfig))
+    throw new Error("Invalid audit configuration.");
   for (const [key, value] of Object.entries(config.auditConfig ?? {})) {
     if (!["ignoreCves", "ignoreGhsas", "ignoreUnfixable"].includes(key) || (Array.isArray(value) ? value.length > 0 : value !== false))
       throw new Error("Audit exclusions are prohibited.");
   }
+  if (config.audit !== void 0 && !isRecord(config.audit)) throw new Error("Invalid audit configuration.");
   for (const [key, value] of Object.entries(config.audit ?? {})) {
     if (!(key === "level" && value === "info" || key === "ignore" && Array.isArray(value) && value.length === 0 || key === "ignorePrune" && value === false))
       throw new Error("Filtered audit configuration is prohibited.");
@@ -7699,12 +7749,12 @@ function validateInstallPolicy(config, isolated = false) {
     if (config[key] === true) throw new Error(`Filtered or permissive audit configuration: ${key}`);
   }
   if (config.optional === false) throw new Error("Optional dependencies must be included.");
-  if (config.registry && config.registry.replace(/\/$/, "") !== NPM_REGISTRY)
+  if (config.registry && (typeof config.registry !== "string" || config.registry.replace(/\/$/, "") !== NPM_REGISTRY))
     throw new Error("Unexpected audit registry.");
 }
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object")
+  if (isRecord(value))
     return Object.fromEntries(
       Object.keys(value).sort().map((key) => [key, canonical(value[key])])
     );
@@ -7714,25 +7764,30 @@ function graph(doc) {
   return canonical({ importers: doc.importers, packages: doc.packages, snapshots: doc.snapshots });
 }
 async function verifyLockManifest(root, inventory) {
-  const runtime = inventory.documents.filter((doc) => !doc.importers["."].packageManagerDependencies);
-  if (runtime.length !== 1) throw new Error("Lockfile must have exactly one runtime dependency graph.");
+  const runtime = inventory.documents.filter((doc) => !doc.importers["."]?.packageManagerDependencies);
+  const document = runtime[0];
+  if (runtime.length !== 1 || !document) throw new Error("Lockfile must have exactly one runtime dependency graph.");
   const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  if (!isRecord(manifest)) throw new Error("Invalid dependency manifest.");
   for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
     const expected = manifest[group] ?? {};
-    const actual = runtime[0].importers["."][group] ?? {};
+    if (!isRecord(expected)) throw new Error("Invalid dependency declarations.");
+    const actual = document.importers["."]?.[group] ?? {};
     if (Object.keys(expected).length !== Object.keys(actual).length || Object.entries(expected).some(([name, version]) => actual[name]?.specifier !== version))
       throw new Error(`Lockfile importer differs from manifest ${group}.`);
   }
-  return runtime[0];
+  return document;
 }
 async function verifyInstalledTree(root, inventory) {
   const runtime = await verifyLockManifest(root, inventory);
   const modules = (0, import_yaml2.parse)(await readFile(path.join(root, "node_modules/.modules.yaml"), "utf8"));
+  if (!isRecord(modules) || !isRecord(modules.included)) throw new Error("Invalid installation metadata.");
   for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
     if (modules.included?.[group] !== true) throw new Error(`Installed tree excluded ${group}.`);
   }
   const installed = readLockInventory(await readFile(path.join(root, "node_modules/.pnpm/lock.yaml"), "utf8"));
-  if (installed.documents.length !== 1 || JSON.stringify(graph(runtime)) !== JSON.stringify(graph(installed.documents[0])))
+  const installedDocument = installed.documents[0];
+  if (installed.documents.length !== 1 || !installedDocument || JSON.stringify(graph(runtime)) !== JSON.stringify(graph(installedDocument)))
     throw new Error("Installed dependency graph differs from lockfile.");
 }
 async function hashFiles(root, files) {
@@ -7755,7 +7810,7 @@ async function fingerprintInputs(root, codeFiles, configurationFiles, inventory)
   };
 }
 
-// tooling/security/security-runner.mjs
+// tooling/security/security-runner.ts
 var import_yaml3 = __toESM(require_dist(), 1);
 import { execFile } from "node:child_process";
 import { lstat as lstat2, mkdtemp, readFile as readFile2, rm, writeFile } from "node:fs/promises";
@@ -7782,17 +7837,19 @@ async function executePnpm(args, options) {
     const result = await exec(executable, commandArgs, { ...PROCESS_OPTIONS, ...options });
     return { ...result, exitCode: 0 };
   } catch (error) {
-    if (typeof error.code !== "number" || error.killed || error.signal)
-      throw new Error(`pnpm command could not complete: ${error.message}`);
+    if (!isRecord(error) || typeof error.code !== "number" || error.killed || error.signal || typeof error.stdout !== "string" || typeof error.stderr !== "string")
+      throw new Error(`pnpm command could not complete: ${errorMessage(error)}`);
     return { stdout: error.stdout, stderr: error.stderr, exitCode: error.code };
   }
 }
 async function verifyConfiguration(root, execute, env, isolated = false) {
   const workspace = (0, import_yaml3.parse)(await readFile2(path2.join(root, "pnpm-workspace.yaml"), "utf8"));
+  if (!isRecord(workspace)) throw new Error("Invalid workspace configuration.");
   validateConfigurationDependencies(workspace.configDependencies);
   const effective = await execute(["config", "list", "--json", ...AUDIT_OPTIONS], { cwd: root, env });
   if (effective.exitCode !== 0) throw new Error("Cannot verify effective pnpm audit configuration.");
-  validateInstallPolicy(JSON.parse(effective.stdout), isolated);
+  const configuration = JSON.parse(effective.stdout);
+  validateInstallPolicy(configuration, isolated);
 }
 async function auditTree(root, inventory, execute, env) {
   const options = { cwd: root, env };
@@ -7811,7 +7868,7 @@ async function hasInstallation(root) {
     await lstat2(path2.join(root, "node_modules"));
     return true;
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    if (errorCode(error) !== "ENOENT") throw error;
     return false;
   }
 }
@@ -7822,7 +7879,7 @@ async function lockedInputs(root) {
 }
 async function assertUnchangedInputs(root, before) {
   const after = await lockedInputs(root);
-  if (before.some((bytes, index) => !bytes.equals(after[index])))
+  if (before.some((bytes, index) => !after[index] || !bytes.equals(after[index])))
     throw new Error("Locked inputs changed during validation or installation.");
 }
 async function scanRepository({ root, phase = "complete", execute = executePnpm }) {
@@ -7853,7 +7910,11 @@ async function scanRepository({ root, phase = "complete", execute = executePnpm 
   }
   return auditTree(root, inventory, execute, process.env);
 }
-async function scanUpstream({ temporaryRoot = os.tmpdir(), execute = executePnpm, review } = {}) {
+async function scanUpstream({
+  temporaryRoot = os.tmpdir(),
+  execute = executePnpm,
+  review
+} = {}) {
   const root = await mkdtemp(path2.join(temporaryRoot, "debugging-cdp-targets-security-"));
   try {
     const manifest = {
@@ -7899,8 +7960,8 @@ ignore-scripts=true
     if (await hasInstallation(root)) throw new Error("Upstream lock resolution created an installation tree.");
     const inventory = readLockInventory(await readFile2(path2.join(root, "pnpm-lock.yaml"), "utf8"));
     await verifyLockManifest(root, inventory);
-    const runtime = inventory.documents.find((doc) => doc.importers["."].dependencies?.[PACKAGE_NAME]);
-    if (runtime?.importers["."].dependencies[PACKAGE_NAME].specifier !== PACKAGE_VERSION || !inventory.packages.some((pkg) => pkg.name === PACKAGE_NAME && pkg.version === PACKAGE_VERSION))
+    const runtime = inventory.documents.find((doc) => doc.importers["."]?.dependencies?.[PACKAGE_NAME]);
+    if (runtime?.importers["."]?.dependencies?.[PACKAGE_NAME]?.specifier !== PACKAGE_VERSION || !inventory.packages.some((pkg) => pkg.name === PACKAGE_NAME && pkg.version === PACKAGE_VERSION))
       throw new Error("Isolated upstream version differs from shared configuration.");
     const before = await lockedInputs(root);
     const result = await auditTree(root, inventory, execute, env);
@@ -7919,17 +7980,17 @@ ignore-scripts=true
   }
 }
 
-// tooling/check-security.mjs
+// tooling/check-security.ts
 async function checkSecurity(root, options = {}) {
   const phase = options.phase ?? "complete";
-  if (!["complete", "lockfile"].includes(phase)) throw new Error(`Unknown security phase: ${phase}`);
+  if (phase !== "complete" && phase !== "lockfile") throw new Error(`Unknown security phase: ${phase}`);
   const paths = [
     ...new Set(
       execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
         cwd: root,
         encoding: "utf8",
         windowsHide: true
-      }).split("\0").filter(Boolean)
+      }).split("\0").filter((file) => file && existsSync(path3.join(root, file)))
     )
   ];
   const exceptions = validateExceptions(
@@ -7937,7 +7998,7 @@ async function checkSecurity(root, options = {}) {
     options.now
   );
   const code = paths.filter(
-    (file) => /^(?:src|tooling)\/.*\.(?:mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file)
+    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file)
   );
   const configuration = paths.filter(
     (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^plugins\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", ".npmrc"].includes(file)
@@ -7948,7 +8009,6 @@ async function checkSecurity(root, options = {}) {
         throw new Error(`Unreviewable fingerprinted evidence: ${file}`);
     }
   }
-  const results = {};
   const initialInventory = readLockInventory(await readFile3(path3.join(root, "pnpm-lock.yaml"), "utf8"));
   const initialEvidence = await fingerprintInputs(root, code, configuration, initialInventory);
   async function review(scope, result) {
@@ -7961,7 +8021,9 @@ async function checkSecurity(root, options = {}) {
       fingerprints
     };
   }
-  results.repository = await review("repository", await scanRepository({ root, ...options, phase }));
+  const results = {
+    repository: await review("repository", await scanRepository({ root, ...options, phase }))
+  };
   if (phase === "complete") {
     const result = await scanUpstream({ ...options, review: (result2) => review("upstream", result2) });
     results.upstream = await review("upstream", result);
@@ -7980,7 +8042,7 @@ if (process.argv[1] && path3.resolve(process.argv[1]) === fileURLToPath(import.m
     while (args.length) {
       const flag = args.shift();
       const value = args.shift();
-      if (!["--phase", "--root"].includes(flag) || seen.has(flag) || !value || value.startsWith("--"))
+      if (!flag || !["--phase", "--root"].includes(flag) || seen.has(flag) || !value || value.startsWith("--"))
         throw new Error("Usage: check-security.mjs --root <repository> [--phase complete|lockfile]");
       seen.add(flag);
       if (flag === "--phase") phase = value;
@@ -7991,7 +8053,7 @@ if (process.argv[1] && path3.resolve(process.argv[1]) === fileURLToPath(import.m
     console.log(JSON.stringify(result, null, 4));
     if (!result.ok) process.exitCode = 1;
   } catch (error) {
-    console.error(JSON.stringify({ ok: false, error: error.message }, null, 4));
+    console.error(JSON.stringify({ ok: false, error: errorMessage(error) }, null, 4));
     process.exitCode = 1;
   }
 }

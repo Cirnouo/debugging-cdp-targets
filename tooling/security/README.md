@@ -1,10 +1,10 @@
 # Supply-chain audit tooling
 
-- `audit-policy.mjs` validates every pnpm lockfile document, full audit and
+- `audit-policy.ts` validates every pnpm lockfile document, full audit and
   signature reports, and narrowly reviewed vulnerability exceptions.
-- `security-evidence.mjs` checks installation policy, manifest/lock agreement and installed graph
+- `security-evidence.ts` checks installation policy, manifest/lock agreement and installed graph
   completeness, and computes code/configuration/dependency SHA-256 evidence.
-- `security-runner.mjs` executes pnpm without a shell and audits both the
+- `security-runner.ts` executes pnpm without a shell and audits both the
   repository and a disposable, script-disabled official Server dependency tree;
   upstream vulnerability review precedes actual installation.
   All pnpm calls disable pnpmfile hooks and configuration-dependency loading.

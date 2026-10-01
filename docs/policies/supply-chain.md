@@ -97,6 +97,10 @@ and the Marketplace catalog. Dependency hashes cover
 the parsed full lock documents, canonically sorted. File hashes include sorted
 relative names, byte lengths and contents. The exception file is not hashed into
 itself. Fingerprints differ between repository and upstream graphs.
+Maintained TypeScript (`.ts`, `.mts`, `.cts`) and generated JavaScript are both
+included. Compiler, parser and type dependencies are audited like every other
+development dependency. Type or language changes do not authorize automatic
+exception renewal; changed fingerprints require a fresh human review.
 
 Only a full identity match with current evidence can waive a finding. A stale
 fingerprint, expired/malformed/duplicate review fails the gate rather than

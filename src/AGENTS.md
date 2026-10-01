@@ -4,7 +4,14 @@ Dependencies flow interface → application → domains/shared; application may
 use explicit adapters. Adapters never depend on application/interface. Domains
 contain no environment, file, process, network, or PowerShell I/O.
 
-Only interface/control.mjs and interface/mcp-bootstrap.mjs execute directly.
+Only interface/control.ts and interface/mcp-bootstrap.ts execute directly.
 The bootstrap never consumes or writes MCP stdin/stdout; official Server
-inherits them. Tests inject adapters at I/O boundaries. Use shared/constants.mjs
+inherits them. Tests inject adapters at I/O boundaries. Use shared/constants.ts
 for cross-layer invariants. Never add persisted session state or a CLI daemon.
+
+Use strict, Node-erasable TypeScript with explicit `.ts` imports and owned types.
+Do not use enums, parameter properties, runtime namespaces, path aliases, broad
+`any`, suppression comments, double assertions, or typecheck exclusions. Treat
+JSON, HTTP, IPC, helper and process output as `unknown` until runtime validation.
+Type-only imports/exports and type `import()` obey the same dependency rules.
+esbuild erases types for delivery; `tsc --noEmit` is the correctness gate.

@@ -92,8 +92,10 @@ jobs:
                 run: pnpm check:repo
             -   name: Check formatting
                 run: pnpm format:check
-            -   name: Lint JavaScript and JSON
+            -   name: Lint TypeScript and JSON
                 run: pnpm lint
+            -   name: Check TypeScript types
+                run: pnpm typecheck
             -   name: Check script syntax
                 run: pnpm check:scripts
             -   name: Test with coverage floors
@@ -121,9 +123,11 @@ jobs:
                     cache: pnpm
             -   name: Install dependencies
                 run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
             -   name: Run full Node test suite
                 run: pnpm test
-            -   name: Check JavaScript and both PowerShell parsers
+            -   name: Parse TypeScript, generated JavaScript and both PowerShell parsers
                 run: pnpm check:scripts
             -   name: Test from an arbitrary working directory
                 shell: pwsh
@@ -131,7 +135,7 @@ jobs:
                     $repositoryRoot = (Resolve-Path .).Path
                     Push-Location $env:RUNNER_TEMP
                     try {
-                        node --test "$repositoryRoot/tests/plugin-runtime.test.mjs"
+                        node --test "$repositoryRoot/tests/plugin-runtime.test.ts"
                     }
                     finally {
                         Pop-Location
@@ -162,5 +166,7 @@ jobs:
                     cache: pnpm
             -   name: Install dependencies
                 run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
             -   name: Run simulated CDP and policy tests
                 run: pnpm test

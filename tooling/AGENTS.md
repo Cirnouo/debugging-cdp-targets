@@ -12,6 +12,13 @@ from hooks, CI, and audits. Parse structured formats with their real parser and
 validate value types and paths, rather than approximating YAML or JSON with
 regular expressions.
 
+Maintain tooling and commitlint configuration as strict, erasable TypeScript.
+The Babel AST audit parses TypeScript directly, including type-only imports,
+exports and type `import()`; never erase types before checking dependencies.
+Syntax checks use Babel for source and Node `--check` only for generated JS.
+Independent `tsc --noEmit` covers every maintained Node file. Build scripts
+produce self-contained JS with esbuild, not a TypeScript runtime dependency.
+
 Repository and distribution audits must fail closed on malformed, ignored, or
 unexpected payload content. Do not execute payload code during static audits,
 do not download dependencies in tests, and do not mutate Git history, user

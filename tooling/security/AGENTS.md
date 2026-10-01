@@ -33,6 +33,11 @@ Build the standalone entry with the existing esbuild/YAML dependencies and
 preserve the parser license. Keep generated code out of manual formatting, but
 verify it byte-for-byte against maintained source. All maintained policy code
 remains tested; audit artifacts never belong to the Plugin payload.
+Maintained security code is strict TypeScript. Fingerprint `.ts`, `.mts`, `.cts`
+alongside generated JS and existing helpers. Changing types, compiler/parser
+dependencies or generated output invalidates matching review evidence; never
+automatically refresh exception hashes or dates. The committed `.mjs` bootstrap
+must remain runnable without installed dependencies or TypeScript.
 
 Keep this network gate separate from default tests and verify:push. Never repair
 a trust failure by automatically adding exceptions, changing registry, reducing

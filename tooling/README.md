@@ -1,18 +1,19 @@
 # Tooling
 
-- `build-plugin.mjs` bundles runtime and copies required licenses/helpers.
-- `build-security.mjs` builds and read-only verifies the dependency-free CI
+- `build-plugin.ts` bundles runtime and copies required licenses/helpers.
+- `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its YAML license.
-- `repository-audit.mjs` checks text, AST layer boundaries, versions, docs,
+- `repository-audit.ts` checks text, AST layer boundaries, versions, docs,
   symlink, and production safety.
-- `distribution-audit.mjs` checks physical Plugin inventory and byte-identical
+- `distribution-audit.ts` checks physical Plugin inventory and byte-identical
   packaging into a disposable directory; this is not a Codex install claim.
-- `payload-policy.mjs` owns the exact Plugin file allowlist.
-- `governance.mjs` owns commit type/scope and branch grammar.
-- `check-commits.mjs` validates Git topology/event ranges.
-- `check-scripts.mjs` parses Node and Windows PowerShell source.
-- `check-text-style.mjs` audits staged non-Biome text.
-- `check-security.mjs` runs the opt-in, network-dependent supply-chain gate.
+- `payload-policy.ts` owns the exact Plugin file allowlist.
+- `governance.ts` owns commit type/scope and branch grammar.
+- `check-commits.ts` validates Git topology/event ranges.
+- `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
+  with Node, and parses the Windows helper with PowerShell 5.1 and 7.
+- `check-text-style.ts` audits staged non-Biome text.
+- `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
 - `security/` owns complete lock inventories, audit/exception policy,
   fingerprints, and disposable official Server dependency scans.
 - `AGENTS.md` specifies validator safety and independent evidence.
