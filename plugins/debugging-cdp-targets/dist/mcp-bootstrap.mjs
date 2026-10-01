@@ -1374,14 +1374,14 @@ var require_receiver = __commonJS({
        * @return {(Error|RangeError)} The error
        * @private
        */
-      createError(ErrorCtor, message, prefix, statusCode, errorCode) {
+      createError(ErrorCtor, message, prefix, statusCode, errorCode2) {
         this._loop = false;
         this._errored = true;
         const err = new ErrorCtor(
           prefix ? `Invalid WebSocket frame: ${message}` : message
         );
         Error.captureStackTrace(err, this.createError);
-        err.code = errorCode;
+        err.code = errorCode2;
         err[kStatusCode] = statusCode;
         return err;
       }
@@ -3718,7 +3718,7 @@ var require_websocket_server = __commonJS({
   }
 });
 
-// src/adapters/cdp-router.mjs
+// src/adapters/cdp-router.ts
 import http from "node:http";
 
 // node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
@@ -3731,7 +3731,7 @@ var import_subprotocol = __toESM(require_subprotocol(), 1);
 var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
-// src/shared/constants.mjs
+// src/shared/constants.ts
 var LOOPBACK = "127.0.0.1";
 var DEFAULT_BASE_PORT = 9222;
 var MAX_PORT = 65535;
@@ -3750,7 +3750,24 @@ var PACKAGE_VERSION = "1.9.0";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
-// src/adapters/cdp-router.mjs
+// src/shared/errors.ts
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+function errorCode(error) {
+  return isRecord(error) && typeof error.code === "string" ? error.code : void 0;
+}
+var DetailedError = class extends Error {
+  details;
+};
+function errorDetails(error) {
+  return isRecord(error) && isRecord(error.details) ? error.details : void 0;
+}
+
+// src/adapters/cdp-router.ts
 function rewriteDiscovery(value, routerPort) {
   if (Array.isArray(value)) return value.map((item) => rewriteDiscovery(item, routerPort));
   if (value && typeof value === "object") {
@@ -3771,7 +3788,7 @@ function messageId(data, isBinary) {
   if (isBinary) return null;
   try {
     const parsed = JSON.parse(data.toString());
-    return Number.isInteger(parsed.id) ? parsed.id : null;
+    return isRecord(parsed) && typeof parsed.id === "number" && Number.isInteger(parsed.id) ? parsed.id : null;
   } catch {
     return null;
   }
@@ -3782,6 +3799,11 @@ async function createCdpRouter() {
   let inFlightHttp = 0;
   const sockets = /* @__PURE__ */ new Set();
   const pending = /* @__PURE__ */ new Map();
+  function routerPort() {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Router is not listening on TCP.");
+    return address.port;
+  }
   const websocketServer = new import_websocket_server.default({ noServer: true });
   const server = http.createServer(async (request, response) => {
     if (request.headers.origin) {
@@ -3819,8 +3841,8 @@ async function createCdpRouter() {
       {
         hostname: LOOPBACK,
         port: target.port,
-        path: request.url,
-        method: request.method,
+        path: request.url ?? "/",
+        method: request.method ?? "GET",
         headers: { ...request.headers, host: `${LOOPBACK}:${target.port}` },
         timeout: REQUEST_TIMEOUT_MS
       },
@@ -3838,12 +3860,15 @@ async function createCdpRouter() {
           if (request.url?.startsWith("/json")) {
             try {
               output = Buffer.from(
-                JSON.stringify(rewriteDiscovery(JSON.parse(body.toString()), server.address().port))
+                JSON.stringify(rewriteDiscovery(JSON.parse(body.toString()), routerPort()))
               );
             } catch {
             }
           }
-          const headers = { ...upstreamResponse.headers, "content-length": String(output.length) };
+          const headers = {
+            ...upstreamResponse.headers,
+            "content-length": String(output.length)
+          };
           delete headers["transfer-encoding"];
           response.writeHead(upstreamResponse.statusCode ?? 502, headers);
           response.end(output);
@@ -3924,8 +3949,8 @@ async function createCdpRouter() {
     pending.clear();
   }
   return {
-    port: server.address().port,
-    url: `http://${LOOPBACK}:${server.address().port}`,
+    port: routerPort(),
+    url: `http://${LOOPBACK}:${routerPort()}`,
     isBusy: () => inFlightHttp > 0 || [...sockets].some(({ upstream }) => upstream.readyState === import_websocket.default.CONNECTING) || [...pending.values()].some((requests) => requests.size > 0),
     pause() {
       if (this.isBusy()) throw new Error("CDP router is busy with in-flight requests.");
@@ -3939,7 +3964,7 @@ async function createCdpRouter() {
       if (this.isBusy()) throw new Error("CDP router is busy with in-flight requests.");
       if (!Number.isInteger(nextTarget?.port)) throw new Error("A verified target port is required.");
       disconnect();
-      target = { port: nextTarget.port, verify: nextTarget.verify };
+      target = { port: nextTarget.port, ...nextTarget.verify ? { verify: nextTarget.verify } : {} };
       paused = false;
     },
     clearTarget() {
@@ -3949,18 +3974,47 @@ async function createCdpRouter() {
     },
     async close() {
       disconnect();
-      await new Promise((resolve) => server.close(resolve));
+      await new Promise((resolve) => server.close(() => resolve()));
       websocketServer.close();
     }
   };
 }
 
-// src/adapters/control-ipc.mjs
+// src/adapters/control-ipc.ts
 import { createHash } from "node:crypto";
 import { chmod, lstat, unlink } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+
+// src/domains/control-contract.ts
+function parseControlRequest(value) {
+  if (!isRecord(value)) throw new Error("Invalid control request.");
+  const action = value.action;
+  if (action === "status") return { action };
+  const disposition = value.disposition;
+  if (action === "stop" || action === "switch") {
+    if (disposition !== "Close" && disposition !== "Keep") throw new Error("Choose Close or Keep.");
+    if (action === "stop") return { action, disposition };
+  }
+  if (action !== "start" && action !== "switch") throw new Error("Unknown control action.");
+  if (typeof value.launchCommand !== "string" || !value.launchCommand.trim())
+    throw new Error("A launch command is required.");
+  if (value.targetKind !== void 0 && value.targetKind !== "chrome" && value.targetKind !== "generic-cdp")
+    throw new Error("Unknown target kind.");
+  if (value.basePort !== void 0 && (typeof value.basePort !== "number" || !Number.isInteger(value.basePort) || value.basePort < 1 || value.basePort > 65535))
+    throw new Error("Base port is invalid.");
+  const options = {
+    launchCommand: value.launchCommand,
+    ...value.targetKind === void 0 ? {} : { targetKind: value.targetKind },
+    ...value.basePort === void 0 ? {} : { basePort: value.basePort }
+  };
+  if (action === "switch" && (disposition === "Close" || disposition === "Keep"))
+    return { action, ...options, disposition };
+  return { action: "start", ...options };
+}
+
+// src/adapters/control-ipc.ts
 function defaultControlEndpoint() {
   const user = os.userInfo();
   const identity = `${user.username}:${user.homedir}`;
@@ -3976,7 +4030,7 @@ async function probeEndpoint(endpoint) {
       resolve("live");
     });
     socket.once("error", (error) => {
-      if (error.code === "ECONNREFUSED") resolve("refused");
+      if (errorCode(error) === "ECONNREFUSED") resolve("refused");
       else reject(error);
     });
   });
@@ -3987,12 +4041,12 @@ async function recoverStaleEndpoint(endpoint, io = {}) {
   const inspect = io.inspect ?? lstat;
   const probe = io.probe ?? probeEndpoint;
   const remove = io.remove ?? unlink;
-  const uid = io.uid ?? process.getuid();
+  const uid = io.uid ?? process.getuid?.();
   let before;
   try {
     before = await inspect(endpoint);
   } catch (error) {
-    if (error.code === "ENOENT") return;
+    if (errorCode(error) === "ENOENT") return;
     throw error;
   }
   if (!before.isSocket() || before.uid !== uid) throw new Error("The control endpoint is not an owned Unix socket.");
@@ -4008,12 +4062,17 @@ async function dispatch(controller, request) {
     case "status":
       return controller.status();
     case "start":
-    case "switch":
-      return controller[request.action]({
+      return controller.start({
         launchCommand: request.launchCommand,
-        targetKind: request.targetKind,
-        basePort: request.basePort,
-        ...request.action === "switch" ? { disposition: request.disposition } : {}
+        ...request.targetKind === void 0 ? {} : { targetKind: request.targetKind },
+        ...request.basePort === void 0 ? {} : { basePort: request.basePort }
+      });
+    case "switch":
+      return controller.switch({
+        launchCommand: request.launchCommand,
+        disposition: request.disposition,
+        ...request.targetKind === void 0 ? {} : { targetKind: request.targetKind },
+        ...request.basePort === void 0 ? {} : { basePort: request.basePort }
       });
     case "stop":
       return controller.stop({ disposition: request.disposition });
@@ -4021,7 +4080,10 @@ async function dispatch(controller, request) {
       throw new Error("Unknown control action. Use status, start, switch, or stop.");
   }
 }
-async function createControlServer({ controller, endpoint = defaultControlEndpoint() }) {
+async function createControlServer({
+  controller,
+  endpoint = defaultControlEndpoint()
+}) {
   await recoverStaleEndpoint(endpoint);
   let operation = Promise.resolve();
   const server = net.createServer((socket) => {
@@ -4046,12 +4108,13 @@ async function createControlServer({ controller, endpoint = defaultControlEndpoi
       operation = operation.catch(() => {
       }).then(async () => {
         try {
-          const result = await dispatch(controller, JSON.parse(line));
+          const raw = JSON.parse(line);
+          const result = await dispatch(controller, parseControlRequest(raw));
           socket.end(`${JSON.stringify({ ok: true, result })}
 `);
         } catch (error) {
           socket.end(
-            `${JSON.stringify({ ok: false, error: error.message, ...error.details ? { details: error.details } : {} })}
+            `${JSON.stringify({ ok: false, error: errorMessage(error), ...errorDetails(error) ? { details: errorDetails(error) } : {} })}
 `
           );
         }
@@ -4071,23 +4134,22 @@ async function createControlServer({ controller, endpoint = defaultControlEndpoi
   return {
     endpoint,
     async close() {
-      await new Promise((resolve) => server.close(resolve));
+      await new Promise((resolve) => server.close(() => resolve()));
       if (process.platform !== "win32")
         await unlink(endpoint).catch((error) => {
-          if (error.code !== "ENOENT") throw error;
+          if (errorCode(error) !== "ENOENT") throw error;
         });
     }
   };
 }
 
-// src/adapters/official-server.mjs
+// src/adapters/official-server.ts
 import { spawn, spawnSync } from "node:child_process";
 import { createHash as createHash2 } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, realpath } from "node:fs/promises";
 import os2 from "node:os";
 import path2 from "node:path";
-import { fileURLToPath } from "node:url";
 function booleanSetting(environment, name, fallback) {
   const value = environment[name];
   if (value === void 0) return fallback;
@@ -4137,7 +4199,7 @@ async function prepareServerBin() {
   const [command, prefix] = npxLaunch();
   const environment = {
     ...process.env,
-    NODE_OPTIONS: process.platform === "win32" ? `--require="${fileURLToPath(new URL("./hide-npm-console.cjs", import.meta.url)).replaceAll("\\", "/")}"` : "",
+    NODE_OPTIONS: process.platform === "win32" ? `--import="${new URL(true ? "./hide-npm-console.cjs" : "./hide-npm-console.ts", import.meta.url).href}"` : "",
     NPM_CONFIG_CACHE: cache,
     NPM_CONFIG_REGISTRY: NPM_REGISTRY,
     NPM_CONFIG_IGNORE_SCRIPTS: "true",
@@ -4169,12 +4231,15 @@ async function prepareServerBin() {
   const root = await realpath(packageDirectory(cache));
   const manifest = JSON.parse(await readFile(path2.join(root, "package.json"), "utf8"));
   const lock = JSON.parse(await readFile(path2.join(root, "..", "..", "package-lock.json"), "utf8"));
-  const locked = lock.packages?.[`node_modules/${PACKAGE_NAME}`];
-  if (manifest.name !== PACKAGE_NAME || manifest.version !== PACKAGE_VERSION || locked?.version !== PACKAGE_VERSION || locked?.resolved !== `${NPM_REGISTRY}/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz` || !locked?.integrity?.startsWith("sha512-")) {
+  if (!isRecord(manifest) || !isRecord(lock) || !isRecord(lock.packages))
+    throw new Error("Invalid cached package metadata.");
+  const locked = lock.packages[`node_modules/${PACKAGE_NAME}`];
+  if (manifest.name !== PACKAGE_NAME || manifest.version !== PACKAGE_VERSION || !isRecord(locked) || locked.version !== PACKAGE_VERSION || locked?.resolved !== `${NPM_REGISTRY}/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz` || typeof locked.integrity !== "string" || !locked.integrity.startsWith("sha512-")) {
     throw new Error("The cached official MCP package failed provenance verification.");
   }
-  const relativeBin = typeof manifest.bin === "object" ? manifest.bin[PACKAGE_NAME] : manifest.bin;
-  if (!relativeBin || path2.isAbsolute(relativeBin)) throw new Error("The package has no public Server bin.");
+  const relativeBin = isRecord(manifest.bin) ? manifest.bin[PACKAGE_NAME] : manifest.bin;
+  if (typeof relativeBin !== "string" || !relativeBin || path2.isAbsolute(relativeBin))
+    throw new Error("The package has no public Server bin.");
   const bin = await realpath(path2.resolve(root, relativeBin));
   if (!bin.startsWith(`${root}${path2.sep}`)) throw new Error("The Server bin escapes the verified package.");
   return bin;
@@ -4194,14 +4259,18 @@ async function startOfficialServer(browserUrl) {
   return child;
 }
 
-// src/adapters/target-host.mjs
+// src/adapters/target-host.ts
 import { spawn as nodeSpawn } from "node:child_process";
 import net2 from "node:net";
 import os3 from "node:os";
 import path4 from "node:path";
 
-// src/domains/cdp-target.mjs
-async function choosePort({ basePort = DEFAULT_BASE_PORT, reservedRanges = [], probe }) {
+// src/domains/cdp-target.ts
+async function choosePort({
+  basePort = DEFAULT_BASE_PORT,
+  reservedRanges = [],
+  probe
+}) {
   if (!Number.isInteger(basePort) || basePort < 1 || basePort > MAX_PORT) throw new Error("Invalid base port.");
   for (let port = Math.max(basePort, FIRST_USER_PORT); port <= MAX_PORT; port += 1) {
     if (reservedRanges.some(([start, end]) => port >= start && port <= end)) continue;
@@ -4212,8 +4281,15 @@ async function choosePort({ basePort = DEFAULT_BASE_PORT, reservedRanges = [], p
 function isLoopback(address) {
   return address === "::1" || address === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(address);
 }
-function validateCdpIdentity({ endpoint, port, listeners, processIds, targetKind }) {
-  const url = new URL(endpoint?.webSocketDebuggerUrl ?? "about:blank");
+function validateCdpIdentity({
+  endpoint,
+  port,
+  listeners,
+  processIds,
+  targetKind
+}) {
+  const value = isRecord(endpoint) ? endpoint : {};
+  const url = new URL(typeof value.webSocketDebuggerUrl === "string" ? value.webSocketDebuggerUrl : "about:blank");
   if (url.protocol !== "ws:" || Number(url.port) !== port || !isLoopback(url.hostname)) {
     throw new Error("The CDP WebSocket endpoint has an unexpected host or port.");
   }
@@ -4231,7 +4307,7 @@ function validateCdpIdentity({ endpoint, port, listeners, processIds, targetKind
   if (!listeners.some(({ localAddress }) => localAddress === "127.0.0.1")) {
     throw new Error("The IPv4 loopback CDP listener is missing.");
   }
-  const browserProduct = String(endpoint?.Browser ?? "");
+  const browserProduct = typeof value.Browser === "string" ? value.Browser : "";
   if (!browserProduct) throw new Error("The CDP endpoint did not identify its browser product.");
   if (targetKind === "chrome" && !/^Chrome\/\d+/i.test(browserProduct)) {
     throw new Error("The endpoint is not Google Chrome.");
@@ -4239,7 +4315,7 @@ function validateCdpIdentity({ endpoint, port, listeners, processIds, targetKind
   return { browserProduct, webSocketDebuggerUrl: url.toString() };
 }
 
-// src/domains/launch-command.mjs
+// src/domains/launch-command.ts
 var PORT_PLACEHOLDER = "{port}";
 var DEFAULT_DEBUGGING_SWITCH = "--remote-debugging-port";
 var SHELL_OPERATORS = /* @__PURE__ */ new Set(["&", "|", ";", "<", ">", "`", "\n", "\r"]);
@@ -4249,7 +4325,7 @@ function tokenize(command) {
   let quote = null;
   let started = false;
   for (let index = 0; index < command.length; index += 1) {
-    const character = command[index];
+    const character = command.charAt(index);
     if (quote === null && /\s/.test(character)) {
       if (started) result.push(value);
       value = "";
@@ -4299,6 +4375,7 @@ function explicitDebuggingPort(arguments_) {
   const ports = [];
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
+    if (argument === void 0) throw new Error("Missing launch argument.");
     const match = argument.match(/^--remote-debugging-port(?:=|:)(.+)$/i);
     if (match) ports.push(match[1]);
     if (/^--remote-debugging-port$/i.test(argument)) ports.push(arguments_[index + 1]);
@@ -4308,12 +4385,17 @@ function explicitDebuggingPort(arguments_) {
   if (ports.length > 1) throw new Error("Duplicate remote debugging port sources conflict.");
   return ports.length === 0 ? null : ports[0];
 }
-function parseLaunchCommand({ template, port, environment = {} }) {
+function parseLaunchCommand({
+  template,
+  port,
+  environment = {}
+}) {
   if (typeof template !== "string" || !template.trim()) throw new Error("A launch command is required.");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("The CDP port is invalid.");
   const tokens = tokenize(template).map((token) => expandEnvironment(token, environment));
   if (tokens.length === 0 || !tokens[0]) throw new Error("The executable path is required.");
-  const [executable, ...rawArguments] = tokens;
+  const executable = tokens[0];
+  const rawArguments = tokens.slice(1);
   if (executable.includes(PORT_PLACEHOLDER)) throw new Error("The executable cannot contain {port}.");
   const hasPlaceholder = rawArguments.some((argument) => argument.includes(PORT_PLACEHOLDER));
   const arguments_ = rawArguments.map((argument) => argument.replaceAll(PORT_PLACEHOLDER, String(port)));
@@ -4325,11 +4407,11 @@ function parseLaunchCommand({ template, port, environment = {} }) {
   return { executable, arguments: arguments_ };
 }
 
-// src/adapters/platform-process.mjs
+// src/adapters/platform-process.ts
 import { spawn as spawn2 } from "node:child_process";
 import { readFile as readFile2, readlink } from "node:fs/promises";
 import path3 from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath } from "node:url";
 async function run(executable, arguments_) {
   return new Promise((resolve, reject) => {
     const child = spawn2(executable, arguments_, {
@@ -4350,7 +4432,7 @@ async function run(executable, arguments_) {
   });
 }
 async function windowsHelper(action, fields) {
-  const helper = fileURLToPath2(new URL("./windows-cdp-helper.ps1", import.meta.url));
+  const helper = fileURLToPath(new URL("./windows-cdp-helper.ps1", import.meta.url));
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helper, "-Action", action];
   for (const [name, value] of Object.entries(fields)) if (value !== void 0) args.push(`-${name}`, String(value));
   const result = await run("powershell.exe", args);
@@ -4360,9 +4442,35 @@ async function windowsHelper(action, fields) {
   } catch {
     throw new Error("The Windows process helper did not return valid evidence.");
   }
-  if (result.code !== 0 || output.ok !== true)
-    throw new Error(output.message ?? "Windows process inspection failed.");
+  if (!isRecord(output) || result.code !== 0 || output.ok !== true)
+    throw new Error(
+      isRecord(output) && typeof output.message === "string" ? output.message : "Windows process inspection failed."
+    );
   return output;
+}
+function parseSnapshot(value) {
+  const root = value.root;
+  if (!isRecord(root) || typeof root.exists !== "boolean" || typeof value.currentSessionId !== "number" || !Array.isArray(value.processIds) || !value.processIds.every((pid) => typeof pid === "number" && Number.isInteger(pid)) || !Array.isArray(value.listeners))
+    throw new Error("Invalid process snapshot evidence.");
+  let verifiedRoot = { exists: false };
+  if (root.exists) {
+    if (typeof root.executablePath !== "string" || typeof root.sessionId !== "number" || typeof root.startedAtUtc !== "string")
+      throw new Error("Invalid process root evidence.");
+    verifiedRoot = {
+      exists: true,
+      executablePath: root.executablePath,
+      sessionId: root.sessionId,
+      startedAtUtc: root.startedAtUtc,
+      ...typeof root.productName === "string" ? { productName: root.productName } : {},
+      ...typeof root.companyName === "string" ? { companyName: root.companyName } : {}
+    };
+  }
+  const listeners = value.listeners.map((listener) => {
+    if (!isRecord(listener) || typeof listener.localAddress !== "string" || typeof listener.owningProcess !== "number")
+      throw new Error("Invalid listener evidence.");
+    return { localAddress: listener.localAddress, owningProcess: listener.owningProcess };
+  });
+  return { root: verifiedRoot, currentSessionId: value.currentSessionId, processIds: value.processIds, listeners };
 }
 function normalizePath(value) {
   const normalized = path3.resolve(value);
@@ -4385,7 +4493,13 @@ function validateProcessIdentity(evidence, target, { newlyLaunched = false } = {
     throw new Error("The target executable is not identified as Google Chrome.");
   }
 }
-async function resolveUnixExecutable({ platform, pid, comm, run: execute = run, readlink: link = readlink }) {
+async function resolveUnixExecutable({
+  platform,
+  pid,
+  comm,
+  run: execute = run,
+  readlink: link = readlink
+}) {
   if (platform === "linux") return link(`/proc/${pid}/exe`);
   const result = await execute("lsof", ["-a", "-p", String(pid), "-d", "txt", "-Fn"]);
   if (result.code !== 0 || result.stderr.trim()) throw new Error("The Darwin executable path is unverifiable.");
@@ -4397,21 +4511,25 @@ async function resolveUnixExecutable({ platform, pid, comm, run: execute = run, 
   const matches = candidates.filter(
     (file) => path3.posix.isAbsolute(comm) ? file === comm : path3.posix.basename(file) === comm
   );
-  if (matches.length !== 1) throw new Error("The Darwin executable path is unverifiable or ambiguous.");
-  return matches[0];
+  const executable = matches[0];
+  if (matches.length !== 1 || executable === void 0)
+    throw new Error("The Darwin executable path is unverifiable or ambiguous.");
+  return executable;
 }
 async function unixSnapshot(pid, port) {
   const processes = await run("ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
   if (processes.code !== 0) throw new Error("Cannot inspect target processes.");
   const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
     const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
-    return match ? [
+    const started = match?.[4];
+    const executable = match?.[5];
+    return match && started !== void 0 && executable !== void 0 ? [
       {
         pid: Number(match[1]),
         parent: Number(match[2]),
         uid: Number(match[3]),
-        started: new Date(match[4]).toISOString(),
-        executable: match[5]
+        started: new Date(started).toISOString(),
+        executable
       }
     ] : [];
   });
@@ -4421,21 +4539,23 @@ async function unixSnapshot(pid, port) {
     changed = false;
     for (const row of rows) {
       const parent = rows.find((candidate) => candidate.pid === row.parent);
-      if (!owned.has(row.pid) && owned.has(row.parent) && row.uid === root.uid && row.started >= parent.started) {
+      if (root && parent && !owned.has(row.pid) && owned.has(row.parent) && row.uid === root.uid && row.started >= parent.started) {
         owned.add(row.pid);
         changed = true;
       }
     }
   }
   const result = await run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpn"]);
-  if (![0, 1].includes(result.code) || result.stderr.trim())
+  if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
     throw new Error("Cannot verify CDP listener ownership (lsof required).");
   const listeners = [];
   let owner;
   for (const line of result.stdout.split(/\r?\n/)) {
     if (line.startsWith("p")) owner = Number(line.slice(1));
     const match = line.startsWith("n") ? line.slice(1).match(/^(\S+):\d+$/) : null;
-    if (match) listeners.push({ localAddress: match[1].replace(/^\[|\]$/g, ""), owningProcess: owner });
+    const address = match?.[1];
+    if (address !== void 0 && owner !== void 0)
+      listeners.push({ localAddress: address.replace(/^\[|\]$/g, ""), owningProcess: owner });
   }
   return {
     root: root ? {
@@ -4448,14 +4568,16 @@ async function unixSnapshot(pid, port) {
       sessionId: root.uid,
       startedAtUtc: root.started
     } : { exists: false },
-    currentSessionId: process.getuid(),
+    currentSessionId: process.getuid?.() ?? (() => {
+      throw new Error("Unix user identity unavailable.");
+    })(),
     processIds: [...owned],
     listeners
   };
 }
 function createPlatformAdapter() {
   if (!["win32", "linux", "darwin"].includes(process.platform)) throw new Error("Unsupported operating system.");
-  const snapshot = process.platform === "win32" ? (pid, port) => windowsHelper("Snapshot", { RootProcessId: pid, Port: port }) : unixSnapshot;
+  const snapshot = process.platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot;
   return {
     snapshot,
     validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
@@ -4463,7 +4585,8 @@ function createPlatformAdapter() {
       if (process.platform === "linux") {
         const value = await readFile2("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
         return value.trim().split(",").filter(Boolean).map((part) => {
-          const [start, end = start] = part.split("-").map(Number);
+          const start = Number(part.split("-")[0]);
+          const end = Number(part.split("-")[1] ?? start);
           return [start, end];
         });
       }
@@ -4508,20 +4631,21 @@ function createPlatformAdapter() {
   };
 }
 
-// src/adapters/target-host.mjs
+// src/adapters/target-host.ts
 async function probeAddress(port, host) {
   const server = net2.createServer();
   try {
     return await new Promise((resolve, reject) => {
       server.once("error", (error) => {
-        if (["EAFNOSUPPORT", "EADDRNOTAVAIL", "EPROTONOSUPPORT"].includes(error.code)) resolve(null);
-        else if (["EADDRINUSE", "EACCES"].includes(error.code)) resolve(false);
+        if (["EAFNOSUPPORT", "EADDRNOTAVAIL", "EPROTONOSUPPORT"].includes(errorCode(error) ?? ""))
+          resolve(null);
+        else if (["EADDRINUSE", "EACCES"].includes(errorCode(error) ?? "")) resolve(false);
         else reject(error);
       });
       server.listen({ host, port, exclusive: true, ipv6Only: host === "::1" }, () => resolve(true));
     });
   } finally {
-    if (server.listening) await new Promise((resolve) => server.close(resolve));
+    if (server.listening) await new Promise((resolve) => server.close(() => resolve()));
   }
 }
 async function probePort(port) {
@@ -4557,7 +4681,7 @@ function applyChromePreset(arguments_) {
   if (!home || !path4.isAbsolute(home)) throw new Error("The Chrome profile home directory is unavailable.");
   const addresses = [];
   for (let index = 0; index < arguments_.length; index += 1) {
-    const match = arguments_[index].match(/^--remote-debugging-address(?:[=:](.*))?$/i);
+    const match = arguments_[index]?.match(/^--remote-debugging-address(?:[=:](.*))?$/i);
     if (match) addresses.push(match[1] ?? arguments_[index + 1]);
   }
   if (addresses.length > 1) throw new Error("Duplicate Chrome debugging addresses are prohibited.");
@@ -4580,7 +4704,11 @@ function createTargetHost(dependencies = {}) {
     ...dependencies
   };
   return {
-    async launch({ launchCommand, targetKind = "generic-cdp", basePort = DEFAULT_BASE_PORT }) {
+    async launch({
+      launchCommand,
+      targetKind = "generic-cdp",
+      basePort = DEFAULT_BASE_PORT
+    }) {
       if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
       const excluded = await platform.reservedRanges();
       let candidate = basePort;
@@ -4593,6 +4721,8 @@ function createTargetHost(dependencies = {}) {
         const args = targetKind === "chrome" ? applyChromePreset(parsed.arguments) : parsed.arguments;
         const launchedAt = io.now();
         const child = await io.spawn(executablePath, args, port);
+        if (child.pid === void 0) throw new Error("The target process has no PID.");
+        const processId = child.pid;
         const target = {
           port,
           processId: child.pid,
@@ -4607,6 +4737,7 @@ function createTargetHost(dependencies = {}) {
           try {
             const evidence = await platform.snapshot(child.pid, port);
             platform.validateNewRoot(evidence, target);
+            if (!evidence.root.exists) throw new Error("The target root process is absent.");
             target.startedAtUtc = evidence.root.startedAtUtc;
             if (evidence.listeners.some(({ localAddress }) => !["127.0.0.1", "::1"].includes(localAddress))) {
               throw new Error("The CDP listener is exposed outside loopback.");
@@ -4630,7 +4761,7 @@ function createTargetHost(dependencies = {}) {
               ...target,
               ...identity,
               async verify() {
-                const current = await platform.snapshot(child.pid, port);
+                const current = await platform.snapshot(processId, port);
                 validateProcessIdentity(current, target);
                 const endpointNow = await io.getVersion(port);
                 const checked = validateCdpIdentity({
@@ -4646,7 +4777,8 @@ function createTargetHost(dependencies = {}) {
             };
           } catch (error2) {
             lastError = error2;
-            if (child.exitCode !== null || /exposed|identity|Google Chrome|PID/.test(error2.message)) break;
+            if (child.exitCode !== null || /exposed|identity|Google Chrome|PID/.test(errorMessage(error2)))
+              break;
             await io.sleep(POLL_INTERVAL_MS);
           }
         }
@@ -4659,7 +4791,9 @@ function createTargetHost(dependencies = {}) {
           candidate = port + 1;
           continue;
         }
-        const error = new Error(`The new target did not expose a verified CDP endpoint: ${lastError?.message}`);
+        const error = new DetailedError(
+          `The new target did not expose a verified CDP endpoint: ${lastError === void 0 ? void 0 : errorMessage(lastError)}`
+        );
         error.details = { processId: child.pid, port, closeConfirmed };
         throw error;
       }
@@ -4669,7 +4803,7 @@ function createTargetHost(dependencies = {}) {
   };
 }
 
-// src/application/target-controller.mjs
+// src/application/target-controller.ts
 function createTargetController({ router, host }) {
   let current = null;
   function status() {
@@ -4694,7 +4828,7 @@ function createTargetController({ router, host }) {
   }
   async function rollbackNew(target, message, retained = []) {
     if (!await tryClose(target)) retained.push(target);
-    const error = new Error(message);
+    const error = new DetailedError(message);
     error.details = { retainedTargets: retained.map(({ processId, port }) => ({ processId, port })) };
     throw error;
   }
@@ -4709,7 +4843,7 @@ function createTargetController({ router, host }) {
     try {
       attach(target);
     } catch (error) {
-      await rollbackNew(target, error.message);
+      await rollbackNew(target, errorMessage(error));
     }
     return status();
   }
@@ -4732,7 +4866,7 @@ function createTargetController({ router, host }) {
       try {
         attach(next);
       } catch (error) {
-        await rollbackNew(next, error.message);
+        await rollbackNew(next, errorMessage(error));
       }
       return { ...status(), previousTarget: options.disposition, pageIdsInvalidated: true };
     } finally {
@@ -4746,7 +4880,7 @@ function createTargetController({ router, host }) {
     router.pause?.();
     try {
       if (options.disposition === "Close" && !await tryClose(target)) {
-        const error = new Error("The target did not close normally; it remains active.");
+        const error = new DetailedError("The target did not close normally; it remains active.");
         error.details = { retainedTargets: [{ processId: target.processId, port: target.port }] };
         throw error;
       }
@@ -4768,7 +4902,7 @@ function createTargetController({ router, host }) {
   return { status, start, switch: switchTarget, stop, cleanupOnDisconnect };
 }
 
-// src/application/plugin-runtime.mjs
+// src/application/plugin-runtime.ts
 async function startPluginRuntime({
   createRouter = createCdpRouter,
   createHost = createTargetHost,
@@ -4793,7 +4927,7 @@ async function startPluginRuntime({
 `
           );
       } finally {
-        await control.close();
+        await control?.close();
         await router.close();
       }
     }
@@ -4801,21 +4935,22 @@ async function startPluginRuntime({
     return { child, closed, close: cleanup };
   } catch (error) {
     const retained = await controller.cleanupOnDisconnect();
-    if (retained) error.details = { retainedTarget: retained };
+    if (retained && error instanceof Error) Object.assign(error, { details: { retainedTarget: retained } });
     await control?.close();
     await router.close();
     throw error;
   }
 }
 
-// src/interface/mcp-bootstrap.mjs
+// src/interface/mcp-bootstrap.ts
 try {
   const runtime = await startPluginRuntime();
   await runtime.closed;
 } catch (error) {
-  process.stderr.write(`debugging-cdp-targets: ${error.message}
+  process.stderr.write(`debugging-cdp-targets: ${errorMessage(error)}
 `);
-  if (error.details) process.stderr.write(`${JSON.stringify(error.details)}
+  const details = errorDetails(error);
+  if (details) process.stderr.write(`${JSON.stringify(details)}
 `);
   process.exitCode = 1;
 }
