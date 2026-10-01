@@ -162,10 +162,14 @@ export function auditRepository(root: string) {
             return parents;
         }),
     );
-    for (const directory of directories)
-        if (!files.has(`${directory}/README.md`))
-            errors.push(`${directory}: add README.md describing immediate contents.`);
+    for (const directory of directories) {
+        const documentation = directory === '.github' ? 'INDEX.md' : 'README.md';
+        if (!files.has(`${directory}/${documentation}`))
+            errors.push(`${directory}: add ${documentation} describing immediate contents.`);
+    }
     for (const [file, source] of files) {
+        if (/^\.github\/readme(?:\.[^/]+)?$/i.test(file))
+            errors.push(`${file}: GitHub displays this instead of the root README; use .github/INDEX.md.`);
         if (!file.startsWith(`${PLUGIN_ROOT}/dist/`) && file !== 'tooling/security/dist/check-security.mjs')
             errors.push(...validateTextStyle(file, source));
         if (/^src\/.+\.(?:ts|mts|cts|mjs|cjs)$/.test(file)) errors.push(...validateRuntimeSource(file, source));

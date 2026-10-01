@@ -6,7 +6,10 @@ requirements belong here; implementation constraints belong in the nearest
 source AGENTS.md; decisions belong in docs/adr.
 
 Every human-maintained non-root directory has a README naming its immediate
-files and subdirectories. Generated dependency, Git, coverage, and test-output
+files and subdirectories. The `.github` directory uses `INDEX.md` instead:
+GitHub prioritizes a README there over the root README on the repository home
+page. Do not add a README directly under `.github`; its subdirectories still
+use `README.md`. Generated dependency, Git, coverage, and test-output
 directories are exempt. The committed Plugin dist directory includes a README
 because it is a supported installation surface, although its code is generated.
 

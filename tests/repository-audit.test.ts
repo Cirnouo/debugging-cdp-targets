@@ -1,6 +1,55 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
-import { validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
+import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
+
+async function auditGithubDocumentation(files: readonly string[]) {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-readme-'));
+    try {
+        execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+        for (const file of files) {
+            const target = path.join(root, file);
+            await mkdir(path.dirname(target), { recursive: true });
+            await writeFile(target, '');
+        }
+        // These fixtures isolate directory documentation from unrelated metadata requirements.
+        return auditRepository(root).filter((error) => error.startsWith('.github'));
+    } finally {
+        assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(root).startsWith('dct-readme-'));
+        await rm(root, { recursive: true, force: true });
+    }
+}
+
+test('GitHub directory documentation uses INDEX.md without overriding the root README', async () => {
+    assert.deepEqual(
+        await auditGithubDocumentation(['README.md', '.github/INDEX.md', '.github/workflows/README.md']),
+        [],
+    );
+});
+
+test('GitHub directory READMEs are rejected even when INDEX.md is present', async () => {
+    for (const name of ['README.md', 'readme.md', 'ReadMe.rst', 'README']) {
+        const errors = await auditGithubDocumentation(['README.md', '.github/INDEX.md', `.github/${name}`]);
+        assert.ok(
+            errors.some((error) => error.startsWith(`.github/${name}:`) && error.includes('root README')),
+            `${name}: ${errors.join('\n')}`,
+        );
+    }
+});
+
+test('GitHub directory still requires its INDEX.md documentation', async () => {
+    const errors = await auditGithubDocumentation(['README.md', '.github/workflows/README.md']);
+    assert.ok(errors.some((error) => error.startsWith('.github:') && error.includes('INDEX.md')));
+});
+
+test('the GitHub INDEX.md exception does not exempt nested workflow documentation', async () => {
+    const errors = await auditGithubDocumentation(['README.md', '.github/INDEX.md', '.github/workflows/INDEX.md']);
+    assert.ok(errors.some((error) => error.startsWith('.github/workflows:') && error.includes('README.md')));
+});
 
 test('AST audit rejects boundary violations through imports, exports, require, and escaped specifiers', () => {
     for (const source of [

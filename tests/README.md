@@ -5,7 +5,8 @@
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
   evidence, and PID/path/session mismatch checks with injected I/O.
-- `repository-audit.test.ts` tests AST boundaries and text-style enforcement.
+- `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and
+  directory documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons and allowlists.
 - `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
