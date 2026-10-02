@@ -44,6 +44,7 @@
         "@modelcontextprotocol/server": "2.2.0",
         "@types/node": "24.19.0",
         "@types/ws": "8.18.2",
+        "chrome-devtools-mcp": "1.10.1",
         "esbuild": "0.28.2",
         "husky": "9.1.7",
         "lint-staged": "17.5.1",

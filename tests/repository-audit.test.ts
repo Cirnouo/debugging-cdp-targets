@@ -115,6 +115,11 @@ test('text audit enforces four spaces, LF, final newline, and no tabs', () => {
         assert.ok(validateTextStyle('example.yaml', text).length, JSON.stringify(text));
     }
     assert.deepEqual(validateTextStyle('pnpm-lock.yaml', 'lockfileVersion:\n  generated: true\n'), []);
+    assert.deepEqual(
+        validateTextStyle('tooling/security/upstream-pnpm-lock.yaml', 'lockfileVersion:\n  generated: true\n'),
+        [],
+    );
+    assert.ok(validateTextStyle('tooling/security/other-lock.yaml', 'lockfileVersion:\n  generated: true\n').length);
 });
 
 test('AST audit accepts erasable TypeScript without erasing its dependency evidence', () => {

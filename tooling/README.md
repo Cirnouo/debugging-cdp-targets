@@ -13,6 +13,8 @@
   schema declaration and byte-identical packaging into a disposable directory;
   this is not a Codex install claim.
 - `payload-policy.ts` owns the exact Plugin file allowlist.
+- `official-server-release.json` records the reviewed official npm release, its
+  source tag/commit, tarball integrity and every published file digest and length.
 - `governance.ts` owns commit type/scope and branch grammar.
 - `version-policy.ts` owns SemVer grammar and Package/Plugin/Skill agreement.
 - `release.ts` validates a new tag-push context, builds Changelog-based notes,
