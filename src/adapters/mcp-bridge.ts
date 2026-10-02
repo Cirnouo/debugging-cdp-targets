@@ -1,7 +1,4 @@
 import { spawn } from 'node:child_process';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type {
     CallToolResult,
     ElicitRequestFormParams,
@@ -10,15 +7,10 @@ import type {
     ListRootsResult,
     Progress,
     Tool,
-} from '@modelcontextprotocol/sdk/types.js';
-import {
-    CallToolResultSchema,
-    ElicitRequestSchema,
-    ErrorCode,
-    ListRootsRequestSchema,
-    McpError,
-} from '@modelcontextprotocol/sdk/types.js';
-import { preserveZeroRequestCancellation } from './mcp-transport.ts';
+    Transport,
+} from '@modelcontextprotocol/client';
+import { Client, ProtocolError, ProtocolErrorCode, ReadBuffer, serializeMessage } from '@modelcontextprotocol/client';
+import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
 import { buildServerArguments, prepareServerBin } from './official-server.ts';
 
 export type OfficialConnection = {
@@ -126,23 +118,27 @@ export async function createOfficialConnection(
             },
         },
     );
-    if (options.roots) client.setRequestHandler(ListRootsRequestSchema, options.roots);
+    if (options.roots) client.setRequestHandler('roots/list', options.roots);
     if (options.elicitation?.form) {
         const forward = options.elicitation.request;
-        client.setRequestHandler(ElicitRequestSchema, (request, extra) => {
+        client.setRequestHandler('elicitation/create', (request, ctx) => {
             if (request.params.mode === 'url') {
-                throw new McpError(ErrorCode.InvalidParams, 'URL-mode elicitation is not supported.');
+                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'URL-mode elicitation is not supported.');
             }
-            return forward(request.params, extra.signal);
+            return forward(request.params, ctx.mcpReq.signal);
         });
     }
     try {
-        await client.connect(preserveZeroRequestCancellation(transport));
+        await client.connect(transport);
         const tools: Tool[] = [];
         const cursors = new Set<string>();
         let cursor: string | undefined;
         do {
-            const page = await client.listTools(cursor ? { cursor } : {});
+            // Keep the gateway's uncapped walk; SDK listTools() aggregates at most 64 pages.
+            const page = await client.request(
+                { method: 'tools/list', params: cursor ? { cursor } : {} },
+                ListToolsResultSchema,
+            );
             tools.push(...page.tools);
             cursor = page.nextCursor;
             if (cursor !== undefined) {
@@ -152,13 +148,19 @@ export async function createOfficialConnection(
         } while (cursor !== undefined);
         return {
             tools,
-            call: async (name, arguments_, signal, onProgress) =>
-                CallToolResultSchema.parse(
-                    await client.callTool({ name, arguments: arguments_ }, CallToolResultSchema, {
-                        ...(signal ? { signal } : {}),
-                        ...(onProgress ? { onprogress: onProgress } : {}),
-                    }),
-                ),
+            call: async (name, arguments_, signal, onProgress) => {
+                const toolDefinition = tools.findLast((tool) => tool.name === name);
+                return CallToolResultSchema.parse(
+                    await client.callTool(
+                        { name, arguments: arguments_ },
+                        {
+                            ...(toolDefinition ? { toolDefinition } : {}),
+                            ...(signal ? { signal } : {}),
+                            ...(onProgress ? { onprogress: onProgress } : {}),
+                        },
+                    ),
+                );
+            },
             close: () => client.close(),
             onExit(listener) {
                 if (exited) listener();

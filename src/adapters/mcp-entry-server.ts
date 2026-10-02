@@ -1,7 +1,3 @@
-import { getSupportedElicitationModes } from '@modelcontextprotocol/sdk/client/index.js';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type {
     CallToolResult,
     ElicitRequestFormParams,
@@ -9,16 +5,12 @@ import type {
     ListRootsResult,
     Progress,
     Tool,
-} from '@modelcontextprotocol/sdk/types.js';
-import {
-    CallToolRequestSchema,
-    ErrorCode,
-    ListToolsRequestSchema,
-    McpError,
-    RootsListChangedNotificationSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+    Transport,
+} from '@modelcontextprotocol/client';
+import { getSupportedElicitationModes } from '@modelcontextprotocol/client';
+import { ProtocolError, ProtocolErrorCode, Server } from '@modelcontextprotocol/server';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { type ConnectionRoute, parseConnectionRoute } from '../domains/control-contract.ts';
-import { preserveZeroRequestCancellation } from './mcp-transport.ts';
 
 type LossChoice = 'restart' | 'cancel' | 'pending';
 type AskLoss = (message: string, signal?: AbortSignal) => Promise<LossChoice>;
@@ -67,14 +59,14 @@ export function createMcpEntryServer(options: {
         resolveClosed();
     };
     const supportsRoots = () => server.getClientCapabilities()?.roots !== undefined;
-    server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+    server.setNotificationHandler('notifications/roots/list_changed', async () => {
         if (supportsRoots()) await options.onRootsChanged?.();
     });
     const supportsFormElicitation = () =>
         getSupportedElicitationModes(server.getClientCapabilities()?.elicitation).supportsFormMode;
     const elicit = (params: ElicitRequestFormParams, signal?: AbortSignal): Promise<ElicitResult> => {
         if (!supportsFormElicitation()) {
-            throw new McpError(ErrorCode.InvalidRequest, 'Host does not support form-mode elicitation.');
+            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'Host does not support form-mode elicitation.');
         }
         return server.elicitInput(params, signal ? { signal } : {});
     };
@@ -107,7 +99,7 @@ export function createMcpEntryServer(options: {
             return 'pending';
         }
     };
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    server.setRequestHandler('tools/list', async () => ({
         tools: [
             ...tools,
             {
@@ -122,26 +114,26 @@ export function createMcpEntryServer(options: {
             },
         ],
     }));
-    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+    server.setRequestHandler('tools/call', async (request, ctx) => {
         const name = request.params.name;
         if (name === 'dct_connection_status') {
             if (Object.keys(request.params.arguments ?? {}).length !== 0) {
-                throw new McpError(ErrorCode.InvalidParams, `${name} requires an empty argument object.`);
+                throw new ProtocolError(ProtocolErrorCode.InvalidParams, `${name} requires an empty argument object.`);
             }
             const result = options.status();
             return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
         }
         if (name === 'dct_watch_target') {
-            const result = await options.watch(parseConnectionRoute(request.params.arguments), extra.signal);
+            const result = await options.watch(parseConnectionRoute(request.params.arguments), ctx.mcpReq.signal);
             return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
         }
         if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
         parseConnectionRoute(request.params.arguments?._dct);
         const token = request.params._meta?.progressToken;
-        return options.invoke(name, request.params.arguments ?? {}, extra.signal, (progress) => {
+        return options.invoke(name, request.params.arguments ?? {}, ctx.mcpReq.signal, (progress) => {
             if (token !== undefined) {
-                void extra
-                    .sendNotification({
+                void ctx.mcpReq
+                    .notify({
                         method: 'notifications/progress',
                         params: { ...progress, progressToken: token },
                     })
@@ -152,7 +144,7 @@ export function createMcpEntryServer(options: {
     return {
         async connect() {
             if (!options.transport) process.stdin.once('end', onStdinEnd);
-            await server.connect(preserveZeroRequestCancellation(options.transport ?? new StdioServerTransport()));
+            await server.connect(options.transport ?? new StdioServerTransport());
         },
         closed,
         close: () => server.close(),

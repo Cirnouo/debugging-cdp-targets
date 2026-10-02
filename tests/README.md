@@ -10,7 +10,8 @@
 - `distribution-audit.test.ts` tests packaging comparisons, single-gateway manifests,
   required portable MCP schema declarations, and allowlists.
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
-  nested module metadata, and fail-closed missing license handling.
+  nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
+  and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
 - `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
@@ -33,7 +34,8 @@
   entry/user isolation and Windows named pipe compatibility.
 - `entry-lifecycle.test.ts` checks entry Keep/Close and independent lifecycle.
 - `entry-runtime.test.ts` checks gateway identity, independent connections and upstream lifetime.
-- `mcp-bridge.test.ts` checks official catalog/result forwarding and lifecycle tools.
+- `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
+  output validation, legacy stdio ID-zero cancellation and lifecycle tools.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks manual closure and explicit same-port recovery.
 - `fixtures/` owns isolated CDP processes.

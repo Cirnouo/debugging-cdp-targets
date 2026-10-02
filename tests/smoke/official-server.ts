@@ -63,9 +63,18 @@ const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     assert.ok(isRecord(result));
     return result;
 };
+function textContent(result: Record<string, unknown>) {
+    assert.ok(Array.isArray(result.content));
+    return result.content
+        .map((block: unknown) => {
+            assert.ok(isRecord(block) && block.type === 'text' && typeof block.text === 'string');
+            return block.text;
+        })
+        .join('\n');
+}
 const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 function launch(profile: string, title: string) {
-    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><h1>Isolated smoke</h1>"`;
+    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>"`;
 }
 let entryId: string | undefined;
 let active: ConnectionStatus | undefined;
@@ -89,6 +98,7 @@ try {
     console.log(JSON.stringify({ server: initialized.serverInfo }));
     const tools = readMcpTools(await client.request('tools/list'));
     assert.ok(tools.some((entry) => entry.name === 'list_pages'));
+    assert.ok(tools.some((entry) => entry.name === 'get_css_styles'));
     assert.ok(tools.some((entry) => /extension/.test(entry.name)));
     const statusTool = await tool('dct_connection_status');
     const response = parseControlResponse({ ok: true, result: statusTool.structuredContent });
@@ -110,6 +120,16 @@ try {
     const pagesOne = await tool('list_pages', route(first));
     assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
     assert.match(JSON.stringify(pagesOne), /FIRST/);
+    const page = textContent(pagesOne).match(/^(\d+):.*FIRST/m);
+    assert.ok(page?.[1], 'The isolated page must have an official page ID.');
+    const pageId = Number(page[1]);
+    const snapshot = await tool('take_snapshot', { ...route(first), pageId });
+    assert.notEqual(snapshot.isError, true, JSON.stringify(snapshot));
+    const heading = textContent(snapshot).match(/uid=(\S+) heading "Isolated smoke"/);
+    assert.ok(heading?.[1], 'The isolated heading must have an official snapshot UID.');
+    const styles = await tool('get_css_styles', { ...route(first), pageId, uid: heading[1] });
+    assert.notEqual(styles.isError, true, JSON.stringify(styles));
+    assert.match(textContent(styles), /color:\s*rgb\(12,\s*34,\s*56\)/);
     const extensions = tools.find((entry) => /list.*extension|extension.*list/.test(entry.name));
     assert.ok(extensions);
     const extensionResult = await tool(extensions.name, route(first));
@@ -148,7 +168,7 @@ try {
     });
     active = undefined;
     await emptyGateway(entryId);
-    console.log('Official tools and extensions through a reusable entry, Close, and later start passed.');
+    console.log('Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.');
 } finally {
     if (entryId && active?.sessionId)
         await control({

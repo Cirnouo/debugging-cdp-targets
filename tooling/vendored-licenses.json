@@ -1,0 +1,215 @@
+{
+    "schemaVersion": 1,
+    "bundles": [
+        {
+            "name": "@modelcontextprotocol/client",
+            "version": "2.2.0",
+            "file": "dist/ajvProvider-97rDpkRx.mjs",
+            "sha256": "5c4d6ce22cd6f3323ebc16d2e97956eb6238d1135102f6aefb25bacf40bf14be",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.2.0.tgz",
+            "integrity": "sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==",
+            "mapSha256": "d6901665ca2e695a30c4b54844af6cbb07d907a2b2f6ad53b2bb4e63355459c7"
+        },
+        {
+            "name": "@modelcontextprotocol/client",
+            "version": "2.2.0",
+            "file": "dist/chunk-Br0eD_fh.mjs",
+            "sha256": "d4a000980e7c6a8a2ee04c12d80cf538b11e5040e8487dad7661b09d85894e74",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.2.0.tgz",
+            "integrity": "sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig=="
+        },
+        {
+            "name": "@modelcontextprotocol/client",
+            "version": "2.2.0",
+            "file": "dist/dialects-BOhdv1Fc.mjs",
+            "sha256": "34447f2f5bffaab20cf5148c190137fc3129e7b23614a75a47c1db3b0994969e",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.2.0.tgz",
+            "integrity": "sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==",
+            "mapSha256": "883ccbf685d9dad6dbc2cbea7d1c4fca95c8a3ed6183830b15a480e35a7721fd"
+        },
+        {
+            "name": "@modelcontextprotocol/client",
+            "version": "2.2.0",
+            "file": "dist/index.mjs",
+            "sha256": "b5891864a6ebcef27d8d999d662d03d7095368a2c0ff072ac578c2f31b27afa4",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.2.0.tgz",
+            "integrity": "sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==",
+            "mapSha256": "3ff7a1f42f51e829bd8f4338fb37f9d633347e4e0a2df94968b08ef66ab09353"
+        },
+        {
+            "name": "@modelcontextprotocol/client",
+            "version": "2.2.0",
+            "file": "dist/shimsNode.mjs",
+            "sha256": "0ecec14e715e583a63940a922c0586cd7f02f9c1fdeb3eb2fada6adae0764b5c",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.2.0.tgz",
+            "integrity": "sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==",
+            "mapSha256": "89983a4181b8805660346278d1f48f1af3cfca7569f2ea738013c7a91d40f767"
+        },
+        {
+            "name": "@modelcontextprotocol/client",
+            "version": "2.2.0",
+            "file": "dist/src-xKF0PJN-.mjs",
+            "sha256": "7603c5bdea8f0c80c98d563d8cbb1fb175abffa8f1f169b1ce3417e3679306b2",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.2.0.tgz",
+            "integrity": "sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==",
+            "mapSha256": "8c049aeef2b3b37ec6448b966cacd8b9d7dd96e0c49bbf7b7412dc99423d6675"
+        },
+        {
+            "name": "@modelcontextprotocol/core",
+            "version": "2.2.0",
+            "file": "dist/auth-BNDyLTqp.mjs",
+            "sha256": "4a93aaa8765ce5ec8a2fc0b946881124568a2b118d56fa1408f43e4d952d988c",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/core/-/core-2.2.0.tgz",
+            "integrity": "sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw==",
+            "mapSha256": "7ef83e11595b61b1f8c05ca8be1a510f1477db89e715a51066d0745b15bcc13b"
+        },
+        {
+            "name": "@modelcontextprotocol/core",
+            "version": "2.2.0",
+            "file": "dist/index.mjs",
+            "sha256": "dcf5e4173148f276be335db8a85fadf417a8728634be5ec3ef5159bd18a6ab8f",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/core/-/core-2.2.0.tgz",
+            "integrity": "sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw=="
+        },
+        {
+            "name": "@modelcontextprotocol/core",
+            "version": "2.2.0",
+            "file": "dist/internal.mjs",
+            "sha256": "848b06134a52cd2f95fe71c897a41bf80e2f2335bd60751e53bf854692ec4892",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/core/-/core-2.2.0.tgz",
+            "integrity": "sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw=="
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/ajvProvider-CEoC__sr.mjs",
+            "sha256": "218157a99879a59cdea0b720a484dfe9989fa768f3d05318c2803b61705373fa",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==",
+            "mapSha256": "2eb52e887d5fda7dad8191f9b1adae36d8b77566cf2c8228eb2844e0358f751e"
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/chunk-Br0eD_fh.mjs",
+            "sha256": "d4a000980e7c6a8a2ee04c12d80cf538b11e5040e8487dad7661b09d85894e74",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ=="
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/dialects-DoSzNhcb.mjs",
+            "sha256": "9340570968ae24904805bbb0ee637f9aa1a17f7d2b87c26ba8290809b4cc7080",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==",
+            "mapSha256": "196fc76d86a5665c7b12ad8727ac3c68d196001d7e12bea3b6a6347405036499"
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/index.mjs",
+            "sha256": "d02b0f5142148f7db422ad47d6641290557996f78cf7f361fff40507e1941a21",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==",
+            "mapSha256": "9fa78bca1c6178c69080899a6ea281e15507a249411f60b37f021c8184b0dd84"
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/mcp-DYuW2ZSs.mjs",
+            "sha256": "f8c95fda6181391bc8abe7f12c9377d561b7c29e9055977091f166a16312f984",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==",
+            "mapSha256": "6813506807523b57109ff036b6a2b2abad59a59ef8aa1073ac572be24a4ba597"
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/shimsNode.mjs",
+            "sha256": "efa8ef680135a81cd4b3dadaa765ad5cf506523e410c8a9702ab6d9095869d8f",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ=="
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/src-BHSMhZ_W.mjs",
+            "sha256": "0fe9b6a779a0674cfcda78a531b687e357a5fe0ae67de9923eaeaf2dda4c1956",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==",
+            "mapSha256": "22137ac9117aa123a10609e2743b1b8dc1e46d37ebe7557738ef6d3c91752079"
+        },
+        {
+            "name": "@modelcontextprotocol/server",
+            "version": "2.2.0",
+            "file": "dist/stdio.mjs",
+            "sha256": "17134622acd62868a2cf1c6b51ba2e55013904484218240d6d006a4b23567d00",
+            "tarball": "https://registry.npmjs.org/@modelcontextprotocol/server/-/server-2.2.0.tgz",
+            "integrity": "sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==",
+            "mapSha256": "ffaadea99d46723cc879a33aebb8764e93cab2920b1f915f1d05f7964755521a"
+        }
+    ],
+    "packages": [
+        {
+            "name": "ajv-formats",
+            "version": "3.0.1",
+            "license": "MIT",
+            "tarball": "https://registry.npmjs.org/ajv-formats/-/ajv-formats-3.0.1.tgz",
+            "integrity": "sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==",
+            "licenseFile": "LICENSE",
+            "licenseSha256": "9df3bb69929a3b650ed73b3bfa1756725aaff0ac296461605753547004eafeaf",
+            "licenseText": "MIT License\n\nCopyright (c) 2020 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+        },
+        {
+            "name": "ajv",
+            "version": "8.18.0",
+            "license": "MIT",
+            "tarball": "https://registry.npmjs.org/ajv/-/ajv-8.18.0.tgz",
+            "integrity": "sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==",
+            "licenseFile": "LICENSE",
+            "licenseSha256": "a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3",
+            "licenseText": "The MIT License (MIT)\n\nCopyright (c) 2015-2021 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n\n"
+        },
+        {
+            "name": "content-type",
+            "version": "1.0.5",
+            "license": "MIT",
+            "tarball": "https://registry.npmjs.org/content-type/-/content-type-1.0.5.tgz",
+            "integrity": "sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA==",
+            "licenseFile": "LICENSE",
+            "licenseSha256": "257aed98914108e91a337912727b6a802eef218248507f74b76faffaff517a38",
+            "licenseText": "(The MIT License)\n\nCopyright (c) 2015 Douglas Christopher Wilson\n\nPermission is hereby granted, free of charge, to any person obtaining\na copy of this software and associated documentation files (the\n'Software'), to deal in the Software without restriction, including\nwithout limitation the rights to use, copy, modify, merge, publish,\ndistribute, sublicense, and/or sell copies of the Software, and to\npermit persons to whom the Software is furnished to do so, subject to\nthe following conditions:\n\nThe above copyright notice and this permission notice shall be\nincluded in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\nIN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,\nTORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE\nSOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+        },
+        {
+            "name": "fast-deep-equal",
+            "version": "3.1.3",
+            "license": "MIT",
+            "tarball": "https://registry.npmjs.org/fast-deep-equal/-/fast-deep-equal-3.1.3.tgz",
+            "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==",
+            "licenseFile": "LICENSE",
+            "licenseSha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+            "licenseText": "MIT License\n\nCopyright (c) 2017 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+        },
+        {
+            "name": "fast-uri",
+            "version": "3.1.0",
+            "license": "BSD-3-Clause",
+            "tarball": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.0.tgz",
+            "integrity": "sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==",
+            "licenseFile": "LICENSE",
+            "licenseSha256": "185ef4f377743572c2bf0931f741fae52401268cbe70c880b74063799814083e",
+            "licenseText": "Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae\nCopyright (c) 2021-present The Fastify team\nAll rights reserved.\n\nThe Fastify team members are listed at https://github.com/fastify/fastify#team.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n    * Redistributions of source code must retain the above copyright\n      notice, this list of conditions and the following disclaimer.\n    * Redistributions in binary form must reproduce the above copyright\n      notice, this list of conditions and the following disclaimer in the\n      documentation and/or other materials provided with the distribution.\n    * The names of any contributors may not be used to endorse or promote\n      products derived from this software without specific prior written\n      permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\" AND\nANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED\nWARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY\nDIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES\n(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;\nLOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND\nON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n\n                                  *   *   *\n\nThe complete list of contributors can be found at:\n- https://github.com/garycourt/uri-js/graphs/contributors"
+        },
+        {
+            "name": "json-schema-traverse",
+            "version": "1.0.0",
+            "license": "MIT",
+            "tarball": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-1.0.0.tgz",
+            "integrity": "sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==",
+            "licenseFile": "LICENSE",
+            "licenseSha256": "7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+            "licenseText": "MIT License\n\nCopyright (c) 2017 Evgeny Poberezkin\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+        }
+    ]
+}

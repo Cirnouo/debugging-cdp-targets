@@ -6,6 +6,7 @@ import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import { RetainedTargetError } from '../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlHandler, LaunchOptions } from '../src/domains/control-contract.ts';
+import { isRecord } from '../src/shared/errors.ts';
 
 function connectionStatus(controller: ControlHandler, connectionId: string): ConnectionStatus {
     const status = controller.status(connectionId);
@@ -295,7 +296,8 @@ test('one cancelled caller leaves a shared loss prompt available to its live wat
             new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 30)),
         ]);
         assert.ok(result, 'cancelled call must stop waiting while its watcher stays live');
-        assert.equal(result.structuredContent?.choice, 'pending');
+        assert.ok(isRecord(result.structuredContent));
+        assert.equal(result.structuredContent.choice, 'pending');
         assert.equal(f.counts().asks, 1);
         await f.controller.endTask({ connectionId: active.connectionId, sessionId: active.sessionId });
         assert.equal((await watch).choice, 'pending');

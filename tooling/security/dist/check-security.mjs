@@ -7701,7 +7701,7 @@ var MAX_CONTROL_BYTES = 64 * 1024;
 var TARGET_KINDS = Object.freeze(["chrome", "generic-cdp"]);
 var DISPOSITIONS = Object.freeze(["Close", "Keep"]);
 var PACKAGE_NAME = "chrome-devtools-mcp";
-var PACKAGE_VERSION = "1.9.0";
+var PACKAGE_VERSION = "1.10.1";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
@@ -8001,7 +8001,13 @@ async function checkSecurity(root, options = {}) {
     (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file)
   );
   const configuration = paths.filter(
-    (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^plugins\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", ".npmrc"].includes(file)
+    (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^plugins\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || [
+      "package.json",
+      "pnpm-workspace.yaml",
+      "pnpm-lock.yaml",
+      ".npmrc",
+      "tooling/vendored-licenses.json"
+    ].includes(file)
   );
   for (const exception of exceptions) {
     for (const file of exception.evidence) {

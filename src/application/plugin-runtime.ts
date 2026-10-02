@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createCdpRouter } from '../adapters/cdp-router.ts';
 import { createControlServer } from '../adapters/control-ipc.ts';
 import { createOfficialConnection, type OfficialConnection } from '../adapters/mcp-bridge.ts';

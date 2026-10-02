@@ -82,7 +82,13 @@ export function validateRuntimeSource(file: string, source: string) {
             !specifier.startsWith('.') &&
             !specifier.startsWith('node:') &&
             specifier !== 'ws' &&
-            !specifier.startsWith('@modelcontextprotocol/sdk/')
+            ![
+                '@modelcontextprotocol/client',
+                '@modelcontextprotocol/server',
+                '@modelcontextprotocol/core',
+                '@modelcontextprotocol/client/stdio',
+                '@modelcontextprotocol/server/stdio',
+            ].includes(specifier)
         )
             errors.push(`${file}: unapproved runtime dependency: ${specifier}`);
     }

@@ -13,7 +13,7 @@ Version 0.1.0 is under development and has not been released.
 - Codex with Plugin support, and Node 24.21.0 with npm/npx available on PATH.
     No global npm package, pnpm, or mise installation is needed to use the Plugin.
 - Internet access for installation and the first download of the official Server,
-    pinned to `chrome-devtools-mcp@1.9.0`.
+    pinned to `chrome-devtools-mcp@1.10.1`.
 - An application that supports a command-line debugging port and exposes a
     **browser-level Chrome DevTools Protocol (CDP) endpoint**. Chrome is the
     known-compatible target. Other CDP-capable applications are best effort;

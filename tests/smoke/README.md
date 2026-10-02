@@ -1,7 +1,8 @@
 # Explicit integration smoke
 
 - `official-server.ts` tests the bundled bootstrap against an isolated Chrome,
-  including tool discovery, reusable entry start/Close, and normal closure.
+  including tool discovery, snapshot-based CSS style inspection, reusable entry
+  start/Close, and normal closure.
 - `entry-recovery.ts` launches at least three concurrent isolated Chrome targets
   through one gateway. It checks independent UUIDs and parallel tool routing,
   Keep/reuse, scoped Close, later new connections, active-task loss form delivery,

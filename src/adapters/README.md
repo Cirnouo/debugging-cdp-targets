@@ -7,9 +7,13 @@
 - `official-server.ts` acquires the pinned public MCP package and validates options.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client.
 - `mcp-entry-server.ts` exposes the SDK gateway and lifecycle tools on stdio.
-- `mcp-transport.ts` preserves cancellation for SDK request ID zero using temporary aliases.
 - `hide-npm-console.ts` scopes hidden console spawning to npx acquisition.
 - `target-host.ts` launches and verifies a newly created target.
 - `platform-process.ts` obtains OS identity/reservations and normal shutdown.
 - `windows-cdp-helper.ps1` supplies Windows API evidence and window close.
 - `AGENTS.md` defines I/O safety and platform contracts.
+
+The bundled gateway uses the public `@modelcontextprotocol/client`, `server` and
+`core` SDK packages pinned to 2.2.0. It retains legacy stdio initialization, roots,
+form elicitation, progress and cancellation. Catalog pages are walked without the
+SDK aggregate page cap, and calls validate against the original output schemas.

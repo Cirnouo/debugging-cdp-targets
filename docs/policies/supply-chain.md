@@ -92,7 +92,7 @@ array. Each exception must contain exactly:
 
 Code hashes cover maintained runtime source/helpers, audit/build tooling and
 committed runtime bundles. Configuration hashes cover package.json, workspace
-policy, the lockfile, optional .npmrc, CI workflows, Plugin JSON/YAML configuration
+policy, the lockfile, optional .npmrc, reviewed vendored-license evidence, CI workflows, Plugin JSON/YAML configuration
 and the Marketplace catalog. Dependency hashes cover
 the parsed full lock documents, canonically sorted. File hashes include sorted
 relative names, byte lengths and contents. The exception file is not hashed into

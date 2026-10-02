@@ -41,7 +41,13 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
             /^\.github\/workflows\/.*\.ya?ml$/.test(file) ||
             /^plugins\/.*\.(?:json|ya?ml)$/.test(file) ||
             /^\.agents\/plugins\/.*\.json$/.test(file) ||
-            ['package.json', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', '.npmrc'].includes(file),
+            [
+                'package.json',
+                'pnpm-workspace.yaml',
+                'pnpm-lock.yaml',
+                '.npmrc',
+                'tooling/vendored-licenses.json',
+            ].includes(file),
     );
     for (const exception of exceptions) {
         for (const file of exception.evidence) {

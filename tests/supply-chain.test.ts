@@ -87,7 +87,7 @@ const inventory = [
 ];
 const upstreamLock = lock
     .replaceAll('ws', 'chrome-devtools-mcp')
-    .replaceAll('8.22.0', '1.9.0')
+    .replaceAll('8.22.0', '1.10.1')
     .replace('devDependencies:', 'dependencies:');
 const ghsa = 'GHSA-35jh-r3h4-6jhm';
 const now = new Date('2026-09-30T00:00:00.000Z');
@@ -173,7 +173,7 @@ function isolatedExecutor(calls: CommandCall[], severity = 'high', failure?: str
                     invalid: [],
                 }),
             };
-        const report = audit(severity, '1.9.0');
+        const report = audit(severity, '1.10.1');
         required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
         if (failure === 'coverage') report.metadata.totalDependencies = 0;
         return { exitCode: 1, stdout: JSON.stringify(report) };
@@ -466,7 +466,7 @@ test('upstream reviews the isolated lock before installation and never runs its 
                         await readFile(path.join(options.cwd, 'package.json'), 'utf8'),
                     );
                     assert.ok(isRecord(manifest));
-                    assert.deepEqual(manifest.dependencies, { 'chrome-devtools-mcp': '1.9.0' });
+                    assert.deepEqual(manifest.dependencies, { 'chrome-devtools-mcp': '1.10.1' });
                     const settings: unknown = parse(
                         await readFile(path.join(options.cwd, 'pnpm-workspace.yaml'), 'utf8'),
                     );
@@ -502,7 +502,7 @@ test('upstream reviews the isolated lock before installation and never runs its 
                         ),
                         exitCode: 0,
                     };
-                const report = audit('moderate', '1.9.0');
+                const report = audit('moderate', '1.10.1');
                 required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
                 return args.includes('signatures')
                     ? { stdout: '{"audited":3,"verified":3,"invalid":[],"missing":[]}', exitCode: 0 }
@@ -642,6 +642,9 @@ test('public gate reports both full trees and rejects evidence changing during a
         await mkdir(path.join(root, 'docs/policies'), { recursive: true });
         await mkdir(path.join(root, 'src'), { recursive: true });
         await mkdir(path.join(root, 'plugins/fixture'), { recursive: true });
+        await mkdir(path.join(root, 'tooling'), { recursive: true });
+        const vendorEvidence = path.join(root, 'tooling/vendored-licenses.json');
+        await writeFile(vendorEvidence, '{"schemaVersion":1,"packages":[]}');
         await writeFile(path.join(root, 'plugins/fixture/mcp.json'), '{"env":{}}');
         await writeFile(path.join(root, 'src/evidence.ts'), 'export const safe = true;\n');
         await writeFile(
@@ -675,7 +678,7 @@ test('public gate reports both full trees and rejects evidence changing during a
                     await writeFile(path.join(root, 'src/evidence.ts'), 'export const safe = false;\n');
                 return { exitCode: 0, stdout: '{"audited":3,"verified":3,"invalid":[],"missing":[]}' };
             }
-            const report = audit(cwd === root ? 'high' : upstreamSeverity, cwd === root ? '8.22.0' : '1.9.0');
+            const report = audit(cwd === root ? 'high' : upstreamSeverity, cwd === root ? '8.22.0' : '1.10.1');
             if (cwd !== root) required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
             return { exitCode: 1, stdout: JSON.stringify(report) };
         };
@@ -720,7 +723,7 @@ test('public gate reports both full trees and rejects evidence changing during a
         approvedReview.exceptions.push({
             ...waiver(),
             package: 'chrome-devtools-mcp',
-            version: '1.9.0',
+            version: '1.10.1',
             scope: 'upstream',
             evidence: ['src/evidence.ts'],
             fingerprints: blockedUpstream.scopes.upstream.fingerprints,
@@ -737,6 +740,12 @@ test('public gate reports both full trees and rejects evidence changing during a
         await writeFile(exceptionPath, '{"schemaVersion":1,"exceptions":[]}');
         const afterConfig = await checkSecurity(root, { temporaryRoot, execute, now });
         assert.notEqual(beforeConfig, afterConfig.scopes.repository.fingerprints.configuration);
+        await writeFile(vendorEvidence, '{"schemaVersion":1,"packages":["changed"]}');
+        const afterVendorConfig = await checkSecurity(root, { temporaryRoot, execute, now });
+        assert.notEqual(
+            afterConfig.scopes.repository.fingerprints.configuration,
+            afterVendorConfig.scopes.repository.fingerprints.configuration,
+        );
         mutate = true;
         await assert.rejects(checkSecurity(root, { temporaryRoot, execute, now }), /changed during/i);
     } finally {

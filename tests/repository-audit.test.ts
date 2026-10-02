@@ -6,18 +6,25 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
 
-test('gateway may import official SDK transport modules but arbitrary dependencies remain forbidden', () => {
-    assert.deepEqual(
-        validateRuntimeSource(
-            'src/adapters/mcp-gateway.ts',
-            "import { Server } from '@modelcontextprotocol/sdk/server/index.js';",
-        ),
-        [],
-    );
-    assert.ok(
-        validateRuntimeSource('src/adapters/mcp-gateway.ts', "import x from '@modelcontextprotocol/unofficial';")
-            .length,
-    );
+test('gateway imports only public split SDK entry points', () => {
+    for (const specifier of [
+        '@modelcontextprotocol/client',
+        '@modelcontextprotocol/server',
+        '@modelcontextprotocol/core',
+        '@modelcontextprotocol/client/stdio',
+        '@modelcontextprotocol/server/stdio',
+    ]) {
+        assert.deepEqual(validateRuntimeSource('src/adapters/mcp-gateway.ts', `import x from '${specifier}';`), []);
+    }
+    for (const specifier of [
+        '@modelcontextprotocol/unofficial',
+        '@modelcontextprotocol/client/dist/index.mjs',
+        '@modelcontextprotocol/server/internal',
+        '@modelcontextprotocol/core/types',
+        '@modelcontextprotocol/sdk/server/index.js',
+    ]) {
+        assert.ok(validateRuntimeSource('src/adapters/mcp-gateway.ts', `import x from '${specifier}';`).length);
+    }
 });
 
 async function auditGithubDocumentation(files: readonly string[]) {
