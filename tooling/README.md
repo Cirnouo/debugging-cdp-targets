@@ -6,8 +6,9 @@
   audit entry and its YAML license.
 - `repository-audit.ts` checks text, AST layer boundaries, versions, docs,
   symlink, and production safety.
-- `distribution-audit.ts` checks physical Plugin inventory and byte-identical
-  packaging into a disposable directory; this is not a Codex install claim.
+- `distribution-audit.ts` checks physical Plugin inventory, the portable MCP
+  schema declaration and byte-identical packaging into a disposable directory;
+  this is not a Codex install claim.
 - `payload-policy.ts` owns the exact Plugin file allowlist.
 - `governance.ts` owns commit type/scope and branch grammar.
 - `version-policy.ts` owns SemVer grammar and Package/Plugin/Skill agreement.

@@ -44,6 +44,7 @@ test('portable plugin registers one stdio gateway for independent target connect
     const packageData: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     assert.ok(isRecord(packageData) && isSemVer(packageData.version));
     assert.equal(manifest.version, packageData.version);
+    assert.equal(mcp.$schema, 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json');
     assert.deepEqual(Object.keys(mcp.mcpServers), ['cdp-targets']);
     assert.deepEqual(mcp.mcpServers['cdp-targets'], {
         type: 'stdio',

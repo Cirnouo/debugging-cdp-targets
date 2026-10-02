@@ -8,7 +8,16 @@ export function createClient(
     options: Pick<SpawnOptions, 'cwd' | 'env'> = {},
     onServerRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>,
 ) {
-    const child = spawn(process.execPath, [entry], {
+    return createStdioClient(process.execPath, [entry], options, onServerRequest);
+}
+
+export function createStdioClient(
+    executable: string,
+    args: string[],
+    options: Pick<SpawnOptions, 'cwd' | 'env'> = {},
+    onServerRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+) {
+    const child = spawn(executable, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
         shell: false,

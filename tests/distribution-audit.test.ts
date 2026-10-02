@@ -10,18 +10,23 @@ test('MCP manifest requires one gateway entry without slots or connection limits
         args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`],
         cwd: `\${PLUGIN_ROOT}`,
     };
-    const valid = { mcpServers: { 'cdp-targets': entry } };
+    const valid = {
+        $schema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
+        mcpServers: { 'cdp-targets': entry },
+    };
     assert.deepEqual(validateMcpEntries(valid), []);
-    assert.ok(validateMcpEntries({ mcpServers: { 'chrome-devtools': entry } }).length);
-    assert.ok(validateMcpEntries({ mcpServers: { 'cdp-target-1': entry, 'cdp-target-2': entry } }).length);
-    assert.ok(validateMcpEntries({ mcpServers: { ...valid.mcpServers, extra: entry } }).length);
+    assert.ok(validateMcpEntries({ ...valid, mcpServers: { 'chrome-devtools': entry } }).length);
+    assert.ok(validateMcpEntries({ ...valid, mcpServers: { 'cdp-target-1': entry, 'cdp-target-2': entry } }).length);
+    assert.ok(validateMcpEntries({ ...valid, mcpServers: { ...valid.mcpServers, extra: entry } }).length);
     for (const invalid of [
         { ...entry, args: [...entry.args, '--slot', '1'] },
         { ...entry, args: [...entry.args, '--max-connections', '2'] },
         { ...entry, command: 'npx' },
         { ...entry, type: 'http' },
     ])
-        assert.ok(validateMcpEntries({ mcpServers: { 'cdp-targets': invalid } }).length);
+        assert.ok(validateMcpEntries({ ...valid, mcpServers: { 'cdp-targets': invalid } }).length);
+    for (const $schema of [undefined, null, 1, '', 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'])
+        assert.ok(validateMcpEntries({ ...valid, $schema }).some((error) => /schema/.test(error)));
 });
 
 test('Plugin inventory accepts only explicit runtime and instruction files', () => {

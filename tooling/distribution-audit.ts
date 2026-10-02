@@ -18,6 +18,8 @@ export function compareDistributionTrees(source: Map<string, Buffer>, installed:
 
 export function validateMcpEntries(mcp: unknown) {
     if (!isRecord(mcp) || !isRecord(mcp.mcpServers)) return ['Malformed MCP entries.'];
+    if (mcp.$schema !== 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json')
+        return ['Portable MCP manifest requires the Agent Plugins MCP schema.'];
     const servers = mcp.mcpServers;
     if (Object.keys(servers).length !== 1) return ['Plugin requires exactly one stdio gateway entry.'];
     const server = servers['cdp-targets'];

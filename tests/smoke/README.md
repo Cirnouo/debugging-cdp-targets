@@ -16,10 +16,16 @@
   Form latency measures protocol receipt, not host UI rendering. Cleanup uses
   gateway stdin EOF and identity-verified normal target close; profiles remain in
   the printed temporary directory for inspection.
-- `mcp-client.ts` is a test-only JSON-line stdio client; it is never shipped.
+- `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
+  they are never shipped.
 - `windows-monitor.ps1` samples visible console windows every 20 ms and reports
   newly visible console/terminal windows, without reading application data.
-- `marketplace.ts` installs the local Plugin with an isolated Codex home.
+- `marketplace.ts` installs the local Plugin with an isolated Codex home, compares
+  installed bytes and asks Codex's app server for the installed MCP server and
+  tool catalog before directly testing the bundled gateway. Missing discovery
+  fails even if directly launching the gateway would work. Run
+  `node tests/smoke/marketplace.ts` after `pnpm build:plugin`; an optional first
+  argument selects a Codex executable, including the Desktop app's binary.
 
 These scripts are opt-in and may download the pinned official Server or open
 dedicated test browser windows. The normal test suite never runs them.

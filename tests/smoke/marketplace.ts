@@ -6,16 +6,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
 import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution-audit.ts';
-import { createClient, readMcpTools } from './mcp-client.ts';
+import { createClient, createStdioClient, readMcpTools } from './mcp-client.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const home = await mkdtemp(path.join(os.tmpdir(), 'dct-codex-home-'));
+const executable = process.argv[2] ?? 'codex';
+const environment = { ...process.env, CODEX_HOME: home };
 function codex(args: string[]) {
-    const result = spawnSync('codex', args, {
-        env: { ...process.env, CODEX_HOME: home },
+    const result = spawnSync(executable, args, {
+        env: environment,
         encoding: 'utf8',
         windowsHide: true,
         shell: false,
+        timeout: 60_000,
     });
     if (result.error) throw result.error;
     assert.equal(result.status, 0, result.stderr);
@@ -35,6 +38,32 @@ try {
     assert.deepEqual(compareDistributionTrees(source, payload), []);
     const config = await readFile(path.join(home, 'config.toml'), 'utf8');
     assert.match(config, /debugging-cdp-targets/);
+    const appServer = createStdioClient(executable, ['app-server', '--listen', 'stdio://'], {
+        cwd: root,
+        env: environment,
+    });
+    try {
+        await appServer.request('initialize', {
+            clientInfo: { name: 'isolated-marketplace-smoke', title: null, version: '0.1.0' },
+            capabilities: { experimentalApi: true, requestAttestation: false },
+        });
+        appServer.notify('initialized');
+        const status = await appServer.request('mcpServerStatus/list');
+        assert.ok(isRecord(status) && Array.isArray(status.data));
+        const servers = status.data.filter(
+            (server: unknown) => isRecord(server) && server.pluginId === 'debugging-cdp-targets@debugging-cdp-targets',
+        );
+        assert.equal(servers.length, 1, 'Codex must discover the installed Plugin MCP gateway.');
+        const server: unknown = servers[0];
+        assert.ok(isRecord(server) && isRecord(server.tools));
+        assert.equal(server.name, 'cdp-targets');
+        assert.equal(server.toolsError, null);
+        for (const tool of ['list_pages', 'dct_connection_status', 'dct_watch_target'])
+            assert.ok(isRecord(server.tools[tool]), `Codex did not load ${tool}.`);
+        console.log(JSON.stringify({ discoveredServer: server.name, toolCount: Object.keys(server.tools).length }));
+    } finally {
+        await appServer.close();
+    }
     const client = createClient(path.join(installedPath, 'dist/mcp-bootstrap.mjs'));
     try {
         await client.request('initialize', {
@@ -52,7 +81,7 @@ try {
     } finally {
         await client.close();
     }
-    console.log('Local Marketplace installation succeeded in an isolated Codex home.');
+    console.log('Local Marketplace installation and Codex MCP discovery succeeded in an isolated Codex home.');
 } finally {
-    await rm(home, { recursive: true });
+    await rm(home, { recursive: true, maxRetries: 10, retryDelay: 200 });
 }

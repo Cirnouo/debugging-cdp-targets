@@ -27,6 +27,13 @@ Version 0.1.0 remains under development; no release has been published.
 - Verified Windows Chrome operation; Linux/macOS simulated CDP coverage, without
   a claim of verified real-application compatibility on those platforms.
 
+### Fixed
+
+- Portable MCP schema declaration so Codex discovers the installed gateway;
+  Marketplace smoke tests now verify Codex's MCP discovery and tool catalog.
+- Short entry-specific Unix socket paths for macOS temporary directories, with
+  explicit UTF-8 byte-limit validation instead of a failing socket listen.
+
 ### Security
 
 - Target process, listener, and endpoint identity verification, loopback-only
