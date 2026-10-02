@@ -1,14 +1,15 @@
 import { parseArgs } from 'node:util';
-import type { ControlRequest } from '../domains/control-contract.ts';
-
-const ACTIONS = new Set(['status', 'start', 'switch', 'stop']);
+import { type ControlRequest, parseControlRequest } from '../domains/control-contract.ts';
 
 export function parseControlArguments(arguments_: string[]): ControlRequest {
     const [action, ...rest] = arguments_;
-    if (!action || !ACTIONS.has(action)) throw new Error('Unknown action. Use status, start, switch, or stop.');
+    if (!action || !['status', 'start', 'restart', 'stop', 'end-task'].includes(action))
+        throw new Error('Unknown action. Use status, start, restart, stop, or end-task.');
     const parsed = parseArgs({
         args: rest,
         options: {
+            'entry-id': { type: 'string' },
+            'session-id': { type: 'string' },
             'launch-command': { type: 'string' },
             'target-kind': { type: 'string' },
             'base-port': { type: 'string' },
@@ -20,45 +21,18 @@ export function parseControlArguments(arguments_: string[]): ControlRequest {
     });
     const names = parsed.tokens.filter((token) => token.kind === 'option').map((token) => token.name);
     if (new Set(names).size !== names.length) throw new Error('Duplicate control options are prohibited.');
-    const values = parsed.values;
-    if (action === 'status' && Object.keys(values).length > 0) throw new Error('Status takes no options.');
-    if (['start', 'switch'].includes(action) && !values['launch-command']) {
-        throw new Error('A --launch-command is required.');
-    }
-    if (['switch', 'stop'].includes(action) && !['Close', 'Keep'].includes(values.disposition ?? '')) {
-        throw new Error('Choose --disposition Close or Keep.');
-    }
-    if (action === 'start' && values.disposition) throw new Error('Start does not accept a disposition.');
-    if (
-        ['status', 'stop'].includes(action) &&
-        (values['launch-command'] || values['target-kind'] || values['base-port'])
-    ) {
-        throw new Error(`${action} does not accept target launch options.`);
-    }
-    if (values['target-kind'] && !['chrome', 'generic-cdp'].includes(values['target-kind'])) {
-        throw new Error('Target kind must be chrome or generic-cdp.');
-    }
-    const basePort = values['base-port'] === undefined ? 9222 : Number(values['base-port']);
-    if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error('Base port is invalid.');
-    if (action === 'status') return { action };
-    const disposition = values.disposition;
-    if (action === 'stop') {
-        if (disposition !== 'Close' && disposition !== 'Keep') throw new Error('Choose --disposition Close or Keep.');
-        return { action, disposition };
-    }
-    const launchCommand = values['launch-command'];
-    const targetKind = values['target-kind'] ?? 'generic-cdp';
-    if (!launchCommand || (targetKind !== 'chrome' && targetKind !== 'generic-cdp'))
-        throw new Error('Invalid launch options.');
-    if (action === 'switch') {
-        if (disposition !== 'Close' && disposition !== 'Keep') throw new Error('Choose --disposition Close or Keep.');
-        return { action, launchCommand, targetKind, basePort, disposition };
-    }
-    if (action !== 'start') throw new Error('Unknown control action.');
-    return {
-        action,
-        launchCommand,
-        targetKind,
-        basePort,
+    const request: Record<string, unknown> = { action };
+    const mapping: Record<string, string> = {
+        'entry-id': 'entryId',
+        'session-id': 'sessionId',
+        'launch-command': 'launchCommand',
+        'target-kind': 'targetKind',
+        'base-port': 'basePort',
+        disposition: 'disposition',
     };
+    for (const [name, value] of Object.entries(parsed.values)) {
+        const key = mapping[name];
+        if (key) request[key] = name === 'base-port' ? (/^[0-9]+$/.test(String(value)) ? Number(value) : NaN) : value;
+    }
+    return parseControlRequest(request);
 }

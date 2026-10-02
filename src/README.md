@@ -5,6 +5,6 @@
 - `domains/`: pure launch and CDP identity/port rules.
 - `adapters/`: local IPC, CDP transport, official Server, process/OS I/O.
 - `shared/`: cross-layer constants.
-- `AGENTS.md`: dependency and stdout constraints.
+- `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
 Generated installable code lives in plugins/debugging-cdp-targets/dist.

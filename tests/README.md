@@ -7,7 +7,10 @@
   evidence, and PID/path/session mismatch checks with injected I/O.
 - `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and
   directory documentation that preserves the root README on GitHub.
-- `distribution-audit.test.ts` tests packaging comparisons and allowlists.
+- `distribution-audit.test.ts` tests packaging comparisons, reusable entry manifests,
+  and allowlists.
+- `build-plugin.test.ts` checks complete transitive bundle license collection,
+  nested module metadata, and fail-closed missing license handling.
 - `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
@@ -25,6 +28,12 @@
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
+- `entry-control.test.ts` checks CLI identity and command-specific option schemas.
+- `entry-lifecycle.test.ts` checks entry Keep/Close and independent lifecycle.
+- `entry-runtime.test.ts` checks reusable bootstrap identities and upstream lifetime.
+- `mcp-bridge.test.ts` checks official catalog/result forwarding and lifecycle tools.
+- `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
+- `target-recovery.test.ts` checks manual closure and explicit same-port recovery.
 - `fixtures/` owns isolated CDP processes.
 - `smoke/` owns opt-in official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.

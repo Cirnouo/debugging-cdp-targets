@@ -1,21 +1,18 @@
 # Domain language
 
-- **Target application**: an application the caller knows can expose browser-level
-  CDP through command-line launch options. Chrome and Obsidian are applications.
-- **Framework**: technology used to build an application, such as Electron or
-  Tauri. A framework name does not prove CDP launch compatibility.
-- **Rendering implementation**: a renderer such as Chromium or WebView2.
-- **Current target**: the one verified newly launched process attached to this
-  MCP connection.
-- **CDP endpoint**: the target's loopback HTTP discovery and browser WebSocket.
-- **Stable CDP entry**: the Plugin's loopback HTTP/WebSocket address that remains
-  unchanged while the current target changes.
-- **Official Server**: the unmodified upstream chrome-devtools-mcp Server using
-  stdio directly with Codex.
-- **Control channel**: temporary local IPC for start/status/switch/stop, separate
-  from MCP tool traffic.
-- **Disposition**: the user's Close or Keep choice for the current target.
-- **Kept target**: a disconnected application whose window and CDP listener may
-  remain open; it is not resumable Plugin state.
-- **Plugin payload**: the installable manifests, instructions, bundled runtime,
-  and required licenses.
+- **Target application**: application explicitly known to expose browser-level CDP.
+- **Framework**: application technology; its name does not prove CDP compatibility.
+- **Rendering implementation**: renderer such as Chromium or WebView2.
+- **Static entry**: reusable stdio configuration cdp-target-1 or cdp-target-2.
+- **Entry identity**: random UUID for one live gateway and its independent control pipe.
+- **Session identity**: fresh UUID for every successful target start in an entry.
+- **Current target**: verified newly launched process belonging to one session.
+- **CDP endpoint**: verified loopback discovery and browser WebSocket address.
+- **Official Server**: unmodified upstream chrome-devtools-mcp child for one entry.
+- **Gateway**: official SDK host transport preserving upstream catalogs and results.
+- **Control channel**: temporary entry-specific local IPC for lifecycle commands.
+- **Disposition**: explicit Close or Keep choice without a default.
+- **Kept target**: application and upstream retained within the live entry.
+- **Closed entry**: reusable host transport with no attached target after normal close.
+- **Recovery**: user-authorized launch from memory on the same port, with new session identity.
+- **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.

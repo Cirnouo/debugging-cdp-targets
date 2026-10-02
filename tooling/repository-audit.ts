@@ -78,7 +78,12 @@ export function validateRuntimeSource(file: string, source: string) {
             errors.push(`${file}: shared cannot depend on other layers.`);
         if (layer === 'application' && resolved.startsWith('src/interface/'))
             errors.push(`${file}: application cannot depend on interface.`);
-        if (!specifier.startsWith('.') && !specifier.startsWith('node:') && specifier !== 'ws')
+        if (
+            !specifier.startsWith('.') &&
+            !specifier.startsWith('node:') &&
+            specifier !== 'ws' &&
+            !specifier.startsWith('@modelcontextprotocol/sdk/')
+        )
             errors.push(`${file}: unapproved runtime dependency: ${specifier}`);
     }
     visit(ast, (node) => {

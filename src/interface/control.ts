@@ -1,11 +1,11 @@
-import { defaultControlEndpoint, sendControlRequest } from '../adapters/control-ipc.ts';
+import { controlEndpoint, sendControlRequest } from '../adapters/control-ipc.ts';
 import { errorCode, errorMessage } from '../shared/errors.ts';
 import { parseControlArguments } from './control-arguments.ts';
 
 async function main() {
     try {
         const request = parseControlArguments(process.argv.slice(2));
-        const response = await sendControlRequest(defaultControlEndpoint(), request);
+        const response = await sendControlRequest(controlEndpoint(request.entryId), request);
         process.stdout.write(`${JSON.stringify(response)}\n`);
         if (!response.ok) process.exitCode = 1;
     } catch (error) {

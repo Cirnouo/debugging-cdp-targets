@@ -3,7 +3,11 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { isRecord } from '../../src/shared/errors.ts';
 
-export function createClient(entry: string, options: Pick<SpawnOptions, 'cwd' | 'env'> = {}) {
+export function createClient(
+    entry: string,
+    options: Pick<SpawnOptions, 'cwd' | 'env'> = {},
+    onServerRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+) {
     const child = spawn(process.execPath, [entry], {
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
@@ -27,7 +31,28 @@ export function createClient(entry: string, options: Pick<SpawnOptions, 'cwd' | 
         } catch {
             throw new Error(`Non-MCP stdout: ${line.slice(0, 100)}`);
         }
-        if (!isRecord(message) || typeof message.id !== 'number' || !pending.has(message.id)) return;
+        if (!isRecord(message)) return;
+        if (typeof message.method === 'string' && (typeof message.id === 'number' || typeof message.id === 'string')) {
+            const requestId = message.id;
+            const reply = (result: unknown) =>
+                child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: requestId, result })}\n`);
+            if (!onServerRequest) {
+                child.stdin.write(
+                    `${JSON.stringify({ jsonrpc: '2.0', id: requestId, error: { code: -32601, message: 'Unsupported test client server request.' } })}\n`,
+                );
+                return;
+            }
+            void onServerRequest(message.method, isRecord(message.params) ? message.params : {}).then(
+                reply,
+                (error: unknown) => {
+                    child.stdin.write(
+                        `${JSON.stringify({ jsonrpc: '2.0', id: requestId, error: { code: -32603, message: error instanceof Error ? error.message : String(error) } })}\n`,
+                    );
+                },
+            );
+            return;
+        }
+        if (typeof message.id !== 'number' || !pending.has(message.id)) return;
         const request = pending.get(message.id);
         if (!request) return;
         pending.delete(message.id);
@@ -60,6 +85,10 @@ export function createClient(entry: string, options: Pick<SpawnOptions, 'cwd' | 
             child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method })}\n`);
         },
         async close() {
+            if (child.exitCode !== null || child.signalCode !== null) {
+                lines.close();
+                return;
+            }
             const closed = new Promise<void>((resolve) => child.once('exit', resolve));
             child.stdin.end();
             await closed;

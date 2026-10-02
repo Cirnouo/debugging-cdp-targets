@@ -9,17 +9,19 @@ import {
     type ControlResponse,
     parseControlRequest,
     parseControlResponse,
+    validateIdentity,
 } from '../domains/control-contract.ts';
 import { CONTROL_TIMEOUT_MS, MAX_CONTROL_BYTES } from '../shared/constants.ts';
 import { errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 
-export function defaultControlEndpoint() {
+export function controlEndpoint(entryId: string) {
+    validateIdentity(entryId, 'entry ID');
     const user = os.userInfo();
     const identity = `${user.username}:${user.homedir}`;
     const suffix = createHash('sha256').update(identity).digest('hex').slice(0, 16);
     return process.platform === 'win32'
-        ? `\\\\.\\pipe\\debugging-cdp-targets-${suffix}`
-        : path.join(os.tmpdir(), `debugging-cdp-targets-${suffix}.sock`);
+        ? `\\\\.\\pipe\\debugging-cdp-targets-${suffix}-${entryId}`
+        : path.join(os.tmpdir(), `debugging-cdp-targets-${suffix}-${entryId}.sock`);
 }
 
 async function probeEndpoint(endpoint: string): Promise<string> {
@@ -61,7 +63,7 @@ export async function recoverStaleEndpoint(endpoint: string, io: RecoveryIo = {}
     }
     if (!before.isSocket() || before.uid !== uid) throw new Error('The control endpoint is not an owned Unix socket.');
     if ((await probe(endpoint)) !== 'refused')
-        throw new Error('A debugging-cdp-targets MCP connection is already active for this user.');
+        throw new Error('A debugging-cdp-targets MCP connection is already active for this entry.');
     const after = await inspect(endpoint);
     if (before.ino !== after.ino || before.dev !== after.dev || before.ctimeMs !== after.ctimeMs)
         throw new Error('The control endpoint identity changed during recovery.');
@@ -78,30 +80,33 @@ async function dispatch(controller: ControlHandler, request: ControlRequest) {
                 ...(request.targetKind === undefined ? {} : { targetKind: request.targetKind }),
                 ...(request.basePort === undefined ? {} : { basePort: request.basePort }),
             });
-        case 'switch':
-            return controller.switch({
-                launchCommand: request.launchCommand,
-                disposition: request.disposition,
-                ...(request.targetKind === undefined ? {} : { targetKind: request.targetKind }),
-                ...(request.basePort === undefined ? {} : { basePort: request.basePort }),
-            });
+        case 'restart':
+            return controller.restart({ sessionId: request.sessionId });
         case 'stop':
-            return controller.stop({ disposition: request.disposition });
+            return controller.stop({ sessionId: request.sessionId, disposition: request.disposition });
+        case 'end-task':
+            return controller.endTask({ sessionId: request.sessionId });
         default:
-            throw new Error('Unknown control action. Use status, start, switch, or stop.');
+            throw new Error('Unknown control action. Use status, start, restart, stop, or end-task.');
     }
 }
 
 export async function createControlServer({
     controller,
-    endpoint = defaultControlEndpoint(),
+    entryId,
+    endpoint = controlEndpoint(entryId),
 }: {
     controller: ControlHandler;
+    entryId: string;
     endpoint?: string;
 }) {
+    validateIdentity(entryId, 'entry ID');
     await recoverStaleEndpoint(endpoint);
+    const clients = new Set<net.Socket>();
     let operation = Promise.resolve();
     const server = net.createServer((socket) => {
+        clients.add(socket);
+        socket.once('close', () => clients.delete(socket));
         let received = '';
         let submitted = false;
         socket.on('error', () => {});
@@ -124,7 +129,10 @@ export async function createControlServer({
                 .then(async () => {
                     try {
                         const raw: unknown = JSON.parse(line);
-                        const result = await dispatch(controller, parseControlRequest(raw));
+                        const request = parseControlRequest(raw);
+                        if (request.entryId !== entryId)
+                            throw new Error('Control entry ID does not match this connection.');
+                        const result = await dispatch(controller, request);
                         socket.end(`${JSON.stringify({ ok: true, result })}\n`);
                     } catch (error) {
                         socket.end(
@@ -147,7 +155,16 @@ export async function createControlServer({
     return {
         endpoint,
         async close() {
-            await new Promise<void>((resolve) => server.close(() => resolve()));
+            await new Promise<void>((resolve) => {
+                const timer = setTimeout(() => {
+                    for (const socket of clients) socket.destroy();
+                }, CONTROL_TIMEOUT_MS);
+                server.close(() => {
+                    clearTimeout(timer);
+                    resolve();
+                });
+                for (const socket of clients) socket.end();
+            });
             if (process.platform !== 'win32')
                 await unlink(endpoint).catch((error) => {
                     if (errorCode(error) !== 'ENOENT') throw error;

@@ -18,21 +18,86 @@ function errorCode(error) {
 }
 
 // src/domains/control-contract.ts
+function validateIdentity(value, label) {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
+    throw new Error(`A canonical lowercase UUID ${label} is required.`);
+}
+function fields(value, allowed) {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error("Unknown control field.");
+}
+function validPort(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535;
+}
+function parseControlRequest(value) {
+  if (!isRecord(value)) throw new Error("Invalid control request.");
+  validateIdentity(value.entryId, "entry ID");
+  const entryId = value.entryId;
+  const action = value.action;
+  if (action === "status") {
+    fields(value, ["action", "entryId"]);
+    return { action, entryId };
+  }
+  if (action === "start") {
+    fields(value, ["action", "entryId", "launchCommand", "targetKind", "basePort"]);
+    if (typeof value.launchCommand !== "string" || !value.launchCommand.trim())
+      throw new Error("A launch command is required.");
+    if (value.targetKind !== void 0 && value.targetKind !== "chrome" && value.targetKind !== "generic-cdp")
+      throw new Error("Unknown target kind.");
+    if (value.basePort !== void 0 && !validPort(value.basePort)) throw new Error("Base port is invalid.");
+    return {
+      action,
+      entryId,
+      launchCommand: value.launchCommand,
+      ...value.targetKind === void 0 ? {} : { targetKind: value.targetKind },
+      ...value.basePort === void 0 ? {} : { basePort: value.basePort }
+    };
+  }
+  if (action !== "restart" && action !== "stop" && action !== "end-task") throw new Error("Unknown control action.");
+  fields(value, ["action", "entryId", "sessionId", ...action === "stop" ? ["disposition"] : []]);
+  validateIdentity(value.sessionId, "session ID");
+  if (action === "stop") {
+    if (value.disposition !== "Close" && value.disposition !== "Keep") throw new Error("Choose Close or Keep.");
+    return { action, entryId, sessionId: value.sessionId, disposition: value.disposition };
+  }
+  return { action, entryId, sessionId: value.sessionId };
+}
 function parseControlResponse(value) {
   if (!isRecord(value)) throw new Error("Invalid control response.");
   if (value.ok === false && typeof value.error === "string") {
+    fields(value, ["ok", "error", "details"]);
     if (value.details !== void 0 && !isRecord(value.details)) throw new Error("Invalid error details.");
     return { ok: false, error: value.error, ...value.details === void 0 ? {} : { details: value.details } };
   }
+  fields(value, ["ok", "result"]);
   const result = value.result;
   if (value.ok !== true || !isRecord(result)) throw new Error("Invalid control result.");
-  if (result.status !== "none" && !(result.status === "active" && typeof result.port === "number" && typeof result.processId === "number" && (result.targetKind === "chrome" || result.targetKind === "generic-cdp")))
+  fields(result, [
+    "entryId",
+    "status",
+    "sessionId",
+    "port",
+    "processId",
+    "targetKind",
+    "reason",
+    "taskActive",
+    "disposition",
+    "pageIdsInvalidated"
+  ]);
+  validateIdentity(result.entryId, "entry ID");
+  if (!["idle", "active", "lost", "closing", "close-failed"].includes(String(result.status)))
     throw new Error("Invalid target status.");
-  for (const key of ["disposition", "previousTarget"])
-    if (result[key] !== void 0 && result[key] !== "Close" && result[key] !== "Keep")
-      throw new Error("Invalid disposition.");
-  if (result.pageIdsInvalidated !== void 0 && typeof result.pageIdsInvalidated !== "boolean")
-    throw new Error("Invalid page invalidation marker.");
+  if (result.status !== "idle" || result.sessionId !== void 0) validateIdentity(result.sessionId, "session ID");
+  if ((result.status !== "idle" || result.port !== void 0) && !validPort(result.port))
+    throw new Error("Invalid target port.");
+  if ((result.status !== "idle" || result.processId !== void 0) && (typeof result.processId !== "number" || !Number.isSafeInteger(result.processId) || result.processId < 1))
+    throw new Error("Invalid target process ID.");
+  if ((result.status !== "idle" || result.targetKind !== void 0) && result.targetKind !== "chrome" && result.targetKind !== "generic-cdp")
+    throw new Error("Invalid target kind.");
+  if (result.reason !== void 0 && typeof result.reason !== "string") throw new Error("Invalid target reason.");
+  if (result.disposition !== void 0 && result.disposition !== "Close" && result.disposition !== "Keep")
+    throw new Error("Invalid disposition.");
+  for (const key of ["taskActive", "pageIdsInvalidated"])
+    if (result[key] !== void 0 && typeof result[key] !== "boolean") throw new Error("Invalid target marker.");
   return { ok: true, result };
 }
 
@@ -47,11 +112,12 @@ var PACKAGE_VERSION = "1.9.0";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 // src/adapters/control-ipc.ts
-function defaultControlEndpoint() {
+function controlEndpoint(entryId) {
+  validateIdentity(entryId, "entry ID");
   const user = os.userInfo();
   const identity = `${user.username}:${user.homedir}`;
   const suffix = createHash("sha256").update(identity).digest("hex").slice(0, 16);
-  return process.platform === "win32" ? `\\\\.\\pipe\\debugging-cdp-targets-${suffix}` : path.join(os.tmpdir(), `debugging-cdp-targets-${suffix}.sock`);
+  return process.platform === "win32" ? `\\\\.\\pipe\\debugging-cdp-targets-${suffix}-${entryId}` : path.join(os.tmpdir(), `debugging-cdp-targets-${suffix}-${entryId}.sock`);
 }
 async function sendControlRequest(endpoint, request) {
   return new Promise((resolve, reject) => {
@@ -78,13 +144,15 @@ async function sendControlRequest(endpoint, request) {
 
 // src/interface/control-arguments.ts
 import { parseArgs } from "node:util";
-var ACTIONS = /* @__PURE__ */ new Set(["status", "start", "switch", "stop"]);
 function parseControlArguments(arguments_) {
   const [action, ...rest] = arguments_;
-  if (!action || !ACTIONS.has(action)) throw new Error("Unknown action. Use status, start, switch, or stop.");
+  if (!action || !["status", "start", "restart", "stop", "end-task"].includes(action))
+    throw new Error("Unknown action. Use status, start, restart, stop, or end-task.");
   const parsed = parseArgs({
     args: rest,
     options: {
+      "entry-id": { type: "string" },
+      "session-id": { type: "string" },
       "launch-command": { type: "string" },
       "target-kind": { type: "string" },
       "base-port": { type: "string" },
@@ -96,51 +164,27 @@ function parseControlArguments(arguments_) {
   });
   const names = parsed.tokens.filter((token) => token.kind === "option").map((token) => token.name);
   if (new Set(names).size !== names.length) throw new Error("Duplicate control options are prohibited.");
-  const values = parsed.values;
-  if (action === "status" && Object.keys(values).length > 0) throw new Error("Status takes no options.");
-  if (["start", "switch"].includes(action) && !values["launch-command"]) {
-    throw new Error("A --launch-command is required.");
-  }
-  if (["switch", "stop"].includes(action) && !["Close", "Keep"].includes(values.disposition ?? "")) {
-    throw new Error("Choose --disposition Close or Keep.");
-  }
-  if (action === "start" && values.disposition) throw new Error("Start does not accept a disposition.");
-  if (["status", "stop"].includes(action) && (values["launch-command"] || values["target-kind"] || values["base-port"])) {
-    throw new Error(`${action} does not accept target launch options.`);
-  }
-  if (values["target-kind"] && !["chrome", "generic-cdp"].includes(values["target-kind"])) {
-    throw new Error("Target kind must be chrome or generic-cdp.");
-  }
-  const basePort = values["base-port"] === void 0 ? 9222 : Number(values["base-port"]);
-  if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error("Base port is invalid.");
-  if (action === "status") return { action };
-  const disposition = values.disposition;
-  if (action === "stop") {
-    if (disposition !== "Close" && disposition !== "Keep") throw new Error("Choose --disposition Close or Keep.");
-    return { action, disposition };
-  }
-  const launchCommand = values["launch-command"];
-  const targetKind = values["target-kind"] ?? "generic-cdp";
-  if (!launchCommand || targetKind !== "chrome" && targetKind !== "generic-cdp")
-    throw new Error("Invalid launch options.");
-  if (action === "switch") {
-    if (disposition !== "Close" && disposition !== "Keep") throw new Error("Choose --disposition Close or Keep.");
-    return { action, launchCommand, targetKind, basePort, disposition };
-  }
-  if (action !== "start") throw new Error("Unknown control action.");
-  return {
-    action,
-    launchCommand,
-    targetKind,
-    basePort
+  const request = { action };
+  const mapping = {
+    "entry-id": "entryId",
+    "session-id": "sessionId",
+    "launch-command": "launchCommand",
+    "target-kind": "targetKind",
+    "base-port": "basePort",
+    disposition: "disposition"
   };
+  for (const [name, value] of Object.entries(parsed.values)) {
+    const key = mapping[name];
+    if (key) request[key] = name === "base-port" ? /^[0-9]+$/.test(String(value)) ? Number(value) : NaN : value;
+  }
+  return parseControlRequest(request);
 }
 
 // src/interface/control.ts
 async function main() {
   try {
     const request = parseControlArguments(process.argv.slice(2));
-    const response = await sendControlRequest(defaultControlEndpoint(), request);
+    const response = await sendControlRequest(controlEndpoint(request.entryId), request);
     process.stdout.write(`${JSON.stringify(response)}
 `);
     if (!response.ok) process.exitCode = 1;

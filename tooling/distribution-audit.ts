@@ -16,6 +16,26 @@ export function compareDistributionTrees(source: Map<string, Buffer>, installed:
     return errors;
 }
 
+export function validateMcpEntries(mcp: unknown) {
+    if (!isRecord(mcp) || !isRecord(mcp.mcpServers)) return ['Malformed MCP entries.'];
+    const servers = mcp.mcpServers;
+    if (Object.keys(servers).length !== 2) return ['Plugin requires exactly two reusable stdio entries.'];
+    const errors = [];
+    for (const slot of ['1', '2']) {
+        const server = servers[`cdp-target-${slot}`];
+        if (
+            !isRecord(server) ||
+            server.type !== 'stdio' ||
+            server.command !== 'node' ||
+            JSON.stringify(server.args) !==
+                JSON.stringify([`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`, '--slot', slot]) ||
+            server.cwd !== `\${PLUGIN_ROOT}`
+        )
+            errors.push(`Invalid reusable stdio entry: cdp-target-${slot}.`);
+    }
+    return errors;
+}
+
 export async function readDistributionTree(directory: string, prefix = ''): Promise<Map<string, Buffer>> {
     const files = new Map<string, Buffer>();
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -49,17 +69,7 @@ export async function auditDistribution(root: string) {
         first.source.path !== './plugins/debugging-cdp-targets'
     )
         errors.push('Marketplace Plugin identity/path is invalid.');
-    const servers = isRecord(mcp.mcpServers) ? mcp.mcpServers : {};
-    const server = servers['chrome-devtools'];
-    if (
-        Object.keys(servers).length !== 1 ||
-        !isRecord(server) ||
-        server.type !== 'stdio' ||
-        server?.command !== 'node' ||
-        JSON.stringify(server.args) !== JSON.stringify([`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`]) ||
-        server.cwd !== `\${PLUGIN_ROOT}`
-    )
-        errors.push('Plugin must register only the direct stdio bootstrap.');
+    errors.push(...validateMcpEntries(mcp));
     if (errors.length) return errors;
     // A packaging simulation, not a claim that Codex installed or enabled it.
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-distribution-'));

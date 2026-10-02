@@ -5,11 +5,15 @@ nearest source AGENTS.md and only the relevant policies before editing.
 
 ## Boundaries
 
-- Official MCP owns tools and inherits stdin/stdout directly. Do not create a
-  MCP proxy, custom DevTools tools, CLI daemon, or persistent session state.
+- The reusable stdio gateway relays the official MCP catalog and results using
+  the official SDK. Only dct_connection_status and dct_watch_target extend it.
+  Do not create custom DevTools tools, a CLI daemon, or persistent session state.
 - Manage one newly launched target per connection. Verify process, listener,
   and endpoint identity; bind only loopback. Never take over existing targets.
-- Ask Close/Keep before switch or stop. Normal close only; no force kill.
+- Ask Close/Keep before changing entries or ending a task. Keep retains target
+  and upstream; Close requests normal shutdown while preserving the entry.
+  Every control request identifies the entry; restart/end-task/stop also identify
+  the session. Status/start forbid session identity; only stop takes disposition.
 - Keep 0.1.0 unreleased. Never push, publish, tag, open a PR, or modify user
   config/global Skills/old state without explicit authorization.
 

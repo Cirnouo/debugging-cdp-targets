@@ -1,5 +1,5 @@
 import { DEFAULT_BASE_PORT, FIRST_USER_PORT, MAX_PORT } from '../shared/constants.ts';
-import { isRecord } from '../shared/errors.ts';
+import { DetailedError, isRecord } from '../shared/errors.ts';
 import type { TargetKind } from './control-contract.ts';
 
 export type PortRange = readonly [number, number];
@@ -31,10 +31,22 @@ export interface ProcessEvidence {
     listeners: ListenerEvidence[];
 }
 export interface ManagedTarget extends ProcessTarget {
+    launchDefinition?: { executablePath: string; arguments: string[]; cwd: string };
     browserProduct?: string;
     webSocketDebuggerUrl?: string;
     verify?: () => Promise<void>;
     child?: { once(event: 'exit', listener: () => void): unknown };
+}
+
+/** Internal ownership evidence for a new process whose normal rollback failed. */
+export class RetainedTargetError extends DetailedError {
+    readonly target: ManagedTarget;
+
+    constructor(message: string, target: ManagedTarget) {
+        super(message);
+        this.target = target;
+        Object.defineProperty(this, 'target', { enumerable: false });
+    }
 }
 
 export async function choosePort({

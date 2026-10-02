@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { EventEmitter } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -35,8 +35,9 @@ const { createTargetHost } = await import('../src/adapters/target-host.ts');
 const { applyChromePreset } = await import('../src/adapters/target-host.ts');
 const { buildServerArguments } = await import('../src/adapters/official-server.ts');
 const { createControlServer, sendControlRequest } = await import('../src/adapters/control-ipc.ts');
+const entryId = randomUUID();
+const sessionId = randomUUID();
 const { parseControlArguments } = await import('../src/interface/control-arguments.ts');
-const { startPluginRuntime } = await import('../src/application/plugin-runtime.ts');
 
 test('npm acquisition children hide their Windows console without altering stdio', async () => {
     const { hiddenOptions } = await import('../src/adapters/hide-npm-console.ts');
@@ -215,101 +216,6 @@ test('CDP router rejects cross-origin browser access and fails closed on changed
     assert.match(await changed.text(), /IDENTITY/);
 });
 
-test('target controller switches a verified target and keeps the previous one only by explicit choice', async () => {
-    const events: string[] = [];
-    const router = {
-        isBusy: () => false,
-        setTarget: (target: ManagedTarget) => events.push(`route:${target.port}`),
-        clearTarget: () => events.push('route:none'),
-    };
-    let nextPort = 9222;
-    const host = {
-        launch: async () => targetFixture(nextPort++, nextPort + 100),
-        close: async (target: ManagedTarget) => {
-            events.push(`close:${target.port}`);
-            return true;
-        },
-    };
-    const controller = createTargetController({ router, host });
-    assert.deepEqual(controller.status(), { status: 'none' });
-    await controller.start({ launchCommand: 'chrome' });
-    await controller.switch({ launchCommand: 'other', disposition: 'Keep' });
-    assert.deepEqual(events, ['route:9222', 'route:9223']);
-    assert.deepEqual(controller.status(), { status: 'active', port: 9223, processId: 9324, targetKind: 'generic-cdp' });
-    const stopped = await controller.stop({ disposition: 'Close' });
-    assert.equal(stopped.status, 'none');
-    assert.deepEqual(events, ['route:9222', 'route:9223', 'close:9223', 'route:none']);
-});
-
-test('target controller rejects switching without a disposition or while CDP is busy', async () => {
-    let busy = false;
-    const controller = createTargetController({
-        router: {
-            isBusy: () => busy,
-            setTarget: () => {},
-            clearTarget: () => {},
-        },
-        host: { launch: async () => targetFixture(9222), close: async () => true },
-    });
-    await controller.start({ launchCommand: 'chrome' });
-    await assert.rejects(Reflect.apply(controller.switch, controller, [{ launchCommand: 'other' }]), /Close or Keep/);
-    busy = true;
-    await assert.rejects(controller.switch({ launchCommand: 'other', disposition: 'Keep' }), /busy/i);
-});
-
-test('target disposition pauses routing and failed normal close reports both retained targets', async () => {
-    const events: string[] = [];
-    let port = 9222;
-    const controller = createTargetController({
-        router: {
-            isBusy: () => false,
-            pause: () => events.push('pause'),
-            resume: () => events.push('resume'),
-            setTarget: (target) => events.push(`route:${target.port}`),
-            clearTarget: () => events.push('clear'),
-        },
-        host: {
-            launch: async () => targetFixture(port++, port),
-            close: async (target) => {
-                events.push(`close:${target.port}`);
-                return false;
-            },
-        },
-    });
-    await controller.start({ launchCommand: 'fixture' });
-    await assert.rejects(controller.switch({ launchCommand: 'fixture', disposition: 'Close' }), (error: unknown) => {
-        assert.ok(error instanceof DetailedError && isRecord(error.details));
-        const retained = error.details.retainedTargets;
-        assert.ok(Array.isArray(retained));
-        assert.deepEqual(
-            retained.map((target: unknown) => {
-                assert.ok(isRecord(target));
-                return target.port;
-            }),
-            [9222, 9223],
-        );
-        return true;
-    });
-    assert.deepEqual(events, ['route:9222', 'pause', 'close:9222', 'close:9223', 'resume']);
-    assert.equal(controller.status().status, 'active');
-    const active = controller.status();
-    assert.ok(active.status === 'active');
-    assert.equal(active.port, 9222);
-});
-
-test('target exiting after attachment invalidates routing and frees the in-memory slot', async () => {
-    const child = new EventEmitter();
-    const events: string[] = [];
-    const controller = createTargetController({
-        router: { isBusy: () => false, setTarget: () => {}, clearTarget: () => events.push('clear') },
-        host: { launch: async () => ({ ...targetFixture(9222), child }), close: async () => true },
-    });
-    await controller.start({ launchCommand: 'fixture' });
-    child.emit('exit', 0);
-    assert.equal(controller.status().status, 'none');
-    assert.deepEqual(events, ['clear']);
-});
-
 test('port allocation skips occupied and operating-system reserved ports', async () => {
     const visited: number[] = [];
     const port = await choosePort({
@@ -457,19 +363,20 @@ test('Chrome rejects every duplicate or non-loopback debugging address before la
     assert.ok(applyChromePreset(['--remote-debugging-address', '127.0.0.1']).includes('127.0.0.1'));
 });
 
-test('per-user IPC rejects a second live controller without replacing the first', async (context) => {
+test('per-entry IPC rejects a second live controller without replacing the first', async (context) => {
     const endpoint =
         process.platform === 'win32' ? `\\\\.\\pipe\\dct-unique-${process.pid}` : `/tmp/dct-unique-${process.pid}.sock`;
     const controller: ControlHandler = {
-        status: () => ({ status: 'none' }),
-        start: async () => ({ status: 'none' }),
-        switch: async () => ({ status: 'none' }),
-        stop: async () => ({ status: 'none' }),
+        status: () => ({ entryId, status: 'idle' }),
+        start: async () => ({ entryId, status: 'idle' }),
+        restart: async () => ({ entryId, status: 'idle' }),
+        endTask: async () => ({ entryId, status: 'idle' }),
+        stop: async () => ({ entryId, status: 'idle' }),
     };
-    const first = await createControlServer({ controller, endpoint });
+    const first = await createControlServer({ controller, entryId, endpoint });
     context.after(() => first.close());
-    await assert.rejects(createControlServer({ controller, endpoint }), /already active|EADDRINUSE/);
-    assert.equal((await sendControlRequest(endpoint, { action: 'status' })).ok, true);
+    await assert.rejects(createControlServer({ controller, entryId, endpoint }), /already active|EADDRINUSE/);
+    assert.equal((await sendControlRequest(endpoint, { action: 'status', entryId })).ok, true);
 });
 
 test('official server receives a stable browser URL and privacy-safe defaults', () => {
@@ -501,48 +408,81 @@ test('official server switches require explicit boolean environment overrides', 
 test('local control IPC dispatches management commands without writing a session file', async (context) => {
     const received: LaunchOptions[] = [];
     const controller: ControlHandler = {
-        status: () => ({ status: 'none' }),
+        status: () => ({ entryId, status: 'idle' }),
         start: async (options) => {
             received.push(options);
-            return { status: 'active', port: 9222, processId: 42, targetKind: 'generic-cdp' };
+            return { entryId, sessionId, status: 'active', port: 9222, processId: 42, targetKind: 'generic-cdp' };
         },
-        switch: async () => ({ status: 'active', port: 9223, processId: 43, targetKind: 'generic-cdp' }),
-        stop: async () => ({ status: 'none' }),
+        restart: async () => ({
+            entryId,
+            sessionId,
+            status: 'active',
+            port: 9223,
+            processId: 43,
+            targetKind: 'generic-cdp',
+        }),
+        endTask: async () => ({ entryId, status: 'idle' }),
+        stop: async () => ({ entryId, status: 'idle' }),
     };
     const endpoint =
         process.platform === 'win32'
             ? `\\\\.\\pipe\\dct-test-${process.pid}`
             : path.join(process.env.TMPDIR ?? '/tmp', `dct-test-${process.pid}.sock`);
-    const server = await createControlServer({ controller, endpoint });
+    const server = await createControlServer({ controller, entryId, endpoint });
     context.after(() => server.close());
-    assert.deepEqual(await sendControlRequest(endpoint, { action: 'status' }), {
+    assert.deepEqual(await sendControlRequest(endpoint, { action: 'status', entryId }), {
         ok: true,
-        result: { status: 'none' },
+        result: { entryId, status: 'idle' },
     });
-    assert.deepEqual(await sendControlRequest(endpoint, { action: 'start', launchCommand: 'chrome' }), {
+    assert.deepEqual(await sendControlRequest(endpoint, { action: 'start', entryId, launchCommand: 'chrome' }), {
         ok: true,
-        result: { status: 'active', port: 9222, processId: 42, targetKind: 'generic-cdp' },
+        result: { entryId, sessionId, status: 'active', port: 9222, processId: 42, targetKind: 'generic-cdp' },
     });
     assert.deepEqual(received, [{ launchCommand: 'chrome' }]);
-    assert.equal((await sendControlRequest(endpoint, { action: 'resume' })).ok, false);
+    assert.equal((await sendControlRequest(endpoint, { action: 'resume', entryId })).ok, false);
 });
 
-test('public control parser accepts only status, start, switch, and stop', () => {
-    assert.deepEqual(parseControlArguments(['start', '--launch-command', 'chrome', '--target-kind', 'chrome']), {
-        action: 'start',
-        launchCommand: 'chrome',
-        targetKind: 'chrome',
-        basePort: 9222,
-    });
-    assert.deepEqual(parseControlArguments(['stop', '--disposition', 'Keep']), {
-        action: 'stop',
-        disposition: 'Keep',
-    });
+test('public control parser requires entry identity and explicit session disposition', () => {
+    assert.deepEqual(
+        parseControlArguments([
+            'start',
+            '--entry-id',
+            entryId,
+            '--launch-command',
+            'chrome',
+            '--target-kind',
+            'chrome',
+        ]),
+        {
+            action: 'start',
+            entryId,
+            launchCommand: 'chrome',
+            targetKind: 'chrome',
+        },
+    );
+    assert.deepEqual(
+        parseControlArguments(['stop', '--entry-id', entryId, '--session-id', sessionId, '--disposition', 'Keep']),
+        {
+            action: 'stop',
+            entryId,
+            sessionId,
+            disposition: 'Keep',
+        },
+    );
     assert.throws(() => parseControlArguments(['invoke', '--', 'list_pages']), /unknown/i);
     assert.throws(() => parseControlArguments(['resume']), /unknown/i);
-    assert.throws(() => parseControlArguments(['switch', '--launch-command', 'chrome']), /disposition/i);
+    assert.throws(() => parseControlArguments(['switch', '--launch-command', 'chrome']), /unknown/i);
     assert.throws(
-        () => parseControlArguments(['start', '--launch-command', 'one', '--launch-command', 'two']),
+        () =>
+            parseControlArguments([
+                'start',
+                '--entry-id',
+                entryId,
+                '--launch-command',
+                'one',
+                '--launch-command',
+                'two',
+            ]),
         /Duplicate/,
     );
 });
@@ -557,82 +497,81 @@ test('control entry rejects invalid grammar before contacting any user MCP conne
     assert.equal(result.status, 1);
     assert.deepEqual(JSON.parse(result.stdout), {
         ok: false,
-        error: 'Unknown action. Use status, start, switch, or stop.',
+        error: 'Unknown action. Use status, start, restart, stop, or end-task.',
     });
 });
 
-test('plugin runtime exposes no target initially and closes it after official Server exits', async () => {
+test('controller normal Close pauses routing and preserves identity on failure; busy Close does not signal', async () => {
     const events: string[] = [];
-    const child = new EventEmitter();
-    const runtime = await startPluginRuntime({
-        createRouter: async () => ({
-            url: 'http://127.0.0.1:30000',
-            isBusy: () => false,
-            setTarget: () => {},
-            clearTarget: () => events.push('route:none'),
-            close: async () => {
-                events.push('router:closed');
+    let busy = false;
+    const controller = createTargetController({
+        entryId,
+        router: {
+            isBusy: () => busy,
+            pause: () => {
+                events.push('pause');
             },
-        }),
-        createHost: () => ({
+            resume: () => {
+                events.push('resume');
+            },
+            setTarget: () => {
+                events.push('route');
+            },
+            clearTarget: () => {
+                events.push('clear');
+            },
+        },
+        host: {
             launch: async () => targetFixture(9222),
             close: async () => {
-                events.push('target:closed');
-                return true;
+                events.push('close');
+                return false;
             },
-        }),
-        createControl: async ({ controller }) => {
-            assert.deepEqual(controller.status(), { status: 'none' });
-            await controller.start({ launchCommand: 'chrome' });
-            return {
-                close: async () => {
-                    events.push('control:closed');
-                },
-            };
         },
-        startServer: async (url) => {
-            assert.equal(url, 'http://127.0.0.1:30000');
-            return child;
+        server: {
+            ensure: async () => {},
+            close: async () => {
+                events.push('official-close');
+            },
         },
     });
-    child.emit('exit', 0);
-    await runtime.closed;
-    assert.deepEqual(events, ['target:closed', 'route:none', 'control:closed', 'router:closed']);
+    const active = await controller.start({ launchCommand: 'fixture' });
+    assert.ok(active.sessionId);
+    busy = true;
+    await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), /busy/i);
+    assert.deepEqual(events, ['route']);
+    busy = false;
+    await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), (error: unknown) => {
+        assert.ok(error instanceof DetailedError && isRecord(error.details));
+        assert.deepEqual(error.details.retainedTargets, [{ processId: 42, port: 9222 }]);
+        return true;
+    });
+    assert.deepEqual(events, ['route', 'pause', 'close', 'resume']);
+    assert.equal(controller.status().sessionId, active.sessionId);
+    assert.equal(controller.status().status, 'active');
 });
 
-test('official Server startup failure rolls back a target launched while package acquisition was pending', async () => {
-    const events: string[] = [];
-    await assert.rejects(
-        startPluginRuntime({
-            createRouter: async () => ({
-                url: 'http://127.0.0.1:30000',
-                isBusy: () => false,
-                setTarget: () => {},
-                clearTarget: () => events.push('clear'),
-                close: async () => {
-                    events.push('router');
-                },
-            }),
-            createHost: () => ({
-                launch: async () => targetFixture(9222),
-                close: async () => {
-                    events.push('target');
-                    return true;
-                },
-            }),
-            createControl: async ({ controller }) => {
-                await controller.start({ launchCommand: 'fixture' });
-                return {
-                    close: async () => {
-                        events.push('control');
-                    },
-                };
+test('controller route attachment failure normally closes only the newly launched target', async () => {
+    const closed: number[] = [];
+    const controller = createTargetController({
+        entryId,
+        router: {
+            isBusy: () => false,
+            setTarget: () => {
+                throw new Error('route failed');
             },
-            startServer: async () => {
-                throw new Error('Acquisition failed');
+            clearTarget: () => {},
+        },
+        host: {
+            launch: async () => targetFixture(9222),
+            close: async (target) => {
+                closed.push(target.processId);
+                return true;
             },
-        }),
-        /Acquisition failed/,
-    );
-    assert.deepEqual(events, ['target', 'clear', 'control', 'router']);
+        },
+        server: { ensure: async () => {}, close: async () => {} },
+    });
+    await assert.rejects(controller.start({ launchCommand: 'fixture' }), /route failed/);
+    assert.deepEqual(closed, [42]);
+    assert.equal(controller.status().status, 'idle');
 });

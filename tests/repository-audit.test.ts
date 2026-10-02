@@ -6,6 +6,20 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
 
+test('gateway may import official SDK transport modules but arbitrary dependencies remain forbidden', () => {
+    assert.deepEqual(
+        validateRuntimeSource(
+            'src/adapters/mcp-gateway.ts',
+            "import { Server } from '@modelcontextprotocol/sdk/server/index.js';",
+        ),
+        [],
+    );
+    assert.ok(
+        validateRuntimeSource('src/adapters/mcp-gateway.ts', "import x from '@modelcontextprotocol/unofficial';")
+            .length,
+    );
+});
+
 async function auditGithubDocumentation(files: readonly string[]) {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-readme-'));
     try {

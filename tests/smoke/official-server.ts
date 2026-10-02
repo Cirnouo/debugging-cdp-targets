@@ -4,8 +4,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultControlEndpoint, sendControlRequest } from '../../src/adapters/control-ipc.ts';
-import type { ControlRequest } from '../../src/domains/control-contract.ts';
+import { controlEndpoint, sendControlRequest } from '../../src/adapters/control-ipc.ts';
+import { type ControlRequest, parseControlResponse, validateIdentity } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
@@ -35,7 +35,7 @@ await new Promise<void>((resolve) => monitor.stdout.once('data', () => resolve()
 const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
 async function control(request: ControlRequest) {
     for (let attempt = 0; attempt < 40; attempt += 1) {
-        const result = await sendControlRequest(defaultControlEndpoint(), request);
+        const result = await sendControlRequest(controlEndpoint(request.entryId), request);
         if (result.ok) return result.result;
         if (!/busy/.test(result.error)) assert.fail(JSON.stringify(result));
         if (attempt === 0) console.log('Waiting for background CDP requests to finish before disposition.');
@@ -52,7 +52,8 @@ const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 function launch(profile: string, title: string) {
     return `"${chrome}" --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><h1>Isolated smoke</h1>"`;
 }
-let active = false;
+let entryId: string | undefined;
+let activeSession: string | undefined;
 try {
     const initialized = await client.request('initialize', {
         protocolVersion: '2024-11-05',
@@ -65,15 +66,22 @@ try {
     const tools = readMcpTools(await client.request('tools/list'));
     assert.ok(tools.some((entry) => entry.name === 'list_pages'));
     assert.ok(tools.some((entry) => /extension/.test(entry.name)));
-    assert.equal((await control({ action: 'status' })).status, 'none');
+    const statusTool = await tool('dct_connection_status');
+    const response = parseControlResponse({ ok: true, result: statusTool.structuredContent });
+    assert.ok(response.ok);
+    entryId = response.result.entryId;
+    validateIdentity(entryId, 'entry ID');
+    assert.equal((await control({ action: 'status', entryId })).status, 'idle');
     assert.equal((await tool('list_pages')).isError, true);
     const first = await control({
         action: 'start',
+        entryId,
         targetKind: 'chrome',
         basePort: 19222,
         launchCommand: launch('profile-one', 'FIRST'),
     });
-    active = true;
+    assert.ok(first.sessionId);
+    activeSession = first.sessionId;
     console.log(JSON.stringify({ first }));
     const pagesOne = await tool('list_pages');
     assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
@@ -82,26 +90,32 @@ try {
     assert.ok(extensions);
     const extensionResult = await tool(extensions.name);
     assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
+    await control({ action: 'stop', entryId, sessionId: activeSession, disposition: 'Close' });
+    activeSession = undefined;
+    assert.equal((await control({ action: 'status', entryId })).status, 'idle');
     const second = await control({
-        action: 'switch',
+        action: 'start',
+        entryId,
         targetKind: 'chrome',
         basePort: 19222,
-        disposition: 'Close',
         launchCommand: launch('profile-two', 'SECOND'),
     });
+    assert.ok(second.sessionId);
+    assert.notEqual(second.sessionId, first.sessionId);
+    activeSession = second.sessionId;
     console.log(JSON.stringify({ second }));
     const pagesTwo = await tool('list_pages');
     assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
     assert.match(JSON.stringify(pagesTwo), /SECOND/);
     assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
-    await control({ action: 'stop', disposition: 'Close' });
-    active = false;
-    assert.equal((await control({ action: 'status' })).status, 'none');
-    console.log('Direct official stdio tools, extensions, switch/reconnect, and Close passed.');
+    await control({ action: 'stop', entryId, sessionId: activeSession, disposition: 'Close' });
+    activeSession = undefined;
+    assert.equal((await control({ action: 'status', entryId })).status, 'idle');
+    console.log('Official tools and extensions through a reusable entry, Close, and later start passed.');
 } finally {
-    if (active)
-        await control({ action: 'stop', disposition: 'Close' }).catch((error: unknown) =>
-            console.error(errorMessage(error)),
+    if (entryId && activeSession)
+        await control({ action: 'stop', entryId, sessionId: activeSession, disposition: 'Close' }).catch(
+            (error: unknown) => console.error(errorMessage(error)),
         );
     await client.close();
     const monitoringEnded = new Promise<void>((resolve) => monitor.once('exit', () => resolve()));

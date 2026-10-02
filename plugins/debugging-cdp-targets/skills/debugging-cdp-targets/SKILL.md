@@ -8,53 +8,66 @@ metadata:
 
 # Debugging CDP targets
 
-This Plugin starts the official Chrome DevTools MCP Server over stdio. Use its
-DevTools tools directly for inspection; the separate local control command only
-manages the target application. Never use a DevTools CLI wrapper or call an
-`invoke` action.
+Use either static MCP entry cdp-target-1 or cdp-target-2. Call that entry's
+`dct_connection_status` with `{}` first and retain its entry UUID and current session UUID.
+Each entry controls only its own newly launched, verified target. The gateway
+preserves official tool schemas and results; never substitute a DevTools CLI,
+custom inspection tool, or invoke action. No session survives host disconnect.
 
-The target application must support a command-line remote debugging port and
-expose a browser-level CDP endpoint. Chrome is the known-compatible target;
-other CDP applications may differ, so inspect their behavior rather than
-assuming Chrome-specific capabilities. Do not claim universal Electron, Tauri,
-or WebView2 compatibility.
-
-This release allows one active Plugin MCP connection per OS user. If another
-conversation owns it, ask the user to disconnect that connection first; do not
-control or replace its target.
-
-The file is `<plugin-root>/skills/debugging-cdp-targets/SKILL.md`; resolve two
-parents above its containing directory to get the Plugin root, then run
-`node <plugin-root>/dist/control.mjs <action>`. The actions are `status`,
-`start`, `switch`, and `stop`:
+Resolve the Plugin root two parents above this file's containing directory.
+Run `node <plugin-root>/dist/control.mjs <action>`. Actions are status, start,
+restart, stop, and end-task; there is no switch action. Every command requires
+`--entry-id <entry-uuid>`. Status and start prohibit --session-id, even when a session exists. Restart,
+end-task and stop require `--session-id <current-session-uuid>`. Only stop accepts
+--disposition. Refresh status
+rather than guessing stale identity. Start an empty entry with:
 
 ```powershell
-node "<plugin-root>/dist/control.mjs" status
-node "<plugin-root>/dist/control.mjs" start --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
+node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
 ```
 
-The launch command is parsed into argv without a shell. `{port}` is replaced
-with an available non-reserved port. If absent, the Chrome
-`--remote-debugging-port=<port>` switch is appended. On Windows, Chrome
-defaults to `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile`; a
-command-line `--user-data-dir` overrides it. Never attach to a process the
-Plugin did not launch.
+Commands parse argv without a shell. `{port}` selects an available non-reserved
+port; missing Chromium port options are appended. Chrome uses a dedicated
+profile unless --user-data-dir overrides it. Generic targets must explicitly
+support command-line debugging and browser-level CDP; a framework name alone
+does not establish compatibility. Never attach to pre-existing processes.
 
-After `start`, call the official `list_pages` tool and identify the intended
-target from fresh URL/title evidence. Use other official DevTools tools directly.
-The Server exposes extension tools by default; call them only for a verified
-Google Chrome target with major version 149 or newer. The default Server
-settings disable usage statistics and CrUX.
+After start or recovery, refresh dct_connection_status, discard all old page IDs,
+and call official list_pages to verify fresh URL/title evidence. Use official
+inspection tools. Extension tools require verified Google Chrome 149 or newer.
+Usage statistics and CrUX are disabled by default.
 
-Before changing targets or ending the task, ask the user to choose **Close**
-or **Keep**. There is no default. For a switch, pass
-`--disposition Close|Keep` with a new `--launch-command`; for the last target,
-run `stop --disposition Close|Keep`. Keep leaves the application and loopback
-CDP port reachable to other local processes. Close requests normal shutdown
-only; if it fails, report the retained process and do not force-kill it.
+While doing target-dependent work, call `dct_watch_target` with `{}` concurrently
+with inspection. It watches the current session and has a 25-second lease.
+When it returns reason `watch-renew`, renew only while dependent work remains
+active. Do not renew for an idle entry. Finish the lease with CLI end-task and both identity flags when work ends.
+End-task accepts no disposition and retains target and official Server; it only
+stops the active-task watch. Ask Close/Keep separately before a stop.
 
-After switching, call `list_pages` again and discard every old page ID. There
-is no cross-connection Resume or session file. If the MCP connection ends
-unexpectedly, the Plugin attempts to close its target; a forcibly terminated
-Plugin cannot guarantee cleanup, so ask the user to inspect the process and
-listening port manually.
+On loss, watch returns event {sessionId, reason}, choice restart/cancel/pending,
+and nextAction restart/stop-Close/ask-user. Standard MCP form elicitation collects
+the user's choice; it does not perform recovery itself. If choice is restart,
+run CLI restart with this entry UUID and the event's old session UUID. If cancel,
+run CLI stop with those UUIDs and --disposition Close, and terminate this target's
+dependent work. For pending/ask-user, ask the user before proceeding. Other
+entries remain independent. Never restart or replay automatically.
+
+Active tasks receive form elicitation within five seconds after closure is
+confirmed by an event or at least two failed polls. Idle targets ask on next use.
+Authorized restart retains original argv/cwd/profile/port from memory and refuses
+an occupied port. It returns a new session UUID and pageIdsInvalidated: true;
+refresh status and list_pages before continuing with new page IDs.
+
+Before selecting another entry or ending a task, ask **Close** or **Keep**, with
+no default. Keep retains application and official Server together in this entry.
+Close requests normal shutdown of both; the host transport remains reusable for
+later start. Run stop with both identity flags and
+`--disposition Close|Keep`. A failed close reports retained process/port; never
+force-kill. Keep leaves loopback CDP reachable by local processes. Another entry
+has its own identity and target; never control it using this entry's UUIDs.
+
+Common mistakes: guessing IDs, reusing page IDs after recovery, treating Keep as
+an upstream disconnect, silently changing a busy recovery port, or assuming
+window disappearance authorizes restart. Handled MCP disconnect attempts normal
+close; force termination cannot guarantee cleanup. Report unverifiable remnants
+for manual inspection without taking over their processes.

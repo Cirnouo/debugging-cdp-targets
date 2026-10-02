@@ -5,8 +5,9 @@ use explicit adapters. Adapters never depend on application/interface. Domains
 contain no environment, file, process, network, or PowerShell I/O.
 
 Only interface/control.ts and interface/mcp-bootstrap.ts execute directly.
-The bootstrap never consumes or writes MCP stdin/stdout; official Server
-inherits them. Tests inject adapters at I/O boundaries. Use shared/constants.ts
+The bootstrap owns host MCP stdin/stdout through the official SDK; the
+gateway preserves upstream tool schemas and results. Only lifecycle status and
+watch tools extend the catalog. Each entry has independent transient identity. Tests inject adapters at I/O boundaries. Use shared/constants.ts
 for cross-layer invariants. Never add persisted session state or a CLI daemon.
 
 Use strict, Node-erasable TypeScript with explicit `.ts` imports and owned types.

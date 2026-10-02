@@ -2,7 +2,7 @@
 
 Launch a separate local Chrome browser or another CDP-capable application and
 inspect it from Codex using the official Chrome DevTools MCP Server. The Plugin
-helps you launch and switch debugging targets; page inspection, network
+provides two reusable entries for launching debugging targets; page inspection, network
 diagnostics, and extension tools come directly from the official Server.
 
 Version 0.1.0 is under development and has not been released.
@@ -71,26 +71,24 @@ The connection starts with no target. The Plugin only controls an application it
 launches and verifies; it does not attach to an already running browser. Chrome
 uses a dedicated debugging profile, separate from your usual browsing profile.
 
-## Switch, keep, or close a target
+## Keep, close, or recover a target
 
-Version 0.1.0 supports one active Plugin MCP connection per operating-system user
-and one attached target within that connection. Disconnect the connection before
-enabling the Plugin in another conversation.
+The Plugin exposes two independent static entries, `cdp-target-1` and
+`cdp-target-2`. Each entry owns one target and official Server child. Selecting
+another entry changes the target you work with. The host connection remains
+usable after normal Close, so you can launch a new target without reconnecting.
 
-Before switching targets or finishing a task, Codex asks you to choose:
+Before changing entries or ending work, Codex asks **Close** or **Keep**. Close
+requests normal shutdown of both target and official Server. Keep retains both
+in the live entry. There is no default and no force kill. If normal shutdown
+fails, inspect the reported process and port and close the application manually.
 
-- **Close**: request normal shutdown of the verified application the Plugin
-    launched. If it cannot close normally, the Plugin reports the process and port
-    for manual recovery. It never escalates to a force kill.
-- **Keep**: disconnect control while leaving the application and its CDP port
-    running. Other local processes can still control that application.
-
-There is no default choice. Switching is blocked while a CDP request is in
-flight; retry once it finishes. After a switch, refresh the page list and discard
-previous page IDs. There is no saved session or cross-conversation Resume.
-
-An unexpected disconnect handled by the Plugin attempts normal shutdown of its
-current target. Forcibly terminating the Plugin cannot guarantee cleanup.
+If you close a window during dependent work, Codex asks whether it was accidental
+and should be recovered on the same port, or intentional and work should end.
+Idle entries ask on next use. Recovery is explicit, retains launch arguments,
+working directory and profile from memory, refuses an occupied original port,
+and requires fresh page IDs. No tool calls replay automatically and no session
+state is saved across host connections.
 
 ## Data and privacy
 
@@ -108,15 +106,17 @@ The Plugin uses two separate storage locations:
 | Storage | Windows | Linux/macOS |
 | --- | --- | --- |
 | Official Server package cache | `%LOCALAPPDATA%\debugging-cdp-targets\cache\mcp-server` | `~/.cache/debugging-cdp-targets/cache/mcp-server` |
-| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
+| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\profile-<entry-uuid>-<session-uuid>` | `~/.cache/chrome-devtools-mcp/profile-<entry-uuid>-<session-uuid>` |
 
 The package cache contains downloaded dependencies. You can delete it while no
 connection is using it; the next connection needs to download the package again.
 The Chrome profile retains browser data, including cookies and browsing state.
+Each new target session receives its own default profile; recovery reuses the
+original session's profile. Profiles are retained after Close for inspection.
 Deleting the package cache does not clear the profile.
 
 CDP provides powerful access to the application being debugged. Both the Plugin's
-CDP router and the target's debugging endpoint must listen on loopback only.
+CDP transport and the target's debugging endpoint must listen on loopback only.
 Never expose or tunnel these ports to a network. Loopback does not protect
 against malicious software running as your user.
 
@@ -129,32 +129,25 @@ Codex normally manages targets for you. For manual control, replace
 `dist/`, and `skills/`. You can locate it from the installed Skill file at
 `<plugin-root>/skills/debugging-cdp-targets/SKILL.md`.
 
-The following PowerShell example uses Chrome's standard Windows installation
-path. Replace it if Chrome is installed elsewhere, and enable the MCP connection
-before running the control commands:
+Call the selected entry's `dct_connection_status` tool to obtain its random
+entry UUID and current session UUID. Every CLI command requires `--entry-id`;
+restart, end-task and stop additionally require `--session-id`. Status and start
+prohibit that option even with an existing session. Only stop accepts disposition.
+Never infer an identity from an entry's static name.
 
 ```powershell
-node "<plugin-root>/dist/control.mjs" status
-node "<plugin-root>/dist/control.mjs" start --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
+node "<plugin-root>/dist/control.mjs" status --entry-id <entry-uuid>
+node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
+node "<plugin-root>/dist/control.mjs" end-task --entry-id <entry-uuid> --session-id <session-uuid>
+node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --session-id <session-uuid> --disposition Close
 ```
 
-After starting a target, use the official MCP tools directly. Call `list_pages`
-to identify the page you want to inspect.
-
-To switch to a new target, choose Close or Keep for the previous one and provide
-the new launch command. This example closes the previous target normally:
-
-```powershell
-node "<plugin-root>/dist/control.mjs" switch --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}' --disposition Close
-```
-
-Call `list_pages` again after switching. To stop controlling the current target,
-run one of these commands according to your choice:
-
-```powershell
-node "<plugin-root>/dist/control.mjs" stop --disposition Close
-node "<plugin-root>/dist/control.mjs" stop --disposition Keep
-```
+Actions are status, start, restart, stop and end-task. End-task only stops the
+active watch and retains target and Server. Use stop with an explicit Close/Keep
+choice for disposition. There is no switch command.
+The Agent uses `dct_watch_target` while performing target-dependent work. After
+starting or recovering, refresh status and call official `list_pages` for fresh
+page evidence. Old page IDs become invalid.
 
 ### Launch commands and ports
 
@@ -174,7 +167,7 @@ port must match the selected port. Applications with custom option names need a
 correct `{port}` template.
 
 Port selection starts at 9222 by default. Use `--base-port <port>` with `start`
-or `switch` to choose another starting point. Occupied, privileged, and
+to choose another starting point. Occupied, privileged, and
 OS-excluded ports are skipped.
 
 ### Chrome profiles
@@ -200,14 +193,15 @@ Each variable accepts only `true` or `false`.
 
 ## Troubleshooting
 
-- **Another connection is active**: disconnect the Plugin's MCP connection in
-    the other conversation before enabling it here. The Plugin will not replace
-    that connection or take over its target.
+- **Stale entry or session identity**: refresh the selected entry's
+    `dct_connection_status`; another static entry has independent UUIDs.
+- **The recovery port is busy**: release it normally after verifying its owner;
+    recovery does not select a different port or take over that process.
 - **The application has no verified CDP endpoint**: check the executable path,
     debugging option, and browser-level endpoint support. A framework name alone
     does not establish compatibility.
-- **Switching is blocked by an in-flight request**: let the current DevTools
-    request finish, then retry.
+- **Lifecycle change is blocked by an in-flight request**: let the current
+    DevTools request finish, then retry.
 - **Chrome reports a locked profile**: close the Chrome process using that
     debugging profile normally, or select another dedicated `--user-data-dir`.
 

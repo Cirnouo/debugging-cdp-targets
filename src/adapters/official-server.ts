@@ -119,18 +119,3 @@ export async function prepareServerBin() {
     if (!bin.startsWith(`${root}${path.sep}`)) throw new Error('The Server bin escapes the verified package.');
     return bin;
 }
-
-export async function startOfficialServer(browserUrl: string) {
-    const arguments_ = buildServerArguments(browserUrl);
-    const bin = await prepareServerBin();
-    const child = spawn(process.execPath, [bin, ...arguments_], {
-        stdio: 'inherit',
-        windowsHide: true,
-        shell: false,
-    });
-    await new Promise<void>((resolve, reject) => {
-        child.once('spawn', resolve);
-        child.once('error', reject);
-    });
-    return child;
-}

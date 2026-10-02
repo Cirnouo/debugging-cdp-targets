@@ -13,6 +13,8 @@ descendants, listener ownership, and loopback. Never signal unknown processes.
 Windows closes a normal window; Unix sends only SIGTERM after identity checks.
 No escalation. Report unverifiable/failed close instead of deleting evidence.
 
-Bind router to 127.0.0.1; rewrite only CDP discovery addresses, not MCP messages.
-Preserve WebSocket frames and invalidate old connections on switch. Track
-request/response IDs, errors, and busy state; do not store their contents.
+Bind router to 127.0.0.1; rewrite only CDP discovery addresses. Preserve
+WebSocket frames. Each entry has its own target, port, upstream child, and
+control pipe. The official SDK gateway preserves upstream catalogs and results.
+Track lifecycle and busy state without logging tool contents. Confirm target
+loss through events and at least two failed polls before eliciting recovery.

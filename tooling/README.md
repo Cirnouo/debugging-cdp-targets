@@ -1,6 +1,7 @@
 # Tooling
 
-- `build-plugin.ts` bundles runtime and copies required licenses/helpers.
+- `build-plugin.ts` bundles runtime and helpers, derives all bundled package roots
+  from the esbuild metafile, and generates complete third-party license notices.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its YAML license.
 - `repository-audit.ts` checks text, AST layer boundaries, versions, docs,

@@ -1,10 +1,45 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const output = path.join(root, 'plugins', 'debugging-cdp-targets', 'dist');
+
+export async function collectBundledLicenses(inputs: readonly string[], workingDirectory = root) {
+    const packages = new Map<string, string>();
+    for (const input of inputs) {
+        if (!input.replaceAll('\\', '/').includes('node_modules/')) continue;
+        let directory = path.dirname(await realpath(path.resolve(workingDirectory, input)));
+        while (true) {
+            try {
+                const metadata: unknown = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'));
+                if (!metadata || typeof metadata !== 'object')
+                    throw new Error(`Malformed bundled package metadata: ${directory}`);
+                if ('name' in metadata) {
+                    if (typeof metadata.name !== 'string') throw new Error(`Malformed package name: ${directory}`);
+                    packages.set(directory, metadata.name);
+                    break;
+                }
+            } catch (error) {
+                if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+            }
+            const parent = path.dirname(directory);
+            if (parent === directory) throw new Error(`No package root for bundled input: ${input}`);
+            directory = parent;
+        }
+    }
+    const sections = [];
+    for (const [directory, name] of [...packages].sort((a, b) => a[1].localeCompare(b[1]))) {
+        const licenses = (await readdir(directory))
+            .filter((file) => /^(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i.test(file))
+            .sort();
+        if (!licenses.length) throw new Error(`Bundled package has no license file: ${name}`);
+        for (const file of licenses)
+            sections.push(`${name} — ${file}\n\n${(await readFile(path.join(directory, file), 'utf8')).trim()}\n`);
+    }
+    return Buffer.from(`${sections.join('\n').trimEnd()}\n`);
+}
 
 export async function generatePluginFiles() {
     const result = await build({
@@ -25,6 +60,7 @@ export async function generatePluginFiles() {
         banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
         logLevel: 'warning',
         write: false,
+        metafile: true,
     });
     const files = new Map(result.outputFiles.map((file) => [path.basename(file.path), Buffer.from(file.contents)]));
     for (const file of ['windows-cdp-helper.ps1']) {
@@ -41,8 +77,7 @@ export async function generatePluginFiles() {
         write: false,
     });
     for (const file of preload.outputFiles) files.set(path.basename(file.path), Buffer.from(file.contents));
-    const notice = await readFile(path.join(root, 'node_modules', 'ws', 'LICENSE'));
-    if (!notice.toString().includes('MIT')) throw new Error('The bundled WebSocket dependency license changed.');
+    const notice = await collectBundledLicenses(Object.keys(result.metafile.inputs));
     files.set('THIRD-PARTY-NOTICES.txt', notice);
     return files;
 }

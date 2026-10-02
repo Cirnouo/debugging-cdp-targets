@@ -12,9 +12,12 @@ Version 0.1.0 remains under development; no release has been published.
   application-agnostic debugging instructions.
 - Tag-triggered GitHub source releases with Changelog-based notes, new
   contributor attribution, and required security and cross-platform CI gates.
-- Direct access to official chrome-devtools-mcp 1.9.0 tools over stdio.
-- Local status, start, switch, and stop commands for one current target, with
-  explicit Close/Keep choices and a stable CDP connection entry.
+- Two reusable independent stdio entries that relay official chrome-devtools-mcp
+  1.9.0 tool catalogs and results through the official MCP SDK.
+- Entry/session-addressed status, start, restart, stop, and end-task commands,
+  explicit Close/Keep choices, and reusable host connections after normal Close.
+- Lifecycle status and active-task watch tools with explicit same-port recovery
+  after accidental closure and fresh page identities after recovery.
 - Shell-free launch-command templates with environment expansion and selection
   of a free, non-reserved debugging port.
 - Chrome presets for a dedicated browser profile and extension debugging, with

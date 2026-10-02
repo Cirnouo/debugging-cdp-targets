@@ -3,13 +3,36 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { parseControlArguments } from '../src/interface/control-arguments.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { isSemVer } from '../tooling/version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pluginRoot = path.join(root, 'plugins', 'debugging-cdp-targets');
 
-test('portable plugin registers the official MCP through one stdio bootstrap', async () => {
+test('documented lifecycle command templates match each command schema', () => {
+    const entry = ['--entry-id', '11111111-1111-4111-8111-111111111111'];
+    const session = ['--session-id', '22222222-2222-4222-8222-222222222222'];
+    const templates = [
+        ['status', ...entry],
+        ['start', ...entry, '--target-kind', 'chrome', '--launch-command', 'chrome --remote-debugging-port={port}'],
+        ['restart', ...entry, ...session],
+        ['end-task', ...entry, ...session],
+        ['stop', ...entry, ...session, '--disposition', 'Close'],
+        ['stop', ...entry, ...session, '--disposition', 'Keep'],
+    ];
+    for (const template of templates) assert.equal(parseControlArguments(template).action, template[0]);
+    for (const template of [
+        ['status', ...entry, ...session],
+        ['start', ...entry, ...session, '--launch-command', 'chrome'],
+        ['end-task', ...entry, ...session, '--disposition', 'Keep'],
+        ['restart', ...entry, ...session, '--disposition', 'Close'],
+        ['stop', ...entry, ...session],
+    ])
+        assert.throws(() => parseControlArguments(template));
+});
+
+test('portable plugin registers the official MCP through two reusable stdio entries', async () => {
     const manifest: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'plugin.json'), 'utf8'));
     const mcp: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'mcp.json'), 'utf8'));
     assert.ok(isRecord(manifest) && isRecord(mcp) && isRecord(mcp.mcpServers));
@@ -17,12 +40,14 @@ test('portable plugin registers the official MCP through one stdio bootstrap', a
     const packageData: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     assert.ok(isRecord(packageData) && isSemVer(packageData.version));
     assert.equal(manifest.version, packageData.version);
-    assert.deepEqual(mcp.mcpServers['chrome-devtools'], {
-        type: 'stdio',
-        command: 'node',
-        args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`],
-        cwd: `\${PLUGIN_ROOT}`,
-    });
+    assert.deepEqual(Object.keys(mcp.mcpServers).sort(), ['cdp-target-1', 'cdp-target-2']);
+    for (const slot of ['1', '2'])
+        assert.deepEqual(mcp.mcpServers[`cdp-target-${slot}`], {
+            type: 'stdio',
+            command: 'node',
+            args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`, '--slot', slot],
+            cwd: `\${PLUGIN_ROOT}`,
+        });
 });
 
 test('plugin payload has only manifests, one skill, license, and self-contained runtime', async () => {
