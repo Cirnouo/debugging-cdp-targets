@@ -24,6 +24,9 @@
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
 - `check-text-style.ts` audits staged non-Biome text.
 - `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
+- `smoke-official-catalog.ts` copies the Plugin outside repository dependencies,
+  initializes its official public Server with a temporary home and empty PATH,
+  reads only the catalog and closes stdin. Run it explicitly with pnpm smoke:official.
 - `security/` owns complete lock inventories, audit/exception policy,
   fingerprints, and disposable official Server dependency scans.
 - `AGENTS.md` specifies validator safety and independent evidence.

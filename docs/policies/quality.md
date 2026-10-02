@@ -4,6 +4,10 @@ Use four spaces, UTF-8, LF, a final newline, and no tabs. Biome formats/lints
 TypeScript, generated-compatible JavaScript and JSON; repository text checks cover YAML, Markdown, PowerShell,
 TOML, and shell. Generated lockfile indentation is exempt.
 
+Only the official release subtree verified against maintained release evidence
+keeps upstream formatting and directory documentation. All delivered JavaScript
+still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
+
 Develop changed behavior test-first. Regression tests use isolated fake CDP
 targets; never download packages or launch user browsers in the default suite.
 Explicit integration smoke commands are separate. Keep coverage floors at
@@ -14,6 +18,10 @@ coverage, repository audit, deterministic build, distribution, and Git rules.
 pnpm build:plugin regenerates committed bundles; check:build is read-only.
 pnpm build:security regenerates the standalone audit entry;
 check:security:build is an offline, read-only comparison in verify:push.
+
+`pnpm smoke:official` is a separate explicit catalog smoke of the delivered public
+Server. It copies the Plugin outside node_modules, uses a temporary home and empty
+PATH, invokes no browser tools, and shuts the child down normally through stdin.
 
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection; safe

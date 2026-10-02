@@ -10,10 +10,11 @@ Version 0.1.0 is under development and has not been released.
 
 ## Requirements and compatibility
 
-- Codex with Plugin support, and Node 24.21.0 with npm/npx available on PATH.
-    No global npm package, pnpm, or mise installation is needed to use the Plugin.
-- Internet access for installation and the first download of the official Server,
-    pinned to `chrome-devtools-mcp@1.10.1`.
+- Codex with Plugin support, and Node 24.21.0 available on PATH.
+    The Plugin includes the complete official `chrome-devtools-mcp@1.10.1` release;
+    creating connections needs no npm/npx, pnpm, or dependency download.
+- Internet access to obtain or update the Plugin. The installed Server can initialize
+    its tool catalog offline; browser tools and visited pages may require network access.
 - An application that supports a command-line debugging port and exposes a
     **browser-level Chrome DevTools Protocol (CDP) endpoint**. Chrome is the
     known-compatible target. Other CDP-capable applications are best effort;
@@ -113,19 +114,22 @@ The official Server's usage statistics and CrUX lookups are disabled by default.
 Debugging tools and the pages you open can still make network requests; these
 defaults are not a guarantee that all upstream tools work offline.
 
-The Plugin uses two separate storage locations:
+The official Server is delivered at `<plugin-root>/dist/official-server/`. Every
+published file is verified before each Server launch. Missing or changed files
+require reinstalling the Plugin, or rebuilding it in a contributor checkout.
+Only the official child's environment disables its automatic update check.
+
+Chrome retains its debugging profile separately:
 
 | Storage | Windows | Linux/macOS |
 | --- | --- | --- |
-| Official Server package cache | `%LOCALAPPDATA%\debugging-cdp-targets\cache\mcp-server` | `~/.cache/debugging-cdp-targets/cache/mcp-server` |
 | Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
 
-The package cache contains downloaded dependencies. You can delete it while no
-connection is using it; the next connection needs to download the package again.
 The Chrome profile retains browser data, including cookies and browsing state.
 Starts and recovery reuse this fixed default directory. Occupied or unverifiable
 profiles fail clearly; explicitly choose another --user-data-dir for concurrency. Profiles are retained after Close for inspection.
-Deleting the package cache does not clear the profile.
+Older npm/package caches are no longer used; upgrades leave them and existing
+profiles, user configuration and global Skills in place.
 
 CDP provides powerful access to the application being debugged. Both the Plugin's
 CDP transport and the target's debugging endpoint must listen on loopback only.
@@ -231,6 +235,8 @@ Each variable accepts only `true` or `false`.
 
 ## Troubleshooting
 
+- **Bundled official package verification failed**: reinstall the Plugin or run
+    `pnpm build:plugin` in a prepared contributor checkout. Runtime does not fetch replacements.
 - **Missing, unknown or stale routing identity**: refresh
     `dct_connection_status` and use the target's connection/current session UUIDs.
     Recovery changes session identity; Close removes the connection.
@@ -261,7 +267,9 @@ the port if the owning process remains alive.
 
 Build-time checks audit dependencies for known vulnerabilities and verify npm
 registry signatures. See the [supply-chain policy](docs/policies/supply-chain.md)
-for details. These checks describe the dependencies resolved at build time; the
-official Server is downloaded separately when you use the Plugin, and its
-dependencies may resolve differently. The Plugin does not perform a runtime
-vulnerability audit.
+for details. Both the build and isolated audit use the reviewed release and
+committed locks. Every published file is bound to maintained SHA-256 evidence.
+The release embeds vendor libraries outside its npm dependency graph: graph
+audits do not establish vulnerability coverage for those embedded libraries.
+Their original inventory and license notices are preserved. The Plugin does not
+perform a runtime vulnerability audit.

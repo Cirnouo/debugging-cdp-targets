@@ -26,7 +26,8 @@ the upstream project. Validate manifest agreement and effective configuration,
 reject unreviewed configuration dependencies before invoking pnpm,
 then frozen lock-only validation and full registry audits. Lock-only commands
 must not mutate locked inputs or create node_modules. In upstream isolation,
-resolve only the lock first, approve findings with current evidence, and only
+copy the committed upstream lock snapshot, validate it frozen without mutation,
+approve findings with current evidence, and only
 then perform a frozen script-disabled install; preserve the approved inputs.
 
 Build the standalone entry with the existing esbuild/YAML dependencies and

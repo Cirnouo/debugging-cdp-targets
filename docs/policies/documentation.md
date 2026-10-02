@@ -12,6 +12,8 @@ page. Do not add a README directly under `.github`; its subdirectories still
 use `README.md`. Generated dependency, Git, coverage, and test-output
 directories are exempt. The committed Plugin dist directory includes a README
 because it is a supported installation surface, although its code is generated.
+Its `official-server/` subtree preserves upstream documentation unchanged only
+after complete release verification; it requires no repository README additions.
 
 Keep root CLAUDE.md a real relative symlink to AGENTS.md, Git mode 120000.
 Maintain progressive disclosure rather than copying all policies everywhere.

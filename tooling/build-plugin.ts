@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { isOfficialRelativePath, parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
+import { isOfficialRelativePath } from '../src/shared/official-package.ts';
 import { readDistributionTree } from './distribution-audit.ts';
+import { verifyOfficialInputs } from './security/official-inputs.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const output = path.join(root, 'plugins', 'debugging-cdp-targets', 'dist');
@@ -210,9 +211,7 @@ export async function collectBundledLicenses(
 }
 
 export async function generatePluginFiles() {
-    const evidence = parseOfficialReleaseEvidence(
-        JSON.parse(await readFile(path.join(root, 'tooling/official-server-release.json'), 'utf8')),
-    );
+    const { release: evidence } = await verifyOfficialInputs(root);
     const official = await verifyOfficialPackage(
         await realpath(path.join(root, 'node_modules', evidence.name)),
         evidence,

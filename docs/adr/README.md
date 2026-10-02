@@ -17,7 +17,7 @@
   partially superseded by 0009 for monitoring and ended-task cleanup.
 - `0009-process-exit-hooks.md`: native exit events, independent task activity,
   automatic trusted Codex Hooks, retired-connection cleanup and fixed profiles.
-- `0010-bundled-official-server.md`: proposed build-time delivery of the reviewed
+- `0010-bundled-official-server.md`: accepted build-time delivery of the reviewed
   official npm release, exact artifact verification and runtime package resolution.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered

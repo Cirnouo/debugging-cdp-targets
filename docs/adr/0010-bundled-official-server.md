@@ -1,8 +1,8 @@
 # Official Server package delivered with the Plugin
 
-Status: proposed design, 2026-10-02. The user selected build-time delivery of
-the official package. This document specifies the implementation for review;
-the current runtime still acquires it through npx.
+Status: accepted, 2026-10-02. The user selected build-time delivery of
+the official npm release, implemented with maintained release evidence and
+a frozen isolated upstream lock snapshot. Version 0.1.0 remains unreleased.
 
 ## Intent and constraints
 
@@ -24,7 +24,7 @@ the contributor toolchain.
 
 ## Current behavior and selected trade-off
 
-`prepareServerBin()` currently invokes npx for every new upstream connection,
+Before this decision, `prepareServerBin()` invoked npx for every new upstream connection,
 checks the reported version, computes the expected `_npx` cache directory,
 and validates its package metadata before returning the public bin. The
 gateway also creates a temporary upstream to discover the tool catalog at
@@ -94,6 +94,12 @@ reviewed evidence, and copies it byte-for-byte into:
 ```text
 plugins/debugging-cdp-targets/dist/official-server/
 ```
+
+pnpm 12.4.2 adds installation-only `node_modules/.bin` launchers for the two
+published bin names. The installed-input verifier permits only those regular
+shim files and their exact parent directories, excludes them from returned release
+bytes, and rejects all other extras or links. Delivery and runtime verification
+permit no shim exception. This keeps the copied package identical to the tarball.
 
 This directory is the original package root, including `package.json`, the
 public bin, runtime assets, published skills, LICENSE, bundled package index

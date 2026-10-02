@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { errorMessage } from '../src/shared/errors.ts';
 import type { AuditScope, FindingDecision, Fingerprints } from './security/audit-policy.ts';
 import { evaluateFindings, readLockInventory, validateExceptions } from './security/audit-policy.ts';
+import { verifyOfficialInputs } from './security/official-inputs.ts';
 import { fingerprintInputs } from './security/security-evidence.ts';
 import type { PnpmExecutor, ScanResult } from './security/security-runner.ts';
 import { scanRepository, scanUpstream } from './security/security-runner.ts';
@@ -34,7 +35,8 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
     const code = paths.filter(
         (file) =>
             /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) ||
-            /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file),
+            /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) ||
+            file.startsWith('plugins/debugging-cdp-targets/dist/official-server/'),
     );
     const configuration = paths.filter(
         (file) =>
@@ -47,6 +49,8 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
                 'pnpm-lock.yaml',
                 '.npmrc',
                 'tooling/vendored-licenses.json',
+                'tooling/official-server-release.json',
+                'tooling/security/upstream-pnpm-lock.yaml',
             ].includes(file),
     );
     for (const exception of exceptions) {
@@ -74,7 +78,8 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
         repository: await review('repository', await scanRepository({ root, ...options, phase })),
     };
     if (phase === 'complete') {
-        const result = await scanUpstream({ ...options, review: (result) => review('upstream', result) });
+        const inputs = await verifyOfficialInputs(root);
+        const result = await scanUpstream({ ...options, inputs, review: (result) => review('upstream', result) });
         results.upstream = await review('upstream', result);
     }
     const finalEvidence = await fingerprintInputs(root, code, configuration, initialInventory);

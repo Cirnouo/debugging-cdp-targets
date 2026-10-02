@@ -13,6 +13,7 @@ import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../src/shared/const
 import { isRecord } from '../src/shared/errors.ts';
 import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import { readLockInventory } from '../tooling/security/audit-policy.ts';
+import { verifyOfficialInputs } from '../tooling/security/official-inputs.ts';
 
 test('reviewed official release agrees with exact build dependency and isolated lock', async () => {
     const manifest: unknown = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -43,6 +44,40 @@ test('reviewed official release agrees with exact build dependency and isolated 
         assert.equal(official.length, 1);
         assert.equal(official[0]?.version, release.version);
         assert.equal(official[0]?.integrity, release.integrity);
+    }
+});
+
+test('build input verification rejects drift in root declarations, snapshot identity and release integrity', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-official-inputs-'));
+    const names = [
+        'package.json',
+        'pnpm-lock.yaml',
+        'tooling/official-server-release.json',
+        'tooling/security/upstream-pnpm-lock.yaml',
+    ];
+    try {
+        for (const name of names) {
+            await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+            await writeFile(path.join(root, name), await readFile(new URL(`../${name}`, import.meta.url)));
+        }
+        await verifyOfficialInputs(root);
+        for (const name of [
+            'package.json',
+            'tooling/security/upstream-pnpm-lock.yaml',
+            'tooling/official-server-release.json',
+        ]) {
+            const original = await readFile(path.join(root, name), 'utf8');
+            const changed = name.endsWith('.yaml')
+                ? original.replaceAll('1.10.1', '1.10.0')
+                : name === 'package.json'
+                  ? original.replace('"chrome-devtools-mcp": "1.10.1"', '"chrome-devtools-mcp": "1.10.0"')
+                  : original.replace('sha512-Klw6', 'sha512-Alw6');
+            await writeFile(path.join(root, name), changed);
+            await assert.rejects(verifyOfficialInputs(root), /official|importer|identity|integrity/i);
+            await writeFile(path.join(root, name), original);
+        }
+    } finally {
+        await rm(root, { recursive: true, force: true });
     }
 });
 

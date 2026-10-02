@@ -35,3 +35,10 @@ Use Node 24.21.0 and pnpm 12.4.2. Run focused tests first, then
 `pnpm check:build` verifies it without writing. Domain changes are test-first.
 Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
 generated JavaScript is distribution output, never a handwritten fallback.
+
+The official Server is a complete unchanged npm release delivered in Plugin dist.
+Builds verify maintained tarball/file evidence and both locks before copying;
+never refresh release hashes automatically. Dependency/version upgrades require
+fresh independent tarball evidence and the explicit supply-chain gate. Runtime
+only verifies and launches the delivered public bin. Preserve original upstream
+licenses, resources, vendor inventory and skills, and document npm graph audit scope.

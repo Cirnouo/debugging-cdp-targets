@@ -112,17 +112,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path4) {
-      const ctrl = callVisitor(key, node, visitor, path4);
+    function visit_(key, node, visitor, path5) {
+      const ctrl = callVisitor(key, node, visitor, path5);
       if (identity2.isNode(ctrl) || identity2.isPair(ctrl)) {
-        replaceNode(key, path4, ctrl);
-        return visit_(key, ctrl, visitor, path4);
+        replaceNode(key, path5, ctrl);
+        return visit_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity2.isCollection(node)) {
-          path4 = Object.freeze(path4.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path4);
+            const ci = visit_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -133,13 +133,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity2.isPair(node)) {
-          path4 = Object.freeze(path4.concat(node));
-          const ck = visit_("key", node.key, visitor, path4);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = visit_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path4);
+          const cv = visit_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -160,17 +160,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path4) {
-      const ctrl = await callVisitor(key, node, visitor, path4);
+    async function visitAsync_(key, node, visitor, path5) {
+      const ctrl = await callVisitor(key, node, visitor, path5);
       if (identity2.isNode(ctrl) || identity2.isPair(ctrl)) {
-        replaceNode(key, path4, ctrl);
-        return visitAsync_(key, ctrl, visitor, path4);
+        replaceNode(key, path5, ctrl);
+        return visitAsync_(key, ctrl, visitor, path5);
       }
       if (typeof ctrl !== "symbol") {
         if (identity2.isCollection(node)) {
-          path4 = Object.freeze(path4.concat(node));
+          path5 = Object.freeze(path5.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path4);
+            const ci = await visitAsync_(i, node.items[i], visitor, path5);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -181,13 +181,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity2.isPair(node)) {
-          path4 = Object.freeze(path4.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path4);
+          path5 = Object.freeze(path5.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path5);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path4);
+          const cv = await visitAsync_("value", node.value, visitor, path5);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -214,23 +214,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path4) {
+    function callVisitor(key, node, visitor, path5) {
       if (typeof visitor === "function")
-        return visitor(key, node, path4);
+        return visitor(key, node, path5);
       if (identity2.isMap(node))
-        return visitor.Map?.(key, node, path4);
+        return visitor.Map?.(key, node, path5);
       if (identity2.isSeq(node))
-        return visitor.Seq?.(key, node, path4);
+        return visitor.Seq?.(key, node, path5);
       if (identity2.isPair(node))
-        return visitor.Pair?.(key, node, path4);
+        return visitor.Pair?.(key, node, path5);
       if (identity2.isScalar(node))
-        return visitor.Scalar?.(key, node, path4);
+        return visitor.Scalar?.(key, node, path5);
       if (identity2.isAlias(node))
-        return visitor.Alias?.(key, node, path4);
+        return visitor.Alias?.(key, node, path5);
       return void 0;
     }
-    function replaceNode(key, path4, node) {
-      const parent = path4[path4.length - 1];
+    function replaceNode(key, path5, node) {
+      const parent = path5[path5.length - 1];
       if (identity2.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity2.isPair(parent)) {
@@ -842,10 +842,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity2 = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path4, value) {
+    function collectionFromPath(schema, path5, value) {
       let v = value;
-      for (let i = path4.length - 1; i >= 0; --i) {
-        const k = path4[i];
+      for (let i = path5.length - 1; i >= 0; --i) {
+        const k = path5[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -864,7 +864,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path4) => path4 == null || typeof path4 === "object" && !!path4[Symbol.iterator]().next().done;
+    var isEmptyPath = (path5) => path5 == null || typeof path5 === "object" && !!path5[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -894,11 +894,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path4, value) {
-        if (isEmptyPath(path4))
+      addIn(path5, value) {
+        if (isEmptyPath(path5))
           this.add(value);
         else {
-          const [key, ...rest] = path4;
+          const [key, ...rest] = path5;
           const node = this.get(key, true);
           if (identity2.isCollection(node))
             node.addIn(rest, value);
@@ -912,8 +912,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path4) {
-        const [key, ...rest] = path4;
+      deleteIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -927,8 +927,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path4, keepScalar) {
-        const [key, ...rest] = path4;
+      getIn(path5, keepScalar) {
+        const [key, ...rest] = path5;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity2.isScalar(node) ? node.value : node;
@@ -946,8 +946,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path4) {
-        const [key, ...rest] = path4;
+      hasIn(path5) {
+        const [key, ...rest] = path5;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path4, value) {
-        const [key, ...rest] = path4;
+      setIn(path5, value) {
+        const [key, ...rest] = path5;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -3473,9 +3473,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path4, value) {
+      addIn(path5, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path4, value);
+          this.contents.addIn(path5, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3550,14 +3550,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path4) {
-        if (Collection.isEmptyPath(path4)) {
+      deleteIn(path5) {
+        if (Collection.isEmptyPath(path5)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path4) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path5) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3572,10 +3572,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path4, keepScalar) {
-        if (Collection.isEmptyPath(path4))
+      getIn(path5, keepScalar) {
+        if (Collection.isEmptyPath(path5))
           return !keepScalar && identity2.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity2.isCollection(this.contents) ? this.contents.getIn(path4, keepScalar) : void 0;
+        return identity2.isCollection(this.contents) ? this.contents.getIn(path5, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3586,10 +3586,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path4) {
-        if (Collection.isEmptyPath(path4))
+      hasIn(path5) {
+        if (Collection.isEmptyPath(path5))
           return this.contents !== void 0;
-        return identity2.isCollection(this.contents) ? this.contents.hasIn(path4) : false;
+        return identity2.isCollection(this.contents) ? this.contents.hasIn(path5) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3606,13 +3606,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path4, value) {
-        if (Collection.isEmptyPath(path4)) {
+      setIn(path5, value) {
+        if (Collection.isEmptyPath(path5)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path4), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path5), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path4, value);
+          this.contents.setIn(path5, value);
         }
       }
       /**
@@ -5573,9 +5573,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path4) => {
+    visit.itemAtPath = (cst, path5) => {
       let item = cst;
-      for (const [field, index] of path4) {
+      for (const [field, index] of path5) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5584,23 +5584,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path4) => {
-      const parent = visit.itemAtPath(cst, path4.slice(0, -1));
-      const field = path4[path4.length - 1][0];
+    visit.parentCollection = (cst, path5) => {
+      const parent = visit.itemAtPath(cst, path5.slice(0, -1));
+      const field = path5[path5.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path4, item, visitor) {
-      let ctrl = visitor(item, path4);
+    function _visit(path5, item, visitor) {
+      let ctrl = visitor(item, path5);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path4.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path5.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5611,10 +5611,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path4);
+            ctrl = ctrl(item, path5);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path4) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path5) : ctrl;
     }
     exports.visit = visit;
   }
@@ -7368,9 +7368,9 @@ var require_dist = __commonJS({
 // tooling/check-security.ts
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { lstat as lstat3, readFile as readFile3 } from "node:fs/promises";
-import path3 from "node:path";
-import { fileURLToPath } from "node:url";
+import { lstat as lstat3, readFile as readFile4 } from "node:fs/promises";
+import path4 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/shared/errors.ts
 function isRecord(value) {
@@ -7689,11 +7689,9 @@ function evaluateFindings(findings, exceptions, contexts) {
   return result;
 }
 
-// tooling/security/security-evidence.ts
-var import_yaml2 = __toESM(require_dist(), 1);
-import { createHash } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
-import path from "node:path";
+// tooling/security/official-inputs.ts
+import { readFile as readFile2 } from "node:fs/promises";
+import path2 from "node:path";
 
 // src/shared/constants.ts
 var MAX_HTTP_BYTES = 8 * 1024 * 1024;
@@ -7705,7 +7703,85 @@ var PACKAGE_VERSION = "1.10.1";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
+// src/shared/official-package.ts
+function demand2(condition, message) {
+  if (!condition) throw new Error(`Invalid official release: ${message}`);
+}
+function fields(value, names) {
+  demand2(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), "evidence fields.");
+}
+function isOfficialRelativePath(value) {
+  return typeof value === "string" && value.length > 0 && value.split("/").every(
+    (part) => part.length > 0 && part !== "." && part !== ".." && !/[\\:\x00-\x1f\x7f<>"|?*]/.test(part) && !/[. ]$/.test(part) && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)
+  );
+}
+function parseOfficialReleaseEvidence(input) {
+  fields(input, ["schemaVersion", "name", "version", "registry", "tarball", "integrity", "bin", "source", "files"]);
+  demand2(
+    input.schemaVersion === 1 && input.name === PACKAGE_NAME && input.version === PACKAGE_VERSION,
+    "package identity."
+  );
+  demand2(
+    input.registry === NPM_REGISTRY && input.tarball === `${NPM_REGISTRY}/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz`,
+    "registry source."
+  );
+  demand2(
+    typeof input.integrity === "string" && /^sha512-[A-Za-z0-9+/]{86}==$/.test(input.integrity),
+    "SHA-512 integrity."
+  );
+  demand2(input.bin === "build/src/bin/chrome-devtools-mcp.js", "public Server bin.");
+  fields(input.source, ["repository", "tag", "commit"]);
+  demand2(
+    input.source.repository === "https://github.com/ChromeDevTools/chrome-devtools-mcp" && input.source.tag === `chrome-devtools-mcp-v${PACKAGE_VERSION}` && typeof input.source.commit === "string" && /^[a-f0-9]{40}$/.test(input.source.commit),
+    "source provenance."
+  );
+  demand2(Array.isArray(input.files) && input.files.length > 0, "file inventory.");
+  const files = [];
+  const aliases = /* @__PURE__ */ new Set();
+  let previous = "";
+  for (const file of input.files) {
+    fields(file, ["path", "sha256", "bytes"]);
+    demand2(isOfficialRelativePath(file.path), "unsafe relative path.");
+    demand2(file.path > previous && !aliases.has(file.path.toLowerCase()), "duplicate, alias or unsorted path.");
+    demand2(typeof file.sha256 === "string" && /^[a-f0-9]{64}$/.test(file.sha256), "SHA-256 digest.");
+    demand2(typeof file.bytes === "number" && Number.isSafeInteger(file.bytes) && file.bytes >= 0, "byte length.");
+    previous = file.path;
+    aliases.add(file.path.toLowerCase());
+    files.push({ path: file.path, sha256: file.sha256, bytes: file.bytes });
+  }
+  for (const required of [
+    "package.json",
+    input.bin,
+    "LICENSE",
+    "build/src/third_party/THIRD_PARTY_NOTICES",
+    "build/src/third_party/bundled-packages.json"
+  ])
+    demand2(
+      files.some((file) => file.path === required),
+      `missing required file ${required}.`
+    );
+  demand2(
+    files.some((file) => file.path.startsWith("skills/") && file.path.endsWith("/SKILL.md")),
+    "missing published skills."
+  );
+  return {
+    schemaVersion: 1,
+    name: input.name,
+    version: input.version,
+    registry: input.registry,
+    tarball: input.tarball,
+    integrity: input.integrity,
+    bin: input.bin,
+    source: { repository: input.source.repository, tag: input.source.tag, commit: input.source.commit },
+    files
+  };
+}
+
 // tooling/security/security-evidence.ts
+var import_yaml2 = __toESM(require_dist(), 1);
+import { createHash } from "node:crypto";
+import { lstat, readFile } from "node:fs/promises";
+import path from "node:path";
 var INSTALL_POLICY = Object.freeze({
   minimumReleaseAge: 1440,
   minimumReleaseAgeStrict: true,
@@ -7810,12 +7886,32 @@ async function fingerprintInputs(root, codeFiles, configurationFiles, inventory)
   };
 }
 
+// tooling/security/official-inputs.ts
+function verifyOfficialLock(inventory, release, group) {
+  const declared = inventory.documents.filter((document) => document.importers["."]?.[group]?.[release.name]);
+  const identities = inventory.packages.filter((item) => item.name === release.name);
+  if (declared.length !== 1 || declared[0]?.importers["."]?.[group]?.[release.name]?.specifier !== release.version || identities.length !== 1 || identities[0]?.version !== release.version || identities[0]?.integrity !== release.integrity)
+    throw new Error("Official release identity or integrity differs from its frozen lock.");
+}
+async function verifyOfficialInputs(root) {
+  const release = parseOfficialReleaseEvidence(
+    JSON.parse(await readFile2(path2.join(root, "tooling/official-server-release.json"), "utf8"))
+  );
+  const repository = readLockInventory(await readFile2(path2.join(root, "pnpm-lock.yaml"), "utf8"));
+  await verifyLockManifest(root, repository);
+  verifyOfficialLock(repository, release, "devDependencies");
+  const snapshot = await readFile2(path2.join(root, "tooling/security/upstream-pnpm-lock.yaml"), "utf8");
+  verifyOfficialLock(readLockInventory(snapshot), release, "dependencies");
+  return { release, snapshot };
+}
+
 // tooling/security/security-runner.ts
 var import_yaml3 = __toESM(require_dist(), 1);
 import { execFile } from "node:child_process";
-import { lstat as lstat2, mkdtemp, readFile as readFile2, rm, writeFile } from "node:fs/promises";
+import { lstat as lstat2, mkdtemp, readFile as readFile3, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import path2 from "node:path";
+import path3 from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 var exec = promisify(execFile);
 var AUDIT_OPTIONS = ["--ignore-pnpmfile", "--config.configDependencies={}", `--registry=${NPM_REGISTRY}`];
@@ -7843,7 +7939,7 @@ async function executePnpm(args, options) {
   }
 }
 async function verifyConfiguration(root, execute, env, isolated = false) {
-  const workspace = (0, import_yaml3.parse)(await readFile2(path2.join(root, "pnpm-workspace.yaml"), "utf8"));
+  const workspace = (0, import_yaml3.parse)(await readFile3(path3.join(root, "pnpm-workspace.yaml"), "utf8"));
   if (!isRecord(workspace)) throw new Error("Invalid workspace configuration.");
   validateConfigurationDependencies(workspace.configDependencies);
   const effective = await execute(["config", "list", "--json", ...AUDIT_OPTIONS], { cwd: root, env });
@@ -7865,7 +7961,7 @@ async function auditTree(root, inventory, execute, env) {
 }
 async function hasInstallation(root) {
   try {
-    await lstat2(path2.join(root, "node_modules"));
+    await lstat2(path3.join(root, "node_modules"));
     return true;
   } catch (error) {
     if (errorCode(error) !== "ENOENT") throw error;
@@ -7874,7 +7970,7 @@ async function hasInstallation(root) {
 }
 async function lockedInputs(root) {
   return Promise.all(
-    ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"].map((file) => readFile2(path2.join(root, file)))
+    ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"].map((file) => readFile3(path3.join(root, file)))
   );
 }
 async function assertUnchangedInputs(root, before) {
@@ -7883,7 +7979,7 @@ async function assertUnchangedInputs(root, before) {
     throw new Error("Locked inputs changed during validation or installation.");
 }
 async function scanRepository({ root, phase = "complete", execute = executePnpm }) {
-  const inventory = readLockInventory(await readFile2(path2.join(root, "pnpm-lock.yaml"), "utf8"));
+  const inventory = readLockInventory(await readFile3(path3.join(root, "pnpm-lock.yaml"), "utf8"));
   await verifyLockManifest(root, inventory);
   await verifyConfiguration(root, execute, process.env);
   if (phase === "lockfile") {
@@ -7911,11 +8007,16 @@ async function scanRepository({ root, phase = "complete", execute = executePnpm 
   return auditTree(root, inventory, execute, process.env);
 }
 async function scanUpstream({
+  inputs,
   temporaryRoot = os.tmpdir(),
   execute = executePnpm,
   review
 } = {}) {
-  const root = await mkdtemp(path2.join(temporaryRoot, "debugging-cdp-targets-security-"));
+  const reviewed = inputs ?? await verifyOfficialInputs(fileURLToPath(new URL("../../", import.meta.url)));
+  const release = parseOfficialReleaseEvidence(reviewed.release);
+  const inventory = readLockInventory(reviewed.snapshot);
+  verifyOfficialLock(inventory, release, "dependencies");
+  const root = await mkdtemp(path3.join(temporaryRoot, "debugging-cdp-targets-security-"));
   try {
     const manifest = {
       name: "isolated-security-audit",
@@ -7924,26 +8025,27 @@ async function scanUpstream({
       packageManager: "pnpm@12.4.2",
       dependencies: { [PACKAGE_NAME]: PACKAGE_VERSION }
     };
-    await writeFile(path2.join(root, "package.json"), `${JSON.stringify(manifest, null, 4)}
+    await writeFile(path3.join(root, "package.json"), `${JSON.stringify(manifest, null, 4)}
 `);
+    await writeFile(path3.join(root, "pnpm-lock.yaml"), reviewed.snapshot);
     await writeFile(
-      path2.join(root, "pnpm-workspace.yaml"),
+      path3.join(root, "pnpm-workspace.yaml"),
       (0, import_yaml3.stringify)(
         { ...INSTALL_POLICY, allowBuilds: {}, ignoreScripts: true, registry: NPM_REGISTRY },
         { indent: 4 }
       )
     );
-    await writeFile(path2.join(root, "npmrc"), `registry=${NPM_REGISTRY}
+    await writeFile(path3.join(root, "npmrc"), `registry=${NPM_REGISTRY}
 ignore-scripts=true
 `);
-    await writeFile(path2.join(root, "global-npmrc"), "");
+    await writeFile(path3.join(root, "global-npmrc"), "");
     const env = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => !/^(?:npm_config_|pnpm_config_|node_options$)/i.test(key))
     );
     Object.assign(env, {
-      NPM_CONFIG_USERCONFIG: path2.join(root, "npmrc"),
-      NPM_CONFIG_GLOBALCONFIG: path2.join(root, "global-npmrc"),
-      XDG_CONFIG_HOME: path2.join(root, "configuration")
+      NPM_CONFIG_USERCONFIG: path3.join(root, "npmrc"),
+      NPM_CONFIG_GLOBALCONFIG: path3.join(root, "global-npmrc"),
+      XDG_CONFIG_HOME: path3.join(root, "configuration")
     });
     await verifyConfiguration(root, execute, env, true);
     const installArguments = [
@@ -7951,19 +8053,21 @@ ignore-scripts=true
       "--ignore-scripts",
       "--ignore-workspace",
       "--config.managePackageManagerVersions=false",
-      `--store-dir=${path2.join(root, "store")}`,
+      `--store-dir=${path3.join(root, "store")}`,
       ...AUDIT_OPTIONS
     ];
-    const resolution = await execute([...installArguments, "--lockfile-only"], { cwd: root, env });
-    if (resolution.exitCode !== 0)
-      throw new Error(`Isolated upstream lock resolution failed: ${resolution.stderr ?? resolution.stdout}`);
-    if (await hasInstallation(root)) throw new Error("Upstream lock resolution created an installation tree.");
-    const inventory = readLockInventory(await readFile2(path2.join(root, "pnpm-lock.yaml"), "utf8"));
     await verifyLockManifest(root, inventory);
-    const runtime = inventory.documents.find((doc) => doc.importers["."]?.dependencies?.[PACKAGE_NAME]);
-    if (runtime?.importers["."]?.dependencies?.[PACKAGE_NAME]?.specifier !== PACKAGE_VERSION || !inventory.packages.some((pkg) => pkg.name === PACKAGE_NAME && pkg.version === PACKAGE_VERSION))
-      throw new Error("Isolated upstream version differs from shared configuration.");
     const before = await lockedInputs(root);
+    const resolution = await execute([...installArguments, "--lockfile-only", "--frozen-lockfile"], {
+      cwd: root,
+      env
+    });
+    if (resolution.exitCode !== 0)
+      throw new Error(
+        `Isolated upstream frozen lock validation failed: ${resolution.stderr ?? resolution.stdout}`
+      );
+    await assertUnchangedInputs(root, before);
+    if (await hasInstallation(root)) throw new Error("Upstream lock resolution created an installation tree.");
     const result = await auditTree(root, inventory, execute, env);
     const decision = review ? await review(result) : { blocked: result.findings.filter((finding) => ["high", "critical"].includes(finding.severity)) };
     if (!decision || !Array.isArray(decision.blocked)) throw new Error("Invalid upstream review decision.");
@@ -7990,15 +8094,15 @@ async function checkSecurity(root, options = {}) {
         cwd: root,
         encoding: "utf8",
         windowsHide: true
-      }).split("\0").filter((file) => file && existsSync(path3.join(root, file)))
+      }).split("\0").filter((file) => file && existsSync(path4.join(root, file)))
     )
   ];
   const exceptions = validateExceptions(
-    JSON.parse(await readFile3(path3.join(root, "docs/policies/security-exceptions.json"), "utf8")),
+    JSON.parse(await readFile4(path4.join(root, "docs/policies/security-exceptions.json"), "utf8")),
     options.now
   );
   const code = paths.filter(
-    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file)
+    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) || file.startsWith("plugins/debugging-cdp-targets/dist/official-server/")
   );
   const configuration = paths.filter(
     (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^plugins\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || [
@@ -8006,16 +8110,18 @@ async function checkSecurity(root, options = {}) {
       "pnpm-workspace.yaml",
       "pnpm-lock.yaml",
       ".npmrc",
-      "tooling/vendored-licenses.json"
+      "tooling/vendored-licenses.json",
+      "tooling/official-server-release.json",
+      "tooling/security/upstream-pnpm-lock.yaml"
     ].includes(file)
   );
   for (const exception of exceptions) {
     for (const file of exception.evidence) {
-      if (!code.includes(file) && !configuration.includes(file) || !(await lstat3(path3.join(root, file))).isFile())
+      if (!code.includes(file) && !configuration.includes(file) || !(await lstat3(path4.join(root, file))).isFile())
         throw new Error(`Unreviewable fingerprinted evidence: ${file}`);
     }
   }
-  const initialInventory = readLockInventory(await readFile3(path3.join(root, "pnpm-lock.yaml"), "utf8"));
+  const initialInventory = readLockInventory(await readFile4(path4.join(root, "pnpm-lock.yaml"), "utf8"));
   const initialEvidence = await fingerprintInputs(root, code, configuration, initialInventory);
   async function review(scope, result) {
     const fingerprints = await fingerprintInputs(root, code, configuration, result.inventory);
@@ -8031,7 +8137,8 @@ async function checkSecurity(root, options = {}) {
     repository: await review("repository", await scanRepository({ root, ...options, phase }))
   };
   if (phase === "complete") {
-    const result = await scanUpstream({ ...options, review: (result2) => review("upstream", result2) });
+    const inputs = await verifyOfficialInputs(root);
+    const result = await scanUpstream({ ...options, inputs, review: (result2) => review("upstream", result2) });
     results.upstream = await review("upstream", result);
   }
   const finalEvidence = await fingerprintInputs(root, code, configuration, initialInventory);
@@ -8039,7 +8146,7 @@ async function checkSecurity(root, options = {}) {
     throw new Error("Audit evidence changed during scan; retry with stable inputs.");
   return { ok: Object.values(results).every((result) => result.blocked.length === 0), scopes: results };
 }
-if (process.argv[1] && path3.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path4.resolve(process.argv[1]) === fileURLToPath2(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
     let root;
@@ -8052,7 +8159,7 @@ if (process.argv[1] && path3.resolve(process.argv[1]) === fileURLToPath(import.m
         throw new Error("Usage: check-security.mjs --root <repository> [--phase complete|lockfile]");
       seen.add(flag);
       if (flag === "--phase") phase = value;
-      else root = path3.resolve(value);
+      else root = path4.resolve(value);
     }
     if (!root) throw new Error("Usage: check-security.mjs --root <repository> [--phase complete|lockfile]");
     const result = await checkSecurity(root, { phase });

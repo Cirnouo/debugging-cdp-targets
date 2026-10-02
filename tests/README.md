@@ -3,6 +3,8 @@
 - `plugin-runtime.test.ts` covers command templates, routing, lifecycle, IPC,
   Server options, identity, and launch rollback using fake targets.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
+- `official-package.test.ts` checks frozen input agreement, exact release evidence,
+  path/link rejection, complete file verification and source/packaged resolution.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
   evidence, and PID/path/session mismatch checks with injected I/O.
 - `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and

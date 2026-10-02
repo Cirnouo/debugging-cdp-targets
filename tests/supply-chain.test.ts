@@ -7,6 +7,7 @@ import test from 'node:test';
 import { parse, stringify } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
 import { checkSecurity } from '../tooling/check-security.ts';
+import { OFFICIAL_RELEASE } from '../tooling/payload-policy.ts';
 import {
     assessAudit,
     evaluateFindings,
@@ -88,11 +89,23 @@ const inventory = [
 const upstreamLock = lock
     .replaceAll('ws', 'chrome-devtools-mcp')
     .replaceAll('8.22.0', '1.10.1')
-    .replace('devDependencies:', 'dependencies:');
+    .replace('devDependencies:', 'dependencies:')
+    .replace('sha512-d3M=', OFFICIAL_RELEASE.integrity);
+const upstreamInputs = { release: OFFICIAL_RELEASE, snapshot: upstreamLock };
+const releaseRootLock = lock
+    .replace(
+        'ws: {specifier: 8.22.0, version: 8.22.0}',
+        'ws: {specifier: 8.22.0, version: 8.22.0}\n      chrome-devtools-mcp: {specifier: 1.10.1, version: 1.10.1}',
+    )
+    .replace(
+        'packages:\n  ws@8.22.0:',
+        `packages:\n  chrome-devtools-mcp@1.10.1:\n    resolution: {integrity: ${OFFICIAL_RELEASE.integrity}}\n  ws@8.22.0:`,
+    )
+    .replace('snapshots:\n  ws@8.22.0:', 'snapshots:\n  chrome-devtools-mcp@1.10.1: {}\n  ws@8.22.0:');
 const ghsa = 'GHSA-35jh-r3h4-6jhm';
 const now = new Date('2026-09-30T00:00:00.000Z');
 const fingerprints = { code: 'a'.repeat(64), configuration: 'b'.repeat(64), dependencies: 'c'.repeat(64) };
-function audit(severity = 'high', version = '8.22.0'): AuditFixture {
+function audit(severity = 'high', version = '8.22.0', count = 3): AuditFixture {
     return {
         advisories: {
             1: {
@@ -110,9 +123,9 @@ function audit(severity = 'high', version = '8.22.0'): AuditFixture {
         metadata: {
             vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, [severity]: 1 },
             dependencies: 1,
-            devDependencies: 1,
+            devDependencies: count - 2,
             optionalDependencies: 1,
-            totalDependencies: 3,
+            totalDependencies: count,
         },
     };
 }
@@ -307,11 +320,59 @@ test('lock-only validation cannot create an installation tree or mutate locked i
     }
 });
 
+test('security fingerprints bind all official resource bytes, release evidence and the frozen snapshot', async () => {
+    const root = await lockProject();
+    try {
+        const resource = 'plugins/debugging-cdp-targets/dist/official-server/build/src/resource.txt';
+        for (const [file, bytes] of [
+            [resource, 'resource'],
+            ['tooling/official-server-release.json', JSON.stringify(OFFICIAL_RELEASE)],
+            ['tooling/security/upstream-pnpm-lock.yaml', upstreamLock],
+        ]) {
+            assert.ok(file && bytes);
+            await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+            await writeFile(path.join(root, file), bytes);
+        }
+        const execute: PnpmExecutor = async (args) =>
+            args[0] === 'config'
+                ? {
+                      exitCode: 0,
+                      stdout: JSON.stringify({ ...INSTALL_POLICY, allowBuilds: { 'esbuild@0.28.2': true } }),
+                  }
+                : args[0] === 'install'
+                  ? { exitCode: 0, stdout: '' }
+                  : args.includes('signatures')
+                    ? { exitCode: 0, stdout: '{"audited":3,"verified":3,"missing":[],"invalid":[]}' }
+                    : { exitCode: 1, stdout: JSON.stringify(audit('moderate')) };
+        const first = await checkSecurity(root, { phase: 'lockfile', execute, now });
+        await writeFile(path.join(root, resource), 'changed resource');
+        const changed = await checkSecurity(root, { phase: 'lockfile', execute, now });
+        assert.notEqual(first.scopes.repository.fingerprints.code, changed.scopes.repository.fingerprints.code);
+        await writeFile(
+            path.join(root, 'tooling/official-server-release.json'),
+            `${JSON.stringify(OFFICIAL_RELEASE)}\n`,
+        );
+        const evidence = await checkSecurity(root, { phase: 'lockfile', execute, now });
+        assert.notEqual(
+            changed.scopes.repository.fingerprints.configuration,
+            evidence.scopes.repository.fingerprints.configuration,
+        );
+        await writeFile(path.join(root, 'tooling/security/upstream-pnpm-lock.yaml'), `${upstreamLock}\n`);
+        const snapshot = await checkSecurity(root, { phase: 'lockfile', execute, now });
+        assert.notEqual(
+            evidence.scopes.repository.fingerprints.configuration,
+            snapshot.scopes.repository.fingerprints.configuration,
+        );
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 test('upstream high findings are blocked before installation, including without a review callback', async () => {
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'dct-blocked-upstream-'));
     const calls: CommandCall[] = [];
     try {
-        const result = await scanUpstream({ temporaryRoot, execute: isolatedExecutor(calls) });
+        const result = await scanUpstream({ temporaryRoot, inputs: upstreamInputs, execute: isolatedExecutor(calls) });
         assert.equal(result.findings[0]?.severity, 'high');
         assert.equal(result.installed, false);
         assert.equal(calls.filter(({ args }) => args[0] === 'install').length, 1);
@@ -327,7 +388,11 @@ test('upstream signature, network, malformed and incomplete audits never proceed
         const calls: CommandCall[] = [];
         try {
             await assert.rejects(
-                scanUpstream({ temporaryRoot, execute: isolatedExecutor(calls, 'moderate', failure) }),
+                scanUpstream({
+                    temporaryRoot,
+                    inputs: upstreamInputs,
+                    execute: isolatedExecutor(calls, 'moderate', failure),
+                }),
             );
             assert.equal(calls.filter(({ args }) => args[0] === 'install').length, 1);
             assert.equal(
@@ -451,6 +516,7 @@ test('upstream reviews the isolated lock before installation and never runs its 
     try {
         const result = await scanUpstream({
             temporaryRoot,
+            inputs: upstreamInputs,
             async review(result) {
                 await assert.rejects(access(path.join(required(calls[0]).cwd, 'node_modules')), /ENOENT/);
                 assert.equal(result.findings[0]?.severity, 'moderate');
@@ -477,7 +543,8 @@ test('upstream reviews the isolated lock before installation and never runs its 
                     assert.ok(options.env.NPM_CONFIG_USERCONFIG?.startsWith(options.cwd));
                     assert.ok(options.env.XDG_CONFIG_HOME?.startsWith(options.cwd));
                     if (args.includes('--lockfile-only')) {
-                        await writeFile(path.join(options.cwd, 'pnpm-lock.yaml'), upstreamLock);
+                        assert.equal(await readFile(path.join(options.cwd, 'pnpm-lock.yaml'), 'utf8'), upstreamLock);
+                        assert.equal(args.includes('--frozen-lockfile'), true);
                         return { stdout: '', exitCode: 0 };
                     }
                     assert.equal(reviewed, true, 'upstream approval must precede installation');
@@ -526,6 +593,26 @@ test('upstream reviews the isolated lock before installation and never runs its 
     } finally {
         await rm(temporaryRoot, { recursive: true, force: true });
     }
+});
+
+test('frozen upstream validation rejects identity drift and lock mutation before any audit', async () => {
+    let audits = 0;
+    const execute: PnpmExecutor = async (args, { cwd }) => {
+        if (args[0] === 'config')
+            return { exitCode: 0, stdout: JSON.stringify({ ...INSTALL_POLICY, allowBuilds: {} }) };
+        if (args[0] === 'audit') audits++;
+        if (args[0] === 'install') {
+            assert.equal(args.includes('--frozen-lockfile'), true);
+            await writeFile(path.join(cwd, 'pnpm-lock.yaml'), `${upstreamLock}\n`);
+        }
+        return { exitCode: 0, stdout: '' };
+    };
+    await assert.rejects(
+        scanUpstream({ inputs: { ...upstreamInputs, snapshot: upstreamLock.replaceAll('1.10.1', '1.10.0') }, execute }),
+        /identity|version/i,
+    );
+    await assert.rejects(scanUpstream({ inputs: upstreamInputs, execute }), /changed/i);
+    assert.equal(audits, 0);
 });
 
 test('installation policy has no cooldown exemptions, ignored advisories or trust bypass', () => {
@@ -606,6 +693,7 @@ test('failed isolated lock resolution never proceeds to audit and cleans only it
         await assert.rejects(
             scanUpstream({
                 temporaryRoot,
+                inputs: upstreamInputs,
                 execute: async () => {
                     calls++;
                     return { stdout: '', exitCode: 1 };
@@ -644,6 +732,9 @@ test('public gate reports both full trees and rejects evidence changing during a
         await mkdir(path.join(root, 'plugins/fixture'), { recursive: true });
         await mkdir(path.join(root, 'tooling'), { recursive: true });
         const vendorEvidence = path.join(root, 'tooling/vendored-licenses.json');
+        await mkdir(path.join(root, 'tooling/security'), { recursive: true });
+        await writeFile(path.join(root, 'tooling/official-server-release.json'), JSON.stringify(OFFICIAL_RELEASE));
+        await writeFile(path.join(root, 'tooling/security/upstream-pnpm-lock.yaml'), upstreamLock);
         await writeFile(vendorEvidence, '{"schemaVersion":1,"packages":[]}');
         await writeFile(path.join(root, 'plugins/fixture/mcp.json'), '{"env":{}}');
         await writeFile(path.join(root, 'src/evidence.ts'), 'export const safe = true;\n');
@@ -651,17 +742,21 @@ test('public gate reports both full trees and rejects evidence changing during a
             path.join(root, 'docs/policies/security-exceptions.json'),
             '{"schemaVersion":1,"exceptions":[]}',
         );
-        await writeFile(path.join(root, 'package.json'), '{"devDependencies":{"ws":"8.22.0"}}');
+        await writeFile(
+            path.join(root, 'package.json'),
+            '{"devDependencies":{"ws":"8.22.0","chrome-devtools-mcp":"1.10.1"}}',
+        );
         const { INSTALL_POLICY } = await import('../tooling/security/security-evidence.ts');
         await writeFile(
             path.join(root, 'pnpm-workspace.yaml'),
             stringify({ ...INSTALL_POLICY, allowBuilds: { 'esbuild@0.28.2': true } }),
         );
-        await tree(root, lock);
+        await tree(root, releaseRootLock);
         let mutate = false;
         const execute: PnpmExecutor = async (args, { cwd }) => {
             if (args[0] === 'install') {
-                if (args.includes('--lockfile-only')) await writeFile(path.join(cwd, 'pnpm-lock.yaml'), upstreamLock);
+                if (args.includes('--lockfile-only'))
+                    assert.equal(await readFile(path.join(cwd, 'pnpm-lock.yaml'), 'utf8'), upstreamLock);
                 else {
                     upstreamInstalls++;
                     await tree(cwd, upstreamLock);
@@ -676,9 +771,17 @@ test('public gate reports both full trees and rejects evidence changing during a
             if (args.includes('signatures')) {
                 if (mutate && cwd === root)
                     await writeFile(path.join(root, 'src/evidence.ts'), 'export const safe = false;\n');
-                return { exitCode: 0, stdout: '{"audited":3,"verified":3,"invalid":[],"missing":[]}' };
+                const count = cwd === root ? 4 : 3;
+                return {
+                    exitCode: 0,
+                    stdout: JSON.stringify({ audited: count, verified: count, invalid: [], missing: [] }),
+                };
             }
-            const report = audit(cwd === root ? 'high' : upstreamSeverity, cwd === root ? '8.22.0' : '1.10.1');
+            const report = audit(
+                cwd === root ? 'high' : upstreamSeverity,
+                cwd === root ? '8.22.0' : '1.10.1',
+                cwd === root ? 4 : 3,
+            );
             if (cwd !== root) required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
             return { exitCode: 1, stdout: JSON.stringify(report) };
         };

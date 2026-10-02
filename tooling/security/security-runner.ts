@@ -2,11 +2,14 @@ import { execFile } from 'node:child_process';
 import { lstat, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parse, stringify } from 'yaml';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../../src/shared/constants.ts';
 import { errorCode, errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { parseOfficialReleaseEvidence } from '../../src/shared/official-package.ts';
 import type { AuditCommandResult, Finding, LockInventory } from './audit-policy.ts';
+import { type OfficialInputs, verifyOfficialInputs, verifyOfficialLock } from './official-inputs.ts';
 
 export type SecurityPhase = 'complete' | 'lockfile';
 export type PnpmExecutor = (
@@ -21,6 +24,7 @@ export interface ScanResult {
 }
 export type SecurityRunnerOptions = { root: string; phase?: SecurityPhase; execute?: PnpmExecutor };
 export type UpstreamOptions = {
+    inputs?: OfficialInputs;
     temporaryRoot?: string;
     execute?: PnpmExecutor;
     review?: (result: ScanResult) => Promise<{ blocked: readonly Finding[] }>;
@@ -152,10 +156,15 @@ export async function scanRepository({ root, phase = 'complete', execute = execu
 }
 
 export async function scanUpstream({
+    inputs,
     temporaryRoot = os.tmpdir(),
     execute = executePnpm,
     review,
 }: UpstreamOptions = {}) {
+    const reviewed = inputs ?? (await verifyOfficialInputs(fileURLToPath(new URL('../../', import.meta.url))));
+    const release = parseOfficialReleaseEvidence(reviewed.release);
+    const inventory = readLockInventory(reviewed.snapshot);
+    verifyOfficialLock(inventory, release, 'dependencies');
     const root = await mkdtemp(path.join(temporaryRoot, 'debugging-cdp-targets-security-'));
     try {
         const manifest = {
@@ -166,6 +175,7 @@ export async function scanUpstream({
             dependencies: { [PACKAGE_NAME]: PACKAGE_VERSION },
         };
         await writeFile(path.join(root, 'package.json'), `${JSON.stringify(manifest, null, 4)}\n`);
+        await writeFile(path.join(root, 'pnpm-lock.yaml'), reviewed.snapshot);
         await writeFile(
             path.join(root, 'pnpm-workspace.yaml'),
             stringify(
@@ -192,19 +202,18 @@ export async function scanUpstream({
             `--store-dir=${path.join(root, 'store')}`,
             ...AUDIT_OPTIONS,
         ];
-        const resolution = await execute([...installArguments, '--lockfile-only'], { cwd: root, env });
-        if (resolution.exitCode !== 0)
-            throw new Error(`Isolated upstream lock resolution failed: ${resolution.stderr ?? resolution.stdout}`);
-        if (await hasInstallation(root)) throw new Error('Upstream lock resolution created an installation tree.');
-        const inventory = readLockInventory(await readFile(path.join(root, 'pnpm-lock.yaml'), 'utf8'));
         await verifyLockManifest(root, inventory);
-        const runtime = inventory.documents.find((doc) => doc.importers['.']?.dependencies?.[PACKAGE_NAME]);
-        if (
-            runtime?.importers['.']?.dependencies?.[PACKAGE_NAME]?.specifier !== PACKAGE_VERSION ||
-            !inventory.packages.some((pkg) => pkg.name === PACKAGE_NAME && pkg.version === PACKAGE_VERSION)
-        )
-            throw new Error('Isolated upstream version differs from shared configuration.');
         const before = await lockedInputs(root);
+        const resolution = await execute([...installArguments, '--lockfile-only', '--frozen-lockfile'], {
+            cwd: root,
+            env,
+        });
+        if (resolution.exitCode !== 0)
+            throw new Error(
+                `Isolated upstream frozen lock validation failed: ${resolution.stderr ?? resolution.stdout}`,
+            );
+        await assertUnchangedInputs(root, before);
+        if (await hasInstallation(root)) throw new Error('Upstream lock resolution created an installation tree.');
         const result = await auditTree(root, inventory, execute, env);
         const decision = review
             ? await review(result)

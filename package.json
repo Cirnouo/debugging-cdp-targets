@@ -22,6 +22,7 @@
         "check:distribution": "node tooling/distribution-audit.ts",
         "build:plugin": "node tooling/build-plugin.ts",
         "check:build": "node tooling/build-plugin.ts --check",
+        "smoke:official": "node tooling/smoke-official-catalog.ts",
         "check:commits": "node tooling/check-commits.ts",
         "check:security": "node tooling/check-security.ts --root .",
         "build:security": "node tooling/build-security.ts",

@@ -50,17 +50,26 @@ zero/partial coverage, malformed reports, missing/invalid signatures, unknown
 identities, ignored findings, command failures, and network failures all block.
 No vulnerability exception can bypass these failures.
 
-The complete command resolves the shared-constant exact official MCP version
-into a new disposable lockfile with scripts disabled, isolated configuration and
-store. It validates and audits this lockfile, evaluates vulnerability exceptions
+The complete command checks root declarations/lock and release evidence against
+the committed `tooling/security/upstream-pnpm-lock.yaml`, then copies that snapshot
+into a disposable directory with scripts disabled, isolated configuration and
+store. It performs frozen lock-only validation without changing the snapshot,
+audits it, evaluates vulnerability exceptions
 with current fingerprints, and only then performs a script-disabled frozen
 install and verifies the installed graph. Blocked or unverifiable findings do
 not permit actual installation. The approved inputs must remain unchanged.
 It never executes the Server/bin/version command,
 starts a browser, or reads the user's runtime cache. All disposable files are
-removed after the check. This measures the upstream dependency graph resolved
-at CI time, not a guarantee about a future runtime npx download. Audit tooling,
+removed after the check. The root and isolated graphs bind the exact delivered
+release and tarball integrity; runtime performs no npm/npx acquisition. Audit tooling,
 temporary locks, packages and reports are not Plugin payload files.
+
+The official release embeds vendor libraries outside its declared npm graph.
+Registry graph audits and signatures do not establish vulnerability coverage for
+those embedded libraries. Preserve `build/src/third_party/bundled-packages.json`
+and `THIRD_PARTY_NOTICES` with the complete original release; their reviewed bytes
+are covered by release evidence and code fingerprints. This is an explicit audit
+coverage boundary, not a claim that embedded code is vulnerability-free.
 
 ## Vulnerabilities and bounded review exceptions
 
@@ -91,7 +100,9 @@ array. Each exception must contain exactly:
   hashes copied from the corresponding check report after human inspection.
 
 Code hashes cover maintained runtime source/helpers, audit/build tooling and
-committed runtime bundles. Configuration hashes cover package.json, workspace
+committed runtime bundles and every official delivery file, including resources,
+licenses and skills. Configuration hashes cover maintained release evidence,
+the isolated lock snapshot, package.json, workspace
 policy, the lockfile, optional .npmrc, reviewed vendored-license evidence, CI workflows, Plugin JSON/YAML configuration
 and the Marketplace catalog. Dependency hashes cover
 the parsed full lock documents, canonically sorted. File hashes include sorted

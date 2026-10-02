@@ -16,6 +16,11 @@ Version 0.1.0 remains under development; no release has been published.
   1.10.1 connections for new targets, without a fixed connection limit.
 - Bundled gateway using official split MCP SDK 2.2.0 with legacy stdio, roots,
   form elicitation, progress and cancellation compatibility.
+- Complete unchanged official chrome-devtools-mcp 1.10.1 release delivered with
+  the Plugin, with reviewed tarball/file evidence and a frozen isolated audit lock.
+  Each launch verifies the delivered files and resolves the public Server bin
+  relative to the Plugin; runtime npm/npx acquisition and its preload are removed.
+  Automatic update checks are disabled only for the official Server child.
 - Parallel official tool calls with explicit connection/session routing and
   independent progress, cancellation, exit monitoring and recovery reminders.
 - Entry/connection/session-addressed status, start, restart, stop, and end-task commands,

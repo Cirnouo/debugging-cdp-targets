@@ -11,6 +11,8 @@
 - `dist/` contains the committed standalone checker and original YAML license
   so CI can audit before installing project dependencies.
 - `upstream-pnpm-lock.yaml` freezes the isolated official release dependency graph.
+- `official-inputs.ts` binds root declarations/lock, release evidence and isolated
+  snapshot identity and integrity before builds and complete audits.
 - `AGENTS.md` defines fail-closed implementation and test requirements.
 
 Run `pnpm check:security` for full installed-tree checks, or the standalone
