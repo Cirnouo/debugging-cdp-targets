@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -82,7 +82,7 @@ test('build input verification rejects drift in root declarations, snapshot iden
 });
 
 async function packageFixture(launchMarker = false) {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-official-package-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-official-package-')));
     const release: unknown = JSON.parse(
         await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
@@ -197,11 +197,51 @@ test('package verifier rejects internal links and a linked package root', async 
         const evidence = parseOfficialReleaseEvidence(fixture.input);
         await symlink(fixture.root, path.join(container, 'package'), 'junction');
         await assert.rejects(verifyOfficialPackage(path.join(container, 'package'), evidence), /link/i);
+        await symlink(path.dirname(fixture.root), path.join(container, 'parent'), 'junction');
+        await assert.rejects(
+            verifyOfficialPackage(path.join(container, 'parent', path.basename(fixture.root)), evidence),
+            /linked or aliased parent/i,
+        );
         await symlink(container, path.join(fixture.root, 'build/src/linked'), 'junction');
         await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /link/i);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
         await rm(container, { recursive: true, force: true });
+    }
+});
+
+test('package, output and repository fixtures work with an aliased system temporary directory', async () => {
+    const temporaryBase = await realpath(os.tmpdir());
+    const root = await mkdtemp(path.join(temporaryBase, 'dct-aliased-temp-'));
+    try {
+        const directory = path.join(root, 'real');
+        const alias = path.join(root, 'alias');
+        await mkdir(directory);
+        await symlink(directory, alias, 'junction');
+        const environment: NodeJS.ProcessEnv = { ...process.env, TEMP: alias, TMP: alias, TMPDIR: alias };
+        delete environment.NODE_TEST_CONTEXT;
+        const result = await promisify(execFile)(
+            process.execPath,
+            [
+                '--test',
+                '--test-reporter=spec',
+                '--test-name-pattern=package verifier|installed pnpm|packaged resolver|build synchronization|only the fully verified official',
+                ...['official-package', 'build-plugin', 'repository-audit'].map((name) =>
+                    fileURLToPath(new URL(`./${name}.test.ts`, import.meta.url)),
+                ),
+            ],
+            {
+                env: environment,
+                timeout: 30_000,
+                windowsHide: true,
+                shell: false,
+            },
+        );
+        assert.match(result.stdout, /fail 0/);
+    } finally {
+        assert.equal(path.dirname(root), temporaryBase);
+        assert.ok(path.basename(root).startsWith('dct-aliased-temp-'));
+        await rm(root, { recursive: true, force: true });
     }
 });
 

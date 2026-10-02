@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,11 +32,8 @@ async function catalog(plugin: string) {
     }
 }
 
-async function removeSmokeWorkspace(temporary: string) {
-    if (
-        path.dirname(temporary) !== path.resolve(os.tmpdir()) ||
-        !path.basename(temporary).startsWith('dct-official-catalog-')
-    )
+async function removeSmokeWorkspace(temporary: string, temporaryBase: string) {
+    if (path.dirname(temporary) !== temporaryBase || !path.basename(temporary).startsWith('dct-official-catalog-'))
         throw new Error('Unsafe smoke cleanup path.');
     await rm(temporary, { recursive: true, force: true });
 }
@@ -45,7 +42,8 @@ async function smoke() {
     const root = fileURLToPath(new URL('..', import.meta.url));
     const source = await readDistributionTree(path.join(root, PLUGIN_ROOT));
     assert.deepEqual(validatePayloadFileInventory([...source.keys()]), []);
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-official-catalog-'));
+    const temporaryBase = await realpath(os.tmpdir());
+    const temporary = await realpath(await mkdtemp(path.join(temporaryBase, 'dct-official-catalog-')));
     try {
         const plugin = path.join(temporary, 'plugin');
         for (const [name, bytes] of source) {
@@ -85,7 +83,7 @@ async function smoke() {
         );
         console.log(`Copied-Plugin official catalog smoke passed: ${result.stdout.trim()}`);
     } finally {
-        await removeSmokeWorkspace(temporary);
+        await removeSmokeWorkspace(temporary, temporaryBase);
     }
 }
 

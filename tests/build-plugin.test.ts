@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -225,7 +225,7 @@ test('Plugin generation copies every official published file at its complete rel
 });
 
 test('build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-output-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-output-')));
     try {
         const files = new Map([
             ['gateway.mjs', Buffer.from('gateway')],

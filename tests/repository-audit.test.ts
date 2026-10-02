@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -54,7 +54,7 @@ test('GitHub directory documentation uses INDEX.md without overriding the root R
 });
 
 test('only the fully verified official output is exempt from directory documentation and owned-module rules', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-upstream-repo-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-upstream-repo-')));
     try {
         execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
         const prefix = `${PLUGIN_ROOT}/dist/official-server`;
