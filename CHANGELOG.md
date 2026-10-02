@@ -17,19 +17,27 @@ Version 0.1.0 remains under development; no release has been published.
 - Bundled gateway using official split MCP SDK 2.2.0 with legacy stdio, roots,
   form elicitation, progress and cancellation compatibility.
 - Parallel official tool calls with explicit connection/session routing and
-  independent progress, cancellation, monitoring and recovery prompts.
+  independent progress, cancellation, exit monitoring and recovery reminders.
 - Entry/connection/session-addressed status, start, restart, stop, and end-task commands,
   explicit Close/Keep choices, and reusable host connections after normal Close.
-- Lifecycle status and active-task watch tools with explicit same-port recovery
-  after accidental closure and fresh page identities after recovery.
+- Lifecycle status and native process exit monitoring with automatic, reviewed
+  Codex MCP Tool Hooks, one reminder per active session, and explicit same-port
+  recovery with fresh page identities.
 - Shell-free launch-command templates with environment expansion and selection
   of a free, non-reserved debugging port.
-- Chrome presets for a dedicated browser profile and extension debugging, with
+- Chrome presets for a fixed dedicated browser profile and extension debugging, with
   usage statistics and CrUX disabled by default and explicit overrides.
 - Verified Windows Chrome operation; Linux/macOS simulated CDP coverage, without
   a claim of verified real-application compatibility on those platforms.
 
 ### Fixed
+
+- Silent scoped upstream/router cleanup after a kept or ended target exits, with
+  retained retry identity on failure and automatic task resumption on reuse.
+- Profile occupancy checks and launch reservations requiring explicit alternative
+  directories, preserving original profiles during recovery without UUID fallback.
+- Codex manifest packaging so the installed-version loader discovers bundled Hooks;
+  isolated model-request tests cover trust, tool-boundary, Stop and idle delivery.
 
 - Visible Windows target GUI launch so normal CloseMainWindow shutdown can
   reach the target window; auxiliary process consoles remain hidden.

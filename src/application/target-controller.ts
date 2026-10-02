@@ -16,33 +16,41 @@ export interface ControllerHost {
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
     health?(target: ManagedTarget): Promise<TargetHealth>;
 }
-export type TargetEvent = { sessionId: string; reason: string };
-type Current = { target: ManagedTarget; options: LaunchOptions; sessionId: string };
+export type TargetEvent = { sessionId: string; reason: 'process-exited'; taskActive: boolean };
+type Current = {
+    target: ManagedTarget;
+    options: LaunchOptions;
+    sessionId: string;
+    exited: boolean;
+    expectedExit?: boolean;
+    unsubscribe?: () => void;
+};
 
 export function createTargetController({
     entryId,
     router,
     host,
     server,
+    onProcessExit,
 }: {
     entryId: string;
     router: ControllerRouter;
     host: ControllerHost;
     server: { ensure(): Promise<void>; close(): Promise<void> };
+    onProcessExit?: (event: TargetEvent) => void;
 }) {
     let current: Current | undefined;
     let state: TargetStatus['status'] = 'idle';
     let reason: string | undefined;
-    let misses = 0;
+    let taskActive = false;
     let gated = false;
     let serial = Promise.resolve();
     let checking: Promise<void> | undefined;
-    let watcher: { sessionId: string; finish(event: TargetEvent): void } | undefined;
     function status(): TargetStatus {
         return {
             entryId,
             status: state,
-            taskActive: watcher !== undefined,
+            taskActive,
             ...(current
                 ? {
                       sessionId: current.sessionId,
@@ -66,30 +74,48 @@ export function createTargetController({
         if (!current || current.sessionId !== sessionId) throw new Error('The target session is absent or stale.');
         return current;
     }
-    function endWatcher() {
-        watcher?.finish({ sessionId: watcher.sessionId, reason: 'task-ended' });
-    }
     function gate() {
         if (!gated) router.clearTarget();
         gated = true;
     }
+    function processExited(selected: Current) {
+        if (current !== selected || selected.exited) return;
+        selected.exited = true;
+        gate();
+        // Explicit cleanup owns expected exits, including late delivery after its failure.
+        if (state === 'closing' || selected.expectedExit) return;
+        state = 'lost';
+        reason = 'process-exited';
+        onProcessExit?.({
+            sessionId: selected.sessionId,
+            reason: 'process-exited',
+            taskActive,
+        });
+    }
+    function subscribe(selected: Current) {
+        const child = selected.target.child;
+        if (!child) return;
+        const exited = () => processExited(selected);
+        child.once('exit', exited);
+        selected.unsubscribe = () => child.off?.('exit', exited);
+        // Node retains exitCode/signalCode even when exit preceded this subscription.
+        if (typeof child.exitCode === 'number' || typeof child.signalCode === 'string') exited();
+    }
     function lose(selected: Current, why: string) {
-        if (current !== selected || state !== 'active') return;
+        if (current !== selected || selected.exited || state === 'closing' || state === 'close-failed') return;
         gate();
         state = 'lost';
         reason = why;
-        watcher?.finish({ sessionId: selected.sessionId, reason: why });
     }
     async function tryClose(selected: Current, requireListener = true) {
         try {
+            if (selected.exited) return true;
             if (!requireListener && host.health && (await host.health(selected.target)) === 'gone') return true;
-            return await host.close(selected.target, { requireListener });
+            const closed = await host.close(selected.target, { requireListener });
+            return selected.exited || closed;
         } catch {
-            return false;
+            return selected.exited;
         }
-    }
-    function officialDisconnected() {
-        if (current) lose(current, 'official-disconnected');
     }
     function failedClose(selected: Current) {
         const error = new DetailedError(
@@ -98,39 +124,39 @@ export function createTargetController({
         error.details = { retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }] };
         return error;
     }
-    function retainFailedRollback(selected: Current) {
-        current = selected;
+    function retainFailedRollback(target: ManagedTarget, options: LaunchOptions, sessionId: string) {
+        current = { target, options, sessionId, exited: false };
+        taskActive = false;
         state = 'close-failed';
         reason = 'target-rollback-failed';
         gate();
+        subscribe(current);
     }
     async function attach(options: LaunchOptions, sessionId: string = randomUUID()) {
-        options = { ...options, profileKey: options.profileKey ?? `${entryId}-${sessionId}` };
         await server.ensure();
         let target: ManagedTarget;
         try {
             target = await host.launch(options);
         } catch (error) {
-            if (error instanceof RetainedTargetError)
-                retainFailedRollback({ target: error.target, options, sessionId });
+            if (error instanceof RetainedTargetError) retainFailedRollback(error.target, options, sessionId);
             throw error;
         }
-        const selected = { target, options, sessionId };
+        const selected: Current = { target, options, sessionId, exited: false };
         try {
             router.setTarget(target);
         } catch (error) {
             if (!(await tryClose(selected, false))) {
-                retainFailedRollback(selected);
+                retainFailedRollback(target, options, sessionId);
                 throw failedClose(selected);
             }
             throw error;
         }
         current = selected;
         gated = false;
-        misses = 0;
+        taskActive = true;
         reason = undefined;
         state = 'active';
-        target.child?.once('exit', () => lose(selected, 'process-exited'));
+        subscribe(selected);
         return status();
     }
     function start(options: LaunchOptions, sessionId?: string) {
@@ -140,6 +166,29 @@ export function createTargetController({
             return attach(options, sessionId);
         });
     }
+    async function dispose(selected: Current) {
+        taskActive = false;
+        state = 'closing';
+        gate();
+        try {
+            await server.close();
+        } catch (error) {
+            state = 'close-failed';
+            reason = 'official-close-failed';
+            throw error;
+        }
+        selected.unsubscribe?.();
+        current = undefined;
+        state = 'idle';
+        reason = undefined;
+    }
+    function retireExited({ sessionId }: { sessionId: string }) {
+        return run(async () => {
+            const selected = current;
+            if (selected?.sessionId === sessionId && selected.exited && !taskActive) await dispose(selected);
+            return status();
+        });
+    }
     function restart({ sessionId }: { sessionId: string }) {
         return run(async () => {
             const previous = requireSession(sessionId);
@@ -147,18 +196,29 @@ export function createTargetController({
                 throw new Error('Only a lost target session can be restarted after an explicit user choice.');
             if (!previous.target.launchDefinition)
                 throw new Error('The exact launch definition is unavailable; cannot safely restart.');
-            const gone = host.health ? (await host.health(previous.target)) === 'gone' : false;
-            if (!gone && !(await tryClose(previous, false))) throw failedClose(previous);
-            await server.close();
+            previous.expectedExit = true;
+            state = 'closing';
+            if (!(await tryClose(previous, false))) {
+                delete previous.expectedExit;
+                state = 'lost';
+                throw failedClose(previous);
+            }
+            try {
+                await server.close();
+            } catch (error) {
+                state = 'close-failed';
+                reason = 'official-close-failed';
+                taskActive = false;
+                throw error;
+            }
+            previous.unsubscribe?.();
             const options: LaunchOptions = {
                 ...previous.options,
                 exactPort: previous.target.port,
                 launchDefinition: previous.target.launchDefinition,
-                profileKey: previous.options.profileKey ?? `${entryId}-${sessionId}`,
             };
             try {
-                const result = await attach(options);
-                return { ...result, pageIdsInvalidated: true };
+                return { ...(await attach(options)), pageIdsInvalidated: true };
             } catch (error) {
                 if (current === previous) {
                     state = 'lost';
@@ -168,77 +228,50 @@ export function createTargetController({
             }
         });
     }
-    function stop({ sessionId, disposition }: { sessionId: string; disposition: Disposition }): Promise<TargetStatus> {
+    function stop({ sessionId, disposition }: { sessionId: string; disposition: Disposition }) {
         return run(async () => {
             const selected = requireSession(sessionId);
             if (disposition !== 'Close' && disposition !== 'Keep') throw new Error('Choose Close or Keep.');
             if (state === 'close-failed' && disposition !== 'Close')
                 throw new Error('The retained target requires an explicit Close retry.');
             if (disposition === 'Keep') {
-                endWatcher();
+                taskActive = false;
+                if (selected.exited) await dispose(selected);
                 return { ...status(), disposition };
             }
             if (state === 'active' && router.isBusy())
                 throw new Error('CDP is busy; retry after the current request completes.');
             const previousState = state;
-            state = 'closing';
             router.pause?.();
-            try {
-                if (!(await tryClose(selected, previousState === 'active'))) {
-                    state = previousState;
-                    router.resume?.();
-                    throw failedClose(selected);
-                }
-                gate();
-                endWatcher();
-                try {
-                    await server.close();
-                } catch (error) {
-                    state = 'close-failed';
-                    reason = 'official-close-failed';
-                    throw error;
-                }
-                current = undefined;
-                state = 'idle';
-                reason = undefined;
-                return { ...status(), disposition, pageIdsInvalidated: true };
-            } catch (error) {
-                if (state === 'closing') state = previousState;
-                throw error;
+            selected.expectedExit = true;
+            state = 'closing';
+            if (!(await tryClose(selected, previousState === 'active'))) {
+                delete selected.expectedExit;
+                state = previousState;
+                router.resume?.();
+                throw failedClose(selected);
             }
+            await dispose(selected);
+            return { ...status(), disposition, pageIdsInvalidated: true };
         });
     }
-    async function endTask({ sessionId }: { sessionId: string }) {
-        requireSession(sessionId);
-        if (state === 'close-failed') throw new Error('The retained target requires an explicit Close retry.');
-        endWatcher();
-        return status();
-    }
-    function watchTarget(signal: AbortSignal): Promise<TargetEvent> {
-        if (!current) return Promise.reject(new Error('No current target session to watch.'));
-        if (watcher) return Promise.reject(new Error('This target session already has a task watcher.'));
-        const sessionId = current.sessionId;
-        if (state === 'close-failed')
-            return Promise.reject(new Error('The retained target requires an explicit Close retry.'));
-        if (state === 'lost') return Promise.resolve({ sessionId, reason: reason ?? 'target-unavailable' });
-        return new Promise((resolve) => {
-            function finish(event: TargetEvent) {
-                signal.removeEventListener('abort', aborted);
-                watcher = undefined;
-                resolve(event);
-            }
-            function aborted() {
-                finish({ sessionId, reason: 'task-ended' });
-            }
-            watcher = { sessionId, finish };
-            signal.addEventListener('abort', aborted, { once: true });
-            if (signal.aborted) aborted();
+    function endTask({ sessionId }: { sessionId: string }) {
+        return run(async () => {
+            const selected = requireSession(sessionId);
+            if (state === 'close-failed') throw new Error('The retained target requires an explicit Close retry.');
+            taskActive = false;
+            if (selected.exited) await dispose(selected);
+            return status();
         });
+    }
+    function beginTask({ sessionId }: { sessionId: string }) {
+        const selected = requireSession(sessionId);
+        if (!selected.exited && state !== 'closing' && state !== 'close-failed') taskActive = true;
     }
     async function checkHealth() {
         if (checking) return checking;
         const selected = current;
-        if (!selected || state !== 'active') return;
+        if (!selected || selected.exited || state !== 'active') return;
         checking = (async () => {
             let health: TargetHealth;
             try {
@@ -251,33 +284,30 @@ export function createTargetController({
                 health = 'unavailable';
             }
             if (current !== selected || state !== 'active') return;
-            if (health === 'healthy') {
-                misses = 0;
-                if (gated) {
-                    router.setTarget(selected.target);
-                    gated = false;
-                }
-                return;
-            }
-            gate();
-            if (health === 'gone') lose(selected, 'process-exited');
-            else if (health === 'identity-changed') lose(selected, 'identity-changed');
-            else if (++misses >= 2) lose(selected, 'target-unavailable');
+            if (health === 'gone') processExited(selected);
+            else if (health !== 'healthy')
+                lose(selected, health === 'identity-changed' ? health : 'target-unavailable');
         })().finally(() => {
             checking = undefined;
         });
         return checking;
     }
-    async function cleanupOnDisconnect() {
+    function cleanupOnDisconnect() {
         return run(async () => {
-            endWatcher();
+            taskActive = false;
             const selected = current;
+            if (selected) selected.expectedExit = true;
             state = 'closing';
             const closed = !selected || (await tryClose(selected, false));
             gate();
-            await server.close();
+            try {
+                await server.close();
+            } finally {
+                selected?.unsubscribe?.();
+            }
             current = undefined;
             state = 'idle';
+            reason = undefined;
             return closed || !selected
                 ? undefined
                 : { processId: selected.target.processId, port: selected.target.port };
@@ -289,10 +319,13 @@ export function createTargetController({
         restart,
         stop,
         endTask,
-        watchTarget,
+        beginTask,
+        retireExited,
         checkHealth,
         cleanupOnDisconnect,
-        officialDisconnected,
+        officialDisconnected: () => {
+            if (current) lose(current, 'official-disconnected');
+        },
         canInvoke: () => state === 'active' && !gated,
     };
 }

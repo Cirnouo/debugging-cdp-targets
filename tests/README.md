@@ -38,10 +38,15 @@
   output validation, legacy stdio ID-zero cancellation and lifecycle tools.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks manual closure and explicit same-port recovery.
+- `target-events.test.ts` checks silent exit monitoring, task resumption, Hook
+  deduplication and isolated cleanup with retained retry identity on failure.
+- `chrome-profile.test.ts` checks stable defaults, explicit directories, occupancy
+  rejection, concurrent reservations and release generation safety with fake targets.
+- `plugin-hooks.test.ts` checks the four automatic MCP Tool Hook declarations.
 - `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
   process options at the native child-process boundary without launching a target.
 - `fixtures/` owns isolated CDP processes.
-- `smoke/` owns opt-in official Server, local Marketplace, and Windows visible
+- `smoke/` owns opt-in isolated Codex Hook, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
 - `AGENTS.md` sets test safety and evidence rules.
 

@@ -39,9 +39,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
@@ -62,9 +62,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -137,9 +137,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = /* @__PURE__ */ Symbol("kDone");
     var kRun = /* @__PURE__ */ Symbol("kRun");
@@ -187,9 +187,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib = __require("zlib");
     var bufferUtil = require_buffer_util();
@@ -570,9 +570,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
@@ -771,9 +771,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -1394,9 +1394,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
@@ -1887,9 +1887,9 @@ var require_sender = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = /* @__PURE__ */ Symbol("kCode");
@@ -2116,9 +2116,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -2269,9 +2269,9 @@ var require_extension = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var https = __require("https");
@@ -3178,9 +3178,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
@@ -3240,7 +3240,7 @@ var require_stream = __commonJS({
       };
       duplex._final = function(callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open2() {
+          ws.once("open", function open3() {
             duplex._final(callback);
           });
           return;
@@ -3261,7 +3261,7 @@ var require_stream = __commonJS({
       };
       duplex._write = function(chunk, encoding, callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open2() {
+          ws.once("open", function open3() {
             duplex._write(chunk, encoding, callback);
           });
           return;
@@ -3276,9 +3276,9 @@ var require_stream = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse2(header) {
@@ -3321,9 +3321,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var http2 = __require("http");
@@ -3728,7 +3728,7 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 // src/adapters/cdp-router.ts
 import http from "node:http";
 
-// node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -4212,7 +4212,7 @@ async function createControlServer({
 // src/adapters/mcp-bridge.ts
 import { spawn as spawn2 } from "node:child_process";
 
-// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/chunk-Br0eD_fh.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/chunk-Br0eD_fh.mjs
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -4252,7 +4252,7 @@ var __toESM2 = (mod, isNodeMode, target) => (target = mod != null ? __create2(__
   enumerable: true
 }) : target, mod));
 
-// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/dialects-BOhdv1Fc.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/dialects-BOhdv1Fc.mjs
 var DRAFT_2020_12_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -4269,7 +4269,7 @@ function declaredDialect(schema, remedy) {
   throw new Error(`JSON Schema declares an unsupported dialect ("$schema": "${schema.$schema.slice(0, 200)}"). The default validator supports JSON Schema 2020-12, 2019-09, draft-07, and draft-06; ${remedy}`);
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/util.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -4505,10 +4505,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path6) {
+  if (!path6)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path6.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -4848,11 +4848,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path6, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path6);
     return iss;
   });
 }
@@ -5112,7 +5112,7 @@ function constantCatch(value) {
   return fn;
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/core.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/core.js
 var _a;
 var NEVER = /* @__PURE__ */ Object.freeze({
   status: "aborted"
@@ -5233,7 +5233,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/errors.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/errors.js
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -5301,16 +5301,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path5 = []) => {
+  const processError = (error3, path6 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path6, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -5348,7 +5348,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/parse.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
   return { callee: params?.callee ?? callee, Err: params?.Err };
 }
@@ -5496,7 +5496,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/regexes.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/regexes.js
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$/;
@@ -5556,7 +5556,7 @@ var _null = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/checks.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -5876,7 +5876,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/doc.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = [], closed = {}) {
     this.content = [];
@@ -5917,14 +5917,14 @@ ${content.join("\n")}
   }
 };
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/versions.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 6,
   patch: 5
 };
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/schemas.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -7632,7 +7632,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/memoizer.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/memoizer.js
 var $ZodCyclicError = class extends Error {
   constructor() {
     super(`Cannot parse a reference cycle that closes through a transform`);
@@ -7906,7 +7906,7 @@ function isBackEdge(ctx, value) {
   return backEdges !== void 0 && isRef(value) && backEdges.has(value);
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/en.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/en.js
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -8031,7 +8031,7 @@ function en_default() {
   };
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/registries.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/registries.js
 var _a2;
 var $ZodRegistry = class {
   constructor() {
@@ -8079,7 +8079,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/api.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -8632,7 +8632,7 @@ function _check(fn, params) {
   return ch;
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/to-json-schema.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
@@ -9162,7 +9162,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/json-schema-processors.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/json-schema-processors.js
 var narrowMin = (agg, key, value) => {
   if (agg[key] === void 0 || value > agg[key])
     agg[key] = value;
@@ -9910,7 +9910,7 @@ function toJSONSchema(input, params) {
   return finalize(ctx, input);
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/errors.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/errors.js
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
@@ -9955,7 +9955,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, void 0
   Parent: Error
 });
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/parse.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/parse.js
 var parse = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -9969,7 +9969,7 @@ var safeDecode = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/schemas.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/schemas.js
 function _ensureDefaultLocale() {
   if (!globalConfig.localeError)
     config(en_default());
@@ -11003,7 +11003,7 @@ function preprocess(fn, schema) {
   });
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/compat.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/compat.js
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -11021,7 +11021,7 @@ var ZodFirstPartyTypeKind;
 /* @__PURE__ */ (function(ZodFirstPartyTypeKind2) {
 })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/iso.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -11046,7 +11046,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/coerce.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/coerce.js
 var coerce_exports = {};
 __export(coerce_exports, {
   bigint: () => bigint2,
@@ -11071,7 +11071,7 @@ function date3(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [
   LATEST_PROTOCOL_VERSION,
@@ -12012,7 +12012,7 @@ var OAuthTokenRevocationRequestSchema = object({
   token_type_hint: string2().optional()
 }).strip();
 
-// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/src-xKF0PJN-.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/src-xKF0PJN-.mjs
 var BRANDS = /* @__PURE__ */ Symbol.for("mcp.sdk.errorBrands");
 function stampErrorBrands(instance, ctor) {
   const brands = /* @__PURE__ */ new Set();
@@ -14587,9 +14587,9 @@ var rev2026Codec = {
     });
     const parsed = buildSchemas2026().RequestMetaEnvelopeSchema.safeParse(meta2);
     if (!parsed.success) for (const issue2 of parsed.error.issues) {
-      const path5 = issue2.path.map(String);
-      const key = path5.length > 0 ? path5.join(".") : "_meta";
-      if (path5.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
+      const path6 = issue2.path.map(String);
+      const key = path6.length > 0 ? path6.join(".") : "_meta";
+      if (path6.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
       issues.push({
         key,
         problem: issue2.message
@@ -14889,29 +14889,29 @@ var PERMITTED_X_MCP_HEADER_TYPES = /* @__PURE__ */ new Set([
 function scanXMcpHeaderDeclarations(inputSchema) {
   const declarations = [];
   const seenLower = /* @__PURE__ */ new Map();
-  const visit = (node2, path5, reachable) => {
+  const visit = (node2, path6, reachable) => {
     if (node2 === null || typeof node2 !== "object") return void 0;
     const schema = node2;
     if (X_MCP_HEADER_KEY in schema) {
-      if (!reachable || path5.length === 0) return `${pathName(path5)}: x-mcp-header is only permitted on properties statically reachable via a chain of 'properties' keys (not under items, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, or $ref)`;
+      if (!reachable || path6.length === 0) return `${pathName(path6)}: x-mcp-header is only permitted on properties statically reachable via a chain of 'properties' keys (not under items, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, or $ref)`;
       const raw = schema[X_MCP_HEADER_KEY];
-      if (typeof raw !== "string" || raw.length === 0) return `${pathName(path5)}: x-mcp-header MUST be a non-empty string`;
-      if (!RFC9110_TOKEN.test(raw)) return `${pathName(path5)}: x-mcp-header '${raw}' is not a valid RFC 9110 token (no spaces, control characters or HTTP delimiters)`;
+      if (typeof raw !== "string" || raw.length === 0) return `${pathName(path6)}: x-mcp-header MUST be a non-empty string`;
+      if (!RFC9110_TOKEN.test(raw)) return `${pathName(path6)}: x-mcp-header '${raw}' is not a valid RFC 9110 token (no spaces, control characters or HTTP delimiters)`;
       const type = typeof schema.type === "string" ? schema.type : void 0;
-      if (type === void 0 || !PERMITTED_X_MCP_HEADER_TYPES.has(type)) return `${pathName(path5)}: x-mcp-header is only permitted on primitive-typed properties (string, integer, boolean); got ${type ?? "<none>"}`;
+      if (type === void 0 || !PERMITTED_X_MCP_HEADER_TYPES.has(type)) return `${pathName(path6)}: x-mcp-header is only permitted on primitive-typed properties (string, integer, boolean); got ${type ?? "<none>"}`;
       const lower = raw.toLowerCase();
       const prior = seenLower.get(lower);
       if (prior !== void 0) return `x-mcp-header '${raw}' is not case-insensitively unique (also declared as '${prior}')`;
       seenLower.set(lower, raw);
       declarations.push({
-        path: path5,
+        path: path6,
         headerName: raw,
         type
       });
     }
     const properties = schema.properties;
     if (properties !== null && typeof properties === "object") for (const [key, child] of Object.entries(properties)) {
-      const fault$1 = visit(child, [...path5, key], reachable);
+      const fault$1 = visit(child, [...path6, key], reachable);
       if (fault$1 !== void 0) return fault$1;
     }
     for (const k of NON_REACHABLE_SUBSCHEMA_KEYWORDS) {
@@ -14919,7 +14919,7 @@ function scanXMcpHeaderDeclarations(inputSchema) {
       if (sub === void 0) continue;
       const branches = Array.isArray(sub) ? sub : sub !== null && typeof sub === "object" && OBJECT_VALUED_SUBSCHEMA_KEYWORDS.has(k) ? Object.values(sub) : [sub];
       for (const branch of branches) {
-        const fault$1 = visit(branch, [...path5, `<${k}>`], false);
+        const fault$1 = visit(branch, [...path6, `<${k}>`], false);
         if (fault$1 !== void 0) return fault$1;
       }
     }
@@ -14959,8 +14959,8 @@ var OBJECT_VALUED_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set([
   "$defs",
   "definitions"
 ]);
-function pathName(path5) {
-  return path5.length === 0 ? "<root>" : path5.join(".");
+function pathName(path6) {
+  return path6.length === 0 ? "<root>" : path6.join(".");
 }
 var BASE64_SENTINEL_PREFIX = "=?base64?";
 var BASE64_SENTINEL_SUFFIX = "?=";
@@ -14993,9 +14993,9 @@ function utf8ToBase64(s) {
 function encodeMcpParamValue(value) {
   return needsBase64(value) ? `${BASE64_SENTINEL_PREFIX}${utf8ToBase64(value)}${BASE64_SENTINEL_SUFFIX}` : value;
 }
-function valueAtPath(root, path5) {
+function valueAtPath(root, path6) {
   let node2 = root;
-  for (const key of path5) {
+  for (const key of path6) {
     if (node2 === null || typeof node2 !== "object") return void 0;
     node2 = node2[key];
   }
@@ -15250,7 +15250,7 @@ var PROPERTY_KEYS_BY_TYPE = {
   array: shapeKeys([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema])
 };
 var SUPPORTED_STRING_FORMATS = new Set(StringSchemaSchema.shape.format.unwrap().options);
-function walkProperty(node2, path5, vendor, unsupported) {
+function walkProperty(node2, path6, vendor, unsupported) {
   if (!isJsonObject(node2)) return node2;
   const allowedKeys = typeof node2.type === "string" && Object.hasOwn(PROPERTY_KEYS_BY_TYPE, node2.type) ? PROPERTY_KEYS_BY_TYPE[node2.type] : void 0;
   if (allowedKeys === void 0) return node2;
@@ -15258,8 +15258,8 @@ function walkProperty(node2, path5, vendor, unsupported) {
   for (const [key, value] of Object.entries(node2)) if (allowedKeys.has(key) || isAnnotationOnlyJsonSchemaKeyword(key)) pruned[key] = value;
   else if (key === "pattern" && node2.type === "string" && typeof node2.format === "string") {
     if (!SUPPORTED_STRING_FORMATS.has(node2.format)) pruned[key] = value;
-    else if (typeof value !== "string" || !isLibraryFormatPattern(node2.format, value, vendor)) unsupported.push(`${path5}.${key}`);
-  } else unsupported.push(`${path5}.${key}`);
+    else if (typeof value !== "string" || !isLibraryFormatPattern(node2.format, value, vendor)) unsupported.push(`${path6}.${key}`);
+  } else unsupported.push(`${path6}.${key}`);
   return pruned;
 }
 function walkRequestedSchema(converted, vendor) {
@@ -15276,11 +15276,11 @@ function describeUnsupportedProperties(pruned, fallback) {
   const offenders = Object.entries(pruned.properties).filter(([, node2]) => !parseSchema(PrimitiveSchemaDefinitionSchema, node2).success).map(([name]) => `properties.${name}`);
   return offenders.length > 0 ? offenders.join(", ") : fallback;
 }
-function findDroppedConstraintPaths(original, parsed, path5 = "") {
-  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths(item, parsed[index], `${path5}[${index}]`));
+function findDroppedConstraintPaths(original, parsed, path6 = "") {
+  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths(item, parsed[index], `${path6}[${index}]`));
   if (!isJsonObject(original) || !isJsonObject(parsed)) return [];
   return Object.entries(original).flatMap(([key, value]) => {
-    const childPath = path5 ? `${path5}.${key}` : key;
+    const childPath = path6 ? `${path6}.${key}` : key;
     if (!Object.prototype.hasOwnProperty.call(parsed, key)) return isAnnotationOnlyJsonSchemaKeyword(key) ? [] : [childPath];
     return findDroppedConstraintPaths(value, parsed[key], childPath);
   });
@@ -16649,7 +16649,7 @@ function serializeMessage(message) {
   return JSON.stringify(message) + "\n";
 }
 
-// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -19433,8 +19433,8 @@ var require_utils = /* @__PURE__ */ __commonJSMin(((exports, module) => {
     for (let i = 0; i < str.length; i++) if (str[i] === token) ind++;
     return ind;
   }
-  function removeDotSegments(path5) {
-    let input = path5;
+  function removeDotSegments(path6) {
+    let input = path6;
     const output = [];
     let nextSlash = -1;
     let len = 0;
@@ -19587,8 +19587,8 @@ var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
       wsComponent.secure = void 0;
     }
     if (wsComponent.resourceName) {
-      const [path5, query] = wsComponent.resourceName.split("?");
-      wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
+      const [path6, query] = wsComponent.resourceName.split("?");
+      wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
       wsComponent.query = query;
       wsComponent.resourceName = void 0;
     }
@@ -23659,13 +23659,13 @@ var AjvJsonSchemaValidator = class {
 };
 var Ajv = import_ajv.Ajv;
 
-// node_modules/.pnpm/pkce-challenge@5.0.1/node_modules/pkce-challenge/dist/index.node.js
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/pkce-challenge@5.0.1/node_modules/pkce-challenge/dist/index.node.js
 var crypto2;
 crypto2 = globalThis.crypto?.webcrypto ?? // Node.js [18-16] REPL
 globalThis.crypto ?? // Node.js >18
 import("node:crypto").then((m) => m.webcrypto);
 
-// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
 var OAuthClientFlowError = class extends Error {
   static {
     Object.defineProperty(this, "mcpBrand", { value: "mcp.OAuthClientFlowError" });
@@ -26378,7 +26378,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
   }
 }
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/chunk-Br0eD_fh.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/chunk-Br0eD_fh.mjs
 var __create3 = Object.create;
 var __defProp3 = Object.defineProperty;
 var __getOwnPropDesc3 = Object.getOwnPropertyDescriptor;
@@ -26418,7 +26418,7 @@ var __toESM3 = (mod, isNodeMode, target) => (target = mod != null ? __create3(__
   enumerable: true
 }) : target, mod));
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/dialects-DoSzNhcb.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/dialects-DoSzNhcb.mjs
 var DRAFT_2020_12_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -26435,7 +26435,7 @@ function declaredDialect2(schema, remedy) {
   throw new Error(`JSON Schema declares an unsupported dialect ("$schema": "${schema.$schema.slice(0, 200)}"). The default validator supports JSON Schema 2020-12, 2019-09, draft-07, and draft-06; ${remedy}`);
 }
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/src-BHSMhZ_W.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/src-BHSMhZ_W.mjs
 var BRANDS2 = /* @__PURE__ */ Symbol.for("mcp.sdk.errorBrands");
 function stampErrorBrands2(instance, ctor) {
   const brands = /* @__PURE__ */ new Set();
@@ -29069,9 +29069,9 @@ var rev2026Codec2 = {
     });
     const parsed = buildSchemas20262().RequestMetaEnvelopeSchema.safeParse(meta2);
     if (!parsed.success) for (const issue2 of parsed.error.issues) {
-      const path5 = issue2.path.map(String);
-      const key = path5.length > 0 ? path5.join(".") : "_meta";
-      if (path5.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
+      const path6 = issue2.path.map(String);
+      const key = path6.length > 0 ? path6.join(".") : "_meta";
+      if (path6.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
       issues.push({
         key,
         problem: issue2.message
@@ -29597,7 +29597,7 @@ var PROPERTY_KEYS_BY_TYPE2 = {
   array: shapeKeys2([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema])
 };
 var SUPPORTED_STRING_FORMATS2 = new Set(StringSchemaSchema.shape.format.unwrap().options);
-function walkProperty2(node2, path5, vendor, unsupported) {
+function walkProperty2(node2, path6, vendor, unsupported) {
   if (!isJsonObject2(node2)) return node2;
   const allowedKeys = typeof node2.type === "string" && Object.hasOwn(PROPERTY_KEYS_BY_TYPE2, node2.type) ? PROPERTY_KEYS_BY_TYPE2[node2.type] : void 0;
   if (allowedKeys === void 0) return node2;
@@ -29605,8 +29605,8 @@ function walkProperty2(node2, path5, vendor, unsupported) {
   for (const [key, value] of Object.entries(node2)) if (allowedKeys.has(key) || isAnnotationOnlyJsonSchemaKeyword2(key)) pruned[key] = value;
   else if (key === "pattern" && node2.type === "string" && typeof node2.format === "string") {
     if (!SUPPORTED_STRING_FORMATS2.has(node2.format)) pruned[key] = value;
-    else if (typeof value !== "string" || !isLibraryFormatPattern2(node2.format, value, vendor)) unsupported.push(`${path5}.${key}`);
-  } else unsupported.push(`${path5}.${key}`);
+    else if (typeof value !== "string" || !isLibraryFormatPattern2(node2.format, value, vendor)) unsupported.push(`${path6}.${key}`);
+  } else unsupported.push(`${path6}.${key}`);
   return pruned;
 }
 function walkRequestedSchema2(converted, vendor) {
@@ -29623,11 +29623,11 @@ function describeUnsupportedProperties2(pruned, fallback) {
   const offenders = Object.entries(pruned.properties).filter(([, node2]) => !parseSchema2(PrimitiveSchemaDefinitionSchema, node2).success).map(([name]) => `properties.${name}`);
   return offenders.length > 0 ? offenders.join(", ") : fallback;
 }
-function findDroppedConstraintPaths2(original, parsed, path5 = "") {
-  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths2(item, parsed[index], `${path5}[${index}]`));
+function findDroppedConstraintPaths2(original, parsed, path6 = "") {
+  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths2(item, parsed[index], `${path6}[${index}]`));
   if (!isJsonObject2(original) || !isJsonObject2(parsed)) return [];
   return Object.entries(original).flatMap(([key, value]) => {
-    const childPath = path5 ? `${path5}.${key}` : key;
+    const childPath = path6 ? `${path6}.${key}` : key;
     if (!Object.prototype.hasOwnProperty.call(parsed, key)) return isAnnotationOnlyJsonSchemaKeyword2(key) ? [] : [childPath];
     return findDroppedConstraintPaths2(value, parsed[key], childPath);
   });
@@ -30858,7 +30858,7 @@ function serializeMessage2(message) {
   return JSON.stringify(message) + "\n";
 }
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/ajvProvider-CEoC__sr.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/ajvProvider-CEoC__sr.mjs
 var require_code$12 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -33642,8 +33642,8 @@ var require_utils2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
     for (let i = 0; i < str.length; i++) if (str[i] === token) ind++;
     return ind;
   }
-  function removeDotSegments(path5) {
-    let input = path5;
+  function removeDotSegments(path6) {
+    let input = path6;
     const output = [];
     let nextSlash = -1;
     let len = 0;
@@ -33796,8 +33796,8 @@ var require_schemes2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
       wsComponent.secure = void 0;
     }
     if (wsComponent.resourceName) {
-      const [path5, query] = wsComponent.resourceName.split("?");
-      wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
+      const [path6, query] = wsComponent.resourceName.split("?");
+      wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
       wsComponent.query = query;
       wsComponent.resourceName = void 0;
     }
@@ -37868,10 +37868,10 @@ var AjvJsonSchemaValidator2 = class {
 };
 var Ajv2 = import_ajv2.Ajv;
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/shimsNode.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/shimsNode.mjs
 import process2 from "node:process";
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/mcp-DYuW2ZSs.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/mcp-DYuW2ZSs.mjs
 var MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 var DEFAULT_LEGACY_SHIM_MAX_ROUNDS = 8;
 var DEFAULT_LEGACY_SHIM_ROUND_TIMEOUT_MS = 6e5;
@@ -38622,10 +38622,10 @@ function discoverAdvertisedCapabilities(capabilities) {
   return { ...capabilities };
 }
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/index.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/index.mjs
 var DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
 
-// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/stdio.mjs
+// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/stdio.mjs
 var swallowsErrorsAfterClose = /* @__PURE__ */ Symbol("swallowsErrorsAfterClose");
 var StdioServerTransport = class {
   _readBuffer;
@@ -38728,6 +38728,7 @@ var StdioServerTransport = class {
 };
 
 // src/adapters/mcp-entry-server.ts
+var HOOK_EVENTS = ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"];
 function createMcpEntryServer(options) {
   const routeSchema = {
     type: "object",
@@ -38771,61 +38772,34 @@ function createMcpEntryServer(options) {
     }
     return server.elicitInput(params, signal ? { signal } : {});
   };
-  const askLoss = async (message, signal) => {
-    if (!supportsFormElicitation()) return "pending";
-    try {
-      const result = await elicit(
-        {
-          mode: "form",
-          message,
-          requestedSchema: {
-            type: "object",
-            properties: {
-              action: {
-                type: "string",
-                title: "\u76EE\u6807\u8FDE\u63A5\u5DF2\u65AD\u5F00\uFF0C\u8BF7\u9009\u62E9\u4E0B\u4E00\u6B65",
-                enum: ["restart", "cancel"],
-                enumNames: ["\u8BEF\u5173\u95ED\uFF0C\u4F7F\u7528\u539F\u7AEF\u53E3\u91CD\u65B0\u542F\u52A8", "\u6709\u610F\u5173\u95ED\uFF0C\u7EC8\u6B62\u4F9D\u8D56\u8BE5\u76EE\u6807\u7684\u4EFB\u52A1"]
-              }
-            },
-            required: ["action"]
-          }
-        },
-        signal
-      );
-      if (result.action !== "accept") return "pending";
-      const action = result.content?.action;
-      return action === "restart" || action === "cancel" ? action : "pending";
-    } catch {
-      return "pending";
-    }
-  };
   server.setRequestHandler("tools/list", async () => ({
     tools: [
       ...tools,
       {
         name: "dct_connection_status",
         description: "\u67E5\u770B\u76EE\u6807\u8FDE\u63A5\u72B6\u6001",
-        inputSchema: { type: "object", properties: {}, additionalProperties: false }
-      },
-      {
-        name: "dct_watch_target",
-        description: "\u7B49\u5F85\u76EE\u6807\u9000\u51FA\u5E76\u8BE2\u95EE\u662F\u5426\u91CD\u65B0\u542F\u52A8",
-        inputSchema: { ...routeSchema, type: "object" }
+        inputSchema: {
+          type: "object",
+          properties: {
+            hookEventName: {
+              type: "string",
+              enum: [...HOOK_EVENTS],
+              description: "Only for automatic Codex Hooks; Agents use empty arguments for status."
+            }
+          },
+          additionalProperties: false
+        }
       }
     ]
   }));
   server.setRequestHandler("tools/call", async (request, ctx) => {
     const name = request.params.name;
     if (name === "dct_connection_status") {
-      if (Object.keys(request.params.arguments ?? {}).length !== 0) {
-        throw new ProtocolError3(ProtocolErrorCode2.InvalidParams, `${name} requires an empty argument object.`);
-      }
-      const result = options.status();
-      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
-    }
-    if (name === "dct_watch_target") {
-      const result = await options.watch(parseConnectionRoute(request.params.arguments), ctx.mcpReq.signal);
+      const arguments_ = request.params.arguments ?? {};
+      const hook = arguments_.hookEventName;
+      if (Object.keys(arguments_).some((key) => key !== "hookEventName") || hook !== void 0 && !HOOK_EVENTS.some((event) => event === hook))
+        throw new ProtocolError3(ProtocolErrorCode2.InvalidParams, "Invalid lifecycle status Hook arguments.");
+      const result = options.status(HOOK_EVENTS.find((event) => event === hook));
       return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
     }
     if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
@@ -38849,7 +38823,6 @@ function createMcpEntryServer(options) {
     closed,
     close: () => server.close(),
     roots: () => server.listRoots(),
-    askLoss,
     supportsFormElicitation,
     supportsRoots,
     elicit
@@ -38859,8 +38832,8 @@ function createMcpEntryServer(options) {
 // src/adapters/target-host.ts
 import { spawn as nodeSpawn } from "node:child_process";
 import net2 from "node:net";
-import os3 from "node:os";
-import path4 from "node:path";
+import os4 from "node:os";
+import path5 from "node:path";
 
 // src/domains/cdp-target.ts
 var RetainedTargetError = class extends DetailedError {
@@ -39011,6 +38984,11 @@ function parseLaunchCommand({
   if (!hasPlaceholder && fixedPort === null) arguments_.push(`${DEFAULT_DEBUGGING_SWITCH}=${port}`);
   return { executable, arguments: arguments_ };
 }
+
+// src/adapters/chrome-profile.ts
+import { open as open2, readlink as readlink2, realpath as realpath2 } from "node:fs/promises";
+import os3 from "node:os";
+import path4 from "node:path";
 
 // src/adapters/platform-process.ts
 import { spawn as spawn3 } from "node:child_process";
@@ -39235,6 +39213,93 @@ function createPlatformAdapter() {
     }
   };
 }
+function probeProcessExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error2) {
+    if (errorCode(error2) === "ESRCH") return false;
+    throw error2;
+  }
+}
+
+// src/adapters/chrome-profile.ts
+var claims = /* @__PURE__ */ new Set();
+async function profileAvailable(directory) {
+  if (process.platform === "win32") {
+    try {
+      const handle = await open2(path4.join(directory, "lockfile"), "r+");
+      await handle.close();
+      return true;
+    } catch (error2) {
+      if (errorCode(error2) === "ENOENT") return true;
+      if (["EACCES", "EPERM", "EBUSY"].includes(errorCode(error2) ?? "")) return false;
+      throw error2;
+    }
+  }
+  let lock;
+  try {
+    lock = await readlink2(path4.join(directory, "SingletonLock"));
+  } catch (error2) {
+    if (errorCode(error2) === "ENOENT") return true;
+    throw error2;
+  }
+  const split = lock.lastIndexOf("-");
+  const host = lock.slice(0, split);
+  const pid = Number(lock.slice(split + 1));
+  if (host !== os3.hostname() || !Number.isSafeInteger(pid) || pid < 1) return false;
+  return !probeProcessExists(pid);
+}
+async function canonicalDirectory(directory) {
+  try {
+    return await realpath2(directory);
+  } catch (error2) {
+    if (errorCode(error2) !== "ENOENT") throw error2;
+    const parent = path4.dirname(directory);
+    if (parent === directory) throw error2;
+    return path4.join(await canonicalDirectory(parent), path4.basename(directory));
+  }
+}
+async function reserveProfile(directory, available = profileAvailable) {
+  const occupied = () => new Error(
+    `Chrome profile is occupied or unverifiable; explicitly choose another --user-data-dir: ${directory}`
+  );
+  let canonical;
+  try {
+    canonical = await canonicalDirectory(directory);
+  } catch {
+    throw occupied();
+  }
+  const identity = process.platform === "win32" ? canonical.toLowerCase() : canonical;
+  if (claims.has(identity)) throw occupied();
+  claims.add(identity);
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      claims.delete(identity);
+    }
+  };
+  try {
+    if (!await available(canonical)) throw occupied();
+  } catch {
+    release();
+    throw occupied();
+  }
+  return release;
+}
+function chromeProfileArgument(arguments_) {
+  let directory;
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const argument = arguments_[index];
+    if (argument !== "--user-data-dir" && !argument?.startsWith("--user-data-dir=")) continue;
+    if (directory !== void 0) throw new Error("Duplicate Chrome --user-data-dir profile arguments.");
+    directory = argument === "--user-data-dir" ? arguments_[++index] : argument.slice("--user-data-dir=".length);
+    if (!directory || directory.startsWith("--"))
+      throw new Error("Chrome --user-data-dir requires a profile directory.");
+  }
+  return directory;
+}
 
 // src/adapters/target-host.ts
 async function probeAddress(port, host) {
@@ -39258,7 +39323,7 @@ async function probePort(port) {
   const ipv62 = await probeAddress(port, "::1");
   return ipv42 === true && ipv62 !== false;
 }
-async function spawn4(executable, arguments_, _port, cwd = path4.dirname(executable)) {
+async function spawn4(executable, arguments_, _port, cwd = path5.dirname(executable)) {
   const child = nodeSpawn(executable, arguments_, {
     cwd,
     detached: true,
@@ -39281,9 +39346,7 @@ async function getVersion(port) {
   if (!response.ok) throw new Error(`CDP returned HTTP ${response.status}.`);
   return response.json();
 }
-function applyChromePreset(arguments_, profileKey) {
-  const home = process.platform === "win32" ? process.env.USERPROFILE : os3.homedir();
-  if (!home || !path4.isAbsolute(home)) throw new Error("The Chrome profile home directory is unavailable.");
+function applyChromePreset(arguments_) {
   const addresses = [];
   for (let index = 0; index < arguments_.length; index += 1) {
     const match = arguments_[index]?.match(/^--remote-debugging-address(?:[=:](.*))?$/i);
@@ -39292,10 +39355,11 @@ function applyChromePreset(arguments_, profileKey) {
   if (addresses.length > 1) throw new Error("Duplicate Chrome debugging addresses are prohibited.");
   if (addresses.length && addresses[0] !== "127.0.0.1") throw new Error("Chrome debugging must use loopback.");
   const result = [...arguments_];
-  if (!result.some((value) => /^--user-data-dir(?:=|$)/.test(value)))
-    result.push(
-      `--user-data-dir=${path4.join(home, ".cache", "chrome-devtools-mcp", profileKey ? `profile-${profileKey}` : "chrome-profile")}`
-    );
+  if (chromeProfileArgument(result) === void 0) {
+    const home = process.platform === "win32" ? process.env.USERPROFILE : os4.homedir();
+    if (!home || !path5.isAbsolute(home)) throw new Error("The Chrome profile home directory is unavailable.");
+    result.push(`--user-data-dir=${path5.join(home, ".cache", "chrome-devtools-mcp", "chrome-profile")}`);
+  }
   if (!addresses.length) result.push("--remote-debugging-address=127.0.0.1");
   for (const flag of ["--no-first-run", "--no-default-browser-check"]) if (!result.includes(flag)) result.push(flag);
   return result;
@@ -39308,6 +39372,7 @@ function createTargetHost(dependencies = {}) {
     getVersion,
     now: Date.now,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    profileAvailable,
     ...dependencies
   };
   return {
@@ -39316,7 +39381,6 @@ function createTargetHost(dependencies = {}) {
       targetKind = "generic-cdp",
       basePort = DEFAULT_BASE_PORT,
       exactPort,
-      profileKey,
       launchDefinition
     }) {
       if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
@@ -39327,22 +39391,40 @@ function createTargetHost(dependencies = {}) {
       while (candidate <= 65535) {
         const port = exactPort ?? await choosePort({ basePort: candidate, reservedRanges: excluded, probe: io.probe });
         const parsed = launchDefinition ? { executable: launchDefinition.executablePath, arguments: [...launchDefinition.arguments] } : parseLaunchCommand({ template: launchCommand, port, environment: process.env });
-        if (!path4.isAbsolute(parsed.executable))
+        if (!path5.isAbsolute(parsed.executable))
           throw new Error("The launch command must use an absolute executable path.");
-        const executablePath = path4.resolve(parsed.executable);
-        const args = targetKind === "chrome" ? applyChromePreset(parsed.arguments, profileKey) : parsed.arguments;
-        const cwd = launchDefinition?.cwd ?? path4.dirname(executablePath);
+        const executablePath = path5.resolve(parsed.executable);
+        const args = targetKind === "chrome" ? applyChromePreset(parsed.arguments) : parsed.arguments;
+        const cwd = launchDefinition?.cwd ?? path5.dirname(executablePath);
+        const profile = targetKind === "chrome" ? chromeProfileArgument(args) : void 0;
+        const release = profile === void 0 ? void 0 : await reserveProfile(path5.resolve(cwd, profile), io.profileAvailable);
         const launchedAt = io.now();
-        const child = await io.spawn(executablePath, args, port, cwd);
-        if (child.pid === void 0) throw new Error("The target process has no PID.");
+        let child;
+        try {
+          child = await io.spawn(executablePath, args, port, cwd);
+          if (child.pid === void 0) throw new Error("The target process has no PID.");
+        } catch (error3) {
+          release?.();
+          throw error3;
+        }
+        const releaseProfile = () => {
+          release?.();
+          child.off?.("exit", releaseProfile);
+        };
+        if (release) {
+          child.once("exit", releaseProfile);
+          if (typeof child.exitCode === "number" || typeof child.signalCode === "string") releaseProfile();
+        }
         const processId = child.pid;
+        if (processId === void 0) throw new Error("The target process has no PID.");
         const target = {
           port,
-          processId: child.pid,
+          processId,
           executablePath,
           startedAtUtc: new Date(launchedAt).toISOString(),
           targetKind,
-          child
+          child,
+          ...release ? { releaseProfile } : {}
         };
         let lastError;
         let foreignRace = false;
@@ -39391,7 +39473,7 @@ function createTargetHost(dependencies = {}) {
             };
           } catch (error3) {
             lastError = error3;
-            if (child.exitCode !== null || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
+            if (child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
               break;
             await io.sleep(POLL_INTERVAL_MS);
           }
@@ -39401,6 +39483,7 @@ function createTargetHost(dependencies = {}) {
           closeConfirmed = await platform.close(target, { requireListener: false });
         } catch {
         }
+        if (closeConfirmed) releaseProfile?.();
         if (foreignRace && closeConfirmed && exactPort === void 0) {
           candidate = port + 1;
           continue;
@@ -39415,7 +39498,11 @@ function createTargetHost(dependencies = {}) {
       }
       throw new Error("The CDP port range is exhausted.");
     },
-    close: (target, options) => platform.close(target, options),
+    async close(target, options) {
+      const closed = await platform.close(target, options);
+      if (closed) target.releaseProfile?.();
+      return closed;
+    },
     async health(target) {
       const evidence = await platform.snapshot(target.processId, target.port);
       if (!evidence.root.exists) return "gone";
@@ -39443,21 +39530,21 @@ function createTargetController({
   entryId,
   router,
   host,
-  server
+  server,
+  onProcessExit
 }) {
   let current;
   let state = "idle";
   let reason;
-  let misses = 0;
+  let taskActive = false;
   let gated = false;
   let serial = Promise.resolve();
   let checking;
-  let watcher;
   function status() {
     return {
       entryId,
       status: state,
-      taskActive: watcher !== void 0,
+      taskActive,
       ...current ? {
         sessionId: current.sessionId,
         port: current.target.port,
@@ -39481,30 +39568,46 @@ function createTargetController({
     if (!current || current.sessionId !== sessionId) throw new Error("The target session is absent or stale.");
     return current;
   }
-  function endWatcher() {
-    watcher?.finish({ sessionId: watcher.sessionId, reason: "task-ended" });
-  }
   function gate() {
     if (!gated) router.clearTarget();
     gated = true;
   }
+  function processExited(selected) {
+    if (current !== selected || selected.exited) return;
+    selected.exited = true;
+    gate();
+    if (state === "closing" || selected.expectedExit) return;
+    state = "lost";
+    reason = "process-exited";
+    onProcessExit?.({
+      sessionId: selected.sessionId,
+      reason: "process-exited",
+      taskActive
+    });
+  }
+  function subscribe(selected) {
+    const child = selected.target.child;
+    if (!child) return;
+    const exited = () => processExited(selected);
+    child.once("exit", exited);
+    selected.unsubscribe = () => child.off?.("exit", exited);
+    if (typeof child.exitCode === "number" || typeof child.signalCode === "string") exited();
+  }
   function lose(selected, why) {
-    if (current !== selected || state !== "active") return;
+    if (current !== selected || selected.exited || state === "closing" || state === "close-failed") return;
     gate();
     state = "lost";
     reason = why;
-    watcher?.finish({ sessionId: selected.sessionId, reason: why });
   }
   async function tryClose(selected, requireListener = true) {
     try {
+      if (selected.exited) return true;
       if (!requireListener && host.health && await host.health(selected.target) === "gone") return true;
-      return await host.close(selected.target, { requireListener });
+      const closed = await host.close(selected.target, { requireListener });
+      return selected.exited || closed;
     } catch {
-      return false;
+      return selected.exited;
     }
-  }
-  function officialDisconnected() {
-    if (current) lose(current, "official-disconnected");
   }
   function failedClose(selected) {
     const error2 = new DetailedError(
@@ -39513,39 +39616,39 @@ function createTargetController({
     error2.details = { retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }] };
     return error2;
   }
-  function retainFailedRollback(selected) {
-    current = selected;
+  function retainFailedRollback(target, options, sessionId) {
+    current = { target, options, sessionId, exited: false };
+    taskActive = false;
     state = "close-failed";
     reason = "target-rollback-failed";
     gate();
+    subscribe(current);
   }
   async function attach(options, sessionId = randomUUID()) {
-    options = { ...options, profileKey: options.profileKey ?? `${entryId}-${sessionId}` };
     await server.ensure();
     let target;
     try {
       target = await host.launch(options);
     } catch (error2) {
-      if (error2 instanceof RetainedTargetError)
-        retainFailedRollback({ target: error2.target, options, sessionId });
+      if (error2 instanceof RetainedTargetError) retainFailedRollback(error2.target, options, sessionId);
       throw error2;
     }
-    const selected = { target, options, sessionId };
+    const selected = { target, options, sessionId, exited: false };
     try {
       router.setTarget(target);
     } catch (error2) {
       if (!await tryClose(selected, false)) {
-        retainFailedRollback(selected);
+        retainFailedRollback(target, options, sessionId);
         throw failedClose(selected);
       }
       throw error2;
     }
     current = selected;
     gated = false;
-    misses = 0;
+    taskActive = true;
     reason = void 0;
     state = "active";
-    target.child?.once("exit", () => lose(selected, "process-exited"));
+    subscribe(selected);
     return status();
   }
   function start(options, sessionId) {
@@ -39555,6 +39658,29 @@ function createTargetController({
       return attach(options, sessionId);
     });
   }
+  async function dispose(selected) {
+    taskActive = false;
+    state = "closing";
+    gate();
+    try {
+      await server.close();
+    } catch (error2) {
+      state = "close-failed";
+      reason = "official-close-failed";
+      throw error2;
+    }
+    selected.unsubscribe?.();
+    current = void 0;
+    state = "idle";
+    reason = void 0;
+  }
+  function retireExited({ sessionId }) {
+    return run2(async () => {
+      const selected = current;
+      if (selected?.sessionId === sessionId && selected.exited && !taskActive) await dispose(selected);
+      return status();
+    });
+  }
   function restart({ sessionId }) {
     return run2(async () => {
       const previous = requireSession(sessionId);
@@ -39562,18 +39688,29 @@ function createTargetController({
         throw new Error("Only a lost target session can be restarted after an explicit user choice.");
       if (!previous.target.launchDefinition)
         throw new Error("The exact launch definition is unavailable; cannot safely restart.");
-      const gone = host.health ? await host.health(previous.target) === "gone" : false;
-      if (!gone && !await tryClose(previous, false)) throw failedClose(previous);
-      await server.close();
+      previous.expectedExit = true;
+      state = "closing";
+      if (!await tryClose(previous, false)) {
+        delete previous.expectedExit;
+        state = "lost";
+        throw failedClose(previous);
+      }
+      try {
+        await server.close();
+      } catch (error2) {
+        state = "close-failed";
+        reason = "official-close-failed";
+        taskActive = false;
+        throw error2;
+      }
+      previous.unsubscribe?.();
       const options = {
         ...previous.options,
         exactPort: previous.target.port,
-        launchDefinition: previous.target.launchDefinition,
-        profileKey: previous.options.profileKey ?? `${entryId}-${sessionId}`
+        launchDefinition: previous.target.launchDefinition
       };
       try {
-        const result = await attach(options);
-        return { ...result, pageIdsInvalidated: true };
+        return { ...await attach(options), pageIdsInvalidated: true };
       } catch (error2) {
         if (current === previous) {
           state = "lost";
@@ -39590,70 +39727,43 @@ function createTargetController({
       if (state === "close-failed" && disposition !== "Close")
         throw new Error("The retained target requires an explicit Close retry.");
       if (disposition === "Keep") {
-        endWatcher();
+        taskActive = false;
+        if (selected.exited) await dispose(selected);
         return { ...status(), disposition };
       }
       if (state === "active" && router.isBusy())
         throw new Error("CDP is busy; retry after the current request completes.");
       const previousState = state;
-      state = "closing";
       router.pause?.();
-      try {
-        if (!await tryClose(selected, previousState === "active")) {
-          state = previousState;
-          router.resume?.();
-          throw failedClose(selected);
-        }
-        gate();
-        endWatcher();
-        try {
-          await server.close();
-        } catch (error2) {
-          state = "close-failed";
-          reason = "official-close-failed";
-          throw error2;
-        }
-        current = void 0;
-        state = "idle";
-        reason = void 0;
-        return { ...status(), disposition, pageIdsInvalidated: true };
-      } catch (error2) {
-        if (state === "closing") state = previousState;
-        throw error2;
+      selected.expectedExit = true;
+      state = "closing";
+      if (!await tryClose(selected, previousState === "active")) {
+        delete selected.expectedExit;
+        state = previousState;
+        router.resume?.();
+        throw failedClose(selected);
       }
+      await dispose(selected);
+      return { ...status(), disposition, pageIdsInvalidated: true };
     });
   }
-  async function endTask({ sessionId }) {
-    requireSession(sessionId);
-    if (state === "close-failed") throw new Error("The retained target requires an explicit Close retry.");
-    endWatcher();
-    return status();
-  }
-  function watchTarget(signal) {
-    if (!current) return Promise.reject(new Error("No current target session to watch."));
-    if (watcher) return Promise.reject(new Error("This target session already has a task watcher."));
-    const sessionId = current.sessionId;
-    if (state === "close-failed")
-      return Promise.reject(new Error("The retained target requires an explicit Close retry."));
-    if (state === "lost") return Promise.resolve({ sessionId, reason: reason ?? "target-unavailable" });
-    return new Promise((resolve) => {
-      function finish(event) {
-        signal.removeEventListener("abort", aborted2);
-        watcher = void 0;
-        resolve(event);
-      }
-      function aborted2() {
-        finish({ sessionId, reason: "task-ended" });
-      }
-      watcher = { sessionId, finish };
-      signal.addEventListener("abort", aborted2, { once: true });
-      if (signal.aborted) aborted2();
+  function endTask({ sessionId }) {
+    return run2(async () => {
+      const selected = requireSession(sessionId);
+      if (state === "close-failed") throw new Error("The retained target requires an explicit Close retry.");
+      taskActive = false;
+      if (selected.exited) await dispose(selected);
+      return status();
     });
+  }
+  function beginTask({ sessionId }) {
+    const selected = requireSession(sessionId);
+    if (!selected.exited && state !== "closing" && state !== "close-failed") taskActive = true;
   }
   async function checkHealth() {
     if (checking) return checking;
     const selected = current;
-    if (!selected || state !== "active") return;
+    if (!selected || selected.exited || state !== "active") return;
     checking = (async () => {
       let health;
       try {
@@ -39666,33 +39776,30 @@ function createTargetController({
         health = "unavailable";
       }
       if (current !== selected || state !== "active") return;
-      if (health === "healthy") {
-        misses = 0;
-        if (gated) {
-          router.setTarget(selected.target);
-          gated = false;
-        }
-        return;
-      }
-      gate();
-      if (health === "gone") lose(selected, "process-exited");
-      else if (health === "identity-changed") lose(selected, "identity-changed");
-      else if (++misses >= 2) lose(selected, "target-unavailable");
+      if (health === "gone") processExited(selected);
+      else if (health !== "healthy")
+        lose(selected, health === "identity-changed" ? health : "target-unavailable");
     })().finally(() => {
       checking = void 0;
     });
     return checking;
   }
-  async function cleanupOnDisconnect() {
+  function cleanupOnDisconnect() {
     return run2(async () => {
-      endWatcher();
+      taskActive = false;
       const selected = current;
+      if (selected) selected.expectedExit = true;
       state = "closing";
       const closed = !selected || await tryClose(selected, false);
       gate();
-      await server.close();
+      try {
+        await server.close();
+      } finally {
+        selected?.unsubscribe?.();
+      }
       current = void 0;
       state = "idle";
+      reason = void 0;
       return closed || !selected ? void 0 : { processId: selected.target.processId, port: selected.target.port };
     });
   }
@@ -39702,10 +39809,13 @@ function createTargetController({
     restart,
     stop,
     endTask,
-    watchTarget,
+    beginTask,
+    retireExited,
     checkHealth,
     cleanupOnDisconnect,
-    officialDisconnected,
+    officialDisconnected: () => {
+      if (current) lose(current, "official-disconnected");
+    },
     canInvoke: () => state === "active" && !gated
   };
 }
@@ -39716,9 +39826,7 @@ async function startPluginRuntime({
   createHost = createTargetHost,
   createControl = createControlServer,
   createConnection = createOfficialConnection,
-  createEntry = createMcpEntryServer,
-  pollIntervalMs = 1e3,
-  watchLeaseMs = 25e3
+  createEntry = createMcpEntryServer
 } = {}) {
   const entryId = randomUUID2();
   const connections = /* @__PURE__ */ new Map();
@@ -39729,7 +39837,8 @@ async function startPluginRuntime({
   let catalogRouterClosed = false;
   let catalogCleanupError;
   let cleanupPromise;
-  let polling;
+  const notices = /* @__PURE__ */ new Map();
+  const retirements = /* @__PURE__ */ new Set();
   let shuttingDown = false;
   const starts = /* @__PURE__ */ new Set();
   function selected(connectionId) {
@@ -39748,7 +39857,8 @@ async function startPluginRuntime({
     return {
       ...connection.controller.status(),
       connectionId: connection.connectionId,
-      ...connection.failedStartupSessionId ? { sessionId: connection.failedStartupSessionId, reason: "startup-cleanup-failed" } : {}
+      ...connection.failedStartupSessionId ? { sessionId: connection.failedStartupSessionId, reason: "startup-cleanup-failed" } : {},
+      ...connection.retainedStatus
     };
   }
   function status(connectionId) {
@@ -39784,19 +39894,85 @@ async function startPluginRuntime({
       connection.controller.officialDisconnected();
     });
   }
-  function abortPrompts(connection, sessionId) {
-    if (sessionId) {
-      connection.prompts.get(sessionId)?.abort.abort();
-      connection.prompts.delete(sessionId);
-    } else {
-      for (const prompt of connection.prompts.values()) prompt.abort.abort();
-      connection.prompts.clear();
-    }
+  function clearNotice(connection, sessionId) {
+    if (!sessionId || notices.get(connection.connectionId)?.sessionId === sessionId)
+      notices.delete(connection.connectionId);
   }
   async function remove(connection) {
-    abortPrompts(connection);
-    await connection.router.close();
-    connections.delete(connection.connectionId);
+    if (connections.get(connection.connectionId) !== connection) return;
+    clearNotice(connection);
+    if (!connection.removal) {
+      connection.removal = connection.router.close().then(() => {
+        if (connections.get(connection.connectionId) === connection)
+          connections.delete(connection.connectionId);
+      });
+    }
+    try {
+      await connection.removal;
+    } catch (error2) {
+      delete connection.removal;
+      throw error2;
+    }
+  }
+  async function removeRetired(connection, previous) {
+    try {
+      await remove(connection);
+    } catch (error2) {
+      if (previous.sessionId) connection.failedStartupSessionId = previous.sessionId;
+      connection.retainedStatus = {
+        ...previous,
+        status: "close-failed",
+        taskActive: false,
+        reason: "router-close-failed"
+      };
+      const retained = new DetailedError(errorMessage(error2));
+      retained.details = { ...statusOf(connection) };
+      throw retained;
+    }
+  }
+  function observeExit(connection, event) {
+    if (shuttingDown || connections.get(connection.connectionId) !== connection) return;
+    if (event.taskActive) {
+      notices.set(connection.connectionId, event);
+      return;
+    }
+    clearNotice(connection, event.sessionId);
+    const previous = statusOf(connection);
+    const pending = (async () => {
+      const result = await connection.controller.retireExited({ sessionId: event.sessionId });
+      if (result.status === "idle") await removeRetired(connection, previous);
+    })();
+    retirements.add(pending);
+    void pending.catch((error2) => {
+      process.stderr.write(
+        "Retired target connection cleanup failed: " + connection.connectionId + ": " + errorMessage(error2) + "\n"
+      );
+    }).finally(() => retirements.delete(pending));
+  }
+  function hookStatus(hookEventName) {
+    const messages = [];
+    for (const [connectionId, event] of notices) {
+      notices.delete(connectionId);
+      const connection = connections.get(connectionId);
+      if (!connection) continue;
+      const current = statusOf(connection);
+      if (current.sessionId !== event.sessionId || !current.taskActive || current.reason !== "process-exited")
+        continue;
+      messages.push(
+        JSON.stringify({
+          entryId,
+          connectionId,
+          sessionId: event.sessionId,
+          targetKind: current.targetKind,
+          processId: current.processId,
+          port: current.port,
+          reason: event.reason
+        })
+      );
+    }
+    if (!messages.length) return {};
+    const context = "CDP target process exited during active work. " + messages.join("\n") + "\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent.";
+    return hookEventName === "Stop" ? { decision: "block", reason: context } : { hookSpecificOutput: { hookEventName, additionalContext: context } };
   }
   async function start(options) {
     if (shuttingDown) throw new Error("The gateway is closing.");
@@ -39806,20 +39982,17 @@ async function startPluginRuntime({
     const connection = {
       connectionId,
       router,
-      prompts: /* @__PURE__ */ new Map(),
       controller: createTargetController({
         entryId,
         router,
         host: createHost(),
+        onProcessExit: (event) => observeExit(connection, event),
         server: { ensure: () => ensureUpstream(connection), close: () => closeUpstream(connection) }
       })
     };
     connections.set(connectionId, connection);
     try {
-      await connection.controller.start(
-        { ...options, profileKey: options.profileKey ?? `${connectionId}-${sessionId}` },
-        sessionId
-      );
+      await connection.controller.start(options, sessionId);
       return statusOf(connection);
     } catch (error2) {
       if (connection.controller.status().status === "idle") {
@@ -39853,15 +40026,15 @@ async function startPluginRuntime({
     },
     restart: async (request) => {
       const connection = routed(request);
+      clearNotice(connection, request.sessionId);
       const result = await connection.controller.restart(request);
-      abortPrompts(connection, request.sessionId);
       return { ...result, connectionId: connection.connectionId };
     },
     stop: async (request) => {
       const connection = routed(request);
       if (connection.failedStartupSessionId) {
         if (request.disposition !== "Close")
-          throw new Error("The retained startup requires an explicit Close retry.");
+          throw new Error("The retained connection requires an explicit Close retry.");
         await closeUpstream(connection);
         await remove(connection);
         return {
@@ -39872,74 +40045,21 @@ async function startPluginRuntime({
           pageIdsInvalidated: true
         };
       }
+      const previous = statusOf(connection);
       const result = await connection.controller.stop(request);
-      abortPrompts(connection, request.sessionId);
-      if (result.status === "idle") {
-        try {
-          await remove(connection);
-        } catch (error2) {
-          connection.failedStartupSessionId = request.sessionId;
-          const retained = new DetailedError(errorMessage(error2));
-          retained.details = { ...statusOf(connection) };
-          throw retained;
-        }
-      }
+      clearNotice(connection, request.sessionId);
+      if (result.status === "idle") await removeRetired(connection, previous);
       return { ...result, connectionId: connection.connectionId };
     },
     endTask: async (request) => {
       const connection = routed(request);
+      clearNotice(connection, request.sessionId);
+      const previous = statusOf(connection);
       const result = await connection.controller.endTask(request);
-      abortPrompts(connection, request.sessionId);
+      if (result.status === "idle") await removeRetired(connection, previous);
       return { ...result, connectionId: connection.connectionId };
     }
   };
-  async function ask(connection, event, signal) {
-    if (signal.aborted) return "pending";
-    let prompt = connection.prompts.get(event.sessionId);
-    if (prompt) return waitForChoice(prompt, signal);
-    const abort = new AbortController();
-    const record2 = { abort, result: Promise.resolve("pending"), subscribers: 0, settled: false };
-    record2.result = Promise.resolve().then(async () => {
-      const current = statusOf(connection);
-      const gateway = entry;
-      if (!gateway || current.sessionId !== event.sessionId || current.status !== "lost" || abort.signal.aborted)
-        return "pending";
-      const choice = await gateway.askLoss(
-        `\u8C03\u8BD5\u76EE\u6807 ${current.targetKind}\uFF08PID ${current.processId}\uFF0C\u8FDE\u63A5 ${connection.connectionId}\uFF0C\u4F1A\u8BDD ${event.sessionId}\uFF09\u5DF2\u65AD\u5F00\uFF08${event.reason}\uFF09\u3002\u8FD9\u662F\u8BEF\u5173\u95ED\u8FD8\u662F\u6709\u610F\u5173\u95ED\uFF1F\u8BEF\u5173\u95ED\u53EF\u7528\u539F CDP \u7AEF\u53E3 ${current.port}\u3001\u539F\u542F\u52A8\u53C2\u6570\u548C\u914D\u7F6E\u91CD\u65B0\u542F\u52A8\uFF1B\u6709\u610F\u5173\u95ED\u5C06\u7EC8\u6B62\u4F9D\u8D56\u6B64\u76EE\u6807\u7684\u4EFB\u52A1\u3002`,
-        abort.signal
-      );
-      return abort.signal.aborted ? "pending" : choice;
-    }).then((choice) => {
-      if (choice === "pending" && connection.prompts.get(event.sessionId) === record2)
-        connection.prompts.delete(event.sessionId);
-      return choice;
-    }).finally(() => {
-      record2.settled = true;
-    });
-    prompt = record2;
-    connection.prompts.set(event.sessionId, prompt);
-    return waitForChoice(prompt, signal);
-  }
-  function waitForChoice(prompt, signal) {
-    prompt.subscribers += 1;
-    return new Promise((resolve) => {
-      let done = false;
-      function finish(choice) {
-        if (done) return;
-        done = true;
-        signal.removeEventListener("abort", aborted2);
-        prompt.subscribers -= 1;
-        if (!prompt.settled && prompt.subscribers === 0) prompt.abort.abort();
-        resolve(signal.aborted ? "pending" : choice);
-      }
-      function aborted2() {
-        finish("pending");
-      }
-      signal.addEventListener("abort", aborted2, { once: true });
-      void prompt.result.then(finish, () => finish("pending"));
-      if (signal.aborted) aborted2();
-    });
-  }
   function lifecycleResult(details) {
     return {
       isError: true,
@@ -39951,7 +40071,8 @@ async function startPluginRuntime({
     if (cleanupPromise) return cleanupPromise;
     shuttingDown = true;
     cleanupPromise = (async () => {
-      if (polling) clearInterval(polling);
+      notices.clear();
+      await Promise.allSettled([...retirements]);
       try {
         await closeCatalogConnection();
       } catch (error2) {
@@ -39964,7 +40085,7 @@ async function startPluginRuntime({
       await Promise.allSettled([...starts]);
       const results = await Promise.allSettled(
         [...connections.values()].map(async (connection) => {
-          abortPrompts(connection);
+          clearNotice(connection);
           try {
             const retained = await connection.controller.cleanupOnDisconnect();
             if (retained)
@@ -40005,48 +40126,21 @@ async function startPluginRuntime({
     await closeCatalogRouter();
     entry = createEntry({
       tools: catalog,
-      status: () => ({ ...status() }),
+      status: (hookEventName) => hookEventName ? hookStatus(hookEventName) : { ...status() },
       onRootsChanged: async () => {
         await Promise.all([...connections.values()].map((connection) => connection.upstream?.rootsChanged()));
-      },
-      watch: async (route, signal) => {
-        const connection = routed(parseConnectionRoute(route));
-        const lease = new AbortController();
-        const aborted2 = () => lease.abort();
-        signal.addEventListener("abort", aborted2, { once: true });
-        if (signal.aborted) lease.abort();
-        let expired = false;
-        const timer = setTimeout(() => {
-          expired = true;
-          lease.abort();
-        }, watchLeaseMs);
-        try {
-          const event = await connection.controller.watchTarget(lease.signal);
-          if (event.reason === "task-ended")
-            return { ...statusOf(connection), reason: expired ? "watch-renew" : "task-ended" };
-          const choice = await ask(connection, event, signal);
-          return {
-            ...statusOf(connection),
-            event,
-            choice,
-            nextAction: choice === "restart" ? "restart" : choice === "cancel" ? "stop-Close" : "ask-user"
-          };
-        } finally {
-          clearTimeout(timer);
-          signal.removeEventListener("abort", aborted2);
-        }
       },
       invoke: async (name, arguments_, signal, onProgress) => {
         const route = parseConnectionRoute(arguments_._dct);
         const connection = routed(route);
+        connection.controller.beginTask(route);
         await connection.controller.checkHealth();
         routed(route);
         const current = statusOf(connection);
         if (current.status === "lost" && current.sessionId) {
-          const event = { sessionId: current.sessionId, reason: current.reason ?? "target-unavailable" };
           return lifecycleResult({
             ...current,
-            choice: await ask(connection, event, signal),
+            nextAction: current.reason === "process-exited" ? "ask-user" : "inspect-connection-error",
             pageIdsInvalidated: true
           });
         }
@@ -40059,10 +40153,6 @@ async function startPluginRuntime({
     });
     control = await createControl({ entryId, controller: handler });
     await entry.connect();
-    polling = setInterval(() => {
-      for (const connection of connections.values()) void connection.controller.checkHealth().catch(() => {
-      });
-    }, pollIntervalMs);
     const selectedEntry = entry;
     const closed = selectedEntry.closed.then(cleanup);
     return {

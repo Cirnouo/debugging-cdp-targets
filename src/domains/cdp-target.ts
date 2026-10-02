@@ -35,7 +35,13 @@ export interface ManagedTarget extends ProcessTarget {
     browserProduct?: string;
     webSocketDebuggerUrl?: string;
     verify?: () => Promise<void>;
-    child?: { once(event: 'exit', listener: () => void): unknown };
+    releaseProfile?: () => void;
+    child?: {
+        exitCode?: number | null;
+        signalCode?: string | null;
+        once(event: 'exit', listener: () => void): unknown;
+        off?(event: 'exit', listener: () => void): unknown;
+    };
 }
 
 /** Internal ownership evidence for a new process whose normal rollback failed. */

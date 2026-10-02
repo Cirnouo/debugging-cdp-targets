@@ -37,10 +37,12 @@ test('documented lifecycle command templates match each command schema', () => {
 });
 
 test('portable plugin registers one stdio gateway for independent target connections', async () => {
-    const manifest: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'plugin.json'), 'utf8'));
+    const manifest: unknown = JSON.parse(await readFile(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
     const mcp: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'mcp.json'), 'utf8'));
     assert.ok(isRecord(manifest) && isRecord(mcp) && isRecord(mcp.mcpServers));
     assert.equal(manifest.name, 'debugging-cdp-targets');
+    assert.equal(manifest.mcpServers, './mcp.json');
+    assert.equal(manifest.hooks, './hooks/hooks.json');
     const packageData: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     assert.ok(isRecord(packageData) && isSemVer(packageData.version));
     assert.equal(manifest.version, packageData.version);
@@ -49,14 +51,14 @@ test('portable plugin registers one stdio gateway for independent target connect
     assert.deepEqual(mcp.mcpServers['cdp-targets'], {
         type: 'stdio',
         command: 'node',
-        args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`],
-        cwd: `\${PLUGIN_ROOT}`,
+        args: ['dist/mcp-bootstrap.mjs'],
+        cwd: '.',
     });
 });
 
 test('plugin payload has only manifests, one skill, license, and self-contained runtime', async () => {
     const topLevel = await readdir(pluginRoot);
-    assert.deepEqual(topLevel.sort(), ['LICENSE', 'README.md', 'dist', 'mcp.json', 'plugin.json', 'skills']);
+    assert.deepEqual(topLevel.sort(), ['.codex-plugin', 'LICENSE', 'README.md', 'dist', 'hooks', 'mcp.json', 'skills']);
     const distribution = await readdir(path.join(pluginRoot, 'dist'));
     assert.deepEqual(distribution.sort(), [
         'README.md',

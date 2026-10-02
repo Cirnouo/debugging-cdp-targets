@@ -143,8 +143,8 @@ export function validateRuntimeSource(file: string, source: string) {
                     file === 'src/adapters/platform-process.ts' &&
                     expression(callee.object).type === 'Identifier' &&
                     propertyName(expression(callee.object)) === 'process' &&
-                    node.arguments[1]?.type === 'StringLiteral' &&
-                    node.arguments[1].value === 'SIGTERM'
+                    ((node.arguments[1]?.type === 'StringLiteral' && node.arguments[1].value === 'SIGTERM') ||
+                        (node.arguments[1]?.type === 'NumericLiteral' && node.arguments[1].value === 0))
                 )
             )
                 errors.push(`${file}: unapproved process termination API.`);
@@ -208,7 +208,7 @@ export function auditRepository(root: string) {
     const mode = execFileSync('git', ['ls-files', '-s', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
     if (!mode.startsWith('120000 ')) errors.push('CLAUDE.md must have Git mode 120000.');
     const packageData: unknown = JSON.parse(files.get('package.json') ?? 'null');
-    const plugin: unknown = JSON.parse(files.get(`${PLUGIN_ROOT}/plugin.json`) ?? 'null');
+    const plugin: unknown = JSON.parse(files.get(`${PLUGIN_ROOT}/.codex-plugin/plugin.json`) ?? 'null');
     const skillText = files.get(`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skillText?.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
     if (

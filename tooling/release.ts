@@ -253,7 +253,7 @@ export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
     const version = parseReleaseTag(input.tag);
     const object = verifyTagIdentity(input.tag, input.sha, input.tagObject, io.git);
     const packageData: unknown = JSON.parse(await io.readFile('package.json'));
-    const plugin: unknown = JSON.parse(await io.readFile(`${PLUGIN_ROOT}/plugin.json`));
+    const plugin: unknown = JSON.parse(await io.readFile(`${PLUGIN_ROOT}/.codex-plugin/plugin.json`));
     const skill = await io.readFile(`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skill.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1] ?? '');
     if (!isRecord(packageData) || !isRecord(plugin) || !isRecord(frontmatter) || !isRecord(frontmatter.metadata)) {

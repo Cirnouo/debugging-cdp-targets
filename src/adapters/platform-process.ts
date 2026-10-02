@@ -10,7 +10,7 @@ import type {
     RootEvidence,
 } from '../domains/cdp-target.ts';
 import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
-import { isRecord } from '../shared/errors.ts';
+import { errorCode, isRecord } from '../shared/errors.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
 export type ProcessExecutor = (executable: string, arguments_: string[]) => Promise<ProcessResult>;
@@ -306,4 +306,15 @@ export function createPlatformAdapter(): PlatformAdapter {
             return false;
         },
     };
+}
+
+/** Check Unix SingletonLock ownership without sending a signal. */
+export function probeProcessExists(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        if (errorCode(error) === 'ESRCH') return false;
+        throw error;
+    }
 }

@@ -3,7 +3,7 @@ import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createCdpRouter } from '../adapters/cdp-router.ts';
 import { createControlServer } from '../adapters/control-ipc.ts';
 import { createOfficialConnection, type OfficialConnection } from '../adapters/mcp-bridge.ts';
-import { createMcpEntryServer } from '../adapters/mcp-entry-server.ts';
+import { createMcpEntryServer, type HookEventName } from '../adapters/mcp-entry-server.ts';
 import { createTargetHost } from '../adapters/target-host.ts';
 import {
     type ConnectionRoute,
@@ -19,7 +19,6 @@ import { createTargetController } from './target-controller.ts';
 
 type RuntimeRouter = ControllerRouter & { url: string; close(): Promise<void> };
 type Entry = ReturnType<typeof createMcpEntryServer>;
-type Prompt = { abort: AbortController; result: Promise<string>; subscribers: number; settled: boolean };
 type Controller = ReturnType<typeof createTargetController>;
 type ManagedConnection = {
     connectionId: string;
@@ -28,7 +27,8 @@ type ManagedConnection = {
     upstream?: OfficialConnection;
     closingUpstream?: OfficialConnection;
     failedStartupSessionId?: string;
-    prompts: Map<string, Prompt>;
+    removal?: Promise<void>;
+    retainedStatus?: ConnectionStatus;
 };
 type RuntimeDependencies = {
     createRouter?: () => Promise<RuntimeRouter>;
@@ -36,8 +36,6 @@ type RuntimeDependencies = {
     createControl?: (options: { controller: ControlHandler; entryId: string }) => Promise<{ close(): Promise<void> }>;
     createConnection?: typeof createOfficialConnection;
     createEntry?: typeof createMcpEntryServer;
-    pollIntervalMs?: number;
-    watchLeaseMs?: number;
 };
 
 export async function startPluginRuntime({
@@ -46,8 +44,6 @@ export async function startPluginRuntime({
     createControl = createControlServer,
     createConnection = createOfficialConnection,
     createEntry = createMcpEntryServer,
-    pollIntervalMs = 1_000,
-    watchLeaseMs = 25_000,
 }: RuntimeDependencies = {}) {
     const entryId = randomUUID();
     const connections = new Map<string, ManagedConnection>();
@@ -58,7 +54,8 @@ export async function startPluginRuntime({
     let catalogRouterClosed = false;
     let catalogCleanupError: string | undefined;
     let cleanupPromise: Promise<void> | undefined;
-    let polling: ReturnType<typeof setInterval> | undefined;
+    const notices = new Map<string, TargetEvent>();
+    const retirements = new Set<Promise<void>>();
     let shuttingDown = false;
     const starts = new Set<Promise<ConnectionStatus>>();
     function selected(connectionId: string) {
@@ -80,6 +77,7 @@ export async function startPluginRuntime({
             ...(connection.failedStartupSessionId
                 ? { sessionId: connection.failedStartupSessionId, reason: 'startup-cleanup-failed' }
                 : {}),
+            ...connection.retainedStatus,
         };
     }
     function status(): GatewayStatus;
@@ -119,19 +117,96 @@ export async function startPluginRuntime({
             connection.controller.officialDisconnected();
         });
     }
-    function abortPrompts(connection: ManagedConnection, sessionId?: string) {
-        if (sessionId) {
-            connection.prompts.get(sessionId)?.abort.abort();
-            connection.prompts.delete(sessionId);
-        } else {
-            for (const prompt of connection.prompts.values()) prompt.abort.abort();
-            connection.prompts.clear();
-        }
+    function clearNotice(connection: ManagedConnection, sessionId?: string) {
+        if (!sessionId || notices.get(connection.connectionId)?.sessionId === sessionId)
+            notices.delete(connection.connectionId);
     }
     async function remove(connection: ManagedConnection) {
-        abortPrompts(connection);
-        await connection.router.close();
-        connections.delete(connection.connectionId);
+        if (connections.get(connection.connectionId) !== connection) return;
+        clearNotice(connection);
+        if (!connection.removal) {
+            connection.removal = connection.router.close().then(() => {
+                if (connections.get(connection.connectionId) === connection)
+                    connections.delete(connection.connectionId);
+            });
+        }
+        try {
+            await connection.removal;
+        } catch (error) {
+            delete connection.removal;
+            throw error;
+        }
+    }
+    async function removeRetired(connection: ManagedConnection, previous: ConnectionStatus) {
+        try {
+            await remove(connection);
+        } catch (error) {
+            if (previous.sessionId) connection.failedStartupSessionId = previous.sessionId;
+            connection.retainedStatus = {
+                ...previous,
+                status: 'close-failed',
+                taskActive: false,
+                reason: 'router-close-failed',
+            };
+            const retained = new DetailedError(errorMessage(error));
+            retained.details = { ...statusOf(connection) };
+            throw retained;
+        }
+    }
+    function observeExit(connection: ManagedConnection, event: TargetEvent) {
+        if (shuttingDown || connections.get(connection.connectionId) !== connection) return;
+        if (event.taskActive) {
+            notices.set(connection.connectionId, event);
+            return;
+        }
+        clearNotice(connection, event.sessionId);
+        const previous = statusOf(connection);
+        const pending = (async () => {
+            const result = await connection.controller.retireExited({ sessionId: event.sessionId });
+            if (result.status === 'idle') await removeRetired(connection, previous);
+        })();
+        retirements.add(pending);
+        void pending
+            .catch((error: unknown) => {
+                process.stderr.write(
+                    'Retired target connection cleanup failed: ' +
+                        connection.connectionId +
+                        ': ' +
+                        errorMessage(error) +
+                        '\n',
+                );
+            })
+            .finally(() => retirements.delete(pending));
+    }
+    function hookStatus(hookEventName: HookEventName): Record<string, unknown> {
+        const messages: string[] = [];
+        for (const [connectionId, event] of notices) {
+            notices.delete(connectionId);
+            const connection = connections.get(connectionId);
+            if (!connection) continue;
+            const current = statusOf(connection);
+            if (current.sessionId !== event.sessionId || !current.taskActive || current.reason !== 'process-exited')
+                continue;
+            messages.push(
+                JSON.stringify({
+                    entryId,
+                    connectionId,
+                    sessionId: event.sessionId,
+                    targetKind: current.targetKind,
+                    processId: current.processId,
+                    port: current.port,
+                    reason: event.reason,
+                }),
+            );
+        }
+        if (!messages.length) return {};
+        const context =
+            'CDP target process exited during active work. ' +
+            messages.join('\n') +
+            '\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent.';
+        return hookEventName === 'Stop'
+            ? { decision: 'block', reason: context }
+            : { hookSpecificOutput: { hookEventName, additionalContext: context } };
     }
     async function start(options: Parameters<Controller['start']>[0]): Promise<ConnectionStatus> {
         if (shuttingDown) throw new Error('The gateway is closing.');
@@ -141,20 +216,17 @@ export async function startPluginRuntime({
         const connection: ManagedConnection = {
             connectionId,
             router,
-            prompts: new Map(),
             controller: createTargetController({
                 entryId,
                 router,
                 host: createHost(),
+                onProcessExit: (event) => observeExit(connection, event),
                 server: { ensure: () => ensureUpstream(connection), close: () => closeUpstream(connection) },
             }),
         };
         connections.set(connectionId, connection);
         try {
-            await connection.controller.start(
-                { ...options, profileKey: options.profileKey ?? `${connectionId}-${sessionId}` },
-                sessionId,
-            );
+            await connection.controller.start(options, sessionId);
             return statusOf(connection);
         } catch (error) {
             if (connection.controller.status().status === 'idle') {
@@ -187,15 +259,15 @@ export async function startPluginRuntime({
         },
         restart: async (request) => {
             const connection = routed(request);
+            clearNotice(connection, request.sessionId);
             const result = await connection.controller.restart(request);
-            abortPrompts(connection, request.sessionId);
             return { ...result, connectionId: connection.connectionId };
         },
         stop: async (request) => {
             const connection = routed(request);
             if (connection.failedStartupSessionId) {
                 if (request.disposition !== 'Close')
-                    throw new Error('The retained startup requires an explicit Close retry.');
+                    throw new Error('The retained connection requires an explicit Close retry.');
                 await closeUpstream(connection);
                 await remove(connection);
                 return {
@@ -206,82 +278,21 @@ export async function startPluginRuntime({
                     pageIdsInvalidated: true,
                 };
             }
+            const previous = statusOf(connection);
             const result = await connection.controller.stop(request);
-            abortPrompts(connection, request.sessionId);
-            if (result.status === 'idle') {
-                try {
-                    await remove(connection);
-                } catch (error) {
-                    connection.failedStartupSessionId = request.sessionId;
-                    const retained = new DetailedError(errorMessage(error));
-                    retained.details = { ...statusOf(connection) };
-                    throw retained;
-                }
-            }
+            clearNotice(connection, request.sessionId);
+            if (result.status === 'idle') await removeRetired(connection, previous);
             return { ...result, connectionId: connection.connectionId };
         },
         endTask: async (request) => {
             const connection = routed(request);
+            clearNotice(connection, request.sessionId);
+            const previous = statusOf(connection);
             const result = await connection.controller.endTask(request);
-            abortPrompts(connection, request.sessionId);
+            if (result.status === 'idle') await removeRetired(connection, previous);
             return { ...result, connectionId: connection.connectionId };
         },
     };
-    async function ask(connection: ManagedConnection, event: TargetEvent, signal: AbortSignal) {
-        if (signal.aborted) return 'pending';
-        let prompt = connection.prompts.get(event.sessionId);
-        if (prompt) return waitForChoice(prompt, signal);
-        const abort = new AbortController();
-        const record: Prompt = { abort, result: Promise.resolve('pending'), subscribers: 0, settled: false };
-        record.result = Promise.resolve()
-            .then(async () => {
-                const current = statusOf(connection);
-                const gateway = entry;
-                if (
-                    !gateway ||
-                    current.sessionId !== event.sessionId ||
-                    current.status !== 'lost' ||
-                    abort.signal.aborted
-                )
-                    return 'pending';
-                const choice = await gateway.askLoss(
-                    `调试目标 ${current.targetKind}（PID ${current.processId}，连接 ${connection.connectionId}，会话 ${event.sessionId}）已断开（${event.reason}）。这是误关闭还是有意关闭？误关闭可用原 CDP 端口 ${current.port}、原启动参数和配置重新启动；有意关闭将终止依赖此目标的任务。`,
-                    abort.signal,
-                );
-                return abort.signal.aborted ? 'pending' : choice;
-            })
-            .then((choice) => {
-                if (choice === 'pending' && connection.prompts.get(event.sessionId) === record)
-                    connection.prompts.delete(event.sessionId);
-                return choice;
-            })
-            .finally(() => {
-                record.settled = true;
-            });
-        prompt = record;
-        connection.prompts.set(event.sessionId, prompt);
-        return waitForChoice(prompt, signal);
-    }
-    function waitForChoice(prompt: Prompt, signal: AbortSignal): Promise<string> {
-        prompt.subscribers += 1;
-        return new Promise((resolve) => {
-            let done = false;
-            function finish(choice: string) {
-                if (done) return;
-                done = true;
-                signal.removeEventListener('abort', aborted);
-                prompt.subscribers -= 1;
-                if (!prompt.settled && prompt.subscribers === 0) prompt.abort.abort();
-                resolve(signal.aborted ? 'pending' : choice);
-            }
-            function aborted() {
-                finish('pending');
-            }
-            signal.addEventListener('abort', aborted, { once: true });
-            void prompt.result.then(finish, () => finish('pending'));
-            if (signal.aborted) aborted();
-        });
-    }
     function lifecycleResult(details: Record<string, unknown>): CallToolResult {
         return {
             isError: true,
@@ -293,7 +304,8 @@ export async function startPluginRuntime({
         if (cleanupPromise) return cleanupPromise;
         shuttingDown = true;
         cleanupPromise = (async () => {
-            if (polling) clearInterval(polling);
+            notices.clear();
+            await Promise.allSettled([...retirements]);
             try {
                 await closeCatalogConnection();
             } catch (error) {
@@ -305,7 +317,7 @@ export async function startPluginRuntime({
             await Promise.allSettled([...starts]);
             const results = await Promise.allSettled(
                 [...connections.values()].map(async (connection) => {
-                    abortPrompts(connection);
+                    clearNotice(connection);
                     try {
                         const retained = await connection.controller.cleanupOnDisconnect();
                         if (retained)
@@ -344,48 +356,21 @@ export async function startPluginRuntime({
         await closeCatalogRouter();
         entry = createEntry({
             tools: catalog,
-            status: () => ({ ...status() }),
+            status: (hookEventName) => (hookEventName ? hookStatus(hookEventName) : { ...status() }),
             onRootsChanged: async () => {
                 await Promise.all([...connections.values()].map((connection) => connection.upstream?.rootsChanged()));
-            },
-            watch: async (route, signal) => {
-                const connection = routed(parseConnectionRoute(route));
-                const lease = new AbortController();
-                const aborted = () => lease.abort();
-                signal.addEventListener('abort', aborted, { once: true });
-                if (signal.aborted) lease.abort();
-                let expired = false;
-                const timer = setTimeout(() => {
-                    expired = true;
-                    lease.abort();
-                }, watchLeaseMs);
-                try {
-                    const event = await connection.controller.watchTarget(lease.signal);
-                    if (event.reason === 'task-ended')
-                        return { ...statusOf(connection), reason: expired ? 'watch-renew' : 'task-ended' };
-                    const choice = await ask(connection, event, signal);
-                    return {
-                        ...statusOf(connection),
-                        event,
-                        choice,
-                        nextAction: choice === 'restart' ? 'restart' : choice === 'cancel' ? 'stop-Close' : 'ask-user',
-                    };
-                } finally {
-                    clearTimeout(timer);
-                    signal.removeEventListener('abort', aborted);
-                }
             },
             invoke: async (name, arguments_, signal, onProgress) => {
                 const route = parseConnectionRoute(arguments_._dct);
                 const connection = routed(route);
+                connection.controller.beginTask(route);
                 await connection.controller.checkHealth();
                 routed(route);
                 const current = statusOf(connection);
                 if (current.status === 'lost' && current.sessionId) {
-                    const event = { sessionId: current.sessionId, reason: current.reason ?? 'target-unavailable' };
                     return lifecycleResult({
                         ...current,
-                        choice: await ask(connection, event, signal),
+                        nextAction: current.reason === 'process-exited' ? 'ask-user' : 'inspect-connection-error',
                         pageIdsInvalidated: true,
                     });
                 }
@@ -398,9 +383,6 @@ export async function startPluginRuntime({
         });
         control = await createControl({ entryId, controller: handler });
         await entry.connect();
-        polling = setInterval(() => {
-            for (const connection of connections.values()) void connection.controller.checkHealth().catch(() => {});
-        }, pollIntervalMs);
         const selectedEntry = entry;
         const closed = selectedEntry.closed.then(cleanup);
         return {

@@ -29,7 +29,9 @@ node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kin
 
 Commands parse argv without a shell. `{port}` selects an available non-reserved
 port; missing Chromium port options are appended. Chrome uses a dedicated
-profile unless --user-data-dir overrides it. Generic targets must explicitly
+fixed profile at <user-home>/.cache/chrome-devtools-mcp/chrome-profile unless
+--user-data-dir overrides it. Occupied or unverifiable directories fail before
+launch; explicitly choose another directory instead of a temporary fallback. Generic targets must explicitly
 support command-line debugging and browser-level CDP; a framework name alone
 does not establish compatibility. Never reuse a profile locked by another target.
 
@@ -49,33 +51,32 @@ for fresh URL/title evidence. Recovery keeps connectionId but replaces sessionId
 Old sessions and closed connections are rejected. Extension tools require
 verified Google Chrome 149 or newer. Usage statistics and CrUX default to off.
 
-While doing dependent work for each target, call `dct_watch_target` concurrently
-with that target's inspection, using `{ connectionId, sessionId }` (without _dct).
-Each watch has a 25-second lease. Renew after reason watch-renew only while that
-target's dependent work remains active. Idle targets need no renewed watch.
-Finish the watch using end-task with all three IDs; it retains target and MCP.
+The gateway observes process exit automatically from launch. Never call a watch
+or renew a lease. Start/restart and official use activate dependent work; Keep
+and end-task end it. Reusing a live kept target automatically resumes monitoring
+for its new task. Empty status calls are read-only; hookEventName is reserved
+for packaged automatic Codex Hooks, never an Agent monitoring request.
 
-On loss, watch identifies the connection/session and returns choice
-restart/cancel/pending and nextAction restart/stop-Close/ask-user. Standard MCP
-form elicitation collects the user's choice, without automatically recovering.
-If restart, use the event's old session UUID:
+Enable Codex Hooks and review/trust this plugin's four definitions through the
+standard Codex flow. Installation does not grant trust. See
+[Codex Hooks](https://learn.chatgpt.com/docs/hooks). While processes live, Hooks
+add no context. An active task's unexpected exit queues one reminder with target
+kind, PID, port and entry/connection/session identities. Delivery occurs at a
+tool boundary or before the turn ends; idle chats receive it next turn.
 
-```powershell
-node "<plugin-root>/dist/control.mjs" restart --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <event-old-session-uuid>
-```
-
-If cancel, run stop with those identities and --disposition Close, then terminate
-only that target's dependent work. For pending/ask-user, ask before proceeding.
-Other connections continue working. Never restart or replay tools automatically.
-
-Active tasks receive elicitation within five seconds after loss is confirmed
-by events or at least two failed polls. Idle targets ask on next use. Authorized
-restart retains original argv/cwd/profile/port, refuses a busy port and returns
-new session identity with pageIdsInvalidated: true. Refresh status and list_pages
-before resuming with new page IDs.
+On a process-exited reminder, ask the user whether to restart or end dependent
+work. Keep other targets usable. Never automatically restart or replay tools.
+If authorized to restart, run restart with all three IDs and the event's old
+session. Recovery retains original argv/cwd/profile/port, rejects an occupied
+port, returns a new session and invalidates page IDs. Refresh status and
+list_pages before resuming. If work should end, apply the user's Close/Keep
+choice to that connection. A CDP/upstream error while the process lives requires
+inspection of the connection error; it does not prove the process exited.
 
 Before ending or abandoning a target's task, ask **Close** or **Keep**, with no
-default. Keep retains target and official MCP for later work in the same chat.
+default. Keep retains a live target and official MCP for later work in the same chat.
+If it exits after Keep/end-task, the gateway silently closes that upstream and
+removes only that connection; reuse its identities only while still present.
 Close normally shuts down both and removes only that connection; the gateway
 and other connections remain available. Use stop with all identities:
 

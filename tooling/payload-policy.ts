@@ -3,8 +3,11 @@ export const PLUGIN_ROOT = `plugins/${PLUGIN_NAME}`;
 export const REQUIRED_PAYLOAD_FILES = Object.freeze([
     'LICENSE',
     'README.md',
-    'plugin.json',
+    '.codex-plugin/README.md',
+    '.codex-plugin/plugin.json',
     'mcp.json',
+    'hooks/README.md',
+    'hooks/hooks.json',
     'dist/README.md',
     'dist/THIRD-PARTY-NOTICES.txt',
     'dist/control.mjs',

@@ -4,8 +4,8 @@
         "cdp-targets": {
             "type": "stdio",
             "command": "node",
-            "args": ["${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs"],
-            "cwd": "${PLUGIN_ROOT}"
+            "args": ["dist/mcp-bootstrap.mjs"],
+            "cwd": "."
         }
     }
 }

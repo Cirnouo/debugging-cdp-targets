@@ -14,6 +14,7 @@ import {
     TARGET_KINDS,
 } from '../shared/constants.ts';
 import { DetailedError, errorCode, errorMessage } from '../shared/errors.ts';
+import { chromeProfileArgument, profileAvailable, reserveProfile } from './chrome-profile.ts';
 import type { PlatformAdapter } from './platform-process.ts';
 import { createPlatformAdapter, validateProcessIdentity } from './platform-process.ts';
 
@@ -65,9 +66,7 @@ async function getVersion(port: number): Promise<unknown> {
     return response.json();
 }
 
-export function applyChromePreset(arguments_: string[], profileKey?: string) {
-    const home = process.platform === 'win32' ? process.env.USERPROFILE : os.homedir();
-    if (!home || !path.isAbsolute(home)) throw new Error('The Chrome profile home directory is unavailable.');
+export function applyChromePreset(arguments_: string[]) {
     const addresses = [];
     for (let index = 0; index < arguments_.length; index += 1) {
         const match = arguments_[index]?.match(/^--remote-debugging-address(?:[=:](.*))?$/i);
@@ -76,16 +75,17 @@ export function applyChromePreset(arguments_: string[], profileKey?: string) {
     if (addresses.length > 1) throw new Error('Duplicate Chrome debugging addresses are prohibited.');
     if (addresses.length && addresses[0] !== '127.0.0.1') throw new Error('Chrome debugging must use loopback.');
     const result = [...arguments_];
-    if (!result.some((value) => /^--user-data-dir(?:=|$)/.test(value)))
-        result.push(
-            `--user-data-dir=${path.join(home, '.cache', 'chrome-devtools-mcp', profileKey ? `profile-${profileKey}` : 'chrome-profile')}`,
-        );
+    if (chromeProfileArgument(result) === undefined) {
+        const home = process.platform === 'win32' ? process.env.USERPROFILE : os.homedir();
+        if (!home || !path.isAbsolute(home)) throw new Error('The Chrome profile home directory is unavailable.');
+        result.push(`--user-data-dir=${path.join(home, '.cache', 'chrome-devtools-mcp', 'chrome-profile')}`);
+    }
     if (!addresses.length) result.push('--remote-debugging-address=127.0.0.1');
     for (const flag of ['--no-first-run', '--no-default-browser-check']) if (!result.includes(flag)) result.push(flag);
     return result;
 }
 
-type LaunchProcess = { exitCode: number | null; pid: number; once(event: 'exit', listener: () => void): unknown };
+type LaunchProcess = NonNullable<ManagedTarget['child']> & { exitCode: number | null; pid?: number | undefined };
 export interface HostDependencies {
     platformAdapter?: PlatformAdapter;
     probe?: (port: number) => Promise<boolean>;
@@ -93,6 +93,7 @@ export interface HostDependencies {
     getVersion?: (port: number) => Promise<unknown>;
     now?: () => number;
     sleep?: (ms: number) => Promise<void>;
+    profileAvailable?: (directory: string) => Promise<boolean>;
 }
 export function createTargetHost(dependencies: HostDependencies = {}) {
     const platform = dependencies.platformAdapter ?? createPlatformAdapter();
@@ -102,6 +103,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         getVersion,
         now: Date.now,
         sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+        profileAvailable,
         ...dependencies,
     };
     return {
@@ -110,7 +112,6 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
             targetKind = 'generic-cdp',
             basePort = DEFAULT_BASE_PORT,
             exactPort,
-            profileKey,
             launchDefinition,
         }: LaunchOptions): Promise<ManagedTarget> {
             if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
@@ -134,20 +135,43 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 if (!path.isAbsolute(parsed.executable))
                     throw new Error('The launch command must use an absolute executable path.');
                 const executablePath = path.resolve(parsed.executable);
-                const args =
-                    targetKind === 'chrome' ? applyChromePreset(parsed.arguments, profileKey) : parsed.arguments;
+                const args = targetKind === 'chrome' ? applyChromePreset(parsed.arguments) : parsed.arguments;
                 const cwd = launchDefinition?.cwd ?? path.dirname(executablePath);
+                const profile = targetKind === 'chrome' ? chromeProfileArgument(args) : undefined;
+                const release =
+                    profile === undefined
+                        ? undefined
+                        : await reserveProfile(path.resolve(cwd, profile), io.profileAvailable);
                 const launchedAt = io.now();
-                const child = await io.spawn(executablePath, args, port, cwd);
-                if (child.pid === undefined) throw new Error('The target process has no PID.');
+                let child: LaunchProcess;
+                try {
+                    child = await io.spawn(executablePath, args, port, cwd);
+                    if (child.pid === undefined) throw new Error('The target process has no PID.');
+                } catch (error) {
+                    release?.();
+                    throw error;
+                }
+                const releaseProfile = () => {
+                    release?.();
+                    child.off?.('exit', releaseProfile);
+                };
+                if (release) {
+                    child.once('exit', releaseProfile);
+                    if (typeof child.exitCode === 'number' || typeof child.signalCode === 'string') releaseProfile();
+                }
                 const processId = child.pid;
-                const target: ProcessTarget & { child: NonNullable<ManagedTarget['child']> } = {
+                if (processId === undefined) throw new Error('The target process has no PID.');
+                const target: ProcessTarget & {
+                    child: NonNullable<ManagedTarget['child']>;
+                    releaseProfile?: () => void;
+                } = {
                     port,
-                    processId: child.pid,
+                    processId,
                     executablePath,
                     startedAtUtc: new Date(launchedAt).toISOString(),
                     targetKind,
                     child,
+                    ...(release ? { releaseProfile } : {}),
                 };
                 let lastError: unknown;
                 let foreignRace = false;
@@ -201,7 +225,11 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         };
                     } catch (error) {
                         lastError = error;
-                        if (child.exitCode !== null || /exposed|identity|Google Chrome|PID/.test(errorMessage(error)))
+                        if (
+                            child.exitCode !== null ||
+                            typeof child.signalCode === 'string' ||
+                            /exposed|identity|Google Chrome|PID/.test(errorMessage(error))
+                        )
                             break;
                         await io.sleep(POLL_INTERVAL_MS);
                     }
@@ -212,6 +240,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 } catch {
                     /* Keep PID/port evidence for manual recovery. */
                 }
+                if (closeConfirmed) releaseProfile?.();
                 if (foreignRace && closeConfirmed && exactPort === undefined) {
                     candidate = port + 1;
                     continue;
@@ -228,7 +257,11 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
             }
             throw new Error('The CDP port range is exhausted.');
         },
-        close: (target: ManagedTarget, options?: { requireListener?: boolean }) => platform.close(target, options),
+        async close(target: ManagedTarget, options?: { requireListener?: boolean }) {
+            const closed = await platform.close(target, options);
+            if (closed) target.releaseProfile?.();
+            return closed;
+        },
         async health(target: ManagedTarget): Promise<'healthy' | 'gone' | 'unavailable' | 'identity-changed'> {
             const evidence = await platform.snapshot(target.processId, target.port);
             if (!evidence.root.exists) return 'gone';

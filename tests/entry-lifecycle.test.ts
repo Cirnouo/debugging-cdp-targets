@@ -95,13 +95,10 @@ test('manual exit invalidates routes, retains exact launch evidence, and notifie
     const f = fixture();
     const active = await f.controller.start({ launchCommand: 'fixture' });
     assert.ok(active.sessionId);
-    const abort = new AbortController();
-    const event = f.controller.watchTarget(abort.signal);
     assert.equal(f.controller.status().taskActive, true);
     f.child.emit('exit', 0);
     f.setHealth('gone');
     await f.controller.checkHealth();
-    assert.equal((await event).reason, 'process-exited');
     assert.equal(f.controller.status().status, 'lost');
     assert.equal(f.counts().cleared, 1);
     f.child.emit('exit', 0);
@@ -115,20 +112,16 @@ test('manual exit invalidates routes, retains exact launch evidence, and notifie
     await f.controller.cleanupOnDisconnect();
 });
 
-test('idle loss remains pending; one transient miss does not become a closed target', async () => {
+test('connection unavailability gates tools while process monitoring stays active', async () => {
     const f = fixture();
     await f.controller.start({ launchCommand: 'fixture' });
     f.setHealth('unavailable');
     await f.controller.checkHealth();
-    assert.equal(f.controller.status().status, 'active');
-    f.setHealth('healthy');
-    await f.controller.checkHealth();
-    f.setHealth('unavailable');
-    await f.controller.checkHealth();
-    await f.controller.checkHealth();
     assert.equal(f.controller.status().status, 'lost');
-    assert.equal(f.controller.status().taskActive, false);
-    assert.equal(f.counts().serverCloses, 0);
+    assert.equal(f.controller.status().taskActive, true);
+    assert.equal(f.controller.status().reason, 'target-unavailable');
+    f.child.emit('exit');
+    assert.equal(f.controller.status().reason, 'process-exited');
     await f.controller.cleanupOnDisconnect();
 });
 
@@ -155,18 +148,4 @@ test('Close forgets an exited owned process even when its old port now belongs t
     assert.equal(result.status, 'idle');
     assert.equal(f.counts().closes, 0);
     assert.equal(f.counts().serverCloses, 1);
-});
-
-test('end-task cancels only its live watcher and managed Close does not elicit accidental loss', async () => {
-    const f = fixture();
-    const active = await f.controller.start({ launchCommand: 'fixture' });
-    assert.ok(active.sessionId);
-    const event = f.controller.watchTarget(new AbortController().signal);
-    await f.controller.endTask({ sessionId: active.sessionId });
-    assert.equal((await event).reason, 'task-ended');
-    const closeEvent = f.controller.watchTarget(new AbortController().signal);
-    await f.controller.stop({ sessionId: active.sessionId, disposition: 'Close' });
-    assert.equal((await closeEvent).reason, 'task-ended');
-    f.child.emit('exit', 0);
-    assert.equal(f.controller.status().status, 'idle');
 });

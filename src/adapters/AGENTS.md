@@ -23,4 +23,8 @@ and upstreams for all target connections. The official SDK gateway adds only
 required _dct routing to tool input schemas and forwards original arguments and
 results. Reject routing collisions and missing, unknown, closed or stale IDs.
 Track lifecycle and busy state without logging tool contents. Confirm target
-loss through events and at least two failed polls before eliciting recovery.
+exit through child events and retained exit state from startup. Runtime verification
+occurs before official calls, with no periodic health scans. Live process connection
+errors never announce process exit. Chrome defaults to the fixed chrome-profile;
+check native ownership and reserve canonical directories before launch, refusing
+occupied or unverifiable profiles without attaching to existing targets.

@@ -16,8 +16,8 @@ The official SDK gateway owns host stdio and preserves the official Server's too
 names and results. Exposed schemas add required _dct connection/session routing;
 validate and remove it before forwarding original arguments. Reject missing,
 unknown, closed, stale or colliding routing identities. Never select an implicit
-current target. Only dct_connection_status and dct_watch_target are additional
-lifecycle tools. Diagnostics go to stderr. Do not log commands, page contents,
+current target. Only dct_connection_status extends the tool catalog, including
+its four automatic Hook event names. Empty arguments are read-only. Diagnostics go to stderr. Do not log commands, page contents,
 cookies, network/console data, secrets, or tool calls.
 
 Require explicit Close/Keep before ending a target's work. Keep retains
@@ -28,14 +28,35 @@ Handled host disconnect attempts normal close for every connection despite
 individual failures; force termination cannot guarantee
 cleanup. Preserve old experimental state and global installations.
 
-Detect manual target loss through events or at least two failed polling checks.
-While a task is active, request standard MCP form elicitation within five seconds:
-recover an accidental close on the same port, or terminate dependent work after
-an intentional close. Scope prompts and cancellation to connection/session;
-other targets continue working. Idle connections ask only on next use. Never automatically
-restart or replay tools. Retain launch argv, cwd, and profile in memory exactly;
-recovery retains connection identity, replaces session identity, invalidates
-every page ID and requires fresh list_pages evidence.
+Observe the gateway-launched child's exit event from startup and retain exit
+state to close subscription gaps. Revoke listeners and verify current identities
+before applying callbacks. Task activity is independent of process lifetime;
+start/restart and official reuse activate it, Keep/end-task end it. No background
+process scan, watch lease, automatic restart or tool replay is permitted. Keep
+bounded startup readiness and pre-tool process/listener/endpoint verification.
+
+Active unexpected exit gates forwarding, retains exact launch identity and
+queues one reminder per connection/session. Trusted Codex MCP Tool Hooks drain
+in-memory events at PreToolUse, PostToolUse, UserPromptSubmit or Stop; no events
+return empty JSON without model context. Stop continues once for an undelivered
+event. Idle chats wait for the next turn. Only target kind, PID, port, identities
+and exit reason belong in reminders. Require the standard user trust review;
+installation cannot implicitly grant Hook trust. End-task/Keep/Close/restart
+clear notices. Expected close/restart/disconnect events stay silent. CDP/upstream
+failure while a process lives reports a connection error, not process exit.
+
+Ended tasks retain live targets/upstreams. On exit, close only that upstream and
+router and remove its connection; end-task/Keep after exit also clean up. Failed
+cleanup retains retry identity and reports the actual failure without force kill.
+Explicit recovery retains argv/cwd/profile/port and connection identity, replaces
+session identity and requires fresh list_pages evidence and page IDs.
+
+Chrome uses the fixed user-home .cache/chrome-devtools-mcp/chrome-profile unless
+an explicit --user-data-dir overrides it. Check native profile ownership and
+reserve canonical directories across gateway launches. Occupied or unverifiable
+profiles fail closed and require an explicit alternative; never attach to their
+owner or silently generate another profile. Release a reservation on actual exit
+or confirmed normal close. Profiles remain on disk after Close.
 
 Server defaults enable extensions and disable usage statistics and CrUX. Only
 compatible Chrome may use extension tools. Environment overrides require a new

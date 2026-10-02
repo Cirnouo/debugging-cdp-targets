@@ -6,7 +6,7 @@ nearest source AGENTS.md and only the relevant policies before editing.
 ## Boundaries
 
 - The reusable stdio gateway relays official MCP tools and results using
-  the official SDK. Only dct_connection_status and dct_watch_target extend it.
+  the official SDK. Only dct_connection_status extends it, including automatic Hooks.
   Do not create custom DevTools tools, a CLI daemon, or persistent session state.
 - Manage one newly launched target per connection. Verify process, listener,
   and endpoint identity; bind only loopback. Never take over existing targets.

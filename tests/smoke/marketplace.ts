@@ -58,8 +58,9 @@ try {
         assert.ok(isRecord(server) && isRecord(server.tools));
         assert.equal(server.name, 'cdp-targets');
         assert.equal(server.toolsError, null);
-        for (const tool of ['list_pages', 'dct_connection_status', 'dct_watch_target'])
+        for (const tool of ['list_pages', 'dct_connection_status'])
             assert.ok(isRecord(server.tools[tool]), `Codex did not load ${tool}.`);
+        assert.ok(!server.tools.dct_watch_target);
         console.log(JSON.stringify({ discoveredServer: server.name, toolCount: Object.keys(server.tools).length }));
     } finally {
         await appServer.close();

@@ -15,6 +15,10 @@
 - **Control channel**: temporary entry-specific local IPC for lifecycle commands.
 - **Disposition**: explicit Close or Keep choice without a default.
 - **Kept target**: application and upstream retained within its live connection.
+- **Active task**: dependent work activated by start, recovery or official use and ended by Keep/end-task.
+- **Exit reminder**: one in-memory process exit event awaiting delivery to Agent context through a trusted Codex Hook.
+- **Retired connection**: ended task whose exited process permits scoped upstream/router cleanup.
+- **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory.
 - **Closed connection**: removed target connection after normal shutdown; the gateway remains reusable.
 - **Recovery**: user-authorized launch from memory on the same port, with new session identity.
 - **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.

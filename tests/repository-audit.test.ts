@@ -104,6 +104,9 @@ test('runtime audit rejects force termination, persistent sessions, extra entry 
         [],
     );
     assert.deepEqual(validateRuntimeSource('src/adapters/platform-process.ts', "process.kill(pid, 'SIGTERM');"), []);
+    assert.deepEqual(validateRuntimeSource('src/adapters/platform-process.ts', 'process.kill(pid, 0);'), []);
+    assert.ok(validateRuntimeSource('src/adapters/example.ts', 'process.kill(pid, 0);').length);
+    assert.ok(validateRuntimeSource('src/adapters/platform-process.ts', 'process.kill(pid, signal);').length);
 });
 
 test('text audit enforces four spaces, LF, final newline, and no tabs', () => {

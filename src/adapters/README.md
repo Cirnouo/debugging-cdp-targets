@@ -9,6 +9,7 @@
 - `mcp-entry-server.ts` exposes the SDK gateway and lifecycle tools on stdio.
 - `hide-npm-console.ts` scopes hidden console spawning to npx acquisition.
 - `target-host.ts` launches and verifies a newly created target.
+- `chrome-profile.ts` checks native profile locks and reserves canonical directories.
 - `platform-process.ts` obtains OS identity/reservations and normal shutdown.
 - `windows-cdp-helper.ps1` supplies Windows API evidence and window close.
 - `AGENTS.md` defines I/O safety and platform contracts.

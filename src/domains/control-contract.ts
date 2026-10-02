@@ -7,7 +7,6 @@ export interface LaunchOptions {
     targetKind?: TargetKind;
     basePort?: number;
     exactPort?: number;
-    profileKey?: string;
     launchDefinition?: { executablePath: string; arguments: string[]; cwd: string };
 }
 export type ControlRequest =

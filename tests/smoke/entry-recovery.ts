@@ -18,24 +18,9 @@ const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-'));
 const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const execute = promisify(execFile);
 const platform = createPlatformAdapter();
-const forms: { message: string; receivedAt: number; choice: string }[] = [];
 const owned: ProcessTarget[] = [];
-let recoveryConnection: string | undefined;
 let entryId = '';
-const client = createClient(
-    path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
-    {},
-    async (method, params) => {
-        assert.equal(method, 'elicitation/create');
-        assert.equal(params.mode, 'form');
-        assert.ok(isRecord(params.requestedSchema));
-        assert.equal(typeof params.message, 'string');
-        const message = String(params.message);
-        const choice = recoveryConnection && message.includes(recoveryConnection) ? 'restart' : 'cancel';
-        forms.push({ message, receivedAt: Date.now(), choice });
-        return { action: 'accept', content: { action: choice } };
-    },
-);
+const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
 async function tool(name: string, arguments_: Record<string, unknown> = {}) {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
@@ -184,24 +169,20 @@ try {
     await recordOwned(fourth);
     await Promise.all([pages(first, 0), pages(third, 2), pages(fourth, 3)]);
     console.log('Keep/reuse, scoped Close and later new connection passed.');
-    recoveryConnection = first.connectionId;
-    const watch = tool('dct_watch_target', route(first));
     await until(async () => (await selectedStatus(first.connectionId)).taskActive === true);
     closeStarted = Date.now();
     const [normallyClosed] = await Promise.all([closeFixture(first), pages(third, 2), pages(fourth, 3)]);
     assert.equal(normallyClosed, true);
     closeCompleted = Date.now();
-    const watched = await watch;
-    assert.ok(isRecord(watched.structuredContent));
-    assert.equal(watched.structuredContent.choice, 'restart');
-    assert.equal(watched.structuredContent.connectionId, first.connectionId);
-    const firstForm = forms.find((item) => item.message.includes(first.connectionId));
-    assert.ok(firstForm);
-    assert.ok(
-        firstForm.receivedAt - closeCompleted <= 5_000,
-        'Protocol form arrived more than five seconds after verified normal closure completed.',
-    );
-    assert.equal((await selectedStatus(first.connectionId)).status, 'lost');
+    await until(async () => (await selectedStatus(first.connectionId)).status === 'lost');
+    const reminder = await tool('dct_connection_status', { hookEventName: 'PostToolUse' });
+    assert.ok(isRecord(reminder.structuredContent));
+    const context = JSON.stringify(reminder.structuredContent);
+    assert.ok(context.includes(first.connectionId));
+    assert.ok(context.includes('process-exited'));
+    const reminderReceived = Date.now();
+    assert.ok(reminderReceived - closeCompleted <= 5_000);
+    assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
     const restarted = await cli('restart', identities(first));
     assert.equal(restarted.connectionId, first.connectionId);
     assert.equal(restarted.port, first.port);
@@ -212,17 +193,16 @@ try {
     await rejectsRoute(first);
     await Promise.all([pages(restarted, 0), pages(third, 2), pages(fourth, 3)]);
     console.log('Explicit same-port recovery replaced session and rejected old route while peers remained usable.');
-    const idleFormsBefore = forms.length;
+    await cli('stop', [...identities(fourth), '--disposition', 'Keep']);
     assert.equal(await closeFixture(fourth), true);
-    await until(async () => (await selectedStatus(fourth.connectionId)).status === 'lost');
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
-    assert.equal(forms.length, idleFormsBefore);
-    const idleUse = await tool('list_pages', { _dct: route(fourth) });
-    assert.equal(idleUse.isError, true);
-    assert.ok(isRecord(idleUse.structuredContent));
-    assert.equal(idleUse.structuredContent.choice, 'cancel');
-    assert.equal(forms.length, idleFormsBefore + 1);
-    await cli('stop', [...identities(fourth), '--disposition', 'Close']);
+    await until(async () => {
+        const current = await status();
+        return (
+            'connections' in current && !current.connections.some((item) => item.connectionId === fourth.connectionId)
+        );
+    });
+    assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
+    await rejectsRoute(fourth);
     await Promise.all([pages(restarted, 0), pages(third, 2)]);
     const remaining = await status();
     assert.ok('connections' in remaining && remaining.connections.length === 2);
@@ -231,12 +211,12 @@ try {
             passed: true,
             entryId,
             connectionIds: [first.connectionId, second.connectionId, third.connectionId, fourth.connectionId],
-            protocolFormTiming: {
+            recordedExitTiming: {
                 closeStarted,
                 closeCompleted,
-                firstFormReceived: firstForm.receivedAt,
-                millisecondsFromCloseStart: firstForm.receivedAt - closeStarted,
-                millisecondsFromCloseCompletion: firstForm.receivedAt - closeCompleted,
+                reminderReceived,
+                millisecondsFromCloseStart: reminderReceived - closeStarted,
+                millisecondsFromCloseCompletion: reminderReceived - closeCompleted,
                 measuresUiRendering: false,
             },
             profilesRetainedAt: folder,

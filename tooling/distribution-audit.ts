@@ -27,8 +27,8 @@ export function validateMcpEntries(mcp: unknown) {
         !isRecord(server) ||
         server.type !== 'stdio' ||
         server.command !== 'node' ||
-        JSON.stringify(server.args) !== JSON.stringify([`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`]) ||
-        server.cwd !== `\${PLUGIN_ROOT}`
+        JSON.stringify(server.args) !== JSON.stringify(['dist/mcp-bootstrap.mjs']) ||
+        server.cwd !== '.'
     )
         return ['Invalid stdio gateway entry: cdp-targets.'];
     return [];
@@ -51,7 +51,7 @@ export async function readDistributionTree(directory: string, prefix = ''): Prom
 export async function auditDistribution(root: string) {
     const source = await readDistributionTree(path.join(root, PLUGIN_ROOT));
     const errors = validatePayloadFileInventory([...source.keys()]);
-    const manifest: unknown = JSON.parse(source.get('plugin.json')?.toString() ?? 'null');
+    const manifest: unknown = JSON.parse(source.get('.codex-plugin/plugin.json')?.toString() ?? 'null');
     const mcp: unknown = JSON.parse(source.get('mcp.json')?.toString() ?? 'null');
     const marketplace: unknown = JSON.parse(
         await readFile(path.join(root, '.agents/plugins/marketplace.json'), 'utf8'),
@@ -61,6 +61,8 @@ export async function auditDistribution(root: string) {
     const first: unknown = marketplace.plugins[0];
     if (
         manifest.name !== 'debugging-cdp-targets' ||
+        manifest.mcpServers !== './mcp.json' ||
+        manifest.hooks !== './hooks/hooks.json' ||
         marketplace.plugins.length !== 1 ||
         !isRecord(first) ||
         !isRecord(first.source) ||

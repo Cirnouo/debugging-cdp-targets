@@ -10,15 +10,14 @@ import type {
 import { getSupportedElicitationModes } from '@modelcontextprotocol/client';
 import { ProtocolError, ProtocolErrorCode, Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import { type ConnectionRoute, parseConnectionRoute } from '../domains/control-contract.ts';
+import { parseConnectionRoute } from '../domains/control-contract.ts';
 
-type LossChoice = 'restart' | 'cancel' | 'pending';
-type AskLoss = (message: string, signal?: AbortSignal) => Promise<LossChoice>;
+export const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
+export type HookEventName = (typeof HOOK_EVENTS)[number];
 
 export function createMcpEntryServer(options: {
     tools: Tool[];
-    status: () => Record<string, unknown>;
-    watch: (route: ConnectionRoute, signal: AbortSignal) => Promise<Record<string, unknown>>;
+    status: (hookEventName?: HookEventName) => Record<string, unknown>;
     invoke: (
         name: string,
         arguments_: Record<string, unknown>,
@@ -70,61 +69,37 @@ export function createMcpEntryServer(options: {
         }
         return server.elicitInput(params, signal ? { signal } : {});
     };
-    const askLoss: AskLoss = async (message, signal) => {
-        if (!supportsFormElicitation()) return 'pending';
-        try {
-            const result = await elicit(
-                {
-                    mode: 'form',
-                    message,
-                    requestedSchema: {
-                        type: 'object',
-                        properties: {
-                            action: {
-                                type: 'string',
-                                title: '目标连接已断开，请选择下一步',
-                                enum: ['restart', 'cancel'],
-                                enumNames: ['误关闭，使用原端口重新启动', '有意关闭，终止依赖该目标的任务'],
-                            },
-                        },
-                        required: ['action'],
-                    },
-                },
-                signal,
-            );
-            if (result.action !== 'accept') return 'pending';
-            const action = result.content?.action;
-            return action === 'restart' || action === 'cancel' ? action : 'pending';
-        } catch {
-            return 'pending';
-        }
-    };
     server.setRequestHandler('tools/list', async () => ({
         tools: [
             ...tools,
             {
                 name: 'dct_connection_status',
                 description: '查看目标连接状态',
-                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-            },
-            {
-                name: 'dct_watch_target',
-                description: '等待目标退出并询问是否重新启动',
-                inputSchema: { ...routeSchema, type: 'object' },
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        hookEventName: {
+                            type: 'string',
+                            enum: [...HOOK_EVENTS],
+                            description: 'Only for automatic Codex Hooks; Agents use empty arguments for status.',
+                        },
+                    },
+                    additionalProperties: false,
+                },
             },
         ],
     }));
     server.setRequestHandler('tools/call', async (request, ctx) => {
         const name = request.params.name;
         if (name === 'dct_connection_status') {
-            if (Object.keys(request.params.arguments ?? {}).length !== 0) {
-                throw new ProtocolError(ProtocolErrorCode.InvalidParams, `${name} requires an empty argument object.`);
-            }
-            const result = options.status();
-            return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
-        }
-        if (name === 'dct_watch_target') {
-            const result = await options.watch(parseConnectionRoute(request.params.arguments), ctx.mcpReq.signal);
+            const arguments_ = request.params.arguments ?? {};
+            const hook = arguments_.hookEventName;
+            if (
+                Object.keys(arguments_).some((key) => key !== 'hookEventName') ||
+                (hook !== undefined && !HOOK_EVENTS.some((event) => event === hook))
+            )
+                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Invalid lifecycle status Hook arguments.');
+            const result = options.status(HOOK_EVENTS.find((event) => event === hook));
             return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
         }
         if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
@@ -149,7 +124,6 @@ export function createMcpEntryServer(options: {
         closed,
         close: () => server.close(),
         roots: (): Promise<ListRootsResult> => server.listRoots(),
-        askLoss,
         supportsFormElicitation,
         supportsRoots,
         elicit,

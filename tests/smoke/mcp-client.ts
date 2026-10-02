@@ -16,6 +16,7 @@ export function createStdioClient(
     args: string[],
     options: Pick<SpawnOptions, 'cwd' | 'env'> = {},
     onServerRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+    onNotification?: (method: string, params: Record<string, unknown>) => void,
 ) {
     const child = spawn(executable, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -41,6 +42,10 @@ export function createStdioClient(
             throw new Error(`Non-MCP stdout: ${line.slice(0, 100)}`);
         }
         if (!isRecord(message)) return;
+        if (typeof message.method === 'string' && message.id === undefined) {
+            onNotification?.(message.method, isRecord(message.params) ? message.params : {});
+            return;
+        }
         if (typeof message.method === 'string' && (typeof message.id === 'number' || typeof message.id === 'string')) {
             const requestId = message.id;
             const reply = (result: unknown) =>

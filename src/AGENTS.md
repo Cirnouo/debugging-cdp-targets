@@ -8,7 +8,7 @@ Only interface/control.ts and interface/mcp-bootstrap.ts execute directly.
 The bootstrap owns host MCP stdin/stdout through the official SDK; the
 gateway adds only required _dct connection/session routing to official input
 schemas and removes it before forwarding. Official names and results remain.
-Only lifecycle status and watch tools extend the catalog. Each gateway has an
+Only lifecycle status, including automatic Hook output, extends the catalog. Each gateway has an
 independent entry identity and manages any number of independent connections.
 Tests inject adapters at I/O boundaries. Use shared/constants.ts
 for cross-layer invariants. Never add persisted session state or a CLI daemon.

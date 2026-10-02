@@ -88,7 +88,15 @@ fails, inspect the reported process and port and close the application manually.
 
 If you close a window during dependent work, Codex asks whether it was accidental
 and should be recovered on the same port, or intentional and work should end.
-Idle connections ask on next use. Recovery is explicit, retains connection
+The gateway observes native process exit events without Agent watch calls or
+renewal. Trusted Codex Hooks deliver one reminder at a tool boundary or before
+the turn ends; idle chats receive it on the next turn. Enable Hooks and review
+the plugin definitions through Codex's standard trust flow. Installing the plugin
+does not trust its Hooks; see [Codex Hooks](https://learn.chatgpt.com/docs/hooks).
+After Keep/end-task, a live target remains usable; its later exit silently removes
+its connection and official Server. Reuse resumes task monitoring automatically.
+CDP or Server failure with a live process reports a connection error.
+Recovery is explicit, retains connection
 identity, launch arguments,
 working directory and profile from memory, refuses an occupied original port,
 and creates a new session identity requiring fresh page IDs. No tool calls replay automatically and no session
@@ -110,13 +118,13 @@ The Plugin uses two separate storage locations:
 | Storage | Windows | Linux/macOS |
 | --- | --- | --- |
 | Official Server package cache | `%LOCALAPPDATA%\debugging-cdp-targets\cache\mcp-server` | `~/.cache/debugging-cdp-targets/cache/mcp-server` |
-| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\profile-<connection-uuid>-<session-uuid>` | `~/.cache/chrome-devtools-mcp/profile-<connection-uuid>-<session-uuid>` |
+| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
 
 The package cache contains downloaded dependencies. You can delete it while no
 connection is using it; the next connection needs to download the package again.
 The Chrome profile retains browser data, including cookies and browsing state.
-Each new target session receives its own default profile; recovery reuses the
-original session's profile. Profiles are retained after Close for inspection.
+Starts and recovery reuse this fixed default directory. Occupied or unverifiable
+profiles fail clearly; explicitly choose another --user-data-dir for concurrency. Profiles are retained after Close for inspection.
 Deleting the package cache does not clear the profile.
 
 CDP provides powerful access to the application being debugged. Both the Plugin's
@@ -129,7 +137,7 @@ against malicious software running as your user.
 ### Manual target control
 
 Codex normally manages targets for you. For manual control, replace
-`<plugin-root>` with the installed Plugin directory containing `plugin.json`,
+`<plugin-root>` with the installed Plugin directory containing `.codex-plugin/plugin.json`,
 `dist/`, and `skills/`. You can locate it from the installed Skill file at
 `<plugin-root>/skills/debugging-cdp-targets/SKILL.md`.
 
@@ -149,11 +157,10 @@ node "<plugin-root>/dist/control.mjs" end-task --entry-id <entry-uuid> --connect
 node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid> --disposition Close
 ```
 
-Actions are status, start, restart, stop and end-task. End-task only stops the
-active watch and retains target and Server. Use stop with an explicit Close/Keep
+Actions are status, start, restart, stop and end-task. End-task ends dependent
+work and retains a live target and Server; an already exited target is cleaned up. Use stop with an explicit Close/Keep
 choice for disposition. There is no switch command.
-The Agent uses `dct_watch_target` with `{ connectionId, sessionId }` concurrently
-with each target's dependent work. All official tool calls require the additional
+Monitoring and reminder delivery are automatic. All official tool calls require the additional
 `_dct` argument, which the gateway removes before forwarding to the official
 Server. For example, `list_pages` receives:
 
@@ -197,7 +204,9 @@ OS-excluded ports are skipped.
 With `--target-kind chrome`, Chrome uses the dedicated profile listed under
 [Data and privacy](#data-and-privacy) unless you provide `--user-data-dir` in the
 launch command. Use another dedicated directory if needed; do not reuse a profile
-already locked by another Chrome process.
+already locked by another Chrome process. The gateway also reserves directories
+during launch and runtime. It never generates a replacement profile or connects
+to the process holding the directory.
 
 ### Server options
 

@@ -27,6 +27,46 @@ async function boundedSignal(signal: Promise<void>, description: string) {
     }
 }
 
+async function fakeOfficial(options: { pages?: number; repeatedCursor?: boolean } = {}) {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-mcp-test-'));
+    const bin = path.join(directory, 'server.mjs');
+    await writeFile(
+        bin,
+        `import { Server } from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/server'))};
+import { StdioServerTransport } from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/server/stdio'))};
+const server = new Server({ name: 'fake-official', version: '1' }, { capabilities: { tools: {} } });
+server.setRequestHandler('tools/list', async (request) => {
+    const page = Number(request.params?.cursor === 'repeat' ? 1 : request.params?.cursor ?? 0);
+    return {
+        tools: [{ name: ${options.pages ? "'echo_' + page" : "'echo'"}, inputSchema: { type: 'object', properties: {} }, outputSchema: { type: 'object', properties: { arguments: { type: 'object' }, value: { type: 'number' } } }, annotations: { title: 'Original title', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, _meta: { original: 'tool metadata' } }],
+        ...(page + 1 < ${options.pages ?? 1} ? { nextCursor: ${options.repeatedCursor ? "'repeat'" : 'String(page + 1)'} } : {}),
+    };
+});
+server.setRequestHandler('tools/call', async (request, ctx) => {
+    if (request.params.arguments?.invalidOutput) return { content: [], structuredContent: { value: 'invalid' } };
+    if (request.params.arguments?.capabilities) return { content: [], structuredContent: { capabilities: server.getClientCapabilities() } };
+    if (request.params.arguments?.elicit) {
+        const result = await server.elicitInput({ mode: 'form', message: request.params.arguments.elicitWait ? '等待取消' : '上游原始问题', requestedSchema: { type: 'object', properties: { value: { type: 'string', title: '原始字段' } }, required: ['value'] } }, { signal: ctx.mcpReq.signal });
+        return { content: [], structuredContent: { result } };
+    }
+    if (request.params.arguments?.exit) process.exit(0);
+    if (request.params.arguments?.wait) {
+        await new Promise((resolve) => ctx.mcpReq.signal.addEventListener('abort', resolve, { once: true }));
+        return { content: [{ type: 'text', text: 'cancelled' }] };
+    }
+    const token = request.params._meta?.progressToken;
+    if (token !== undefined) await ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: 1 } });
+    const roots = await server.listRoots();
+    return { content: [{ type: 'text', text: JSON.stringify(roots) }], structuredContent: { arguments: request.params.arguments }, _meta: { original: 'result metadata' }, isError: false };
+});
+process.stdin.once('end', () => server.close().then(() => process.exit(0)));
+await server.connect(new StdioServerTransport());
+`,
+        'utf8',
+    );
+    return { bin, cleanup: () => rm(directory, { recursive: true, force: true }) };
+}
+
 test('entry preserves official tools and forwards calls, roots, progress and lifecycle choices', async () => {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const tool = {
@@ -41,7 +81,6 @@ test('entry preserves official tools and forwards calls, roots, progress and lif
         tools: [tool],
         transport: serverTransport,
         status: () => ({ state: 'idle' }),
-        watch: async (_route, signal) => ({ choice: await entry.askLoss('目标已退出', signal) }),
         invoke: async (name, arguments_, signal, progress) => {
             assert.equal(name, tool.name);
             assert.equal(signal.aborted, false);
@@ -96,18 +135,13 @@ test('entry preserves official tools and forwards calls, roots, progress and lif
         assert.deepEqual((await client.callTool({ name: 'dct_connection_status' })).structuredContent, {
             state: 'idle',
         });
-        for (const name of ['dct_connection_status', 'dct_watch_target']) {
+        for (const name of ['dct_connection_status']) {
             const lifecycleTool = (await client.listTools()).tools.find((item) => item.name === name);
             assert.equal(lifecycleTool?.inputSchema.additionalProperties, false);
             await assert.rejects(client.callTool({ name, arguments: { extra: true } }));
         }
-        assert.deepEqual((await client.callTool({ name: 'dct_watch_target', arguments: route })).structuredContent, {
-            choice: 'restart',
-        });
-        client.setRequestHandler('elicitation/create', async () => ({ action: 'cancel' }));
-        assert.equal(await entry.askLoss('退出'), 'pending');
-        client.setRequestHandler('elicitation/create', async () => ({ action: 'decline' }));
-        assert.equal(await entry.askLoss('退出'), 'pending');
+        assert.ok(!(await client.listTools()).tools.some((tool) => tool.name === 'dct_watch_target'));
+        await assert.rejects(client.callTool({ name: 'dct_watch_target', arguments: route }));
         const forwarded = {
             mode: 'form' as const,
             message: '官方请求',
@@ -118,116 +152,12 @@ test('entry preserves official tools and forwards calls, roots, progress and lif
             return { action: 'accept', content: { value: '原始回答' } };
         });
         assert.deepEqual(await entry.elicit(forwarded), { action: 'accept', content: { value: '原始回答' } });
-        const cancelled = new AbortController();
-        cancelled.abort();
-        assert.equal(await entry.askLoss('退出', cancelled.signal), 'pending');
     } finally {
         await entry.close();
         await client.close();
     }
     await entry.closed;
 });
-
-test('entry returns pending without host elicitation and forwards watch cancellation', async () => {
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    let cancelled = false;
-    let rootsNotifications = 0;
-    let entered: () => void = () => {};
-    const started = new Promise<void>((resolve) => {
-        entered = resolve;
-    });
-    const entry = createMcpEntryServer({
-        onRootsChanged: async () => {
-            rootsNotifications += 1;
-        },
-        tools: [],
-        transport: serverTransport,
-        status: () => ({}),
-        watch: async (_route, signal) => {
-            entered();
-            await new Promise<void>((resolve) =>
-                signal.addEventListener(
-                    'abort',
-                    () => {
-                        cancelled = true;
-                        resolve();
-                    },
-                    { once: true },
-                ),
-            );
-            return {};
-        },
-        invoke: async () => ({ content: [] }),
-    });
-    const client = new Client({ name: 'test', version: '1' }, { capabilities: {} });
-    await entry.connect();
-    await client.connect(clientTransport);
-    try {
-        assert.equal(await entry.askLoss('目标已退出'), 'pending');
-        assert.equal(entry.supportsFormElicitation(), false);
-        assert.equal(entry.supportsRoots(), false);
-        await clientTransport.send({ jsonrpc: '2.0', method: 'notifications/roots/list_changed' });
-        assert.equal(rootsNotifications, 0);
-        assert.throws(() =>
-            entry.elicit({ mode: 'form', message: '不应询问', requestedSchema: { type: 'object', properties: {} } }),
-        );
-        const signal = new AbortController();
-        const pending = client.callTool(
-            { name: 'dct_watch_target', arguments: route },
-            {
-                signal: signal.signal,
-            },
-        );
-        await started;
-        signal.abort();
-        await assert.rejects(pending);
-        assert.equal(cancelled, true);
-        await assert.rejects(client.callTool({ name: 'unknown' }));
-    } finally {
-        await entry.close();
-        await client.close();
-    }
-});
-
-async function fakeOfficial(options: { pages?: number; repeatedCursor?: boolean } = {}) {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-mcp-test-'));
-    const bin = path.join(directory, 'server.mjs');
-    await writeFile(
-        bin,
-        `import { Server } from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/server'))};
-import { StdioServerTransport } from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/server/stdio'))};
-const server = new Server({ name: 'fake-official', version: '1' }, { capabilities: { tools: {} } });
-server.setRequestHandler('tools/list', async (request) => {
-    const page = Number(request.params?.cursor === 'repeat' ? 1 : request.params?.cursor ?? 0);
-    return {
-        tools: [{ name: ${options.pages ? "'echo_' + page" : "'echo'"}, inputSchema: { type: 'object', properties: {} }, outputSchema: { type: 'object', properties: { arguments: { type: 'object' }, value: { type: 'number' } } }, annotations: { title: 'Original title', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, _meta: { original: 'tool metadata' } }],
-        ...(page + 1 < ${options.pages ?? 1} ? { nextCursor: ${options.repeatedCursor ? "'repeat'" : 'String(page + 1)'} } : {}),
-    };
-});
-server.setRequestHandler('tools/call', async (request, ctx) => {
-    if (request.params.arguments?.invalidOutput) return { content: [], structuredContent: { value: 'invalid' } };
-    if (request.params.arguments?.capabilities) return { content: [], structuredContent: { capabilities: server.getClientCapabilities() } };
-    if (request.params.arguments?.elicit) {
-        const result = await server.elicitInput({ mode: 'form', message: request.params.arguments.elicitWait ? '等待取消' : '上游原始问题', requestedSchema: { type: 'object', properties: { value: { type: 'string', title: '原始字段' } }, required: ['value'] } }, { signal: ctx.mcpReq.signal });
-        return { content: [], structuredContent: { result } };
-    }
-    if (request.params.arguments?.exit) process.exit(0);
-    if (request.params.arguments?.wait) {
-        await new Promise((resolve) => ctx.mcpReq.signal.addEventListener('abort', resolve, { once: true }));
-        return { content: [{ type: 'text', text: 'cancelled' }] };
-    }
-    const token = request.params._meta?.progressToken;
-    if (token !== undefined) await ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: 1 } });
-    const roots = await server.listRoots();
-    return { content: [{ type: 'text', text: JSON.stringify(roots) }], structuredContent: { arguments: request.params.arguments }, _meta: { original: 'result metadata' }, isError: false };
-});
-process.stdin.once('end', () => server.close().then(() => process.exit(0)));
-await server.connect(new StdioServerTransport());
-`,
-        'utf8',
-    );
-    return { bin, cleanup: () => rm(directory, { recursive: true, force: true }) };
-}
 
 test('official bridge initializes, relays results/roots/progress/cancellation and exits by EOF', async () => {
     const fixture = await fakeOfficial();
@@ -407,7 +337,6 @@ test('host cancellation crosses gateway, upstream call and nested form request w
         tools: [{ name: 'echo', inputSchema: { type: 'object', properties: {} } }],
         transport: serverTransport,
         status: () => ({}),
-        watch: async () => ({}),
         invoke: (name, arguments_, signal, progress) => {
             assert.ok(connection);
             return connection.call(name, arguments_, signal, progress);
@@ -471,7 +400,6 @@ test('official catalog rejects reserved routing collisions and malformed tool ro
                     { name: 'collision', inputSchema: { type: 'object', properties: { _dct: { type: 'string' } } } },
                 ],
                 status: () => ({}),
-                watch: async () => ({}),
                 invoke: async () => ({ content: [] }),
             }),
         /reserved _dct/,
@@ -482,7 +410,6 @@ test('official catalog rejects reserved routing collisions and malformed tool ro
         tools: [{ name: 'official', inputSchema: { type: 'object', properties: {}, additionalProperties: false } }],
         transport: serverTransport,
         status: () => ({}),
-        watch: async () => ({}),
         invoke: async () => {
             invoked += 1;
             return { content: [] };
@@ -501,11 +428,24 @@ test('official catalog rejects reserved routing collisions and malformed tool ro
             await assert.rejects(client.callTool({ name: 'official', arguments: arguments_ }));
         assert.equal(invoked, 0);
         const tools = (await client.listTools()).tools;
-        const watch = tools.find((tool) => tool.name === 'dct_watch_target');
-        assert.deepEqual(watch?.inputSchema.required, ['connectionId', 'sessionId']);
-        assert.equal(watch?.inputSchema.additionalProperties, false);
+        assert.equal(
+            tools.some((tool) => tool.name === 'dct_watch_target'),
+            false,
+        );
         const status = tools.find((tool) => tool.name === 'dct_connection_status');
-        assert.deepEqual(status?.inputSchema.properties, {});
+        assert.deepEqual(Object.keys(status?.inputSchema.properties ?? {}), ['hookEventName']);
+        for (const hookEventName of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'])
+            assert.deepEqual(
+                (await client.callTool({ name: 'dct_connection_status', arguments: { hookEventName } }))
+                    .structuredContent,
+                {},
+            );
+        for (const arguments_ of [
+            { hookEventName: 'SessionEnd' },
+            { hookEventName: null },
+            { hookEventName: 'Stop', sessionId: route.sessionId },
+        ])
+            await assert.rejects(client.callTool({ name: 'dct_connection_status', arguments: arguments_ }));
     } finally {
         await entry.close();
         await client.close();
@@ -569,7 +509,6 @@ test('legacy raw host preserves request and progress ID zero and cancels the act
         transport,
         tools: [{ name: 'echo', inputSchema: { type: 'object', properties: {} } }],
         status: () => ({}),
-        watch: async () => ({}),
         invoke: async (_name, args, signal, progress) => {
             progress({ progress: 0, total: 1, message: 'original progress' });
             if (args.wait) {

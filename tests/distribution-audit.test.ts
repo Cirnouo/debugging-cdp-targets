@@ -7,8 +7,8 @@ test('MCP manifest requires one gateway entry without slots or connection limits
     const entry = {
         type: 'stdio',
         command: 'node',
-        args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`],
-        cwd: `\${PLUGIN_ROOT}`,
+        args: ['dist/mcp-bootstrap.mjs'],
+        cwd: '.',
     };
     const valid = {
         $schema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
@@ -23,6 +23,7 @@ test('MCP manifest requires one gateway entry without slots or connection limits
         { ...entry, args: [...entry.args, '--max-connections', '2'] },
         { ...entry, command: 'npx' },
         { ...entry, type: 'http' },
+        { ...entry, args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`], cwd: `\${PLUGIN_ROOT}` },
     ])
         assert.ok(validateMcpEntries({ ...valid, mcpServers: { 'cdp-targets': invalid } }).length);
     for (const $schema of [undefined, null, 1, '', 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'])

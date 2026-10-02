@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
-import { applyChromePreset, createTargetHost } from '../src/adapters/target-host.ts';
+import { createTargetHost } from '../src/adapters/target-host.ts';
 
 function fixture({ busy = false, race = false } = {}) {
     const launched: { port: number; args: string[]; cwd: string | undefined }[] = [];
@@ -27,6 +27,7 @@ function fixture({ busy = false, race = false } = {}) {
     };
     const host = createTargetHost({
         platformAdapter: platform,
+        profileAvailable: async () => true,
         probe: async () => !busy,
         spawn: async (_exe, args, port, cwd) => {
             launched.push({ port, args, cwd });
@@ -66,21 +67,12 @@ test('recovery keeps argv, cwd and profile even if the original template environ
         launchCommand: '"%MISSING%"',
         exactPort: 9227,
         targetKind: 'chrome',
-        profileKey: 'new-ignored-key',
         launchDefinition: { executablePath: process.execPath, arguments: args, cwd: process.cwd() },
     });
+    assert.equal(await f.host.close(result), true);
     assert.equal(result.port, 9227);
     assert.equal(f.launched[0]?.cwd, process.cwd());
     assert.equal(f.launched[0]?.args.filter((value) => value.startsWith('--user-data-dir=')).length, 1);
     assert.equal(f.launched[0]?.args.includes('--user-data-dir=unchanged'), true);
     assert.equal(f.launched[0]?.args.includes('--flag=a b'), true);
-});
-
-test('new entry sessions receive distinct default Chrome profiles', () => {
-    const first = applyChromePreset([], 'entry-one-session-one');
-    const second = applyChromePreset([], 'entry-two-session-one');
-    assert.notEqual(
-        first.find((arg) => arg.startsWith('--user-data-dir=')),
-        second.find((arg) => arg.startsWith('--user-data-dir=')),
-    );
 });
