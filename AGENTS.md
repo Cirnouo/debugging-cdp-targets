@@ -5,15 +5,19 @@ nearest source AGENTS.md and only the relevant policies before editing.
 
 ## Boundaries
 
-- The reusable stdio gateway relays the official MCP catalog and results using
+- The reusable stdio gateway relays official MCP tools and results using
   the official SDK. Only dct_connection_status and dct_watch_target extend it.
   Do not create custom DevTools tools, a CLI daemon, or persistent session state.
 - Manage one newly launched target per connection. Verify process, listener,
   and endpoint identity; bind only loopback. Never take over existing targets.
-- Ask Close/Keep before changing entries or ending a task. Keep retains target
-  and upstream; Close requests normal shutdown while preserving the entry.
+- Create one independent official MCP connection per new target, without a
+  fixed connection limit. Official tools require _dct connection/session routing;
+  remove it before forwarding original arguments. Reject stale identities.
+- Ask Close/Keep before ending a target's task. Keep retains target and upstream;
+  Close normally closes only that connection while preserving the gateway.
   Every control request identifies the entry; restart/end-task/stop also identify
-  the session. Status/start forbid session identity; only stop takes disposition.
+  connection and session. Status optionally selects a connection; start creates
+  one. Status/start forbid session identity; only stop takes disposition.
 - Keep 0.1.0 unreleased. Never push, publish, tag, open a PR, or modify user
   config/global Skills/old state without explicit authorization.
 

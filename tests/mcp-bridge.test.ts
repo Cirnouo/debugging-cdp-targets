@@ -8,6 +8,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ElicitRequestSchema, ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
 import { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
+
+const route = {
+    connectionId: '11111111-1111-4111-8111-111111111111',
+    sessionId: '22222222-2222-4222-8222-222222222222',
+};
+
 import { preserveZeroRequestCancellation } from '../src/adapters/mcp-transport.ts';
 
 test('transport preserves cancellation for ID zero without changing other protocol fields', async () => {
@@ -125,7 +131,7 @@ test('entry preserves official tools and forwards calls, roots, progress and lif
         tools: [tool],
         transport: serverTransport,
         status: () => ({ state: 'idle' }),
-        watch: async (signal, ask) => ({ choice: await ask('目标已退出', signal) }),
+        watch: async (_route, signal) => ({ choice: await entry.askLoss('目标已退出', signal) }),
         invoke: async (name, arguments_, signal, progress) => {
             assert.equal(name, tool.name);
             assert.equal(signal.aborted, false);
@@ -156,10 +162,14 @@ test('entry preserves official tools and forwards calls, roots, progress and lif
     assert.equal(entry.supportsFormElicitation(), true);
     assert.equal(entry.supportsRoots(), true);
     try {
-        assert.deepEqual((await client.listTools()).tools[0], tool);
+        const exposed = (await client.listTools()).tools[0];
+        assert.equal(exposed?.name, tool.name);
+        assert.deepEqual(exposed?.inputSchema.properties?.value, tool.inputSchema.properties.value);
+        assert.deepEqual(exposed?.inputSchema.required, ['_dct']);
+        assert.deepEqual(tool.inputSchema.properties, { value: { type: 'string' } });
         let progressed = false;
         assert.deepEqual(
-            await client.callTool({ name: tool.name, arguments: { value: 'ok' } }, undefined, {
+            await client.callTool({ name: tool.name, arguments: { value: 'ok', _dct: route } }, undefined, {
                 onprogress: () => {
                     progressed = true;
                 },
@@ -178,7 +188,7 @@ test('entry preserves official tools and forwards calls, roots, progress and lif
             assert.equal(lifecycleTool?.inputSchema.additionalProperties, false);
             await assert.rejects(client.callTool({ name, arguments: { extra: true } }));
         }
-        assert.deepEqual((await client.callTool({ name: 'dct_watch_target' })).structuredContent, {
+        assert.deepEqual((await client.callTool({ name: 'dct_watch_target', arguments: route })).structuredContent, {
             choice: 'restart',
         });
         client.setRequestHandler(ElicitRequestSchema, async () => ({ action: 'cancel' }));
@@ -220,7 +230,7 @@ test('entry returns pending without host elicitation and forwards watch cancella
         tools: [],
         transport: serverTransport,
         status: () => ({}),
-        watch: async (signal) => {
+        watch: async (_route, signal) => {
             entered();
             await new Promise<void>((resolve) =>
                 signal.addEventListener(
@@ -249,7 +259,9 @@ test('entry returns pending without host elicitation and forwards watch cancella
             entry.elicit({ mode: 'form', message: '不应询问', requestedSchema: { type: 'object', properties: {} } }),
         );
         const signal = new AbortController();
-        const pending = client.callTool({ name: 'dct_watch_target' }, undefined, { signal: signal.signal });
+        const pending = client.callTool({ name: 'dct_watch_target', arguments: route }, undefined, {
+            signal: signal.signal,
+        });
         await started;
         signal.abort();
         await assert.rejects(pending);
@@ -495,9 +507,13 @@ test('host cancellation crosses gateway, upstream call and nested form request w
             elicitation: { form: {} },
         });
         const abort = new AbortController();
-        const pending = host.callTool({ name: 'echo', arguments: { elicit: true, elicitWait: true } }, undefined, {
-            signal: abort.signal,
-        });
+        const pending = host.callTool(
+            { name: 'echo', arguments: { elicit: true, elicitWait: true, _dct: route } },
+            undefined,
+            {
+                signal: abort.signal,
+            },
+        );
         void pending.catch(() => {});
         await boundedSignal(began, 'host must receive nested elicitation');
         abort.abort();
@@ -509,5 +525,54 @@ test('host cancellation crosses gateway, upstream call and nested form request w
         await gateway.close();
         await host.close();
         await fixture.cleanup();
+    }
+});
+
+test('official catalog rejects reserved routing collisions and malformed tool routes', async () => {
+    assert.throws(
+        () =>
+            createMcpEntryServer({
+                tools: [
+                    { name: 'collision', inputSchema: { type: 'object', properties: { _dct: { type: 'string' } } } },
+                ],
+                status: () => ({}),
+                watch: async () => ({}),
+                invoke: async () => ({ content: [] }),
+            }),
+        /reserved _dct/,
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    let invoked = 0;
+    const entry = createMcpEntryServer({
+        tools: [{ name: 'official', inputSchema: { type: 'object', properties: {}, additionalProperties: false } }],
+        transport: serverTransport,
+        status: () => ({}),
+        watch: async () => ({}),
+        invoke: async () => {
+            invoked += 1;
+            return { content: [] };
+        },
+    });
+    const client = new Client({ name: 'routes', version: '1' }, { capabilities: {} });
+    await entry.connect();
+    await client.connect(clientTransport);
+    try {
+        for (const arguments_ of [
+            {},
+            { _dct: {} },
+            { _dct: { ...route, extra: true } },
+            { _dct: { ...route, sessionId: route.sessionId.replace('2222', 'ABCD') } },
+        ])
+            await assert.rejects(client.callTool({ name: 'official', arguments: arguments_ }));
+        assert.equal(invoked, 0);
+        const tools = (await client.listTools()).tools;
+        const watch = tools.find((tool) => tool.name === 'dct_watch_target');
+        assert.deepEqual(watch?.inputSchema.required, ['connectionId', 'sessionId']);
+        assert.equal(watch?.inputSchema.additionalProperties, false);
+        const status = tools.find((tool) => tool.name === 'dct_connection_status');
+        assert.deepEqual(status?.inputSchema.properties, {});
+    } finally {
+        await entry.close();
+        await client.close();
     }
 });

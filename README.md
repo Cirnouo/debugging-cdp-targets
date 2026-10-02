@@ -2,8 +2,9 @@
 
 Launch a separate local Chrome browser or another CDP-capable application and
 inspect it from Codex using the official Chrome DevTools MCP Server. The Plugin
-provides two reusable entries for launching debugging targets; page inspection, network
-diagnostics, and extension tools come directly from the official Server.
+provides one reusable gateway and creates an independent MCP connection for each
+new target, without a fixed connection limit. Page inspection, network diagnostics,
+and extension tools come directly from the official Server.
 
 Version 0.1.0 is under development and has not been released.
 
@@ -73,21 +74,24 @@ uses a dedicated debugging profile, separate from your usual browsing profile.
 
 ## Keep, close, or recover a target
 
-The Plugin exposes two independent static entries, `cdp-target-1` and
-`cdp-target-2`. Each entry owns one target and official Server child. Selecting
-another entry changes the target you work with. The host connection remains
-usable after normal Close, so you can launch a new target without reconnecting.
+The Plugin exposes one Desktop entry, `cdp-targets`. Each new target receives its
+own connection and official Server child. Multiple targets can be inspected
+concurrently: calls explicitly identify their connection and current session.
+Creating a target preserves existing connections. The host connection remains
+usable after normal Close, so you can launch another target without reconnecting.
 
-Before changing entries or ending work, Codex asks **Close** or **Keep**. Close
-requests normal shutdown of both target and official Server. Keep retains both
-in the live entry. There is no default and no force kill. If normal shutdown
+Before ending work on a target, Codex asks **Close** or **Keep**. Close requests
+normal shutdown of that target and its official Server, then removes the
+connection. Keep retains both for later tasks. Other connections continue
+working. There is no default and no force kill. If normal shutdown
 fails, inspect the reported process and port and close the application manually.
 
 If you close a window during dependent work, Codex asks whether it was accidental
 and should be recovered on the same port, or intentional and work should end.
-Idle entries ask on next use. Recovery is explicit, retains launch arguments,
+Idle connections ask on next use. Recovery is explicit, retains connection
+identity, launch arguments,
 working directory and profile from memory, refuses an occupied original port,
-and requires fresh page IDs. No tool calls replay automatically and no session
+and creates a new session identity requiring fresh page IDs. No tool calls replay automatically and no session
 state is saved across host connections.
 
 ## Data and privacy
@@ -106,7 +110,7 @@ The Plugin uses two separate storage locations:
 | Storage | Windows | Linux/macOS |
 | --- | --- | --- |
 | Official Server package cache | `%LOCALAPPDATA%\debugging-cdp-targets\cache\mcp-server` | `~/.cache/debugging-cdp-targets/cache/mcp-server` |
-| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\profile-<entry-uuid>-<session-uuid>` | `~/.cache/chrome-devtools-mcp/profile-<entry-uuid>-<session-uuid>` |
+| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\profile-<connection-uuid>-<session-uuid>` | `~/.cache/chrome-devtools-mcp/profile-<connection-uuid>-<session-uuid>` |
 
 The package cache contains downloaded dependencies. You can delete it while no
 connection is using it; the next connection needs to download the package again.
@@ -129,25 +133,43 @@ Codex normally manages targets for you. For manual control, replace
 `dist/`, and `skills/`. You can locate it from the installed Skill file at
 `<plugin-root>/skills/debugging-cdp-targets/SKILL.md`.
 
-Call the selected entry's `dct_connection_status` tool to obtain its random
-entry UUID and current session UUID. Every CLI command requires `--entry-id`;
-restart, end-task and stop additionally require `--session-id`. Status and start
-prohibit that option even with an existing session. Only stop accepts disposition.
-Never infer an identity from an entry's static name.
+Call `dct_connection_status` with `{}` to obtain the gateway entry UUID and its
+connections. Each target has a connection UUID and current session UUID.
+Every CLI command requires `--entry-id`; restart, end-task and stop additionally
+require `--connection-id` and `--session-id`. Status optionally selects a
+connection and prohibits session identity; start creates a new connection and
+accepts neither connection nor session identity. Only stop accepts disposition.
+Never infer an identity from the static entry name.
 
 ```powershell
 node "<plugin-root>/dist/control.mjs" status --entry-id <entry-uuid>
+node "<plugin-root>/dist/control.mjs" status --entry-id <entry-uuid> --connection-id <connection-uuid>
 node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
-node "<plugin-root>/dist/control.mjs" end-task --entry-id <entry-uuid> --session-id <session-uuid>
-node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --session-id <session-uuid> --disposition Close
+node "<plugin-root>/dist/control.mjs" end-task --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid>
+node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid> --disposition Close
 ```
 
 Actions are status, start, restart, stop and end-task. End-task only stops the
 active watch and retains target and Server. Use stop with an explicit Close/Keep
 choice for disposition. There is no switch command.
-The Agent uses `dct_watch_target` while performing target-dependent work. After
-starting or recovering, refresh status and call official `list_pages` for fresh
-page evidence. Old page IDs become invalid.
+The Agent uses `dct_watch_target` with `{ connectionId, sessionId }` concurrently
+with each target's dependent work. All official tool calls require the additional
+`_dct` argument, which the gateway removes before forwarding to the official
+Server. For example, `list_pages` receives:
+
+```json
+{
+    "_dct": {
+        "connectionId": "<connection-uuid>",
+        "sessionId": "<session-uuid>"
+    }
+}
+```
+
+Starting a target returns new connection/session UUIDs. Recovery retains the
+connection UUID and replaces the session UUID. Refresh status and call official
+`list_pages` with the new route for fresh page evidence. Old session and page IDs
+must not be reused.
 
 ### Launch commands and ports
 
@@ -193,8 +215,9 @@ Each variable accepts only `true` or `false`.
 
 ## Troubleshooting
 
-- **Stale entry or session identity**: refresh the selected entry's
-    `dct_connection_status`; another static entry has independent UUIDs.
+- **Missing, unknown or stale routing identity**: refresh
+    `dct_connection_status` and use the target's connection/current session UUIDs.
+    Recovery changes session identity; Close removes the connection.
 - **The recovery port is busy**: release it normally after verifying its owner;
     recovery does not select a different port or take over that process.
 - **The application has no verified CDP endpoint**: check the executable path,

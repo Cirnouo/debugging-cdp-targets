@@ -11165,6 +11165,13 @@ function validateIdentity(value, label) {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
     throw new Error(`A canonical lowercase UUID ${label} is required.`);
 }
+function parseConnectionRoute(value) {
+  if (!isRecord(value)) throw new Error("A connection routing object is required.");
+  fields(value, ["connectionId", "sessionId"]);
+  validateIdentity(value.connectionId, "connection ID");
+  validateIdentity(value.sessionId, "session ID");
+  return { connectionId: value.connectionId, sessionId: value.sessionId };
+}
 function fields(value, allowed) {
   if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error("Unknown control field.");
 }
@@ -11177,8 +11184,9 @@ function parseControlRequest(value) {
   const entryId = value.entryId;
   const action = value.action;
   if (action === "status") {
-    fields(value, ["action", "entryId"]);
-    return { action, entryId };
+    fields(value, ["action", "entryId", "connectionId"]);
+    if (value.connectionId !== void 0) validateIdentity(value.connectionId, "connection ID");
+    return { action, entryId, ...value.connectionId === void 0 ? {} : { connectionId: value.connectionId } };
   }
   if (action === "start") {
     fields(value, ["action", "entryId", "launchCommand", "targetKind", "basePort"]);
@@ -11196,13 +11204,20 @@ function parseControlRequest(value) {
     };
   }
   if (action !== "restart" && action !== "stop" && action !== "end-task") throw new Error("Unknown control action.");
-  fields(value, ["action", "entryId", "sessionId", ...action === "stop" ? ["disposition"] : []]);
+  fields(value, ["action", "entryId", "connectionId", "sessionId", ...action === "stop" ? ["disposition"] : []]);
+  validateIdentity(value.connectionId, "connection ID");
   validateIdentity(value.sessionId, "session ID");
   if (action === "stop") {
     if (value.disposition !== "Close" && value.disposition !== "Keep") throw new Error("Choose Close or Keep.");
-    return { action, entryId, sessionId: value.sessionId, disposition: value.disposition };
+    return {
+      action,
+      entryId,
+      connectionId: value.connectionId,
+      sessionId: value.sessionId,
+      disposition: value.disposition
+    };
   }
-  return { action, entryId, sessionId: value.sessionId };
+  return { action, entryId, connectionId: value.connectionId, sessionId: value.sessionId };
 }
 
 // src/adapters/control-ipc.ts
@@ -11252,7 +11267,7 @@ async function recoverStaleEndpoint(endpoint, io = {}) {
 async function dispatch(controller, request) {
   switch (request?.action) {
     case "status":
-      return controller.status();
+      return request.connectionId === void 0 ? controller.status() : controller.status(request.connectionId);
     case "start":
       return controller.start({
         launchCommand: request.launchCommand,
@@ -11260,11 +11275,15 @@ async function dispatch(controller, request) {
         ...request.basePort === void 0 ? {} : { basePort: request.basePort }
       });
     case "restart":
-      return controller.restart({ sessionId: request.sessionId });
+      return controller.restart({ connectionId: request.connectionId, sessionId: request.sessionId });
     case "stop":
-      return controller.stop({ sessionId: request.sessionId, disposition: request.disposition });
+      return controller.stop({
+        connectionId: request.connectionId,
+        sessionId: request.sessionId,
+        disposition: request.disposition
+      });
     case "end-task":
-      return controller.endTask({ sessionId: request.sessionId });
+      return controller.endTask({ connectionId: request.connectionId, sessionId: request.sessionId });
     default:
       throw new Error("Unknown control action. Use status, start, restart, stop, or end-task.");
   }
@@ -11277,7 +11296,6 @@ async function createControlServer({
   validateIdentity(entryId, "entry ID");
   await recoverStaleEndpoint(endpoint);
   const clients = /* @__PURE__ */ new Set();
-  let operation = Promise.resolve();
   const server = net.createServer((socket) => {
     clients.add(socket);
     socket.once("close", () => clients.delete(socket));
@@ -11299,8 +11317,7 @@ async function createControlServer({
       submitted = true;
       const line = received.slice(0, received.indexOf("\n"));
       received = "";
-      operation = operation.catch(() => {
-      }).then(async () => {
+      void (async () => {
         try {
           const raw = JSON.parse(line);
           const request = parseControlRequest(raw);
@@ -11315,7 +11332,7 @@ async function createControlServer({
 `
           );
         }
-      });
+      })();
     });
   });
   const previousMask = process.platform === "win32" ? void 0 : process.umask(63);
@@ -22031,6 +22048,24 @@ var StdioServerTransport = class {
 
 // src/adapters/mcp-entry-server.ts
 function createMcpEntryServer(options) {
+  const routeSchema = {
+    type: "object",
+    properties: { connectionId: { type: "string", format: "uuid" }, sessionId: { type: "string", format: "uuid" } },
+    required: ["connectionId", "sessionId"],
+    additionalProperties: false
+  };
+  const tools = options.tools.map((tool) => {
+    if (Object.hasOwn(tool.inputSchema.properties ?? {}, "_dct"))
+      throw new Error(`Official tool ${tool.name} already owns the reserved _dct routing field.`);
+    return {
+      ...tool,
+      inputSchema: {
+        ...tool.inputSchema,
+        properties: { ...tool.inputSchema.properties, _dct: routeSchema },
+        required: [...tool.inputSchema.required ?? [], "_dct"]
+      }
+    };
+  });
   const server = new Server({ name: "debugging-cdp-targets", version: "0.1.0" }, { capabilities: { tools: {} } });
   let resolveClosed = () => {
   };
@@ -22086,7 +22121,7 @@ function createMcpEntryServer(options) {
   };
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
-      ...options.tools,
+      ...tools,
       {
         name: "dct_connection_status",
         description: "\u67E5\u770B\u76EE\u6807\u8FDE\u63A5\u72B6\u6001",
@@ -22095,20 +22130,25 @@ function createMcpEntryServer(options) {
       {
         name: "dct_watch_target",
         description: "\u7B49\u5F85\u76EE\u6807\u9000\u51FA\u5E76\u8BE2\u95EE\u662F\u5426\u91CD\u65B0\u542F\u52A8",
-        inputSchema: { type: "object", properties: {}, additionalProperties: false }
+        inputSchema: { ...routeSchema, type: "object" }
       }
     ]
   }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const name = request.params.name;
-    if (name === "dct_connection_status" || name === "dct_watch_target") {
+    if (name === "dct_connection_status") {
       if (Object.keys(request.params.arguments ?? {}).length !== 0) {
         throw new McpError(ErrorCode.InvalidParams, `${name} requires an empty argument object.`);
       }
-      const result = name === "dct_connection_status" ? options.status() : await options.watch(extra.signal, askLoss);
+      const result = options.status();
+      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+    }
+    if (name === "dct_watch_target") {
+      const result = await options.watch(parseConnectionRoute(request.params.arguments), extra.signal);
       return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
     }
     if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
+    parseConnectionRoute(request.params.arguments?._dct);
     const token = request.params._meta?.progressToken;
     return options.invoke(name, request.params.arguments ?? {}, extra.signal, (progress) => {
       if (token !== void 0) {
@@ -22799,10 +22839,11 @@ function createTargetController({
     gate();
   }
   async function attach(options, sessionId = randomUUID2()) {
+    options = { ...options, profileKey: options.profileKey ?? `${entryId}-${sessionId}` };
     await server.ensure();
     let target;
     try {
-      target = await host.launch({ ...options, profileKey: options.profileKey ?? `${entryId}-${sessionId}` });
+      target = await host.launch(options);
     } catch (error2) {
       if (error2 instanceof RetainedTargetError)
         retainFailedRollback({ target: error2.target, options, sessionId });
@@ -22826,11 +22867,11 @@ function createTargetController({
     target.child?.once("exit", () => lose(selected, "process-exited"));
     return status();
   }
-  function start(options) {
+  function start(options, sessionId) {
     return run2(async () => {
       if (current)
         throw new Error("An existing target session must be explicitly closed before this entry is reused.");
-      return attach(options);
+      return attach(options, sessionId);
     });
   }
   function restart({ sessionId }) {
@@ -22847,7 +22888,7 @@ function createTargetController({
         ...previous.options,
         exactPort: previous.target.port,
         launchDefinition: previous.target.launchDefinition,
-        profileKey: `${entryId}-${sessionId}`
+        profileKey: previous.options.profileKey ?? `${entryId}-${sessionId}`
       };
       try {
         const result = await attach(options);
@@ -22999,99 +23040,203 @@ async function startPluginRuntime({
   watchLeaseMs = 25e3
 } = {}) {
   const entryId = randomUUID3();
-  const router = await createRouter();
+  const connections = /* @__PURE__ */ new Map();
   let entry;
-  let connection;
   let control;
   let catalog = [];
-  let closingConnection;
+  let catalogConnection;
+  let catalogRouterClosed = false;
+  let catalogCleanupError;
   let cleanupPromise;
   let polling;
-  const prompts = /* @__PURE__ */ new Map();
-  async function closeConnection() {
-    const selected = connection;
-    if (!selected) return;
-    closingConnection = selected;
+  let shuttingDown = false;
+  const starts = /* @__PURE__ */ new Set();
+  function selected(connectionId) {
+    validateIdentity(connectionId, "connection ID");
+    const connection = connections.get(connectionId);
+    if (!connection) throw new Error("The target connection is absent or closed.");
+    return connection;
+  }
+  function routed(route) {
+    const connection = selected(route.connectionId);
+    if (statusOf(connection).sessionId !== route.sessionId)
+      throw new Error("The target session is absent or stale.");
+    return connection;
+  }
+  function statusOf(connection) {
+    return {
+      ...connection.controller.status(),
+      connectionId: connection.connectionId,
+      ...connection.failedStartupSessionId ? { sessionId: connection.failedStartupSessionId, reason: "startup-cleanup-failed" } : {}
+    };
+  }
+  function status(connectionId) {
+    if (connectionId !== void 0) return statusOf(selected(connectionId));
+    return { entryId, connections: [...connections.values()].map(statusOf) };
+  }
+  async function closeUpstream(connection) {
+    const upstream = connection.upstream;
+    if (!upstream) return;
+    connection.closingUpstream = upstream;
     try {
-      await selected.close();
-      if (connection === selected) connection = void 0;
+      await upstream.close();
+      if (connection.upstream === upstream) delete connection.upstream;
     } finally {
-      closingConnection = void 0;
+      delete connection.closingUpstream;
     }
   }
-  async function ensureConnection() {
-    if (connection) return;
+  async function ensureUpstream(connection) {
+    if (connection.upstream) return;
     const gateway = entry;
-    const selected = await createConnection(router.url, {
+    const upstream = await createConnection(connection.router.url, {
       ...gateway?.supportsRoots() ? { roots: () => gateway.roots() } : {},
-      ...gateway?.supportsFormElicitation() ? {
-        elicitation: { form: true, request: (params, signal) => gateway.elicit(params, signal) }
-      } : {}
+      ...gateway?.supportsFormElicitation() ? { elicitation: { form: true, request: (params, signal) => gateway.elicit(params, signal) } } : {}
     });
-    if (JSON.stringify(selected.tools) !== JSON.stringify(catalog)) {
-      await selected.close();
+    connection.upstream = upstream;
+    if (JSON.stringify(upstream.tools) !== JSON.stringify(catalog)) {
+      await closeUpstream(connection);
       throw new Error("The official tool catalog changed. Reconnect this entry before starting a target.");
     }
-    connection = selected;
-    selected.onExit(() => {
-      if (connection !== selected || closingConnection === selected) return;
-      connection = void 0;
-      controller.officialDisconnected();
+    upstream.onExit(() => {
+      if (connection.upstream !== upstream || connection.closingUpstream === upstream) return;
+      delete connection.upstream;
+      connection.controller.officialDisconnected();
     });
   }
-  const controller = createTargetController({
-    entryId,
-    router,
-    host: createHost(),
-    server: { ensure: ensureConnection, close: closeConnection }
-  });
-  function abortPrompts(sessionId) {
-    prompts.get(sessionId)?.abort.abort();
-    prompts.delete(sessionId);
+  function abortPrompts(connection, sessionId) {
+    if (sessionId) {
+      connection.prompts.get(sessionId)?.abort.abort();
+      connection.prompts.delete(sessionId);
+    } else {
+      for (const prompt of connection.prompts.values()) prompt.abort.abort();
+      connection.prompts.clear();
+    }
+  }
+  async function remove(connection) {
+    abortPrompts(connection);
+    await connection.router.close();
+    connections.delete(connection.connectionId);
+  }
+  async function start(options) {
+    if (shuttingDown) throw new Error("The gateway is closing.");
+    const connectionId = randomUUID3();
+    const sessionId = randomUUID3();
+    const router = await createRouter();
+    const connection = {
+      connectionId,
+      router,
+      prompts: /* @__PURE__ */ new Map(),
+      controller: createTargetController({
+        entryId,
+        router,
+        host: createHost(),
+        server: { ensure: () => ensureUpstream(connection), close: () => closeUpstream(connection) }
+      })
+    };
+    connections.set(connectionId, connection);
+    try {
+      await connection.controller.start(
+        { ...options, profileKey: options.profileKey ?? `${connectionId}-${sessionId}` },
+        sessionId
+      );
+      return statusOf(connection);
+    } catch (error2) {
+      if (connection.controller.status().status === "idle") {
+        try {
+          await closeUpstream(connection);
+          await remove(connection);
+        } catch (cleanupError) {
+          connection.failedStartupSessionId = sessionId;
+          const retained2 = new DetailedError(errorMessage(error2));
+          retained2.details = {
+            ...errorDetails(error2),
+            ...statusOf(connection),
+            cleanupError: errorMessage(cleanupError)
+          };
+          throw retained2;
+        }
+      }
+      const retained = new DetailedError(errorMessage(error2));
+      retained.details = { ...errorDetails(error2), ...statusOf(connection) };
+      throw retained;
+    }
   }
   const handler = {
-    status: controller.status,
-    start: controller.start,
+    status,
+    start: (options) => {
+      const pending = start(options);
+      starts.add(pending);
+      void pending.finally(() => starts.delete(pending)).catch(() => {
+      });
+      return pending;
+    },
     restart: async (request) => {
-      const result = await controller.restart(request);
-      abortPrompts(request.sessionId);
-      return result;
+      const connection = routed(request);
+      const result = await connection.controller.restart(request);
+      abortPrompts(connection, request.sessionId);
+      return { ...result, connectionId: connection.connectionId };
     },
     stop: async (request) => {
-      const result = await controller.stop(request);
-      abortPrompts(request.sessionId);
-      return result;
+      const connection = routed(request);
+      if (connection.failedStartupSessionId) {
+        if (request.disposition !== "Close")
+          throw new Error("The retained startup requires an explicit Close retry.");
+        await closeUpstream(connection);
+        await remove(connection);
+        return {
+          entryId,
+          connectionId: connection.connectionId,
+          status: "idle",
+          disposition: "Close",
+          pageIdsInvalidated: true
+        };
+      }
+      const result = await connection.controller.stop(request);
+      abortPrompts(connection, request.sessionId);
+      if (result.status === "idle") {
+        try {
+          await remove(connection);
+        } catch (error2) {
+          connection.failedStartupSessionId = request.sessionId;
+          const retained = new DetailedError(errorMessage(error2));
+          retained.details = { ...statusOf(connection) };
+          throw retained;
+        }
+      }
+      return { ...result, connectionId: connection.connectionId };
     },
     endTask: async (request) => {
-      const result = await controller.endTask(request);
-      abortPrompts(request.sessionId);
-      return result;
+      const connection = routed(request);
+      const result = await connection.controller.endTask(request);
+      abortPrompts(connection, request.sessionId);
+      return { ...result, connectionId: connection.connectionId };
     }
   };
-  async function ask(event, signal) {
+  async function ask(connection, event, signal) {
     if (signal.aborted) return "pending";
-    let prompt = prompts.get(event.sessionId);
+    let prompt = connection.prompts.get(event.sessionId);
     if (prompt) return waitForChoice(prompt, signal);
     const abort = new AbortController();
     const record2 = { abort, result: Promise.resolve("pending"), subscribers: 0, settled: false };
     record2.result = Promise.resolve().then(async () => {
-      const status = controller.status();
+      const current = statusOf(connection);
       const gateway = entry;
-      if (!gateway || status.sessionId !== event.sessionId || status.status !== "lost" || abort.signal.aborted)
+      if (!gateway || current.sessionId !== event.sessionId || current.status !== "lost" || abort.signal.aborted)
         return "pending";
       const choice = await gateway.askLoss(
-        `\u8C03\u8BD5\u76EE\u6807\u5DF2\u65AD\u5F00\uFF08${event.reason}\uFF09\u3002\u8FD9\u662F\u8BEF\u5173\u95ED\u8FD8\u662F\u6709\u610F\u5173\u95ED\uFF1F\u8BEF\u5173\u95ED\u53EF\u7528\u539F CDP \u7AEF\u53E3 ${status.port}\u3001\u539F\u542F\u52A8\u53C2\u6570\u548C\u914D\u7F6E\u91CD\u65B0\u542F\u52A8\uFF1B\u6709\u610F\u5173\u95ED\u5C06\u7EC8\u6B62\u4F9D\u8D56\u6B64\u76EE\u6807\u7684\u4EFB\u52A1\u3002`,
+        `\u8C03\u8BD5\u76EE\u6807 ${current.targetKind}\uFF08PID ${current.processId}\uFF0C\u8FDE\u63A5 ${connection.connectionId}\uFF0C\u4F1A\u8BDD ${event.sessionId}\uFF09\u5DF2\u65AD\u5F00\uFF08${event.reason}\uFF09\u3002\u8FD9\u662F\u8BEF\u5173\u95ED\u8FD8\u662F\u6709\u610F\u5173\u95ED\uFF1F\u8BEF\u5173\u95ED\u53EF\u7528\u539F CDP \u7AEF\u53E3 ${current.port}\u3001\u539F\u542F\u52A8\u53C2\u6570\u548C\u914D\u7F6E\u91CD\u65B0\u542F\u52A8\uFF1B\u6709\u610F\u5173\u95ED\u5C06\u7EC8\u6B62\u4F9D\u8D56\u6B64\u76EE\u6807\u7684\u4EFB\u52A1\u3002`,
         abort.signal
       );
       return abort.signal.aborted ? "pending" : choice;
     }).then((choice) => {
-      if (choice === "pending" && prompts.get(event.sessionId) === record2) prompts.delete(event.sessionId);
+      if (choice === "pending" && connection.prompts.get(event.sessionId) === record2)
+        connection.prompts.delete(event.sessionId);
       return choice;
     }).finally(() => {
       record2.settled = true;
     });
     prompt = record2;
-    prompts.set(event.sessionId, prompt);
+    connection.prompts.set(event.sessionId, prompt);
     return waitForChoice(prompt, signal);
   }
   function waitForChoice(prompt, signal) {
@@ -23123,37 +23268,68 @@ async function startPluginRuntime({
   }
   async function cleanup() {
     if (cleanupPromise) return cleanupPromise;
+    shuttingDown = true;
     cleanupPromise = (async () => {
       if (polling) clearInterval(polling);
-      for (const prompt of prompts.values()) prompt.abort.abort();
-      prompts.clear();
       try {
-        const retained = await controller.cleanupOnDisconnect();
-        if (retained)
-          process.stderr.write(
-            `Target did not close normally; inspect PID ${retained.processId}, port ${retained.port}.
-`
-          );
+        await closeCatalogConnection();
+      } catch (error2) {
+        catalogCleanupError = errorMessage(error2);
+        process.stderr.write(`Catalog upstream cleanup failed for entry ${entryId}: ${catalogCleanupError}
+`);
       } finally {
-        try {
-          await control?.close();
-        } finally {
-          await router.close();
-        }
+        await closeCatalogRouter();
       }
+      await Promise.allSettled([...starts]);
+      const results = await Promise.allSettled(
+        [...connections.values()].map(async (connection) => {
+          abortPrompts(connection);
+          try {
+            const retained = await connection.controller.cleanupOnDisconnect();
+            if (retained)
+              process.stderr.write(
+                `Target connection ${connection.connectionId} did not close normally; inspect PID ${retained.processId}, port ${retained.port}.
+`
+              );
+          } finally {
+            await connection.router.close();
+          }
+        })
+      );
+      connections.clear();
+      await control?.close();
+      for (const result of results)
+        if (result.status === "rejected")
+          process.stderr.write(`Target cleanup failed: ${errorMessage(result.reason)}
+`);
     })();
     return cleanupPromise;
   }
+  const catalogRouter = await createRouter();
+  async function closeCatalogConnection() {
+    const selected2 = catalogConnection;
+    if (!selected2) return;
+    await selected2.close();
+    if (catalogConnection === selected2) catalogConnection = void 0;
+  }
+  async function closeCatalogRouter() {
+    if (catalogRouterClosed) return;
+    await catalogRouter.close();
+    catalogRouterClosed = true;
+  }
   try {
-    const initial = await createConnection(router.url);
-    catalog = initial.tools;
-    connection = initial;
-    await closeConnection();
+    catalogConnection = await createConnection(catalogRouter.url);
+    catalog = catalogConnection.tools;
+    await closeCatalogConnection();
+    await closeCatalogRouter();
     entry = createEntry({
       tools: catalog,
-      status: () => ({ ...controller.status() }),
-      onRootsChanged: () => connection?.rootsChanged() ?? Promise.resolve(),
-      watch: async (signal) => {
+      status: () => ({ ...status() }),
+      onRootsChanged: async () => {
+        await Promise.all([...connections.values()].map((connection) => connection.upstream?.rootsChanged()));
+      },
+      watch: async (route, signal) => {
+        const connection = routed(parseConnectionRoute(route));
         const lease = new AbortController();
         const aborted2 = () => lease.abort();
         signal.addEventListener("abort", aborted2, { once: true });
@@ -23164,12 +23340,12 @@ async function startPluginRuntime({
           lease.abort();
         }, watchLeaseMs);
         try {
-          const event = await controller.watchTarget(lease.signal);
+          const event = await connection.controller.watchTarget(lease.signal);
           if (event.reason === "task-ended")
-            return { ...controller.status(), reason: expired ? "watch-renew" : "task-ended" };
-          const choice = await ask(event, signal);
+            return { ...statusOf(connection), reason: expired ? "watch-renew" : "task-ended" };
+          const choice = await ask(connection, event, signal);
           return {
-            ...controller.status(),
+            ...statusOf(connection),
             event,
             choice,
             nextAction: choice === "restart" ? "restart" : choice === "cancel" ? "stop-Close" : "ask-user"
@@ -23180,21 +23356,30 @@ async function startPluginRuntime({
         }
       },
       invoke: async (name, arguments_, signal, onProgress) => {
-        await controller.checkHealth();
-        const status = controller.status();
-        if (status.status === "lost" && status.sessionId) {
-          const event = { sessionId: status.sessionId, reason: status.reason ?? "target-unavailable" };
-          return lifecycleResult({ ...status, choice: await ask(event, signal), pageIdsInvalidated: true });
+        const route = parseConnectionRoute(arguments_._dct);
+        const connection = routed(route);
+        await connection.controller.checkHealth();
+        routed(route);
+        const current = statusOf(connection);
+        if (current.status === "lost" && current.sessionId) {
+          const event = { sessionId: current.sessionId, reason: current.reason ?? "target-unavailable" };
+          return lifecycleResult({
+            ...current,
+            choice: await ask(connection, event, signal),
+            pageIdsInvalidated: true
+          });
         }
-        if (!controller.canInvoke() || !connection)
-          return lifecycleResult({ ...status, reason: "target-not-ready" });
-        return connection.call(name, arguments_, signal, onProgress);
+        if (!connection.controller.canInvoke() || !connection.upstream)
+          return lifecycleResult({ ...current, reason: "target-not-ready" });
+        const { _dct: routing, ...upstreamArguments } = arguments_;
+        void routing;
+        return connection.upstream.call(name, upstreamArguments, signal, onProgress);
       }
     });
     control = await createControl({ entryId, controller: handler });
     await entry.connect();
     polling = setInterval(() => {
-      void controller.checkHealth().catch(() => {
+      for (const connection of connections.values()) void connection.controller.checkHealth().catch(() => {
       });
     }, pollIntervalMs);
     const selectedEntry = entry;
@@ -23212,6 +23397,16 @@ async function startPluginRuntime({
       await entry?.close();
     } finally {
       await cleanup();
+    }
+    if (catalogConnection) {
+      const retained = new DetailedError(errorMessage(error2));
+      retained.details = {
+        ...errorDetails(error2),
+        entryId,
+        catalogUpstreamRetained: true,
+        cleanupError: catalogCleanupError
+      };
+      throw retained;
     }
     throw error2;
   }

@@ -12,27 +12,31 @@ const pluginRoot = path.join(root, 'plugins', 'debugging-cdp-targets');
 
 test('documented lifecycle command templates match each command schema', () => {
     const entry = ['--entry-id', '11111111-1111-4111-8111-111111111111'];
+    const connection = ['--connection-id', '33333333-3333-4333-8333-333333333333'];
     const session = ['--session-id', '22222222-2222-4222-8222-222222222222'];
     const templates = [
         ['status', ...entry],
+        ['status', ...entry, ...connection],
         ['start', ...entry, '--target-kind', 'chrome', '--launch-command', 'chrome --remote-debugging-port={port}'],
-        ['restart', ...entry, ...session],
-        ['end-task', ...entry, ...session],
-        ['stop', ...entry, ...session, '--disposition', 'Close'],
-        ['stop', ...entry, ...session, '--disposition', 'Keep'],
+        ['restart', ...entry, ...connection, ...session],
+        ['end-task', ...entry, ...connection, ...session],
+        ['stop', ...entry, ...connection, ...session, '--disposition', 'Close'],
+        ['stop', ...entry, ...connection, ...session, '--disposition', 'Keep'],
     ];
     for (const template of templates) assert.equal(parseControlArguments(template).action, template[0]);
     for (const template of [
         ['status', ...entry, ...session],
         ['start', ...entry, ...session, '--launch-command', 'chrome'],
-        ['end-task', ...entry, ...session, '--disposition', 'Keep'],
-        ['restart', ...entry, ...session, '--disposition', 'Close'],
-        ['stop', ...entry, ...session],
+        ['start', ...entry, ...connection, '--launch-command', 'chrome'],
+        ['end-task', ...entry, ...connection, ...session, '--disposition', 'Keep'],
+        ['restart', ...entry, ...connection, ...session, '--disposition', 'Close'],
+        ['stop', ...entry, ...connection, ...session],
+        ['restart', ...entry, ...session],
     ])
         assert.throws(() => parseControlArguments(template));
 });
 
-test('portable plugin registers the official MCP through two reusable stdio entries', async () => {
+test('portable plugin registers one stdio gateway for independent target connections', async () => {
     const manifest: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'plugin.json'), 'utf8'));
     const mcp: unknown = JSON.parse(await readFile(path.join(pluginRoot, 'mcp.json'), 'utf8'));
     assert.ok(isRecord(manifest) && isRecord(mcp) && isRecord(mcp.mcpServers));
@@ -40,14 +44,13 @@ test('portable plugin registers the official MCP through two reusable stdio entr
     const packageData: unknown = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
     assert.ok(isRecord(packageData) && isSemVer(packageData.version));
     assert.equal(manifest.version, packageData.version);
-    assert.deepEqual(Object.keys(mcp.mcpServers).sort(), ['cdp-target-1', 'cdp-target-2']);
-    for (const slot of ['1', '2'])
-        assert.deepEqual(mcp.mcpServers[`cdp-target-${slot}`], {
-            type: 'stdio',
-            command: 'node',
-            args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`, '--slot', slot],
-            cwd: `\${PLUGIN_ROOT}`,
-        });
+    assert.deepEqual(Object.keys(mcp.mcpServers), ['cdp-targets']);
+    assert.deepEqual(mcp.mcpServers['cdp-targets'], {
+        type: 'stdio',
+        command: 'node',
+        args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`],
+        cwd: `\${PLUGIN_ROOT}`,
+    });
 });
 
 test('plugin payload has only manifests, one skill, license, and self-contained runtime', async () => {

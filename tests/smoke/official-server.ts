@@ -5,7 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { controlEndpoint, sendControlRequest } from '../../src/adapters/control-ipc.ts';
-import { type ControlRequest, parseControlResponse, validateIdentity } from '../../src/domains/control-contract.ts';
+import {
+    type ConnectionStatus,
+    type ControlRequest,
+    parseControlResponse,
+    validateIdentity,
+} from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
@@ -34,10 +39,20 @@ monitor.stdout.on('data', (data) => {
 await new Promise<void>((resolve) => monitor.stdout.once('data', () => resolve()));
 const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
 async function control(request: ControlRequest) {
+    let retainedCloseAttempts = 0;
     for (let attempt = 0; attempt < 40; attempt += 1) {
         const result = await sendControlRequest(controlEndpoint(request.entryId), request);
         if (result.ok) return result.result;
-        if (!/busy/.test(result.error)) assert.fail(JSON.stringify(result));
+        const retainedClose =
+            request.action === 'stop' && request.disposition === 'Close' && /did not close normally/.test(result.error);
+        if (retainedClose) {
+            retainedCloseAttempts += 1;
+            console.log(
+                JSON.stringify({ normalCloseRetry: retainedCloseAttempts, at: Date.now(), retained: result.details }),
+            );
+        }
+        if ((!/busy/.test(result.error) && !retainedClose) || retainedCloseAttempts > 2)
+            assert.fail(JSON.stringify(result));
         if (attempt === 0) console.log('Waiting for background CDP requests to finish before disposition.');
         await new Promise((resolve) => setTimeout(resolve, 200));
     }
@@ -50,10 +65,19 @@ const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
 };
 const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 function launch(profile: string, title: string) {
-    return `"${chrome}" --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><h1>Isolated smoke</h1>"`;
+    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><h1>Isolated smoke</h1>"`;
 }
 let entryId: string | undefined;
-let activeSession: string | undefined;
+let active: ConnectionStatus | undefined;
+function route(target: ConnectionStatus) {
+    assert.ok(target.sessionId);
+    return { _dct: { connectionId: target.connectionId, sessionId: target.sessionId } };
+}
+async function emptyGateway(id: string) {
+    const result = await control({ action: 'status', entryId: id });
+    assert.ok('connections' in result);
+    assert.deepEqual(result.connections, []);
+}
 try {
     const initialized = await client.request('initialize', {
         protocolVersion: '2024-11-05',
@@ -68,11 +92,11 @@ try {
     assert.ok(tools.some((entry) => /extension/.test(entry.name)));
     const statusTool = await tool('dct_connection_status');
     const response = parseControlResponse({ ok: true, result: statusTool.structuredContent });
-    assert.ok(response.ok);
+    assert.ok(response.ok && 'connections' in response.result);
     entryId = response.result.entryId;
     validateIdentity(entryId, 'entry ID');
-    assert.equal((await control({ action: 'status', entryId })).status, 'idle');
-    assert.equal((await tool('list_pages')).isError, true);
+    await emptyGateway(entryId);
+    await assert.rejects(() => tool('list_pages'), /routing/);
     const first = await control({
         action: 'start',
         entryId,
@@ -80,19 +104,25 @@ try {
         basePort: 19222,
         launchCommand: launch('profile-one', 'FIRST'),
     });
-    assert.ok(first.sessionId);
-    activeSession = first.sessionId;
+    assert.ok(!('connections' in first) && first.sessionId);
+    active = first;
     console.log(JSON.stringify({ first }));
-    const pagesOne = await tool('list_pages');
+    const pagesOne = await tool('list_pages', route(first));
     assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
     assert.match(JSON.stringify(pagesOne), /FIRST/);
     const extensions = tools.find((entry) => /list.*extension|extension.*list/.test(entry.name));
     assert.ok(extensions);
-    const extensionResult = await tool(extensions.name);
+    const extensionResult = await tool(extensions.name, route(first));
     assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
-    await control({ action: 'stop', entryId, sessionId: activeSession, disposition: 'Close' });
-    activeSession = undefined;
-    assert.equal((await control({ action: 'status', entryId })).status, 'idle');
+    await control({
+        action: 'stop',
+        entryId,
+        connectionId: first.connectionId,
+        sessionId: first.sessionId,
+        disposition: 'Close',
+    });
+    active = undefined;
+    await emptyGateway(entryId);
     const second = await control({
         action: 'start',
         entryId,
@@ -100,23 +130,34 @@ try {
         basePort: 19222,
         launchCommand: launch('profile-two', 'SECOND'),
     });
-    assert.ok(second.sessionId);
+    assert.ok(!('connections' in second) && second.sessionId);
+    assert.notEqual(second.connectionId, first.connectionId);
     assert.notEqual(second.sessionId, first.sessionId);
-    activeSession = second.sessionId;
+    active = second;
     console.log(JSON.stringify({ second }));
-    const pagesTwo = await tool('list_pages');
+    const pagesTwo = await tool('list_pages', route(second));
     assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
     assert.match(JSON.stringify(pagesTwo), /SECOND/);
     assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
-    await control({ action: 'stop', entryId, sessionId: activeSession, disposition: 'Close' });
-    activeSession = undefined;
-    assert.equal((await control({ action: 'status', entryId })).status, 'idle');
+    await control({
+        action: 'stop',
+        entryId,
+        connectionId: second.connectionId,
+        sessionId: second.sessionId,
+        disposition: 'Close',
+    });
+    active = undefined;
+    await emptyGateway(entryId);
     console.log('Official tools and extensions through a reusable entry, Close, and later start passed.');
 } finally {
-    if (entryId && activeSession)
-        await control({ action: 'stop', entryId, sessionId: activeSession, disposition: 'Close' }).catch(
-            (error: unknown) => console.error(errorMessage(error)),
-        );
+    if (entryId && active?.sessionId)
+        await control({
+            action: 'stop',
+            entryId,
+            connectionId: active.connectionId,
+            sessionId: active.sessionId,
+            disposition: 'Close',
+        }).catch((error: unknown) => console.error(errorMessage(error)));
     await client.close();
     const monitoringEnded = new Promise<void>((resolve) => monitor.once('exit', () => resolve()));
     await writeFile(stopFile, 'stop');

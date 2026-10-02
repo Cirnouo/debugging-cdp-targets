@@ -14,7 +14,10 @@ Windows closes a normal window; Unix sends only SIGTERM after identity checks.
 No escalation. Report unverifiable/failed close instead of deleting evidence.
 
 Bind router to 127.0.0.1; rewrite only CDP discovery addresses. Preserve
-WebSocket frames. Each entry has its own target, port, upstream child, and
-control pipe. The official SDK gateway preserves upstream catalogs and results.
+WebSocket frames. Each connection has its own target, port and upstream child.
+The gateway has one entry control pipe and independent routers
+and upstreams for all target connections. The official SDK gateway adds only
+required _dct routing to tool input schemas and forwards original arguments and
+results. Reject routing collisions and missing, unknown, closed or stale IDs.
 Track lifecycle and busy state without logging tool contents. Confirm target
 loss through events and at least two failed polls before eliciting recovery.

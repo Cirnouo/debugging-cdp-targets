@@ -17,6 +17,7 @@ import {
     McpError,
     RootsListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { type ConnectionRoute, parseConnectionRoute } from '../domains/control-contract.ts';
 import { preserveZeroRequestCancellation } from './mcp-transport.ts';
 
 type LossChoice = 'restart' | 'cancel' | 'pending';
@@ -25,7 +26,7 @@ type AskLoss = (message: string, signal?: AbortSignal) => Promise<LossChoice>;
 export function createMcpEntryServer(options: {
     tools: Tool[];
     status: () => Record<string, unknown>;
-    watch: (signal: AbortSignal, ask: AskLoss) => Promise<Record<string, unknown>>;
+    watch: (route: ConnectionRoute, signal: AbortSignal) => Promise<Record<string, unknown>>;
     invoke: (
         name: string,
         arguments_: Record<string, unknown>,
@@ -35,6 +36,24 @@ export function createMcpEntryServer(options: {
     transport?: Transport;
     onRootsChanged?: () => Promise<void>;
 }) {
+    const routeSchema = {
+        type: 'object',
+        properties: { connectionId: { type: 'string', format: 'uuid' }, sessionId: { type: 'string', format: 'uuid' } },
+        required: ['connectionId', 'sessionId'],
+        additionalProperties: false,
+    };
+    const tools = options.tools.map((tool) => {
+        if (Object.hasOwn(tool.inputSchema.properties ?? {}, '_dct'))
+            throw new Error(`Official tool ${tool.name} already owns the reserved _dct routing field.`);
+        return {
+            ...tool,
+            inputSchema: {
+                ...tool.inputSchema,
+                properties: { ...tool.inputSchema.properties, _dct: routeSchema },
+                required: [...(tool.inputSchema.required ?? []), '_dct'],
+            },
+        };
+    });
     const server = new Server({ name: 'debugging-cdp-targets', version: '0.1.0' }, { capabilities: { tools: {} } });
     let resolveClosed: () => void = () => {};
     const closed = new Promise<void>((resolve) => {
@@ -90,7 +109,7 @@ export function createMcpEntryServer(options: {
     };
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
         tools: [
-            ...options.tools,
+            ...tools,
             {
                 name: 'dct_connection_status',
                 description: '查看目标连接状态',
@@ -99,21 +118,25 @@ export function createMcpEntryServer(options: {
             {
                 name: 'dct_watch_target',
                 description: '等待目标退出并询问是否重新启动',
-                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+                inputSchema: { ...routeSchema, type: 'object' },
             },
         ],
     }));
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const name = request.params.name;
-        if (name === 'dct_connection_status' || name === 'dct_watch_target') {
+        if (name === 'dct_connection_status') {
             if (Object.keys(request.params.arguments ?? {}).length !== 0) {
                 throw new McpError(ErrorCode.InvalidParams, `${name} requires an empty argument object.`);
             }
-            const result =
-                name === 'dct_connection_status' ? options.status() : await options.watch(extra.signal, askLoss);
+            const result = options.status();
+            return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+        }
+        if (name === 'dct_watch_target') {
+            const result = await options.watch(parseConnectionRoute(request.params.arguments), extra.signal);
             return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
         }
         if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
+        parseConnectionRoute(request.params.arguments?._dct);
         const token = request.params._meta?.progressToken;
         return options.invoke(name, request.params.arguments ?? {}, extra.signal, (progress) => {
             if (token !== undefined) {

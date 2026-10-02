@@ -3,16 +3,18 @@
 - **Target application**: application explicitly known to expose browser-level CDP.
 - **Framework**: application technology; its name does not prove CDP compatibility.
 - **Rendering implementation**: renderer such as Chromium or WebView2.
-- **Static entry**: reusable stdio configuration cdp-target-1 or cdp-target-2.
-- **Entry identity**: random UUID for one live gateway and its independent control pipe.
-- **Session identity**: fresh UUID for every successful target start in an entry.
+- **Static entry**: reusable Desktop stdio configuration cdp-targets.
+- **Entry identity**: random UUID for one live gateway and its control pipe.
+- **Connection identity**: random UUID for one independent target task and its official MCP connection.
+- **Session identity**: fresh UUID for every successful target start or recovery in a connection.
 - **Current target**: verified newly launched process belonging to one session.
 - **CDP endpoint**: verified loopback discovery and browser WebSocket address.
-- **Official Server**: unmodified upstream chrome-devtools-mcp child for one entry.
-- **Gateway**: official SDK host transport preserving upstream catalogs and results.
+- **Official Server**: unmodified upstream chrome-devtools-mcp child for one connection.
+- **Gateway**: official SDK host transport managing independent connections and routing official tools.
+- **Routing identity**: required _dct connection/session object removed before official tool invocation.
 - **Control channel**: temporary entry-specific local IPC for lifecycle commands.
 - **Disposition**: explicit Close or Keep choice without a default.
-- **Kept target**: application and upstream retained within the live entry.
-- **Closed entry**: reusable host transport with no attached target after normal close.
+- **Kept target**: application and upstream retained within its live connection.
+- **Closed connection**: removed target connection after normal shutdown; the gateway remains reusable.
 - **Recovery**: user-authorized launch from memory on the same port, with new session identity.
 - **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.

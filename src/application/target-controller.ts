@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type ManagedTarget, RetainedTargetError } from '../domains/cdp-target.ts';
-import type { ControlResult, Disposition, LaunchOptions, TargetStatus } from '../domains/control-contract.ts';
+import type { Disposition, LaunchOptions, TargetStatus } from '../domains/control-contract.ts';
 import { DetailedError } from '../shared/errors.ts';
 
 export interface ControllerRouter {
@@ -104,11 +104,12 @@ export function createTargetController({
         reason = 'target-rollback-failed';
         gate();
     }
-    async function attach(options: LaunchOptions, sessionId = randomUUID()) {
+    async function attach(options: LaunchOptions, sessionId: string = randomUUID()) {
+        options = { ...options, profileKey: options.profileKey ?? `${entryId}-${sessionId}` };
         await server.ensure();
         let target: ManagedTarget;
         try {
-            target = await host.launch({ ...options, profileKey: options.profileKey ?? `${entryId}-${sessionId}` });
+            target = await host.launch(options);
         } catch (error) {
             if (error instanceof RetainedTargetError)
                 retainFailedRollback({ target: error.target, options, sessionId });
@@ -132,11 +133,11 @@ export function createTargetController({
         target.child?.once('exit', () => lose(selected, 'process-exited'));
         return status();
     }
-    function start(options: LaunchOptions) {
+    function start(options: LaunchOptions, sessionId?: string) {
         return run(async () => {
             if (current)
                 throw new Error('An existing target session must be explicitly closed before this entry is reused.');
-            return attach(options);
+            return attach(options, sessionId);
         });
     }
     function restart({ sessionId }: { sessionId: string }) {
@@ -153,7 +154,7 @@ export function createTargetController({
                 ...previous.options,
                 exactPort: previous.target.port,
                 launchDefinition: previous.target.launchDefinition,
-                profileKey: `${entryId}-${sessionId}`,
+                profileKey: previous.options.profileKey ?? `${entryId}-${sessionId}`,
             };
             try {
                 const result = await attach(options);
@@ -167,7 +168,7 @@ export function createTargetController({
             }
         });
     }
-    function stop({ sessionId, disposition }: { sessionId: string; disposition: Disposition }): Promise<ControlResult> {
+    function stop({ sessionId, disposition }: { sessionId: string; disposition: Disposition }): Promise<TargetStatus> {
         return run(async () => {
             const selected = requireSession(sessionId);
             if (disposition !== 'Close' && disposition !== 'Keep') throw new Error('Choose Close or Keep.');

@@ -11,10 +11,10 @@ export interface LaunchOptions {
     launchDefinition?: { executablePath: string; arguments: string[]; cwd: string };
 }
 export type ControlRequest =
-    | { action: 'status'; entryId: string }
+    | { action: 'status'; entryId: string; connectionId?: string }
     | { action: 'start'; entryId: string; launchCommand: string; targetKind?: TargetKind; basePort?: number }
-    | { action: 'restart' | 'end-task'; entryId: string; sessionId: string }
-    | { action: 'stop'; entryId: string; sessionId: string; disposition: Disposition };
+    | { action: 'restart' | 'end-task'; entryId: string; connectionId: string; sessionId: string }
+    | { action: 'stop'; entryId: string; connectionId: string; sessionId: string; disposition: Disposition };
 export interface TargetStatus {
     entryId: string;
     status: 'idle' | 'active' | 'lost' | 'closing' | 'close-failed';
@@ -27,21 +27,36 @@ export interface TargetStatus {
     disposition?: Disposition;
     pageIdsInvalidated?: boolean;
 }
-export type ControlResult = TargetStatus;
+export interface ConnectionStatus extends TargetStatus {
+    connectionId: string;
+}
+export interface GatewayStatus {
+    entryId: string;
+    connections: ConnectionStatus[];
+}
+export type ControlResult = GatewayStatus | ConnectionStatus;
 export type ControlResponse =
     | { ok: true; result: ControlResult }
     | { ok: false; error: string; details?: Record<string, unknown> };
 export interface ControlHandler {
-    status(): TargetStatus;
-    start(options: LaunchOptions): Promise<ControlResult>;
-    restart(options: { sessionId: string }): Promise<ControlResult>;
-    stop(options: { sessionId: string; disposition: Disposition }): Promise<ControlResult>;
-    endTask(options: { sessionId: string }): Promise<ControlResult>;
+    status(connectionId?: string): ControlResult;
+    start(options: LaunchOptions): Promise<ConnectionStatus>;
+    restart(options: { connectionId: string; sessionId: string }): Promise<ConnectionStatus>;
+    stop(options: { connectionId: string; sessionId: string; disposition: Disposition }): Promise<ConnectionStatus>;
+    endTask(options: { connectionId: string; sessionId: string }): Promise<ConnectionStatus>;
 }
 
 export function validateIdentity(value: unknown, label: string): asserts value is string {
     if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
         throw new Error(`A canonical lowercase UUID ${label} is required.`);
+}
+export type ConnectionRoute = { connectionId: string; sessionId: string };
+export function parseConnectionRoute(value: unknown): ConnectionRoute {
+    if (!isRecord(value)) throw new Error('A connection routing object is required.');
+    fields(value, ['connectionId', 'sessionId']);
+    validateIdentity(value.connectionId, 'connection ID');
+    validateIdentity(value.sessionId, 'session ID');
+    return { connectionId: value.connectionId, sessionId: value.sessionId };
 }
 function fields(value: Record<string, unknown>, allowed: string[]) {
     if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error('Unknown control field.');
@@ -55,8 +70,9 @@ export function parseControlRequest(value: unknown): ControlRequest {
     const entryId = value.entryId;
     const action = value.action;
     if (action === 'status') {
-        fields(value, ['action', 'entryId']);
-        return { action, entryId };
+        fields(value, ['action', 'entryId', 'connectionId']);
+        if (value.connectionId !== undefined) validateIdentity(value.connectionId, 'connection ID');
+        return { action, entryId, ...(value.connectionId === undefined ? {} : { connectionId: value.connectionId }) };
     }
     if (action === 'start') {
         fields(value, ['action', 'entryId', 'launchCommand', 'targetKind', 'basePort']);
@@ -74,13 +90,20 @@ export function parseControlRequest(value: unknown): ControlRequest {
         };
     }
     if (action !== 'restart' && action !== 'stop' && action !== 'end-task') throw new Error('Unknown control action.');
-    fields(value, ['action', 'entryId', 'sessionId', ...(action === 'stop' ? ['disposition'] : [])]);
+    fields(value, ['action', 'entryId', 'connectionId', 'sessionId', ...(action === 'stop' ? ['disposition'] : [])]);
+    validateIdentity(value.connectionId, 'connection ID');
     validateIdentity(value.sessionId, 'session ID');
     if (action === 'stop') {
         if (value.disposition !== 'Close' && value.disposition !== 'Keep') throw new Error('Choose Close or Keep.');
-        return { action, entryId, sessionId: value.sessionId, disposition: value.disposition };
+        return {
+            action,
+            entryId,
+            connectionId: value.connectionId,
+            sessionId: value.sessionId,
+            disposition: value.disposition,
+        };
     }
-    return { action, entryId, sessionId: value.sessionId };
+    return { action, entryId, connectionId: value.connectionId, sessionId: value.sessionId };
 }
 export function parseControlResponse(value: unknown): ControlResponse {
     if (!isRecord(value)) throw new Error('Invalid control response.');
@@ -92,8 +115,23 @@ export function parseControlResponse(value: unknown): ControlResponse {
     fields(value, ['ok', 'result']);
     const result = value.result;
     if (value.ok !== true || !isRecord(result)) throw new Error('Invalid control result.');
+    if ('connections' in result) {
+        fields(result, ['entryId', 'connections']);
+        validateIdentity(result.entryId, 'entry ID');
+        if (!Array.isArray(result.connections)) throw new Error('Invalid connection list.');
+        const connections = result.connections.map((connection: unknown) => {
+            const parsed = parseControlResponse({ ok: true, result: connection });
+            if (!parsed.ok || !('connectionId' in parsed.result) || parsed.result.entryId !== result.entryId)
+                throw new Error('Invalid connection identity.');
+            return parsed.result;
+        });
+        if (new Set(connections.map((connection) => connection.connectionId)).size !== connections.length)
+            throw new Error('Duplicate connection identity.');
+        return { ok: true, result: { entryId: result.entryId, connections } };
+    }
     fields(result, [
         'entryId',
+        'connectionId',
         'status',
         'sessionId',
         'port',
@@ -105,6 +143,7 @@ export function parseControlResponse(value: unknown): ControlResponse {
         'pageIdsInvalidated',
     ]);
     validateIdentity(result.entryId, 'entry ID');
+    validateIdentity(result.connectionId, 'connection ID');
     if (!['idle', 'active', 'lost', 'closing', 'close-failed'].includes(String(result.status)))
         throw new Error('Invalid target status.');
     if (result.status !== 'idle' || result.sessionId !== undefined) validateIdentity(result.sessionId, 'session ID');

@@ -9,6 +9,7 @@ export function parseControlArguments(arguments_: string[]): ControlRequest {
         args: rest,
         options: {
             'entry-id': { type: 'string' },
+            'connection-id': { type: 'string' },
             'session-id': { type: 'string' },
             'launch-command': { type: 'string' },
             'target-kind': { type: 'string' },
@@ -24,6 +25,7 @@ export function parseControlArguments(arguments_: string[]): ControlRequest {
     const request: Record<string, unknown> = { action };
     const mapping: Record<string, string> = {
         'entry-id': 'entryId',
+        'connection-id': 'connectionId',
         'session-id': 'sessionId',
         'launch-command': 'launchCommand',
         'target-kind': 'targetKind',

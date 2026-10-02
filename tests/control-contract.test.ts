@@ -24,9 +24,9 @@ test('IPC boundary accepts validated commands and rejects malformed external val
     ]) {
         assert.throws(() => parseControlRequest(value));
     }
-    assert.deepEqual(parseControlResponse({ ok: true, result: { entryId, status: 'idle' } }), {
+    assert.deepEqual(parseControlResponse({ ok: true, result: { entryId, connections: [] } }), {
         ok: true,
-        result: { entryId, status: 'idle' },
+        result: { entryId, connections: [] },
     });
     for (const value of [null, { ok: true, result: {} }, { ok: false, error: 1 }])
         assert.throws(() => parseControlResponse(value));

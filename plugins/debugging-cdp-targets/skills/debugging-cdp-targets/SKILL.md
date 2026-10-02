@@ -8,19 +8,20 @@ metadata:
 
 # Debugging CDP targets
 
-Use either static MCP entry cdp-target-1 or cdp-target-2. Call that entry's
-`dct_connection_status` with `{}` first and retain its entry UUID and current session UUID.
-Each entry controls only its own newly launched, verified target. The gateway
-preserves official tool schemas and results; never substitute a DevTools CLI,
-custom inspection tool, or invoke action. No session survives host disconnect.
+Use the cdp-targets MCP gateway. Call `dct_connection_status` with `{}` first:
+it returns entryId and connections. Each new target gets its own connectionId,
+official MCP and sessionId. There is no fixed connection limit or implicit
+current target. Only newly launched, verified targets are managed; never attach
+to existing applications. All identities and launch settings stay in memory.
 
 Resolve the Plugin root two parents above this file's containing directory.
 Run `node <plugin-root>/dist/control.mjs <action>`. Actions are status, start,
-restart, stop, and end-task; there is no switch action. Every command requires
-`--entry-id <entry-uuid>`. Status and start prohibit --session-id, even when a session exists. Restart,
-end-task and stop require `--session-id <current-session-uuid>`. Only stop accepts
---disposition. Refresh status
-rather than guessing stale identity. Start an empty entry with:
+restart, stop and end-task; there is no switch action. Every command requires
+--entry-id. Status optionally accepts --connection-id and prohibits --session-id.
+Start creates a new connection and prohibits connection/session identity.
+Restart/end-task/stop require --connection-id and --session-id in addition to
+entry identity. Only stop accepts --disposition. Obtain IDs from status/results,
+never from the static gateway name. Launch a new target with:
 
 ```powershell
 node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
@@ -30,44 +31,64 @@ Commands parse argv without a shell. `{port}` selects an available non-reserved
 port; missing Chromium port options are appended. Chrome uses a dedicated
 profile unless --user-data-dir overrides it. Generic targets must explicitly
 support command-line debugging and browser-level CDP; a framework name alone
-does not establish compatibility. Never attach to pre-existing processes.
+does not establish compatibility. Never reuse a profile locked by another target.
 
-After start or recovery, refresh dct_connection_status, discard all old page IDs,
-and call official list_pages to verify fresh URL/title evidence. Use official
-inspection tools. Extension tools require verified Google Chrome 149 or newer.
-Usage statistics and CrUX are disabled by default.
+Every official tool call requires `_dct: { connectionId, sessionId }` using the
+target's current IDs. This is routing metadata: the gateway removes it before
+forwarding original parameters and preserves official tool names and results.
+Never substitute a DevTools CLI, custom inspection tool or generic invoke action.
+For example, call official list_pages for target A with:
 
-While doing target-dependent work, call `dct_watch_target` with `{}` concurrently
-with inspection. It watches the current session and has a 25-second lease.
-When it returns reason `watch-renew`, renew only while dependent work remains
-active. Do not renew for an idle entry. Finish the lease with CLI end-task and both identity flags when work ends.
-End-task accepts no disposition and retains target and official Server; it only
-stops the active-task watch. Ask Close/Keep separately before a stop.
+```json
+{ "_dct": { "connectionId": "<A-connection-uuid>", "sessionId": "<A-session-uuid>" } }
+```
 
-On loss, watch returns event {sessionId, reason}, choice restart/cancel/pending,
-and nextAction restart/stop-Close/ask-user. Standard MCP form elicitation collects
-the user's choice; it does not perform recovery itself. If choice is restart,
-run CLI restart with this entry UUID and the event's old session UUID. If cancel,
-run CLI stop with those UUIDs and --disposition Close, and terminate this target's
-dependent work. For pending/ask-user, ask the user before proceeding. Other
-entries remain independent. Never restart or replay automatically.
+Calls for target B use B's IDs and can run concurrently. After start or recovery,
+refresh status, discard old page IDs and call list_pages with the current route
+for fresh URL/title evidence. Recovery keeps connectionId but replaces sessionId.
+Old sessions and closed connections are rejected. Extension tools require
+verified Google Chrome 149 or newer. Usage statistics and CrUX default to off.
 
-Active tasks receive form elicitation within five seconds after closure is
-confirmed by an event or at least two failed polls. Idle targets ask on next use.
-Authorized restart retains original argv/cwd/profile/port from memory and refuses
-an occupied port. It returns a new session UUID and pageIdsInvalidated: true;
-refresh status and list_pages before continuing with new page IDs.
+While doing dependent work for each target, call `dct_watch_target` concurrently
+with that target's inspection, using `{ connectionId, sessionId }` (without _dct).
+Each watch has a 25-second lease. Renew after reason watch-renew only while that
+target's dependent work remains active. Idle targets need no renewed watch.
+Finish the watch using end-task with all three IDs; it retains target and MCP.
 
-Before selecting another entry or ending a task, ask **Close** or **Keep**, with
-no default. Keep retains application and official Server together in this entry.
-Close requests normal shutdown of both; the host transport remains reusable for
-later start. Run stop with both identity flags and
-`--disposition Close|Keep`. A failed close reports retained process/port; never
-force-kill. Keep leaves loopback CDP reachable by local processes. Another entry
-has its own identity and target; never control it using this entry's UUIDs.
+On loss, watch identifies the connection/session and returns choice
+restart/cancel/pending and nextAction restart/stop-Close/ask-user. Standard MCP
+form elicitation collects the user's choice, without automatically recovering.
+If restart, use the event's old session UUID:
 
-Common mistakes: guessing IDs, reusing page IDs after recovery, treating Keep as
-an upstream disconnect, silently changing a busy recovery port, or assuming
-window disappearance authorizes restart. Handled MCP disconnect attempts normal
-close; force termination cannot guarantee cleanup. Report unverifiable remnants
-for manual inspection without taking over their processes.
+```powershell
+node "<plugin-root>/dist/control.mjs" restart --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <event-old-session-uuid>
+```
+
+If cancel, run stop with those identities and --disposition Close, then terminate
+only that target's dependent work. For pending/ask-user, ask before proceeding.
+Other connections continue working. Never restart or replay tools automatically.
+
+Active tasks receive elicitation within five seconds after loss is confirmed
+by events or at least two failed polls. Idle targets ask on next use. Authorized
+restart retains original argv/cwd/profile/port, refuses a busy port and returns
+new session identity with pageIdsInvalidated: true. Refresh status and list_pages
+before resuming with new page IDs.
+
+Before ending or abandoning a target's task, ask **Close** or **Keep**, with no
+default. Keep retains target and official MCP for later work in the same chat.
+Close normally shuts down both and removes only that connection; the gateway
+and other connections remain available. Use stop with all identities:
+
+```powershell
+node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid> --disposition Close
+```
+
+Failed close reports retained identity/PID/port for retry; never force-kill.
+Keep leaves CDP reachable by local processes. Creating another target does not
+end existing tasks or dispose their connections. Handled gateway disconnect
+attempts normal cleanup for every connection; forced termination cannot guarantee
+cleanup. Report unverifiable remnants without taking over their processes.
+
+Common mistakes: omitting _dct, using another target's IDs, reusing session/page
+IDs after recovery, treating Keep as an MCP disconnect, silently changing a busy
+recovery port, or assuming window disappearance authorizes restart.

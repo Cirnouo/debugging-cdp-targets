@@ -45,9 +45,10 @@ try {
         client.notify('notifications/initialized');
         const tools = readMcpTools(await client.request('tools/list'));
         assert.ok(tools.some((entry) => entry.name === 'list_pages'));
-        const pages = await client.request('tools/call', { name: 'list_pages', arguments: {} });
-        assert.ok(isRecord(pages));
-        assert.equal(pages.isError, true);
+        await assert.rejects(() => client.request('tools/call', { name: 'list_pages', arguments: {} }), /routing/);
+        const status = await client.request('tools/call', { name: 'dct_connection_status', arguments: {} });
+        assert.ok(isRecord(status) && isRecord(status.structuredContent));
+        assert.deepEqual(status.structuredContent.connections, []);
     } finally {
         await client.close();
     }

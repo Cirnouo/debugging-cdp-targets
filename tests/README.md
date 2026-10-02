@@ -7,7 +7,7 @@
   evidence, and PID/path/session mismatch checks with injected I/O.
 - `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and
   directory documentation that preserves the root README on GitHub.
-- `distribution-audit.test.ts` tests packaging comparisons, reusable entry manifests,
+- `distribution-audit.test.ts` tests packaging comparisons, single-gateway manifests,
   and allowlists.
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
   nested module metadata, and fail-closed missing license handling.
@@ -28,9 +28,9 @@
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
-- `entry-control.test.ts` checks CLI identity and command-specific option schemas.
+- `entry-control.test.ts` checks entry/connection/session identity and command-specific schemas.
 - `entry-lifecycle.test.ts` checks entry Keep/Close and independent lifecycle.
-- `entry-runtime.test.ts` checks reusable bootstrap identities and upstream lifetime.
+- `entry-runtime.test.ts` checks gateway identity, independent connections and upstream lifetime.
 - `mcp-bridge.test.ts` checks official catalog/result forwarding and lifecycle tools.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks manual closure and explicit same-port recovery.

@@ -73,7 +73,7 @@ export async function recoverStaleEndpoint(endpoint: string, io: RecoveryIo = {}
 async function dispatch(controller: ControlHandler, request: ControlRequest) {
     switch (request?.action) {
         case 'status':
-            return controller.status();
+            return request.connectionId === undefined ? controller.status() : controller.status(request.connectionId);
         case 'start':
             return controller.start({
                 launchCommand: request.launchCommand,
@@ -81,11 +81,15 @@ async function dispatch(controller: ControlHandler, request: ControlRequest) {
                 ...(request.basePort === undefined ? {} : { basePort: request.basePort }),
             });
         case 'restart':
-            return controller.restart({ sessionId: request.sessionId });
+            return controller.restart({ connectionId: request.connectionId, sessionId: request.sessionId });
         case 'stop':
-            return controller.stop({ sessionId: request.sessionId, disposition: request.disposition });
+            return controller.stop({
+                connectionId: request.connectionId,
+                sessionId: request.sessionId,
+                disposition: request.disposition,
+            });
         case 'end-task':
-            return controller.endTask({ sessionId: request.sessionId });
+            return controller.endTask({ connectionId: request.connectionId, sessionId: request.sessionId });
         default:
             throw new Error('Unknown control action. Use status, start, restart, stop, or end-task.');
     }
@@ -103,7 +107,6 @@ export async function createControlServer({
     validateIdentity(entryId, 'entry ID');
     await recoverStaleEndpoint(endpoint);
     const clients = new Set<net.Socket>();
-    let operation = Promise.resolve();
     const server = net.createServer((socket) => {
         clients.add(socket);
         socket.once('close', () => clients.delete(socket));
@@ -124,22 +127,20 @@ export async function createControlServer({
             submitted = true;
             const line = received.slice(0, received.indexOf('\n'));
             received = '';
-            operation = operation
-                .catch(() => {})
-                .then(async () => {
-                    try {
-                        const raw: unknown = JSON.parse(line);
-                        const request = parseControlRequest(raw);
-                        if (request.entryId !== entryId)
-                            throw new Error('Control entry ID does not match this connection.');
-                        const result = await dispatch(controller, request);
-                        socket.end(`${JSON.stringify({ ok: true, result })}\n`);
-                    } catch (error) {
-                        socket.end(
-                            `${JSON.stringify({ ok: false, error: errorMessage(error), ...(errorDetails(error) ? { details: errorDetails(error) } : {}) })}\n`,
-                        );
-                    }
-                });
+            void (async () => {
+                try {
+                    const raw: unknown = JSON.parse(line);
+                    const request = parseControlRequest(raw);
+                    if (request.entryId !== entryId)
+                        throw new Error('Control entry ID does not match this connection.');
+                    const result = await dispatch(controller, request);
+                    socket.end(`${JSON.stringify({ ok: true, result })}\n`);
+                } catch (error) {
+                    socket.end(
+                        `${JSON.stringify({ ok: false, error: errorMessage(error), ...(errorDetails(error) ? { details: errorDetails(error) } : {}) })}\n`,
+                    );
+                }
+            })();
         });
     });
     const previousMask = process.platform === 'win32' ? undefined : process.umask(0o077);

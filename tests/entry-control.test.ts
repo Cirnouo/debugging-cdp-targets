@@ -6,6 +6,7 @@ import { type ControlHandler, parseControlRequest, parseControlResponse } from '
 import { parseControlArguments } from '../src/interface/control-arguments.ts';
 
 const entryId = '11111111-1111-4111-8111-111111111111';
+const connectionId = '33333333-3333-4333-8333-333333333333';
 const sessionId = '22222222-2222-4222-8222-222222222222';
 
 test('Unix recovery removes only an unchanged owned refused socket', async () => {
@@ -46,20 +47,33 @@ test('entry requests require canonical IDs and reject obsolete and extraneous fi
         { action: 'stop', entryId, sessionId, disposition: 'Close', launchCommand: 'target' },
     ])
         assert.throws(() => parseControlRequest(request));
-    assert.deepEqual(parseControlRequest({ action: 'end-task', entryId, sessionId }), {
+    assert.deepEqual(parseControlRequest({ action: 'end-task', entryId, connectionId, sessionId }), {
         action: 'end-task',
         entryId,
+        connectionId,
         sessionId,
     });
 });
 
 test('CLI requires explicit entry and session options and disallows duplicates or aliases', () => {
     assert.deepEqual(parseControlArguments(['status', '--entry-id', entryId]), { action: 'status', entryId });
-    assert.deepEqual(parseControlArguments(['restart', '--entry-id', entryId, '--session-id', sessionId]), {
-        action: 'restart',
-        entryId,
-        sessionId,
-    });
+    assert.deepEqual(
+        parseControlArguments([
+            'restart',
+            '--entry-id',
+            entryId,
+            '--connection-id',
+            connectionId,
+            '--session-id',
+            sessionId,
+        ]),
+        {
+            action: 'restart',
+            entryId,
+            connectionId,
+            sessionId,
+        },
+    );
     for (const args of [
         ['status'],
         ['switch', '--entry-id', entryId],
@@ -71,7 +85,15 @@ test('CLI requires explicit entry and session options and disallows duplicates o
 });
 
 test('response validates complete target identity and unknown fields', () => {
-    const result = { entryId, status: 'active', sessionId, port: 9222, processId: 12, targetKind: 'chrome' };
+    const result = {
+        entryId,
+        connectionId,
+        status: 'active',
+        sessionId,
+        port: 9222,
+        processId: 12,
+        targetKind: 'chrome',
+    };
     assert.deepEqual(parseControlResponse({ ok: true, result }), { ok: true, result });
     assert.throws(() => parseControlResponse({ ok: true, result: { ...result, port: 0 } }));
     assert.throws(() => parseControlResponse({ ok: true, result: { ...result, surprise: true } }));
@@ -87,14 +109,14 @@ test('simultaneous IPC entries stay independent and reject wrong entry before di
     const secondId = randomUUID();
     let calls = 0;
     const handler = (id: string): ControlHandler => ({
-        status: () => ({ entryId: id, status: 'idle' }),
+        status: () => ({ entryId: id, connections: [] }),
         start: async () => {
             calls++;
-            return { entryId: id, status: 'idle' };
+            return { entryId: id, connectionId, status: 'idle' };
         },
-        restart: async () => ({ entryId: id, status: 'idle' }),
-        stop: async () => ({ entryId: id, status: 'idle' }),
-        endTask: async () => ({ entryId: id, status: 'idle' }),
+        restart: async () => ({ entryId: id, connectionId, status: 'idle' }),
+        stop: async () => ({ entryId: id, connectionId, status: 'idle' }),
+        endTask: async () => ({ entryId: id, connectionId, status: 'idle' }),
     });
     const first = await createControlServer({ entryId, controller: handler(entryId) });
     const second = await createControlServer({ entryId: secondId, controller: handler(secondId) });
@@ -102,11 +124,11 @@ test('simultaneous IPC entries stay independent and reject wrong entry before di
         assert.notEqual(first.endpoint, second.endpoint);
         assert.deepEqual(await sendControlRequest(first.endpoint, { action: 'status', entryId }), {
             ok: true,
-            result: { entryId, status: 'idle' },
+            result: { entryId, connections: [] },
         });
         assert.deepEqual(await sendControlRequest(second.endpoint, { action: 'status', entryId: secondId }), {
             ok: true,
-            result: { entryId: secondId, status: 'idle' },
+            result: { entryId: secondId, connections: [] },
         });
         const wrong = await sendControlRequest(first.endpoint, {
             action: 'start',
@@ -118,5 +140,43 @@ test('simultaneous IPC entries stay independent and reject wrong entry before di
     } finally {
         await first.close();
         await second.close();
+    }
+});
+
+test('one blocked IPC connection does not block another connection', async () => {
+    let release: () => void = () => {};
+    let entered: () => void = () => {};
+    const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const began = new Promise<void>((resolve) => {
+        entered = resolve;
+    });
+    const handler: ControlHandler = {
+        status: () => ({ entryId, connections: [] }),
+        start: async () => ({ entryId, connectionId, status: 'idle' }),
+        restart: async (request) => {
+            entered();
+            await blocked;
+            return { entryId, connectionId: request.connectionId, status: 'idle' };
+        },
+        stop: async (request) => ({ entryId, connectionId: request.connectionId, status: 'idle' }),
+        endTask: async (request) => ({ entryId, connectionId: request.connectionId, status: 'idle' }),
+    };
+    const control = await createControlServer({ entryId, controller: handler });
+    const first = sendControlRequest(control.endpoint, { action: 'restart', entryId, connectionId, sessionId });
+    try {
+        await began;
+        const second = await Promise.race([
+            sendControlRequest(control.endpoint, { action: 'status', entryId }),
+            new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Second connection was blocked.')), 1000),
+            ),
+        ]);
+        assert.equal(second.ok, true);
+    } finally {
+        release();
+        await first;
+        await control.close();
     }
 });

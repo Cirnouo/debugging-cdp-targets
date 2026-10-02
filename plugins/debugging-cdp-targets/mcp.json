@@ -1,15 +1,9 @@
 {
     "mcpServers": {
-        "cdp-target-1": {
+        "cdp-targets": {
             "type": "stdio",
             "command": "node",
-            "args": ["${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs", "--slot", "1"],
-            "cwd": "${PLUGIN_ROOT}"
-        },
-        "cdp-target-2": {
-            "type": "stdio",
-            "command": "node",
-            "args": ["${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs", "--slot", "2"],
+            "args": ["${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs"],
             "cwd": "${PLUGIN_ROOT}"
         }
     }

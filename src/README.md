@@ -1,7 +1,7 @@
 # Runtime source
 
 - `interface/`: MCP bootstrap and local control CLI composition.
-- `application/`: current-target lifecycle and runtime orchestration.
+- `application/`: independent target lifecycles and connection registry orchestration.
 - `domains/`: pure launch and CDP identity/port rules.
 - `adapters/`: local IPC, CDP transport, official Server, process/OS I/O.
 - `shared/`: cross-layer constants.

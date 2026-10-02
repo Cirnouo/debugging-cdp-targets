@@ -36,6 +36,7 @@ const { applyChromePreset } = await import('../src/adapters/target-host.ts');
 const { buildServerArguments } = await import('../src/adapters/official-server.ts');
 const { createControlServer, sendControlRequest } = await import('../src/adapters/control-ipc.ts');
 const entryId = randomUUID();
+const connectionId = '33333333-3333-4333-8333-333333333333';
 const sessionId = randomUUID();
 const { parseControlArguments } = await import('../src/interface/control-arguments.ts');
 
@@ -367,11 +368,11 @@ test('per-entry IPC rejects a second live controller without replacing the first
     const endpoint =
         process.platform === 'win32' ? `\\\\.\\pipe\\dct-unique-${process.pid}` : `/tmp/dct-unique-${process.pid}.sock`;
     const controller: ControlHandler = {
-        status: () => ({ entryId, status: 'idle' }),
-        start: async () => ({ entryId, status: 'idle' }),
-        restart: async () => ({ entryId, status: 'idle' }),
-        endTask: async () => ({ entryId, status: 'idle' }),
-        stop: async () => ({ entryId, status: 'idle' }),
+        status: () => ({ entryId, connections: [] }),
+        start: async () => ({ entryId, connectionId, status: 'idle' }),
+        restart: async () => ({ entryId, connectionId, status: 'idle' }),
+        endTask: async () => ({ entryId, connectionId, status: 'idle' }),
+        stop: async () => ({ entryId, connectionId, status: 'idle' }),
     };
     const first = await createControlServer({ controller, entryId, endpoint });
     context.after(() => first.close());
@@ -408,21 +409,30 @@ test('official server switches require explicit boolean environment overrides', 
 test('local control IPC dispatches management commands without writing a session file', async (context) => {
     const received: LaunchOptions[] = [];
     const controller: ControlHandler = {
-        status: () => ({ entryId, status: 'idle' }),
+        status: () => ({ entryId, connections: [] }),
         start: async (options) => {
             received.push(options);
-            return { entryId, sessionId, status: 'active', port: 9222, processId: 42, targetKind: 'generic-cdp' };
+            return {
+                entryId,
+                connectionId,
+                sessionId,
+                status: 'active',
+                port: 9222,
+                processId: 42,
+                targetKind: 'generic-cdp',
+            };
         },
         restart: async () => ({
             entryId,
+            connectionId,
             sessionId,
             status: 'active',
             port: 9223,
             processId: 43,
             targetKind: 'generic-cdp',
         }),
-        endTask: async () => ({ entryId, status: 'idle' }),
-        stop: async () => ({ entryId, status: 'idle' }),
+        endTask: async () => ({ entryId, connectionId, status: 'idle' }),
+        stop: async () => ({ entryId, connectionId, status: 'idle' }),
     };
     const endpoint =
         process.platform === 'win32'
@@ -432,11 +442,19 @@ test('local control IPC dispatches management commands without writing a session
     context.after(() => server.close());
     assert.deepEqual(await sendControlRequest(endpoint, { action: 'status', entryId }), {
         ok: true,
-        result: { entryId, status: 'idle' },
+        result: { entryId, connections: [] },
     });
     assert.deepEqual(await sendControlRequest(endpoint, { action: 'start', entryId, launchCommand: 'chrome' }), {
         ok: true,
-        result: { entryId, sessionId, status: 'active', port: 9222, processId: 42, targetKind: 'generic-cdp' },
+        result: {
+            entryId,
+            connectionId,
+            sessionId,
+            status: 'active',
+            port: 9222,
+            processId: 42,
+            targetKind: 'generic-cdp',
+        },
     });
     assert.deepEqual(received, [{ launchCommand: 'chrome' }]);
     assert.equal((await sendControlRequest(endpoint, { action: 'resume', entryId })).ok, false);
@@ -461,10 +479,21 @@ test('public control parser requires entry identity and explicit session disposi
         },
     );
     assert.deepEqual(
-        parseControlArguments(['stop', '--entry-id', entryId, '--session-id', sessionId, '--disposition', 'Keep']),
+        parseControlArguments([
+            'stop',
+            '--entry-id',
+            entryId,
+            '--connection-id',
+            connectionId,
+            '--session-id',
+            sessionId,
+            '--disposition',
+            'Keep',
+        ]),
         {
             action: 'stop',
             entryId,
+            connectionId,
             sessionId,
             disposition: 'Keep',
         },

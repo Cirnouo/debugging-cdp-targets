@@ -10,8 +10,10 @@
 - `0006-native-typescript.md`: native erasable TypeScript, independent strict
   typechecking, direct AST auditing and dependency-free JavaScript delivery.
 
-- `0007-reusable-stdio-entries.md`: current independent reusable SDK gateways,
+- `0007-reusable-stdio-entries.md`: historical two-entry reusable SDK gateways,
   identity checks, lifecycle dispositions, and explicit manual-close recovery.
+- `0008-independent-target-connections.md`: one gateway, independent per-target
+  MCP connections without a fixed limit, explicit routing, and parallel isolation.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

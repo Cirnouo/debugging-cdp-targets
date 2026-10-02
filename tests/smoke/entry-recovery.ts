@@ -8,62 +8,97 @@ import { promisify } from 'node:util';
 import { controlEndpoint, sendControlRequest } from '../../src/adapters/control-ipc.ts';
 import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
-import { parseControlResponse, type TargetStatus } from '../../src/domains/control-contract.ts';
+import { type ConnectionStatus, type ControlResult, parseControlResponse } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
-if (process.platform !== 'win32') throw new Error('The real entry recovery smoke is Windows-only.');
+if (process.platform !== 'win32') throw new Error('The real connection recovery smoke is Windows-only.');
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-'));
 const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const execute = promisify(execFile);
 const platform = createPlatformAdapter();
-const forms: { client: number; receivedAt: number; choice: string }[] = [];
+const forms: { message: string; receivedAt: number; choice: string }[] = [];
 const owned: ProcessTarget[] = [];
-const clients = Array.from({ length: 4 }, (_, index) =>
-    createClient(
-        path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
-        {},
-        async (method, params) => {
-            assert.equal(method, 'elicitation/create');
-            assert.equal(params.mode, 'form');
-            assert.ok(isRecord(params.requestedSchema));
-            const choice = index === 0 ? 'restart' : 'cancel';
-            forms.push({ client: index, receivedAt: Date.now(), choice });
-            return { action: 'accept', content: { action: choice } };
-        },
-    ),
+let recoveryConnection: string | undefined;
+let entryId = '';
+const client = createClient(
+    path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
+    {},
+    async (method, params) => {
+        assert.equal(method, 'elicitation/create');
+        assert.equal(params.mode, 'form');
+        assert.ok(isRecord(params.requestedSchema));
+        assert.equal(typeof params.message, 'string');
+        const message = String(params.message);
+        const choice = recoveryConnection && message.includes(recoveryConnection) ? 'restart' : 'cancel';
+        forms.push({ message, receivedAt: Date.now(), choice });
+        return { action: 'accept', content: { action: choice } };
+    },
 );
-async function tool(index: number, name: string) {
-    const client = clients[index];
-    assert.ok(client);
-    const result = await client.request('tools/call', { name, arguments: {} });
+async function tool(name: string, arguments_: Record<string, unknown> = {}) {
+    const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
     return result;
 }
-async function status(entryId: string): Promise<TargetStatus> {
-    const response = await sendControlRequest(controlEndpoint(entryId), { action: 'status', entryId });
+async function status(connectionId?: string): Promise<ControlResult> {
+    const response = await sendControlRequest(controlEndpoint(entryId), {
+        action: 'status',
+        entryId,
+        ...(connectionId ? { connectionId } : {}),
+    });
     assert.ok(response.ok, JSON.stringify(response));
     return response.result;
 }
-async function cli(action: string, entryId: string, options: string[] = []): Promise<TargetStatus> {
-    const { stdout } = await execute(
-        process.execPath,
-        [path.join(root, 'src/interface/control.ts'), action, '--entry-id', entryId, ...options],
-        { windowsHide: true, shell: false, timeout: 60_000 },
-    );
-    const response = parseControlResponse(JSON.parse(stdout));
-    assert.ok(response.ok, JSON.stringify(response));
-    return response.result;
+async function selectedStatus(connectionId: string): Promise<ConnectionStatus> {
+    const result = await status(connectionId);
+    assert.ok(!('connections' in result));
+    return result;
+}
+async function cli(action: string, options: string[] = []): Promise<ConnectionStatus> {
+    for (let attempt = 0; ; attempt += 1) {
+        try {
+            const { stdout } = await execute(
+                process.execPath,
+                [path.join(root, 'src/interface/control.ts'), action, '--entry-id', entryId, ...options],
+                { windowsHide: true, shell: false, timeout: 60_000 },
+            );
+            const response = parseControlResponse(JSON.parse(stdout));
+            assert.ok(response.ok, JSON.stringify(response));
+            assert.ok(!('connections' in response.result));
+            return response.result;
+        } catch (error) {
+            if (
+                action !== 'stop' ||
+                !options.includes('Close') ||
+                attempt >= 2 ||
+                !isRecord(error) ||
+                typeof error.stdout !== 'string'
+            )
+                throw error;
+            const response = parseControlResponse(JSON.parse(error.stdout));
+            if (response.ok || !/did not close normally/.test(response.error)) throw error;
+            console.log(JSON.stringify({ normalCloseRetry: attempt + 1, at: Date.now(), retained: response.details }));
+            await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+    }
+}
+function identities(target: ConnectionStatus) {
+    assert.ok(target.sessionId);
+    return ['--connection-id', target.connectionId, '--session-id', target.sessionId];
+}
+function route(target: ConnectionStatus) {
+    assert.ok(target.sessionId);
+    return { connectionId: target.connectionId, sessionId: target.sessionId };
 }
 async function until(predicate: () => Promise<boolean>, timeout = 15_000) {
     const deadline = Date.now() + timeout;
     while (!(await predicate())) {
-        if (Date.now() >= deadline) throw new Error('Expected entry state was not reached.');
+        if (Date.now() >= deadline) throw new Error('Expected connection state was not reached.');
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
 }
-async function recordOwned(target: TargetStatus): Promise<ProcessTarget> {
+async function recordOwned(target: ConnectionStatus): Promise<ProcessTarget> {
     assert.ok(target.processId && target.port && target.targetKind);
     const evidence = await platform.snapshot(target.processId, target.port);
     assert.ok(evidence.root.exists);
@@ -78,106 +113,124 @@ async function recordOwned(target: TargetStatus): Promise<ProcessTarget> {
     owned.push(fixture);
     return fixture;
 }
+async function closeFixture(target: ConnectionStatus) {
+    assert.ok(target.processId && target.port);
+    const fixture = owned.find((item) => item.processId === target.processId && item.port === target.port);
+    assert.ok(fixture);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (await platform.close(fixture, { requireListener: attempt === 0 })) return true;
+        console.log(
+            JSON.stringify({ fixtureNormalCloseRetry: attempt + 1, at: Date.now(), processId: target.processId }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return false;
+}
 function launch(index: number) {
-    return `"${chrome}" --disable-background-mode --user-data-dir="${path.join(folder, `profile-${index}`)}" --remote-debugging-port={port} "data:text/html,<title>ENTRY-${index}</title>"`;
+    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, `profile-${index}`)}" --remote-debugging-port={port} "data:text/html,<title>CONNECTION-${index}</title>"`;
 }
-async function pages(index: number) {
-    const result = await tool(index, 'list_pages');
+async function start(index: number) {
+    const target = await cli('start', [
+        '--target-kind',
+        'chrome',
+        '--base-port',
+        String(19422 + index * 10),
+        '--launch-command',
+        launch(index),
+    ]);
+    assert.equal(target.status, 'active');
+    return target;
+}
+async function pages(target: ConnectionStatus, index: number) {
+    const result = await tool('list_pages', { _dct: route(target) });
     assert.notEqual(result.isError, true);
-    assert.match(JSON.stringify(result), new RegExp(`ENTRY-${index}`));
+    assert.match(JSON.stringify(result), new RegExp(`CONNECTION-${index}`));
 }
-let ids: string[] = [];
+async function rejectsRoute(target: ConnectionStatus) {
+    await assert.rejects(() => tool('list_pages', { _dct: route(target) }), /unknown|stale|closed|session|connection/i);
+}
 let closeStarted = 0;
 let closeCompleted = 0;
 try {
-    const statuses = await Promise.all(
-        clients.map(async (client, index) => {
-            await client.request('initialize', {
-                protocolVersion: '2025-11-25',
-                capabilities: { elicitation: { form: {} } },
-                clientInfo: { name: `entry-recovery-${index}`, version: '0.1.0' },
-            });
-            client.notify('notifications/initialized');
-            const catalog = readMcpTools(await client.request('tools/list'));
-            assert.ok(catalog.some((item) => item.name === 'list_pages'));
-            const result = await tool(index, 'dct_connection_status');
-            const parsed = parseControlResponse({ ok: true, result: result.structuredContent });
-            assert.ok(parsed.ok);
-            assert.equal(parsed.result.status, 'idle');
-            return parsed.result;
-        }),
-    );
-    ids = statuses.map((item) => item.entryId);
-    assert.equal(new Set(ids).size, 4);
-    console.log('Four independent entries initialized.');
-    const firstId = ids[0];
-    const secondId = ids[1];
-    assert.ok(firstId && secondId);
-    const [first, second] = await Promise.all(
-        [0, 1].map(async (index) => {
-            const id = ids[index];
-            assert.ok(id);
-            return cli('start', id, [
-                '--target-kind',
-                'chrome',
-                '--base-port',
-                String(19422 + index * 10),
-                '--launch-command',
-                launch(index),
-            ]);
-        }),
-    );
-    assert.ok(first && second && first.sessionId && second.sessionId);
-    const [firstFixture, secondFixture] = await Promise.all([recordOwned(first), recordOwned(second)]);
-    console.log('Two isolated targets started.');
-    await Promise.all([pages(0), pages(1)]);
-    console.log('Both official page tools passed.');
-    await cli('stop', firstId, ['--session-id', first.sessionId, '--disposition', 'Keep']);
-    await Promise.all([pages(0), pages(1)]);
-    const watch = tool(0, 'dct_watch_target');
-    await until(async () => (await status(firstId)).taskActive === true);
-    console.log('Active watcher confirmed.');
+    await client.request('initialize', {
+        protocolVersion: '2025-11-25',
+        capabilities: { elicitation: { form: {} } },
+        clientInfo: { name: 'parallel-connection-recovery', version: '0.1.0' },
+    });
+    client.notify('notifications/initialized');
+    const catalog = readMcpTools(await client.request('tools/list'));
+    assert.ok(catalog.some((item) => item.name === 'list_pages'));
+    const gateway = await tool('dct_connection_status');
+    const initial = parseControlResponse({ ok: true, result: gateway.structuredContent });
+    assert.ok(initial.ok && 'connections' in initial.result);
+    assert.deepEqual(initial.result.connections, []);
+    entryId = initial.result.entryId;
+    const [first, second, third] = await Promise.all([0, 1, 2].map(start));
+    assert.ok(first && second && third);
+    assert.equal(new Set([first.connectionId, second.connectionId, third.connectionId]).size, 3);
+    await Promise.all([first, second, third].map(recordOwned));
+    const aggregate = await status();
+    assert.ok('connections' in aggregate && aggregate.connections.length === 3);
+    await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
+    console.log('Three independent real targets passed concurrent official page calls in one gateway.');
+    await cli('end-task', identities(first));
+    await cli('stop', [...identities(first), '--disposition', 'Keep']);
+    await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
+    await cli('stop', [...identities(second), '--disposition', 'Close']);
+    await rejectsRoute(second);
+    await Promise.all([pages(first, 0), pages(third, 2)]);
+    const fourth = await start(3);
+    assert.notEqual(fourth.connectionId, second.connectionId);
+    await recordOwned(fourth);
+    await Promise.all([pages(first, 0), pages(third, 2), pages(fourth, 3)]);
+    console.log('Keep/reuse, scoped Close and later new connection passed.');
+    recoveryConnection = first.connectionId;
+    const watch = tool('dct_watch_target', route(first));
+    await until(async () => (await selectedStatus(first.connectionId)).taskActive === true);
     closeStarted = Date.now();
-    assert.equal(await platform.close(firstFixture), true);
+    const [normallyClosed] = await Promise.all([closeFixture(first), pages(third, 2), pages(fourth, 3)]);
+    assert.equal(normallyClosed, true);
     closeCompleted = Date.now();
     const watched = await watch;
-    console.log('Active target loss answered.');
     assert.ok(isRecord(watched.structuredContent));
     assert.equal(watched.structuredContent.choice, 'restart');
-    const firstForm = forms.find((item) => item.client === 0);
+    assert.equal(watched.structuredContent.connectionId, first.connectionId);
+    const firstForm = forms.find((item) => item.message.includes(first.connectionId));
     assert.ok(firstForm);
     assert.ok(
         firstForm.receivedAt - closeCompleted <= 5_000,
         'Protocol form arrived more than five seconds after verified normal closure completed.',
     );
-    assert.equal((await status(firstId)).status, 'lost');
-    // The test agent explicitly acts on the returned choice; the gateway does not replay work.
-    const restarted = await cli('restart', firstId, ['--session-id', first.sessionId]);
+    assert.equal((await selectedStatus(first.connectionId)).status, 'lost');
+    const restarted = await cli('restart', identities(first));
+    assert.equal(restarted.connectionId, first.connectionId);
     assert.equal(restarted.port, first.port);
     assert.notEqual(restarted.processId, first.processId);
     assert.notEqual(restarted.sessionId, first.sessionId);
     assert.equal(restarted.pageIdsInvalidated, true);
     await recordOwned(restarted);
-    await pages(0);
-    console.log('Explicit exact-port restart passed.');
-    const secondFormsBefore = forms.filter((item) => item.client === 1).length;
-    assert.equal(await platform.close(secondFixture), true);
-    await until(async () => (await status(secondId)).status === 'lost');
+    await rejectsRoute(first);
+    await Promise.all([pages(restarted, 0), pages(third, 2), pages(fourth, 3)]);
+    console.log('Explicit same-port recovery replaced session and rejected old route while peers remained usable.');
+    const idleFormsBefore = forms.length;
+    assert.equal(await closeFixture(fourth), true);
+    await until(async () => (await selectedStatus(fourth.connectionId)).status === 'lost');
     await new Promise((resolve) => setTimeout(resolve, 1_200));
-    assert.equal(forms.filter((item) => item.client === 1).length, secondFormsBefore);
-    const idleUse = await tool(1, 'list_pages');
+    assert.equal(forms.length, idleFormsBefore);
+    const idleUse = await tool('list_pages', { _dct: route(fourth) });
     assert.equal(idleUse.isError, true);
     assert.ok(isRecord(idleUse.structuredContent));
     assert.equal(idleUse.structuredContent.choice, 'cancel');
-    assert.equal(forms.filter((item) => item.client === 1).length, secondFormsBefore + 1);
-    await cli('stop', secondId, ['--session-id', second.sessionId, '--disposition', 'Close']);
-    assert.equal((await status(secondId)).status, 'idle');
-    await pages(0);
-    console.log('Idle loss and scoped cancellation passed.');
+    assert.equal(forms.length, idleFormsBefore + 1);
+    await cli('stop', [...identities(fourth), '--disposition', 'Close']);
+    await Promise.all([pages(restarted, 0), pages(third, 2)]);
+    const remaining = await status();
+    assert.ok('connections' in remaining && remaining.connections.length === 2);
     console.log(
         JSON.stringify({
             passed: true,
-            entries: ids,
+            entryId,
+            connectionIds: [first.connectionId, second.connectionId, third.connectionId, fourth.connectionId],
             protocolFormTiming: {
                 closeStarted,
                 closeCompleted,
@@ -190,11 +243,10 @@ try {
         }),
     );
 } catch (error) {
-    console.error('Recovery smoke primary failure:', error);
+    console.error('Connection smoke primary failure:', error);
     throw error;
 } finally {
-    // EOF asks each gateway to close its own upstream and fixture target normally.
-    const closed = await Promise.allSettled(clients.map((client) => client.close()));
+    const closed = await Promise.allSettled([client.close()]);
     for (const fixture of owned) {
         const evidence = await platform.snapshot(fixture.processId, fixture.port);
         if (evidence.root.exists) {
@@ -207,14 +259,6 @@ try {
         closed.every((result) => result.status === 'fulfilled'),
         'Gateway EOF cleanup failed.',
     );
-    assert.ok(
-        clients.every((client) => client.child.exitCode === 0),
-        'Gateway did not exit normally.',
-    );
-    console.log(
-        JSON.stringify({
-            gatewayExitCodes: clients.map((client) => client.child.exitCode),
-            profilesRetainedAt: folder,
-        }),
-    );
+    assert.equal(client.child.exitCode, 0, 'Gateway did not exit normally.');
+    console.log(JSON.stringify({ gatewayExitCode: client.child.exitCode, profilesRetainedAt: folder }));
 }

@@ -34,8 +34,9 @@ function parseControlRequest(value) {
   const entryId = value.entryId;
   const action = value.action;
   if (action === "status") {
-    fields(value, ["action", "entryId"]);
-    return { action, entryId };
+    fields(value, ["action", "entryId", "connectionId"]);
+    if (value.connectionId !== void 0) validateIdentity(value.connectionId, "connection ID");
+    return { action, entryId, ...value.connectionId === void 0 ? {} : { connectionId: value.connectionId } };
   }
   if (action === "start") {
     fields(value, ["action", "entryId", "launchCommand", "targetKind", "basePort"]);
@@ -53,13 +54,20 @@ function parseControlRequest(value) {
     };
   }
   if (action !== "restart" && action !== "stop" && action !== "end-task") throw new Error("Unknown control action.");
-  fields(value, ["action", "entryId", "sessionId", ...action === "stop" ? ["disposition"] : []]);
+  fields(value, ["action", "entryId", "connectionId", "sessionId", ...action === "stop" ? ["disposition"] : []]);
+  validateIdentity(value.connectionId, "connection ID");
   validateIdentity(value.sessionId, "session ID");
   if (action === "stop") {
     if (value.disposition !== "Close" && value.disposition !== "Keep") throw new Error("Choose Close or Keep.");
-    return { action, entryId, sessionId: value.sessionId, disposition: value.disposition };
+    return {
+      action,
+      entryId,
+      connectionId: value.connectionId,
+      sessionId: value.sessionId,
+      disposition: value.disposition
+    };
   }
-  return { action, entryId, sessionId: value.sessionId };
+  return { action, entryId, connectionId: value.connectionId, sessionId: value.sessionId };
 }
 function parseControlResponse(value) {
   if (!isRecord(value)) throw new Error("Invalid control response.");
@@ -71,8 +79,23 @@ function parseControlResponse(value) {
   fields(value, ["ok", "result"]);
   const result = value.result;
   if (value.ok !== true || !isRecord(result)) throw new Error("Invalid control result.");
+  if ("connections" in result) {
+    fields(result, ["entryId", "connections"]);
+    validateIdentity(result.entryId, "entry ID");
+    if (!Array.isArray(result.connections)) throw new Error("Invalid connection list.");
+    const connections = result.connections.map((connection) => {
+      const parsed = parseControlResponse({ ok: true, result: connection });
+      if (!parsed.ok || !("connectionId" in parsed.result) || parsed.result.entryId !== result.entryId)
+        throw new Error("Invalid connection identity.");
+      return parsed.result;
+    });
+    if (new Set(connections.map((connection) => connection.connectionId)).size !== connections.length)
+      throw new Error("Duplicate connection identity.");
+    return { ok: true, result: { entryId: result.entryId, connections } };
+  }
   fields(result, [
     "entryId",
+    "connectionId",
     "status",
     "sessionId",
     "port",
@@ -84,6 +107,7 @@ function parseControlResponse(value) {
     "pageIdsInvalidated"
   ]);
   validateIdentity(result.entryId, "entry ID");
+  validateIdentity(result.connectionId, "connection ID");
   if (!["idle", "active", "lost", "closing", "close-failed"].includes(String(result.status)))
     throw new Error("Invalid target status.");
   if (result.status !== "idle" || result.sessionId !== void 0) validateIdentity(result.sessionId, "session ID");
@@ -152,6 +176,7 @@ function parseControlArguments(arguments_) {
     args: rest,
     options: {
       "entry-id": { type: "string" },
+      "connection-id": { type: "string" },
       "session-id": { type: "string" },
       "launch-command": { type: "string" },
       "target-kind": { type: "string" },
@@ -167,6 +192,7 @@ function parseControlArguments(arguments_) {
   const request = { action };
   const mapping = {
     "entry-id": "entryId",
+    "connection-id": "connectionId",
     "session-id": "sessionId",
     "launch-command": "launchCommand",
     "target-kind": "targetKind",

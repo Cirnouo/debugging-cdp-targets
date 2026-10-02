@@ -19,21 +19,17 @@ export function compareDistributionTrees(source: Map<string, Buffer>, installed:
 export function validateMcpEntries(mcp: unknown) {
     if (!isRecord(mcp) || !isRecord(mcp.mcpServers)) return ['Malformed MCP entries.'];
     const servers = mcp.mcpServers;
-    if (Object.keys(servers).length !== 2) return ['Plugin requires exactly two reusable stdio entries.'];
-    const errors = [];
-    for (const slot of ['1', '2']) {
-        const server = servers[`cdp-target-${slot}`];
-        if (
-            !isRecord(server) ||
-            server.type !== 'stdio' ||
-            server.command !== 'node' ||
-            JSON.stringify(server.args) !==
-                JSON.stringify([`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`, '--slot', slot]) ||
-            server.cwd !== `\${PLUGIN_ROOT}`
-        )
-            errors.push(`Invalid reusable stdio entry: cdp-target-${slot}.`);
-    }
-    return errors;
+    if (Object.keys(servers).length !== 1) return ['Plugin requires exactly one stdio gateway entry.'];
+    const server = servers['cdp-targets'];
+    if (
+        !isRecord(server) ||
+        server.type !== 'stdio' ||
+        server.command !== 'node' ||
+        JSON.stringify(server.args) !== JSON.stringify([`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`]) ||
+        server.cwd !== `\${PLUGIN_ROOT}`
+    )
+        return ['Invalid stdio gateway entry: cdp-targets.'];
+    return [];
 }
 
 export async function readDistributionTree(directory: string, prefix = ''): Promise<Map<string, Buffer>> {

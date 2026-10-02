@@ -3,18 +3,25 @@ import { test } from 'node:test';
 import { compareDistributionTrees, validateMcpEntries } from '../tooling/distribution-audit.ts';
 import { REQUIRED_PAYLOAD_FILES, validatePayloadFileInventory } from '../tooling/payload-policy.ts';
 
-test('MCP manifest requires two reusable independently slotted stdio entries', () => {
-    const entry = (slot: string) => ({
+test('MCP manifest requires one gateway entry without slots or connection limits', () => {
+    const entry = {
         type: 'stdio',
         command: 'node',
-        args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`, '--slot', slot],
+        args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`],
         cwd: `\${PLUGIN_ROOT}`,
-    });
-    const valid = { mcpServers: { 'cdp-target-1': entry('1'), 'cdp-target-2': entry('2') } };
+    };
+    const valid = { mcpServers: { 'cdp-targets': entry } };
     assert.deepEqual(validateMcpEntries(valid), []);
-    assert.ok(validateMcpEntries({ mcpServers: { 'chrome-devtools': entry('1') } }).length);
-    assert.ok(validateMcpEntries({ mcpServers: { 'cdp-target-1': entry('1'), 'cdp-target-2': entry('1') } }).length);
-    assert.ok(validateMcpEntries({ mcpServers: { ...valid.mcpServers, extra: entry('3') } }).length);
+    assert.ok(validateMcpEntries({ mcpServers: { 'chrome-devtools': entry } }).length);
+    assert.ok(validateMcpEntries({ mcpServers: { 'cdp-target-1': entry, 'cdp-target-2': entry } }).length);
+    assert.ok(validateMcpEntries({ mcpServers: { ...valid.mcpServers, extra: entry } }).length);
+    for (const invalid of [
+        { ...entry, args: [...entry.args, '--slot', '1'] },
+        { ...entry, args: [...entry.args, '--max-connections', '2'] },
+        { ...entry, command: 'npx' },
+        { ...entry, type: 'http' },
+    ])
+        assert.ok(validateMcpEntries({ mcpServers: { 'cdp-targets': invalid } }).length);
 });
 
 test('Plugin inventory accepts only explicit runtime and instruction files', () => {

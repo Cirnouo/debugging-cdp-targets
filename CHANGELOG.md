@@ -12,9 +12,11 @@ Version 0.1.0 remains under development; no release has been published.
   application-agnostic debugging instructions.
 - Tag-triggered GitHub source releases with Changelog-based notes, new
   contributor attribution, and required security and cross-platform CI gates.
-- Two reusable independent stdio entries that relay official chrome-devtools-mcp
-  1.9.0 tool catalogs and results through the official MCP SDK.
-- Entry/session-addressed status, start, restart, stop, and end-task commands,
+- One reusable stdio gateway that creates independent official chrome-devtools-mcp
+  1.9.0 connections for new targets, without a fixed connection limit.
+- Parallel official tool calls with explicit connection/session routing and
+  independent progress, cancellation, monitoring and recovery prompts.
+- Entry/connection/session-addressed status, start, restart, stop, and end-task commands,
   explicit Close/Keep choices, and reusable host connections after normal Close.
 - Lifecycle status and active-task watch tools with explicit same-port recovery
   after accidental closure and fresh page identities after recovery.
