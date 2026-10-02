@@ -39361,7 +39361,8 @@ function applyChromePreset(arguments_) {
     result.push(`--user-data-dir=${path5.join(home, ".cache", "chrome-devtools-mcp", "chrome-profile")}`);
   }
   if (!addresses.length) result.push("--remote-debugging-address=127.0.0.1");
-  for (const flag of ["--no-first-run", "--no-default-browser-check"]) if (!result.includes(flag)) result.push(flag);
+  for (const flag of ["--no-first-run", "--no-default-browser-check", "--disable-updater-scheduler"])
+    if (!result.includes(flag)) result.push(flag);
   return result;
 }
 function createTargetHost(dependencies = {}) {

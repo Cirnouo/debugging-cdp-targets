@@ -8,6 +8,7 @@ import { applyChromePreset, createTargetHost } from '../src/adapters/target-host
 function fixture(available = true) {
     const children: EventEmitter[] = [];
     const inspected: string[] = [];
+    const launchedArguments: string[][] = [];
     const host = createTargetHost({
         profileAvailable: async (directory) => {
             inspected.push(directory);
@@ -29,7 +30,8 @@ function fixture(available = true) {
                 listeners: [{ localAddress: '127.0.0.1', owningProcess: pid }],
             }),
         },
-        spawn: async () => {
+        spawn: async (_executable, arguments_) => {
+            launchedArguments.push([...arguments_]);
             const child = Object.assign(new EventEmitter(), { pid: 40 + children.length, exitCode: null });
             children.push(child);
             return child;
@@ -50,6 +52,7 @@ function fixture(available = true) {
         launch,
         children,
         inspected,
+        launchedArguments,
         finish: () => {
             for (const child of children) child.emit('exit');
         },
@@ -68,6 +71,34 @@ test('Chrome defaults to stable chrome-profile and preserves an explicit separat
     assert.deepEqual(applyChromePreset(args).slice(0, 2), args);
     for (const invalid of [['--user-data-dir'], ['--user-data-dir='], ['--user-data-dir=a', '--user-data-dir=b']])
         assert.throws(() => applyChromePreset(invalid), /profile|user-data-dir/i);
+});
+
+test('Chrome launch disables updater scheduling and preserves the switch during exact recovery', async () => {
+    const f = fixture();
+    const directory = path.join(os.tmpdir(), 'dct-updater-preset-fixture');
+    try {
+        const target = await f.launch(directory);
+        assert.equal(f.launchedArguments[0]?.filter((value) => value === '--disable-updater-scheduler').length, 1);
+        assert.ok(target.launchDefinition);
+        assert.equal(await f.host.close(target), true);
+        await f.host.launch({
+            targetKind: 'chrome',
+            launchCommand: '',
+            exactPort: target.port,
+            launchDefinition: target.launchDefinition,
+        });
+        assert.deepEqual(f.launchedArguments[1], f.launchedArguments[0]);
+    } finally {
+        f.finish();
+    }
+});
+
+test('Chrome preset preserves an explicit updater scheduler switch without mutating caller arguments', () => {
+    const arguments_ = ['--user-data-dir', 'chosen profile', '--disable-updater-scheduler'];
+    const result = applyChromePreset(arguments_);
+    assert.equal(result.filter((value) => value === '--disable-updater-scheduler').length, 1);
+    assert.deepEqual(arguments_, ['--user-data-dir', 'chosen profile', '--disable-updater-scheduler']);
+    assert.deepEqual(applyChromePreset(result), result);
 });
 
 test('occupied profile is rejected before spawn, without substituting a temporary directory', async () => {

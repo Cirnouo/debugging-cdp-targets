@@ -25,7 +25,8 @@ Version 0.1.0 remains under development; no release has been published.
   recovery with fresh page identities.
 - Shell-free launch-command templates with environment expansion and selection
   of a free, non-reserved debugging port.
-- Chrome presets for a fixed dedicated browser profile and extension debugging, with
+- Chrome presets for a fixed dedicated browser profile, disabled automatic updater
+  scheduling, and extension debugging, with
   usage statistics and CrUX disabled by default and explicit overrides.
 - Verified Windows Chrome operation; Linux/macOS simulated CDP coverage, without
   a claim of verified real-application compatibility on those platforms.

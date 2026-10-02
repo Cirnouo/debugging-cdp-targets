@@ -199,6 +199,13 @@ Port selection starts at 9222 by default. Use `--base-port <port>` with `start`
 to choose another starting point. Occupied, privileged, and
 OS-excluded ports are skipped.
 
+With `--target-kind chrome`, the recommended launch preset adds
+`--no-first-run`, `--no-default-browser-check` and `--disable-updater-scheduler`.
+The updater switch suppresses automatic updater startup in the debugging process,
+which can otherwise delay normal shutdown. It applies to that launched process
+and does not change the installed updater service's configuration. Explicitly
+supplied preset switches are not appended again during launch or recovery.
+
 ### Chrome profiles
 
 With `--target-kind chrome`, Chrome uses the dedicated profile listed under

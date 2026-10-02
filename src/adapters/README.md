@@ -8,7 +8,9 @@
 - `mcp-bridge.ts` connects the official Server through the public SDK Client.
 - `mcp-entry-server.ts` exposes the SDK gateway and lifecycle tools on stdio.
 - `hide-npm-console.ts` scopes hidden console spawning to npx acquisition.
-- `target-host.ts` launches and verifies a newly created target.
+- `target-host.ts` launches and verifies a newly created target. Its Chrome preset
+  adds `--disable-updater-scheduler` to suppress automatic updater startup in
+  the debugging process and preserves explicit switches during recovery.
 - `chrome-profile.ts` checks native profile locks and reserves canonical directories.
 - `platform-process.ts` obtains OS identity/reservations and normal shutdown.
 - `windows-cdp-helper.ps1` supplies Windows API evidence and window close.

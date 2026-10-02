@@ -112,7 +112,7 @@ async function closeFixture(target: ConnectionStatus) {
     return false;
 }
 function launch(index: number) {
-    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --disable-updater-scheduler --user-data-dir="${path.join(folder, `profile-${index}`)}" --remote-debugging-port={port} "data:text/html,<title>CONNECTION-${index}</title>"`;
+    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, `profile-${index}`)}" --remote-debugging-port={port} "data:text/html,<title>CONNECTION-${index}</title>"`;
 }
 async function start(index: number) {
     const target = await cli('start', [
