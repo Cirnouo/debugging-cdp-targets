@@ -1,7 +1,8 @@
 # ADR 0007: Reusable independent stdio entries
 
-Status: Accepted; superseded by ADR 0008 for the two-entry topology and routing
-contract. Supersedes the direct inherited stdio and single OS-user entry
+Status: partially superseded by ADR 0008 for the two-entry topology and routing
+contract, and ADR 0009 for loss monitoring and reminder delivery.
+Supersedes the direct inherited stdio and single OS-user entry
 parts of ADR 0005, and the corresponding stdio statement in ADR 0006.
 
 Two static configurations, cdp-target-1 and cdp-target-2, use the same bundled

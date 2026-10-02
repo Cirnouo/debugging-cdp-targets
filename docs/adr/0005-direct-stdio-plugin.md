@@ -1,7 +1,9 @@
 # 0005 — Direct official MCP in a Codex Plugin
 
-Status: accepted. Supersedes the distribution, daemon, persisted-state, and
-application-specific parts of ADRs 0001–0004.
+Status: partially superseded by ADR 0007 for stdio ownership and gateway topology,
+ADR 0008 for per-target connections, and ADR 0009 for Hook packaging.
+Supersedes the distribution, daemon, persisted-state, and application-specific
+parts of ADRs 0001–0004.
 
 ## Context
 

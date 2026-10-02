@@ -35,7 +35,7 @@
 - `entry-lifecycle.test.ts` checks entry Keep/Close and independent lifecycle.
 - `entry-runtime.test.ts` checks gateway identity, independent connections and upstream lifetime.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
-  output validation, legacy stdio ID-zero cancellation and lifecycle tools.
+  output validation, legacy stdio ID-zero cancellation and gateway status.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks manual closure and explicit same-port recovery.
 - `target-events.test.ts` checks silent exit monitoring, task resumption, Hook

@@ -32,7 +32,7 @@ Observe the gateway-launched child's exit event from startup and retain exit
 state to close subscription gaps. Revoke listeners and verify current identities
 before applying callbacks. Task activity is independent of process lifetime;
 start/restart and official reuse activate it, Keep/end-task end it. No background
-process scan, watch lease, automatic restart or tool replay is permitted. Keep
+process scan, automatic restart or tool replay is permitted. Keep
 bounded startup readiness and pre-tool process/listener/endpoint verification.
 
 Active unexpected exit gates forwarding, retains exact launch identity and

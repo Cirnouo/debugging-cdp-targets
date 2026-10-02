@@ -16,8 +16,8 @@ to existing applications. All identities and launch settings stay in memory.
 
 Resolve the Plugin root two parents above this file's containing directory.
 Run `node <plugin-root>/dist/control.mjs <action>`. Actions are status, start,
-restart, stop and end-task; there is no switch action. Every command requires
---entry-id. Status optionally accepts --connection-id and prohibits --session-id.
+restart, stop and end-task. Every command requires --entry-id.
+Status optionally accepts --connection-id and prohibits --session-id.
 Start creates a new connection and prohibits connection/session identity.
 Restart/end-task/stop require --connection-id and --session-id in addition to
 entry identity. Only stop accepts --disposition. Obtain IDs from status/results,
@@ -31,9 +31,10 @@ Commands parse argv without a shell. `{port}` selects an available non-reserved
 port; missing Chromium port options are appended. Chrome uses a dedicated
 fixed profile at <user-home>/.cache/chrome-devtools-mcp/chrome-profile unless
 --user-data-dir overrides it. Occupied or unverifiable directories fail before
-launch; explicitly choose another directory instead of a temporary fallback. Generic targets must explicitly
-support command-line debugging and browser-level CDP; a framework name alone
-does not establish compatibility. Never reuse a profile locked by another target.
+launch; explicitly choose another available dedicated directory.
+Use --target-kind generic-cdp only for applications explicitly supporting
+command-line debugging and browser-level CDP; a framework name alone does not
+establish compatibility. Never reuse a profile locked by another target.
 
 Every official tool call requires `_dct: { connectionId, sessionId }` using the
 target's current IDs. This is routing metadata: the gateway removes it before
@@ -51,16 +52,16 @@ for fresh URL/title evidence. Recovery keeps connectionId but replaces sessionId
 Old sessions and closed connections are rejected. Extension tools require
 verified Google Chrome 149 or newer. Usage statistics and CrUX default to off.
 
-The gateway observes process exit automatically from launch. Never call a watch
-or renew a lease. Start/restart and official use activate dependent work; Keep
-and end-task end it. Reusing a live kept target automatically resumes monitoring
+The gateway observes process exit automatically from launch. Start/restart and
+official use activate dependent work; Keep and end-task end it.
+Reusing a live kept target automatically resumes monitoring
 for its new task. Empty status calls are read-only; hookEventName is reserved
 for packaged automatic Codex Hooks, never an Agent monitoring request.
 
 Enable Codex Hooks and review/trust this plugin's four definitions through the
 standard Codex flow. Installation does not grant trust. See
-[Codex Hooks](https://learn.chatgpt.com/docs/hooks). While processes live, Hooks
-add no context. An active task's unexpected exit queues one reminder with target
+[Codex Hooks](https://learn.chatgpt.com/docs/hooks). Without pending exit events,
+Hooks add no context. An active task's unexpected exit queues one reminder with target
 kind, PID, port and entry/connection/session identities. Delivery occurs at a
 tool boundary or before the turn ends; idle chats receive it next turn.
 

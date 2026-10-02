@@ -1,7 +1,8 @@
 # ADR 0008: Independent per-target MCP connections
 
-Status: Accepted. Supersedes ADR 0007's fixed two-entry topology, unchanged
-input-schema requirement, and entry/session-only control addressing.
+Status: accepted; partially superseded by ADR 0009 for loss monitoring, reminder
+delivery and cleanup after ended tasks. Supersedes ADR 0007's fixed two-entry
+topology, unchanged input-schema requirement, and entry/session-only control addressing.
 
 One static Desktop configuration, cdp-targets, starts a reusable SDK gateway with
 a random entry UUID and temporary control pipe. Every start creates an independent

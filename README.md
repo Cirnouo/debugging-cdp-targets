@@ -44,7 +44,7 @@ start below. Enabling the connection does not launch a browser automatically.
 Refresh the GitHub Marketplace source with:
 
 ```powershell
-codex plugin marketplace upgrade
+codex plugin marketplace upgrade debugging-cdp-targets
 ```
 
 To uninstall, remove the Plugin before removing its Marketplace source:
@@ -88,8 +88,8 @@ fails, inspect the reported process and port and close the application manually.
 
 If you close a window during dependent work, Codex asks whether it was accidental
 and should be recovered on the same port, or intentional and work should end.
-The gateway observes native process exit events without Agent watch calls or
-renewal. Trusted Codex Hooks deliver one reminder at a tool boundary or before
+The gateway automatically observes native process exit events from launch.
+Trusted Codex Hooks deliver one reminder at a tool boundary or before
 the turn ends; idle chats receive it on the next turn. Enable Hooks and review
 the plugin definitions through Codex's standard trust flow. Installing the plugin
 does not trust its Hooks; see [Codex Hooks](https://learn.chatgpt.com/docs/hooks).
@@ -159,7 +159,7 @@ node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --connection-
 
 Actions are status, start, restart, stop and end-task. End-task ends dependent
 work and retains a live target and Server; an already exited target is cleaned up. Use stop with an explicit Close/Keep
-choice for disposition. There is no switch command.
+choice for disposition.
 Monitoring and reminder delivery are automatic. All official tool calls require the additional
 `_dct` argument, which the gateway removes before forwarding to the official
 Server. For example, `list_pages` receives:
@@ -234,15 +234,15 @@ Each variable accepts only `true` or `false`.
 - **Missing, unknown or stale routing identity**: refresh
     `dct_connection_status` and use the target's connection/current session UUIDs.
     Recovery changes session identity; Close removes the connection.
-- **The recovery port is busy**: release it normally after verifying its owner;
-    recovery does not select a different port or take over that process.
+- **The recovery port is busy**: identify its owner and resolve the conflict
+    before retrying; recovery retains the original port and target identity.
 - **The application has no verified CDP endpoint**: check the executable path,
     debugging option, and browser-level endpoint support. A framework name alone
     does not establish compatibility.
 - **Lifecycle change is blocked by an in-flight request**: let the current
     DevTools request finish, then retry.
-- **Chrome reports a locked profile**: close the Chrome process using that
-    debugging profile normally, or select another dedicated `--user-data-dir`.
+- **Chrome reports a locked profile**: close that Chrome instance manually,
+    or explicitly select another dedicated `--user-data-dir`.
 
 If normal shutdown fails, inspect the reported PID and port, confirm the
 application's identity, and close it manually. Replace `<reported-pid>` and

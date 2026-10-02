@@ -8,7 +8,7 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
-- Codex Plugin and local Marketplace catalog with a bundled Node runtime and
+- Codex Plugin and local Marketplace catalog with a bundled JavaScript runtime and
   application-agnostic debugging instructions.
 - Tag-triggered GitHub source releases with Changelog-based notes, new
   contributor attribution, and required security and cross-platform CI gates.
@@ -20,34 +20,20 @@ Version 0.1.0 remains under development; no release has been published.
   independent progress, cancellation, exit monitoring and recovery reminders.
 - Entry/connection/session-addressed status, start, restart, stop, and end-task commands,
   explicit Close/Keep choices, and reusable host connections after normal Close.
+- Reuse of kept live targets and scoped upstream/router cleanup after an ended
+  target exits, with retained identity for cleanup retries.
 - Lifecycle status and native process exit monitoring with automatic, reviewed
   Codex MCP Tool Hooks, one reminder per active session, and explicit same-port
   recovery with fresh page identities.
 - Shell-free launch-command templates with environment expansion and selection
   of a free, non-reserved debugging port.
-- Chrome presets for a fixed dedicated browser profile, disabled automatic updater
-  scheduling, and extension debugging, with
-  usage statistics and CrUX disabled by default and explicit overrides.
-- Verified Windows Chrome operation; Linux/macOS simulated CDP coverage, without
-  a claim of verified real-application compatibility on those platforms.
-
-### Fixed
-
-- Silent scoped upstream/router cleanup after a kept or ended target exits, with
-  retained retry identity on failure and automatic task resumption on reuse.
-- Profile occupancy checks and launch reservations requiring explicit alternative
-  directories, preserving original profiles during recovery without UUID fallback.
-- Codex manifest packaging so the installed-version loader discovers bundled Hooks;
-  isolated model-request tests cover trust, tool-boundary, Stop and idle delivery.
-
-- Visible Windows target GUI launch so normal CloseMainWindow shutdown can
-  reach the target window; auxiliary process consoles remain hidden.
-- Isolated Windows browser smoke startup without Chrome's automatic updater
-  scheduler, retaining actual process/listener exit checks and closure deadlines.
-- Portable MCP schema declaration so Codex discovers the installed gateway;
-  Marketplace smoke tests now verify Codex's MCP discovery and tool catalog.
-- Short entry-specific Unix socket paths for macOS temporary directories, with
-  explicit UTF-8 byte-limit validation instead of a failing socket listen.
+- Chrome presets for a fixed dedicated browser profile, occupancy checks and
+  launch reservations, explicit alternative directories, and preserved profiles
+  during recovery. Automatic updater scheduling is disabled in the new process.
+- Chrome extension debugging, with usage statistics and CrUX disabled by default
+  and explicit overrides.
+- Verified Windows Chrome operation with visible target windows and normal shutdown;
+  auxiliary process consoles remain hidden. Linux/macOS have simulated CDP coverage.
 
 ### Security
 

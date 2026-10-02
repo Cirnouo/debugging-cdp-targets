@@ -6,14 +6,15 @@
 - `0004-target-adapters.md`: historical adapter boundaries.
 - `0005-direct-stdio-plugin.md`: historical Plugin, direct stdio, transient
   control, generic targets, and bundled runtime; supersedes the affected parts
-  of 0001–0004.
+  of 0001–0004 and is partially superseded by 0007–0009.
 - `0006-native-typescript.md`: native erasable TypeScript, independent strict
   typechecking, direct AST auditing and dependency-free JavaScript delivery.
-
 - `0007-reusable-stdio-entries.md`: historical two-entry reusable SDK gateways,
-  identity checks, lifecycle dispositions, and explicit manual-close recovery.
+  identity checks, lifecycle dispositions, and explicit manual-close recovery;
+  partially superseded by 0008–0009.
 - `0008-independent-target-connections.md`: one gateway, independent per-target
-  MCP connections without a fixed limit, explicit routing, and parallel isolation.
+  MCP connections without a fixed limit, explicit routing, and parallel isolation;
+  partially superseded by 0009 for monitoring and ended-task cleanup.
 - `0009-process-exit-hooks.md`: native exit events, independent task activity,
   automatic trusted Codex Hooks, retired-connection cleanup and fixed profiles.
 

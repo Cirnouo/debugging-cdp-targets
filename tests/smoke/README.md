@@ -39,8 +39,8 @@
   temporary homes and runs the actual Codex app-server against a local SSE model
   substitute and production gateway with fake process/CDP/upstream I/O. It checks
   actual outbound model requests for PostToolUse, one Stop continuation, and
-  idle-next-turn delivery, confirms no watch call, and verifies untrusted Hooks
-  do not run. Only temporary config is trusted; no real browser or account API
+  idle-next-turn delivery, checks the gateway tool catalog, and verifies untrusted
+  Hooks do not run. Only temporary config is trusted; no real browser or account API
   is used. Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects
   a Codex executable. Enable Hooks in this isolated config for the test.
 

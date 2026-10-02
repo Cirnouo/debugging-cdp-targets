@@ -17,3 +17,9 @@ Keep root CLAUDE.md a real relative symlink to AGENTS.md, Git mode 120000.
 Maintain progressive disclosure rather than copying all policies everywhere.
 Plugin instructions must be concise and application-agnostic. Do not collect
 application-specific debugging recipes; Agents explore after connecting.
+
+User-facing documentation, prompts, and installed Skills describe current
+supported behavior. Mention rejected or superseded exploratory features only
+when they explain a concrete common mistake and its correction. Keep design
+history in ADRs and environment-specific migration diagnostics separate from
+normal usage instructions.

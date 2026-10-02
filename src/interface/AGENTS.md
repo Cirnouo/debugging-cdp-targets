@@ -7,7 +7,7 @@ allocates one. Restart/end-task/stop require connection and current session
 identity; status/start prohibit session identity. Only stop accepts disposition. End-task
 ends task activity while retaining a live target and upstream; exited targets retire.
 Reject ambiguous, duplicate, missing, unknown, or inapplicable options. Parse
-commands into argv, never a shell command. There is no switch action.
+commands into argv, never a shell command.
 The gateway adds required _dct connection/session routing to official input
 schemas, rejects collisions, and strips it before forwarding original arguments.
 Results are unchanged; only lifecycle status belongs to this Plugin. Optional

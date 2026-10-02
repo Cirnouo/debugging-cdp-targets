@@ -6,7 +6,8 @@
   103-byte path limit; Windows uses entry-specific named pipes.
 - `official-server.ts` acquires the pinned public MCP package and validates options.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client.
-- `mcp-entry-server.ts` exposes the SDK gateway and lifecycle tools on stdio.
+- `mcp-entry-server.ts` exposes routed official tools and dct_connection_status
+  through the SDK gateway on stdio.
 - `hide-npm-console.ts` scopes hidden console spawning to npx acquisition.
 - `target-host.ts` launches and verifies a newly created target. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in

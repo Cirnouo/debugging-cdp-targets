@@ -1,6 +1,6 @@
 # ADR 0006: Native TypeScript with independent typechecking
 
-Status: accepted, 2026-10-01.
+Status: accepted, 2026-10-01. The stdio ownership statement is superseded by ADR 0007.
 
 ## Context
 
