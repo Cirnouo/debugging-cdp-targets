@@ -14,14 +14,30 @@ import {
 import { CONTROL_TIMEOUT_MS, MAX_CONTROL_BYTES } from '../shared/constants.ts';
 import { errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 
-export function controlEndpoint(entryId: string) {
+type EndpointIo = {
+    platform?: string;
+    tmpdir?: string;
+    user?: { username: string; homedir: string };
+};
+
+export function controlEndpoint(entryId: string, io: EndpointIo = {}) {
     validateIdentity(entryId, 'entry ID');
-    const user = os.userInfo();
+    const user = io.user ?? os.userInfo();
     const identity = `${user.username}:${user.homedir}`;
-    const suffix = createHash('sha256').update(identity).digest('hex').slice(0, 16);
-    return process.platform === 'win32'
-        ? `\\\\.\\pipe\\debugging-cdp-targets-${suffix}-${entryId}`
-        : path.join(os.tmpdir(), `debugging-cdp-targets-${suffix}-${entryId}.sock`);
+    if ((io.platform ?? process.platform) === 'win32') {
+        const suffix = createHash('sha256').update(identity).digest('hex').slice(0, 16);
+        return `\\\\.\\pipe\\debugging-cdp-targets-${suffix}-${entryId}`;
+    }
+    const suffix = createHash('sha256')
+        .update(JSON.stringify([user.username, user.homedir, entryId]))
+        .digest('hex')
+        .slice(0, 32);
+    const endpoint = path.posix.join(io.tmpdir ?? os.tmpdir(), `dct-${suffix}.sock`);
+    if (Buffer.byteLength(endpoint, 'utf8') > 103)
+        throw new Error(
+            'Unix control endpoint exceeds the 103-byte socket path limit. Use a shorter temporary directory.',
+        );
+    return endpoint;
 }
 
 async function probeEndpoint(endpoint: string): Promise<string> {

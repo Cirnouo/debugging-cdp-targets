@@ -136,12 +136,21 @@ var PACKAGE_VERSION = "1.9.0";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 
 // src/adapters/control-ipc.ts
-function controlEndpoint(entryId) {
+function controlEndpoint(entryId, io = {}) {
   validateIdentity(entryId, "entry ID");
-  const user = os.userInfo();
+  const user = io.user ?? os.userInfo();
   const identity = `${user.username}:${user.homedir}`;
-  const suffix = createHash("sha256").update(identity).digest("hex").slice(0, 16);
-  return process.platform === "win32" ? `\\\\.\\pipe\\debugging-cdp-targets-${suffix}-${entryId}` : path.join(os.tmpdir(), `debugging-cdp-targets-${suffix}-${entryId}.sock`);
+  if ((io.platform ?? process.platform) === "win32") {
+    const suffix2 = createHash("sha256").update(identity).digest("hex").slice(0, 16);
+    return `\\\\.\\pipe\\debugging-cdp-targets-${suffix2}-${entryId}`;
+  }
+  const suffix = createHash("sha256").update(JSON.stringify([user.username, user.homedir, entryId])).digest("hex").slice(0, 32);
+  const endpoint = path.posix.join(io.tmpdir ?? os.tmpdir(), `dct-${suffix}.sock`);
+  if (Buffer.byteLength(endpoint, "utf8") > 103)
+    throw new Error(
+      "Unix control endpoint exceeds the 103-byte socket path limit. Use a shorter temporary directory."
+    );
+  return endpoint;
 }
 async function sendControlRequest(endpoint, request) {
   return new Promise((resolve, reject) => {

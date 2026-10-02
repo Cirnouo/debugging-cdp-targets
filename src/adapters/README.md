@@ -2,6 +2,8 @@
 
 - `cdp-router.ts` forwards loopback HTTP/WebSocket CDP and tracks requests.
 - `control-ipc.ts` owns independent temporary control IPC for each entry.
+  Unix socket names hash the user and entry identities and enforce a portable
+  103-byte path limit; Windows uses entry-specific named pipes.
 - `official-server.ts` acquires the pinned public MCP package and validates options.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client.
 - `mcp-entry-server.ts` exposes the SDK gateway and lifecycle tools on stdio.
