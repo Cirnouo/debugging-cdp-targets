@@ -39,9 +39,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
@@ -62,9 +62,9 @@ var require_constants = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -137,9 +137,9 @@ var require_buffer_util = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     var kDone = /* @__PURE__ */ Symbol("kDone");
     var kRun = /* @__PURE__ */ Symbol("kRun");
@@ -187,9 +187,9 @@ var require_limiter = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     var zlib = __require("zlib");
     var bufferUtil = require_buffer_util();
@@ -570,9 +570,9 @@ var require_permessage_deflate = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
@@ -771,9 +771,9 @@ var require_validation = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -1394,9 +1394,9 @@ var require_receiver = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
@@ -1887,9 +1887,9 @@ var require_sender = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = /* @__PURE__ */ Symbol("kCode");
@@ -2116,9 +2116,9 @@ var require_event_target = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -2269,9 +2269,9 @@ var require_extension = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var https = __require("https");
@@ -3178,9 +3178,9 @@ var require_websocket = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
@@ -3276,9 +3276,9 @@ var require_stream = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse2(header) {
@@ -3321,9 +3321,9 @@ var require_subprotocol = __commonJS({
   }
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     var EventEmitter = __require("events");
     var http2 = __require("http");
@@ -3728,7 +3728,7 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 // src/adapters/cdp-router.ts
 import http from "node:http";
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
+// node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -4212,7 +4212,7 @@ async function createControlServer({
 // src/adapters/mcp-bridge.ts
 import { spawn as spawn2 } from "node:child_process";
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/chunk-Br0eD_fh.mjs
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/chunk-Br0eD_fh.mjs
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -4252,7 +4252,7 @@ var __toESM2 = (mod, isNodeMode, target) => (target = mod != null ? __create2(__
   enumerable: true
 }) : target, mod));
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/dialects-BOhdv1Fc.mjs
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/dialects-BOhdv1Fc.mjs
 var DRAFT_2020_12_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -4269,7 +4269,7 @@ function declaredDialect(schema, remedy) {
   throw new Error(`JSON Schema declares an unsupported dialect ("$schema": "${schema.$schema.slice(0, 200)}"). The default validator supports JSON Schema 2020-12, 2019-09, draft-07, and draft-06; ${remedy}`);
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/util.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -5112,7 +5112,7 @@ function constantCatch(value) {
   return fn;
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/core.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/core.js
 var _a;
 var NEVER = /* @__PURE__ */ Object.freeze({
   status: "aborted"
@@ -5233,7 +5233,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/errors.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/errors.js
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -5348,7 +5348,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
   return fieldErrors;
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/parse.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
   return { callee: params?.callee ?? callee, Err: params?.Err };
 }
@@ -5496,7 +5496,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/regexes.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/regexes.js
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$/;
@@ -5556,7 +5556,7 @@ var _null = /^null$/i;
 var lowercase = /^[^A-Z]*$/;
 var uppercase = /^[^a-z]*$/;
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/checks.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -5876,7 +5876,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/doc.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = [], closed = {}) {
     this.content = [];
@@ -5917,14 +5917,14 @@ ${content.join("\n")}
   }
 };
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/versions.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 6,
   patch: 5
 };
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/schemas.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -7632,7 +7632,7 @@ function handleRefineResult(result, payload, input, inst) {
   }
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/memoizer.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/memoizer.js
 var $ZodCyclicError = class extends Error {
   constructor() {
     super(`Cannot parse a reference cycle that closes through a transform`);
@@ -7906,7 +7906,7 @@ function isBackEdge(ctx, value) {
   return backEdges !== void 0 && isRef(value) && backEdges.has(value);
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/en.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/en.js
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -8031,7 +8031,7 @@ function en_default() {
   };
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/registries.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/registries.js
 var _a2;
 var $ZodRegistry = class {
   constructor() {
@@ -8079,7 +8079,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/api.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -8632,7 +8632,7 @@ function _check(fn, params) {
   return ch;
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/to-json-schema.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
@@ -9162,7 +9162,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/json-schema-processors.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/json-schema-processors.js
 var narrowMin = (agg, key, value) => {
   if (agg[key] === void 0 || value > agg[key])
     agg[key] = value;
@@ -9910,7 +9910,7 @@ function toJSONSchema(input, params) {
   return finalize(ctx, input);
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/errors.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/errors.js
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
@@ -9955,7 +9955,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, void 0
   Parent: Error
 });
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/parse.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/parse.js
 var parse = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -9969,7 +9969,7 @@ var safeDecode = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/schemas.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/schemas.js
 function _ensureDefaultLocale() {
   if (!globalConfig.localeError)
     config(en_default());
@@ -11003,7 +11003,7 @@ function preprocess(fn, schema) {
   });
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/compat.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/compat.js
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -11021,7 +11021,7 @@ var ZodFirstPartyTypeKind;
 /* @__PURE__ */ (function(ZodFirstPartyTypeKind2) {
 })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/iso.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -11046,7 +11046,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/coerce.js
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/coerce.js
 var coerce_exports = {};
 __export(coerce_exports, {
   bigint: () => bigint2,
@@ -11071,7 +11071,7 @@ function date3(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
+// node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [
   LATEST_PROTOCOL_VERSION,
@@ -12012,7 +12012,7 @@ var OAuthTokenRevocationRequestSchema = object({
   token_type_hint: string2().optional()
 }).strip();
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/src-xKF0PJN-.mjs
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/src-xKF0PJN-.mjs
 var BRANDS = /* @__PURE__ */ Symbol.for("mcp.sdk.errorBrands");
 function stampErrorBrands(instance, ctor) {
   const brands = /* @__PURE__ */ new Set();
@@ -16649,7 +16649,7 @@ function serializeMessage(message) {
   return JSON.stringify(message) + "\n";
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -23659,13 +23659,13 @@ var AjvJsonSchemaValidator = class {
 };
 var Ajv = import_ajv.Ajv;
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/pkce-challenge@5.0.1/node_modules/pkce-challenge/dist/index.node.js
+// node_modules/.pnpm/pkce-challenge@5.0.1/node_modules/pkce-challenge/dist/index.node.js
 var crypto2;
 crypto2 = globalThis.crypto?.webcrypto ?? // Node.js [18-16] REPL
 globalThis.crypto ?? // Node.js >18
 import("node:crypto").then((m) => m.webcrypto);
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
 var OAuthClientFlowError = class extends Error {
   static {
     Object.defineProperty(this, "mcpBrand", { value: "mcp.OAuthClientFlowError" });
@@ -26378,7 +26378,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
   }
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/chunk-Br0eD_fh.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/chunk-Br0eD_fh.mjs
 var __create3 = Object.create;
 var __defProp3 = Object.defineProperty;
 var __getOwnPropDesc3 = Object.getOwnPropertyDescriptor;
@@ -26418,7 +26418,7 @@ var __toESM3 = (mod, isNodeMode, target) => (target = mod != null ? __create3(__
   enumerable: true
 }) : target, mod));
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/dialects-DoSzNhcb.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/dialects-DoSzNhcb.mjs
 var DRAFT_2020_12_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -26435,7 +26435,7 @@ function declaredDialect2(schema, remedy) {
   throw new Error(`JSON Schema declares an unsupported dialect ("$schema": "${schema.$schema.slice(0, 200)}"). The default validator supports JSON Schema 2020-12, 2019-09, draft-07, and draft-06; ${remedy}`);
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/src-BHSMhZ_W.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/src-BHSMhZ_W.mjs
 var BRANDS2 = /* @__PURE__ */ Symbol.for("mcp.sdk.errorBrands");
 function stampErrorBrands2(instance, ctor) {
   const brands = /* @__PURE__ */ new Set();
@@ -30858,7 +30858,7 @@ function serializeMessage2(message) {
   return JSON.stringify(message) + "\n";
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/ajvProvider-CEoC__sr.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/ajvProvider-CEoC__sr.mjs
 var require_code$12 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -37868,10 +37868,10 @@ var AjvJsonSchemaValidator2 = class {
 };
 var Ajv2 = import_ajv2.Ajv;
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/shimsNode.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/shimsNode.mjs
 import process2 from "node:process";
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/mcp-DYuW2ZSs.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/mcp-DYuW2ZSs.mjs
 var MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 var DEFAULT_LEGACY_SHIM_MAX_ROUNDS = 8;
 var DEFAULT_LEGACY_SHIM_ROUND_TIMEOUT_MS = 6e5;
@@ -38622,10 +38622,10 @@ function discoverAdvertisedCapabilities(capabilities) {
   return { ...capabilities };
 }
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/index.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/index.mjs
 var DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
 
-// D:/Projects/Personal/debugging-cdp-targets/node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/stdio.mjs
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/stdio.mjs
 var swallowsErrorsAfterClose = /* @__PURE__ */ Symbol("swallowsErrorsAfterClose");
 var StdioServerTransport = class {
   _readBuffer;
