@@ -45,7 +45,7 @@ async function spawn(executable: string, arguments_: string[], _port: number, cw
         cwd,
         detached: true,
         stdio: 'ignore',
-        windowsHide: true,
+        windowsHide: false,
         shell: false,
     });
     await new Promise<void>((resolve, reject) => {

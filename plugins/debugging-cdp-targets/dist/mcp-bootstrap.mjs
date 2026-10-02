@@ -39263,7 +39263,7 @@ async function spawn4(executable, arguments_, _port, cwd = path4.dirname(executa
     cwd,
     detached: true,
     stdio: "ignore",
-    windowsHide: true,
+    windowsHide: false,
     shell: false
   });
   await new Promise((resolve, reject) => {

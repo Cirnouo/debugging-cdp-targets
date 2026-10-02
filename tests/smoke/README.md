@@ -10,6 +10,13 @@
   A normal Close that reports retained identity may be retried twice with the
   same IDs; retries are logged and never escalate to forced termination.
   Fixtures disable the first-run UI, background networking and background mode.
+  Both Windows browser smokes also disable Chrome's automatic updater scheduler
+  for their newly launched targets, following Chromium's
+  [browser-test setup](https://github.com/chromium/chromium/blob/154.0.8037.93/chrome/test/base/in_process_browser_test.cc).
+  A captured Chrome 154 shutdown waited on an updater COM activation task;
+  excluding that background installer isolates the browser fixture. The plugin's
+  launch defaults do not add this switch. An unresponsive updater in a regular
+  target can still cause a retained normal-Close failure.
   Manual exits use identity-verified Windows CloseMainWindow and assert actual
   process/listener exit. A root that remains alive after window/listener teardown
   is a retained-close failure, not a successful smoke result.

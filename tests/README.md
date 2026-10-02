@@ -38,6 +38,8 @@
   output validation, legacy stdio ID-zero cancellation and lifecycle tools.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks manual closure and explicit same-port recovery.
+- `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
+  process options at the native child-process boundary without launching a target.
 - `fixtures/` owns isolated CDP processes.
 - `smoke/` owns opt-in official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.

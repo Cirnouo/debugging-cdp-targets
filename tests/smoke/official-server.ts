@@ -74,7 +74,7 @@ function textContent(result: Record<string, unknown>) {
 }
 const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 function launch(profile: string, title: string) {
-    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>"`;
+    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --disable-updater-scheduler --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>"`;
 }
 let entryId: string | undefined;
 let active: ConnectionStatus | undefined;

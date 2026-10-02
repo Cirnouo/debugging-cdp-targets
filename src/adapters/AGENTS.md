@@ -1,7 +1,10 @@
 # Adapter implementation
 
-All child processes use shell:false and Windows hidden-console options; browser
-windows remain visible. The scoped npx preload affects only acquisition.
+All child processes use shell:false. Only the actual target launch uses
+windowsHide:false, with detached:true and ignored stdio, so GUI windows remain
+available for normal CloseMainWindow shutdown. Windows helpers, official Server
+and acquisition children keep windowsHide:true. Do not hide the target GUI to
+suppress console windows. The scoped npx preload affects only acquisition.
 Start the public upstream Server bin; never import private CLI/daemon internals.
 The native TypeScript preload and generated CJS preload use Node `--import`.
 A private build constant selects the resource name; never pass that preload or

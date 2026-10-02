@@ -31,6 +31,10 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Fixed
 
+- Visible Windows target GUI launch so normal CloseMainWindow shutdown can
+  reach the target window; auxiliary process consoles remain hidden.
+- Isolated Windows browser smoke startup without Chrome's automatic updater
+  scheduler, retaining actual process/listener exit checks and closure deadlines.
 - Portable MCP schema declaration so Codex discovers the installed gateway;
   Marketplace smoke tests now verify Codex's MCP discovery and tool catalog.
 - Short entry-specific Unix socket paths for macOS temporary directories, with
