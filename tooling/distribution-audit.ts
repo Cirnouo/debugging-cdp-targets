@@ -2,8 +2,14 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import { PLUGIN_ROOT, REQUIRED_PAYLOAD_FILES, validatePayloadFileInventory } from './payload-policy.ts';
+import {
+    OFFICIAL_RELEASE,
+    PLUGIN_ROOT,
+    REQUIRED_PAYLOAD_FILES,
+    validatePayloadFileInventory,
+} from './payload-policy.ts';
 
 export function compareDistributionTrees(source: Map<string, Buffer>, installed: Map<string, Buffer>) {
     const errors = [];
@@ -39,10 +45,11 @@ export async function readDistributionTree(directory: string, prefix = ''): Prom
     for (const entry of await readdir(directory, { withFileTypes: true })) {
         const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
         if (entry.isSymbolicLink()) throw new Error(`Plugin may not contain symlinks: ${relative}`);
-        if (entry.isDirectory())
-            for (const [file, data] of await readDistributionTree(path.join(directory, entry.name), relative))
-                files.set(file, data);
-        else if (entry.isFile()) files.set(relative, await readFile(path.join(directory, entry.name)));
+        if (entry.isDirectory()) {
+            const nested = await readDistributionTree(path.join(directory, entry.name), relative);
+            if (!nested.size) throw new Error(`Unexpected empty Plugin directory: ${relative}`);
+            for (const [file, data] of nested) files.set(file, data);
+        } else if (entry.isFile()) files.set(relative, await readFile(path.join(directory, entry.name)));
         else throw new Error(`Unexpected Plugin entry: ${relative}`);
     }
     return files;
@@ -51,6 +58,20 @@ export async function readDistributionTree(directory: string, prefix = ''): Prom
 export async function auditDistribution(root: string) {
     const source = await readDistributionTree(path.join(root, PLUGIN_ROOT));
     const errors = validatePayloadFileInventory([...source.keys()]);
+    try {
+        const official = await verifyOfficialPackage(
+            path.join(root, PLUGIN_ROOT, 'dist/official-server'),
+            OFFICIAL_RELEASE,
+        );
+        const copied = new Map(
+            [...source]
+                .filter(([file]) => file.startsWith('dist/official-server/'))
+                .map(([file, bytes]) => [file.slice('dist/official-server/'.length), bytes]),
+        );
+        errors.push(...compareDistributionTrees(official, copied));
+    } catch (error) {
+        errors.push(errorMessage(error));
+    }
     const manifest: unknown = JSON.parse(source.get('.codex-plugin/plugin.json')?.toString() ?? 'null');
     const mcp: unknown = JSON.parse(source.get('mcp.json')?.toString() ?? 'null');
     const marketplace: unknown = JSON.parse(

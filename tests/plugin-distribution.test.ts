@@ -66,6 +66,7 @@ test('plugin payload has only manifests, one skill, license, and self-contained 
         'control.mjs',
         'hide-npm-console.cjs',
         'mcp-bootstrap.mjs',
+        'official-server',
         'windows-cdp-helper.ps1',
     ]);
     const skill = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets'));

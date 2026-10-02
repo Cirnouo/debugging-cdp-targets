@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
-import { compareDistributionTrees, validateMcpEntries } from '../tooling/distribution-audit.ts';
+import { isRecord } from '../src/shared/errors.ts';
+import { compareDistributionTrees, readDistributionTree, validateMcpEntries } from '../tooling/distribution-audit.ts';
 import { REQUIRED_PAYLOAD_FILES, validatePayloadFileInventory } from '../tooling/payload-policy.ts';
 
 test('MCP manifest requires one gateway entry without slots or connection limits', () => {
@@ -34,6 +38,28 @@ test('Plugin inventory accepts only explicit runtime and instruction files', () 
     assert.deepEqual(validatePayloadFileInventory(REQUIRED_PAYLOAD_FILES), []);
     assert.ok(validatePayloadFileInventory([...REQUIRED_PAYLOAD_FILES, 'node_modules/secret.txt']).length);
     assert.ok(validatePayloadFileInventory(REQUIRED_PAYLOAD_FILES.slice(1)).length);
+});
+
+test('Plugin allowlist independently includes every reviewed official release path', async () => {
+    const release: unknown = JSON.parse(
+        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
+    );
+    assert.ok(isRecord(release) && Array.isArray(release.files));
+    for (const record of release.files) {
+        assert.ok(isRecord(record) && typeof record.path === 'string');
+        assert.ok(REQUIRED_PAYLOAD_FILES.includes(`dist/official-server/${record.path}`));
+    }
+    assert.ok(validatePayloadFileInventory([...REQUIRED_PAYLOAD_FILES, 'dist/official-server/extra.js']).length);
+});
+
+test('physical Plugin inventory rejects unexpected empty directories', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-empty-directory-'));
+    try {
+        await mkdir(path.join(root, 'extra'));
+        await assert.rejects(readDistributionTree(root), /empty|unexpected/i);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });
 
 test('installation comparison reports missing, changed, and extra bytes', () => {

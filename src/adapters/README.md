@@ -5,6 +5,7 @@
   Unix socket names hash the user and entry identities and enforce a portable
   103-byte path limit; Windows uses entry-specific named pipes.
 - `official-server.ts` acquires the pinned public MCP package and validates options.
+- `official-package.ts` verifies the complete official release tree and returns its original bytes.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client.
 - `mcp-entry-server.ts` exposes routed official tools and dct_connection_status
   through the SDK gateway on stdio.

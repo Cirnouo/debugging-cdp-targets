@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
+
 export const PLUGIN_NAME = 'debugging-cdp-targets';
 export const PLUGIN_ROOT = `plugins/${PLUGIN_NAME}`;
+export const OFFICIAL_RELEASE = parseOfficialReleaseEvidence(
+    JSON.parse(readFileSync(new URL('./official-server-release.json', import.meta.url), 'utf8')),
+);
 export const REQUIRED_PAYLOAD_FILES = Object.freeze([
     'LICENSE',
     'README.md',
@@ -17,6 +23,7 @@ export const REQUIRED_PAYLOAD_FILES = Object.freeze([
     'skills/README.md',
     'skills/debugging-cdp-targets/README.md',
     'skills/debugging-cdp-targets/SKILL.md',
+    ...OFFICIAL_RELEASE.files.map((file) => `dist/official-server/${file.path}`),
 ]);
 
 export function validatePayloadFileInventory(paths: readonly string[]) {

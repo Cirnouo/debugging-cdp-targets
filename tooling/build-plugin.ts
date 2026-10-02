@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
-import { readdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { isOfficialRelativePath, parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
+import { readDistributionTree } from './distribution-audit.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const output = path.join(root, 'plugins', 'debugging-cdp-targets', 'dist');
@@ -207,6 +210,14 @@ export async function collectBundledLicenses(
 }
 
 export async function generatePluginFiles() {
+    const evidence = parseOfficialReleaseEvidence(
+        JSON.parse(await readFile(path.join(root, 'tooling/official-server-release.json'), 'utf8')),
+    );
+    const official = await verifyOfficialPackage(
+        await realpath(path.join(root, 'node_modules', evidence.name)),
+        evidence,
+        { pnpmInstalled: true },
+    );
     const result = await build({
         absWorkingDir: root,
         entryPoints: {
@@ -220,14 +231,20 @@ export async function generatePluginFiles() {
         format: 'esm',
         target: 'node24',
         packages: 'bundle',
-        define: { __DCT_PACKAGED_PRELOAD__: 'true' },
+        define: { __DCT_PACKAGED_PRELOAD__: 'true', __DCT_OFFICIAL_RELEASE__: JSON.stringify(evidence) },
         legalComments: 'none',
         banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
         logLevel: 'warning',
         write: false,
         metafile: true,
     });
-    const files = new Map(result.outputFiles.map((file) => [path.basename(file.path), Buffer.from(file.contents)]));
+    const files = new Map<string, Buffer>(
+        result.outputFiles.map((file) => [
+            path.relative(output, file.path).replaceAll('\\', '/'),
+            Buffer.from(file.contents),
+        ]),
+    );
+    for (const [file, bytes] of official) files.set(`official-server/${file}`, bytes);
     for (const file of ['windows-cdp-helper.ps1']) {
         files.set(file, await readFile(path.join(root, 'src', 'adapters', file)));
     }
@@ -247,14 +264,47 @@ export async function generatePluginFiles() {
     return files;
 }
 
+export async function syncPluginFiles(
+    files: ReadonlyMap<string, Buffer>,
+    directory: string,
+    options: { check?: boolean } = {},
+) {
+    for (const name of files.keys())
+        if (!isOfficialRelativePath(name)) throw new Error(`Unsafe generated output path: ${name}`);
+    const owned = path.resolve(directory);
+    if (!(await lstat(owned)).isDirectory() || path.relative(owned, await realpath(owned)) !== '')
+        throw new Error('Generated output directory must not be linked.');
+    const existing = await readDistributionTree(owned);
+    const obsolete = new Set(['hide-npm-console.cjs']);
+    for (const name of existing.keys()) {
+        if (files.has(name) || name === 'README.md') continue;
+        if (options.check || !obsolete.has(name)) throw new Error(`Unexpected Plugin build output: ${name}`);
+    }
+    if (options.check) {
+        for (const [name, bytes] of files) {
+            const current = existing.get(name);
+            if (!current) throw new Error(`Missing Plugin build output: ${name}`);
+            if (!current.equals(bytes)) throw new Error(`Stale Plugin build: ${name}; run pnpm build:plugin.`);
+        }
+        return;
+    }
+    for (const name of existing.keys()) {
+        if (files.has(name) || !obsolete.has(name)) continue;
+        const destination = path.resolve(owned, name);
+        const relative = path.relative(owned, destination);
+        if (!relative || relative.startsWith('..') || path.isAbsolute(relative))
+            throw new Error('Obsolete output escaped its owned directory.');
+        await rm(destination);
+    }
+    for (const [name, bytes] of files) {
+        const destination = path.join(owned, name);
+        await mkdir(path.dirname(destination), { recursive: true });
+        await writeFile(destination, bytes);
+    }
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const check = process.argv.includes('--check');
-    for (const [name, contents] of await generatePluginFiles()) {
-        const destination = path.join(output, name);
-        if (check) {
-            if (!contents.equals(await readFile(destination)))
-                throw new Error(`Stale Plugin build: ${name}; run pnpm build:plugin.`);
-        } else await writeFile(destination, contents);
-    }
+    await syncPluginFiles(await generatePluginFiles(), output, { check });
     console.log(check ? 'Committed Plugin runtime matches its source.' : 'Plugin runtime built.');
 }

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { OFFICIAL_RELEASE, PLUGIN_ROOT } from '../tooling/payload-policy.ts';
 import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
 
 test('gateway imports only public split SDK entry points', () => {
@@ -37,7 +38,7 @@ async function auditGithubDocumentation(files: readonly string[]) {
             await writeFile(target, '');
         }
         // These fixtures isolate directory documentation from unrelated metadata requirements.
-        return auditRepository(root).filter((error) => error.startsWith('.github'));
+        return (await auditRepository(root)).filter((error) => error.startsWith('.github'));
     } finally {
         assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
         assert.ok(path.basename(root).startsWith('dct-readme-'));
@@ -50,6 +51,30 @@ test('GitHub directory documentation uses INDEX.md without overriding the root R
         await auditGithubDocumentation(['README.md', '.github/INDEX.md', '.github/workflows/README.md']),
         [],
     );
+});
+
+test('only the fully verified official output is exempt from directory documentation and owned-module rules', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-upstream-repo-'));
+    try {
+        execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+        const prefix = `${PLUGIN_ROOT}/dist/official-server`;
+        for (const file of OFFICIAL_RELEASE.files) {
+            const target = path.join(root, prefix, file.path);
+            await mkdir(path.dirname(target), { recursive: true });
+            await writeFile(
+                target,
+                await readFile(new URL(`../node_modules/chrome-devtools-mcp/${file.path}`, import.meta.url)),
+            );
+        }
+        assert.deepEqual(
+            (await auditRepository(root)).filter((error) => error.includes('official-server')),
+            [],
+        );
+        await writeFile(path.join(root, prefix, 'LICENSE'), 'changed');
+        assert.ok((await auditRepository(root)).some((error) => /Official package.*changed/i.test(error)));
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });
 
 test('GitHub directory READMEs are rejected even when INDEX.md is present', async () => {

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { collectBundledLicenses, generatePluginFiles } from '../tooling/build-plugin.ts';
+import { isRecord } from '../src/shared/errors.ts';
+import { collectBundledLicenses, generatePluginFiles, syncPluginFiles } from '../tooling/build-plugin.ts';
 
 test('bundle notices include transitive package licenses despite nested module metadata', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-licenses-'));
@@ -207,4 +208,49 @@ test('actual Node plugin bundles include all six reviewed SDK vendor notices and
         assert.equal(notices.split(`${identity} — LICENSE (vendored)`).length - 1, 1, identity);
     }
     assert.doesNotMatch(notices, /@cfworker\/json-schema/);
+});
+
+test('Plugin generation copies every official published file at its complete relative path', async () => {
+    const release: unknown = JSON.parse(
+        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
+    );
+    assert.ok(isRecord(release) && Array.isArray(release.files));
+    const files = await generatePluginFiles();
+    for (const record of release.files) {
+        assert.ok(isRecord(record) && typeof record.path === 'string');
+        const bytes = await readFile(new URL(`../node_modules/chrome-devtools-mcp/${record.path}`, import.meta.url));
+        assert.ok(files.get(`official-server/${record.path}`)?.equals(bytes), record.path);
+    }
+    assert.equal([...files.keys()].filter((file) => file.startsWith('official-server/')).length, release.files.length);
+});
+
+test('build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-output-'));
+    try {
+        const files = new Map([
+            ['gateway.mjs', Buffer.from('gateway')],
+            ['official-server/a/same.js', Buffer.from('a')],
+            ['official-server/b/same.js', Buffer.from('b')],
+        ]);
+        await syncPluginFiles(files, root);
+        assert.equal((await readFile(path.join(root, 'official-server/a/same.js'))).toString(), 'a');
+        assert.equal((await readFile(path.join(root, 'official-server/b/same.js'))).toString(), 'b');
+        await syncPluginFiles(files, root, { check: true });
+        await writeFile(path.join(root, 'gateway.mjs'), 'stale');
+        await assert.rejects(syncPluginFiles(files, root, { check: true }), /Stale/);
+        assert.equal((await readFile(path.join(root, 'gateway.mjs'))).toString(), 'stale');
+        await rm(path.join(root, 'gateway.mjs'));
+        await assert.rejects(syncPluginFiles(files, root, { check: true }), /Missing/);
+        await writeFile(path.join(root, 'secret'), 'preserve');
+        await assert.rejects(syncPluginFiles(files, root), /Unexpected/);
+        assert.equal((await readFile(path.join(root, 'secret'))).toString(), 'preserve');
+        await rm(path.join(root, 'secret'));
+        await writeFile(path.join(root, 'hide-npm-console.cjs'), 'obsolete');
+        await assert.rejects(syncPluginFiles(files, root, { check: true }), /Unexpected/);
+        await syncPluginFiles(files, root);
+        await assert.rejects(readFile(path.join(root, 'hide-npm-console.cjs')), /ENOENT/);
+        await assert.rejects(syncPluginFiles(new Map([['../escape', Buffer.from('x')]]), root), /Unsafe/);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });

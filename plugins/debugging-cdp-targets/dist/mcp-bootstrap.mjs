@@ -11,6 +11,14 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
 var __commonJS = (cb, mod) => function __require2() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
@@ -39,10 +47,17 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// <define:__DCT_OFFICIAL_RELEASE__>
+var init_define_DCT_OFFICIAL_RELEASE = __esm({
+  "<define:__DCT_OFFICIAL_RELEASE__>"() {
+  }
+});
+
 // node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
     if (hasBlob) BINARY_TYPES.push("blob");
@@ -66,6 +81,7 @@ var require_constants = __commonJS({
 var require_buffer_util = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
     function concat(list, totalLength) {
@@ -141,6 +157,7 @@ var require_buffer_util = __commonJS({
 var require_limiter = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var kDone = /* @__PURE__ */ Symbol("kDone");
     var kRun = /* @__PURE__ */ Symbol("kRun");
     var Limiter = class {
@@ -191,6 +208,7 @@ var require_limiter = __commonJS({
 var require_permessage_deflate = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var zlib = __require("zlib");
     var bufferUtil = require_buffer_util();
     var Limiter = require_limiter();
@@ -574,6 +592,7 @@ var require_permessage_deflate = __commonJS({
 var require_validation = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
     var tokenChars = [
@@ -775,6 +794,7 @@ var require_validation = __commonJS({
 var require_receiver = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
     var {
@@ -1398,6 +1418,7 @@ var require_receiver = __commonJS({
 var require_sender = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
     var {
@@ -1891,6 +1912,7 @@ var require_sender = __commonJS({
 var require_event_target = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = /* @__PURE__ */ Symbol("kCode");
     var kData = /* @__PURE__ */ Symbol("kData");
@@ -2120,6 +2142,7 @@ var require_event_target = __commonJS({
 var require_extension = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
       if (dest[name] === void 0) dest[name] = [elem];
@@ -2273,6 +2296,7 @@ var require_extension = __commonJS({
 var require_websocket = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var EventEmitter = __require("events");
     var https = __require("https");
     var http2 = __require("http");
@@ -3182,6 +3206,7 @@ var require_websocket = __commonJS({
 var require_stream = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
     function emitClose(stream) {
@@ -3280,6 +3305,7 @@ var require_stream = __commonJS({
 var require_subprotocol = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var { tokenChars } = require_validation();
     function parse2(header) {
       const protocols = /* @__PURE__ */ new Set();
@@ -3325,6 +3351,7 @@ var require_subprotocol = __commonJS({
 var require_websocket_server = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
+    init_define_DCT_OFFICIAL_RELEASE();
     var EventEmitter = __require("events");
     var http2 = __require("http");
     var { Duplex } = __require("stream");
@@ -3722,13 +3749,19 @@ var require_websocket_server = __commonJS({
   }
 });
 
+// src/interface/mcp-bootstrap.ts
+init_define_DCT_OFFICIAL_RELEASE();
+
 // src/application/plugin-runtime.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { randomUUID as randomUUID2 } from "node:crypto";
 
 // src/adapters/cdp-router.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import http from "node:http";
 
 // node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -3739,6 +3772,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // src/shared/constants.ts
+init_define_DCT_OFFICIAL_RELEASE();
 var LOOPBACK = "127.0.0.1";
 var DEFAULT_BASE_PORT = 9222;
 var MAX_PORT = 65535;
@@ -3758,6 +3792,7 @@ var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
 // src/shared/errors.ts
+init_define_DCT_OFFICIAL_RELEASE();
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -3988,6 +4023,7 @@ async function createCdpRouter() {
 }
 
 // src/adapters/control-ipc.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { createHash } from "node:crypto";
 import { chmod, lstat, unlink } from "node:fs/promises";
 import net from "node:net";
@@ -3995,6 +4031,7 @@ import os from "node:os";
 import path from "node:path";
 
 // src/domains/control-contract.ts
+init_define_DCT_OFFICIAL_RELEASE();
 function validateIdentity(value, label) {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
     throw new Error(`A canonical lowercase UUID ${label} is required.`);
@@ -4210,9 +4247,17 @@ async function createControlServer({
 }
 
 // src/adapters/mcp-bridge.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { spawn as spawn2 } from "node:child_process";
 
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/src-xKF0PJN-.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/chunk-Br0eD_fh.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -4253,6 +4298,7 @@ var __toESM2 = (mod, isNodeMode, target) => (target = mod != null ? __create2(__
 }) : target, mod));
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/dialects-BOhdv1Fc.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var DRAFT_2020_12_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -4268,6 +4314,21 @@ function declaredDialect(schema, remedy) {
   if (DRAFT_07_URIS.has(declared) || DRAFT_06_URIS.has(declared)) return "draft-7";
   throw new Error(`JSON Schema declares an unsupported dialect ("$schema": "${schema.$schema.slice(0, 200)}"). The default validator supports JSON Schema 2020-12, 2019-09, draft-07, and draft-06; ${remedy}`);
 }
+
+// node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/internal.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/index.js
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/core.js
+init_define_DCT_OFFICIAL_RELEASE();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -4348,6 +4409,7 @@ __export(util_exports, {
   uint8ArrayToHex: () => uint8ArrayToHex,
   unwrapMessage: () => unwrapMessage
 });
+init_define_DCT_OFFICIAL_RELEASE();
 function assertEqual(val) {
   return val;
 }
@@ -5233,7 +5295,11 @@ function config(newConfig) {
   return globalConfig;
 }
 
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/parse.js
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/errors.js
+init_define_DCT_OFFICIAL_RELEASE();
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -5496,7 +5562,14 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
   return _safeParseAsync(_Err)(schema, value, _ctx);
 };
 
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/schemas.js
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/checks.js
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/regexes.js
+init_define_DCT_OFFICIAL_RELEASE();
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$/;
@@ -5877,6 +5950,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
 });
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/doc.js
+init_define_DCT_OFFICIAL_RELEASE();
 var Doc = class {
   constructor(args = [], closed = {}) {
     this.content = [];
@@ -5918,6 +5992,7 @@ ${content.join("\n")}
 };
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/versions.js
+init_define_DCT_OFFICIAL_RELEASE();
 var version = {
   major: 4,
   minor: 6,
@@ -7633,6 +7708,7 @@ function handleRefineResult(result, payload, input, inst) {
 }
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/memoizer.js
+init_define_DCT_OFFICIAL_RELEASE();
 var $ZodCyclicError = class extends Error {
   constructor() {
     super(`Cannot parse a reference cycle that closes through a transform`);
@@ -7907,6 +7983,7 @@ function isBackEdge(ctx, value) {
 }
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/en.js
+init_define_DCT_OFFICIAL_RELEASE();
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -8032,6 +8109,7 @@ function en_default() {
 }
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/registries.js
+init_define_DCT_OFFICIAL_RELEASE();
 var _a2;
 var $ZodRegistry = class {
   constructor() {
@@ -8080,6 +8158,7 @@ function registry() {
 var globalRegistry = globalThis.__zod_globalRegistry;
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/api.js
+init_define_DCT_OFFICIAL_RELEASE();
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -8633,6 +8712,7 @@ function _check(fn, params) {
 }
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/to-json-schema.js
+init_define_DCT_OFFICIAL_RELEASE();
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
@@ -9163,6 +9243,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
 };
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/json-schema-processors.js
+init_define_DCT_OFFICIAL_RELEASE();
 var narrowMin = (agg, key, value) => {
   if (agg[key] === void 0 || value > agg[key])
     agg[key] = value;
@@ -9910,7 +9991,17 @@ function toJSONSchema(input, params) {
   return finalize(ctx, input);
 }
 
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/schemas.js
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/checks.js
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/parse.js
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/errors.js
+init_define_DCT_OFFICIAL_RELEASE();
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
@@ -11004,6 +11095,7 @@ function preprocess(fn, schema) {
 }
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/compat.js
+init_define_DCT_OFFICIAL_RELEASE();
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -11033,6 +11125,7 @@ __export(iso_exports, {
   duration: () => duration2,
   time: () => time2
 });
+init_define_DCT_OFFICIAL_RELEASE();
 function datetime2(params) {
   return _isoDateTime(ZodISODateTime, params);
 }
@@ -11055,6 +11148,7 @@ __export(coerce_exports, {
   number: () => number3,
   string: () => string3
 });
+init_define_DCT_OFFICIAL_RELEASE();
 function string3(params) {
   return _coercedString(ZodString, params);
 }
@@ -16649,7 +16743,11 @@ function serializeMessage(message) {
   return JSON.stringify(message) + "\n";
 }
 
+// node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/shimsNode.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -23660,6 +23758,7 @@ var AjvJsonSchemaValidator = class {
 var Ajv = import_ajv.Ajv;
 
 // node_modules/.pnpm/pkce-challenge@5.0.1/node_modules/pkce-challenge/dist/index.node.js
+init_define_DCT_OFFICIAL_RELEASE();
 var crypto2;
 crypto2 = globalThis.crypto?.webcrypto ?? // Node.js [18-16] REPL
 globalThis.crypto ?? // Node.js >18
@@ -26139,7 +26238,11 @@ var SseError = class extends Error {
   }
 };
 
+// node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/index.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
 // src/adapters/official-server.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { spawn, spawnSync } from "node:child_process";
 import { createHash as createHash2 } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -26378,7 +26481,20 @@ async function createOfficialConnection(browserUrl, options = {}) {
   }
 }
 
+// src/adapters/mcp-entry-server.ts
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/index.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/mcp-DYuW2ZSs.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/src-BHSMhZ_W.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/chunk-Br0eD_fh.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var __create3 = Object.create;
 var __defProp3 = Object.defineProperty;
 var __getOwnPropDesc3 = Object.getOwnPropertyDescriptor;
@@ -26419,6 +26535,7 @@ var __toESM3 = (mod, isNodeMode, target) => (target = mod != null ? __create3(__
 }) : target, mod));
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/dialects-DoSzNhcb.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var DRAFT_2020_12_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -30858,7 +30975,11 @@ function serializeMessage2(message) {
   return JSON.stringify(message) + "\n";
 }
 
+// node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/shimsNode.mjs
+init_define_DCT_OFFICIAL_RELEASE();
+
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/ajvProvider-CEoC__sr.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var require_code$12 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -38626,6 +38747,7 @@ function discoverAdvertisedCapabilities(capabilities) {
 var DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/stdio.mjs
+init_define_DCT_OFFICIAL_RELEASE();
 var swallowsErrorsAfterClose = /* @__PURE__ */ Symbol("swallowsErrorsAfterClose");
 var StdioServerTransport = class {
   _readBuffer;
@@ -38830,12 +38952,14 @@ function createMcpEntryServer(options) {
 }
 
 // src/adapters/target-host.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { spawn as nodeSpawn } from "node:child_process";
 import net2 from "node:net";
 import os4 from "node:os";
 import path5 from "node:path";
 
 // src/domains/cdp-target.ts
+init_define_DCT_OFFICIAL_RELEASE();
 var RetainedTargetError = class extends DetailedError {
   target;
   constructor(message, target) {
@@ -38894,6 +39018,7 @@ function validateCdpIdentity({
 }
 
 // src/domains/launch-command.ts
+init_define_DCT_OFFICIAL_RELEASE();
 var PORT_PLACEHOLDER = "{port}";
 var DEFAULT_DEBUGGING_SWITCH = "--remote-debugging-port";
 var SHELL_OPERATORS = /* @__PURE__ */ new Set(["&", "|", ";", "<", ">", "`", "\n", "\r"]);
@@ -38986,11 +39111,13 @@ function parseLaunchCommand({
 }
 
 // src/adapters/chrome-profile.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { open as open2, readlink as readlink2, realpath as realpath2 } from "node:fs/promises";
 import os3 from "node:os";
 import path4 from "node:path";
 
 // src/adapters/platform-process.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { spawn as spawn3 } from "node:child_process";
 import { readFile as readFile2, readlink } from "node:fs/promises";
 import path3 from "node:path";
@@ -39526,6 +39653,7 @@ function createTargetHost(dependencies = {}) {
 }
 
 // src/application/target-controller.ts
+init_define_DCT_OFFICIAL_RELEASE();
 import { randomUUID } from "node:crypto";
 function createTargetController({
   entryId,
