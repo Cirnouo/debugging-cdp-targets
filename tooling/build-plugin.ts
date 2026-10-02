@@ -231,7 +231,7 @@ export async function generatePluginFiles() {
         format: 'esm',
         target: 'node24',
         packages: 'bundle',
-        define: { __DCT_PACKAGED_PRELOAD__: 'true', __DCT_OFFICIAL_RELEASE__: JSON.stringify(evidence) },
+        define: { __DCT_OFFICIAL_RELEASE__: JSON.stringify(evidence) },
         legalComments: 'none',
         banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
         logLevel: 'warning',
@@ -248,17 +248,6 @@ export async function generatePluginFiles() {
     for (const file of ['windows-cdp-helper.ps1']) {
         files.set(file, await readFile(path.join(root, 'src', 'adapters', file)));
     }
-    const preload = await build({
-        entryPoints: [path.join(root, 'src', 'adapters', 'hide-npm-console.ts')],
-        outfile: path.join(output, 'hide-npm-console.cjs'),
-        bundle: true,
-        platform: 'node',
-        format: 'cjs',
-        target: 'node24',
-        legalComments: 'none',
-        write: false,
-    });
-    for (const file of preload.outputFiles) files.set(path.basename(file.path), Buffer.from(file.contents));
     const notice = await collectBundledLicenses(Object.keys(result.metafile.inputs));
     files.set('THIRD-PARTY-NOTICES.txt', notice);
     return files;

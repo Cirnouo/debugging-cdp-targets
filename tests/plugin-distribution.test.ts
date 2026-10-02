@@ -64,7 +64,6 @@ test('plugin payload has only manifests, one skill, license, and self-contained 
         'README.md',
         'THIRD-PARTY-NOTICES.txt',
         'control.mjs',
-        'hide-npm-console.cjs',
         'mcp-bootstrap.mjs',
         'official-server',
         'windows-cdp-helper.ps1',

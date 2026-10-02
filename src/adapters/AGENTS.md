@@ -2,13 +2,12 @@
 
 All child processes use shell:false. Only the actual target launch uses
 windowsHide:false, with detached:true and ignored stdio, so GUI windows remain
-available for normal CloseMainWindow shutdown. Windows helpers, official Server
-and acquisition children keep windowsHide:true. Do not hide the target GUI to
-suppress console windows. The scoped npx preload affects only acquisition.
+available for normal CloseMainWindow shutdown. Windows helpers and official Server
+children keep windowsHide:true. Do not hide the target GUI to suppress console windows.
 Start the public upstream Server bin; never import private CLI/daemon internals.
-The native TypeScript preload and generated CJS preload use Node `--import`.
-A private build constant selects the resource name; never pass that preload or
-the acquisition environment to the official Server. Validate external evidence
+Resolve it within the Plugin using module location and verify every published
+file before each launch. Never acquire packages at runtime. Update-check suppression
+belongs only to the official child's environment. Validate external evidence
 from `unknown` before assigning process, endpoint, package or IPC types.
 
 OS evidence must independently confirm path, creation time, session/user,

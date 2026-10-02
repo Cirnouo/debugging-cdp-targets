@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
+import { build } from 'esbuild';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../src/shared/constants.ts';
 import { isRecord } from '../src/shared/errors.ts';
@@ -42,7 +46,7 @@ test('reviewed official release agrees with exact build dependency and isolated 
     }
 });
 
-async function packageFixture() {
+async function packageFixture(launchMarker = false) {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-official-package-'));
     const release: unknown = JSON.parse(
         await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
@@ -58,7 +62,12 @@ async function packageFixture() {
                 bin: { [PACKAGE_NAME]: './build/src/bin/chrome-devtools-mcp.js' },
             }),
         ],
-        ['build/src/bin/chrome-devtools-mcp.js', 'export {};\n'],
+        [
+            'build/src/bin/chrome-devtools-mcp.js',
+            launchMarker
+                ? `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(path.join(root, 'spawn-marker'))}, 'started'); process.stdin.resume();\n`
+                : 'export {};\n',
+        ],
         ['LICENSE', 'Apache License\n'],
         ['build/src/third_party/THIRD_PARTY_NOTICES', 'Vendor licenses\n'],
         ['build/src/third_party/bundled-packages.json', '{}\n'],
@@ -173,6 +182,110 @@ test('installed pnpm bin shims are excluded only by the explicit build-input bou
         assert.ok(!files.has('node_modules/.bin/chrome-devtools-mcp.cmd'));
         await writeFile(path.join(fixture.root, 'node_modules/.bin/extra'), 'extra');
         await assert.rejects(verifyOfficialPackage(fixture.root, evidence, { pnpmInstalled: true }), /Unexpected/);
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+    }
+});
+
+test('native Server resolution is independent of the caller working directory', async () => {
+    const execute = promisify(execFile);
+    const module = new URL('../src/adapters/official-server.ts', import.meta.url).href;
+    const result = await execute(
+        process.execPath,
+        [
+            '--input-type=module',
+            '--eval',
+            `import { resolveServerBin } from ${JSON.stringify(module)}; console.log(await resolveServerBin());`,
+        ],
+        { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false },
+    );
+    assert.equal(
+        result.stdout.trim(),
+        fileURLToPath(
+            new URL(
+                '../plugins/debugging-cdp-targets/dist/official-server/build/src/bin/chrome-devtools-mcp.js',
+                import.meta.url,
+            ),
+        ),
+    );
+});
+
+test('packaged resolver verifies every call and rejects missing or changed content before child spawn', async () => {
+    const fixture = await packageFixture(true);
+    const execute = promisify(execFile);
+    try {
+        for (const [name, bytes] of fixture.contents) {
+            await mkdir(path.dirname(path.join(fixture.root, 'official-server', name)), { recursive: true });
+            await writeFile(path.join(fixture.root, 'official-server', name), bytes);
+        }
+        const output = path.join(fixture.root, 'gateway.mjs');
+        await build({
+            stdin: {
+                contents:
+                    "export { resolveServerBin } from './src/adapters/official-server.ts'; export { createOfficialConnection } from './src/adapters/mcp-bridge.ts';",
+                resolveDir: fileURLToPath(new URL('..', import.meta.url)),
+            },
+            outfile: output,
+            bundle: true,
+            platform: 'node',
+            format: 'esm',
+            target: 'node24',
+            define: { __DCT_OFFICIAL_RELEASE__: JSON.stringify(fixture.input) },
+            banner: {
+                js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+            },
+        });
+        const prelude = `const m = await import(${JSON.stringify(pathToFileURL(output).href)});`;
+        const options = { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false };
+        const result = await execute(
+            process.execPath,
+            ['--input-type=module', '--eval', `${prelude} console.log(await m.resolveServerBin());`],
+            options,
+        );
+        assert.equal(
+            result.stdout.trim(),
+            path.join(fixture.root, 'official-server/build/src/bin/chrome-devtools-mcp.js'),
+        );
+        const changed = path.join(fixture.root, 'official-server/build/src/resource.json');
+        await assert.rejects(
+            execute(
+                process.execPath,
+                [
+                    '--input-type=module',
+                    '--eval',
+                    `${prelude} await m.resolveServerBin(); const fs = await import('node:fs/promises'); await fs.writeFile(${JSON.stringify(changed)}, 'changed'); await m.resolveServerBin();`,
+                ],
+                options,
+            ),
+            /digest|length|changed/,
+        );
+        await assert.rejects(
+            execute(
+                process.execPath,
+                [
+                    '--input-type=module',
+                    '--eval',
+                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222');`,
+                ],
+                options,
+            ),
+            /digest|length|changed/,
+        );
+        await writeFile(changed, fixture.contents.get('build/src/resource.json') ?? '');
+        await rm(path.join(fixture.root, 'official-server/LICENSE'));
+        await assert.rejects(
+            execute(
+                process.execPath,
+                [
+                    '--input-type=module',
+                    '--eval',
+                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222');`,
+                ],
+                options,
+            ),
+            /Missing official package file/,
+        );
+        await assert.rejects(readFile(path.join(fixture.root, 'spawn-marker')), /ENOENT/);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }

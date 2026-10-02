@@ -40,12 +40,6 @@ const connectionId = '33333333-3333-4333-8333-333333333333';
 const sessionId = randomUUID();
 const { parseControlArguments } = await import('../src/interface/control-arguments.ts');
 
-test('npm acquisition children hide their Windows console without altering stdio', async () => {
-    const { hiddenOptions } = await import('../src/adapters/hide-npm-console.ts');
-    const stdio = ['ignore', 'pipe', 'pipe'];
-    assert.deepEqual(hiddenOptions({ stdio }), { stdio, windowsHide: true });
-});
-
 test('launch command substitutes a selected CDP port without a shell', () => {
     const command = runtime.parseLaunchCommand({
         template: '"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port={port} --flag',

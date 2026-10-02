@@ -18,7 +18,6 @@ export const REQUIRED_PAYLOAD_FILES = Object.freeze([
     'dist/THIRD-PARTY-NOTICES.txt',
     'dist/control.mjs',
     'dist/mcp-bootstrap.mjs',
-    'dist/hide-npm-console.cjs',
     'dist/windows-cdp-helper.ps1',
     'skills/README.md',
     'skills/debugging-cdp-targets/README.md',

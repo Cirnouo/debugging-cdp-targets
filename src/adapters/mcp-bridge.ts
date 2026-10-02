@@ -11,7 +11,7 @@ import type {
 } from '@modelcontextprotocol/client';
 import { Client, ProtocolError, ProtocolErrorCode, ReadBuffer, serializeMessage } from '@modelcontextprotocol/client';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
-import { buildServerArguments, prepareServerBin } from './official-server.ts';
+import { buildServerArguments, resolveServerBin } from './official-server.ts';
 
 export type OfficialConnection = {
     tools: Tool[];
@@ -39,11 +39,12 @@ export async function createOfficialConnection(
     } = {},
 ): Promise<OfficialConnection> {
     const arguments_ = options.args ?? buildServerArguments(browserUrl);
-    const bin = options.bin ?? (await prepareServerBin());
+    const bin = options.bin ?? (await resolveServerBin());
     const child = spawn(process.execPath, [bin, ...arguments_], {
         shell: false,
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1' },
     });
     const listeners = new Set<() => void>();
     let exited = false;
