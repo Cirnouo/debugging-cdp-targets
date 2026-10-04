@@ -58,3 +58,9 @@ Version 0.1.0 remains under development; no release has been published.
   reviewed esbuild installation script allowed after the audit gate.
 - Exact, fingerprint-bound review exceptions with a maximum 30-day lifetime;
   signature, registry and scan failures cannot be waived.
+
+### Fixed
+
+- Linux target creation evidence preserves kernel start tick precision, avoiding
+  false identity rejection caused by the rounded `ps lstart` display while
+  retaining creation-time, process/user, listener and endpoint checks.

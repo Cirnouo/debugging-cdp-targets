@@ -8,8 +8,11 @@ session record, CLI daemon, or process takeover is permitted. An isolated
 package cache cannot authorize attaching to a process.
 
 Validate executable path, launch creation time, user/session, process tree,
-loopback listener ownership, and browser-level WebSocket endpoint. Skip occupied,
-privileged, and OS-excluded ports on new launches. Recovery must use the original
+loopback listener ownership, and browser-level WebSocket endpoint.
+On Linux, derive root creation time from `/proc` boot time and process start
+ticks with the system `CLK_TCK`, preserving fractional precision instead of
+the rounded `ps lstart` display. Missing or malformed evidence fails closed.
+Skip occupied, privileged, and OS-excluded ports on new launches. Recovery must use the original
 port and refuse clearly when it is occupied; never silently choose another port.
 
 The official SDK gateway owns host stdio and preserves the official Server's tool

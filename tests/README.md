@@ -6,7 +6,8 @@
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
   path/link rejection, complete file verification and source/packaged resolution.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
-  evidence, and PID/path/session mismatch checks with injected I/O.
+  evidence, precise Linux kernel creation ticks, malformed evidence rejection,
+  and PID/path/session mismatch checks with injected I/O.
 - `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and
   directory documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons, single-gateway manifests,

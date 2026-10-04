@@ -1,6 +1,40 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { resolveUnixExecutable, validateProcessIdentity } from '../src/adapters/platform-process.ts';
+import { resolveUnixExecutable, unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
+
+test('Linux creation evidence preserves kernel tick precision instead of the rounded ps display', async () => {
+    const calls: string[] = [];
+    const evidence = await unixSnapshot(42, 9222, {
+        platform: 'linux',
+        currentUser: () => 7,
+        readlink: async () => process.execPath,
+        readText: async (file) => {
+            calls.push(file);
+            if (file === '/proc/stat') return 'cpu 1 2 3\nbtime 0\n';
+            assert.equal(file, '/proc/42/stat');
+            return '42 (a name ) with spaces) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 100050 20\n';
+        },
+        run: async (executable) => {
+            if (executable === 'getconf') return { code: 0, stdout: '100\n', stderr: '' };
+            if (executable === 'ps') return { code: 0, stdout: '42 1 7 Thu Jan  1 00:16:40 1970 chrome\n', stderr: '' };
+            assert.equal(executable, 'lsof');
+            return { code: 0, stdout: 'p42\nn127.0.0.1:9222\n', stderr: '' };
+        },
+    });
+    assert.ok(evidence.root.exists);
+    assert.equal(evidence.root.startedAtUtc, '1970-01-01T00:16:40.500Z');
+    assert.deepEqual(calls.sort(), ['/proc/42/stat', '/proc/stat']);
+    const target = {
+        executablePath: process.execPath,
+        startedAtUtc: '1970-01-01T00:16:41.200Z',
+        targetKind: 'generic-cdp' as const,
+    };
+    assert.doesNotThrow(() => validateProcessIdentity(evidence, target, { newlyLaunched: true }));
+    assert.throws(
+        () => validateProcessIdentity(evidence, { ...target, startedAtUtc: '1970-01-01T00:16:45Z' }),
+        /creation time changed/,
+    );
+});
 
 test('Darwin resolves absolute executable evidence from lsof text mappings, not a relative ps name', async () => {
     const executable = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -14,6 +48,41 @@ test('Darwin resolves absolute executable evidence from lsof text mappings, not 
         resolveUnixExecutable({ platform: 'darwin', pid: 42, comm: 'another app', run }),
         /unverifiable/,
     );
+});
+
+test('Linux creation evidence fails closed for missing, ambiguous or malformed kernel inputs', async () => {
+    for (const fault of ['pid', 'ticks', 'boot', 'duplicate-boot', 'clock', 'clock-failure', 'missing-file']) {
+        await assert.rejects(
+            unixSnapshot(42, 9222, {
+                platform: 'linux',
+                currentUser: () => 7,
+                readlink: async () => process.execPath,
+                readText: async (file) => {
+                    if (fault === 'missing-file') throw new Error('No kernel evidence');
+                    if (file === '/proc/stat')
+                        return fault === 'boot'
+                            ? 'btime invalid\n'
+                            : fault === 'duplicate-boot'
+                              ? 'btime 0\nbtime 1\n'
+                              : 'btime 0\n';
+                    return `${fault === 'pid' ? 43 : 42} (chrome) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 ${fault === 'ticks' ? '9007199254740993' : 100050}\n`;
+                },
+                run: async (executable) => {
+                    if (executable === 'getconf')
+                        return {
+                            code: fault === 'clock-failure' ? 1 : 0,
+                            stdout: fault === 'clock' ? '0\n' : '100\n',
+                            stderr: '',
+                        };
+                    if (executable === 'ps')
+                        return { code: 0, stdout: '42 1 7 Thu Jan  1 00:16:40 1970 chrome\n', stderr: '' };
+                    return { code: 0, stdout: '', stderr: '' };
+                },
+            }),
+            /kernel evidence|creation evidence/,
+            fault,
+        );
+    }
 });
 
 test('process identity rejects executable, session, and creation-time mismatches', () => {

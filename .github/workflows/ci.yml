@@ -214,6 +214,7 @@ jobs:
                     set -euo pipefail
                     test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
                     command -v lsof
+                    command -v getconf
                     command -v Xvfb
                     command -v xvfb-run
                     command -v xauth

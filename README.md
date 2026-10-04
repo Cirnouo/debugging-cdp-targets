@@ -26,6 +26,7 @@ to report a vulnerability privately.
 Windows has real-process verification and Chrome smoke-test coverage. Linux and
 macOS have simulated CDP test coverage, but real application sessions have not
 been validated. They also require `ps` and `lsof`.
+Linux additionally requires `getconf` and readable `/proc` process evidence.
 
 Chrome extension tools require compatible Google Chrome 149 or newer. Their
 presence in the tool catalog does not mean another application supports them.

@@ -168,8 +168,59 @@ export async function resolveUnixExecutable({
     return executable;
 }
 
-async function unixSnapshot(pid: number, port: number): Promise<ProcessEvidence> {
-    const processes = await run('ps', ['-ww', '-axo', 'pid=,ppid=,uid=,lstart=,comm=']);
+async function linuxCreationTime(
+    pid: number,
+    execute: ProcessExecutor,
+    readText: (file: string) => Promise<string>,
+): Promise<string> {
+    const [stat, boot, clock] = await Promise.all([
+        readText(`/proc/${pid}/stat`),
+        readText('/proc/stat'),
+        execute('getconf', ['CLK_TCK']),
+    ]);
+    // comm may contain spaces and closing parentheses; fields resume after its last ') '.
+    const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
+    const ticks = processStat?.[2]?.split(/\s+/)[19];
+    const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
+    const clockText = clock.stdout.trim();
+    const startTicks = Number(ticks);
+    const bootSeconds = Number(bootTimes[0]?.[1]);
+    const ticksPerSecond = Number(clockText);
+    if (
+        Number(processStat?.[1]) !== pid ||
+        ticks === undefined ||
+        !/^\d+$/.test(ticks) ||
+        !Number.isSafeInteger(startTicks) ||
+        bootTimes.length !== 1 ||
+        !Number.isSafeInteger(bootSeconds) ||
+        clock.code !== 0 ||
+        clock.stderr.trim() ||
+        !/^\d+$/.test(clockText) ||
+        !Number.isSafeInteger(ticksPerSecond) ||
+        ticksPerSecond <= 0
+    ) {
+        throw new Error('The Linux process creation evidence is unverifiable.');
+    }
+    // ps lstart truncates startTicks / CLK_TCK; retain the kernel's fractional seconds.
+    const started = new Date(bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000);
+    if (!Number.isFinite(started.getTime())) throw new Error('The Linux process creation evidence is unverifiable.');
+    return started.toISOString();
+}
+
+export async function unixSnapshot(
+    pid: number,
+    port: number,
+    dependencies: {
+        platform?: NodeJS.Platform;
+        currentUser?: () => number;
+        readlink?: (file: string) => Promise<string>;
+        readText?: (file: string) => Promise<string>;
+        run?: ProcessExecutor;
+    } = {},
+): Promise<ProcessEvidence> {
+    const platform = dependencies.platform ?? process.platform;
+    const execute = dependencies.run ?? run;
+    const processes = await execute('ps', ['-ww', '-axo', 'pid=,ppid=,uid=,lstart=,comm=']);
     if (processes.code !== 0) throw new Error('Cannot inspect target processes.');
     const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
         const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
@@ -188,6 +239,10 @@ async function unixSnapshot(pid: number, port: number): Promise<ProcessEvidence>
             : [];
     });
     const root = rows.find((row) => row.pid === pid);
+    const rootStartedAt =
+        root && platform === 'linux'
+            ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile(file, 'utf8')))
+            : root?.started;
     const owned = new Set(root ? [pid] : []);
     for (let changed = true; changed; ) {
         changed = false;
@@ -206,7 +261,7 @@ async function unixSnapshot(pid: number, port: number): Promise<ProcessEvidence>
             }
         }
     }
-    const result = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fpn']);
+    const result = await execute('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fpn']);
     if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
         throw new Error('Cannot verify CDP listener ownership (lsof required).');
     const listeners: ListenerEvidence[] = [];
@@ -223,16 +278,18 @@ async function unixSnapshot(pid: number, port: number): Promise<ProcessEvidence>
             ? {
                   exists: true,
                   executablePath: await resolveUnixExecutable({
-                      platform: process.platform,
+                      platform,
                       pid,
                       comm: root.executable,
+                      run: execute,
+                      ...(dependencies.readlink ? { readlink: dependencies.readlink } : {}),
                   }),
                   sessionId: root.uid,
-                  startedAtUtc: root.started,
+                  startedAtUtc: rootStartedAt ?? root.started,
               }
             : { exists: false },
         currentSessionId:
-            process.getuid?.() ??
+            (dependencies.currentUser ?? process.getuid)?.() ??
             (() => {
                 throw new Error('Unix user identity unavailable.');
             })(),

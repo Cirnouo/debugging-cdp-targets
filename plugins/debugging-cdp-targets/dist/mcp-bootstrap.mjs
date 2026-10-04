@@ -39781,8 +39781,30 @@ async function resolveUnixExecutable({
     throw new Error("The Darwin executable path is unverifiable or ambiguous.");
   return executable;
 }
-async function unixSnapshot(pid, port) {
-  const processes = await run("ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
+async function linuxCreationTime(pid, execute, readText) {
+  const [stat, boot, clock] = await Promise.all([
+    readText(`/proc/${pid}/stat`),
+    readText("/proc/stat"),
+    execute("getconf", ["CLK_TCK"])
+  ]);
+  const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
+  const ticks = processStat?.[2]?.split(/\s+/)[19];
+  const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
+  const clockText = clock.stdout.trim();
+  const startTicks = Number(ticks);
+  const bootSeconds = Number(bootTimes[0]?.[1]);
+  const ticksPerSecond = Number(clockText);
+  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
+    throw new Error("The Linux process creation evidence is unverifiable.");
+  }
+  const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
+  if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
+  return started.toISOString();
+}
+async function unixSnapshot(pid, port, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const execute = dependencies.run ?? run;
+  const processes = await execute("ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
   if (processes.code !== 0) throw new Error("Cannot inspect target processes.");
   const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
     const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
@@ -39799,6 +39821,7 @@ async function unixSnapshot(pid, port) {
     ] : [];
   });
   const root = rows.find((row) => row.pid === pid);
+  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile3(file, "utf8"))) : root?.started;
   const owned = new Set(root ? [pid] : []);
   for (let changed = true; changed; ) {
     changed = false;
@@ -39810,7 +39833,7 @@ async function unixSnapshot(pid, port) {
       }
     }
   }
-  const result = await run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpn"]);
+  const result = await execute("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpn"]);
   if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
     throw new Error("Cannot verify CDP listener ownership (lsof required).");
   const listeners = [];
@@ -39826,14 +39849,16 @@ async function unixSnapshot(pid, port) {
     root: root ? {
       exists: true,
       executablePath: await resolveUnixExecutable({
-        platform: process.platform,
+        platform,
         pid,
-        comm: root.executable
+        comm: root.executable,
+        run: execute,
+        ...dependencies.readlink ? { readlink: dependencies.readlink } : {}
       }),
       sessionId: root.uid,
-      startedAtUtc: root.started
+      startedAtUtc: rootStartedAt ?? root.started
     } : { exists: false },
-    currentSessionId: process.getuid?.() ?? (() => {
+    currentSessionId: (dependencies.currentUser ?? process.getuid)?.() ?? (() => {
       throw new Error("Unix user identity unavailable.");
     })(),
     processIds: [...owned],
