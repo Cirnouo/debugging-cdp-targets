@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolveUnixExecutable, unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
+import { errorDetails } from '../src/shared/errors.ts';
 
 test('Linux creation evidence preserves kernel tick precision instead of the rounded ps display', async () => {
     const calls: string[] = [];
@@ -48,6 +49,36 @@ test('Darwin resolves absolute executable evidence from lsof text mappings, not 
         resolveUnixExecutable({ platform: 'darwin', pid: 42, comm: 'another app', run }),
         /unverifiable/,
     );
+});
+
+test('Darwin unverifiable executable failures retain bounded identity evidence for diagnosis', async () => {
+    const paths = Array.from({ length: 40 }, (_, index) => `/Applications/candidate-${index}/Google Chrome`);
+    for (const command of ['Google Chrome', '/Applications/missing/Google Chrome']) {
+        await assert.rejects(
+            resolveUnixExecutable({
+                platform: 'darwin',
+                pid: 42,
+                comm: command,
+                run: async () => ({
+                    code: 0,
+                    stdout: `p42\n${paths.map((file) => `n${file}`).join('\n')}\n`,
+                    stderr: '',
+                }),
+            }),
+            (error: unknown) => {
+                assert.match(error instanceof Error ? error.message : '', /unverifiable or ambiguous/);
+                assert.deepEqual(errorDetails(error), {
+                    phase: 'executable-identity',
+                    processId: 42,
+                    command,
+                    candidateCount: 40,
+                    matchCount: command === 'Google Chrome' ? 40 : 0,
+                    mappedPaths: paths.slice(0, 32),
+                });
+                return true;
+            },
+        );
+    }
 });
 
 test('Linux creation evidence fails closed for missing, ambiguous or malformed kernel inputs', async () => {

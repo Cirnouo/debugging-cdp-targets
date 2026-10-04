@@ -163,8 +163,18 @@ export async function resolveUnixExecutable({
         path.posix.isAbsolute(comm) ? file === comm : path.posix.basename(file) === comm,
     );
     const executable = matches[0];
-    if (matches.length !== 1 || executable === undefined)
-        throw new Error('The Darwin executable path is unverifiable or ambiguous.');
+    if (matches.length !== 1 || executable === undefined) {
+        const error = new DetailedError('The Darwin executable path is unverifiable or ambiguous.');
+        error.details = {
+            phase: 'executable-identity',
+            processId: pid,
+            command: comm.slice(0, 1_024),
+            candidateCount: candidates.length,
+            matchCount: matches.length,
+            mappedPaths: candidates.slice(0, 32).map((file) => file.slice(0, 1_024)),
+        };
+        throw error;
+    }
     return executable;
 }
 
