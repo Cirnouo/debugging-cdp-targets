@@ -7779,8 +7779,43 @@ function parseOfficialReleaseEvidence(input) {
 // tooling/security/security-evidence.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { createHash } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+// src/adapters/file-evidence.ts
+import { constants } from "node:fs";
+import { lstat, open } from "node:fs/promises";
+function sameFile(expected, actual) {
+  return actual.isFile() && !actual.isSymbolicLink() && expected.dev === actual.dev && expected.ino === actual.ino;
+}
+function unchanged(expected, actual) {
+  return sameFile(expected, actual) && expected.size === actual.size && expected.mtimeNs === actual.mtimeNs && expected.ctimeNs === actual.ctimeNs;
+}
+async function readRegularFile(file, io = {}) {
+  const inspect = io.lstat ?? ((name) => lstat(name, { bigint: true }));
+  const acquire = io.open ?? (async (name, flags) => {
+    const handle2 = await open(name, flags);
+    return {
+      stat: () => handle2.stat({ bigint: true }),
+      readFile: () => handle2.readFile(),
+      close: () => handle2.close()
+    };
+  });
+  const handle = await acquire(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) throw new Error("Evidence must be a regular file without links.");
+    if (!unchanged(before, await inspect(file))) throw new Error("Evidence file identity or metadata changed.");
+    const bytes = await handle.readFile();
+    if (!unchanged(before, await handle.stat()) || !unchanged(before, await inspect(file)) || BigInt(bytes.length) !== before.size)
+      throw new Error("Evidence file identity or metadata changed.");
+    return bytes;
+  } finally {
+    await handle.close();
+  }
+}
+
+// tooling/security/security-evidence.ts
 var INSTALL_POLICY = Object.freeze({
   minimumReleaseAge: 1440,
   minimumReleaseAgeStrict: true,
@@ -7870,9 +7905,8 @@ async function hashFiles(root, files) {
   const hash = createHash("sha256");
   for (const file of [...files].sort()) {
     const absolute = path.resolve(root, file);
-    if (!absolute.startsWith(`${path.resolve(root)}${path.sep}`) || !(await lstat(absolute)).isFile())
-      throw new Error(`Unsafe evidence path: ${file}`);
-    const bytes = await readFile(absolute);
+    if (!absolute.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error(`Unsafe evidence path: ${file}`);
+    const bytes = await readRegularFile(absolute);
     hash.update(`${file}\0${bytes.length}\0`).update(bytes);
   }
   return hash.digest("hex");

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
+import { readRegularFile } from '../../src/adapters/file-evidence.ts';
 import { NPM_REGISTRY } from '../../src/shared/constants.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import type { LockDocument, LockInventory } from './audit-policy.ts';
@@ -117,9 +118,8 @@ async function hashFiles(root: string, files: string[]) {
     const hash = createHash('sha256');
     for (const file of [...files].sort()) {
         const absolute = path.resolve(root, file);
-        if (!absolute.startsWith(`${path.resolve(root)}${path.sep}`) || !(await lstat(absolute)).isFile())
-            throw new Error(`Unsafe evidence path: ${file}`);
-        const bytes = await readFile(absolute);
+        if (!absolute.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error(`Unsafe evidence path: ${file}`);
+        const bytes = await readRegularFile(absolute);
         hash.update(`${file}\0${bytes.length}\0`).update(bytes);
     }
     return hash.digest('hex');

@@ -3286,7 +3286,7 @@ var require_stream = __commonJS({
       };
       duplex._final = function(callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open3() {
+          ws.once("open", function open4() {
             duplex._final(callback);
           });
           return;
@@ -3307,7 +3307,7 @@ var require_stream = __commonJS({
       };
       duplex._write = function(chunk, encoding, callback) {
         if (ws.readyState === ws.CONNECTING) {
-          ws.once("open", function open3() {
+          ws.once("open", function open4() {
             duplex._write(chunk, encoding, callback);
           });
           return;
@@ -17009,9 +17009,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
       return `${varKind} ${this.name}${rhs};` + _n;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       if (!names[this.name.str]) return;
-      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants);
+      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants2);
       return this;
     }
     get names() {
@@ -17028,9 +17028,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     render({ _n }) {
       return `${this.lhs} = ${this.rhs};` + _n;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects) return;
-      this.rhs = optimizeExpr(this.rhs, names, constants);
+      this.rhs = optimizeExpr(this.rhs, names, constants2);
       return this;
     }
     get names() {
@@ -17089,8 +17089,8 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     optimizeNodes() {
       return `${this.code}` ? this : void 0;
     }
-    optimizeNames(names, constants) {
-      this.code = optimizeExpr(this.code, names, constants);
+    optimizeNames(names, constants2) {
+      this.code = optimizeExpr(this.code, names, constants2);
       return this;
     }
     get names() {
@@ -17116,12 +17116,12 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       }
       return nodes.length > 0 ? this : void 0;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       const { nodes } = this;
       let i = nodes.length;
       while (i--) {
         const n = nodes[i];
-        if (n.optimizeNames(names, constants)) continue;
+        if (n.optimizeNames(names, constants2)) continue;
         subtractNames(names, n.names);
         nodes.splice(i, 1);
       }
@@ -17168,11 +17168,11 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       if (cond === false || !this.nodes.length) return void 0;
       return this;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       var _a3;
-      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-      if (!(super.optimizeNames(names, constants) || this.else)) return;
-      this.condition = optimizeExpr(this.condition, names, constants);
+      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+      if (!(super.optimizeNames(names, constants2) || this.else)) return;
+      this.condition = optimizeExpr(this.condition, names, constants2);
       return this;
     }
     get names() {
@@ -17194,9 +17194,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     render(opts) {
       return `for(${this.iteration})` + super.render(opts);
     }
-    optimizeNames(names, constants) {
-      if (!super.optimizeNames(names, constants)) return;
-      this.iteration = optimizeExpr(this.iteration, names, constants);
+    optimizeNames(names, constants2) {
+      if (!super.optimizeNames(names, constants2)) return;
+      this.iteration = optimizeExpr(this.iteration, names, constants2);
       return this;
     }
     get names() {
@@ -17231,9 +17231,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     render(opts) {
       return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
     }
-    optimizeNames(names, constants) {
-      if (!super.optimizeNames(names, constants)) return;
-      this.iterable = optimizeExpr(this.iterable, names, constants);
+    optimizeNames(names, constants2) {
+      if (!super.optimizeNames(names, constants2)) return;
+      this.iterable = optimizeExpr(this.iterable, names, constants2);
       return this;
     }
     get names() {
@@ -17272,11 +17272,11 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       (_b = this.finally) === null || _b === void 0 || _b.optimizeNodes();
       return this;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       var _a3, _b;
-      super.optimizeNames(names, constants);
-      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names, constants);
-      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants);
+      super.optimizeNames(names, constants2);
+      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names, constants2);
+      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants2);
       return this;
     }
     get names() {
@@ -17525,7 +17525,7 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
   function addExprNames(names, from) {
     return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
   }
-  function optimizeExpr(expr, names, constants) {
+  function optimizeExpr(expr, names, constants2) {
     if (expr instanceof code_1.Name) return replaceName(expr);
     if (!canOptimize(expr)) return expr;
     return new code_1._Code(expr._items.reduce((items, c) => {
@@ -17535,13 +17535,13 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       return items;
     }, []));
     function replaceName(n) {
-      const c = constants[n.str];
+      const c = constants2[n.str];
       if (c === void 0 || names[n.str] !== 1) return n;
       delete names[n.str];
       return c;
     }
     function canOptimize(e) {
-      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
+      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
     }
   }
   function subtractNames(names, from) {
@@ -26127,7 +26127,7 @@ init_define_DCT_TOOL_CATALOG();
 // src/adapters/official-server.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-import { readFile as readFile2 } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26332,12 +26332,49 @@ function validateOfficialManifest(input, evidence) {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { createHash } from "node:crypto";
-import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import { lstat as lstat2, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+
+// src/adapters/file-evidence.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { constants } from "node:fs";
+import { lstat, open as open2 } from "node:fs/promises";
+function sameFile(expected, actual) {
+  return actual.isFile() && !actual.isSymbolicLink() && expected.dev === actual.dev && expected.ino === actual.ino;
+}
+function unchanged(expected, actual) {
+  return sameFile(expected, actual) && expected.size === actual.size && expected.mtimeNs === actual.mtimeNs && expected.ctimeNs === actual.ctimeNs;
+}
+async function readRegularFile(file, io = {}) {
+  const inspect = io.lstat ?? ((name) => lstat(name, { bigint: true }));
+  const acquire = io.open ?? (async (name, flags) => {
+    const handle2 = await open2(name, flags);
+    return {
+      stat: () => handle2.stat({ bigint: true }),
+      readFile: () => handle2.readFile(),
+      close: () => handle2.close()
+    };
+  });
+  const handle = await acquire(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) throw new Error("Evidence must be a regular file without links.");
+    if (!unchanged(before, await inspect(file))) throw new Error("Evidence file identity or metadata changed.");
+    const bytes = await handle.readFile();
+    if (!unchanged(before, await handle.stat()) || !unchanged(before, await inspect(file)) || BigInt(bytes.length) !== before.size)
+      throw new Error("Evidence file identity or metadata changed.");
+    return bytes;
+  } finally {
+    await handle.close();
+  }
+}
+
+// src/adapters/official-package.ts
 async function verifyOfficialPackage(directory, input, options = {}) {
   const evidence = parseOfficialReleaseEvidence(input);
   const root = path.resolve(directory);
-  const rootStat = await lstat(root);
+  const rootStat = await lstat2(root);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory())
     throw new Error("Official package root must be a directory without links.");
   const canonical2 = await realpath(root);
@@ -26361,7 +26398,7 @@ async function verifyOfficialPackage(directory, input, options = {}) {
     for (const name of await readdir(current)) {
       const relative = `${prefix}${name}`;
       const absolute = path.join(current, name);
-      const stat2 = await lstat(absolute);
+      const stat2 = await lstat2(absolute);
       if (stat2.isSymbolicLink()) throw new Error(`Official package contains a link: ${relative}`);
       if (path.relative(canonical2, await realpath(absolute)).replaceAll("\\", "/") !== relative)
         throw new Error(`Official package path escaped or changed: ${relative}`);
@@ -26377,7 +26414,7 @@ async function verifyOfficialPackage(directory, input, options = {}) {
         if (options.pnpmInstalled && shims.has(relative)) continue;
         const record2 = expected.get(relative);
         if (!record2) throw new Error(`Unexpected official package file: ${relative}`);
-        const bytes = await readFile(absolute);
+        const bytes = await readRegularFile(absolute);
         if (bytes.length !== record2.bytes || createHash("sha256").update(bytes).digest("hex") !== record2.sha256)
           throw new Error(`Official package digest or length changed: ${relative}`);
         files.set(relative, bytes);
@@ -26425,7 +26462,7 @@ async function resolveServerBin() {
     const packaged = typeof define_DCT_OFFICIAL_RELEASE_default !== "undefined";
     const evidence = parseOfficialReleaseEvidence(
       packaged ? define_DCT_OFFICIAL_RELEASE_default : JSON.parse(
-        await readFile2(new URL("../../tooling/official-server-release.json", import.meta.url), "utf8")
+        await readFile(new URL("../../tooling/official-server-release.json", import.meta.url), "utf8")
       )
     );
     const directory = fileURLToPath(
@@ -31474,9 +31511,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
       return `${varKind} ${this.name}${rhs};` + _n;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       if (!names[this.name.str]) return;
-      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants);
+      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants2);
       return this;
     }
     get names() {
@@ -31493,9 +31530,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     render({ _n }) {
       return `${this.lhs} = ${this.rhs};` + _n;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects) return;
-      this.rhs = optimizeExpr(this.rhs, names, constants);
+      this.rhs = optimizeExpr(this.rhs, names, constants2);
       return this;
     }
     get names() {
@@ -31554,8 +31591,8 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     optimizeNodes() {
       return `${this.code}` ? this : void 0;
     }
-    optimizeNames(names, constants) {
-      this.code = optimizeExpr(this.code, names, constants);
+    optimizeNames(names, constants2) {
+      this.code = optimizeExpr(this.code, names, constants2);
       return this;
     }
     get names() {
@@ -31581,12 +31618,12 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       }
       return nodes.length > 0 ? this : void 0;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       const { nodes } = this;
       let i = nodes.length;
       while (i--) {
         const n = nodes[i];
-        if (n.optimizeNames(names, constants)) continue;
+        if (n.optimizeNames(names, constants2)) continue;
         subtractNames(names, n.names);
         nodes.splice(i, 1);
       }
@@ -31633,11 +31670,11 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       if (cond === false || !this.nodes.length) return void 0;
       return this;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       var _a3;
-      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants);
-      if (!(super.optimizeNames(names, constants) || this.else)) return;
-      this.condition = optimizeExpr(this.condition, names, constants);
+      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
+      if (!(super.optimizeNames(names, constants2) || this.else)) return;
+      this.condition = optimizeExpr(this.condition, names, constants2);
       return this;
     }
     get names() {
@@ -31659,9 +31696,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     render(opts) {
       return `for(${this.iteration})` + super.render(opts);
     }
-    optimizeNames(names, constants) {
-      if (!super.optimizeNames(names, constants)) return;
-      this.iteration = optimizeExpr(this.iteration, names, constants);
+    optimizeNames(names, constants2) {
+      if (!super.optimizeNames(names, constants2)) return;
+      this.iteration = optimizeExpr(this.iteration, names, constants2);
       return this;
     }
     get names() {
@@ -31696,9 +31733,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     render(opts) {
       return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
     }
-    optimizeNames(names, constants) {
-      if (!super.optimizeNames(names, constants)) return;
-      this.iterable = optimizeExpr(this.iterable, names, constants);
+    optimizeNames(names, constants2) {
+      if (!super.optimizeNames(names, constants2)) return;
+      this.iterable = optimizeExpr(this.iterable, names, constants2);
       return this;
     }
     get names() {
@@ -31737,11 +31774,11 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       (_b = this.finally) === null || _b === void 0 || _b.optimizeNodes();
       return this;
     }
-    optimizeNames(names, constants) {
+    optimizeNames(names, constants2) {
       var _a3, _b;
-      super.optimizeNames(names, constants);
-      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names, constants);
-      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants);
+      super.optimizeNames(names, constants2);
+      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names, constants2);
+      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants2);
       return this;
     }
     get names() {
@@ -31990,7 +32027,7 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   function addExprNames(names, from) {
     return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
   }
-  function optimizeExpr(expr, names, constants) {
+  function optimizeExpr(expr, names, constants2) {
     if (expr instanceof code_1.Name) return replaceName(expr);
     if (!canOptimize(expr)) return expr;
     return new code_1._Code(expr._items.reduce((items, c) => {
@@ -32000,13 +32037,13 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       return items;
     }, []));
     function replaceName(n) {
-      const c = constants[n.str];
+      const c = constants2[n.str];
       if (c === void 0 || names[n.str] !== 1) return n;
       delete names[n.str];
       return c;
     }
     function canOptimize(e) {
-      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants[c.str] !== void 0);
+      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
     }
   }
   function subtractNames(names, from) {
@@ -39453,7 +39490,7 @@ function validateCdpIdentity({
 // src/adapters/chrome-profile.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-import { open as open2, readlink as readlink2, realpath as realpath2 } from "node:fs/promises";
+import { open as open3, readlink as readlink2, realpath as realpath2 } from "node:fs/promises";
 import os from "node:os";
 import path5 from "node:path";
 
@@ -39461,7 +39498,7 @@ import path5 from "node:path";
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { spawn as spawn3 } from "node:child_process";
-import { readFile as readFile3, readlink, stat } from "node:fs/promises";
+import { readFile as readFile2, readlink, stat } from "node:fs/promises";
 import path4 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
@@ -39870,7 +39907,7 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     ] : [];
   });
   const root = rows.find((row) => row.pid === pid);
-  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile3(file, "utf8"))) : root?.started;
+  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile2(file, "utf8"))) : root?.started;
   const owned = new Set(root ? [pid] : []);
   for (let changed = true; changed; ) {
     changed = false;
@@ -39926,7 +39963,7 @@ function createPlatformAdapter(dependencies = {}) {
     validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
     async reservedRanges() {
       if (process.platform === "linux") {
-        const value = await readFile3("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
+        const value = await readFile2("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
         return value.trim().split(",").filter(Boolean).map((part) => {
           const start = Number(part.split("-")[0]);
           const end = Number(part.split("-")[1] ?? start);
@@ -40014,7 +40051,7 @@ var claims = /* @__PURE__ */ new Set();
 async function profileAvailable(directory) {
   if (process.platform === "win32") {
     try {
-      const handle = await open2(path5.join(directory, "lockfile"), "r+");
+      const handle = await open3(path5.join(directory, "lockfile"), "r+");
       await handle.close();
       return true;
     } catch (error2) {
@@ -40364,7 +40401,7 @@ function createTargetHost(dependencies = {}) {
 // src/adapters/tool-catalog.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-import { readFile as readFile4 } from "node:fs/promises";
+import { readFile as readFile3 } from "node:fs/promises";
 import os3 from "node:os";
 var defaults = {
   categoryInput: true,
@@ -40467,7 +40504,7 @@ Gateway configuration: ${conditions.conditions.join(", ")}. ${conditions.reason 
   };
 }
 async function loadOfficialToolCatalog(_defaults) {
-  const value = typeof define_DCT_TOOL_CATALOG_default !== "undefined" ? define_DCT_TOOL_CATALOG_default : JSON.parse(await readFile4(new URL("../../tooling/official-tool-catalog.json", import.meta.url), "utf8"));
+  const value = typeof define_DCT_TOOL_CATALOG_default !== "undefined" ? define_DCT_TOOL_CATALOG_default : JSON.parse(await readFile3(new URL("../../tooling/official-tool-catalog.json", import.meta.url), "utf8"));
   return createToolCatalog(value);
 }
 function workspaceSources(mcpArgs, supportsRoots) {
