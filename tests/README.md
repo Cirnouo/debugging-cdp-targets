@@ -18,6 +18,8 @@
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
+- `hook-isolation.test.ts` executes the pre-push entry point with foreign Git
+  routing variables and verifies disposable fixtures leave that repository intact.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
 - `chrome-smoke-config.test.ts` checks explicit portable executable selection,

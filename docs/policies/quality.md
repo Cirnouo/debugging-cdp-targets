@@ -26,7 +26,9 @@ PATH, invokes no browser tools, and shuts the child down normally through stdin.
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection; safe
 Biome writes are limited to staged TS/JS/JSON, other text is audited read-only.
-pre-push runs verify:push. --no-verify and HUSKY=0 can bypass local hooks.
+pre-push clears Git's repository routing variables before running verify:push,
+so disposable Git fixtures cannot modify the repository that invoked the hook.
+--no-verify and HUSKY=0 can bypass local hooks.
 
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
 cancellation of superseded ref runs. Commit messages validates topology, PR
