@@ -35,6 +35,7 @@ Version 0.1.0 remains under development; no release has been published.
 - Structured executable/args/cwd/env launches with native Windows privilege
   detection, private one-shot elevation, actual app handles and separate permission
   and CDP readiness budgets. No plugin CLI, control IPC or Agent startup wrappers.
+  Normal close accepts 8.3 executable paths while retaining process identity checks.
 - Timeout quarantine, pending transport cleanup and phase-only diagnostics;
   absent-listener close and native failure/retry evidence.
 - Chrome presets for a fixed dedicated browser profile, occupancy checks and

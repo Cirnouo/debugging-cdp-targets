@@ -21,4 +21,4 @@ try {
 }
 finally { $compiler.Dispose() }
 Add-Type -Path (Join-Path $PSScriptRoot '../../src/adapters/windows-native-process.cs') -ReferencedAssemblies 'System.dll', 'System.Core.dll', 'System.Xml.dll'
-[Console]::Out.WriteLine((@{ requiresElevation = [DctNative]::NeedsElevation($Output, ''); currentElevation = [DctNative]::IsElevated() } | ConvertTo-Json -Compress))
+[Console]::Out.WriteLine((@{ requiresElevation = [DctNative]::NeedsElevation($Output, ''); currentElevation = [DctNative]::IsElevated(); shortPath = (New-Object -ComObject Scripting.FileSystemObject).GetFile($Output).ShortPath } | ConvertTo-Json -Compress))

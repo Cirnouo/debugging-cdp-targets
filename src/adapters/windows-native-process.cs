@@ -290,7 +290,8 @@ public static class DctNative
         using (DctNativeProcess target = Inspect(pid)) {
             int targetSession, ownSession;
             if (!ProcessIdToSessionId(pid, out targetSession) || !ProcessIdToSessionId(Process.GetCurrentProcess().Id, out ownSession)) throw Error();
-            if (!Path.GetFullPath(executable).Equals(target.ExecutablePath, StringComparison.OrdinalIgnoreCase) ||
+            // .NET Framework expands 8.3 aliases here; normalize both identity paths.
+            if (!Path.GetFullPath(executable).Equals(Path.GetFullPath(target.ExecutablePath), StringComparison.OrdinalIgnoreCase) ||
                 DateTime.Parse(startedAtUtc, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime().Ticks != target.CreatedTicks || targetSession != ownSession)
                 throw new InvalidDataException("Native close process identity changed.");
             using (Process process = Process.GetProcessById(pid)) {
