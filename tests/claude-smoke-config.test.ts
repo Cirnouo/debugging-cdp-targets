@@ -294,6 +294,7 @@ test('CLI captures complete piped output before accepting child completion', asy
 async function adversarialHost(
     mode: 'resistant' | 'callback' | 'initial-input' | 'next-input' | 'callback-error' | 'driver-cleanup',
     afterEvidence?: (pidFile: string) => Promise<void>,
+    versionDelayMs = 0,
 ) {
     const { temporary } = await sandbox(process.cwd(), `adversarial-${mode}`);
     const fixture = path.join(temporary, 'private-fixture.ts');
@@ -303,12 +304,18 @@ async function adversarialHost(
         `
 import { writeFileSync } from 'node:fs';
 writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify(process.pid));
-if (process.argv.includes('--version')) { console.log('2.1.283 (Claude Code)'); process.exit(0); }
+if (process.argv.includes('--version')) {
+    await new Promise((resolve) => setTimeout(resolve, ${versionDelayMs}));
+    console.log('2.1.283 (Claude Code)'); process.exit(0);
+}
 process.on('SIGTERM', () => {});
 const result = JSON.stringify({ type: 'result', subtype: 'success', is_error: false }) + String.fromCharCode(10);
 const evidence = JSON.stringify({ type: 'fixture', label: 'private-child-evidence' }) + String.fromCharCode(10);
 const mode = ${JSON.stringify(mode)};
-if (mode === 'resistant' || mode === 'driver-cleanup') { setInterval(() => {}, 1000); }
+if (mode === 'resistant' || mode === 'driver-cleanup') {
+    if (mode === 'driver-cleanup') process.stdout.write('FIXTURE_READY' + String.fromCharCode(10));
+    setInterval(() => {}, 1000);
+}
 else if (mode === 'initial-input') {
     process.stdout.write(evidence, () => process.stdin.destroy());
     setInterval(() => {}, 1000);
@@ -331,7 +338,7 @@ const owned = new Set();
 let cleaning;
 function cleanup() {
     return cleaning ??= Promise.all([...owned].map((child) => new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Private fixture cleanup did not close.')), 500);
+        const timer = setTimeout(() => reject(new Error('Private fixture cleanup did not close.')), 3000);
         child.once('close', () => { clearTimeout(timer); resolve(); });
         child.kill('SIGKILL');
     })));
@@ -348,6 +355,8 @@ cp.spawn = (executable, args, options) => {
     const child = original(executable, executable === process.execPath && ['--version', '-p'].includes(args[0]) ? [${JSON.stringify(fixture)}, ...args] : args, options);
     owned.add(child);
     child.once('close', () => owned.delete(child));
+    if (${JSON.stringify(mode)} === 'driver-cleanup')
+        child.stdout.once('data', () => { if (process.connected) process.send('fixture-ready'); });
     if (args[0] === '-p' && ${JSON.stringify(mode)} === 'initial-input') {
         // Make input closure race a real pending write after fixture evidence
         // has arrived, instead of relying on OS pipe buffering timing.
@@ -406,22 +415,30 @@ process.disconnect();
         (stopping ??= (async () => {
             if (driverClosed) return;
             if (child.connected) child.send('cleanup', () => {});
-            if (await completesWithin(closed, 750)) return;
+            if (await completesWithin(closed, 5000)) return;
             child.kill('SIGKILL');
-            assert.ok(await completesWithin(closed, 250), 'Private driver cleanup did not close.');
+            assert.ok(await completesWithin(closed, 2000), 'Private driver cleanup did not close.');
         })());
     let rejectDeadline: ((error: Error) => void) | undefined;
     const deadline = new Promise<never>((_resolve, reject) => {
         rejectDeadline = reject;
     });
-    // This outer deadline makes the RED executable reproduction bounded too.
-    const timer = setTimeout(() => {
+    const expire = () => {
         watchdog = true;
         void stopDriver().then(
             () => rejectDeadline?.(new Error('Private helper failed to settle before its deadline.')),
             (error: unknown) => rejectDeadline?.(error instanceof Error ? error : new Error(String(error))),
         );
-    }, 2500);
+    };
+    // Driver, version CLI and host interpreter startup precede the unchanged
+    // helper deadlines. Allow scheduling under the full concurrent test suite.
+    let timer = setTimeout(expire, 15_000);
+    child.on('message', (message: unknown) => {
+        if (mode === 'driver-cleanup' && message === 'fixture-ready') {
+            clearTimeout(timer);
+            timer = setTimeout(expire, 500);
+        }
+    });
     try {
         const code = await Promise.race([closed, deadline]);
         const pid: unknown = JSON.parse(await readFile(pidFile, 'utf8'));
@@ -461,6 +478,9 @@ async function completesWithin(completion: Promise<unknown>, milliseconds: numbe
 for (const mode of ['resistant', 'callback', 'initial-input', 'next-input', 'callback-error'] as const)
     test(`private child ${mode} failure is bounded, contained and retains transcript evidence`, () =>
         adversarialHost(mode));
+
+test('slow interpreter version startup preserves the bounded callback failure and transcript', () =>
+    adversarialHost('callback', undefined, 2700));
 
 test('outer watchdog requests owned fixture cleanup before its private driver closes', async () => {
     await assert.rejects(() => adversarialHost('driver-cleanup'), /Private helper failed to settle/);
