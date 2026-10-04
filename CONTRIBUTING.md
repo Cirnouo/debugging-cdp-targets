@@ -56,6 +56,8 @@ Target main and use a PR title accepted by the commit policy, for example
 `fix(target): reject stale session identity`. Explain the problem, final behavior,
 and actual verification results in the PR template. Update relevant documentation
 and meaningful user-facing changes in the Unreleased changelog.
+Wrap description paragraphs and list continuations within 100 characters; CI
+validates the complete future squash message as well as its title.
 
 The main Ruleset requires an up-to-date PR and successful required GitHub checks.
 The maintainer reviews contributions and merges with squash; the PR title becomes

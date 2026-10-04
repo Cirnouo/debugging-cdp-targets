@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -40,10 +40,11 @@ function sanitizedGitEnvironment(environment = process.env, overrides = {}) {
     };
 }
 
-test('builds a pull request audit for title, source branch, and commit range', () => {
+test('builds a pull request audit for title, complete squash message, source branch and commit range', () => {
     const event = {
         pull_request: {
             title: 'ci(tooling): add quality gates',
+            body: 'Explain the final behavior.',
             base: { sha: 'base' },
             head: { ref: 'ci/quality-gates', sha: 'head' },
         },
@@ -55,10 +56,62 @@ test('builds a pull request audit for title, source branch, and commit range', (
                 label: 'pull request title',
                 message: 'ci(tooling): add quality gates',
             },
+            {
+                label: 'pull request squash message',
+                message: 'ci(tooling): add quality gates\n\nExplain the final behavior.',
+            },
         ],
         range: 'base..head',
         includeAncestors: false,
     });
+});
+
+test('PR squash validation rejects long descriptions and missing or malformed body evidence', () => {
+    const pr = {
+        title: 'fix(governance): validate squash messages',
+        head: { ref: 'codex/squash-check', sha: 'head' },
+        base: { sha: 'base' },
+    };
+    const request = buildCommitCheckRequest({
+        eventName: 'pull_request',
+        event: { pull_request: { ...pr, body: 'x'.repeat(101) } },
+    });
+    assert.equal(
+        request.directMessages.some(({ message }) => !commitlintAccepts(message)),
+        true,
+    );
+    for (const body of [undefined, false, 42, {}]) {
+        assert.throws(
+            () => buildCommitCheckRequest({ eventName: 'pull_request', event: { pull_request: { ...pr, body } } }),
+            /Invalid pull request/,
+        );
+    }
+    const empty = buildCommitCheckRequest({
+        eventName: 'pull_request',
+        event: { pull_request: { ...pr, body: null } },
+    });
+    assert.equal(
+        empty.directMessages.every(({ message }) => commitlintAccepts(message)),
+        true,
+    );
+});
+
+test('historical squash wrapping applies only to the exact immutable reviewed commit message', async () => {
+    const message: unknown = JSON.parse(
+        await readFile(new URL('./fixtures/pr2-squash-message.json', import.meta.url), 'utf8'),
+    );
+    assert.ok(typeof message === 'string');
+    const sha = 'a5b7b8ba0006926df55beb81f17dc52f20767699';
+    assert.equal(commitlintAccepts(message), false);
+    assert.deepEqual(validateCommitRecords([{ sha, message, parentCount: 1 }]), []);
+    assert.notDeepEqual(recordErrors(message), []);
+    for (const changed of [
+        { message: message.replace('fix(dependencies)', 'feat(unapproved)'), parentCount: 1 },
+        { message: `${message}\nUnreviewed appended text.\n`, parentCount: 1 },
+        { message, parentCount: 2 },
+    ]) {
+        assert.match(validateCommitRecords([{ sha, ...changed }]).join('\n'), /historical.*identity/i);
+    }
 });
 
 test('builds normal and first-push audits from GitHub push payloads', () => {

@@ -1,5 +1,8 @@
 # Test fixtures
 
+`pr2-squash-message.json` preserves the exact immutable historical PR #2 commit
+message for body-wrapping and identity-mismatch regressions.
+
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
 `hook-gateway.ts` composes the production gateway/SDK with fake process, CDP and
 upstream I/O for isolated Codex model-context tests. Its local HTTP exit trigger
