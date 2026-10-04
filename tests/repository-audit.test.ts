@@ -28,6 +28,43 @@ test('gateway imports only public split SDK entry points', () => {
     }
 });
 
+test('repository audit accepts AGENTS.md as the contributor entry point', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-agents-'));
+    try {
+        execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+        const license = 'Copyright (c) 2026 Cirnouo\n';
+        const files = {
+            'AGENTS.md': '# Contributor entry point\n',
+            'README.md': '# Repository\n',
+            LICENSE: license,
+            '.gitignore': '.idea/\nnode_modules/\n.env*\n',
+            'CHANGELOG.md': '## [Unreleased]\n',
+            'package.json': `${JSON.stringify({ version: '0.1.0', engines: { node: '24.21.0' }, packageManager: 'pnpm@12.4.2' }, null, 4)}\n`,
+            'docs/README.md': '# Documentation\n',
+            'docs/domain-language.md': '# Domain language\n',
+            'plugins/README.md': '# Plugins\n',
+            [`${PLUGIN_ROOT}/README.md`]: '# Plugin\n',
+            [`${PLUGIN_ROOT}/LICENSE`]: license,
+            [`${PLUGIN_ROOT}/.codex-plugin/README.md`]: '# Manifest\n',
+            [`${PLUGIN_ROOT}/.codex-plugin/plugin.json`]: `${JSON.stringify({ name: 'debugging-cdp-targets', version: '0.1.0' }, null, 4)}\n`,
+            [`${PLUGIN_ROOT}/skills/README.md`]: '# Skills\n',
+            [`${PLUGIN_ROOT}/skills/debugging-cdp-targets/README.md`]: '# Instructions\n',
+            [`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`]:
+                '---\nname: debugging-cdp-targets\nlicense: MIT\ndescription: Debug CDP targets.\nmetadata:\n    version: 0.1.0\n---\n',
+        };
+        for (const [file, source] of Object.entries(files)) {
+            const target = path.join(root, file);
+            await mkdir(path.dirname(target), { recursive: true });
+            await writeFile(target, source);
+        }
+        assert.deepEqual(await auditRepository(root), []);
+    } finally {
+        assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(root).startsWith('dct-agents-'));
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 async function auditGithubDocumentation(files: readonly string[]) {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-readme-'));
     try {

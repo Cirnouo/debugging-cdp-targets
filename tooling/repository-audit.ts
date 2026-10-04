@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, readlinkSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
@@ -219,11 +219,6 @@ export async function auditRepository(root: string) {
         if (file.startsWith('skills/')) errors.push(`${file}: retired standalone Skill must not ship.`);
         if (/(?:^|\/)(?:utils|helpers)\//.test(file)) errors.push(`${file}: modules need domain ownership.`);
     }
-    const link = path.join(root, 'CLAUDE.md');
-    if (!existsSync(link) || !lstatSync(link).isSymbolicLink() || readlinkSync(link) !== 'AGENTS.md')
-        errors.push('CLAUDE.md must be a real relative symlink to AGENTS.md.');
-    const mode = execFileSync('git', ['ls-files', '-s', 'CLAUDE.md'], { cwd: root, encoding: 'utf8' });
-    if (!mode.startsWith('120000 ')) errors.push('CLAUDE.md must have Git mode 120000.');
     const packageData: unknown = JSON.parse(files.get('package.json') ?? 'null');
     const plugin: unknown = JSON.parse(files.get(`${PLUGIN_ROOT}/.codex-plugin/plugin.json`) ?? 'null');
     const skillText = files.get(`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
