@@ -28,7 +28,8 @@ test('regular-file evidence rejects a path replaced after metadata inspection', 
         assert.equal(replaced, true);
     } finally {
         assert.equal(path.dirname(root), os.tmpdir());
-        await rm(root, { recursive: true, force: true });
+        // Windows can retain a renamed entry briefly after the descriptor closes.
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -42,7 +43,7 @@ test('regular-file evidence preserves exact bytes and rejects directories', asyn
         await assert.rejects(readRegularFile(path.join(root, 'directory')));
     } finally {
         assert.equal(path.dirname(root), os.tmpdir());
-        await rm(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -67,7 +68,7 @@ test('regular-file evidence rejects in-place mutation during inspection', async 
         );
     } finally {
         assert.equal(path.dirname(root), os.tmpdir());
-        await rm(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -104,6 +105,6 @@ test('regular-file evidence closes its descriptor after success, inspection fail
         }
     } finally {
         assert.equal(path.dirname(root), os.tmpdir());
-        await rm(root, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
