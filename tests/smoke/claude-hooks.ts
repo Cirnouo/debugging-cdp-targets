@@ -1,0 +1,283 @@
+import assert from 'node:assert/strict';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { ClaudeBlock, ClaudeRequest } from './claude-host.ts';
+import { claudeContext, claudeRequest, claudeSse, claudeToolResult, record } from './claude-host.ts';
+import { claudeCli, claudeHost, sandbox } from './claude-process.ts';
+
+const root = fileURLToPath(new URL('../..', import.meta.url));
+const executable =
+    process.argv[2] ?? (process.platform === 'win32' ? path.join(os.homedir(), '.local/bin/claude.exe') : 'claude');
+const marker = 'CDP target process exited during active work.';
+const modes = ['pre', 'post', 'stop', 'idle', 'lifecycle', 'skill', 'disabled'] as const;
+type Mode = (typeof modes)[number];
+
+async function scenario(mode: Mode) {
+    const { temporary, workspace } = await sandbox(root, `hooks-${mode}`);
+    const marketplace = path.join(temporary, 'marketplace');
+    const pluginRoot = path.join(marketplace, 'plugins/claude-code/debugging-cdp-targets');
+    await mkdir(path.join(marketplace, '.claude-plugin'), { recursive: true });
+    await mkdir(path.join(pluginRoot, '.claude-plugin'), { recursive: true });
+    await cp(
+        path.join(root, '.claude-plugin/marketplace.json'),
+        path.join(marketplace, '.claude-plugin/marketplace.json'),
+    );
+    for (const name of ['.claude-plugin/plugin.json', 'hooks', 'skills'])
+        await cp(path.join(root, 'plugins/claude-code/debugging-cdp-targets', name), path.join(pluginRoot, name), {
+            recursive: true,
+        });
+    const statePath = path.join(temporary, 'target.json');
+    await writeFile(
+        path.join(pluginRoot, '.mcp.json'),
+        JSON.stringify(
+            {
+                mcpServers: {
+                    'cdp-targets': {
+                        command: process.execPath,
+                        args: [path.join(root, 'tests/fixtures/hook-gateway.ts')],
+                        env: {
+                            DCT_HOOK_FIXTURE_STATE: statePath,
+                            DCT_HOOK_FIXTURE_EXIT: mode === 'disabled' ? 'post' : mode,
+                        },
+                    },
+                },
+            },
+            null,
+            4,
+        ),
+    );
+    const requests: ClaudeRequest[] = [];
+    const calls: string[] = [];
+    let state: Record<string, unknown> | undefined;
+    let failure: unknown;
+    function tool(value: ClaudeRequest, name: string, input: Record<string, unknown>, index: number): ClaudeBlock {
+        const declaration = value.tools.find(
+            (candidate) => typeof candidate.name === 'string' && candidate.name.endsWith(`__${name}`),
+        );
+        assert.ok(declaration && typeof declaration.name === 'string', `Actual Claude catalog omitted ${name}.`);
+        calls.push(name);
+        return { type: 'tool_use', id: `toolu_${index}`, name: declaration.name, input };
+    }
+    async function signalExit() {
+        assert.ok(state && typeof state.signalUrl === 'string');
+        const url = new URL(state.signalUrl);
+        assert.equal(url.hostname, '127.0.0.1');
+        assert.equal(url.protocol, 'http:');
+        assert.equal((await fetch(url, { method: 'POST' })).status, 200);
+    }
+    const model = createServer(async (request, response) => {
+        try {
+            if (request.method === 'HEAD' && request.url === '/api/hello') {
+                response.end();
+                return;
+            }
+            if (request.method === 'POST' && request.url?.startsWith('/v1/messages/count_tokens')) {
+                response.end('{"input_tokens":10}');
+                return;
+            }
+            assert.equal(request.method, 'POST');
+            assert.ok(
+                request.url === '/v1/messages' || request.url === '/v1/messages?beta=true',
+                'Unexpected synthetic provider endpoint.',
+            );
+            assert.equal(request.headers['x-api-key'], 'sk-ant-synthetic-dct-smoke');
+            let raw = '';
+            for await (const chunk of request) raw += chunk;
+            const value = claudeRequest(raw);
+            requests.push(value);
+            await writeFile(path.join(temporary, 'requests.json'), JSON.stringify(requests, null, 4));
+            assert.ok(requests.length <= 5, 'Hooks must not create infinite model continuations.');
+            const index = requests.length;
+            let block: ClaudeBlock = { type: 'text', text: 'Fixture completed.' };
+            if (index === 1) block = tool(value, 'dct_connection_status', {}, index);
+            else if (index === 2) {
+                const status = claudeToolResult(value.messages, 'toolu_1');
+                assert.ok(
+                    Array.isArray(status.connections) &&
+                        record(status.connections[0]) &&
+                        typeof status.connections[0].connectionId === 'string',
+                );
+                const actual: unknown = JSON.parse(
+                    await readFile(`${statePath}.${status.connections[0].connectionId}`, 'utf8'),
+                );
+                assert.ok(record(actual));
+                state = actual;
+                if (mode === 'pre') await signalExit();
+                block =
+                    mode === 'lifecycle'
+                        ? tool(
+                              value,
+                              'dct_connection_start',
+                              {
+                                  entryId: state.entryId,
+                                  requestId: 'claude-start',
+                                  launch: { executable: 'fake target', args: [], env: { DCT_FIXTURE: 'test' } },
+                                  mcpArgs: ['--workspace', workspace],
+                              },
+                              index,
+                          )
+                        : tool(
+                              value,
+                              'list_pages',
+                              { _dct: { connectionId: state.connectionId, sessionId: state.sessionId } },
+                              index,
+                          );
+            } else if (mode === 'lifecycle' && index === 3) {
+                const accepted = claudeToolResult(value.messages, 'toolu_2');
+                assert.equal(typeof accepted.operationId, 'string');
+                block = tool(
+                    value,
+                    'dct_operation_wait',
+                    { entryId: state?.entryId, operationId: accepted.operationId, cursor: 0 },
+                    index,
+                );
+            } else if (mode === 'stop' && index === 3) await signalExit();
+            response.writeHead(200, { 'content-type': 'text/event-stream' });
+            response.end(claudeSse(value.model, index, block));
+        } catch (error) {
+            failure = error;
+            response.writeHead(500);
+            response.end(String(error));
+        }
+    });
+    await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve));
+    const address = model.address();
+    assert.ok(address && typeof address !== 'string');
+    const endpoint = `http://127.0.0.1:${address.port}`;
+    try {
+        await claudeCli(executable, ['plugin', 'marketplace', 'add', marketplace], temporary, endpoint);
+        await claudeCli(
+            executable,
+            ['plugin', 'install', 'debugging-cdp-targets@debugging-cdp-targets', '--json'],
+            temporary,
+            endpoint,
+        );
+        const extra = ['--allowedTools', 'mcp__plugin_debugging-cdp-targets_cdp-targets__*'];
+        if (mode === 'disabled') extra.push('--settings', '{"disableAllHooks":true}');
+        const host = await claudeHost(
+            executable,
+            temporary,
+            endpoint,
+            extra,
+            mode === 'skill'
+                ? '/debugging-cdp-targets:debugging-cdp-targets'
+                : 'Use the isolated CDP fixture once, then finish.',
+            async (turn) => {
+                if (mode === 'idle' && turn === 1) {
+                    assert.equal(requests.length, 3);
+                    assert.ok(requests.every((value) => !claudeContext(value).some((text) => text.includes(marker))));
+                    await signalExit();
+                    // Hold the idle host across the observed exit before sending a new prompt.
+                    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+                    assert.equal(requests.length, 3, 'Idle exit must not wake the model.');
+                    return 'Continue the isolated fixture.';
+                }
+                return undefined;
+            },
+        );
+        if (failure) throw failure;
+        assert.ok(state, 'Actual model must receive production status identity.');
+        assert.ok(
+            Array.isArray(host.init.tools) && host.init.tools.length === 8,
+            'Fixture has seven real lifecycle tools and one fake official I/O tool.',
+        );
+        const hooks = host.events.filter((event) => event.subtype === 'hook_response');
+        assert.ok(
+            hooks.every((event) => event.outcome === 'success' && event.exit_code === 0),
+            JSON.stringify(hooks),
+        );
+        const contexts = requests.map(claudeContext);
+        const notices = contexts.map((entries) => entries.filter((text) => text.includes(marker)));
+        if (mode === 'disabled') {
+            assert.equal(hooks.length, 0);
+            assert.ok(notices.every((entries) => entries.length === 0));
+            assert.equal(requests.length, 3);
+        } else {
+            for (const event of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'])
+                assert.ok(
+                    hooks.some((hook) => hook.hook_event === event),
+                    `Actual Claude did not execute ${event}.`,
+                );
+            if (mode === 'lifecycle') {
+                assert.ok(
+                    contexts.some((entries) =>
+                        entries.some(
+                            (text) => text.includes('CDP lifecycle operation results:') && text.includes('succeeded'),
+                        ),
+                    ),
+                );
+                for (const field of ['mcpArgs', 'executable', 'requestId', 'operationId', 'cursor'])
+                    assert.ok(JSON.stringify(requests).includes(field));
+                assert.ok(!JSON.stringify(requests).includes('launchCommand'));
+                assert.equal(requests.length, 4);
+            } else if (mode === 'skill') {
+                const skill = await readFile(path.join(pluginRoot, 'skills/debugging-cdp-targets/SKILL.md'), 'utf8');
+                const body = skill.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim();
+                assert.ok(
+                    contexts[0]?.some((text) => text.includes(body)),
+                    'Namespaced Skill invocation must put complete installed instructions in actual outbound model context.',
+                );
+                assert.equal(requests.length, 3);
+            } else {
+                const delivery = mode === 'pre' || mode === 'post' ? 2 : 3;
+                assert.ok(notices.slice(0, delivery).every((entries) => entries.length === 0));
+                // Claude renders one blocking Stop reason in both a system reminder
+                // and Stop feedback. Hook execution and continuation count establish
+                // single delivery independently of those host context wrappers.
+                if (mode === 'stop') assert.ok((notices[delivery]?.length ?? 0) >= 1);
+                else assert.equal(notices[delivery]?.length, 1, JSON.stringify({ contexts, hooks }));
+                assert.ok(notices[delivery]?.[0]?.includes(String(state.connectionId)));
+                assert.ok(notices[delivery]?.[0]?.includes(String(state.sessionId)));
+                const event =
+                    mode === 'pre'
+                        ? 'PreToolUse'
+                        : mode === 'post'
+                          ? 'PostToolUse'
+                          : mode === 'idle'
+                            ? 'UserPromptSubmit'
+                            : 'Stop';
+                const delivered = hooks.filter(
+                    (hook) => typeof hook.output === 'string' && hook.output.includes(marker),
+                );
+                assert.equal(delivered.length, 1, 'Exit reminder is delivered once across all Hook boundaries.');
+                assert.equal(delivered[0]?.hook_event, event);
+                assert.equal(
+                    requests.length,
+                    delivery + 1,
+                    'Stop continues exactly once and other modes do not continue.',
+                );
+                assert.equal(
+                    hooks.filter((hook) => hook.hook_event === 'Stop').length,
+                    mode === 'stop' || mode === 'idle' ? 2 : 1,
+                );
+            }
+        }
+        assert.deepEqual(
+            calls,
+            mode === 'lifecycle'
+                ? ['dct_connection_status', 'dct_connection_start', 'dct_operation_wait']
+                : ['dct_connection_status', 'list_pages'],
+        );
+        await writeFile(path.join(temporary, 'requests.json'), JSON.stringify(requests, null, 4));
+        console.log(
+            JSON.stringify({
+                mode,
+                host: 'Claude Code',
+                version: host.version,
+                temporary,
+                modelRequests: requests.length,
+                hookEvents: hooks.map((hook) => hook.hook_event),
+                modelCalls: calls,
+            }),
+        );
+    } finally {
+        model.closeAllConnections();
+        await new Promise<void>((resolve, reject) => model.close((error) => (error ? reject(error) : resolve())));
+    }
+}
+
+assert.ok(!process.argv[3] || modes.some((mode) => mode === process.argv[3]), 'Unknown Claude Hook scenario.');
+for (const mode of modes) if (!process.argv[3] || process.argv[3] === mode) await scenario(mode);
