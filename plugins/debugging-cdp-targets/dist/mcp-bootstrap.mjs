@@ -39868,6 +39868,8 @@ async function unixSnapshot(pid, port, dependencies = {}) {
 function createPlatformAdapter(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
   const closeWindows = dependencies.closeWindows ?? createWindowsLauncher().close;
+  const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, "SIGTERM"));
+  const sleep3 = dependencies.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
   const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
   return {
@@ -39927,14 +39929,23 @@ function createPlatformAdapter(dependencies = {}) {
         };
         throw error2;
       }
-      process.kill(target.processId, "SIGTERM");
+      requestUnixClose(target.processId);
+      let inspectionFailure;
       for (let attempt = 0; attempt < CLOSE_TIMEOUT_SECONDS * 5; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        const after = await snapshot(target.processId, target.port);
+        await sleep3(200);
+        let after;
+        try {
+          after = await snapshot(target.processId, target.port);
+          inspectionFailure = void 0;
+        } catch (error2) {
+          inspectionFailure = error2;
+          continue;
+        }
         if (!after.root.exists && !after.listeners.some((listener) => owned.has(listener.owningProcess)))
           return true;
         if (after.root.exists) validateProcessIdentity(after, target);
       }
+      if (inspectionFailure !== void 0) throw inspectionFailure;
       return false;
     }
   };

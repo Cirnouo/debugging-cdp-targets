@@ -303,10 +303,14 @@ export function createPlatformAdapter(
         platform?: NodeJS.Platform;
         snapshot?: PlatformAdapter['snapshot'];
         closeWindows?: (target: ProcessTarget) => Promise<Record<string, unknown>>;
+        requestUnixClose?: (pid: number) => void;
+        sleep?: (ms: number) => Promise<void>;
     } = {},
 ): PlatformAdapter {
     const platform = dependencies.platform ?? process.platform;
     const closeWindows = dependencies.closeWindows ?? createWindowsLauncher().close;
+    const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, 'SIGTERM'));
+    const sleep = dependencies.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
     if (!['win32', 'linux', 'darwin'].includes(platform)) throw new Error('Unsupported operating system.');
     const snapshot: PlatformAdapter['snapshot'] =
         dependencies.snapshot ??
@@ -379,14 +383,25 @@ export function createPlatformAdapter(
                 throw error;
             }
             // SIGTERM asks the recorded process to exit; no escalation to SIGKILL.
-            process.kill(target.processId, 'SIGTERM');
+            requestUnixClose(target.processId);
+            let inspectionFailure: unknown;
             for (let attempt = 0; attempt < CLOSE_TIMEOUT_SECONDS * 5; attempt += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 200));
-                const after = await snapshot(target.processId, target.port);
+                await sleep(200);
+                let after: ProcessEvidence;
+                try {
+                    after = await snapshot(target.processId, target.port);
+                    inspectionFailure = undefined;
+                } catch (error) {
+                    // An exiting process can unmap its executable between ps and lsof.
+                    // Wait for complete evidence; never infer exit or send another signal.
+                    inspectionFailure = error;
+                    continue;
+                }
                 if (!after.root.exists && !after.listeners.some((listener) => owned.has(listener.owningProcess)))
                     return true;
                 if (after.root.exists) validateProcessIdentity(after, target);
             }
+            if (inspectionFailure !== undefined) throw inspectionFailure;
             return false;
         },
     };

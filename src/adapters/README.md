@@ -15,6 +15,8 @@
 - `chrome-profile.ts` checks native profile locks and reserves canonical directories.
 - `platform-process.ts` obtains OS identity/reservations and normal shutdown;
   Linux root creation evidence preserves kernel start tick precision.
+  Unix normal close waits for complete exit evidence across disappearing mappings,
+  retaining identity failures and the bounded wait without sending another signal.
 - `windows-cdp-helper.ps1` supplies Windows process/listener evidence.
 - `windows-launch.ts` validates the native helper protocol and actual app events.
 - `windows-native-helper.ps1` orchestrates native launch/close, permission waiting

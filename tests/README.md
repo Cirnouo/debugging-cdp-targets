@@ -60,7 +60,8 @@
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous identity/deduplication/cursor/cancel behavior and real SDK tools.
 - `close-diagnostics.test.ts`, `platform-close.test.ts` cover absent/foreign listeners,
-  native failure evidence and retry identity.
+  native failure causes through operation wrappers, retry identity and bounded
+  Unix exit confirmation across incomplete executable mappings.
 - `windows-launch.test.ts` checks private native protocol and actual app observation.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
 - `windows-native.test.ts` runs disposable ordinary Node/WinForms fixtures on Windows;
