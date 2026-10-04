@@ -7383,6 +7383,44 @@ function errorCode(error) {
   return isRecord(error) && typeof error.code === "string" ? error.code : void 0;
 }
 
+// tooling/host-policy.ts
+var CODEX_HOST = Object.freeze({
+  id: "codex",
+  inputRoot: "packaging/codex",
+  payloadRoot: "plugins/codex/debugging-cdp-targets",
+  manifest: ".codex-plugin/plugin.json",
+  marketplace: ".agents/plugins/marketplace.json",
+  mcp: "mcp.json",
+  hooks: "hooks/hooks.json",
+  files: Object.freeze({
+    ".codex-plugin/README.md": ".codex-plugin/README.md",
+    ".codex-plugin/plugin.json": ".codex-plugin/plugin.json",
+    "mcp.json": "mcp.json",
+    "hooks/README.md": "hooks/README.md",
+    "hooks/hooks.json": "hooks/hooks.json",
+    "plugin-README.md": "README.md"
+  })
+});
+var CLAUDE_CODE_HOST = Object.freeze({
+  id: "claude-code",
+  inputRoot: "packaging/claude-code",
+  payloadRoot: "plugins/claude-code/debugging-cdp-targets",
+  manifest: ".claude-plugin/plugin.json",
+  marketplace: ".claude-plugin/marketplace.json",
+  mcp: ".mcp.json",
+  hooks: "hooks/hooks.json",
+  files: Object.freeze({
+    ".claude-plugin/README.md": ".claude-plugin/README.md",
+    ".claude-plugin/plugin.json": ".claude-plugin/plugin.json",
+    ".mcp.json": ".mcp.json",
+    "hooks/README.md": "hooks/README.md",
+    "hooks/hooks.json": "hooks/hooks.json",
+    "plugin-README.md": "README.md"
+  })
+});
+var PLUGIN_HOSTS = Object.freeze([CODEX_HOST, CLAUDE_CODE_HOST]);
+var PLUGIN_ROOT = CODEX_HOST.payloadRoot;
+
 // tooling/security/audit-policy.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SEVERITIES = ["info", "low", "moderate", "high", "critical"];
@@ -8135,10 +8173,10 @@ async function checkSecurity(root, options = {}) {
     options.now
   );
   const code = paths.filter(
-    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) || file.startsWith("plugins/debugging-cdp-targets/dist/official-server/")
+    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) || PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/official-server/`))
   );
   const configuration = paths.filter(
-    (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^plugins\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || [
+    (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^(?:plugins|packaging)\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || PLUGIN_HOSTS.some((host) => file === host.marketplace) || [
       "package.json",
       "pnpm-workspace.yaml",
       "pnpm-lock.yaml",

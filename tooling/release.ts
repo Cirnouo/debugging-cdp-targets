@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import { PLUGIN_ROOT } from './payload-policy.ts';
+import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { isStableVersion, validateVersionAgreement } from './version-policy.ts';
 
 export interface ReleaseInput {
@@ -252,14 +252,35 @@ export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
     validateInput(input);
     const version = parseReleaseTag(input.tag);
     const object = verifyTagIdentity(input.tag, input.sha, input.tagObject, io.git);
-    const packageData: unknown = JSON.parse(await io.readFile('package.json'));
-    const plugin: unknown = JSON.parse(await io.readFile(`${PLUGIN_ROOT}/.codex-plugin/plugin.json`));
-    const skill = await io.readFile(`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
+    async function readMetadata(file: string): Promise<unknown> {
+        const source = await io.readFile(file);
+        const value: unknown = JSON.parse(source);
+        parseYaml(source, { uniqueKeys: true });
+        return value;
+    }
+    const packageData = await readMetadata('package.json');
+    const plugins: unknown[] = [];
+    const license = await io.readFile('LICENSE');
+    for (const host of PLUGIN_HOSTS) {
+        plugins.push(await readMetadata(`${host.inputRoot}/${host.manifest}`));
+        plugins.push(await readMetadata(`${host.payloadRoot}/${host.manifest}`));
+        if ((await io.readFile(`${host.payloadRoot}/LICENSE`)) !== license)
+            throw new Error('Release Plugin licenses must match the canonical root license.');
+    }
+    const skill = await io.readFile(`${SHARED_PACKAGING_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skill.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1] ?? '');
-    if (!isRecord(packageData) || !isRecord(plugin) || !isRecord(frontmatter) || !isRecord(frontmatter.metadata)) {
+    if (
+        !isRecord(packageData) ||
+        !plugins.every(isRecord) ||
+        !isRecord(frontmatter) ||
+        !isRecord(frontmatter.metadata)
+    ) {
         throw new Error('Malformed release version metadata.');
     }
-    const errors = validateVersionAgreement(packageData.version, plugin.version, frontmatter.metadata.version);
+    const skillVersion = frontmatter.metadata.version;
+    const errors = plugins.flatMap((plugin) =>
+        validateVersionAgreement(packageData.version, isRecord(plugin) ? plugin.version : undefined, skillVersion),
+    );
     if (errors.length || packageData.version !== version)
         throw new Error('Release tag and all metadata versions must agree.');
     const changes = extractChangelog(await io.readFile('CHANGELOG.md'), version);

@@ -51,6 +51,31 @@ then explicitly restarts and normally closes them. It retains test profiles.
   is used. Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects
   a Codex executable. Enable Hooks in this isolated config for the test.
 
+- `claude-marketplace.ts` validates, adds and installs the actual Claude Marketplace
+  into an isolated home outside the repository. It compares the complete installed
+  cache and actual init source bytes, checks component inventory, namespaced Skill,
+  connected gateway and all 73 tools through real Claude discovery. A separate direct
+  gateway check supplements host discovery. Run `node tests/smoke/claude-marketplace.ts`
+  after `pnpm build:plugin`; an optional first argument selects a Claude executable.
+- `claude-hooks.ts` installs the committed Claude manifest, Hook and Skill bytes in
+  temporary homes and substitutes only process/CDP/upstream I/O with the production
+  gateway fixture. Actual Anthropic model requests prove PreToolUse, PostToolUse,
+  next-turn UserPromptSubmit, one Stop continuation, lifecycle result delivery and
+  complete namespaced Skill instructions. `disableAllHooks` keeps MCP connected and
+  suppresses Hooks. Run `node tests/smoke/claude-hooks.ts`; an optional first argument
+  selects Claude and an optional second selects one scenario. The default runs all
+  seven scenarios. An intentional blocking Stop can emit Claude's `stop-hook-error`
+  notification while the Hook and final turn succeed; the script checks the actual
+  continuation and successful result.
+- `claude-host.ts` owns tested allowlisted environments, explicit loopback model
+  endpoints, baseline versions, strict request/result parsing, Hook context and SSE.
+- `claude-process.ts` launches actual Claude with disposable config/home/workspace/TMP
+  outside the repository, synthetic credentials and a loopback model. It checks actual
+  init credentials/version/memory paths and records argv, environment, transcripts,
+  stderr and debug output. Claude 2.1.283 is the first supported host. Claude smokes
+  retain their printed temporary evidence directories, call no account model API,
+  install no global Skill and launch no real target.
+
 - `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
   retries of explicitly selected normal Close when pending CDP traffic is busy.
   It keeps the entry/connection/session identity and does not retry other failures.

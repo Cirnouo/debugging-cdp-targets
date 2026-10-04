@@ -5,6 +5,13 @@ fixtures. Every rule must inspect independently derived evidence; a validator
 must not treat its own source, the payload being copied, or a deduplicated parser
 result as proof that the input is safe.
 
+Host descriptors are pure data with no file reads or release-evidence imports;
+standalone lockfile preflight must work without dependencies or official evidence.
+Build the shared runtime once, then assemble and independently audit both complete
+host payloads. Validate canonical packaging inputs before copying, exact host file
+inventories and formats, both Marketplace pointers and original official bytes.
+Generated checks remain read-only and may not repair drift.
+
 Keep tooling non-destructive and cross-platform unless a check explicitly runs
 only in the Windows CI job. Centralize commit types, scopes, branches, payload
 paths, and other shared grammar in one owned module, then consume that source

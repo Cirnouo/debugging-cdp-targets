@@ -13,4 +13,4 @@ and explicit operation cancellation owns cleanup. Wait cancellation is independe
 The gateway adds required _dct connection/session routing to official input
 schemas, rejects collisions, and strips it before forwarding original arguments.
 Results are unchanged; lifecycle/operation tools belong to this Plugin. Optional
-hookEventName accepts exactly the four packaged Codex events; empty status is read-only.
+hookEventName accepts exactly the four packaged host events; empty status is read-only.

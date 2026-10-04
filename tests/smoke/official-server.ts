@@ -41,7 +41,7 @@ if (monitor)
         monitor.stdout.once('data', () => resolve());
         monitor.once('error', reject);
     });
-const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));

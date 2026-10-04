@@ -34,7 +34,8 @@ nearest source AGENTS.md and only the relevant policies before editing.
 - [Policies](docs/policies/README.md)
 - [Decisions](docs/adr/README.md)
 - [Source](src/README.md)
-- [Plugin instructions](plugins/debugging-cdp-targets/skills/debugging-cdp-targets/SKILL.md)
+- [Packaging inputs](packaging/README.md) and [host payloads](plugins/README.md)
+- [Plugin instructions](packaging/shared/skills/debugging-cdp-targets/SKILL.md)
 - [Tests](tests/README.md) and [tooling](tooling/README.md)
 
 Use Node 24.21.0 and pnpm 12.4.2. Run focused tests first, then

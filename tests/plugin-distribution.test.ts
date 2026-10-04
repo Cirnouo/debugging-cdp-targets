@@ -7,7 +7,7 @@ import { isRecord } from '../src/shared/errors.ts';
 import { isSemVer } from '../tooling/version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const pluginRoot = path.join(root, 'plugins', 'debugging-cdp-targets');
+const pluginRoot = path.join(root, 'plugins', 'codex', 'debugging-cdp-targets');
 
 test('portable plugin registers one stdio gateway for independent target connections', async () => {
     const manifest: unknown = JSON.parse(await readFile(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
@@ -62,6 +62,6 @@ test('repository marketplace points only at the local plugin', async () => {
             assert.ok(isRecord(plugin) && isRecord(plugin.source));
             return plugin.source.path;
         }),
-        ['./plugins/debugging-cdp-targets'],
+        ['./plugins/codex/debugging-cdp-targets'],
     );
 });

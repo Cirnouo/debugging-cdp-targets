@@ -49,14 +49,15 @@ process scan, automatic restart or tool replay is permitted. Keep
 bounded startup readiness and pre-tool process/listener/endpoint verification.
 
 Active unexpected exit gates forwarding, retains exact launch identity and
-queues one reminder per connection/session. Trusted Codex MCP Tool Hooks drain
+queues one reminder per connection/session. Enabled, authorized host MCP Tool Hooks drain
 in-memory events at PreToolUse, PostToolUse, UserPromptSubmit or Stop; no events
 return empty JSON without model context. Stop continues once for an undelivered
 event. Idle chats wait for the next turn. Only target kind, PID, port, identities
 and exit reason belong in exit reminders. Operation completion and quarantine
 events report corresponding operation/session evidence without application inputs.
-Require the standard user trust review;
-installation cannot implicitly grant Hook trust. End-task/Keep/Close/restart
+Follow each host's standard controls: Codex requires explicit definition trust;
+Claude Code loads enabled Plugin Hooks and honors disableAllHooks. Review the
+Plugin before enabling its code and Hooks. End-task/Keep/Close/restart
 clear notices. Expected close/restart/disconnect events stay silent. CDP/upstream
 failure while a process lives reports a connection error, not process exit.
 

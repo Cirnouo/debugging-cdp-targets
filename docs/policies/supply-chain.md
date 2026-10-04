@@ -101,10 +101,12 @@ array. Each exception must contain exactly:
 
 Code hashes cover maintained runtime source/helpers, audit/build tooling and
 committed runtime bundles and every official delivery file, including resources,
-licenses and skills. Configuration hashes cover maintained release evidence,
+licenses and skills in both host payloads. Configuration hashes cover maintained release evidence,
 the isolated lock snapshot, package.json, workspace
 policy, the lockfile, optional .npmrc, reviewed vendored-license evidence, CI workflows, Plugin JSON/YAML configuration
-and the Marketplace catalog. Dependency hashes cover
+and both Codex/Claude Marketplace catalogs. Host path descriptors are pure data;
+importing them cannot load release evidence during dependency-free preflight.
+Dependency hashes cover
 the parsed full lock documents, canonically sorted. File hashes include sorted
 relative names, byte lengths and contents. The exception file is not hashed into
 itself. Fingerprints differ between repository and upstream graphs.

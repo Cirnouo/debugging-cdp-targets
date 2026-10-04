@@ -1,0 +1,16 @@
+{
+    "name": "debugging-cdp-targets",
+    "owner": {
+        "name": "Cirnouo"
+    },
+    "metadata": {
+        "description": "Verified local CDP target debugging through the official Chrome DevTools MCP Server."
+    },
+    "plugins": [
+        {
+            "name": "debugging-cdp-targets",
+            "source": "./plugins/claude-code/debugging-cdp-targets",
+            "description": "Connect Claude Code directly to the official Chrome DevTools MCP Server for a verified local CDP target."
+        }
+    ]
+}

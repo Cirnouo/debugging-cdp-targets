@@ -48,7 +48,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-codex-hooks-'));
     const home = path.join(temporary, 'home');
     const workspace = path.join(temporary, 'workspace');
-    const pluginRoot = path.join(temporary, 'marketplace/plugins/debugging-cdp-targets');
+    const pluginRoot = path.join(temporary, 'marketplace/plugins/codex/debugging-cdp-targets');
     const statePath = path.join(temporary, 'target.json');
     await Promise.all([
         mkdir(home),
@@ -210,11 +210,11 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
         );
         await writeFile(
             path.join(pluginRoot, '.codex-plugin/plugin.json'),
-            await readFile(path.join(root, 'plugins/debugging-cdp-targets/.codex-plugin/plugin.json')),
+            await readFile(path.join(root, 'plugins/codex/debugging-cdp-targets/.codex-plugin/plugin.json')),
         );
         await writeFile(
             path.join(pluginRoot, 'hooks/hooks.json'),
-            await readFile(path.join(root, 'plugins/debugging-cdp-targets/hooks/hooks.json')),
+            await readFile(path.join(root, 'plugins/codex/debugging-cdp-targets/hooks/hooks.json')),
         );
         await writeFile(
             path.join(pluginRoot, 'mcp.json'),
@@ -241,7 +241,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                 plugins: [
                     {
                         name: 'debugging-cdp-targets',
-                        source: { source: 'local', path: './plugins/debugging-cdp-targets' },
+                        source: { source: 'local', path: './plugins/codex/debugging-cdp-targets' },
                     },
                 ],
             }),

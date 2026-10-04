@@ -15,6 +15,14 @@ because it is a supported installation surface, although its code is generated.
 Its `official-server/` subtree preserves upstream documentation unchanged only
 after complete release verification; it requires no repository README additions.
 
+`packaging/shared/` owns the complete host-neutral Skill and shared distribution
+documentation; `packaging/codex/` and `packaging/claude-code/` own authored host
+configuration and installed guides. A host's source `README.md` documents its
+directory, while `plugin-README.md` supplies its installed guide. Update these
+inputs and regenerate both complete `plugins/<host>/debugging-cdp-targets/`
+payloads. Host-specific install and Hook controls belong in host guides and the
+root README; lifecycle instructions remain shared.
+
 Keep authoritative contributor rules in root AGENTS.md and these policies.
 CONTRIBUTING.md provides the human setup and contribution entry point and links
 to those rules. SECURITY.md owns vulnerability reporting; CODE_OF_CONDUCT.md

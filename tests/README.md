@@ -3,6 +3,9 @@
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
+- `host-distribution.test.ts` covers both complete host inventories, manifest/MCP/Hook
+  and Marketplace routing, shared bytes, independent version/license/resource drift,
+  duplicate metadata, linked inputs/roots and read-only build checks.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
   path/link rejection, complete file verification and source/packaged resolution.
 - `file-evidence.test.ts` reproduces path replacement and in-place mutation during
@@ -32,6 +35,10 @@
   literal isolated launch arguments, actual Chrome version requirements and
   bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser.
+- `claude-smoke-config.test.ts` checks allowlisted host environments, isolated user
+  paths, loopback-only model endpoints, the Claude version baseline, unknown request
+  validation, actual tool-result shapes, Hook context extraction, Anthropic SSE,
+  responsive subprocess I/O, error/timeout cleanup and complete output draining.
 - `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
 - `release.test.ts` checks tag/event identity, dated Changelog extraction,
   English notes, paginated draft recovery and fail-closed publication with
@@ -76,7 +83,7 @@
   must leave the fixture running.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP processes.
-- `smoke/` owns opt-in isolated Codex Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
+- `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
 - `AGENTS.md` sets test safety and evidence rules.
 

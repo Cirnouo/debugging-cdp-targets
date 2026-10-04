@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
 import { OFFICIAL_RELEASE, PLUGIN_ROOT } from '../tooling/payload-policy.ts';
 import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
 
@@ -43,16 +44,32 @@ test('repository audit accepts AGENTS.md as the contributor entry point', async 
             'docs/README.md': '# Documentation\n',
             'docs/domain-language.md': '# Domain language\n',
             'plugins/README.md': '# Plugins\n',
+            'plugins/codex/README.md': '# Codex\n',
+            'packaging/README.md': '# Packaging\n',
+            'packaging/codex/README.md': '# Codex inputs\n',
+            'packaging/shared/README.md': '# Shared inputs\n',
             [`${PLUGIN_ROOT}/README.md`]: '# Plugin\n',
             [`${PLUGIN_ROOT}/LICENSE`]: license,
-            [`${PLUGIN_ROOT}/.codex-plugin/README.md`]: '# Manifest\n',
-            [`${PLUGIN_ROOT}/.codex-plugin/plugin.json`]: `${JSON.stringify({ name: 'debugging-cdp-targets', version: '0.1.0' }, null, 4)}\n`,
-            [`${PLUGIN_ROOT}/skills/README.md`]: '# Skills\n',
-            [`${PLUGIN_ROOT}/skills/debugging-cdp-targets/README.md`]: '# Instructions\n',
-            [`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`]:
+            'packaging/codex/.codex-plugin/README.md': '# Manifest\n',
+            'packaging/codex/.codex-plugin/plugin.json': `${JSON.stringify({ name: 'debugging-cdp-targets', version: '0.1.0', license: 'MIT' }, null, 4)}\n`,
+            'packaging/shared/skills/README.md': '# Skills\n',
+            'packaging/shared/skills/debugging-cdp-targets/README.md': '# Instructions\n',
+            'packaging/shared/skills/debugging-cdp-targets/SKILL.md':
                 '---\nname: debugging-cdp-targets\nlicense: MIT\ndescription: Debug CDP targets.\nmetadata:\n    version: 0.1.0\n---\n',
         };
-        for (const [file, source] of Object.entries(files)) {
+        const entries = new Map(Object.entries(files));
+        for (const host of PLUGIN_HOSTS) {
+            entries.set(`plugins/${host.id}/README.md`, '# Host\n');
+            entries.set(`${host.inputRoot}/README.md`, '# Host inputs\n');
+            entries.set(`${host.payloadRoot}/README.md`, '# Plugin\n');
+            entries.set(`${host.payloadRoot}/LICENSE`, license);
+            entries.set(`${host.inputRoot}/${path.posix.dirname(host.manifest)}/README.md`, '# Manifest\n');
+            entries.set(`${host.payloadRoot}/${path.posix.dirname(host.manifest)}/README.md`, '# Manifest\n');
+            const manifest = `${JSON.stringify({ name: 'debugging-cdp-targets', version: '0.1.0', license: 'MIT' }, null, 4)}\n`;
+            entries.set(`${host.inputRoot}/${host.manifest}`, manifest);
+            entries.set(`${host.payloadRoot}/${host.manifest}`, manifest);
+        }
+        for (const [file, source] of entries) {
             const target = path.join(root, file);
             await mkdir(path.dirname(target), { recursive: true });
             await writeFile(target, source);
@@ -94,21 +111,29 @@ test('only the fully verified official output is exempt from directory documenta
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-upstream-repo-')));
     try {
         execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
-        const prefix = `${PLUGIN_ROOT}/dist/official-server`;
-        for (const file of OFFICIAL_RELEASE.files) {
-            const target = path.join(root, prefix, file.path);
-            await mkdir(path.dirname(target), { recursive: true });
+        for (const host of PLUGIN_HOSTS) {
+            const prefix = `${host.payloadRoot}/dist/official-server`;
+            for (const file of OFFICIAL_RELEASE.files) {
+                const target = path.join(root, prefix, file.path);
+                await mkdir(path.dirname(target), { recursive: true });
+                await writeFile(
+                    target,
+                    await readFile(new URL(`../node_modules/chrome-devtools-mcp/${file.path}`, import.meta.url)),
+                );
+            }
+            assert.deepEqual(
+                (await auditRepository(root)).filter(
+                    (error) => error.includes(prefix) || /Official package/.test(error),
+                ),
+                [],
+            );
+            await writeFile(path.join(root, prefix, 'LICENSE'), 'changed');
+            assert.ok((await auditRepository(root)).some((error) => /Official package.*changed/i.test(error)));
             await writeFile(
-                target,
-                await readFile(new URL(`../node_modules/chrome-devtools-mcp/${file.path}`, import.meta.url)),
+                path.join(root, prefix, 'LICENSE'),
+                await readFile(new URL('../node_modules/chrome-devtools-mcp/LICENSE', import.meta.url)),
             );
         }
-        assert.deepEqual(
-            (await auditRepository(root)).filter((error) => error.includes('official-server')),
-            [],
-        );
-        await writeFile(path.join(root, prefix, 'LICENSE'), 'changed');
-        assert.ok((await auditRepository(root)).some((error) => /Official package.*changed/i.test(error)));
     } finally {
         await rm(root, { recursive: true, force: true });
     }

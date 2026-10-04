@@ -1,0 +1,56 @@
+{
+    "hooks": {
+        "PreToolUse": [
+            {
+                "hooks": [
+                    {
+                        "type": "mcp_tool",
+                        "server": "plugin:debugging-cdp-targets:cdp-targets",
+                        "tool": "dct_connection_status",
+                        "input": { "hookEventName": "PreToolUse" },
+                        "timeout": 3
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "hooks": [
+                    {
+                        "type": "mcp_tool",
+                        "server": "plugin:debugging-cdp-targets:cdp-targets",
+                        "tool": "dct_connection_status",
+                        "input": { "hookEventName": "PostToolUse" },
+                        "timeout": 3
+                    }
+                ]
+            }
+        ],
+        "UserPromptSubmit": [
+            {
+                "hooks": [
+                    {
+                        "type": "mcp_tool",
+                        "server": "plugin:debugging-cdp-targets:cdp-targets",
+                        "tool": "dct_connection_status",
+                        "input": { "hookEventName": "UserPromptSubmit" },
+                        "timeout": 3
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "mcp_tool",
+                        "server": "plugin:debugging-cdp-targets:cdp-targets",
+                        "tool": "dct_connection_status",
+                        "input": { "hookEventName": "Stop" },
+                        "timeout": 3
+                    }
+                ]
+            }
+        ]
+    }
+}

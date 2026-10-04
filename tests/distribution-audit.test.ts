@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -53,7 +53,7 @@ test('Plugin allowlist independently includes every reviewed official release pa
 });
 
 test('physical Plugin inventory rejects unexpected empty directories', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-empty-directory-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-empty-directory-')));
     try {
         await mkdir(path.join(root, 'extra'));
         await assert.rejects(readDistributionTree(root), /empty|unexpected/i);

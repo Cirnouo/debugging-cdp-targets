@@ -3,7 +3,8 @@
 - **Target application**: application explicitly known to expose browser-level CDP.
 - **Framework**: application technology; its name does not prove CDP compatibility.
 - **Rendering implementation**: renderer such as Chromium or WebView2.
-- **Static entry**: reusable Desktop stdio configuration cdp-targets.
+- **Plugin host**: Agent environment that installs and runs a Plugin, currently Codex or Claude Code.
+- **Static entry**: reusable host stdio configuration cdp-targets.
 - **Entry identity**: random UUID for one live MCP gateway.
 - **Connection identity**: random UUID for one independent target task and its official MCP connection.
 - **Session identity**: fresh UUID for every successful target start or recovery in a connection.
@@ -17,16 +18,18 @@
 - **Event cursor**: replay position in an operation's bounded in-memory event queue.
 - **Native application identity**: actual application PID, creation time, path and observed process handle.
 - **Permission wait**: OS authorization phase before application creation, separate from CDP readiness.
-- **Fixed tool catalog**: complete reviewed official tool names and compatible schema variants exposed to Codex.
+- **Fixed tool catalog**: complete reviewed official tool names and compatible schema variants exposed to the host.
 - **Enabled tools**: one connection's actual official tools/list, with its exact input schemas.
 - **Configuration recipe**: complete explicit mcpArgs satisfying a tool's reviewed activation conditions.
 - **Quarantined connection**: session whose forwarding/transport is isolated after an incomplete timeout or cancellation.
 - **Disposition**: explicit Close or Keep choice without a default.
 - **Kept target**: application and upstream retained within its live connection.
 - **Active task**: dependent work activated by start, recovery or official use and ended by Keep/end-task.
-- **Exit reminder**: one in-memory process exit event awaiting delivery to Agent context through a trusted Codex Hook.
+- **Exit reminder**: one in-memory process exit event awaiting delivery to Agent context through an enabled, authorized host Hook.
 - **Retired connection**: ended task whose exited process permits scoped upstream/router cleanup.
 - **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory.
 - **Closed connection**: removed target connection after normal shutdown; the gateway remains reusable.
 - **Recovery**: user-authorized launch from memory on the same port, with new session identity.
 - **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.
+- **Host distribution**: complete Plugin payload adapted to one Plugin host's installation interface.
+- **Packaging input**: maintained material used to assemble a host distribution.

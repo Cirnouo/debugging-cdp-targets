@@ -1,15 +1,15 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
+import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import {
-    OFFICIAL_RELEASE,
-    PLUGIN_ROOT,
-    REQUIRED_PAYLOAD_FILES,
-    validatePayloadFileInventory,
-} from './payload-policy.ts';
+import type { HostDescriptor } from './host-policy.ts';
+import { CODEX_HOST, PLUGIN_HOSTS, PLUGIN_NAME } from './host-policy.ts';
+import { OFFICIAL_RELEASE, requiredPayloadFiles, validatePayloadFileInventory } from './payload-policy.ts';
+import { isSemVer } from './version-policy.ts';
 
 export function compareDistributionTrees(source: Map<string, Buffer>, installed: Map<string, Buffer>) {
     const errors = [];
@@ -22,25 +22,154 @@ export function compareDistributionTrees(source: Map<string, Buffer>, installed:
     return errors;
 }
 
-export function validateMcpEntries(mcp: unknown) {
+function exactKeys(value: Record<string, unknown>, keys: readonly string[]) {
+    return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+export function validateMcpEntries(mcp: unknown, host: HostDescriptor = CODEX_HOST) {
     if (!isRecord(mcp) || !isRecord(mcp.mcpServers)) return ['Malformed MCP entries.'];
-    if (mcp.$schema !== 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json')
+    const codex = host.id === 'codex';
+    if (codex && mcp.$schema !== 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json')
         return ['Portable MCP manifest requires the Agent Plugins MCP schema.'];
+    if (!exactKeys(mcp, codex ? ['$schema', 'mcpServers'] : ['mcpServers'])) return ['Unexpected host MCP fields.'];
     const servers = mcp.mcpServers;
-    if (Object.keys(servers).length !== 1) return ['Plugin requires exactly one stdio gateway entry.'];
+    if (!exactKeys(servers, ['cdp-targets'])) return ['Plugin requires exactly one stdio gateway entry.'];
     const server = servers['cdp-targets'];
     if (
         !isRecord(server) ||
+        !exactKeys(server, codex ? ['type', 'command', 'args', 'cwd'] : ['type', 'command', 'args']) ||
         server.type !== 'stdio' ||
         server.command !== 'node' ||
-        JSON.stringify(server.args) !== JSON.stringify(['dist/mcp-bootstrap.mjs']) ||
-        server.cwd !== '.'
+        JSON.stringify(server.args) !==
+            JSON.stringify([codex ? 'dist/mcp-bootstrap.mjs' : `\${CLAUDE_PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`]) ||
+        (codex && server.cwd !== '.')
     )
         return ['Invalid stdio gateway entry: cdp-targets.'];
     return [];
 }
 
+export function validateHostManifest(manifest: unknown, host: HostDescriptor = CODEX_HOST) {
+    if (
+        !isRecord(manifest) ||
+        manifest.name !== PLUGIN_NAME ||
+        !isSemVer(manifest.version) ||
+        manifest.license !== 'MIT' ||
+        typeof manifest.description !== 'string' ||
+        !manifest.description.trim() ||
+        !isRecord(manifest.author) ||
+        !exactKeys(manifest.author, ['name']) ||
+        manifest.author.name !== 'Cirnouo' ||
+        manifest.repository !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
+        !Array.isArray(manifest.keywords) ||
+        !manifest.keywords.every((keyword) => typeof keyword === 'string')
+    )
+        return ['Malformed Plugin metadata.'];
+    const common = ['name', 'version', 'description', 'author', 'repository', 'license', 'keywords'];
+    if (host.id === 'codex') {
+        if (
+            !exactKeys(manifest, [...common, 'mcpServers', 'hooks', 'interface']) ||
+            manifest.mcpServers !== './mcp.json' ||
+            manifest.hooks !== './hooks/hooks.json' ||
+            !isRecord(manifest.interface)
+        )
+            return ['Invalid Codex Plugin manifest paths/interface.'];
+        if (
+            !exactKeys(manifest.interface, ['displayName', 'shortDescription', 'developerName', 'category']) ||
+            manifest.interface.displayName !== 'Debugging CDP Targets' ||
+            manifest.interface.shortDescription !== 'Inspect verified local CDP targets with Chrome DevTools' ||
+            manifest.interface.developerName !== 'Cirnouo' ||
+            manifest.interface.category !== 'Developer Tools'
+        )
+            return ['Invalid Codex Plugin interface.'];
+    } else if (!exactKeys(manifest, common))
+        return ['Claude Code uses default discovery without Codex manifest fields.'];
+    return [];
+}
+
+export function validateHooks(input: unknown, host: HostDescriptor = CODEX_HOST) {
+    if (!isRecord(input) || !exactKeys(input, ['hooks']) || !isRecord(input.hooks)) return ['Malformed Plugin Hooks.'];
+    const events = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'];
+    if (!exactKeys(input.hooks, events)) return ['Plugin requires exactly four Hook events.'];
+    const server = host.id === 'codex' ? 'cdp-targets' : 'plugin:debugging-cdp-targets:cdp-targets';
+    for (const event of events) {
+        const groups = input.hooks[event];
+        if (!Array.isArray(groups) || groups.length !== 1 || !isRecord(groups[0]) || !exactKeys(groups[0], ['hooks']))
+            return ['Invalid Plugin Hook group.'];
+        const hooks = groups[0].hooks;
+        if (
+            !Array.isArray(hooks) ||
+            hooks.length !== 1 ||
+            !isRecord(hooks[0]) ||
+            !exactKeys(hooks[0], ['type', 'server', 'tool', 'input', 'timeout']) ||
+            hooks[0].type !== 'mcp_tool' ||
+            hooks[0].server !== server ||
+            hooks[0].tool !== 'dct_connection_status' ||
+            hooks[0].timeout !== 3 ||
+            !isRecord(hooks[0].input) ||
+            !exactKeys(hooks[0].input, ['hookEventName']) ||
+            hooks[0].input.hookEventName !== event
+        )
+            return ['Invalid host MCP Hook identity, input or timeout.'];
+    }
+    return [];
+}
+
+export function validateMarketplace(input: unknown, host: HostDescriptor = CODEX_HOST) {
+    if (!isRecord(input) || input.name !== PLUGIN_NAME || !Array.isArray(input.plugins) || input.plugins.length !== 1)
+        return ['Malformed Marketplace metadata.'];
+    const plugin: unknown = input.plugins[0];
+    if (!isRecord(plugin) || plugin.name !== PLUGIN_NAME) return ['Invalid Marketplace Plugin identity.'];
+    if (host.id === 'codex') {
+        if (
+            !exactKeys(input, ['name', 'interface', 'plugins']) ||
+            !isRecord(input.interface) ||
+            !exactKeys(input.interface, ['displayName']) ||
+            input.interface.displayName !== 'Debugging CDP Targets' ||
+            !exactKeys(plugin, ['name', 'source', 'policy', 'category']) ||
+            !isRecord(plugin.source) ||
+            !exactKeys(plugin.source, ['source', 'path']) ||
+            plugin.source.source !== 'local' ||
+            plugin.source.path !== `./${host.payloadRoot}` ||
+            !isRecord(plugin.policy) ||
+            !exactKeys(plugin.policy, ['installation', 'authentication']) ||
+            plugin.policy.installation !== 'AVAILABLE' ||
+            plugin.policy.authentication !== 'ON_INSTALL' ||
+            plugin.category !== 'Developer Tools'
+        )
+            return ['Marketplace Plugin identity/path is invalid.'];
+    } else if (
+        !exactKeys(input, ['name', 'owner', 'metadata', 'plugins']) ||
+        !isRecord(input.owner) ||
+        !exactKeys(input.owner, ['name']) ||
+        input.owner.name !== 'Cirnouo' ||
+        !isRecord(input.metadata) ||
+        !exactKeys(input.metadata, ['description']) ||
+        typeof input.metadata.description !== 'string' ||
+        !exactKeys(plugin, ['name', 'source', 'description']) ||
+        plugin.source !== `./${host.payloadRoot}` ||
+        typeof plugin.description !== 'string'
+    )
+        return ['Claude Code Marketplace Plugin identity/path is invalid.'];
+    return [];
+}
+
+export function parsePluginMetadata(source: string) {
+    const value: unknown = JSON.parse(source);
+    // YAML's real parser rejects duplicate mapping keys that JSON.parse silently discards.
+    parseYaml(source, { uniqueKeys: true });
+    return value;
+}
+
+async function readMetadataFile(file: string) {
+    if (path.relative(path.resolve(file), await realpath(file)) !== '')
+        throw new Error('Plugin metadata must not contain linked paths.');
+    return readRegularFile(file);
+}
+
 export async function readDistributionTree(directory: string, prefix = ''): Promise<Map<string, Buffer>> {
+    const owned = path.resolve(directory);
+    if (!(await lstat(owned)).isDirectory() || path.relative(owned, await realpath(owned)) !== '')
+        throw new Error('Plugin directories must be regular and must not contain linked paths.');
     const files = new Map<string, Buffer>();
     for (const entry of await readdir(directory, { withFileTypes: true })) {
         const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -49,62 +178,74 @@ export async function readDistributionTree(directory: string, prefix = ''): Prom
             const nested = await readDistributionTree(path.join(directory, entry.name), relative);
             if (!nested.size) throw new Error(`Unexpected empty Plugin directory: ${relative}`);
             for (const [file, data] of nested) files.set(file, data);
-        } else if (entry.isFile()) files.set(relative, await readFile(path.join(directory, entry.name)));
+        } else if (entry.isFile()) files.set(relative, await readRegularFile(path.join(directory, entry.name)));
         else throw new Error(`Unexpected Plugin entry: ${relative}`);
     }
     return files;
 }
 
 export async function auditDistribution(root: string) {
-    const source = await readDistributionTree(path.join(root, PLUGIN_ROOT));
-    const errors = validatePayloadFileInventory([...source.keys()]);
-    try {
-        const official = await verifyOfficialPackage(
-            path.join(root, PLUGIN_ROOT, 'dist/official-server'),
-            OFFICIAL_RELEASE,
-        );
-        const copied = new Map(
-            [...source]
-                .filter(([file]) => file.startsWith('dist/official-server/'))
-                .map(([file, bytes]) => [file.slice('dist/official-server/'.length), bytes]),
-        );
-        errors.push(...compareDistributionTrees(official, copied));
-    } catch (error) {
-        errors.push(errorMessage(error));
-    }
-    const manifest: unknown = JSON.parse(source.get('.codex-plugin/plugin.json')?.toString() ?? 'null');
-    const mcp: unknown = JSON.parse(source.get('mcp.json')?.toString() ?? 'null');
-    const marketplace: unknown = JSON.parse(
-        await readFile(path.join(root, '.agents/plugins/marketplace.json'), 'utf8'),
-    );
-    if (!isRecord(manifest) || !isRecord(mcp) || !isRecord(marketplace) || !Array.isArray(marketplace.plugins))
-        return [...errors, 'Malformed Plugin metadata.'];
-    const first: unknown = marketplace.plugins[0];
-    if (
-        manifest.name !== 'debugging-cdp-targets' ||
-        manifest.mcpServers !== './mcp.json' ||
-        manifest.hooks !== './hooks/hooks.json' ||
-        marketplace.plugins.length !== 1 ||
-        !isRecord(first) ||
-        !isRecord(first.source) ||
-        first.source.path !== './plugins/debugging-cdp-targets'
-    )
-        errors.push('Marketplace Plugin identity/path is invalid.');
-    errors.push(...validateMcpEntries(mcp));
-    if (errors.length) return errors;
-    // A packaging simulation, not a claim that Codex installed or enabled it.
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-distribution-'));
-    try {
-        for (const file of REQUIRED_PAYLOAD_FILES) {
-            const destination = path.join(temporary, file);
-            await mkdir(path.dirname(destination), { recursive: true });
-            const contents = source.get(file);
-            if (!contents) throw new Error(`Missing Plugin file: ${file}`);
-            await writeFile(destination, contents);
+    const errors: string[] = [];
+    const payloads = new Map<string, Map<string, Buffer>>();
+    const packageData = parsePluginMetadata((await readMetadataFile(path.join(root, 'package.json'))).toString());
+    const license = await readMetadataFile(path.join(root, 'LICENSE'));
+    for (const host of PLUGIN_HOSTS) {
+        try {
+            const source = await readDistributionTree(path.join(root, host.payloadRoot));
+            payloads.set(host.id, source);
+            errors.push(
+                ...validatePayloadFileInventory([...source.keys()], host).map((error) => `${host.id}: ${error}`),
+            );
+            const official = await verifyOfficialPackage(
+                path.join(root, host.payloadRoot, 'dist/official-server'),
+                OFFICIAL_RELEASE,
+            );
+            const copied = new Map(
+                [...source]
+                    .filter(([file]) => file.startsWith('dist/official-server/'))
+                    .map(([file, bytes]) => [file.slice('dist/official-server/'.length), bytes]),
+            );
+            errors.push(...compareDistributionTrees(official, copied));
+            const manifest = parsePluginMetadata(source.get(host.manifest)?.toString() ?? 'null');
+            errors.push(...validateHostManifest(manifest, host));
+            errors.push(...validateMcpEntries(parsePluginMetadata(source.get(host.mcp)?.toString() ?? 'null'), host));
+            errors.push(...validateHooks(parsePluginMetadata(source.get(host.hooks)?.toString() ?? 'null'), host));
+            errors.push(
+                ...validateMarketplace(
+                    parsePluginMetadata((await readMetadataFile(path.join(root, host.marketplace))).toString()),
+                    host,
+                ),
+            );
+            if (!isRecord(manifest) || !isRecord(packageData) || manifest.version !== packageData.version)
+                errors.push(`${host.id}: Plugin and repository versions must agree.`);
+            if (!source.get('LICENSE')?.equals(license))
+                errors.push(`${host.id}: Root and Plugin licenses must match.`);
+            const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-distribution-')));
+            try {
+                for (const file of requiredPayloadFiles(host)) {
+                    const contents = source.get(file);
+                    if (!contents) continue;
+                    const destination = path.join(temporary, file);
+                    await mkdir(path.dirname(destination), { recursive: true });
+                    await writeFile(destination, contents);
+                }
+                errors.push(...compareDistributionTrees(source, await readDistributionTree(temporary)));
+            } finally {
+                await rm(temporary, { recursive: true });
+            }
+        } catch (error) {
+            errors.push(`${host.id}: ${errorMessage(error)}`);
         }
-        errors.push(...compareDistributionTrees(source, await readDistributionTree(temporary)));
-    } finally {
-        await rm(temporary, { recursive: true });
+    }
+    const codex = payloads.get('codex');
+    const claude = payloads.get('claude-code');
+    if (codex && claude) {
+        for (const [file, bytes] of codex)
+            if (
+                (file === 'LICENSE' || file.startsWith('dist/') || file.startsWith('skills/')) &&
+                !claude.get(file)?.equals(bytes)
+            )
+                errors.push(`Shared payload bytes differ: ${file}`);
     }
     return errors;
 }

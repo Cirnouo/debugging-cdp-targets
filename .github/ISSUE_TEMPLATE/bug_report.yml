@@ -13,11 +13,21 @@ body:
             placeholder: Windows 11, Ubuntu 24.04, or macOS 15
         validations:
             required: true
-    -   type: input
-        id: codex-version
+    -   type: dropdown
+        id: plugin-host
         attributes:
-            label: Codex version
-            description: Include the Desktop or CLI version and which host you used.
+            label: Plugin host
+            options:
+                - Codex Desktop
+                - Codex CLI
+                - Claude Code
+        validations:
+            required: true
+    -   type: input
+        id: host-version
+        attributes:
+            label: Host version
+            description: Include the Desktop version or the output of codex --version or claude --version.
         validations:
             required: true
     -   type: input

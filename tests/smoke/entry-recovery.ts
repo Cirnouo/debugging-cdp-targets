@@ -18,7 +18,7 @@ const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-'));
 const platform = createPlatformAdapter();
 const owned: ProcessTarget[] = [];
 let entryId = '';
-const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
 async function tool(name: string, arguments_: Record<string, unknown> = {}) {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));

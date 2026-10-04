@@ -1,6 +1,8 @@
 # Tooling
 
-- `build-plugin.ts` bundles runtime and helpers, derives all bundled package roots
+- `build-plugin.ts` assembles complete Codex and Claude Code payloads from
+  `packaging/`, root `LICENSE` and one shared runtime map. It bundles runtime and
+  helpers, derives all bundled package roots
   from the esbuild metafile, and generates complete third-party license notices.
   SDK inputs also require exact reviewed source/map fingerprints and vendor notices.
 - `vendored-licenses.json` records original registry tarball provenance, reviewed
@@ -9,10 +11,11 @@
   audit entry and its YAML license.
 - `repository-audit.ts` checks text, AST layer boundaries, versions, docs,
   symlink, and production safety.
-- `distribution-audit.ts` checks physical Plugin inventory, the portable MCP
-  schema declaration and byte-identical packaging into a disposable directory;
-  this is not a Codex install claim.
-- `payload-policy.ts` owns the exact Plugin file allowlist.
+- `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
+  MCP/Hook format, Marketplace pointer and byte-identical packaging into a disposable directory;
+  this is not a host install claim.
+- `host-policy.ts` owns filesystem-free host descriptors and canonical input/output paths.
+- `payload-policy.ts` owns the release-backed exact Plugin file allowlist.
 - `official-tool-catalog.ts` verifies the fixed public tools/list configuration
   matrix; `--write` deliberately regenerates tool metadata for the verified release.
 - `official-tool-catalog.json` records complete names, schema variants, activation
@@ -21,7 +24,8 @@
   source tag/commit, tarball integrity and every published file digest and length.
 - `governance.ts` owns commit type/scope and branch grammar.
 - `version-policy.ts` owns SemVer grammar and Package/Plugin/Skill agreement.
-- `release.ts` validates a new tag-push context, builds Changelog-based notes,
+- `release.ts` reads both maintained packaging and generated host metadata,
+  validates a new tag-push context, builds Changelog-based notes,
   and creates/resumes a draft before publication after the reusable CI gate.
 - `check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
@@ -30,10 +34,11 @@
   body-wrapping record is documented in the commit policy.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
-- `check-text-style.ts` audits staged non-Biome text.
+- `check-text-style.ts` audits staged non-Biome text; original official release
+  files are exempt only after complete independent byte verification.
 - `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
-- `smoke-official-catalog.ts` copies the Plugin outside repository dependencies,
-  initializes its official public Server with a temporary home and empty PATH,
+- `smoke-official-catalog.ts` independently copies both host Plugins outside
+  repository dependencies, initializes each official public Server with a temporary home and empty PATH,
   reads only the catalog and closes stdin. Run it explicitly with pnpm smoke:official.
 - `security/` owns complete lock inventories, audit/exception policy,
   fingerprints, and disposable official Server dependency scans.

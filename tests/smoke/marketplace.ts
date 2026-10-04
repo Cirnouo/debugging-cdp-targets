@@ -31,7 +31,7 @@ try {
     console.log(JSON.stringify({ marketplace }));
     const installed = codex(['plugin', 'add', 'debugging-cdp-targets@debugging-cdp-targets', '--json']);
     console.log(JSON.stringify({ installed }));
-    const source = await readDistributionTree(path.join(root, 'plugins/debugging-cdp-targets'));
+    const source = await readDistributionTree(path.join(root, 'plugins/codex/debugging-cdp-targets'));
     assert.equal(typeof installed.installedPath, 'string');
     const installedPath = String(installed.installedPath);
     const payload = await readDistributionTree(installedPath);
