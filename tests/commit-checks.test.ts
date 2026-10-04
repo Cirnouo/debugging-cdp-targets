@@ -42,9 +42,10 @@ function sanitizedGitEnvironment(environment = process.env, overrides = {}) {
 
 test('builds a pull request audit for title, complete squash message, source branch and commit range', () => {
     const event = {
+        number: 123,
         pull_request: {
             title: 'ci(tooling): add quality gates',
-            body: 'Explain the final behavior.',
+            body: 'Explain the final behavior.\n\nCloses #220\nRefs: #221',
             base: { sha: 'base' },
             head: { ref: 'ci/quality-gates', sha: 'head' },
         },
@@ -58,7 +59,8 @@ test('builds a pull request audit for title, complete squash message, source bra
             },
             {
                 label: 'pull request squash message',
-                message: 'ci(tooling): add quality gates\n\nExplain the final behavior.',
+                message:
+                    'ci(tooling): add quality gates (#123)\n\nExplain the final behavior.\n\nCloses #220\nRefs: #221',
             },
         ],
         range: 'base..head',
@@ -74,7 +76,7 @@ test('PR squash validation rejects long descriptions and missing or malformed bo
     };
     const request = buildCommitCheckRequest({
         eventName: 'pull_request',
-        event: { pull_request: { ...pr, body: 'x'.repeat(101) } },
+        event: { number: 123, pull_request: { ...pr, body: 'x'.repeat(101) } },
     });
     assert.equal(
         request.directMessages.some(({ message }) => !commitlintAccepts(message)),
@@ -82,18 +84,160 @@ test('PR squash validation rejects long descriptions and missing or malformed bo
     );
     for (const body of [undefined, false, 42, {}]) {
         assert.throws(
-            () => buildCommitCheckRequest({ eventName: 'pull_request', event: { pull_request: { ...pr, body } } }),
+            () =>
+                buildCommitCheckRequest({
+                    eventName: 'pull_request',
+                    event: { number: 123, pull_request: { ...pr, body } },
+                }),
             /Invalid pull request/,
         );
     }
     const empty = buildCommitCheckRequest({
         eventName: 'pull_request',
-        event: { pull_request: { ...pr, body: null } },
+        event: { number: 123, pull_request: { ...pr, body: null } },
     });
     assert.equal(
         empty.directMessages.every(({ message }) => commitlintAccepts(message)),
         true,
     );
+});
+
+test('PR squash messages preserve empty descriptions and issue footers', () => {
+    const pr = {
+        title: 'fix(target): reject stale identity',
+        head: { ref: 'fix/stale-identity', sha: 'head' },
+        base: { sha: 'base' },
+    };
+    const cases: [string | null, string][] = [
+        [null, 'fix(target): reject stale identity (#123)'],
+        ['', 'fix(target): reject stale identity (#123)'],
+        ['Closes #220', 'fix(target): reject stale identity (#123)\n\nCloses #220'],
+        [
+            'Validate the endpoint.\n\nFixes #220\nResolves owner/repository#221\nRefs: #222',
+            'fix(target): reject stale identity (#123)\n\nValidate the endpoint.\n\nFixes #220\nResolves owner/repository#221\nRefs: #222',
+        ],
+    ];
+    for (const [body, expected] of cases) {
+        const request = buildCommitCheckRequest({
+            eventName: 'pull_request',
+            event: { number: 123, pull_request: { ...pr, body } },
+        });
+        assert.equal(request.directMessages[1]?.message, expected);
+        assert.deepEqual(recordErrors(expected), []);
+    }
+});
+
+test('PR identity requires a positive safe integer number from the event root', () => {
+    const pr = {
+        number: 123,
+        title: 'fix(target): reject stale identity',
+        body: null,
+        head: { ref: 'fix/stale-identity', sha: 'head' },
+        base: { sha: 'base' },
+    };
+    for (const number of [undefined, null, '123', false, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, {}]) {
+        assert.throws(
+            () => buildCommitCheckRequest({ eventName: 'pull_request', event: { number, pull_request: pr } }),
+            /pull request number.*positive safe integer/i,
+        );
+    }
+    assert.throws(
+        () => buildCommitCheckRequest({ eventName: 'pull_request', event: { pull_request: pr } }),
+        /pull request number.*positive safe integer/i,
+    );
+    const maximum = buildCommitCheckRequest({
+        eventName: 'pull_request',
+        event: { number: Number.MAX_SAFE_INTEGER, pull_request: pr },
+    });
+    assert.equal(maximum.directMessages[1]?.message, 'fix(target): reject stale identity (#9007199254740991)');
+});
+
+test('PR titles reject their own trailing number instead of duplicating or stripping it', () => {
+    const pr = {
+        body: null,
+        head: { ref: 'fix/stale-identity', sha: 'head' },
+        base: { sha: 'base' },
+    };
+    for (const title of ['fix(target): reject stale identity (#123)', 'fix(target): reject stale identity (#123)   ']) {
+        assert.throws(
+            () =>
+                buildCommitCheckRequest({
+                    eventName: 'pull_request',
+                    event: { number: 123, pull_request: { ...pr, title } },
+                }),
+            /remove.*\(#123\).*title/i,
+        );
+    }
+    const reference = buildCommitCheckRequest({
+        eventName: 'pull_request',
+        event: { number: 123, pull_request: { ...pr, title: 'fix(target): follow issue (#220)' } },
+    });
+    assert.equal(reference.directMessages[0]?.message, 'fix(target): follow issue (#220)');
+    assert.equal(reference.directMessages[1]?.message, 'fix(target): follow issue (#220) (#123)');
+});
+
+test('PR squash headers include the actual number in the 100-character budget', () => {
+    const boundaries: [number, number][] = [
+        [1, 82],
+        [123, 80],
+        [12345, 78],
+    ];
+    for (const [number, subjectLength] of boundaries) {
+        for (const excess of [0, 1]) {
+            const request = buildCommitCheckRequest({
+                eventName: 'pull_request',
+                event: {
+                    number,
+                    pull_request: {
+                        title: `fix(target): ${'x'.repeat(subjectLength + excess)}`,
+                        body: null,
+                        head: { ref: 'fix/header-budget', sha: 'head' },
+                        base: { sha: 'base' },
+                    },
+                },
+            });
+            const [titleCheck, squashCheck] = request.directMessages;
+            assert.ok(titleCheck);
+            assert.ok(squashCheck);
+            assert.deepEqual(recordErrors(titleCheck.message), []);
+            assert.equal(squashCheck.message.length, excess === 0 ? 100 : 101);
+            const errors = recordErrors(squashCheck.message);
+            if (excess === 0) assert.deepEqual(errors, []);
+            else assert.match(errors.join('\n'), /header.*100/i);
+        }
+    }
+});
+
+test('PR metadata does not hide invalid raw titles or unseparated issue footers', () => {
+    const pr = {
+        body: null,
+        head: { ref: 'fix/stale-identity', sha: 'head' },
+        base: { sha: 'base' },
+    };
+    for (const title of ['fix(target): ', 'fix(target): reject stale identity.']) {
+        const request = buildCommitCheckRequest({
+            eventName: 'pull_request',
+            event: { number: 123, pull_request: { ...pr, title } },
+        });
+        const [titleCheck] = request.directMessages;
+        assert.ok(titleCheck);
+        assert.equal(titleCheck.message, title);
+        assert.notDeepEqual(recordErrors(titleCheck.message), []);
+    }
+    const request = buildCommitCheckRequest({
+        eventName: 'pull_request',
+        event: {
+            number: 123,
+            pull_request: {
+                ...pr,
+                title: 'fix(target): reject stale identity',
+                body: 'Validate the endpoint.\nCloses #220',
+            },
+        },
+    });
+    const [, squashCheck] = request.directMessages;
+    assert.ok(squashCheck);
+    assert.match(recordErrors(squashCheck.message).join('\n'), /footer.*blank line/i);
 });
 
 test('non-merge commits reject unwrapped squash bodies regardless of commit identity', async () => {

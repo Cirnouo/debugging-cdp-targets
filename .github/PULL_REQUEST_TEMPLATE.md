@@ -20,3 +20,11 @@ verification limits, including real-platform checks.
 - [ ] Relevant documentation and meaningful Unreleased user changes are updated.
 - [ ] The PR title and commits follow the repository policy.
 - [ ] Version 0.1.0 remains unreleased.
+
+<!--
+Optional issue association goes at the end of this description after a blank line.
+Use Closes #ISSUE, Fixes #ISSUE, or Resolves #ISSUE when this PR resolves an issue.
+Use Refs: #ISSUE for a reference only.
+Use a separate line for each issue and owner/repository#ISSUE for another repository.
+See docs/policies/commits-and-scope.md for the issue and squash-message conventions.
+-->
