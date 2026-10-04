@@ -3,6 +3,9 @@
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
+- `host-distribution.test.ts` covers both complete host inventories, manifest/MCP/Hook
+  and Marketplace routing, shared bytes, independent version/license/resource drift,
+  duplicate metadata, linked inputs/roots and read-only build checks.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
   path/link rejection, complete file verification and source/packaged resolution.
 - `file-evidence.test.ts` reproduces path replacement and in-place mutation during

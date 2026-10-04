@@ -7,7 +7,7 @@ import type { Node } from '@babel/types';
 import { parse as parseYaml } from 'yaml';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import { CODEX_HOST, PLUGIN_ROOT, SHARED_PACKAGING_ROOT } from './host-policy.ts';
+import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { OFFICIAL_RELEASE } from './payload-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
@@ -169,9 +169,10 @@ export async function auditRepository(root: string) {
     })
         .split('\0')
         .filter((file) => file && existsSync(path.join(root, file)));
-    const officialPrefix = `${PLUGIN_ROOT}/dist/official-server`;
+    const officialPrefixes = PLUGIN_HOSTS.map((host) => `${host.payloadRoot}/dist/official-server`);
     const verifiedOfficial = new Set<string>();
-    if (existsSync(path.join(root, officialPrefix))) {
+    for (const officialPrefix of officialPrefixes) {
+        if (!existsSync(path.join(root, officialPrefix))) continue;
         try {
             for (const file of (await verifyOfficialPackage(path.join(root, officialPrefix), OFFICIAL_RELEASE)).keys())
                 verifiedOfficial.add(`${officialPrefix}/${file}`);
@@ -189,7 +190,13 @@ export async function auditRepository(root: string) {
         }),
     );
     for (const directory of directories) {
-        if (verifiedOfficial.size && (directory === officialPrefix || directory.startsWith(`${officialPrefix}/`)))
+        if (
+            officialPrefixes.some(
+                (prefix) =>
+                    verifiedOfficial.has(`${prefix}/package.json`) &&
+                    (directory === prefix || directory.startsWith(`${prefix}/`)),
+            )
+        )
             continue;
         const documentation = directory === '.github' ? 'INDEX.md' : 'README.md';
         if (!files.has(`${directory}/${documentation}`))
@@ -199,7 +206,10 @@ export async function auditRepository(root: string) {
         if (verifiedOfficial.has(file)) continue;
         if (/^\.github\/readme(?:\.[^/]+)?$/i.test(file))
             errors.push(`${file}: GitHub displays this instead of the root README; use .github/INDEX.md.`);
-        if (!file.startsWith(`${PLUGIN_ROOT}/dist/`) && file !== 'tooling/security/dist/check-security.mjs')
+        if (
+            !PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/`)) &&
+            file !== 'tooling/security/dist/check-security.mjs'
+        )
             errors.push(...validateTextStyle(file, source));
         if (/^src\/.+\.(?:ts|mts|cts|mjs|cjs)$/.test(file)) errors.push(...validateRuntimeSource(file, source));
         if (/\.(?:mjs|cjs|js)$/.test(file) && !file.includes('/dist/'))
@@ -221,26 +231,34 @@ export async function auditRepository(root: string) {
         if (/(?:^|\/)(?:utils|helpers)\//.test(file)) errors.push(`${file}: modules need domain ownership.`);
     }
     const packageData: unknown = JSON.parse(files.get('package.json') ?? 'null');
-    const plugin: unknown = JSON.parse(files.get(`${CODEX_HOST.inputRoot}/${CODEX_HOST.manifest}`) ?? 'null');
+    const plugins: unknown[] = PLUGIN_HOSTS.flatMap((host) => [
+        JSON.parse(files.get(`${host.inputRoot}/${host.manifest}`) ?? 'null'),
+        JSON.parse(files.get(`${host.payloadRoot}/${host.manifest}`) ?? 'null'),
+    ]);
     const skillText = files.get(`${SHARED_PACKAGING_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skillText?.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
     if (
         !isRecord(packageData) ||
         !isRecord(packageData.engines) ||
-        !isRecord(plugin) ||
+        !plugins.every(isRecord) ||
         !isRecord(frontmatter) ||
         !isRecord(frontmatter.metadata)
     )
         return [...errors, 'Malformed repository metadata.'];
-    errors.push(...validateVersionAgreement(packageData.version, plugin.version, frontmatter.metadata.version));
-    if (
-        frontmatter?.name !== plugin.name ||
-        frontmatter?.license !== 'MIT' ||
-        typeof frontmatter?.description !== 'string'
-    )
-        errors.push('Skill frontmatter identity or description is invalid.');
-    if (files.get('LICENSE') !== files.get(`${PLUGIN_ROOT}/LICENSE`))
-        errors.push('Root and Plugin MIT licenses must match exactly.');
+    for (const plugin of plugins) {
+        if (!isRecord(plugin)) continue;
+        errors.push(...validateVersionAgreement(packageData.version, plugin.version, frontmatter.metadata.version));
+        if (
+            frontmatter.name !== plugin.name ||
+            frontmatter.license !== 'MIT' ||
+            plugin.license !== 'MIT' ||
+            typeof frontmatter.description !== 'string'
+        )
+            errors.push('Skill/Plugin frontmatter identity, license or description is invalid.');
+    }
+    for (const host of PLUGIN_HOSTS)
+        if (files.get('LICENSE') !== files.get(`${host.payloadRoot}/LICENSE`))
+            errors.push(`${host.id}: Root and Plugin MIT licenses must match exactly.`);
     if (!files.get('LICENSE')?.includes('Copyright (c) 2026 Cirnouo')) errors.push('MIT attribution is missing.');
     if (packageData.packageManager !== 'pnpm@12.4.2' || packageData.engines.node !== '24.21.0')
         errors.push('Pinned toolchain drifted.');

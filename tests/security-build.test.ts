@@ -117,3 +117,39 @@ test('release host metadata loads without release evidence or installed dependen
         await rm(directory, { recursive: true, force: true });
     }
 });
+
+test('standalone lockfile preflight validates a real lock without release evidence or installed dependencies', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-standalone-preflight-'));
+    try {
+        await copyFile(bundle, path.join(directory, 'check-security.mjs'));
+        await copyFile(path.join(root, 'pnpm-lock.yaml'), path.join(directory, 'pnpm-lock.yaml'));
+        execFileSync('git', ['init', '--quiet', directory], { windowsHide: true });
+        await mkdir(path.join(directory, 'docs/policies'), { recursive: true });
+        await mkdir(path.join(directory, 'src'));
+        await writeFile(path.join(directory, 'src/evidence.ts'), 'export const safe = true;\n');
+        await writeFile(path.join(directory, 'package.json'), '{}');
+        await writeFile(
+            path.join(directory, 'docs/policies/security-exceptions.json'),
+            '{"schemaVersion":1,"exceptions":[]}',
+        );
+        let failure: unknown;
+        try {
+            execFileSync(process.execPath, ['check-security.mjs', '--phase', 'lockfile', '--root', directory], {
+                cwd: directory,
+                windowsHide: true,
+                encoding: 'utf8',
+                stdio: 'pipe',
+            });
+        } catch (error) {
+            failure = error;
+        }
+        assert.ok(isRecord(failure));
+        assert.equal(failure.status, 1);
+        const result: unknown = JSON.parse(String(failure.stderr));
+        assert.ok(isRecord(result) && typeof result.error === 'string');
+        assert.match(result.error, /Lockfile importer differs from manifest/);
+        assert.doesNotMatch(result.error, /ENOENT|module|official-server-release|node_modules/i);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});

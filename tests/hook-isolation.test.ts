@@ -165,13 +165,13 @@ test('pre-commit batches every staged file below the launcher capacity while pre
     }
 });
 
-async function textHookFixture() {
+async function textHookFixture(host = 'codex') {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-'));
     const release: unknown = JSON.parse(
         await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(release));
-    const prefix = 'plugins/codex/debugging-cdp-targets/dist/official-server';
+    const prefix = `plugins/${host}/debugging-cdp-targets/dist/official-server`;
     const contents = new Map([
         [
             'package.json',
@@ -233,6 +233,26 @@ test('text hook preserves formatting only after verifying the complete original 
 test('text hook rejects altered or incomplete official releases even when the selected file follows repository style', async () => {
     const fixture = await textHookFixture();
     try {
+        const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
+        await writeFile(license, 'Changed upstream license\n');
+        const changed = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+        assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+        await writeFile(license, 'Original upstream license\n');
+        await rm(path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js'));
+        const missing = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(missing.status, 1, missing.stdout + missing.stderr);
+        assert.match(missing.stderr, /official|missing|inventory/i);
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+    }
+});
+
+test('Claude official text exemption verifies complete independent bytes and rejects altered or missing content', async () => {
+    const fixture = await textHookFixture('claude-code');
+    try {
+        const original = fixture.run([`${fixture.prefix}/skills/example/SKILL.md`]);
+        assert.equal(original.status, 0, original.stdout + original.stderr);
         const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
         await writeFile(license, 'Changed upstream license\n');
         const changed = fixture.run([`${fixture.prefix}/LICENSE`]);

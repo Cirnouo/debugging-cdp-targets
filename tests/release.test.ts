@@ -168,6 +168,12 @@ function fixture(options: { existing?: 'draft' | 'published'; latest?: boolean; 
     const files = new Map([
         ['package.json', JSON.stringify({ version: '1.2.3' })],
         ['packaging/codex/.codex-plugin/plugin.json', JSON.stringify({ version: '1.2.3' })],
+        ['packaging/claude-code/.claude-plugin/plugin.json', JSON.stringify({ version: '1.2.3' })],
+        ['plugins/codex/debugging-cdp-targets/.codex-plugin/plugin.json', JSON.stringify({ version: '1.2.3' })],
+        ['plugins/claude-code/debugging-cdp-targets/.claude-plugin/plugin.json', JSON.stringify({ version: '1.2.3' })],
+        ['LICENSE', 'MIT license\n'],
+        ['plugins/codex/debugging-cdp-targets/LICENSE', 'MIT license\n'],
+        ['plugins/claude-code/debugging-cdp-targets/LICENSE', 'MIT license\n'],
         [
             'packaging/shared/skills/debugging-cdp-targets/SKILL.md',
             '---\nmetadata:\n    version: "1.2.3"\n---\n# Skill\n',
@@ -481,5 +487,35 @@ test('Git identity uses an annotated tag and accepts historical main commits but
         );
     } finally {
         await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('either host input or output version and license drift blocks every remote release request', async () => {
+    for (const file of [
+        'packaging/claude-code/.claude-plugin/plugin.json',
+        'plugins/codex/debugging-cdp-targets/.codex-plugin/plugin.json',
+        'plugins/claude-code/debugging-cdp-targets/.claude-plugin/plugin.json',
+        'plugins/codex/debugging-cdp-targets/LICENSE',
+        'plugins/claude-code/debugging-cdp-targets/LICENSE',
+    ]) {
+        const f = fixture();
+        f.files.set(file, file.endsWith('LICENSE') ? 'drift' : '{"version":"1.2.4"}');
+        await assert.rejects(runRelease(input, f.io), /metadata|version|license/i);
+        assert.equal(f.calls.length, 0);
+    }
+});
+
+test('duplicate release metadata cannot hide either host version drift before publication', async () => {
+    for (const file of [
+        'package.json',
+        'packaging/codex/.codex-plugin/plugin.json',
+        'packaging/claude-code/.claude-plugin/plugin.json',
+        'plugins/codex/debugging-cdp-targets/.codex-plugin/plugin.json',
+        'plugins/claude-code/debugging-cdp-targets/.claude-plugin/plugin.json',
+    ]) {
+        const f = fixture();
+        f.files.set(file, '{"version":"1.2.4","version":"1.2.3"}');
+        await assert.rejects(runRelease(input, f.io), /unique|duplicate/i);
+        assert.equal(f.calls.length, 0);
     }
 });

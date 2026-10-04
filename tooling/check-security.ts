@@ -4,7 +4,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { errorMessage } from '../src/shared/errors.ts';
-import { PLUGIN_ROOT } from './host-policy.ts';
+import { PLUGIN_HOSTS } from './host-policy.ts';
 import type { AuditScope, FindingDecision, Fingerprints } from './security/audit-policy.ts';
 import { evaluateFindings, readLockInventory, validateExceptions } from './security/audit-policy.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';
@@ -37,13 +37,14 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
         (file) =>
             /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) ||
             /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) ||
-            file.startsWith(`${PLUGIN_ROOT}/dist/official-server/`),
+            PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/official-server/`)),
     );
     const configuration = paths.filter(
         (file) =>
             /^\.github\/workflows\/.*\.ya?ml$/.test(file) ||
             /^(?:plugins|packaging)\/.*\.(?:json|ya?ml)$/.test(file) ||
             /^\.agents\/plugins\/.*\.json$/.test(file) ||
+            PLUGIN_HOSTS.some((host) => file === host.marketplace) ||
             [
                 'package.json',
                 'pnpm-workspace.yaml',

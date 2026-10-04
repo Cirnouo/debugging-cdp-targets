@@ -323,9 +323,14 @@ test('lock-only validation cannot create an installation tree or mutate locked i
 test('security fingerprints bind all official resource bytes, release evidence and the frozen snapshot', async () => {
     const root = await lockProject();
     try {
-        const resource = 'plugins/codex/debugging-cdp-targets/dist/official-server/build/src/resource.txt';
+        const resources = [
+            'plugins/codex/debugging-cdp-targets/dist/official-server/build/src/resource.txt',
+            'plugins/claude-code/debugging-cdp-targets/dist/official-server/build/src/resource.txt',
+        ];
+        const marketplaces = ['.agents/plugins/marketplace.json', '.claude-plugin/marketplace.json'];
         for (const [file, bytes] of [
-            [resource, 'resource'],
+            ...resources.map((file) => [file, 'resource']),
+            ...marketplaces.map((file) => [file, '{}']),
             ['tooling/official-server-release.json', JSON.stringify(OFFICIAL_RELEASE)],
             ['tooling/security/upstream-pnpm-lock.yaml', upstreamLock],
         ]) {
@@ -344,10 +349,27 @@ test('security fingerprints bind all official resource bytes, release evidence a
                   : args.includes('signatures')
                     ? { exitCode: 0, stdout: '{"audited":3,"verified":3,"missing":[],"invalid":[]}' }
                     : { exitCode: 1, stdout: JSON.stringify(audit('moderate')) };
-        const first = await checkSecurity(root, { phase: 'lockfile', execute, now });
-        await writeFile(path.join(root, resource), 'changed resource');
-        const changed = await checkSecurity(root, { phase: 'lockfile', execute, now });
-        assert.notEqual(first.scopes.repository.fingerprints.code, changed.scopes.repository.fingerprints.code);
+        let changed = await checkSecurity(root, { phase: 'lockfile', execute, now });
+        for (const resource of resources) {
+            const before = changed;
+            await writeFile(path.join(root, resource), 'changed resource');
+            changed = await checkSecurity(root, { phase: 'lockfile', execute, now });
+            assert.notEqual(
+                before.scopes.repository.fingerprints.code,
+                changed.scopes.repository.fingerprints.code,
+                resource,
+            );
+        }
+        for (const marketplace of marketplaces) {
+            const before = changed;
+            await writeFile(path.join(root, marketplace), '{"changed":true}');
+            changed = await checkSecurity(root, { phase: 'lockfile', execute, now });
+            assert.notEqual(
+                before.scopes.repository.fingerprints.configuration,
+                changed.scopes.repository.fingerprints.configuration,
+                marketplace,
+            );
+        }
         await writeFile(
             path.join(root, 'tooling/official-server-release.json'),
             `${JSON.stringify(OFFICIAL_RELEASE)}\n`,

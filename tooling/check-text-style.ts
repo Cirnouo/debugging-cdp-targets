@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage } from '../src/shared/errors.ts';
 import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
-import { PLUGIN_ROOT } from './host-policy.ts';
+import { PLUGIN_HOSTS } from './host-policy.ts';
 import { validateTextStyle } from './repository-audit.ts';
 
 export async function checkTextStyle(root: string, arguments_: readonly string[]) {
@@ -12,9 +12,10 @@ export async function checkTextStyle(root: string, arguments_: readonly string[]
         const absolute = path.resolve(root, argument);
         return { absolute, relative: path.relative(root, absolute).replaceAll('\\', '/') };
     });
-    const officialPrefix = `${PLUGIN_ROOT}/dist/official-server/`;
     const verified = new Set<string>();
-    if (paths.some(({ relative }) => relative.startsWith(officialPrefix))) {
+    for (const host of PLUGIN_HOSTS) {
+        const officialPrefix = `${host.payloadRoot}/dist/official-server/`;
+        if (!paths.some(({ relative }) => relative.startsWith(officialPrefix))) continue;
         const release = parseOfficialReleaseEvidence(
             JSON.parse(await readFile(path.join(root, 'tooling/official-server-release.json'), 'utf8')),
         );

@@ -108,9 +108,9 @@ optional mcpArgs explicitly replaces configuration. It preserves the connection
 and original port, creates a new session, and invalidates old page IDs.
 Old operations cannot cancel a later session.
 
-Trusted Codex Hooks deliver operation results, connection errors and active-task
+Trusted host Hooks deliver operation results, connection errors and active-task
 exit reminders at task boundaries. Enable/review the four definitions through
-the standard Codex trust flow. Idle chats receive events next turn; they are not
+the standard host trust flow. Idle chats receive events next turn; they are not
 woken automatically. A process-exited reminder asks whether to restart or end
 dependent work. Keep other connections usable. hookEventName is reserved for
 automatic Hooks. All runtime identities and operation queues stay in memory.

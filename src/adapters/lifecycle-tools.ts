@@ -32,7 +32,7 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
     return [
         make(
             'dct_connection_status',
-            'Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. hookEventName is reserved for automatic Codex Hooks.',
+            'Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. hookEventName is reserved for automatic host Hooks.',
             {
                 entryId: uuid,
                 connectionId: uuid,
