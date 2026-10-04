@@ -23,8 +23,8 @@
   and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
 - `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
-  They also reject invalid PR squash descriptions and changes to the exact
-  historical body-wrapping record.
+  They also reject invalid PR squash descriptions and unwrapped non-merge commit
+  bodies regardless of commit identity.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git

@@ -31,16 +31,6 @@ PR checks validate both the title and the complete title-plus-description squash
 message before merge. Keep description lines within the same body/footer limit;
 editing a description reruns the gate.
 
-One immutable historical commit has a body-wrapping exception:
-`a5b7b8ba0006926df55beb81f17dc52f20767699` (PR #2, 2026-10-04).
-Its description was copied into the squash body before full PR-message checks
-existed. Preserve shared history. `check-commits.ts` binds that exact one-parent
-commit and message SHA-256
-`92c5617d62fdb601d28c6597a9b1ec2342b2547ef8e18eb4bf1ca4b182caca67`,
-wraps only its body for linting, and still applies every other commit rule.
-Different messages, topology, commits and all future PR descriptions receive no
-such normalization. Do not automatically extend this historical record.
-
 Keep each commit coherent, stage only files owned by the task, and preserve
 unrelated worktree changes. Review the staged diff and run the applicable
 focused checks before committing.

@@ -30,8 +30,8 @@
 - `check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
-  PR checks include the complete squash message; one exact immutable historical
-  body-wrapping record is documented in the commit policy.
+  PR checks include the complete squash message. Every non-merge commit is
+  validated directly without message normalization or commit-specific exceptions.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
 - `check-text-style.ts` audits staged non-Biome text; original official release

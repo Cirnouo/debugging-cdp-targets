@@ -1,5 +1,4 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -15,29 +14,6 @@ interface CommitRecord {
 }
 
 const zeroSha = /^0{40}$/;
-const historicalSquash = {
-    sha: 'a5b7b8ba0006926df55beb81f17dc52f20767699',
-    messageSha256: '92c5617d62fdb601d28c6597a9b1ec2342b2547ef8e18eb4bf1ca4b182caca67',
-};
-
-function wrapHistoricalBody(message: string) {
-    return message
-        .split('\n')
-        .map((line, index) => {
-            if (index === 0 || line.length <= 100) return line;
-            const lines: string[] = [];
-            let current = '';
-            for (const word of line.split(' ')) {
-                if (current && current.length + 1 + word.length > 100) {
-                    lines.push(current);
-                    current = word;
-                } else current = current ? `${current} ${word}` : word;
-            }
-            lines.push(current);
-            return lines.join('\n');
-        })
-        .join('\n');
-}
 
 export function buildCommitCheckRequest({ eventName, event, currentBranch }: EventRequest) {
     if (eventName === 'pull_request') {
@@ -105,20 +81,7 @@ export function buildCommitCheckRequest({ eventName, event, currentBranch }: Eve
 export function validateCommitRecords(records: CommitRecord[]) {
     const errors = [];
     for (const record of records) {
-        let message = record.message;
-        if (record.sha === historicalSquash.sha) {
-            if (
-                record.parentCount !== 1 ||
-                createHash('sha256').update(message).digest('hex') !== historicalSquash.messageSha256
-            ) {
-                errors.push(`${record.sha}: Historical commit identity differs from the reviewed message.`);
-                continue;
-            }
-            // The immutable PR #2 body predates full squash-message validation.
-            // Only its body wrapping is normalized; every other rule still runs.
-            message = wrapHistoricalBody(message);
-        }
-        const recordErrors = validateCommitMessage(message, {
+        const recordErrors = validateCommitMessage(record.message, {
             isMerge: record.parentCount > 1,
         });
         errors.push(...recordErrors.map((error) => `${record.sha}: ${error}`));

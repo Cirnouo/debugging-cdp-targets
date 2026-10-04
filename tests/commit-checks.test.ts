@@ -96,21 +96,14 @@ test('PR squash validation rejects long descriptions and missing or malformed bo
     );
 });
 
-test('historical squash wrapping applies only to the exact immutable reviewed commit message', async () => {
+test('non-merge commits reject unwrapped squash bodies regardless of commit identity', async () => {
     const message: unknown = JSON.parse(
-        await readFile(new URL('./fixtures/pr2-squash-message.json', import.meta.url), 'utf8'),
+        await readFile(new URL('./fixtures/unwrapped-squash-message.json', import.meta.url), 'utf8'),
     );
     assert.ok(typeof message === 'string');
-    const sha = 'a5b7b8ba0006926df55beb81f17dc52f20767699';
     assert.equal(commitlintAccepts(message), false);
-    assert.deepEqual(validateCommitRecords([{ sha, message, parentCount: 1 }]), []);
-    assert.notDeepEqual(recordErrors(message), []);
-    for (const changed of [
-        { message: message.replace('fix(dependencies)', 'feat(unapproved)'), parentCount: 1 },
-        { message: `${message}\nUnreviewed appended text.\n`, parentCount: 1 },
-        { message, parentCount: 2 },
-    ]) {
-        assert.match(validateCommitRecords([{ sha, ...changed }]).join('\n'), /historical.*identity/i);
+    for (const sha of ['a5b7b8ba0006926df55beb81f17dc52f20767699', 'fixture']) {
+        assert.match(validateCommitRecords([{ sha, message, parentCount: 1 }]).join('\n'), /body-max-line-length/);
     }
 });
 
