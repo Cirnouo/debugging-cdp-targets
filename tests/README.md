@@ -20,6 +20,9 @@
   check automation, package gates, and syntax plans.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
+- `chrome-smoke-config.test.ts` checks explicit portable executable selection,
+  literal isolated launch arguments and actual Chrome version requirements
+  without starting a browser.
 - `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
 - `release.test.ts` checks tag/event identity, dated Changelog extraction,
   English notes, paginated draft recovery and fail-closed publication with
@@ -63,7 +66,7 @@
   must leave the fixture running.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP processes.
-- `smoke/` owns opt-in isolated Codex Hook, official Server, local Marketplace, and Windows visible
+- `smoke/` owns opt-in isolated Codex Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
 - `AGENTS.md` sets test safety and evidence rules.
 

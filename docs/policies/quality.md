@@ -34,6 +34,13 @@ titles, and source branches; Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
 
+Separate real Chrome jobs run official tools and connection recovery on
+ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles
+and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
+browser or inspection prerequisites fail. The scripts preserve identity checks,
+normal Close and Windows visible-console monitoring. These jobs also run in
+same-commit release CI; simulated tests do not substitute for real acceptance.
+
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at
 01:47 UTC. C# uses Windows with build-mode none and must prove extraction of the
@@ -79,6 +86,10 @@ Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gat
 
 After successful initial scans and findings review, add all three CodeQL
 analysis checks and high/critical security findings to the main merge gate.
+After the two real Chrome jobs pass on GitHub, add their observed check names
+and update the compatibility statement with the tested systems and actual Chrome
+versions. Until those runs succeed, the active Ruleset retains its six established
+checks; local simulated or Windows results cannot establish Linux/macOS acceptance.
 
 Supply chain security is the first CI gate: dependency-free lockfile preflight
 with full vulnerability/signature audits, script/hook-disabled frozen install,

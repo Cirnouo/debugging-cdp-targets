@@ -9,7 +9,7 @@ This directory owns GitHub Actions workflows.
   archive contains the owned native helper before the job can succeed.
 
 - `ci.yml` validates commit governance, repository quality, Windows behavior,
-  portable simulated CDP, and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
+  portable simulated CDP, real Chrome and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-edit events without uploading runtime
   data or artifacts.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
@@ -23,7 +23,7 @@ It disables lifecycle scripts, pnpmfile hooks and configuration-dependency
 loading, then installs, checks the installed graph,
 repeats the audits, and verifies the standalone build against its source. The
 isolated official Server tree is also reviewed before its actual installation. Commit
-messages and Quality wait for it; Windows/Portable tests wait for Quality. A
+messages and Quality wait for it; Windows/Portable/Real Chrome tests wait for Quality. A
 failed security check prevents downstream builds. Registry failures also block.
 
 Quality, Windows tests and both Portable tests execute strict TypeScript
@@ -35,6 +35,16 @@ generated JavaScript so lockfile preflight needs no installed dependencies.
 Weekly CI runs on Mondays at 01:17 UTC (09:17 Asia/Shanghai); CodeQL runs at
 01:47 UTC (09:47 Asia/Shanghai). Scheduled commit checks use GitHub's explicit
 branch ref and audit its full ancestry, rejecting missing identity or tag refs.
+
+Real Chrome jobs run the official tools and three-connection recovery smokes on
+`ubuntu-24.04` and `macos-15`, after their own strict typecheck. Linux requires
+Xvfb; macOS starts desktop Chrome directly. The executable path is explicit and
+must be an existing actual Chrome binary. Each launch uses an independent
+temporary profile and synthetic local page, validates process/listener/endpoint
+identity and logs the actual OS and Chrome versions. Missing prerequisites fail;
+no browser/profile/content artifacts are uploaded and cleanup uses normal Close.
+New scan and browser checks become required only after their first successful
+GitHub runs and review of the CodeQL findings.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

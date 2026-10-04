@@ -14,22 +14,25 @@ then explicitly restarts and normally closes them. It retains test profiles.
   A normal Close that reports retained identity may be retried twice with the
   same IDs; retries are logged and never escalate to forced termination.
   Fixtures disable the first-run UI, background networking and background mode.
-  Both Windows browser smokes use the Chrome launch preset to disable the
+  On Windows, both browser smokes use the Chrome launch preset to disable the
   automatic updater scheduler for their newly launched targets, following Chromium's
   [browser-test setup](https://github.com/chromium/chromium/blob/154.0.8037.93/chrome/test/base/in_process_browser_test.cc).
   A captured Chrome 154 shutdown waited on an updater COM activation task;
   excluding that background installer isolates the browser fixture. Fixture
   commands omit this switch to exercise the production preset. Other updater
   requests can still cause a retained normal-Close failure.
-  Manual exits use identity-verified Windows CloseMainWindow and assert actual
+  Manual exits use identity-verified Windows CloseMainWindow or Unix SIGTERM and assert actual
   process/listener exit. A root that remains alive after window/listener teardown
   is a retained-close failure, not a successful smoke result.
-  Run `node tests/smoke/entry-recovery.ts` after `pnpm build:plugin` on Windows.
+  Run `node tests/smoke/entry-recovery.ts` against a verified committed Plugin build.
   Recorded exit latency measures gateway event capture, not Agent context delivery. Cleanup uses
   gateway stdin EOF and identity-verified normal target close; profiles remain in
   the printed temporary directory for inspection.
 - `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
   they are never shipped.
+- `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
+  process/user/creation-time and loopback endpoint checks, and actual browser
+  version evidence for the two cross-platform browser smokes.
 - `windows-monitor.ps1` samples visible console windows every 20 ms and reports
   newly visible console/terminal windows, without reading application data.
 - `marketplace.ts` installs the local Plugin with an isolated Codex home, compares
@@ -70,3 +73,25 @@ then explicitly restarts and normally closes them. It retains test profiles.
 These scripts are opt-in and may open dedicated test browser/application windows.
 They use the delivered official package without dependency download. The normal
 test suite never runs them. Codex tests create only disposable homes/configuration.
+
+`official-server.ts` and `entry-recovery.ts` support Windows, Linux and macOS.
+Set `DCT_SMOKE_CHROME_EXECUTABLE` to the absolute path of the actual Chrome
+binary on Linux/macOS; launcher scripts and PATH fallback are not used. Windows
+keeps `C:/Program Files/Google/Chrome/Application/chrome.exe` as its default and
+accepts an explicit absolute override. Chrome 149 or newer is required. Missing
+executables, process inspection prerequisites or required browser tools fail.
+The scripts print OS, architecture, Chrome version and verified target evidence.
+The official tools smoke retains its visible-console monitor on Windows.
+
+CI runs both smokes on `ubuntu-24.04` with Xvfb and on `macos-15` with ordinary
+Chrome. It uses the runner's existing Chrome, `ps` and `lsof`; Linux additionally
+requires Xvfb, xvfb-run and xauth. It downloads no browser, starts no headless
+substitute and uploads no profiles or browser content. These jobs are also part
+of the reusable release CI. Their first successful GitHub runner evidence is
+required before adding their checks to main protection or claiming tested
+Linux/macOS compatibility.
+
+Each target has its own temporary profile and synthetic local page. The tests
+preselect normal Close for their newly launched fixtures; they never take over
+an existing browser or escalate to forced termination. Profiles remain at the
+printed temporary path for local inspection.

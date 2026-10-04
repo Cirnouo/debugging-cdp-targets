@@ -7,32 +7,40 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
 import { lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
-if (process.platform !== 'win32') throw new Error('This real Chrome smoke is Windows-only.');
+const chrome = await requireChromeSmokeExecutable();
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-smoke-'));
 const stopFile = path.join(folder, 'monitor-stop');
-const monitor = spawn(
-    'powershell.exe',
-    [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        fileURLToPath(new URL('./windows-monitor.ps1', import.meta.url)),
-        '-StopFile',
-        stopFile,
-    ],
-    { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
-);
+const monitor =
+    process.platform === 'win32'
+        ? spawn(
+              'powershell.exe',
+              [
+                  '-NoProfile',
+                  '-NonInteractive',
+                  '-ExecutionPolicy',
+                  'Bypass',
+                  '-File',
+                  fileURLToPath(new URL('./windows-monitor.ps1', import.meta.url)),
+                  '-StopFile',
+                  stopFile,
+              ],
+              { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
+          )
+        : undefined;
 let monitorOutput = '';
-monitor.stdout.on('data', (data) => {
+monitor?.stdout.on('data', (data) => {
     monitorOutput += data;
 });
-await new Promise<void>((resolve) => monitor.stdout.once('data', () => resolve()));
+if (monitor)
+    await new Promise<void>((resolve, reject) => {
+        monitor.stdout.once('data', () => resolve());
+        monitor.once('error', reject);
+    });
 const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
@@ -49,19 +57,12 @@ function textContent(result: Record<string, unknown>) {
         })
         .join('\n');
 }
-const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 function launch(profile: string, title: string) {
-    return {
-        executable: chrome,
-        args: [
-            '--no-first-run',
-            '--disable-background-networking',
-            '--disable-background-mode',
-            `--user-data-dir=${path.join(folder, profile)}`,
-            '--remote-debugging-port={port}',
-            `data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>`,
-        ],
-    };
+    return createChromeSmokeLaunch(
+        chrome,
+        path.join(folder, profile),
+        `data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>`,
+    );
 }
 let entryId: string | undefined;
 let active: ConnectionStatus | undefined;
@@ -104,6 +105,7 @@ try {
     });
     assert.ok(!('connections' in first) && first.sessionId);
     active = first;
+    await inspectChromeSmokeTarget(first, chrome);
     console.log(JSON.stringify({ first }));
     const pagesOne = await tool('list_pages', route(first));
     assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
@@ -144,6 +146,7 @@ try {
     assert.notEqual(second.connectionId, first.connectionId);
     assert.notEqual(second.sessionId, first.sessionId);
     active = second;
+    await inspectChromeSmokeTarget(second, chrome);
     console.log(JSON.stringify({ second }));
     const pagesTwo = await tool('list_pages', route(second));
     assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
@@ -171,11 +174,15 @@ try {
             disposition: 'Close',
         }).catch((error: unknown) => console.error(errorMessage(error)));
     await client.close();
-    const monitoringEnded = new Promise<void>((resolve) => monitor.once('exit', () => resolve()));
-    await writeFile(stopFile, 'stop');
-    await monitoringEnded;
-    const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
-    assert.ok(isRecord(report));
-    console.log(JSON.stringify({ windowMonitor: report, testProfileFolder: folder }));
-    assert.deepEqual(report.newlyVisibleConsoles, []);
+    if (monitor) {
+        const monitoringEnded = new Promise<void>((resolve) => monitor.once('exit', () => resolve()));
+        await writeFile(stopFile, 'stop');
+        await monitoringEnded;
+        const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
+        assert.ok(isRecord(report));
+        console.log(JSON.stringify({ windowMonitor: report, testProfileFolder: folder }));
+        assert.deepEqual(report.newlyVisibleConsoles, []);
+    } else {
+        console.log(JSON.stringify({ testProfileFolder: folder }));
+    }
 }
