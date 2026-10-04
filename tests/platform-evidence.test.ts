@@ -51,6 +51,77 @@ test('Darwin resolves absolute executable evidence from lsof text mappings, not 
     );
 });
 
+test('Darwin verifies the installed executable against its mapped hard link using device and inode', async () => {
+    const installed = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const alias = '/private/var/folders/test/X/com.google.Chrome.code_sign_clone/clone/Contents/MacOS/Google Chrome';
+    const inspected: string[] = [];
+    const executable = await resolveUnixExecutable({
+        platform: 'darwin',
+        pid: 42,
+        comm: installed,
+        run: async (command, args) => {
+            assert.equal(command, 'lsof');
+            assert.deepEqual(args, ['-a', '-p', '42', '-d', 'txt', '-FfDin']);
+            return {
+                code: 0,
+                stdout: `p42\nftxt\nD0x11\ni9007199254740995\nn${alias}\nftxt\nn/usr/lib/dyld\n`,
+                stderr: '',
+            };
+        },
+        fileIdentity: async (file) => {
+            inspected.push(file);
+            assert.equal(file, installed);
+            return { dev: 17n, ino: 9007199254740995n, regularFile: true };
+        },
+    });
+    assert.equal(executable, installed);
+    assert.deepEqual(inspected, [installed]);
+});
+
+test('Darwin hard-link resolution refuses different files, incomplete evidence and ambiguous mapped aliases', async () => {
+    const installed = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const alias = '/private/clone/Google Chrome';
+    for (const fault of [
+        'device',
+        'inode',
+        'not-file',
+        'zero-inode',
+        'unreadable',
+        'ambiguous',
+        'missing-device',
+        'bad-inode',
+        'wrong-pid',
+        'malformed-pid',
+        'wrong-filetype',
+        'duplicate-device',
+        'duplicate-inode',
+    ]) {
+        await assert.rejects(
+            resolveUnixExecutable({
+                platform: 'darwin',
+                pid: 42,
+                comm: installed,
+                run: async () => ({
+                    code: 0,
+                    stdout: `p${fault === 'wrong-pid' ? 43 : 42}\n${fault === 'malformed-pid' ? 'pinvalid\n' : ''}f${fault === 'wrong-filetype' ? 'cwd' : 'txt'}\n${fault === 'missing-device' ? '' : 'D0x11\n'}${fault === 'duplicate-device' ? 'D0x12\nD0x11\n' : ''}i${fault === 'bad-inode' ? 'invalid' : '42'}\n${fault === 'duplicate-inode' ? 'i43\ni42\n' : ''}n${alias}\n${fault === 'ambiguous' ? 'ftxt\nD0x11\ni42\nn/private/second/Google Chrome\n' : ''}`,
+                    stderr: '',
+                }),
+                fileIdentity: async (file) => {
+                    assert.equal(file, installed);
+                    if (fault === 'unreadable') throw new Error('Cannot obtain file identity');
+                    return {
+                        dev: fault === 'device' ? 18n : 17n,
+                        ino: fault === 'zero-inode' ? 0n : fault === 'inode' ? 43n : 42n,
+                        regularFile: fault !== 'not-file',
+                    };
+                },
+            }),
+            /unverifiable or ambiguous/,
+            fault,
+        );
+    }
+});
+
 test('Darwin unverifiable executable failures retain bounded identity evidence for diagnosis', async () => {
     const paths = Array.from({ length: 40 }, (_, index) => `/Applications/candidate-${index}/Google Chrome`);
     for (const command of ['Google Chrome', '/Applications/missing/Google Chrome']) {
@@ -61,7 +132,7 @@ test('Darwin unverifiable executable failures retain bounded identity evidence f
                 comm: command,
                 run: async () => ({
                     code: 0,
-                    stdout: `p42\n${paths.map((file) => `n${file}`).join('\n')}\n`,
+                    stdout: `p42\n${paths.map((file) => `n${file}`).join('\n')}\nn/private/profile/History\n`,
                     stderr: '',
                 }),
             }),
@@ -70,10 +141,10 @@ test('Darwin unverifiable executable failures retain bounded identity evidence f
                 assert.deepEqual(errorDetails(error), {
                     phase: 'executable-identity',
                     processId: 42,
-                    command,
-                    candidateCount: 40,
+                    executableClaim: command,
+                    candidateCount: 41,
                     matchCount: command === 'Google Chrome' ? 40 : 0,
-                    mappedPaths: paths.slice(0, 32),
+                    mappedExecutablePaths: paths.slice(0, 32),
                 });
                 return true;
             },

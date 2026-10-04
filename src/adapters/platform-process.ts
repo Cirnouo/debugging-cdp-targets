@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFile, readlink } from 'node:fs/promises';
+import { readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -15,6 +15,7 @@ import { createWindowsLauncher } from './windows-launch.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
 export type ProcessExecutor = (executable: string, arguments_: string[]) => Promise<ProcessResult>;
+type UnixFileIdentity = { dev: bigint; ino: bigint; regularFile: boolean };
 export interface PlatformAdapter {
     snapshot(pid: number, port: number): Promise<ProcessEvidence>;
     validateNewRoot(evidence: ProcessEvidence, target: ProcessTarget): void;
@@ -141,15 +142,20 @@ export async function resolveUnixExecutable({
     comm,
     run: execute = run,
     readlink: link = readlink,
+    fileIdentity = async (file): Promise<UnixFileIdentity> => {
+        const evidence = await stat(file, { bigint: true });
+        return { dev: evidence.dev, ino: evidence.ino, regularFile: evidence.isFile() };
+    },
 }: {
     platform: string;
     pid: number;
     comm: string;
     run?: ProcessExecutor;
     readlink?: (path: string) => Promise<string>;
+    fileIdentity?: (file: string) => Promise<UnixFileIdentity>;
 }) {
     if (platform === 'linux') return link(`/proc/${pid}/exe`);
-    const result = await execute('lsof', ['-a', '-p', String(pid), '-d', 'txt', '-Fn']);
+    const result = await execute('lsof', ['-a', '-p', String(pid), '-d', 'txt', '-FfDin']);
     if (result.code !== 0 || result.stderr.trim()) throw new Error('The Darwin executable path is unverifiable.');
     const candidates = [
         ...new Set(
@@ -163,15 +169,70 @@ export async function resolveUnixExecutable({
         path.posix.isAbsolute(comm) ? file === comm : path.posix.basename(file) === comm,
     );
     const executable = matches[0];
+    if (matches.length === 0 && path.posix.isAbsolute(comm)) {
+        const mappings: { pid: number | undefined; valid: boolean; name?: string; dev?: bigint; ino?: bigint }[] = [];
+        let owner: number | undefined;
+        let mapping: (typeof mappings)[number] | undefined;
+        for (const field of result.stdout.split(/\r?\n/)) {
+            if (field.startsWith('p')) {
+                owner =
+                    /^p\d+$/.test(field) && Number.isSafeInteger(Number(field.slice(1)))
+                        ? Number(field.slice(1))
+                        : undefined;
+                mapping = undefined;
+            } else if (field.startsWith('f')) {
+                mapping = field === 'ftxt' ? { pid: owner, valid: true } : undefined;
+                if (mapping) mappings.push(mapping);
+            } else if (mapping) {
+                if (field.startsWith('n')) {
+                    if (mapping.name !== undefined || !field.startsWith('n/')) mapping.valid = false;
+                    else mapping.name = field.slice(1);
+                } else if (field.startsWith('D')) {
+                    if (mapping.dev !== undefined || !/^D0x[\da-f]+$/i.test(field)) mapping.valid = false;
+                    else mapping.dev = BigInt(field.slice(1));
+                } else if (field.startsWith('i')) {
+                    if (mapping.ino !== undefined || !/^i\d+$/.test(field)) mapping.valid = false;
+                    else mapping.ino = BigInt(field.slice(1));
+                }
+            }
+        }
+        try {
+            const identity = await fileIdentity(comm);
+            // Chrome's code-sign clone hard-links the main executable. Compare the
+            // installed file with the kernel mapping's device/inode, never its name alone.
+            const aliases = new Set(
+                mappings
+                    .filter(
+                        (file) =>
+                            identity.regularFile &&
+                            identity.dev > 0n &&
+                            identity.ino > 0n &&
+                            file.valid &&
+                            file.pid === pid &&
+                            file.dev === identity.dev &&
+                            file.ino === identity.ino &&
+                            file.name !== undefined &&
+                            path.posix.basename(file.name) === path.posix.basename(comm),
+                    )
+                    .map((file) => file.name),
+            );
+            if (aliases.size === 1) return comm;
+        } catch {
+            // Missing filesystem identity cannot authorize a mapped alias.
+        }
+    }
     if (matches.length !== 1 || executable === undefined) {
         const error = new DetailedError('The Darwin executable path is unverifiable or ambiguous.');
         error.details = {
             phase: 'executable-identity',
             processId: pid,
-            command: comm.slice(0, 1_024),
+            executableClaim: comm.slice(0, 1_024),
             candidateCount: candidates.length,
             matchCount: matches.length,
-            mappedPaths: candidates.slice(0, 32).map((file) => file.slice(0, 1_024)),
+            mappedExecutablePaths: candidates
+                .filter((file) => path.posix.basename(file) === path.posix.basename(comm))
+                .slice(0, 32)
+                .map((file) => file.slice(0, 1_024)),
         };
         throw error;
     }

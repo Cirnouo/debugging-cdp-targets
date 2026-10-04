@@ -12,6 +12,11 @@ loopback listener ownership, and browser-level WebSocket endpoint.
 On Linux, derive root creation time from `/proc` boot time and process start
 ticks with the system `CLK_TCK`, preserving fractional precision instead of
 the rounded `ps lstart` display. Missing or malformed evidence fails closed.
+On macOS, an absolute installed executable can also be verified through a unique
+mapped hard-link alias: its regular-file device/inode must match the kernel's
+`lsof` text mapping for the target PID. This covers Chrome's asynchronous
+[code-sign clone](https://chromium.googlesource.com/chromium/src.git/+/2d20934f814ddd688b6dd4bd0052019391114f8d/chrome/browser/mac/code_sign_clone_manager.mm)
+without accepting same-name copies, missing identity or ambiguous aliases.
 Skip occupied, privileged, and OS-excluded ports on new launches. Recovery must use the original
 port and refuse clearly when it is occupied; never silently choose another port.
 

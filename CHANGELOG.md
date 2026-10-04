@@ -69,6 +69,9 @@ Version 0.1.0 remains under development; no release has been published.
 - Linux target creation evidence preserves kernel start tick precision, avoiding
   false identity rejection caused by the rounded `ps lstart` display while
   retaining creation-time, process/user, listener and endpoint checks.
+- macOS executable evidence verifies Chrome's mapped code-sign hard link through
+  the installed file's device/inode, preventing false path changes while rejecting
+  different files, incomplete mapping evidence and ambiguous aliases.
 - Unix normal close waits for complete process/listener exit evidence when a
   terminating process loses its executable mappings between inspection steps.
   It preserves bounded waiting and identity rejection, sends no further signal,

@@ -26361,11 +26361,11 @@ async function verifyOfficialPackage(directory, input, options = {}) {
     for (const name of await readdir(current)) {
       const relative = `${prefix}${name}`;
       const absolute = path.join(current, name);
-      const stat = await lstat(absolute);
-      if (stat.isSymbolicLink()) throw new Error(`Official package contains a link: ${relative}`);
+      const stat2 = await lstat(absolute);
+      if (stat2.isSymbolicLink()) throw new Error(`Official package contains a link: ${relative}`);
       if (path.relative(canonical2, await realpath(absolute)).replaceAll("\\", "/") !== relative)
         throw new Error(`Official package path escaped or changed: ${relative}`);
-      if (stat.isDirectory()) {
+      if (stat2.isDirectory()) {
         if (options.pnpmInstalled && ["node_modules", "node_modules/.bin"].includes(relative)) {
           await visit(absolute, `${relative}/`);
           continue;
@@ -26373,7 +26373,7 @@ async function verifyOfficialPackage(directory, input, options = {}) {
         if (!directories.has(relative)) throw new Error(`Unexpected official package directory: ${relative}`);
         await visit(absolute, `${relative}/`);
       } else {
-        if (!stat.isFile()) throw new Error(`Official package entry is not a regular file: ${relative}`);
+        if (!stat2.isFile()) throw new Error(`Official package entry is not a regular file: ${relative}`);
         if (options.pnpmInstalled && shims.has(relative)) continue;
         const record2 = expected.get(relative);
         if (!record2) throw new Error(`Unexpected official package file: ${relative}`);
@@ -39461,7 +39461,7 @@ import path5 from "node:path";
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { spawn as spawn3 } from "node:child_process";
-import { readFile as readFile3, readlink } from "node:fs/promises";
+import { readFile as readFile3, readlink, stat } from "node:fs/promises";
 import path4 from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
@@ -39763,10 +39763,14 @@ async function resolveUnixExecutable({
   pid,
   comm,
   run: execute = run,
-  readlink: link = readlink
+  readlink: link = readlink,
+  fileIdentity = async (file) => {
+    const evidence = await stat(file, { bigint: true });
+    return { dev: evidence.dev, ino: evidence.ino, regularFile: evidence.isFile() };
+  }
 }) {
   if (platform === "linux") return link(`/proc/${pid}/exe`);
-  const result = await execute("lsof", ["-a", "-p", String(pid), "-d", "txt", "-Fn"]);
+  const result = await execute("lsof", ["-a", "-p", String(pid), "-d", "txt", "-FfDin"]);
   if (result.code !== 0 || result.stderr.trim()) throw new Error("The Darwin executable path is unverifiable.");
   const candidates = [
     ...new Set(
@@ -39777,27 +39781,62 @@ async function resolveUnixExecutable({
     (file) => path4.posix.isAbsolute(comm) ? file === comm : path4.posix.basename(file) === comm
   );
   const executable = matches[0];
+  if (matches.length === 0 && path4.posix.isAbsolute(comm)) {
+    const mappings = [];
+    let owner;
+    let mapping;
+    for (const field of result.stdout.split(/\r?\n/)) {
+      if (field.startsWith("p")) {
+        owner = /^p\d+$/.test(field) && Number.isSafeInteger(Number(field.slice(1))) ? Number(field.slice(1)) : void 0;
+        mapping = void 0;
+      } else if (field.startsWith("f")) {
+        mapping = field === "ftxt" ? { pid: owner, valid: true } : void 0;
+        if (mapping) mappings.push(mapping);
+      } else if (mapping) {
+        if (field.startsWith("n")) {
+          if (mapping.name !== void 0 || !field.startsWith("n/")) mapping.valid = false;
+          else mapping.name = field.slice(1);
+        } else if (field.startsWith("D")) {
+          if (mapping.dev !== void 0 || !/^D0x[\da-f]+$/i.test(field)) mapping.valid = false;
+          else mapping.dev = BigInt(field.slice(1));
+        } else if (field.startsWith("i")) {
+          if (mapping.ino !== void 0 || !/^i\d+$/.test(field)) mapping.valid = false;
+          else mapping.ino = BigInt(field.slice(1));
+        }
+      }
+    }
+    try {
+      const identity = await fileIdentity(comm);
+      const aliases = new Set(
+        mappings.filter(
+          (file) => identity.regularFile && identity.dev > 0n && identity.ino > 0n && file.valid && file.pid === pid && file.dev === identity.dev && file.ino === identity.ino && file.name !== void 0 && path4.posix.basename(file.name) === path4.posix.basename(comm)
+        ).map((file) => file.name)
+      );
+      if (aliases.size === 1) return comm;
+    } catch {
+    }
+  }
   if (matches.length !== 1 || executable === void 0) {
     const error2 = new DetailedError("The Darwin executable path is unverifiable or ambiguous.");
     error2.details = {
       phase: "executable-identity",
       processId: pid,
-      command: comm.slice(0, 1024),
+      executableClaim: comm.slice(0, 1024),
       candidateCount: candidates.length,
       matchCount: matches.length,
-      mappedPaths: candidates.slice(0, 32).map((file) => file.slice(0, 1024))
+      mappedExecutablePaths: candidates.filter((file) => path4.posix.basename(file) === path4.posix.basename(comm)).slice(0, 32).map((file) => file.slice(0, 1024))
     };
     throw error2;
   }
   return executable;
 }
 async function linuxCreationTime(pid, execute, readText) {
-  const [stat, boot, clock] = await Promise.all([
+  const [stat2, boot, clock] = await Promise.all([
     readText(`/proc/${pid}/stat`),
     readText("/proc/stat"),
     execute("getconf", ["CLK_TCK"])
   ]);
-  const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
+  const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
   const ticks = processStat?.[2]?.split(/\s+/)[19];
   const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
   const clockText = clock.stdout.trim();
