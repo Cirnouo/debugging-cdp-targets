@@ -43,13 +43,17 @@ test('repository audit accepts AGENTS.md as the contributor entry point', async 
             'docs/README.md': '# Documentation\n',
             'docs/domain-language.md': '# Domain language\n',
             'plugins/README.md': '# Plugins\n',
+            'plugins/codex/README.md': '# Codex\n',
+            'packaging/README.md': '# Packaging\n',
+            'packaging/codex/README.md': '# Codex inputs\n',
+            'packaging/shared/README.md': '# Shared inputs\n',
             [`${PLUGIN_ROOT}/README.md`]: '# Plugin\n',
             [`${PLUGIN_ROOT}/LICENSE`]: license,
-            [`${PLUGIN_ROOT}/.codex-plugin/README.md`]: '# Manifest\n',
-            [`${PLUGIN_ROOT}/.codex-plugin/plugin.json`]: `${JSON.stringify({ name: 'debugging-cdp-targets', version: '0.1.0' }, null, 4)}\n`,
-            [`${PLUGIN_ROOT}/skills/README.md`]: '# Skills\n',
-            [`${PLUGIN_ROOT}/skills/debugging-cdp-targets/README.md`]: '# Instructions\n',
-            [`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`]:
+            'packaging/codex/.codex-plugin/README.md': '# Manifest\n',
+            'packaging/codex/.codex-plugin/plugin.json': `${JSON.stringify({ name: 'debugging-cdp-targets', version: '0.1.0' }, null, 4)}\n`,
+            'packaging/shared/skills/README.md': '# Skills\n',
+            'packaging/shared/skills/debugging-cdp-targets/README.md': '# Instructions\n',
+            'packaging/shared/skills/debugging-cdp-targets/SKILL.md':
                 '---\nname: debugging-cdp-targets\nlicense: MIT\ndescription: Debug CDP targets.\nmetadata:\n    version: 0.1.0\n---\n',
         };
         for (const [file, source] of Object.entries(files)) {

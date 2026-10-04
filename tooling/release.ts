@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import { PLUGIN_ROOT } from './payload-policy.ts';
+import { CODEX_HOST, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { isStableVersion, validateVersionAgreement } from './version-policy.ts';
 
 export interface ReleaseInput {
@@ -253,8 +253,8 @@ export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
     const version = parseReleaseTag(input.tag);
     const object = verifyTagIdentity(input.tag, input.sha, input.tagObject, io.git);
     const packageData: unknown = JSON.parse(await io.readFile('package.json'));
-    const plugin: unknown = JSON.parse(await io.readFile(`${PLUGIN_ROOT}/.codex-plugin/plugin.json`));
-    const skill = await io.readFile(`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
+    const plugin: unknown = JSON.parse(await io.readFile(`${CODEX_HOST.inputRoot}/${CODEX_HOST.manifest}`));
+    const skill = await io.readFile(`${SHARED_PACKAGING_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skill.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)?.[1] ?? '');
     if (!isRecord(packageData) || !isRecord(plugin) || !isRecord(frontmatter) || !isRecord(frontmatter.metadata)) {
         throw new Error('Malformed release version metadata.');

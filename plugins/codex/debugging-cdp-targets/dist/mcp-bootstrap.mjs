@@ -26467,7 +26467,7 @@ async function resolveServerBin() {
     );
     const directory = fileURLToPath(
       new URL(
-        packaged ? "./official-server/" : "../../plugins/debugging-cdp-targets/dist/official-server/",
+        packaged ? "./official-server/" : "../../plugins/codex/debugging-cdp-targets/dist/official-server/",
         import.meta.url
       )
     );

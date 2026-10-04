@@ -4,7 +4,8 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promi
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
 import { isRecord } from '../src/shared/errors.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -85,6 +86,33 @@ test('security build comparison rejects drift without repairing it', async () =>
         await writeFile(path.join(directory, 'check-security.mjs'), 'throw new Error("drift");\n');
         await assert.rejects(verifySecurityFiles(directory, files), /Stale security build/);
         assert.equal(await readFile(path.join(directory, 'check-security.mjs'), 'utf8'), 'throw new Error("drift");\n');
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('release host metadata loads without release evidence or installed dependencies', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-host-metadata-'));
+    try {
+        const outfile = path.join(directory, 'release.mjs');
+        await build({
+            entryPoints: [path.join(root, 'tooling/release.ts')],
+            outfile,
+            bundle: true,
+            platform: 'node',
+            format: 'esm',
+            target: 'node24',
+            banner: {
+                js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+            },
+        });
+        assert.doesNotThrow(() =>
+            execFileSync(
+                process.execPath,
+                ['--input-type=module', '-e', `await import(${JSON.stringify(pathToFileURL(outfile).href)})`],
+                { cwd: directory, windowsHide: true, stdio: 'pipe' },
+            ),
+        );
     } finally {
         await rm(directory, { recursive: true, force: true });
     }

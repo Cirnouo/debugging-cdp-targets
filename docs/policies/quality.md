@@ -24,8 +24,11 @@ Server. It copies the Plugin outside node_modules, uses a temporary home and emp
 PATH, invokes no browser tools, and shuts the child down normally through stdin.
 
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
-pre-commit uses lint-staged's default stash/partial-staging protection; safe
+pre-commit uses lint-staged's default stash/partial-staging protection and
+4096-character command batches to accommodate Windows launcher expansion; safe
 Biome writes are limited to staged TS/JS/JSON, other text is audited read-only.
+The text hook exempts original upstream files only after verifying their complete
+official release; altered or incomplete releases fail closed.
 pre-push clears Git's repository routing variables before running verify:push,
 so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.

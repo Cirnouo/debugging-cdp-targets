@@ -278,7 +278,7 @@ test('native Server resolution is independent of the caller working directory', 
         result.stdout.trim(),
         fileURLToPath(
             new URL(
-                '../plugins/debugging-cdp-targets/dist/official-server/build/src/bin/chrome-devtools-mcp.js',
+                '../plugins/codex/debugging-cdp-targets/dist/official-server/build/src/bin/chrome-devtools-mcp.js',
                 import.meta.url,
             ),
         ),

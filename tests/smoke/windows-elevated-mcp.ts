@@ -35,7 +35,7 @@ assert.ok(isRecord(permissions));
 assert.equal(permissions.currentElevation, false, 'Run this smoke from an ordinary gateway process.');
 assert.equal(permissions.requiresElevation, true);
 const client = createClient(
-    fileURLToPath(new URL('../../plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs', import.meta.url)),
+    fileURLToPath(new URL('../../plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs', import.meta.url)),
 );
 const events: Record<string, unknown>[] = [];
 const evidence: Record<string, unknown> = { gatewayElevated: false, events };

@@ -323,7 +323,7 @@ test('lock-only validation cannot create an installation tree or mutate locked i
 test('security fingerprints bind all official resource bytes, release evidence and the frozen snapshot', async () => {
     const root = await lockProject();
     try {
-        const resource = 'plugins/debugging-cdp-targets/dist/official-server/build/src/resource.txt';
+        const resource = 'plugins/codex/debugging-cdp-targets/dist/official-server/build/src/resource.txt';
         for (const [file, bytes] of [
             [resource, 'resource'],
             ['tooling/official-server-release.json', JSON.stringify(OFFICIAL_RELEASE)],

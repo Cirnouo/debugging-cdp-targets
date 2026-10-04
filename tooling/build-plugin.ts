@@ -3,15 +3,19 @@ import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:f
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { isOfficialRelativePath } from '../src/shared/official-package.ts';
 import { readDistributionTree } from './distribution-audit.ts';
+import { CODEX_HOST, SHARED_PACKAGING_ROOT } from './host-policy.ts';
+import { validatePayloadFileInventory } from './payload-policy.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const output = path.join(root, 'plugins', 'debugging-cdp-targets', 'dist');
+const output = path.join(root, CODEX_HOST.payloadRoot);
+const runtimeOutput = path.join(output, 'dist');
 
 type ReviewedBundle = {
     name: string;
@@ -211,7 +215,7 @@ export async function collectBundledLicenses(
     return Buffer.from(`${sections.join('\n').trimEnd()}\n`);
 }
 
-export async function generatePluginFiles() {
+export async function generateRuntimeFiles() {
     const { release: evidence } = await verifyOfficialInputs(root);
     const official = await verifyOfficialPackage(
         await realpath(path.join(root, 'node_modules', evidence.name)),
@@ -227,7 +231,7 @@ export async function generatePluginFiles() {
         entryPoints: {
             'mcp-bootstrap': path.join(root, 'src', 'interface', 'mcp-bootstrap.ts'),
         },
-        outdir: output,
+        outdir: runtimeOutput,
         outExtension: { '.js': '.mjs' },
         bundle: true,
         platform: 'node',
@@ -246,7 +250,7 @@ export async function generatePluginFiles() {
     });
     const files = new Map<string, Buffer>(
         result.outputFiles.map((file) => [
-            path.relative(output, file.path).replaceAll('\\', '/'),
+            path.relative(runtimeOutput, file.path).replaceAll('\\', '/'),
             Buffer.from(file.contents),
         ]),
     );
@@ -257,6 +261,57 @@ export async function generatePluginFiles() {
     const notice = await collectBundledLicenses(Object.keys(result.metafile.inputs));
     files.set('THIRD-PARTY-NOTICES.txt', notice);
     return files;
+}
+
+async function verifyPackagingPath(packagingRoot: string, relative: string, directory: boolean) {
+    const owned = path.resolve(packagingRoot);
+    const input = path.resolve(owned, relative);
+    const contained = path.relative(owned, input);
+    if (!contained || contained.startsWith('..') || path.isAbsolute(contained))
+        throw new Error('Packaging input escaped its owned directory.');
+    const metadata = await lstat(input);
+    if (
+        metadata.isSymbolicLink() ||
+        (directory ? !metadata.isDirectory() : !metadata.isFile()) ||
+        path.relative(input, await realpath(input)) !== ''
+    )
+        throw new Error('Packaging input must be regular and must not be linked.');
+    return input;
+}
+
+export async function assembleCodexPayload(runtime: ReadonlyMap<string, Buffer>, packagingRoot = root) {
+    const inputs = await readDistributionTree(await verifyPackagingPath(packagingRoot, CODEX_HOST.inputRoot, true));
+    const expectedInputs = ['README.md', ...Object.keys(CODEX_HOST.files)];
+    for (const file of inputs.keys())
+        if (!expectedInputs.includes(file)) throw new Error(`Unexpected packaging input: ${file}`);
+    for (const file of expectedInputs) if (!inputs.has(file)) throw new Error(`Missing packaging input: ${file}`);
+    const files = new Map<string, Buffer>();
+    function add(destination: string, bytes: Buffer) {
+        if (files.has(destination)) throw new Error(`Duplicate packaging path: ${destination}`);
+        files.set(destination, bytes);
+    }
+    for (const [input, destination] of Object.entries(CODEX_HOST.files)) {
+        const bytes = inputs.get(input);
+        if (!bytes) throw new Error(`Missing packaging input: ${input}`);
+        add(destination, bytes);
+    }
+    add('LICENSE', await readRegularFile(await verifyPackagingPath(packagingRoot, 'LICENSE', false)));
+    const skills = await readDistributionTree(
+        await verifyPackagingPath(packagingRoot, `${SHARED_PACKAGING_ROOT}/skills`, true),
+    );
+    for (const [file, bytes] of skills) add(`skills/${file}`, bytes);
+    const documentation = await readDistributionTree(
+        await verifyPackagingPath(packagingRoot, `${SHARED_PACKAGING_ROOT}/dist`, true),
+    );
+    for (const [file, bytes] of documentation) add(`dist/${file}`, bytes);
+    for (const [file, bytes] of runtime) add(`dist/${file}`, bytes);
+    const errors = validatePayloadFileInventory([...files.keys()]);
+    if (errors.length) throw new Error(errors.join('\n'));
+    return files;
+}
+
+export async function generatePluginFiles() {
+    return assembleCodexPayload(await generateRuntimeFiles());
 }
 
 export async function syncPluginFiles(
@@ -272,7 +327,7 @@ export async function syncPluginFiles(
     const existing = await readDistributionTree(owned);
     const obsolete = new Set(['hide-npm-console.cjs', 'control.mjs']);
     for (const name of existing.keys()) {
-        if (files.has(name) || name === 'README.md') continue;
+        if (files.has(name)) continue;
         if (options.check || !obsolete.has(name)) throw new Error(`Unexpected Plugin build output: ${name}`);
     }
     if (options.check) {
@@ -301,5 +356,5 @@ export async function syncPluginFiles(
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const check = process.argv.includes('--check');
     await syncPluginFiles(await generatePluginFiles(), output, { check });
-    console.log(check ? 'Committed Plugin runtime matches its source.' : 'Plugin runtime built.');
+    console.log(check ? 'Committed Codex payload matches its inputs.' : 'Complete Codex payload built.');
 }

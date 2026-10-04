@@ -8,7 +8,7 @@
             "name": "debugging-cdp-targets",
             "source": {
                 "source": "local",
-                "path": "./plugins/debugging-cdp-targets"
+                "path": "./plugins/codex/debugging-cdp-targets"
             },
             "policy": {
                 "installation": "AVAILABLE",

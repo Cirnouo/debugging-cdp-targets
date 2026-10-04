@@ -67,3 +67,8 @@ approving reviewer. Local Git hooks complement the remote checks.
 Keep version 0.1.0 unreleased. Pushing, creating releases or tags, and changing
 repository or user configuration require the authorization described in
 AGENTS.md and the [release policy](docs/policies/releases.md).
+
+Maintained packaging inputs live in `packaging/codex/` and `packaging/shared/`.
+Edit those inputs or `src/`, then run `pnpm build:plugin` to regenerate the complete
+`plugins/codex/debugging-cdp-targets/` payload. Root `LICENSE` is canonical;
+`pnpm check:build` compares every generated payload file without writing.

@@ -7,4 +7,6 @@
 - `shared/`: cross-layer constants.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
-Generated installable code lives in plugins/debugging-cdp-targets/dist.
+`packaging/` owns maintained host inputs and shared Skill/documentation. The
+complete generated Codex payload lives in `plugins/codex/debugging-cdp-targets/`;
+its `dist/` contains this bundled runtime and the verified official Server.

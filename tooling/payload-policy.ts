@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 
-export const PLUGIN_NAME = 'debugging-cdp-targets';
-export const PLUGIN_ROOT = `plugins/${PLUGIN_NAME}`;
+export { PLUGIN_NAME, PLUGIN_ROOT } from './host-policy.ts';
 export const OFFICIAL_RELEASE = parseOfficialReleaseEvidence(
     JSON.parse(readFileSync(new URL('./official-server-release.json', import.meta.url), 'utf8')),
 );

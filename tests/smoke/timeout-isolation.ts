@@ -11,7 +11,7 @@ import { createClient } from './mcp-client.ts';
 if (process.platform !== 'win32') throw new Error('This opt-in native Chrome smoke is Windows-only.');
 const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-timeout-isolation-'));
 const client = createClient(
-    fileURLToPath(new URL('../../plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs', import.meta.url)),
+    fileURLToPath(new URL('../../plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs', import.meta.url)),
 );
 async function tool(name: string, args: Record<string, unknown> = {}) {
     // The test client must outlive the gateway's unchanged 60-second upstream timeout.

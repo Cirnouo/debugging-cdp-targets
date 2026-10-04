@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
+import { CODEX_HOST } from './host-policy.ts';
 import {
     OFFICIAL_RELEASE,
     PLUGIN_ROOT,
@@ -87,7 +88,7 @@ export async function auditDistribution(root: string) {
         marketplace.plugins.length !== 1 ||
         !isRecord(first) ||
         !isRecord(first.source) ||
-        first.source.path !== './plugins/debugging-cdp-targets'
+        first.source.path !== `./${CODEX_HOST.payloadRoot}`
     )
         errors.push('Marketplace Plugin identity/path is invalid.');
     errors.push(...validateMcpEntries(mcp));

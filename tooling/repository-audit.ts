@@ -7,7 +7,8 @@ import type { Node } from '@babel/types';
 import { parse as parseYaml } from 'yaml';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import { OFFICIAL_RELEASE, PLUGIN_ROOT } from './payload-policy.ts';
+import { CODEX_HOST, PLUGIN_ROOT, SHARED_PACKAGING_ROOT } from './host-policy.ts';
+import { OFFICIAL_RELEASE } from './payload-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
 export function validateTextStyle(file: string, source: string) {
@@ -220,8 +221,8 @@ export async function auditRepository(root: string) {
         if (/(?:^|\/)(?:utils|helpers)\//.test(file)) errors.push(`${file}: modules need domain ownership.`);
     }
     const packageData: unknown = JSON.parse(files.get('package.json') ?? 'null');
-    const plugin: unknown = JSON.parse(files.get(`${PLUGIN_ROOT}/.codex-plugin/plugin.json`) ?? 'null');
-    const skillText = files.get(`${PLUGIN_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
+    const plugin: unknown = JSON.parse(files.get(`${CODEX_HOST.inputRoot}/${CODEX_HOST.manifest}`) ?? 'null');
+    const skillText = files.get(`${SHARED_PACKAGING_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skillText?.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
     if (
         !isRecord(packageData) ||

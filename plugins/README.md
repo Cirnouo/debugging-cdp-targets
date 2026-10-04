@@ -1,3 +1,4 @@
-# Installable Plugin
+# Installable Plugins
 
-`debugging-cdp-targets/` is the self-contained Codex Plugin payload distributed by this repository's marketplace.
+`codex/` contains the complete generated Codex payload. Maintained manifests,
+Hooks, Skill and distribution documentation live in `packaging/`.

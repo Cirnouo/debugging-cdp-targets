@@ -10,7 +10,7 @@
             "**",
             "!**/.husky/_",
             "!**/.superpowers",
-            "!**/plugins/debugging-cdp-targets/dist",
+            "!**/plugins/codex/debugging-cdp-targets/dist",
             "!tooling/security/dist/check-security.mjs"
         ]
     },

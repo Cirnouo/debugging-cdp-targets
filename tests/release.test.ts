@@ -167,9 +167,9 @@ function fixture(options: { existing?: 'draft' | 'published'; latest?: boolean; 
     const calls: { method: string; endpoint: string; body?: Record<string, unknown> }[] = [];
     const files = new Map([
         ['package.json', JSON.stringify({ version: '1.2.3' })],
-        ['plugins/debugging-cdp-targets/.codex-plugin/plugin.json', JSON.stringify({ version: '1.2.3' })],
+        ['packaging/codex/.codex-plugin/plugin.json', JSON.stringify({ version: '1.2.3' })],
         [
-            'plugins/debugging-cdp-targets/skills/debugging-cdp-targets/SKILL.md',
+            'packaging/shared/skills/debugging-cdp-targets/SKILL.md',
             '---\nmetadata:\n    version: "1.2.3"\n---\n# Skill\n',
         ],
         ['CHANGELOG.md', changelog],
@@ -350,13 +350,10 @@ test('invalid tag, identity, metadata, or Changelog blocks all GitHub requests',
             f.files.set('package.json', '{"version":"1.2.4"}');
         },
         (f: ReturnType<typeof fixture>) => {
-            f.files.set('plugins/debugging-cdp-targets/.codex-plugin/plugin.json', '{"version":null}');
+            f.files.set('packaging/codex/.codex-plugin/plugin.json', '{"version":null}');
         },
         (f: ReturnType<typeof fixture>) => {
-            f.files.set(
-                'plugins/debugging-cdp-targets/skills/debugging-cdp-targets/SKILL.md',
-                '---\nmetadata: null\n---\n',
-            );
+            f.files.set('packaging/shared/skills/debugging-cdp-targets/SKILL.md', '---\nmetadata: null\n---\n');
         },
         (f: ReturnType<typeof fixture>) => {
             f.files.set('CHANGELOG.md', '## [Unreleased]\n- Pending.\n');
