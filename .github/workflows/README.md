@@ -3,7 +3,7 @@
 This directory owns GitHub Actions workflows.
 
 - `ci.yml` validates commit governance, repository quality, Windows behavior,
-  portable simulated CDP, and the Plugin distribution on branch pushes, manual runs, and pull
+  portable simulated CDP, and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-edit events without uploading runtime
   data or artifacts.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
@@ -25,6 +25,10 @@ typechecking before their regression tests. Windows additionally parses the
 PowerShell helper with both 5.1 and 7; portable tests remain simulated CDP, not
 claims of real Linux/macOS application acceptance. The first security entry is
 generated JavaScript so lockfile preflight needs no installed dependencies.
+
+Weekly CI runs on Mondays at 01:17 UTC (09:17 Asia/Shanghai). Scheduled commit
+checks use GitHub's explicit branch ref and audit its full ancestry, rejecting
+missing identity or tag refs.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

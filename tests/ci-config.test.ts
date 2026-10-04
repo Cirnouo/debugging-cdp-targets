@@ -18,7 +18,12 @@ interface WorkflowJob {
     'continue-on-error'?: boolean;
 }
 interface Workflow {
-    on: { push: unknown; pull_request: { branches: string[]; types: string[] }; workflow_dispatch: unknown };
+    on: {
+        push: unknown;
+        pull_request: { branches: string[]; types: string[] };
+        workflow_dispatch: unknown;
+        schedule: { cron: string }[];
+    };
     permissions: Record<string, string>;
     concurrency: { 'cancel-in-progress': boolean };
     jobs: Record<
@@ -60,6 +65,12 @@ function readWorkflow(source: string): Workflow {
 const workflowUrl = new URL('../.github/workflows/ci.yml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
+
+test('weekly CI runs the same supply-chain-first gates on the default branch', () => {
+    assert.deepEqual(workflow.on.schedule, [{ cron: '17 1 * * 1' }]);
+    assert.equal(workflow.jobs.quality.needs, 'supply-chain-security');
+    assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
+});
 
 test('CI workflow has read-only triggers, concurrency, and exact job display names', () => {
     assert.equal(Object.hasOwn(workflow.on, 'push'), true);

@@ -98,10 +98,11 @@ export function resolveAuditBranch({
     if (eventName === 'pull_request' || eventName === 'push') {
         return undefined;
     }
-    if (eventName !== 'workflow_dispatch') {
+    if (eventName !== 'workflow_dispatch' && eventName !== 'schedule') {
         return localBranch;
     }
     const githubRef = environment.GITHUB_REF;
+    if (githubRef && !githubRef.startsWith('refs/heads/')) return undefined;
     if (githubRef?.startsWith('refs/heads/')) {
         return githubRef.slice('refs/heads/'.length);
     }
@@ -163,9 +164,9 @@ function run() {
         eventName,
         localBranch,
     });
-    if (eventName === 'workflow_dispatch' && !currentBranch) {
+    if ((eventName === 'workflow_dispatch' || eventName === 'schedule') && !currentBranch) {
         console.error(
-            '- workflow_dispatch: an explicit branch ref is required; detached checkout state is not a branch identity.',
+            `- ${eventName}: an explicit branch ref is required; detached checkout state is not a branch identity.`,
         );
         process.exitCode = 1;
         return;

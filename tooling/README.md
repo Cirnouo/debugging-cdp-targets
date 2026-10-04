@@ -24,7 +24,8 @@
 - `release.ts` validates a new tag-push context, builds Changelog-based notes,
   and creates/resumes a draft before publication after the reusable CI gate.
 - `check-commits.ts` validates Git topology/event ranges, including complete
-  rewritten ancestry when a forced push's old commit is unavailable.
+  rewritten ancestry when a forced push's old commit is unavailable, and full
+  scheduled branch ancestry using GitHub's explicit ref without detached fallback.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
 - `check-text-style.ts` audits staged non-Biome text.

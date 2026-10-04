@@ -130,6 +130,31 @@ test('builds a workflow dispatch audit from its explicit event branch', () => {
     );
 });
 
+test('builds a scheduled audit over the explicit branch and complete ancestry', () => {
+    const currentBranch = resolveAuditBranch({
+        environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' },
+        event: { schedule: '17 1 * * 1' },
+        eventName: 'schedule',
+    });
+    assert.deepEqual(buildCommitCheckRequest({ eventName: 'schedule', currentBranch }), {
+        branches: ['main'],
+        directMessages: [],
+        range: 'HEAD',
+        includeAncestors: true,
+    });
+});
+
+test('scheduled audits reject missing and contradictory tag identities instead of local fallback', () => {
+    for (const environment of [
+        {},
+        { GITHUB_REF: 'refs/tags/v0.1.0', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' },
+    ]) {
+        const currentBranch = resolveAuditBranch({ environment, eventName: 'schedule', localBranch: 'main' });
+        assert.equal(currentBranch, undefined);
+        assert.throws(() => buildCommitCheckRequest({ eventName: 'schedule', currentBranch }), /branch identity/);
+    }
+});
+
 test('runs the workflow_dispatch checker from a detached GitHub checkout', async () => {
     const root = fileURLToPath(new URL('../', import.meta.url));
     const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-workflow-dispatch-'));
@@ -162,34 +187,36 @@ test('runs the workflow_dispatch checker from a detached GitHub checkout', async
             assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
         }
         const checkerPath = path.join(root, 'tooling/check-commits.ts');
-        const result = spawnSync(process.execPath, [checkerPath], {
-            cwd: temporaryDirectory,
-            encoding: 'utf8',
-            env: {
-                ...fixtureEnvironment,
-                GITHUB_EVENT_NAME: 'workflow_dispatch',
-                GITHUB_EVENT_PATH: eventPath,
-                GITHUB_REF: 'refs/heads/main',
-                GITHUB_REF_NAME: 'main',
-                GITHUB_REF_TYPE: 'branch',
-            },
-            windowsHide: true,
-        });
-        assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-        assert.match(result.stdout, /audit passed/i);
+        for (const eventName of ['workflow_dispatch', 'schedule']) {
+            const result = spawnSync(process.execPath, [checkerPath], {
+                cwd: temporaryDirectory,
+                encoding: 'utf8',
+                env: {
+                    ...fixtureEnvironment,
+                    GITHUB_EVENT_NAME: eventName,
+                    GITHUB_EVENT_PATH: eventPath,
+                    GITHUB_REF: 'refs/heads/main',
+                    GITHUB_REF_NAME: 'main',
+                    GITHUB_REF_TYPE: 'branch',
+                },
+                windowsHide: true,
+            });
+            assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+            assert.match(result.stdout, /audit passed/i);
 
-        const missingRef = spawnSync(process.execPath, [checkerPath], {
-            cwd: temporaryDirectory,
-            encoding: 'utf8',
-            env: {
-                ...fixtureEnvironment,
-                GITHUB_EVENT_NAME: 'workflow_dispatch',
-                GITHUB_EVENT_PATH: eventPath,
-            },
-            windowsHide: true,
-        });
-        assert.equal(missingRef.status, 1, `${missingRef.stdout}\n${missingRef.stderr}`);
-        assert.match(missingRef.stderr, /workflow_dispatch.*explicit branch ref.*detached/i);
+            const missingRef = spawnSync(process.execPath, [checkerPath], {
+                cwd: temporaryDirectory,
+                encoding: 'utf8',
+                env: {
+                    ...fixtureEnvironment,
+                    GITHUB_EVENT_NAME: eventName,
+                    GITHUB_EVENT_PATH: eventPath,
+                },
+                windowsHide: true,
+            });
+            assert.equal(missingRef.status, 1, `${missingRef.stdout}\n${missingRef.stderr}`);
+            assert.match(missingRef.stderr, new RegExp(`${eventName}.*explicit branch ref.*detached`, 'i'));
+        }
     } finally {
         await rm(temporaryDirectory, { force: true, recursive: true });
     }

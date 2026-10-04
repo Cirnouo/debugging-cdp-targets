@@ -14,6 +14,8 @@ on:
             - edited
     workflow_dispatch:
     workflow_call:
+    schedule:
+        -   cron: '17 1 * * 1'
 
 permissions:
     contents: read

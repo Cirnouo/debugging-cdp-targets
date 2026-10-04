@@ -73,5 +73,8 @@ with full vulnerability/signature audits, script/hook-disabled frozen install,
 installed-tree verification, repeat audits and reproducible audit tooling, with
 narrowly reviewed exceptions
 under [supply-chain policy](supply-chain.md). Commit messages and Quality require
-its success before normal installation/builds. `pnpm check:security` requires network access and
+its success before normal installation/builds. Weekly CI runs the same gates at
+01:17 UTC on Monday. Scheduled commit auditing requires an explicit GitHub branch
+ref and validates the full ancestry; it cannot infer a branch from a detached
+checkout or accept a tag ref. `pnpm check:security` requires network access and
 is deliberately separate from offline regression tests and verify:push.
