@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -68,7 +68,7 @@ test('pre-push verification clears repository routing before creating independen
 });
 
 test('pre-commit batches every staged file below the launcher capacity while preserving default protection', async () => {
-    const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-hook-batching-'));
+    const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-batching-')));
     const cleanEnvironment = Object.fromEntries(
         Object.entries(process.env).filter(([name]) => !name.toUpperCase().startsWith('GIT_')),
     );
@@ -166,7 +166,7 @@ test('pre-commit batches every staged file below the launcher capacity while pre
 });
 
 async function textHookFixture(host = 'codex') {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-')));
     const release: unknown = JSON.parse(
         await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
