@@ -22,6 +22,9 @@
 - `0011-mcp-native-lifecycle.md`: pure MCP operations, native launch/elevation,
   fixed catalog variants, per-connection configuration and timeout quarantine;
   supersedes previous CLI/control IPC and status-only extension constraints.
+- `0012-peer-host-distributions.md`: shared maintained packaging/runtime with
+  independent Codex and Claude Code installation payloads, exact per-host audits
+  and actual Marketplace/Hook acceptance; extends host assumptions in 0005 and 0009–0011.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

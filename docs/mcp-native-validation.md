@@ -1,5 +1,15 @@
 # MCP native lifecycle delivery and validation
 
+Peer host follow-up, 2026-10-05: [ADR 0012](adr/0012-peer-host-distributions.md)
+adds complete independent Codex and Claude Code distributions. Actual Windows
+acceptance passed with Codex CLI 0.160.0 and Claude Code 2.1.283: local Marketplace
+installation and 73-tool discovery, four Hook boundaries, one Stop continuation,
+idle-next-turn delivery, lifecycle context and the full namespaced Claude Skill.
+Hooks-disabled Claude and untrusted Codex negatives preserve MCP availability.
+These host smokes use temporary configuration, loopback models and the production
+gateway I/O fixture; [smoke commands](../tests/smoke/README.md) remain explicit.
+The following record describes the earlier native-runtime delivery evidence.
+
 Date: 2026-10-04, Windows, Node 24.21.0, pnpm 12.4.2.
 Scope: unreleased 0.1.0, [ADR 0011](adr/0011-mcp-native-lifecycle.md).
 The implementation changes the repository and generated delivery files only.

@@ -1,5 +1,8 @@
 # Bundled runtime
 
+Each host payload contains this same complete runtime and official release.
+Every resource resolves inside its own installed payload.
+
 `mcp-bootstrap.mjs` is generated from source and needs no Plugin-local install.
 `windows-cdp-helper.ps1` provides OS evidence. `windows-native-helper.ps1` and
 `windows-native-process.cs` provide maintained Windows launch/permission/close

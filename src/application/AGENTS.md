@@ -16,7 +16,7 @@ even when one fails. Remove only successfully closed connections.
 Store entry/connection/session identities and original launch argv/cwd/profile only in
 memory. Observe child exit from startup, latch missed events and revoke old subscriptions.
 Separate task activity from process lifetime; never run background health scans.
-Queue one reminder for an active task's unexpected exit; automatic trusted Codex
+Queue one reminder for an active task's unexpected exit; automatic authorized host
 Hooks deliver it at a tool boundary, Stop, or the next idle turn. Ended tasks keep
 live targets/upstreams and retire only their own connection after exit. Retain
 retry identity on cleanup failure. Explicit recovery uses the same port and new

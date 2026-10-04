@@ -8,5 +8,7 @@
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
 `packaging/` owns maintained host inputs and shared Skill/documentation. The
-complete generated Codex payload lives in `plugins/codex/debugging-cdp-targets/`;
-its `dist/` contains this bundled runtime and the verified official Server.
+complete generated payloads live in `plugins/codex/debugging-cdp-targets/` and
+`plugins/claude-code/debugging-cdp-targets/`; each `dist/` contains the same bundled
+runtime and complete verified official Server. Native-source development uses the
+Codex copy of that verified release; installed runtime resolves its own local copy.

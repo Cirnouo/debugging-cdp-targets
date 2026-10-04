@@ -4,7 +4,7 @@ Use four spaces, UTF-8, LF, a final newline, and no tabs. Biome formats/lints
 TypeScript, generated-compatible JavaScript and JSON; repository text checks cover YAML, Markdown, PowerShell,
 TOML, and shell. Generated lockfile indentation is exempt.
 
-Only the official release subtree verified against maintained release evidence
+Only each official release subtree verified against maintained release evidence
 keeps upstream formatting and directory documentation. All delivered JavaScript
 still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
 
@@ -20,8 +20,17 @@ pnpm build:security regenerates the standalone audit entry;
 check:security:build is an offline, read-only comparison in verify:push.
 
 `pnpm smoke:official` is a separate explicit catalog smoke of the delivered public
-Server. It copies the Plugin outside node_modules, uses a temporary home and empty
+Server. It copies both host Plugins outside node_modules, uses a temporary home and empty
 PATH, invokes no browser tools, and shuts the child down normally through stdin.
+
+Actual host Marketplace and Hook smokes remain explicit commands in `tests/smoke/`.
+They use disposable configuration and synthetic loopback models to prove host
+discovery, full Skill context, all four Hook boundaries, one Stop continuation,
+idle-next-turn delivery and each host's disabled/untrusted negative. Preserve user
+configuration, global Skills and old state. The baseline accepted on Windows is
+Codex CLI 0.160.0 and Claude Code 2.1.283; these executables are not installed by CI.
+Existing CI check names and real Chrome acceptance remain unchanged. Static audits,
+generated comparisons and shared runtime regressions validate both host payloads.
 
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection and

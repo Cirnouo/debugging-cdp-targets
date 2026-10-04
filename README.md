@@ -1,8 +1,8 @@
 # Debugging CDP Targets
 
 Launch a separate local Chrome browser or another CDP-capable application and
-inspect it from Codex using the official Chrome DevTools MCP Server. The Plugin
-provides one reusable gateway and creates an independent MCP connection for each
+inspect it from Codex or Claude Code using the official Chrome DevTools MCP Server.
+The Plugin provides one reusable gateway and creates an independent MCP connection for each
 new target, without a fixed connection limit. Page inspection, network diagnostics,
 and extension tools come directly from the official Server.
 
@@ -13,7 +13,8 @@ to report a vulnerability privately.
 
 ## Requirements and compatibility
 
-- Codex with Plugin support, and Node 24.21.0 available on PATH.
+- Codex with Plugin support, or Claude Code 2.1.283 or newer, and Node 24.21.0
+    available on PATH.
     The Plugin includes the complete official `chrome-devtools-mcp@1.10.1` release;
     creating connections needs no npm/npx, pnpm, or dependency download.
 - Internet access to obtain or update the Plugin. The installed Server can initialize
@@ -22,6 +23,14 @@ to report a vulnerability privately.
     **browser-level Chrome DevTools Protocol (CDP) endpoint**. Chrome is the
     known-compatible target. Other CDP-capable applications are best effort;
     Electron, Tauri, or WebView2 alone does not establish compatibility.
+
+Actual Plugin installation, tool discovery and model-context Hooks were accepted
+on Windows on 2026-10-05 with Codex CLI 0.160.0 and Claude Code 2.1.283. Claude
+Code 2.1.283 is the first supported and accepted baseline. These explicit host
+smokes use isolated configuration and loopback model fixtures; see
+[the smoke instructions](tests/smoke/README.md) for commands and boundaries.
+Each host receives a complete independent payload from the same maintained
+runtime, Skill and verified official Server release.
 
 Real desktop Chrome acceptance passed on the following hosts on 2026-10-04:
 
@@ -70,18 +79,67 @@ codex plugin remove debugging-cdp-targets@debugging-cdp-targets
 codex plugin marketplace remove debugging-cdp-targets
 ```
 
+## Install in Claude Code
+
+Add the public GitHub repository as a Marketplace source, then install the Plugin:
+
+```powershell
+claude plugin marketplace add Cirnouo/debugging-cdp-targets
+claude plugin install debugging-cdp-targets@debugging-cdp-targets
+```
+
+The Plugin also appears in Claude Code's `/plugin` interface after adding the
+Marketplace. Restart Claude Code after installation. For an unreleased contributor
+checkout, pass its absolute repository directory to `claude plugin marketplace add`.
+The installed `cdp-targets` server starts with no target; using the Skill below
+launches an explicitly selected application.
+
+### Update or uninstall
+
+Refresh the Marketplace and update the installed Plugin, then restart Claude Code:
+
+```powershell
+claude plugin marketplace update debugging-cdp-targets
+claude plugin update debugging-cdp-targets@debugging-cdp-targets
+```
+
+To uninstall, remove the Plugin before removing its Marketplace source:
+
+```powershell
+claude plugin uninstall debugging-cdp-targets@debugging-cdp-targets
+claude plugin marketplace remove debugging-cdp-targets
+```
+
+Installation and uninstallation default to user scope; updates automatically detect
+the installation scope. Claude also supports project/local scopes; select the matching
+scope when updating or removing those installations.
+See the [Claude Marketplace reference](https://code.claude.com/docs/en/plugin-marketplaces).
+
 ## Quick start
 
-Ask Codex to use `$debugging-cdp-targets` and describe the application and task.
-For example:
+Invoke the shared Skill and describe the application and task:
+
+| Host | Skill entry |
+| --- | --- |
+| Codex | `$debugging-cdp-targets` |
+| Claude Code | `/debugging-cdp-targets:debugging-cdp-targets` |
+
+For example, in Codex:
 
 ```text
 Use $debugging-cdp-targets to launch a separate Chrome debugging window.
 Open https://example.com and inspect the page's network requests and console errors.
 ```
 
+In Claude Code:
+
+```text
+/debugging-cdp-targets:debugging-cdp-targets Launch a separate Chrome debugging window.
+Open https://example.com and inspect the page's network requests and console errors.
+```
+
 For another CDP-capable application, provide its executable path and debugging
-option if you know them. Codex can check whether the application exposes the
+option if you know them. The Agent can check whether the application exposes the
 required endpoint before using the DevTools tools.
 
 The connection starts with no target. The Plugin only controls an application it
@@ -90,25 +148,24 @@ uses a dedicated debugging profile, separate from your usual browsing profile.
 
 ## Keep, close, or recover a target
 
-The Plugin exposes one Desktop entry, `cdp-targets`. Each new target receives its
+The Plugin exposes one stdio MCP entry, `cdp-targets`. Each new target receives its
 own connection and official Server child. Multiple targets can be inspected
 concurrently: calls explicitly identify their connection and current session.
 Creating a target preserves existing connections. The host connection remains
 usable after normal Close, so you can launch another target without reconnecting.
 
-Before ending work on a target, Codex asks **Close** or **Keep**. Close requests
+Before ending work on a target, the Agent asks **Close** or **Keep**. Close requests
 normal shutdown of that target and its official Server, then removes the
 connection. Keep retains both for later tasks. Other connections continue
 working. There is no default and no force kill. If normal shutdown
 fails, inspect the reported process and port and close the application manually.
 
-If you close a window during dependent work, Codex asks whether it was accidental
+If you close a window during dependent work, the Agent asks whether it was accidental
 and should be recovered on the same port, or intentional and work should end.
 The gateway automatically observes native process exit events from launch.
-Trusted Codex Hooks deliver one reminder at a tool boundary or before
-the turn ends; idle chats receive it on the next turn. Enable Hooks and review
-the plugin definitions through Codex's standard trust flow. Installing the plugin
-does not trust its Hooks; see [Codex Hooks](https://learn.chatgpt.com/docs/hooks).
+Enabled and authorized host Hooks deliver one reminder at a tool boundary or
+before the turn ends; idle chats receive it on the next turn. A pending Stop
+reminder requests one continuation. Follow the host's setup below.
 After Keep/end-task, a live target remains usable; its later exit silently removes
 its connection and official Server. Reuse resumes task monitoring automatically.
 CDP or Server failure with a live process reports a connection error.
@@ -117,6 +174,25 @@ identity, launch arguments,
 working directory and profile from memory, refuses an occupied original port,
 and creates a new session identity requiring fresh page IDs. No tool calls replay automatically and no session
 state is saved across host connections.
+
+### Automatic Hooks in each host
+
+Both distributions provide PreToolUse, PostToolUse, UserPromptSubmit and Stop
+Hooks with a three-second timeout. They call existing status and deliver pending
+exit, operation and quarantine context; no event means empty JSON.
+
+In Codex, enable Hooks and review the installed definitions through its standard
+trust flow. Installing the Plugin does not trust its Hooks. The isolated acceptance
+checks both trusted and untrusted definitions; see
+[Codex Hooks](https://learn.chatgpt.com/docs/hooks).
+
+In Claude Code, review the Plugin before installing/enabling it. Enabled Plugin
+Hooks are discovered from `hooks/hooks.json`; they call the scoped server
+`plugin:debugging-cdp-targets:cdp-targets`. Check `/hooks` to inspect active
+definitions. An effective `disableAllHooks: true` setting disables their execution
+while the Plugin MCP server can remain connected. Plugin enablement and these
+settings are Claude's controls; see [Claude Hooks](https://code.claude.com/docs/en/hooks).
+Recovery reminders require Hooks to execute in the current host.
 
 ## Data and privacy
 

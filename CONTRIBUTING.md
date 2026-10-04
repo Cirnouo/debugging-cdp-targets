@@ -68,7 +68,17 @@ Keep version 0.1.0 unreleased. Pushing, creating releases or tags, and changing
 repository or user configuration require the authorization described in
 AGENTS.md and the [release policy](docs/policies/releases.md).
 
-Maintained packaging inputs live in `packaging/codex/` and `packaging/shared/`.
+Maintained packaging inputs live in `packaging/codex/`, `packaging/claude-code/`
+and `packaging/shared/`.
 Edit those inputs or `src/`, then run `pnpm build:plugin` to regenerate the complete
-`plugins/codex/debugging-cdp-targets/` payload. Root `LICENSE` is canonical;
+`plugins/codex/debugging-cdp-targets/` and
+`plugins/claude-code/debugging-cdp-targets/` payloads. Root `LICENSE` is canonical;
 `pnpm check:build` compares every generated payload file without writing.
+
+The host-specific manifest and default component paths follow their respective
+host interfaces. The separate input/output trees are this repository's maintenance
+convention, recorded in [ADR 0012](docs/adr/0012-peer-host-distributions.md).
+Both hosts share one runtime build, complete Skill and official release evidence.
+Each delivered payload must work independently outside repository dependencies.
+Run the explicit Codex and Claude Marketplace/Hook smokes after changing host
+configuration; ordinary tests and CI keep real host invocations opt-in.

@@ -12,7 +12,8 @@ Use [GitHub private vulnerability reporting](https://github.com/Cirnouo/debuggin
 to report a suspected vulnerability privately. Please avoid publishing exploit
 details in a public issue or pull request before coordinated disclosure.
 
-Include the affected commit or Plugin version, operating system, Codex version,
+Include the affected commit or Plugin version, operating system, Plugin host
+(Codex or Claude Code) and host version,
 target application and version, reproduction steps, expected and actual
 behavior, and the security impact. A minimal proof of concept is useful.
 Remove cookies, tokens, private page contents, personal paths, and other secrets

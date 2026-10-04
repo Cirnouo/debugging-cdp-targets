@@ -8,8 +8,9 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
-- Codex Plugin and local Marketplace catalog with a bundled JavaScript runtime and
-  application-agnostic debugging instructions.
+- Independent Codex and Claude Code Plugins and Marketplace catalogs, each with
+  a complete runtime and shared application-agnostic debugging instructions.
+  Claude Code 2.1.283 is the first supported and accepted baseline.
 - Tag-triggered GitHub source releases with Changelog-based notes, new
   contributor attribution, and required security and cross-platform CI gates.
 - One reusable stdio gateway that creates independent official chrome-devtools-mcp
@@ -30,8 +31,8 @@ Version 0.1.0 remains under development; no release has been published.
 - Reuse of kept live targets and scoped upstream/router cleanup after an ended
   target exits, with retained identity for cleanup retries.
 - Lifecycle status and native process exit monitoring with automatic, reviewed
-  Codex MCP Tool Hooks, one reminder per active session, and explicit same-port
-  recovery with fresh page identities.
+  Codex and Claude Code MCP Tool Hooks, one reminder per active session, and
+  explicit same-port recovery with fresh page identities.
 - Structured executable/args/cwd/env launches with native Windows privilege
   detection, private one-shot elevation, actual app handles and separate permission
   and CDP readiness budgets. No plugin CLI, control IPC or Agent startup wrappers.

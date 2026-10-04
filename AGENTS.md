@@ -34,6 +34,7 @@ nearest source AGENTS.md and only the relevant policies before editing.
 - [Policies](docs/policies/README.md)
 - [Decisions](docs/adr/README.md)
 - [Source](src/README.md)
+- [Packaging inputs](packaging/README.md) and [host payloads](plugins/README.md)
 - [Plugin instructions](packaging/shared/skills/debugging-cdp-targets/SKILL.md)
 - [Tests](tests/README.md) and [tooling](tooling/README.md)
 

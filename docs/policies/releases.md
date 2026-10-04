@@ -15,7 +15,7 @@ leading zero.
 Keep a Changelog uses Unreleased first, dated releases newest first, ISO dates,
 and Added/Changed/Deprecated/Removed/Fixed/Security groups containing meaningful
 user changes. Move entries to a dated version only when releasing. Package,
-Plugin, Skill metadata, and release tag must agree.
+both host Plugin/Skill metadata, and release tag must agree.
 
 Each version records meaningful net changes relative to the previous published
 version, not individual commits or the development process. Unreleased always
@@ -33,6 +33,9 @@ they describe a real difference from the previous published version.
 
 Before publishing, verify all gates, licenses, payload inventory, the exact
 official Server version, and installation from the actual distribution source.
+Check both complete host payloads and Marketplace pointers independently, including
+their generated and maintained versions, shared licenses, unchanged official
+release and host formats. A single source release contains both distributions.
 Only an authorized release may create an annotated v<version> tag or GitHub
 Release. Do not publish an npm package; runtime is bundled with the Plugin.
 
