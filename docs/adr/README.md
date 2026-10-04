@@ -16,15 +16,20 @@
   MCP connections without a fixed limit, explicit routing, and parallel isolation;
   partially superseded by 0009 for monitoring and ended-task cleanup.
 - `0009-process-exit-hooks.md`: native exit events, independent task activity,
-  automatic trusted Codex Hooks, retired-connection cleanup and fixed profiles.
+  automatic trusted Codex Hooks, retired-connection cleanup and fixed profiles;
+  partially superseded by 0013 for actual-exit removal and notices.
 - `0010-bundled-official-server.md`: accepted build-time delivery of the reviewed
   official npm release, exact artifact verification and runtime package resolution.
 - `0011-mcp-native-lifecycle.md`: pure MCP operations, native launch/elevation,
   fixed catalog variants, per-connection configuration and timeout quarantine;
-  supersedes previous CLI/control IPC and status-only extension constraints.
+  supersedes previous CLI/control IPC and status-only extension constraints;
+  partially superseded by 0013 for cleanup, restart and protocol projection.
 - `0012-peer-host-distributions.md`: shared maintained packaging/runtime with
   independent Codex and Claude Code installation payloads, exact per-host audits
   and actual Marketplace/Hook acceptance; extends host assumptions in 0005 and 0009–0011.
+- `0013-session-owned-exit-cleanup.md`: ownership before acquisition, event-driven
+  actual-exit cleanup, removed dead sessions with internal disposal retries,
+  bounded official-child termination, live restart and compact acknowledged events.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

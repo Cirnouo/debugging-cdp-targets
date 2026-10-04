@@ -3803,8 +3803,6 @@ init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 var LOOPBACK = "127.0.0.1";
 var DEFAULT_BASE_PORT = 9222;
-var MAX_PORT = 65535;
-var FIRST_USER_PORT = 1024;
 var REQUEST_TIMEOUT_MS = 5e3;
 var STARTUP_TIMEOUT_MS = 2e4;
 var POLL_INTERVAL_MS = 200;
@@ -4067,9 +4065,7 @@ async function createCdpRouter({ diagnose } = {}) {
     url: `http://${LOOPBACK}:${routerPort()}`,
     isBusy: () => httpRequests.size > 0 || [...sockets].some(({ upstream }) => upstream.readyState === import_websocket.default.CONNECTING) || [...pending.values()].some((requests) => requests.size > 0),
     pause() {
-      if (this.isBusy()) throw new Error("CDP router is busy with in-flight requests.");
       paused = true;
-      disconnect();
     },
     resume() {
       paused = false;
@@ -26481,14 +26477,18 @@ async function resolveServerBin() {
 }
 
 // src/adapters/mcp-bridge.ts
+var STDIN_GRACE_MS = 2e3;
+var TERM_GRACE_MS = 2e3;
 function interruptedOfficialCall(error2, signal) {
   if (signal?.aborted) return "upstream-cancelled";
   if (error2 instanceof SdkError && error2.code === SdkErrorCode.RequestTimeout) return "upstream-timeout";
   return void 0;
 }
 async function createOfficialConnection(browserUrl, options = {}) {
+  options.signal?.throwIfAborted();
   const arguments_ = options.args ?? buildServerArguments(browserUrl);
   const bin = options.bin ?? await resolveServerBin();
+  options.signal?.throwIfAborted();
   const child = spawn(process.execPath, [bin, ...arguments_], {
     shell: false,
     windowsHide: true,
@@ -26497,54 +26497,153 @@ async function createOfficialConnection(browserUrl, options = {}) {
   });
   const listeners = /* @__PURE__ */ new Set();
   let exited = false;
+  let closed = false;
+  let closeNotified = false;
+  let stdinEnded = false;
+  let closing;
   const buffer = new ReadBuffer();
   let resolveExit = () => {
   };
   const exit = new Promise((resolve) => {
     resolveExit = resolve;
   });
+  const spawned = new Promise((resolve) => {
+    child.once("spawn", () => resolve(void 0));
+    child.once("error", (error2) => resolve(error2));
+  });
+  function closeProtocol() {
+    closed = true;
+    buffer.clear();
+    if (!closeNotified && transport.onclose) {
+      closeNotified = true;
+      transport.onclose();
+    }
+  }
+  function releaseStreams() {
+    child.stdin.destroy();
+    child.stdout.destroy();
+    child.stderr.destroy();
+  }
+  child.once("exit", () => {
+    exited = true;
+    resolveExit();
+    closeProtocol();
+    options.signal?.removeEventListener("abort", abortAcquisition);
+    releaseStreams();
+    for (const listener of listeners) listener();
+    listeners.clear();
+  });
+  async function waitForExit(milliseconds) {
+    if (exited) return true;
+    let timer;
+    try {
+      return await Promise.race([
+        exit.then(() => true),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(false), Math.max(0, milliseconds));
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  async function reapOwnedChild() {
+    const deadline = performance.now() + CLOSE_TIMEOUT_SECONDS * 1e3;
+    let timer;
+    let spawnError;
+    try {
+      spawnError = await Promise.race([
+        spawned,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("Official MCP spawn did not settle within 10 seconds.")),
+            Math.max(0, deadline - performance.now())
+          );
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (spawnError) {
+      options.signal?.removeEventListener("abort", abortAcquisition);
+      releaseStreams();
+      return;
+    }
+    if (exited) return;
+    if (!stdinEnded) {
+      stdinEnded = true;
+      if (!child.stdin.destroyed && !child.stdin.writableEnded) child.stdin.end();
+    }
+    if (await waitForExit(Math.min(STDIN_GRACE_MS, deadline - performance.now()))) return;
+    if (!child.kill("SIGTERM") && !exited)
+      throw new Error("Could not signal owned official MCP child with SIGTERM.");
+    if (await waitForExit(Math.min(TERM_GRACE_MS, deadline - performance.now()))) return;
+    if (!child.kill("SIGKILL") && !exited)
+      throw new Error("Could not signal owned official MCP child with SIGKILL.");
+    if (!await waitForExit(deadline - performance.now())) {
+      throw new Error("Official MCP child exit was not observed within 10 seconds of close.");
+    }
+  }
+  const resource = {
+    close() {
+      closeProtocol();
+      if (exited) return Promise.resolve();
+      if (!closing) {
+        closing = reapOwnedChild().finally(() => {
+          closing = void 0;
+        });
+      }
+      return closing;
+    },
+    onExit(listener) {
+      if (exited) listener();
+      else listeners.add(listener);
+    }
+  };
+  function abortAcquisition() {
+    void resource.close().catch(() => {
+    });
+  }
   const transport = {
     async start() {
-      if (child.pid !== void 0) return;
-      await new Promise((resolve, reject) => {
-        child.once("spawn", resolve);
-        child.once("error", reject);
-      });
+      if (closed) {
+        closeProtocol();
+        throw new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed");
+      }
+      const spawnError = await spawned;
+      if (spawnError) throw spawnError;
+      if (closed) {
+        closeProtocol();
+        throw new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed");
+      }
     },
     send(message) {
+      if (closed) return Promise.reject(new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed"));
       return new Promise((resolve, reject) => {
         child.stdin.write(serializeMessage(message), (error2) => error2 ? reject(error2) : resolve());
       });
     },
-    async close() {
-      if (exited) return;
-      child.stdin.end();
-      let timer;
-      try {
-        await Promise.race([
-          exit,
-          new Promise((_, reject) => {
-            timer = setTimeout(
-              () => reject(
-                new Error("Official MCP did not exit after normal stdin close within 10 seconds.")
-              ),
-              1e4
-            );
-          })
-        ]);
-      } finally {
-        if (timer) clearTimeout(timer);
-      }
+    close() {
+      void resource.close().catch(() => {
+      });
+      return Promise.resolve();
     }
   };
   child.stderr.resume();
-  child.stdin.on("error", (error2) => transport.onerror?.(error2));
-  child.on("error", (error2) => transport.onerror?.(error2));
+  child.stdin.on("error", (error2) => {
+    if (!closed) transport.onerror?.(error2);
+  });
+  child.on("error", (error2) => {
+    if (!closed) transport.onerror?.(error2);
+  });
+  child.stdout.once("end", abortAcquisition);
+  child.stdout.once("close", abortAcquisition);
   child.stdout.on("data", (chunk) => {
+    if (closed) return;
     try {
       buffer.append(chunk);
       let message = buffer.readMessage();
-      while (message !== null) {
+      while (!closed && message !== null) {
         transport.onmessage?.(message);
         message = buffer.readMessage();
       }
@@ -26552,13 +26651,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
       transport.onerror?.(error2 instanceof Error ? error2 : new Error("Invalid official MCP message."));
     }
   });
-  child.once("close", () => {
-    exited = true;
-    resolveExit();
-    transport.onclose?.();
-    for (const listener of listeners) listener();
-    listeners.clear();
-  });
+  options.signal?.addEventListener("abort", abortAcquisition, { once: true });
   const client = new Client(
     { name: "debugging-cdp-targets", version: "0.1.0" },
     {
@@ -26579,15 +26672,21 @@ async function createOfficialConnection(browserUrl, options = {}) {
     });
   }
   try {
+    options.onAcquired?.(resource);
+    if (options.signal?.aborted) abortAcquisition();
+    options.signal?.throwIfAborted();
     await client.connect(transport);
+    options.signal?.throwIfAborted();
     const tools = [];
     const cursors = /* @__PURE__ */ new Set();
     let cursor;
     do {
+      options.signal?.throwIfAborted();
       const page = await client.request(
         { method: "tools/list", params: cursor ? { cursor } : {} },
         ListToolsResultSchema
       );
+      options.signal?.throwIfAborted();
       tools.push(...page.tools);
       cursor = page.nextCursor;
       if (cursor !== void 0) {
@@ -26611,15 +26710,15 @@ async function createOfficialConnection(browserUrl, options = {}) {
           )
         );
       },
-      close: () => client.close(),
-      onExit(listener) {
-        if (exited) listener();
-        else listeners.add(listener);
-      },
+      close: resource.close,
+      onExit: resource.onExit,
       rootsChanged: () => client.sendRootsListChanged()
     };
   } catch (error2) {
-    await transport.close();
+    const cleanup = resource.close();
+    if (options.onAcquired) void cleanup.catch(() => {
+    });
+    else await cleanup;
     throw error2;
   }
 }
@@ -39110,6 +39209,70 @@ function resolveLaunchDefinition(value, port, environment) {
 }
 
 // src/domains/control-contract.ts
+function connectionSummary(value) {
+  return {
+    entryId: value.entryId,
+    connectionId: value.connectionId,
+    status: value.status,
+    ...value.sessionId === void 0 ? {} : { sessionId: value.sessionId },
+    ...value.port === void 0 ? {} : { port: value.port },
+    ...value.processId === void 0 ? {} : { processId: value.processId },
+    ...value.targetKind === void 0 ? {} : { targetKind: value.targetKind },
+    ...value.reason === void 0 ? {} : { reason: value.reason },
+    ...value.taskActive === void 0 ? {} : { taskActive: value.taskActive },
+    ...value.disposition === void 0 ? {} : { disposition: value.disposition },
+    ...value.pageIdsInvalidated === void 0 ? {} : { pageIdsInvalidated: value.pageIdsInvalidated },
+    ...value.enabledToolCount === void 0 ? {} : { enabledToolCount: value.enabledToolCount },
+    ...value.upstreamStatus === void 0 ? {} : { upstreamStatus: value.upstreamStatus }
+  };
+}
+function lifecycleFailureEvidence(value) {
+  const fields3 = /* @__PURE__ */ new Set([
+    "entryId",
+    "connectionId",
+    "sessionId",
+    "status",
+    "port",
+    "processId",
+    "targetKind",
+    "reason",
+    "taskActive",
+    "disposition",
+    "pageIdsInvalidated",
+    "upstreamStatus",
+    "phase",
+    "code",
+    "category",
+    "nativeError",
+    "exceptionType",
+    "closeRequested",
+    "processExited",
+    "listenerState",
+    "closeConfirmed",
+    "cause",
+    "catalogUpstreamRetained",
+    "cleanupError",
+    "executableClaim",
+    "candidateCount",
+    "matchCount"
+  ]);
+  const evidence = Object.fromEntries(
+    Object.entries(value).filter(
+      ([key, item]) => fields3.has(key) && (typeof item === "string" || typeof item === "boolean" || typeof item === "number" && Number.isFinite(item))
+    )
+  );
+  if (Array.isArray(value.retainedTargets))
+    evidence.retainedTargets = value.retainedTargets.filter(isRecord).map(
+      (target) => Object.fromEntries(
+        ["processId", "port"].flatMap(
+          (key) => typeof target[key] === "number" && Number.isFinite(target[key]) ? [[key, target[key]]] : []
+        )
+      )
+    );
+  if (Array.isArray(value.mappedExecutablePaths))
+    evidence.mappedExecutablePaths = value.mappedExecutablePaths.filter((item) => typeof item === "string").slice(0, 32);
+  return evidence;
+}
 function validateIdentity(value, label) {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
     throw new Error(`A canonical lowercase UUID ${label} is required.`);
@@ -39129,23 +39292,31 @@ function strings(value) {
     throw new Error("Expected an array of strings.");
   return value;
 }
+function statusIncludes(value) {
+  if (!Array.isArray(value) || !value.every((item) => item === "configuration" || item === "diagnostics") || new Set(value).size !== value.length)
+    throw new Error("Status include accepts unique configuration and diagnostics values.");
+  return value;
+}
 function parseControlRequest(value) {
   if (!isRecord(value)) throw new Error("Invalid control request.");
   const action = value.action;
   if (action === "status") {
-    fields2(value, ["action", "entryId", "connectionId", "operationId", "toolNames"]);
+    fields2(value, ["action", "entryId", "connectionId", "operationId", "toolNames", "include"]);
     if (Object.keys(value).length === 1) return { action };
     validateIdentity(value.entryId, "entry ID");
     if (value.connectionId !== void 0) validateIdentity(value.connectionId, "connection ID");
     if (value.operationId !== void 0) validateIdentity(value.operationId, "operation ID");
-    if (value.connectionId !== void 0 && value.operationId !== void 0)
-      throw new Error("Select a connection or an operation, not both.");
+    if (value.operationId !== void 0 && (value.connectionId !== void 0 || value.toolNames !== void 0 || value.include !== void 0))
+      throw new Error("Operation status cannot also select a connection, tools, or includes.");
+    if (value.include !== void 0 && value.connectionId === void 0)
+      throw new Error("Status include requires a selected connection.");
     return {
       action,
       entryId: value.entryId,
       ...value.connectionId === void 0 ? {} : { connectionId: value.connectionId },
       ...value.operationId === void 0 ? {} : { operationId: value.operationId },
-      ...value.toolNames === void 0 ? {} : { toolNames: strings(value.toolNames) }
+      ...value.toolNames === void 0 ? {} : { toolNames: strings(value.toolNames) },
+      ...value.include === void 0 ? {} : { include: statusIncludes(value.include) }
     };
   }
   validateIdentity(value.entryId, "entry ID");
@@ -39236,12 +39407,17 @@ function lifecycleTools(hookEvents) {
   return [
     make(
       "dct_connection_status",
-      "Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. hookEventName is reserved for automatic host Hooks.",
+      "Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. Selected connections accept include for configuration or diagnostics. Operation status cannot combine connectionId, toolNames, or include. hookEventName is reserved for automatic host Hooks.",
       {
         entryId: uuid2,
         connectionId: uuid2,
         operationId: uuid2,
         toolNames: stringList,
+        include: {
+          type: "array",
+          items: { type: "string", enum: ["configuration", "diagnostics"] },
+          uniqueItems: true
+        },
         hookEventName: { type: "string", enum: [...hookEvents] }
       }
     ),
@@ -39419,6 +39595,23 @@ function createMcpEntryServer(options) {
   };
 }
 
+// src/adapters/port-reservation.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function createPortReservations() {
+  const claims2 = /* @__PURE__ */ new Map();
+  return {
+    claim(port) {
+      if (claims2.has(port)) return void 0;
+      const owner = /* @__PURE__ */ Symbol();
+      claims2.set(port, owner);
+      return () => {
+        if (claims2.get(port) === owner) claims2.delete(port);
+      };
+    }
+  };
+}
+
 // src/adapters/target-host.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
@@ -39438,18 +39631,6 @@ var RetainedTargetError = class extends DetailedError {
     Object.defineProperty(this, "target", { enumerable: false });
   }
 };
-async function choosePort({
-  basePort = DEFAULT_BASE_PORT,
-  reservedRanges = [],
-  probe
-}) {
-  if (!Number.isInteger(basePort) || basePort < 1 || basePort > MAX_PORT) throw new Error("Invalid base port.");
-  for (let port = Math.max(basePort, FIRST_USER_PORT); port <= MAX_PORT; port += 1) {
-    if (reservedRanges.some(([start, end]) => port >= start && port <= end)) continue;
-    if (await probe(port)) return port;
-  }
-  throw new Error("No available, non-reserved CDP port remains.");
-}
 function isLoopback(address) {
   return address === "::1" || address === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(address);
 }
@@ -39537,6 +39718,12 @@ var NativeApplication = class extends EventEmitter {
       this.off("monitor-error", listener);
     };
   }
+  recordExit(code) {
+    if (this.exitCode !== null) return;
+    this.exitCode = code;
+    this.emit("exit");
+    this.disposeMonitor();
+  }
 };
 var phases = /* @__PURE__ */ new Set([
   "inspecting-permission",
@@ -39553,7 +39740,11 @@ function nativeFailure(value) {
     phase: typeof value.phase === "string" && phases.has(value.phase) ? value.phase : "native-helper",
     ...typeof value.nativeError === "number" ? { nativeError: value.nativeError } : {},
     ...typeof value.category === "string" && /^[a-z-]+$/.test(value.category) ? { category: value.category } : {},
-    ...typeof value.exceptionType === "string" && /^[A-Za-z]+$/.test(value.exceptionType) ? { exceptionType: value.exceptionType } : {}
+    ...typeof value.exceptionType === "string" && /^[A-Za-z]+$/.test(value.exceptionType) ? { exceptionType: value.exceptionType } : {},
+    ...typeof value.waitResult === "number" ? { waitResult: value.waitResult } : {},
+    ...typeof value.waitError === "number" ? { waitError: value.waitError } : {},
+    closeRequested: value.closeRequested === true,
+    processExited: false
   };
   return error2;
 }
@@ -39564,6 +39755,9 @@ function createWindowsLauncher({
     stdio: ["pipe", "pipe", "pipe"]
   })
 } = {}) {
+  const applications = /* @__PURE__ */ new Map();
+  const closeWaits = /* @__PURE__ */ new WeakMap();
+  const key = (target) => `${target.processId}:${target.startedAtUtc}:${path3.win32.resolve(target.executablePath).toLowerCase()}`;
   function helper(request, context, event, failure2, ended) {
     const windows = process.env.SystemRoot ?? "C:/Windows";
     const executable = path3.join(windows, "System32/WindowsPowerShell/v1.0/powershell.exe");
@@ -39627,6 +39821,7 @@ function createWindowsLauncher({
       detach();
       ended();
     });
+    child.stdout.once("end", ended);
     child.stdin.write(`${JSON.stringify(request)}
 `);
     if (context.signal?.aborted) cancel();
@@ -39638,6 +39833,91 @@ function createWindowsLauncher({
         child.stdin.end();
       }
     };
+  }
+  function requestNormalClose(target, context = {}) {
+    context.signal?.throwIfAborted();
+    let resolveWait = () => {
+    };
+    let rejectWait = () => {
+    };
+    const wait = new Promise((resolve, reject) => {
+      resolveWait = resolve;
+      rejectWait = reject;
+    });
+    void wait.catch(() => {
+    });
+    closeWaits.set(target, wait);
+    return new Promise((resolve, reject) => {
+      let requested = false;
+      let complete = false;
+      const failed = (error2) => {
+        if (complete) return;
+        complete = true;
+        transport.dispose();
+        if (!requested) reject(error2);
+        rejectWait(error2);
+      };
+      const transport = helper(
+        {
+          action: "close",
+          target: {
+            processId: target.processId,
+            executablePath: target.executablePath,
+            startedAtUtc: target.startedAtUtc,
+            targetKind: target.targetKind,
+            port: target.port
+          }
+        },
+        context,
+        (value) => {
+          if (value.event === "cancelled") {
+            failed(
+              context.signal?.reason instanceof Error ? context.signal.reason : new DOMException("Windows close authorization cancelled.", "AbortError")
+            );
+            return;
+          }
+          if (value.processId !== target.processId || value.startedAtUtc !== target.startedAtUtc || typeof value.closeRequested !== "boolean" || typeof value.processExited !== "boolean")
+            throw new Error("Invalid native close identity evidence.");
+          if (value.event === "close-requested" && !requested) {
+            requested = true;
+            resolve(value);
+            return;
+          }
+          if (value.event !== "closed" || value.closed !== true || value.processExited !== true || value.waitResult !== 0 || value.waitError !== 0 || typeof value.exitCode !== "number")
+            throw new Error("Native handle did not confirm actual application exit.");
+          complete = true;
+          applications.get(key(target))?.recordExit(value.exitCode);
+          if (!requested) resolve(value);
+          resolveWait(value);
+          transport.dispose();
+        },
+        failed,
+        () => failed(new Error("Native close observer exited without actual application exit evidence."))
+      );
+    });
+  }
+  function waitForExit(target, signal) {
+    const pending = closeWaits.get(target);
+    if (!pending) return Promise.reject(new Error("No native close handle observer is available."));
+    if (!signal) return pending;
+    signal.throwIfAborted();
+    return new Promise((resolve, reject) => {
+      const cancel = () => {
+        signal.removeEventListener("abort", cancel);
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", cancel, { once: true });
+      pending.then(
+        (value) => {
+          signal.removeEventListener("abort", cancel);
+          resolve(value);
+        },
+        (error2) => {
+          signal.removeEventListener("abort", cancel);
+          reject(error2);
+        }
+      );
+    });
   }
   return {
     launch(launch, context = {}) {
@@ -39674,12 +39954,32 @@ function createWindowsLauncher({
                 transport.dispose
               );
               if (launchFailure) application.monitoringFailure = "native-helper-exited";
+              applications.set(
+                key({
+                  processId: application.pid,
+                  startedAtUtc: application.startedAtUtc,
+                  executablePath: launch.executablePath,
+                  targetKind: "generic-cdp",
+                  port: 0
+                }),
+                application
+              );
+              const actual = application;
+              const identityKey = key({
+                processId: actual.pid,
+                startedAtUtc: actual.startedAtUtc,
+                executablePath: launch.executablePath,
+                targetKind: "generic-cdp",
+                port: 0
+              });
+              actual.once("exit", () => {
+                if (applications.get(identityKey) === actual) applications.delete(identityKey);
+              });
+              context.onCreated?.(application);
               transport.detach();
               resolve(application);
             } else if (value.event === "exited" && application && value.processId === application.pid && typeof value.exitCode === "number") {
-              application.exitCode = value.exitCode;
-              application.emit("exit");
-              application.disposeMonitor();
+              application.recordExit(value.exitCode);
             } else throw new Error("Unexpected native process evidence.");
           },
           failed,
@@ -39687,33 +39987,133 @@ function createWindowsLauncher({
         );
       });
     },
-    close(target) {
-      return new Promise((resolve, reject) => {
-        let complete = false;
-        const transport = helper(
-          { action: "close", target },
-          {},
-          (value) => {
-            if (value.event !== "closed" || typeof value.closed !== "boolean" || typeof value.closeRequested !== "boolean" || typeof value.processExited !== "boolean")
-              throw new Error("Invalid native close evidence.");
-            complete = true;
-            resolve(value);
-            transport.child.stdin.end();
-          },
-          (error2) => {
-            transport.dispose();
-            reject(error2);
-          },
-          () => {
-            if (!complete) reject(new Error("Native close helper exited without evidence."));
-          }
-        );
-      });
+    requestNormalClose,
+    waitForExit,
+    async close(target) {
+      await requestNormalClose(target);
+      return waitForExit(target);
     }
   };
 }
 
 // src/adapters/platform-process.ts
+var exitObservations = /* @__PURE__ */ new WeakMap();
+var exitReferences = /* @__PURE__ */ new WeakMap();
+function retainExitReference(child) {
+  if (!child.ref || !child.unref) return () => {
+  };
+  let reference = exitReferences.get(child);
+  if (!reference) {
+    child.ref();
+    reference = { waiters: 0 };
+    exitReferences.set(child, reference);
+  }
+  reference.waiters += 1;
+  const ownedReference = reference;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (exitReferences.get(child) !== ownedReference) return;
+    ownedReference.waiters -= 1;
+    if (ownedReference.waiters > 0) return;
+    exitReferences.delete(child);
+    child.unref?.();
+  };
+}
+function observeTargetExit(target) {
+  const child = target.child;
+  if (!child || exitObservations.has(child)) return;
+  const state = { exited: typeof child.exitCode === "number" || typeof child.signalCode === "string" };
+  exitObservations.set(child, state);
+  child.once("exit", () => {
+    state.exited = true;
+  });
+}
+function targetExitObserved(target) {
+  observeTargetExit(target);
+  return target.child !== void 0 && exitObservations.get(target.child)?.exited === true;
+}
+function recordTargetExit(target) {
+  observeTargetExit(target);
+  if (target.child) {
+    const state = exitObservations.get(target.child);
+    if (state) state.exited = true;
+  }
+}
+function waitForTargetExit(target, signal) {
+  observeTargetExit(target);
+  if (targetExitObserved(target)) return Promise.resolve();
+  signal?.throwIfAborted();
+  const child = target.child;
+  if (!child) return Promise.reject(new Error("No actual application exit observer is available."));
+  return new Promise((resolve, reject) => {
+    const releaseReference = retainExitReference(child);
+    let releaseMonitoring;
+    let finished = false;
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      child.off?.("exit", exited);
+      releaseMonitoring?.();
+      signal?.removeEventListener("abort", aborted2);
+      releaseReference();
+    };
+    const exited = () => {
+      cleanup();
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      reject(new Error("The actual application exit observer failed."));
+    };
+    const aborted2 = () => {
+      cleanup();
+      reject(signal?.reason);
+    };
+    child.once("exit", exited);
+    signal?.addEventListener("abort", aborted2, { once: true });
+    releaseMonitoring = child.onMonitorError?.(failed);
+    if (finished) releaseMonitoring?.();
+    else if (targetExitObserved(target)) exited();
+    else if (child.monitoringFailure) failed();
+  });
+}
+function validateNativeExitReceipt(result, target) {
+  if (result.processId === target.processId && result.startedAtUtc === target.startedAtUtc && result.closed === true && result.processExited === true && result.waitResult === 0 && result.waitError === 0)
+    return;
+  const error2 = new DetailedError("The native handle did not supply matching application exit evidence.");
+  error2.details = {
+    phase: result.waitResult === 4294967295 ? "wait-exit" : result.phase ?? "normal-close",
+    nativeError: result.nativeError ?? 0,
+    waitResult: result.waitResult,
+    waitError: result.waitError,
+    closeRequested: result.closeRequested === true,
+    processExited: false
+  };
+  throw error2;
+}
+function abortable(pending, signal) {
+  if (!signal) return pending;
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const cancel = () => {
+      signal.removeEventListener("abort", cancel);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", cancel, { once: true });
+    pending.then(
+      (value) => {
+        signal.removeEventListener("abort", cancel);
+        resolve(value);
+      },
+      (error2) => {
+        signal.removeEventListener("abort", cancel);
+        reject(error2);
+      }
+    );
+  });
+}
 async function run(executable, arguments_) {
   return new Promise((resolve, reject) => {
     const child = spawn3(executable, arguments_, {
@@ -39953,11 +40353,68 @@ async function unixSnapshot(pid, port, dependencies = {}) {
 }
 function createPlatformAdapter(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
-  const closeWindows = dependencies.closeWindows ?? createWindowsLauncher().close;
+  const windows = createWindowsLauncher();
+  const closeWindows = dependencies.closeWindows;
   const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, "SIGTERM"));
-  const sleep3 = dependencies.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
   const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
+  const nativeExit = /* @__PURE__ */ new WeakMap();
+  async function requestNormalClose(target, context = {}) {
+    observeTargetExit(target);
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    const evidence = await snapshot(target.processId, target.port);
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    context.signal?.throwIfAborted();
+    const owned = new Set(evidence.processIds);
+    const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess)) ? "foreign" : evidence.listeners.length ? "owned" : "absent";
+    if (!evidence.root.exists) {
+      const error2 = new DetailedError("The target root is absent without actual application exit evidence.");
+      error2.details = { phase: "process-identity", listenerState, closeRequested: false, processExited: false };
+      throw error2;
+    }
+    validateProcessIdentity(evidence, target);
+    if (platform !== "win32") {
+      requestUnixClose(target.processId);
+      return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
+    }
+    try {
+      if (closeWindows) {
+        const result2 = await closeWindows(target);
+        const completion2 = Promise.resolve(result2);
+        nativeExit.set(target, completion2);
+        validateNativeExitReceipt(result2, target);
+        recordTargetExit(target);
+        return { ...result2, listenerState };
+      }
+      const result = await (dependencies.requestWindowsClose ?? windows.requestNormalClose)(target, context);
+      const completion = (dependencies.waitWindowsExit ?? windows.waitForExit)(target);
+      void completion.catch(() => {
+      });
+      nativeExit.set(target, completion);
+      if (result.closeRequested !== true && result.processExited !== true) {
+        const error2 = new DetailedError("The application rejected normal close.");
+        error2.details = { ...result, listenerState, processExited: false };
+        throw error2;
+      }
+      return { ...result, listenerState };
+    } catch (cause) {
+      const error2 = new DetailedError(errorMessage(cause));
+      error2.details = { ...errorDetails(cause), listenerState, processExited: false };
+      throw error2;
+    }
+  }
+  async function waitForExit(target, signal) {
+    if (targetExitObserved(target)) return;
+    signal?.throwIfAborted();
+    const completion = nativeExit.get(target);
+    if (completion) {
+      const result = await abortable(completion, signal);
+      validateNativeExitReceipt(result, target);
+      recordTargetExit(target);
+      return;
+    }
+    await waitForTargetExit(target, signal);
+  }
   return {
     snapshot,
     validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
@@ -39980,59 +40437,12 @@ function createPlatformAdapter(dependencies = {}) {
       }
       return ranges;
     },
-    async close(target, { requireListener = true } = {}) {
-      const evidence = await snapshot(target.processId, target.port);
-      if (!evidence.root.exists)
-        return !evidence.listeners.some((listener) => evidence.processIds.includes(listener.owningProcess));
-      validateProcessIdentity(evidence, target);
-      const owned = new Set(evidence.processIds);
-      const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess)) ? "foreign" : evidence.listeners.length ? "owned" : "absent";
-      if (requireListener && listenerState === "foreign") {
-        const error2 = new DetailedError("The CDP listener belongs to another process.");
-        error2.details = { phase: "listener-identity", listenerState, closeRequested: false };
-        throw error2;
-      }
-      if (platform === "win32") {
-        let result;
-        try {
-          result = await closeWindows(target);
-        } catch (cause) {
-          const error3 = new DetailedError(errorMessage(cause));
-          error3.details = { ...errorDetails(cause), listenerState };
-          throw error3;
-        }
-        const after = await snapshot(target.processId, target.port);
-        if (after.root.exists) validateProcessIdentity(after, target);
-        const remaining = after.listeners.filter((listener) => owned.has(listener.owningProcess));
-        if (result.closed === true && !after.root.exists && !remaining.length) return true;
-        const error2 = new DetailedError("The application did not close normally.");
-        error2.details = {
-          phase: result.phase ?? "normal-close",
-          nativeError: result.nativeError ?? 0,
-          closeRequested: result.closeRequested === true,
-          processExited: !after.root.exists,
-          listenerState: remaining.length ? "owned" : after.listeners.length ? "foreign" : "absent"
-        };
-        throw error2;
-      }
-      requestUnixClose(target.processId);
-      let inspectionFailure;
-      for (let attempt = 0; attempt < CLOSE_TIMEOUT_SECONDS * 5; attempt += 1) {
-        await sleep3(200);
-        let after;
-        try {
-          after = await snapshot(target.processId, target.port);
-          inspectionFailure = void 0;
-        } catch (error2) {
-          inspectionFailure = error2;
-          continue;
-        }
-        if (!after.root.exists && !after.listeners.some((listener) => owned.has(listener.owningProcess)))
-          return true;
-        if (after.root.exists) validateProcessIdentity(after, target);
-      }
-      if (inspectionFailure !== void 0) throw inspectionFailure;
-      return false;
+    requestNormalClose,
+    waitForExit,
+    async close(target) {
+      await requestNormalClose(target);
+      await waitForExit(target);
+      return true;
     }
   };
 }
@@ -40125,6 +40535,30 @@ function chromeProfileArgument(arguments_) {
 }
 
 // src/adapters/target-host.ts
+function waitForWork(work, signal) {
+  signal?.throwIfAborted();
+  const pending = work();
+  if (!signal) return pending;
+  return new Promise((resolve, reject) => {
+    const aborted2 = () => {
+      signal.removeEventListener("abort", aborted2);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", aborted2, { once: true });
+    void pending.then(
+      (value) => {
+        signal.removeEventListener("abort", aborted2);
+        if (signal.aborted) reject(signal.reason);
+        else resolve(value);
+      },
+      (error2) => {
+        signal.removeEventListener("abort", aborted2);
+        reject(error2);
+      }
+    );
+    if (signal.aborted) aborted2();
+  });
+}
 async function probeAddress(port, host) {
   const server = net.createServer();
   try {
@@ -40146,7 +40580,8 @@ async function probePort(port) {
   const ipv62 = await probeAddress(port, "::1");
   return ipv42 === true && ipv62 !== false;
 }
-async function spawnPortableApplication(executable, arguments_, _port, cwd = path6.dirname(executable), env) {
+async function spawnPortableApplication(executable, arguments_, _port, cwd = path6.dirname(executable), env, context = {}) {
+  context.signal?.throwIfAborted();
   const child = nodeSpawn(executable, arguments_, {
     cwd,
     detached: true,
@@ -40156,7 +40591,10 @@ async function spawnPortableApplication(executable, arguments_, _port, cwd = pat
     env
   });
   await new Promise((resolve, reject) => {
-    child.once("spawn", resolve);
+    child.once("spawn", () => {
+      context.onCreated?.(child);
+      resolve();
+    });
     child.once("error", reject);
   });
   child.unref();
@@ -40190,8 +40628,12 @@ function applyChromePreset(arguments_) {
   return result;
 }
 function createTargetHost(dependencies = {}) {
-  const platform = dependencies.platformAdapter ?? createPlatformAdapter();
   const launchWindows = createWindowsLauncher();
+  const platform = dependencies.platformAdapter ?? createPlatformAdapter({
+    requestWindowsClose: launchWindows.requestNormalClose,
+    waitWindowsExit: launchWindows.waitForExit
+  });
+  const reservations = dependencies.portReservations ?? createPortReservations();
   const io = {
     probe: probePort,
     spawn: process.platform === "win32" ? (executablePath, arguments_, _port, cwd, env, context) => launchWindows.launch(
@@ -40213,6 +40655,45 @@ function createTargetHost(dependencies = {}) {
     profileAvailable,
     ...dependencies
   };
+  async function requestNormalClose(target, context) {
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    if (platform.requestNormalClose) return platform.requestNormalClose(target, context);
+    const accepted = await platform.close(target);
+    if (!accepted) throw new Error("The application rejected normal close.");
+    return { closeRequested: true, processExited: targetExitObserved(target) };
+  }
+  async function waitForExit(target, signal) {
+    if (platform.waitForExit) await platform.waitForExit(target, signal);
+    else await waitForTargetExit(target, signal);
+    target.releaseProfile?.();
+    target.child?.disposeMonitor?.();
+  }
+  async function rollbackCreatedTarget(target, context) {
+    if (!targetExitObserved(target)) context.onRollback?.(target);
+    const requestAbort = new AbortController();
+    let resolveExit = () => {
+    };
+    const actualExit = new Promise((resolve) => {
+      resolveExit = resolve;
+    });
+    const exited = () => {
+      resolveExit();
+      requestAbort.abort(new Error("The target application exited during its normal-close request."));
+    };
+    target.child?.once("exit", exited);
+    if (targetExitObserved(target)) exited();
+    try {
+      const request = requestNormalClose(target, { signal: requestAbort.signal });
+      try {
+        await Promise.race([request, actualExit]);
+      } catch (error2) {
+        if (!targetExitObserved(target)) throw error2;
+      }
+      await waitForExit(target);
+    } finally {
+      target.child?.off?.("exit", exited);
+    }
+  }
   return {
     async launch({
       launch,
@@ -40223,12 +40704,46 @@ function createTargetHost(dependencies = {}) {
     }, context = {}) {
       context.signal?.throwIfAborted();
       if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
-      const excluded = await platform.reservedRanges();
-      if (exactPort !== void 0 && (!Number.isInteger(exactPort) || exactPort < 1024 || exactPort > 65535 || excluded.some(([start, end]) => exactPort >= start && exactPort <= end) || !await io.probe(exactPort)))
+      if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error("Invalid base port.");
+      const excluded = await waitForWork(() => platform.reservedRanges(), context.signal);
+      if (exactPort !== void 0 && (!Number.isInteger(exactPort) || exactPort < 1024 || exactPort > 65535 || excluded.some(([start, end]) => exactPort >= start && exactPort <= end)))
         throw new Error("The original CDP port is occupied or excluded; exact-port restart cannot proceed.");
-      let candidate = basePort;
-      while (candidate <= 65535) {
-        const port = exactPort ?? await choosePort({ basePort: candidate, reservedRanges: excluded, probe: io.probe });
+      const candidate = basePort;
+      let port;
+      let releasePort;
+      for (let probeCandidate = exactPort ?? Math.max(candidate, 1024); probeCandidate <= 65535; probeCandidate += 1) {
+        if (excluded.some(([start, end]) => probeCandidate >= start && probeCandidate <= end)) continue;
+        const claimed = reservations.claim(probeCandidate);
+        if (!claimed) {
+          if (exactPort !== void 0) break;
+          continue;
+        }
+        let available;
+        try {
+          available = await waitForWork(() => io.probe(probeCandidate), context.signal);
+        } catch (error2) {
+          claimed();
+          throw error2;
+        }
+        if (available) {
+          port = probeCandidate;
+          releasePort = claimed;
+          break;
+        }
+        claimed();
+        if (exactPort !== void 0) break;
+      }
+      if (port === void 0 || releasePort === void 0) {
+        if (exactPort !== void 0)
+          throw new Error(
+            "The original CDP port is occupied or excluded; exact-port restart cannot proceed."
+          );
+        throw new Error("No available, non-reserved CDP port remains.");
+      }
+      let created;
+      let release;
+      let readinessSignal = context.signal;
+      try {
         context.signal?.throwIfAborted();
         const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env);
         if (!path6.isAbsolute(parsed.executablePath))
@@ -40242,37 +40757,92 @@ function createTargetHost(dependencies = {}) {
           environment.set(process.platform === "win32" ? name.toLowerCase() : name, [name, value]);
         const env = Object.fromEntries(environment.values());
         const profile = targetKind === "chrome" ? chromeProfileArgument(args) : void 0;
-        const release = profile === void 0 ? void 0 : await reserveProfile(path6.resolve(cwd, profile), io.profileAvailable);
+        release = profile === void 0 ? void 0 : await reserveProfile(
+          path6.resolve(cwd, profile),
+          (directory) => waitForWork(() => io.profileAvailable(directory), context.signal)
+        );
+        context.signal?.throwIfAborted();
         const requestedAt = io.now();
         context.onPhase?.("launching");
         let child;
         try {
           context.signal?.throwIfAborted();
-          child = await io.spawn(executablePath, args, port, cwd, env, context);
+          const onCreated = (application) => {
+            if (created) return;
+            if (application.pid === void 0) throw new Error("The target process has no PID.");
+            const target2 = {
+              port,
+              processId: application.pid,
+              executablePath,
+              startedAtUtc: application.startedAtUtc ?? new Date(requestedAt).toISOString(),
+              targetKind,
+              child: application,
+              launchDefinition: {
+                executablePath,
+                arguments: args,
+                cwd,
+                ...parsed.env ? { env: { ...parsed.env } } : {}
+              }
+            };
+            created = target2;
+            observeTargetExit(target2);
+            const observation = new AbortController();
+            readinessSignal = context.signal ? AbortSignal.any([context.signal, observation.signal]) : observation.signal;
+            const exited = () => observation.abort(
+              new Error("The target application exited before CDP readiness or verification.")
+            );
+            const monitorFailed = () => observation.abort(
+              new Error(
+                "The native process observer failed; retaining application identity for cleanup."
+              )
+            );
+            application.once("exit", exited);
+            const stopMonitor = application.onMonitorError?.(monitorFailed);
+            const releaseResources = () => {
+              if (!targetExitObserved(target2)) return;
+              release?.();
+              releasePort?.();
+              application.off?.("exit", releaseResources);
+              application.off?.("exit", exited);
+              stopMonitor?.();
+            };
+            target2.releaseProfile = releaseResources;
+            target2.waitForExit = (signal) => waitForExit(target2, signal);
+            application.once("exit", releaseResources);
+            if (targetExitObserved(target2)) {
+              exited();
+              releaseResources();
+            } else if (application.monitoringFailure) monitorFailed();
+            context.onCreated?.(target2);
+          };
+          child = await io.spawn(executablePath, args, port, cwd, env, {
+            ...context.signal ? { signal: context.signal } : {},
+            ...context.onPhase ? { onPhase: context.onPhase } : {},
+            onCreated
+          });
+          onCreated(child);
           if (child.pid === void 0) throw new Error("The target process has no PID.");
         } catch (error3) {
-          release?.();
+          if (created) {
+            try {
+              await rollbackCreatedTarget(created, context);
+            } catch (cleanupError2) {
+              const retained = new RetainedTargetError(errorMessage(error3), created);
+              retained.details = {
+                processId: created.processId,
+                port,
+                closeConfirmed: false,
+                ...errorDetails(cleanupError2)
+              };
+              throw retained;
+            }
+          }
           throw error3;
-        }
-        const releaseProfile = () => {
-          release?.();
-          child.off?.("exit", releaseProfile);
-        };
-        if (release) {
-          child.once("exit", releaseProfile);
-          if (typeof child.exitCode === "number" || typeof child.signalCode === "string") releaseProfile();
         }
         const processId = child.pid;
         if (processId === void 0) throw new Error("The target process has no PID.");
-        const target = {
-          port,
-          processId,
-          executablePath,
-          startedAtUtc: child.startedAtUtc ?? new Date(requestedAt).toISOString(),
-          targetKind,
-          child,
-          ...release ? { releaseProfile } : {}
-        };
+        const target = created;
+        if (!target) throw new Error("The created application identity is missing.");
         let lastError;
         let foreignRace = false;
         const launchedAt = io.now();
@@ -40280,11 +40850,13 @@ function createTargetHost(dependencies = {}) {
         while (io.now() - launchedAt < STARTUP_TIMEOUT_MS) {
           try {
             context.signal?.throwIfAborted();
+            if (targetExitObserved(target))
+              throw new Error("The target application exited before CDP readiness.");
             if (child.monitoringFailure)
               throw new Error(
                 "The native process observer failed; retaining application identity for cleanup."
               );
-            const evidence = await platform.snapshot(child.pid, port);
+            const evidence = await waitForWork(() => platform.snapshot(processId, port), readinessSignal);
             platform.validateNewRoot(evidence, target);
             if (!evidence.root.exists) throw new Error("The target root process is absent.");
             target.startedAtUtc = evidence.root.startedAtUtc;
@@ -40298,8 +40870,10 @@ function createTargetHost(dependencies = {}) {
               lastError = new Error("A foreign process won the CDP port race.");
               break;
             }
-            const endpoint = await io.getVersion(port);
+            const endpoint = await waitForWork(() => io.getVersion(port), readinessSignal);
             context.signal?.throwIfAborted();
+            if (targetExitObserved(target))
+              throw new Error("The target application exited before CDP readiness.");
             const identity = validateCdpIdentity({
               endpoint,
               port,
@@ -40307,79 +40881,83 @@ function createTargetHost(dependencies = {}) {
               processIds: evidence.processIds,
               targetKind
             });
-            return {
-              ...target,
-              ...identity,
-              launchDefinition: {
-                executablePath,
-                arguments: args,
-                cwd,
-                ...parsed.env ? { env: { ...parsed.env } } : {}
-              },
-              async verify() {
-                const current = await platform.snapshot(processId, port);
-                validateProcessIdentity(current, target);
-                const endpointNow = await io.getVersion(port);
-                const checked = validateCdpIdentity({
-                  endpoint: endpointNow,
-                  port,
-                  listeners: current.listeners,
-                  processIds: current.processIds,
-                  targetKind
-                });
-                if (checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl || checked.browserProduct !== identity.browserProduct)
-                  throw new Error("The target CDP endpoint identity changed.");
-              }
+            Object.assign(target, identity);
+            target.verify = async () => {
+              const current = await waitForWork(
+                () => platform.snapshot(processId, port),
+                readinessSignal
+              );
+              validateProcessIdentity(current, target);
+              const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
+              const checked = validateCdpIdentity({
+                endpoint: endpointNow,
+                port,
+                listeners: current.listeners,
+                processIds: current.processIds,
+                targetKind
+              });
+              if (checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl || checked.browserProduct !== identity.browserProduct)
+                throw new Error("The target CDP endpoint identity changed.");
             };
+            return target;
           } catch (error3) {
             lastError = error3;
-            if (context.signal?.aborted || child.monitoringFailure || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
+            if (readinessSignal?.aborted || child.monitoringFailure || targetExitObserved(target) || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
               break;
-            await io.sleep(POLL_INTERVAL_MS);
+            try {
+              await waitForWork(() => io.sleep(POLL_INTERVAL_MS), readinessSignal);
+            } catch (waitingError) {
+              lastError = waitingError;
+              break;
+            }
           }
         }
+        const cancellationBeforeRollback = context.signal?.aborted ? { reason: context.signal.reason } : void 0;
         let closeConfirmed = false;
         let cleanupError;
         try {
-          closeConfirmed = await platform.close(target, { requireListener: false });
+          await rollbackCreatedTarget(target, context);
+          closeConfirmed = true;
         } catch (error3) {
           cleanupError = error3;
         }
         if (closeConfirmed) {
-          releaseProfile?.();
+          target.releaseProfile?.();
           child.disposeMonitor?.();
         }
-        if (closeConfirmed && context.signal?.aborted) throw context.signal.reason;
-        if (foreignRace && closeConfirmed && exactPort === void 0) {
-          candidate = port + 1;
-          continue;
-        }
+        if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
         const message = `The new target did not expose a verified CDP endpoint: ${lastError === void 0 ? void 0 : errorMessage(lastError)}`;
-        const error2 = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, {
-          ...target,
-          launchDefinition: {
-            executablePath,
-            arguments: args,
-            cwd,
-            ...parsed.env ? { env: { ...parsed.env } } : {}
-          }
-        });
-        error2.details = { processId: child.pid, port, closeConfirmed, ...errorDetails(cleanupError) };
+        const error2 = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, target);
+        error2.details = {
+          ...errorDetails(lastError),
+          ...errorCode(lastError) ? { code: errorCode(lastError) } : {},
+          ...errorDetails(cleanupError),
+          ...errorCode(cleanupError) ? { code: errorCode(cleanupError) } : {},
+          processId: child.pid,
+          port,
+          closeConfirmed
+        };
+        throw error2;
+      } catch (error2) {
+        if (!created) {
+          release?.();
+          releasePort();
+          context.signal?.throwIfAborted();
+        }
         throw error2;
       }
-      throw new Error("The CDP port range is exhausted.");
     },
-    async close(target, options) {
-      const closed = await platform.close(target, options);
-      if (closed) {
-        target.releaseProfile?.();
-        target.child?.disposeMonitor?.();
-      }
-      return closed;
+    async close(target, _options) {
+      await requestNormalClose(target);
+      await waitForExit(target);
+      return true;
     },
+    requestNormalClose,
+    waitForExit,
     async health(target) {
+      if (targetExitObserved(target)) return "gone";
       const evidence = await platform.snapshot(target.processId, target.port);
-      if (!evidence.root.exists) return "gone";
+      if (!evidence.root.exists) return targetExitObserved(target) ? "gone" : "unavailable";
       try {
         validateProcessIdentity(evidence, target);
       } catch {
@@ -40436,20 +41014,23 @@ function createToolCatalog(value) {
       throw new Error("Invalid official tool variants.");
     entries.set(input.name, { name: input.name, requires: required2, variants });
   }
-  function requirements(name, mcpArgs) {
+  function requirements(name, mcpArgs, forceRecipe = false) {
     const entry = entries.get(name);
     if (!entry) throw new Error(`Unknown official tool: ${name}.`);
+    if (entry.requires.categoryPwa)
+      return {
+        name,
+        supported: false,
+        reason: "Official PWA tools require a pipe-launched browser; the gateway manages a verified CDP endpoint."
+      };
     const options = parseMcpArgs(mcpArgs);
     const missingConditions = Object.entries(entry.requires).filter(([flag, expected]) => (options.get(flag)?.values[0] ?? defaults[flag] ?? false) !== expected).map(([flag, expected]) => `--${flag}=${expected}`);
-    const supported = !entry.requires.categoryPwa;
     return {
       name,
-      supported,
+      supported: true,
       conditions: Object.entries(entry.requires).map(([flag, expected]) => `--${flag}=${expected}`),
       missingConditions,
-      ...supported ? { suggestedMcpArgs: suggestMcpArgs(mcpArgs, entry.requires) } : {
-        reason: "Official PWA tools require a pipe-launched browser; the gateway manages a verified CDP endpoint."
-      }
+      ...forceRecipe || missingConditions.length > 0 ? { suggestedMcpArgs: suggestMcpArgs(mcpArgs, entry.requires) } : {}
     };
   }
   const tools = [...entries.values()].map((entry) => {
@@ -40472,7 +41053,7 @@ function createToolCatalog(value) {
     );
     const conditions = requirements(entry.name, []);
     const description = `${first.description ?? entry.name}
-Gateway configuration: ${conditions.conditions.join(", ")}. ${conditions.reason ?? ""}` + (schemas.length > 1 ? "\nCompatible declaration combines official parameter variants. Query dct_connection_status with toolNames for the selected connection\u2019s exact input schema before using configuration-sensitive arguments." : "");
+Gateway configuration: ${conditions.conditions?.join(", ") ?? ""}. ${conditions.reason ?? ""}` + (schemas.length > 1 ? "\nCompatible declaration combines official parameter variants. Query dct_connection_status with toolNames for the selected connection\u2019s exact input schema before using configuration-sensitive arguments." : "");
     return ListToolsResultSchema.parse({
       tools: [{ ...first, description, inputSchema: { ...first.inputSchema, properties, required: required2 } }]
     }).tools[0];
@@ -40489,13 +41070,18 @@ Gateway configuration: ${conditions.conditions.join(", ")}. ${conditions.reason 
           throw new Error(`The official tool catalog changed outside the reviewed variants: ${tool.name}.`);
       }
     },
-    describe(mcpArgs, actual, names) {
+    describe(mcpArgs, actual, names, forceRecipe = false) {
       const chosen = names ?? (actual ? actual.map((tool) => tool.name) : [...entries.keys()]);
       return chosen.map((name) => {
-        const requirement = requirements(name, mcpArgs);
         const tool = actual?.find((tool2) => tool2.name === name);
+        const { suggestedMcpArgs, ...requirement } = requirements(
+          name,
+          mcpArgs,
+          forceRecipe || actual !== void 0 && names !== void 0 && tool === void 0
+        );
         return {
           ...requirement,
+          ...actual !== void 0 && !tool && suggestedMcpArgs ? { suggestedMcpArgs } : {},
           ...actual ? { enabled: tool !== void 0 } : {},
           ...tool ? { inputSchema: tool.inputSchema } : {}
         };
@@ -40516,6 +41102,126 @@ function workspaceSources(mcpArgs, supportsRoots) {
     unrestrictedPaths: args.get("allowUnrestrictedPaths")?.values[0] === true,
     cwdGrantsAccess: false
   };
+}
+
+// src/application/connection-owner.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function createConnectionOwner(sessionId) {
+  const work = new AbortController();
+  const resources = /* @__PURE__ */ new Map();
+  const closing = /* @__PURE__ */ new Map();
+  const unsettled = /* @__PURE__ */ new Set();
+  const pending = /* @__PURE__ */ new Set();
+  let cleanup;
+  let cleanupSettled = false;
+  let resourceVersion = 0;
+  let resolveExit = () => {
+  };
+  const exit = new Promise((resolve) => {
+    resolveExit = resolve;
+  });
+  const owner = {
+    sessionId,
+    target: void 0,
+    exited: false,
+    retired: false,
+    expectedExit: void 0,
+    expectedOperationId: void 0,
+    signal: work.signal,
+    exit,
+    get resourceVersion() {
+      return resourceVersion;
+    },
+    isCleaning() {
+      return !!cleanup && !cleanupSettled;
+    },
+    assertOpen() {
+      if (owner.retired) throw new Error("The target session has exited or retired.");
+      work.signal.throwIfAborted();
+    },
+    abortWork(reason) {
+      if (!work.signal.aborted) work.abort(reason);
+    },
+    retire(reason) {
+      owner.retired = true;
+      owner.abortWork(reason);
+    },
+    confirmExit() {
+      if (owner.exited) return false;
+      owner.exited = true;
+      owner.retire(new Error("The target process exited."));
+      resolveExit();
+      return true;
+    },
+    track(job) {
+      pending.add(job);
+      void job.finally(() => pending.delete(job)).catch(() => {
+      });
+      return job;
+    },
+    register(name, resource) {
+      const previous = resources.get(name);
+      if (previous && previous !== resource) throw new Error("An owned resource is already registered.");
+      if (!previous) resourceVersion += 1;
+      resources.set(name, resource);
+      if (owner.retired) void owner.closeResource(name).catch(() => {
+      });
+    },
+    hasResource(name) {
+      return resources.has(name);
+    },
+    hasPendingResources() {
+      return resources.size > 0 || pending.size > 0;
+    },
+    closeResource(name) {
+      const previous = closing.get(name);
+      if (previous) return previous;
+      const resource = resources.get(name);
+      if (!resource) return Promise.resolve();
+      unsettled.add(name);
+      const result = (async () => {
+        try {
+          await resource.close();
+          if (resources.get(name) === resource) resources.delete(name);
+        } finally {
+          unsettled.delete(name);
+        }
+      })();
+      closing.set(name, result);
+      return result;
+    },
+    closeResources() {
+      if (cleanup) return cleanup;
+      cleanup = (async () => {
+        try {
+          const failures = [];
+          const names = [...resources.keys()].sort((a, b) => Number(a === "router") - Number(b === "router"));
+          for (const name of names) {
+            try {
+              await owner.closeResource(name);
+            } catch (error2) {
+              failures.push(error2);
+            }
+          }
+          if (failures.length === 1) throw failures[0];
+          if (failures.length)
+            throw new AggregateError(failures, "Owned connection resources did not close.");
+        } finally {
+          cleanupSettled = true;
+        }
+      })();
+      return cleanup;
+    },
+    retryResources() {
+      if (cleanup && !cleanupSettled) return cleanup;
+      cleanup = void 0;
+      cleanupSettled = false;
+      for (const name of resources.keys()) if (!unsettled.has(name)) closing.delete(name);
+      return owner.closeResources();
+    }
+  };
+  return owner;
 }
 
 // src/application/mcp-lifecycle.ts
@@ -40568,12 +41274,22 @@ function createOperationRegistry(entryId) {
       throw new Error("This requestId already identifies a different request.");
     return { fingerprint, prior: prior ? get(prior.operationId) : void 0 };
   }
-  function submit(requestId, request, job, onSettled) {
+  function submit(requestId, request, job, onSettled, initialIdentity) {
     const { fingerprint, prior } = lookup(requestId, request);
     if (prior) return prior;
     const operationId = randomUUID();
     const operation = {
-      snapshot: { entryId, operationId, state: "accepted", cursor: 0, phase: "accepted", elapsedMs: 0 },
+      snapshot: {
+        entryId,
+        operationId,
+        requestId,
+        state: "accepted",
+        cursor: 0,
+        phase: "accepted",
+        elapsedMs: 0,
+        ...isRecord(request) && typeof request.action === "string" ? { action: request.action } : {},
+        ...initialIdentity ? { connectionId: initialIdentity.connectionId, sessionId: initialIdentity.sessionId } : {}
+      },
       started: Date.now(),
       abort: new AbortController(),
       events: [],
@@ -40589,22 +41305,36 @@ function createOperationRegistry(entryId) {
         operation.snapshot.state = "running";
         emit(operation);
         const result = await job({
+          operationId,
           signal: operation.abort.signal,
           phase: (phase) => {
+            if (terminal(operation.snapshot.state)) return;
             operation.snapshot.phase = phase;
             emit(operation);
           },
           identity: (route) => {
-            Object.assign(operation.snapshot, route);
+            if (terminal(operation.snapshot.state)) return;
+            operation.snapshot.connectionId = route.connectionId;
+            operation.snapshot.sessionId = route.sessionId;
             emit(operation);
           }
         });
+        operation.abort.signal.throwIfAborted();
         operation.snapshot.result = result;
         operation.snapshot.state = "succeeded";
       } catch (error2) {
         const cancelled = operation.abort.signal.aborted && error2 === operation.abort.signal.reason;
         operation.snapshot.state = cancelled ? "cancelled" : "failed";
-        if (!cancelled) operation.snapshot.error = { ...errorDetails(error2), message: errorMessage(error2) };
+        if (!cancelled) {
+          const code = errorCode(error2);
+          const evidence = lifecycleFailureEvidence(errorDetails(error2) ?? {});
+          operation.snapshot.error = {
+            ...evidence,
+            phase: typeof evidence.phase === "string" ? evidence.phase : operation.snapshot.phase,
+            ...code === void 0 ? {} : { code },
+            message: errorMessage(error2)
+          };
+        }
       } finally {
         onSettled?.();
         operation.snapshot.phase = operation.snapshot.state;
@@ -40654,15 +41384,49 @@ function createOperationRegistry(entryId) {
     }
     return get(operationId);
   }
+  function cancelRoute(route, { excludeActions = ["stop", "restart"] } = {}) {
+    return [...operations.values()].filter(
+      ({ snapshot }) => snapshot.connectionId === route.connectionId && snapshot.sessionId === route.sessionId && !terminal(snapshot.state) && !excludeActions.includes(snapshot.action ?? "")
+    ).map(({ snapshot }) => cancel(snapshot.operationId));
+  }
+  function markRead(operationId) {
+    if (terminal(selected(operationId).snapshot.state)) notices.delete(operationId);
+  }
+  function notice(operationId) {
+    const snapshot = get(operationId);
+    const failure2 = snapshot.error;
+    const code = failure2?.code;
+    return {
+      kind: "operation",
+      entryId,
+      operationId,
+      ...snapshot.action === void 0 ? {} : { action: snapshot.action },
+      state: snapshot.state,
+      phase: typeof snapshot.error?.phase === "string" ? snapshot.error.phase : snapshot.phase,
+      elapsedMs: snapshot.elapsedMs,
+      ...snapshot.connectionId === void 0 ? {} : { connectionId: snapshot.connectionId },
+      ...snapshot.sessionId === void 0 ? {} : { sessionId: snapshot.sessionId },
+      ...typeof code === "string" ? { code } : {},
+      ...typeof failure2?.category === "string" ? { category: failure2.category } : {},
+      ...typeof failure2?.nativeError === "number" ? { nativeError: failure2.nativeError } : {},
+      ...typeof failure2?.exceptionType === "string" ? { exceptionType: failure2.exceptionType } : {},
+      ...typeof failure2?.closeRequested === "boolean" ? { closeRequested: failure2.closeRequested } : {},
+      ...typeof failure2?.processExited === "boolean" ? { processExited: failure2.processExited } : {},
+      ...typeof failure2?.listenerState === "string" ? { listenerState: failure2.listenerState } : {},
+      ...typeof failure2?.closeConfirmed === "boolean" ? { closeConfirmed: failure2.closeConfirmed } : {}
+    };
+  }
   return {
     get,
     submit,
     wait,
     cancel,
+    cancelRoute,
+    markRead,
     prior: (requestId, request) => lookup(requestId, request).prior,
-    takeNotices: () => {
-      const result = [...notices].map(get);
-      notices.clear();
+    takeNotices: (predicate) => {
+      const result = [...notices].map(notice).filter((value) => predicate?.(value) ?? true);
+      for (const value of result) notices.delete(value.operationId);
       return result;
     },
     async close() {
@@ -40681,13 +41445,32 @@ function createLifecycleService({ entryId, handler }) {
     if (request.entryId !== void 0 && request.entryId !== entryId)
       throw new Error("This request identifies another entry.");
     if (request.action === "status") {
-      if (request.operationId) return { ...operations.get(request.operationId) };
+      if (request.operationId) {
+        const result = operations.get(request.operationId);
+        signal?.throwIfAborted();
+        operations.markRead(request.operationId);
+        return { ...result };
+      }
       return { ...handler.status(request.connectionId) };
     }
-    if (request.action === "wait") return operations.wait(request.operationId, request.cursor, signal);
-    if (request.action === "cancel") return { ...operations.cancel(request.operationId) };
+    if (request.action === "wait") {
+      const result = await operations.wait(request.operationId, request.cursor, signal);
+      signal?.throwIfAborted();
+      if (result.complete) operations.markRead(request.operationId);
+      return result;
+    }
+    if (request.action === "cancel") {
+      const result = operations.cancel(request.operationId);
+      signal?.throwIfAborted();
+      operations.markRead(request.operationId);
+      return { ...result };
+    }
     const prior = operations.prior(request.requestId, request);
-    if (prior) return { ...prior };
+    if (prior) {
+      signal?.throwIfAborted();
+      operations.markRead(prior.operationId);
+      return { ...prior };
+    }
     if (closing) throw new Error("The gateway is closing.");
     const connectionId = request.action === "start" ? void 0 : request.connectionId;
     if (request.action !== "start") {
@@ -40704,6 +41487,7 @@ function createLifecycleService({ entryId, handler }) {
       request,
       async (operation) => {
         const context = {
+          operationId: operation.operationId,
           signal: operation.signal,
           onPhase: operation.phase,
           onIdentity: (route) => {
@@ -40724,26 +41508,32 @@ function createLifecycleService({ entryId, handler }) {
           if (operation.signal.aborted && (request.action === "start" || request.action === "restart")) {
             if (result.sessionId) {
               operation.phase("cancelling-created-target");
-              await handler.stop({
-                connectionId: result.connectionId,
-                sessionId: result.sessionId,
-                disposition: "Close"
-              });
+              await handler.stop(
+                {
+                  connectionId: result.connectionId,
+                  sessionId: result.sessionId,
+                  disposition: "Close"
+                },
+                { operationId: operation.operationId }
+              );
             }
             throw operation.signal.reason;
           }
-          return { ...result };
+          return { ...connectionSummary(result) };
         }
       },
       () => {
         if (boundConnection) changing.delete(boundConnection);
-      }
+      },
+      request.action === "start" ? void 0 : request
     );
     return { ...accepted };
   }
   return {
     control,
     takeNotices: operations.takeNotices,
+    cancelRoute: operations.cancelRoute,
+    markRead: operations.markRead,
     async close() {
       closing = true;
       await operations.close();
@@ -40755,323 +41545,404 @@ function createLifecycleService({ entryId, handler }) {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { randomUUID as randomUUID2 } from "node:crypto";
+function waitWithSignal(wait, signal) {
+  if (!signal) return wait;
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const aborted2 = () => {
+      signal.removeEventListener("abort", aborted2);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", aborted2, { once: true });
+    void wait.then(
+      (value) => {
+        signal.removeEventListener("abort", aborted2);
+        resolve(value);
+      },
+      (error2) => {
+        signal.removeEventListener("abort", aborted2);
+        reject(error2);
+      }
+    );
+    if (signal.aborted) aborted2();
+  });
+}
 function createTargetController({
   entryId,
   router,
   host,
   server,
-  onProcessExit
+  onProcessExit,
+  onObservationFailure,
+  createOwner
 }) {
   let current;
   let state = "idle";
   let reason;
   let taskActive = false;
-  let gated = false;
-  let serial = Promise.resolve();
+  let gated = true;
+  let changing = false;
   let checking;
   function status() {
+    const target = current?.owner.target;
     return {
       entryId,
       status: state,
       taskActive,
-      ...current ? {
-        sessionId: current.sessionId,
-        port: current.target.port,
-        processId: current.target.processId,
-        targetKind: current.target.targetKind
-      } : {},
+      ...current ? { sessionId: current.owner.sessionId } : {},
+      ...target ? { port: target.port, processId: target.processId, targetKind: target.targetKind } : {},
       ...reason ? { reason } : {}
     };
   }
-  function run2(operation) {
-    const result = serial.then(operation);
-    serial = result.then(
-      () => {
-      },
-      () => {
-      }
-    );
-    return result;
+  async function run2(job) {
+    if (changing) throw new Error("The target connection is busy with a lifecycle change.");
+    changing = true;
+    try {
+      return await job();
+    } finally {
+      changing = false;
+    }
   }
   function requireSession(sessionId) {
-    if (!current || current.sessionId !== sessionId) throw new Error("The target session is absent or stale.");
+    if (!current || current.owner.sessionId !== sessionId || current.owner.retired)
+      throw new Error("The target session is absent, closed or stale.");
     return current;
   }
   function gate() {
     if (!gated) router.clearTarget();
     gated = true;
   }
-  function confirmExit(selected) {
-    if (!selected.exited) {
-      selected.exited = true;
-      selected.target.releaseProfile?.();
-    }
-    selected.target.child?.disposeMonitor?.();
-  }
   function processExited(selected) {
-    if (current !== selected || selected.exited) return;
-    confirmExit(selected);
-    gate();
-    if (state === "closing" || selected.expectedExit) return;
-    state = "lost";
-    reason = "process-exited";
+    if (!selected.owner.confirmExit()) return;
+    const target = selected.owner.target;
+    target?.releaseProfile?.();
+    if (current === selected) {
+      gate();
+      state = "lost";
+      reason = "process-exited";
+    }
+    if (!target) return;
     onProcessExit?.({
-      sessionId: selected.sessionId,
+      sessionId: selected.owner.sessionId,
       reason: "process-exited",
-      taskActive
+      taskActive,
+      ...selected.owner.expectedExit ? { expected: selected.owner.expectedExit } : {},
+      ...selected.owner.expectedExit && selected.owner.expectedOperationId ? { operationId: selected.owner.expectedOperationId } : {},
+      processId: target.processId,
+      port: target.port,
+      targetKind: target.targetKind,
+      exitedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      ...typeof target.child?.exitCode === "number" ? { exitCode: target.child.exitCode } : {},
+      ...typeof target.child?.signalCode === "string" ? { signalCode: target.child.signalCode } : {}
     });
   }
-  function subscribe(selected) {
-    const child = selected.target.child;
-    if (!child) return;
-    const exited = () => processExited(selected);
-    child.once("exit", exited);
-    const stopMonitor = child.onMonitorError?.(() => lose(selected, "process-monitor-lost"));
-    selected.unsubscribe = () => {
-      child.off?.("exit", exited);
-      stopMonitor?.();
-    };
-    if (typeof child.exitCode === "number" || typeof child.signalCode === "string") exited();
-  }
   function lose(selected, why) {
-    if (current !== selected || selected.exited || state === "closing" || state === "close-failed") return;
+    if (current !== selected || selected.owner.exited) return;
     gate();
     state = "lost";
     reason = why;
-  }
-  async function tryClose(selected, requireListener = true) {
-    delete selected.closeFailure;
-    try {
-      if (selected.exited) return true;
-      if (!requireListener && host.health && await host.health(selected.target) === "gone") {
-        confirmExit(selected);
-        return true;
-      }
-      const closed = await host.close(selected.target, { requireListener });
-      if (closed) confirmExit(selected);
-      if (!closed) selected.closeFailure = { phase: "normal-close", reason: "application-still-running" };
-      return selected.exited || closed;
-    } catch (error2) {
-      selected.closeFailure = { phase: "normal-close", ...errorDetails(error2), cause: errorMessage(error2) };
-      return selected.exited;
+    if (why === "process-monitor-lost") {
+      selected.owner.abortWork(new Error("Target process observation is unavailable."));
+      onObservationFailure?.(selected.owner.sessionId);
     }
   }
-  function failedClose(selected) {
+  function acquire(selected, target) {
+    if (selected.owner.target) {
+      if (selected.owner.target !== target) throw new Error("A target run cannot acquire a second application.");
+      return;
+    }
+    selected.owner.target = target;
+    const child = target.child;
+    if (child) {
+      const exited = () => processExited(selected);
+      child.once("exit", exited);
+      const stopMonitor = child.onMonitorError?.(() => lose(selected, "process-monitor-lost"));
+      selected.unsubscribe = () => {
+        child.off?.("exit", exited);
+        stopMonitor?.();
+      };
+      if (typeof child.exitCode === "number" || typeof child.signalCode === "string") exited();
+      else if (child.monitoringFailure) lose(selected, "process-monitor-lost");
+    } else if (target.waitForExit) {
+      void target.waitForExit().then(
+        () => processExited(selected),
+        () => lose(selected, "process-monitor-lost")
+      );
+    }
+  }
+  async function normalClose(selected, signal, onPhase) {
+    const target = selected.owner.target;
+    if (!target || selected.owner.exited) return;
+    signal?.throwIfAborted();
+    if (!selected.closeRequest) {
+      onPhase?.("requesting-normal-close");
+      const requestAbort = new AbortController();
+      void selected.owner.exit.then(() => requestAbort.abort(new Error("The target process exited.")));
+      const requestSignal = signal ? AbortSignal.any([signal, requestAbort.signal]) : requestAbort.signal;
+      selected.closeRequest = (async () => {
+        if (host.requestNormalClose) {
+          const result = await host.requestNormalClose(target, {
+            signal: requestSignal,
+            ...onPhase ? { onPhase } : {}
+          });
+          if (result.closeRequested !== true && result.closed !== true && !selected.owner.exited)
+            throw new Error("The application rejected its normal close request.");
+        } else if (!await host.close(target, { requireListener: false }) && !selected.owner.exited) {
+          throw new Error("The application rejected its normal close request.");
+        }
+      })();
+      void selected.closeRequest.catch(() => {
+        delete selected.closeRequest;
+      });
+    }
+    try {
+      await waitWithSignal(Promise.race([selected.closeRequest, selected.owner.exit]), signal);
+      if (!selected.owner.exited) {
+        onPhase?.("awaiting-target-exit");
+        const observed = host.waitForExit ? host.waitForExit(target, signal) : target.waitForExit?.(signal);
+        if (observed) {
+          await observed;
+          processExited(selected);
+        } else if (target.child) await waitWithSignal(selected.owner.exit, signal);
+        else throw new Error("No actual application exit observation is available.");
+      }
+    } catch (error2) {
+      if (selected.owner.exited) return;
+      selected.closeFailure = { phase: "normal-close", ...errorDetails(error2), cause: errorMessage(error2) };
+      throw error2;
+    }
+  }
+  function failedClose(selected, cause) {
     const error2 = new DetailedError(
-      "The target did not close normally; its official connection and identity remain available for retry."
+      "The application did not close normally; its live identity remains available for Close retry."
     );
     error2.details = {
       ...selected.closeFailure,
+      ...errorDetails(cause),
       entryId,
-      sessionId: selected.sessionId,
-      retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }]
+      sessionId: selected.owner.sessionId,
+      ...selected.owner.target ? {
+        processId: selected.owner.target.processId,
+        port: selected.owner.target.port,
+        retainedTargets: [
+          { processId: selected.owner.target.processId, port: selected.owner.target.port }
+        ]
+      } : {}
     };
     return error2;
   }
-  function retainFailedRollback(target, options, sessionId) {
-    current = { target, options, sessionId, exited: false };
-    taskActive = false;
-    state = "close-failed";
-    reason = "target-rollback-failed";
-    gate();
-    subscribe(current);
-  }
-  async function attach(options, sessionId = randomUUID2(), context = {}) {
-    context.signal?.throwIfAborted();
-    context.onPhase?.("starting-official-server");
-    await server.ensure(options);
-    context.signal?.throwIfAborted();
-    let target;
+  async function dispose(selected) {
+    selected.owner.retire(new Error("The target session is retired."));
+    if (current === selected) gate();
     try {
-      target = await host.launch(options, context);
-    } catch (error2) {
-      if (error2 instanceof RetainedTargetError) retainFailedRollback(error2.target, options, sessionId);
-      throw error2;
-    }
-    const selected = { target, options, sessionId, exited: false };
-    try {
-      context.signal?.throwIfAborted();
-      router.setTarget(target);
-    } catch (error2) {
-      if (!await tryClose(selected, false)) {
-        retainFailedRollback(target, options, sessionId);
-        throw failedClose(selected);
+      await server.close(selected.owner);
+    } finally {
+      if (selected.owner.exited) {
+        selected.unsubscribe?.();
+        selected.owner.target?.child?.disposeMonitor?.();
       }
+      if (current === selected) {
+        current = void 0;
+        taskActive = false;
+        state = "idle";
+        reason = void 0;
+      }
+    }
+  }
+  async function attach(options, sessionId, context) {
+    context.signal?.throwIfAborted();
+    const owner = createOwner ? await createOwner(sessionId) : createConnectionOwner(sessionId);
+    owner.expectedOperationId = context.operationId;
+    const selected = { owner, options };
+    current = selected;
+    state = "starting";
+    reason = void 0;
+    taskActive = true;
+    const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
+    try {
+      const target = await host.launch(options, {
+        ...context,
+        signal,
+        onCreated: (target2) => acquire(selected, target2),
+        onRollback: (target2) => {
+          acquire(selected, target2);
+          if (!owner.exited) owner.expectedExit = "rollback";
+        }
+      });
+      acquire(selected, target);
+      signal.throwIfAborted();
+      owner.assertOpen();
+      router.setTarget(target);
+      gated = false;
+      context.onPhase?.("starting-official-server");
+      await server.ensure(options, { ...context, signal });
+      signal.throwIfAborted();
+      owner.assertOpen();
+      state = "active";
+      return status();
+    } catch (error2) {
+      if (error2 instanceof RetainedTargetError) {
+        acquire(selected, error2.target);
+        if (!owner.exited) {
+          owner.expectedExit = void 0;
+          state = "close-failed";
+          taskActive = false;
+          reason = "target-rollback-failed";
+          gate();
+          throw error2;
+        }
+      }
+      if (owner.target && !owner.exited) {
+        owner.expectedExit = "rollback";
+        try {
+          await normalClose(selected);
+        } catch (closeError) {
+          owner.expectedExit = void 0;
+          state = "close-failed";
+          taskActive = false;
+          reason = "target-rollback-failed";
+          gate();
+          throw failedClose(selected, closeError);
+        }
+      }
+      await dispose(selected);
       throw error2;
     }
-    current = selected;
-    gated = false;
-    taskActive = true;
-    reason = void 0;
-    state = "active";
-    subscribe(selected);
-    return status();
   }
-  function start(options, sessionId, context = {}) {
+  function start(options, sessionId = randomUUID2(), context = {}) {
     return run2(async () => {
-      if (current)
-        throw new Error("An existing target session must be explicitly closed before this entry is reused.");
+      if (current) throw new Error("An existing target session must be closed before starting another.");
       return attach(options, sessionId, context);
     });
   }
-  async function dispose(selected) {
-    taskActive = false;
-    state = "closing";
-    gate();
-    try {
-      await server.close();
-    } catch (error2) {
-      state = "close-failed";
-      reason = "official-close-failed";
-      throw error2;
-    }
-    selected.unsubscribe?.();
-    selected.target.child?.disposeMonitor?.();
-    current = void 0;
-    state = "idle";
-    reason = void 0;
-  }
-  function retireExited({ sessionId }) {
-    return run2(async () => {
-      const selected = current;
-      if (selected?.sessionId === sessionId && selected.exited && !taskActive) await dispose(selected);
-      return status();
-    });
+  async function retireExited({ sessionId }) {
+    const selected = current;
+    if (selected?.owner.sessionId === sessionId && selected.owner.exited) await dispose(selected);
+    return status();
   }
   function restart({ sessionId, mcpArgs }, context = {}) {
     return run2(async () => {
-      context.signal?.throwIfAborted();
       const previous = requireSession(sessionId);
-      if (state !== "lost" && state !== "active")
-        throw new Error("Only an active or lost target session can be explicitly restarted.");
-      if (router.isBusy()) throw new Error("CDP is busy; retry after the current request completes.");
-      if (!previous.target.launchDefinition)
-        throw new Error("The exact launch definition is unavailable; cannot safely restart.");
-      previous.expectedExit = true;
-      router.pause?.();
+      if (state !== "active" && state !== "lost")
+        throw new Error("Only active or lost live targets can restart.");
+      const target = previous.owner.target;
+      if (!target?.launchDefinition)
+        throw new Error("The exact launch definition is unavailable; cannot restart.");
       const previousState = state;
+      previous.owner.expectedExit = "restart";
+      router.pause?.();
       state = "closing";
-      if (!await tryClose(previous, false)) {
-        delete previous.expectedExit;
+      try {
+        await normalClose(previous, context.signal, context.onPhase);
+      } catch (error2) {
+        previous.owner.expectedExit = void 0;
         state = previousState;
         router.resume?.();
-        throw failedClose(previous);
+        if (context.signal?.aborted) throw context.signal.reason;
+        throw failedClose(previous, error2);
       }
-      try {
-        await server.close();
-      } catch (error2) {
-        state = "close-failed";
-        reason = "official-close-failed";
-        taskActive = false;
-        throw error2;
-      }
-      previous.unsubscribe?.();
-      previous.target.child?.disposeMonitor?.();
-      previous.exited = true;
-      const options = {
-        ...previous.options,
-        exactPort: previous.target.port,
-        launchDefinition: previous.target.launchDefinition,
-        ...mcpArgs === void 0 ? {} : { mcpArgs }
+      context.onPhase?.("closing-resources");
+      await dispose(previous);
+      context.signal?.throwIfAborted();
+      const nextSession = randomUUID2();
+      context.onSession?.(nextSession);
+      return {
+        ...await attach(
+          {
+            ...previous.options,
+            exactPort: target.port,
+            launchDefinition: target.launchDefinition,
+            ...mcpArgs === void 0 ? {} : { mcpArgs }
+          },
+          nextSession,
+          context
+        ),
+        pageIdsInvalidated: true
       };
-      try {
-        const nextSession = randomUUID2();
-        context.onSession?.(nextSession);
-        return { ...await attach(options, nextSession, context), pageIdsInvalidated: true };
-      } catch (error2) {
-        if (current === previous) {
-          state = "lost";
-          reason = "restart-incomplete";
-          gate();
-          context.onSession?.(previous.sessionId);
-        }
-        throw error2;
-      }
     });
   }
-  function stop({ sessionId, disposition }) {
+  function stop({ sessionId, disposition }, context = {}) {
     return run2(async () => {
       const selected = requireSession(sessionId);
-      if (disposition !== "Close" && disposition !== "Keep") throw new Error("Choose Close or Keep.");
       if (state === "close-failed" && disposition !== "Close")
-        throw new Error("The retained target requires an explicit Close retry.");
+        throw new Error("The retained target requires Close retry.");
       if (disposition === "Keep") {
         taskActive = false;
-        if (selected.exited) await dispose(selected);
         return { ...status(), disposition };
       }
-      if (state === "active" && router.isBusy())
-        throw new Error("CDP is busy; retry after the current request completes.");
+      if (disposition !== "Close") throw new Error("Choose Close or Keep.");
+      const previous = status();
       const previousState = state;
+      selected.owner.expectedExit = "close";
       router.pause?.();
-      selected.expectedExit = true;
       state = "closing";
-      if (!await tryClose(selected, previousState === "active")) {
-        delete selected.expectedExit;
-        state = previousState;
-        router.resume?.();
-        throw failedClose(selected);
+      try {
+        await normalClose(selected, context.signal, context.onPhase);
+      } catch (error2) {
+        selected.owner.expectedExit = void 0;
+        if (!selected.owner.exited) {
+          state = previousState;
+          router.resume?.();
+        }
+        if (context.signal?.aborted) throw context.signal.reason;
+        throw failedClose(selected, error2);
       }
+      context.onPhase?.("closing-resources");
       await dispose(selected);
-      return { ...status(), disposition, pageIdsInvalidated: true };
+      return { ...previous, status: "idle", taskActive: false, disposition, pageIdsInvalidated: true };
     });
   }
   function endTask({ sessionId }) {
     return run2(async () => {
-      const selected = requireSession(sessionId);
-      if (state === "close-failed") throw new Error("The retained target requires an explicit Close retry.");
+      requireSession(sessionId);
+      if (state === "close-failed") throw new Error("The retained target requires Close retry.");
       taskActive = false;
-      if (selected.exited) await dispose(selected);
       return status();
     });
   }
   function beginTask({ sessionId }) {
-    const selected = requireSession(sessionId);
-    if (!selected.exited && state !== "closing" && state !== "close-failed") taskActive = true;
+    requireSession(sessionId);
+    if (state === "active" || state === "lost") taskActive = true;
   }
   async function checkHealth() {
-    if (checking) return checking;
     const selected = current;
-    if (!selected || selected.exited || state !== "active") return;
-    checking = (async () => {
+    const target = selected?.owner.target;
+    if (!selected || !target || selected.owner.retired || state !== "active") return;
+    if (checking?.owner === selected.owner) return checking.job;
+    const job = (async () => {
       let health;
       try {
-        if (host.health) health = await host.health(selected.target);
+        if (host.health) health = await waitWithSignal(host.health(target), selected.owner.signal);
         else {
-          await selected.target.verify?.();
+          await waitWithSignal(Promise.resolve(target.verify?.()), selected.owner.signal);
           health = "healthy";
         }
-      } catch {
+      } catch (error2) {
+        if (selected.owner.signal.aborted) throw error2;
         health = "unavailable";
       }
-      if (current !== selected || state !== "active") return;
-      if (health === "gone") processExited(selected);
-      else if (health !== "healthy")
+      if (current === selected && state === "active" && health !== "healthy")
         lose(selected, health === "identity-changed" ? health : "target-unavailable");
     })().finally(() => {
-      checking = void 0;
+      if (checking?.job === job) checking = void 0;
     });
-    return checking;
+    checking = { owner: selected.owner, job };
+    return job;
   }
-  function cleanupOnDisconnect() {
-    return run2(async () => {
-      taskActive = false;
-      const selected = current;
-      if (selected) selected.expectedExit = true;
-      state = "closing";
-      const closed = !selected || await tryClose(selected, false);
-      gate();
-      try {
-        await server.close();
-      } finally {
-        selected?.unsubscribe?.();
-        selected?.target.child?.disposeMonitor?.();
-      }
-      current = void 0;
-      state = "idle";
-      reason = void 0;
-      return closed || !selected ? void 0 : { processId: selected.target.processId, port: selected.target.port };
-    });
+  async function cleanupOnDisconnect() {
+    const selected = current;
+    gate();
+    taskActive = false;
+    if (!selected) return;
+    selected.owner.expectedExit = "disconnect";
+    selected.owner.abortWork(new Error("The gateway is closing."));
+    const resources = server.close(selected.owner);
+    const results = await Promise.allSettled([normalClose(selected), resources]);
+    if (selected.owner.exited) await dispose(selected);
+    if (results.some((result) => result.status === "rejected") && !selected.owner.exited) {
+      const target = selected.owner.target;
+      return target ? { processId: target.processId, port: target.port } : void 0;
+    }
   }
   return {
     status,
@@ -41086,297 +41957,406 @@ function createTargetController({
     officialDisconnected: () => {
       if (current) lose(current, "official-disconnected");
     },
-    quarantine: (reason2) => {
-      if (current) lose(current, reason2);
+    quarantine: (why) => {
+      if (current) lose(current, why);
     },
-    canInvoke: () => state === "active" && !gated
+    canInvoke: () => state === "active" && !gated && !!current && !current.owner.retired
   };
 }
 
 // src/application/plugin-runtime.ts
 async function startPluginRuntime({
   createRouter = createCdpRouter,
-  createHost = createTargetHost,
+  createHost,
   createConnection = createOfficialConnection,
   createEntry = createMcpEntryServer,
   loadCatalog = loadOfficialToolCatalog
 } = {}) {
   const entryId = randomUUID3();
   const connections = /* @__PURE__ */ new Map();
-  let entry;
-  let catalog = [];
-  let fullCatalog;
-  let catalogConnection;
-  let catalogRouterClosed = false;
-  let catalogCleanupError;
-  let cleanupPromise;
+  const owners = /* @__PURE__ */ new Set();
+  const portReservations = createPortReservations();
+  const makeHost = createHost ?? (() => createTargetHost({ portReservations }));
   const notices = /* @__PURE__ */ new Map();
-  const connectionNotices = /* @__PURE__ */ new Map();
+  const failures = /* @__PURE__ */ new Map();
   const retirements = /* @__PURE__ */ new Set();
-  let shuttingDown = false;
   const starts = /* @__PURE__ */ new Set();
+  const replacements = /* @__PURE__ */ new Set();
+  let entry;
+  let fullCatalog;
+  let shuttingDown = false;
+  let cleanupPromise;
+  function newOwner(sessionId) {
+    const owner = createConnectionOwner(sessionId);
+    owners.add(owner);
+    return owner;
+  }
+  function noticeKey(connectionId, sessionId) {
+    return `${connectionId}/${sessionId}`;
+  }
   function selected(connectionId) {
     validateIdentity(connectionId, "connection ID");
     const connection = connections.get(connectionId);
-    if (!connection) throw new Error("The target connection is absent or closed.");
+    if (!connection || connection.owner.retired) throw new Error("The target connection is absent or closed.");
     return connection;
   }
   function routed(route) {
     const connection = selected(route.connectionId);
-    if (statusOf(connection).sessionId !== route.sessionId)
-      throw new Error("The target session is absent or stale.");
+    if (connection.owner.sessionId !== route.sessionId) throw new Error("The target session is absent or stale.");
     return connection;
   }
   function statusOf(connection) {
+    const state = connection.controller.status();
+    const upstreamStatus = connection.quarantined ? "quarantined" : connection.upstream ? "connected" : "disconnected";
+    const enabledTools = upstreamStatus === "connected" ? connection.upstream?.tools.map((tool) => tool.name) ?? [] : [];
     return {
-      ...connection.controller.status(),
+      ...state,
       connectionId: connection.connectionId,
-      mcpArgs: connection.mcpArgs ?? [],
-      enabledTools: connection.upstream?.tools.map((tool) => tool.name) ?? [],
-      workspace: workspaceSources(connection.mcpArgs ?? [], entry?.supportsRoots() ?? false),
-      diagnostics: [...connection.diagnostics],
-      ...connection.failedStartupSessionId ? { sessionId: connection.failedStartupSessionId, reason: "startup-cleanup-failed" } : {},
-      ...connection.retainedStatus
+      upstreamStatus,
+      enabledToolCount: enabledTools.length,
+      enabledTools
     };
+  }
+  function summary(connection) {
+    return connectionSummary(statusOf(connection));
   }
   function status(connectionId) {
     if (connectionId !== void 0) return statusOf(selected(connectionId));
-    return { entryId, connections: [...connections.values()].map(statusOf) };
+    return { entryId, connections: [...connections.values()].filter((item) => !item.owner.retired).map(summary) };
   }
-  async function closeUpstream(connection) {
-    const upstream = connection.upstream;
-    if (!upstream) return;
-    connection.closingUpstream = upstream;
+  async function disposeResources(owner) {
     try {
-      await upstream.close();
-      if (connection.upstream === upstream) delete connection.upstream;
+      await owner.closeResources();
     } finally {
-      delete connection.closingUpstream;
+      if (!owner.hasPendingResources() && owner.retired) owners.delete(owner);
     }
   }
-  async function ensureUpstream(connection, options) {
+  async function closeUpstream(connection, owner = connection.owner) {
+    if (connection.owner === owner) delete connection.upstream;
+    try {
+      await owner.closeResource("upstream");
+    } finally {
+      if (connection.owner === owner) delete connection.upstream;
+    }
+  }
+  function trackRetirement(job) {
+    retirements.add(job);
+    void job.catch((error2) => {
+      process.stderr.write(`Connection cleanup failed: ${errorMessage(error2)}
+`);
+    }).finally(() => retirements.delete(job));
+  }
+  function observeExit(connection, event) {
+    const owner = connection.owner;
+    if (owner.sessionId !== event.sessionId) return;
+    lifecycle.cancelRoute({ connectionId: connection.connectionId, sessionId: event.sessionId });
+    const key = noticeKey(connection.connectionId, event.sessionId);
+    failures.delete(key);
+    const notice = {
+      kind: "target-exit",
+      entryId,
+      connectionId: connection.connectionId,
+      sessionId: event.sessionId,
+      reason: event.reason,
+      taskActive: event.taskActive,
+      processId: event.processId,
+      port: event.port,
+      targetKind: event.targetKind,
+      exitedAt: event.exitedAt,
+      ...event.expected ? { expected: event.expected } : {},
+      ...event.operationId ? { operationId: event.operationId } : {},
+      ...event.exitCode === void 0 ? {} : { exitCode: event.exitCode },
+      ...event.signalCode === void 0 ? {} : { signalCode: event.signalCode },
+      cleanupStatus: "pending"
+    };
+    if (!shuttingDown) notices.set(key, notice);
+    const pending = (async () => {
+      try {
+        await connection.controller.retireExited({ sessionId: event.sessionId });
+        notice.cleanupStatus = "succeeded";
+      } catch (error2) {
+        notice.cleanupStatus = "failed";
+        notice.cleanupError = errorMessage(error2).slice(0, 512);
+        throw error2;
+      } finally {
+        if (event.expected !== "restart" && connections.get(connection.connectionId) === connection && connection.owner === owner)
+          connections.delete(connection.connectionId);
+        if (!owner.hasPendingResources()) owners.delete(owner);
+      }
+    })();
+    trackRetirement(pending);
+  }
+  async function ensureUpstream(connection, options, context = {}) {
+    const owner = connection.owner;
+    owner.assertOpen();
     if (connection.upstream) return;
     const gateway = entry;
     const args = buildServerArguments(connection.router.url, process.env, options.mcpArgs);
-    const upstream = await createConnection(connection.router.url, {
-      args,
-      ...gateway?.supportsRoots() ? { roots: () => gateway.roots() } : {},
-      ...gateway?.supportsFormElicitation() ? { elicitation: { form: true, request: (params, signal) => gateway.elicit(params, signal) } } : {}
-    });
-    connection.upstream = upstream;
     connection.mcpArgs = args.slice(1);
+    const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
+    const acquiring = createConnection(connection.router.url, {
+      args,
+      signal,
+      onAcquired: (resource) => owner.register("upstream", resource),
+      ...gateway?.supportsRoots() ? {
+        roots: async () => {
+          owner.assertOpen();
+          const roots = await gateway.roots();
+          owner.assertOpen();
+          return roots;
+        }
+      } : {},
+      ...gateway?.supportsFormElicitation() ? {
+        elicitation: {
+          form: true,
+          request: async (params, incoming) => {
+            owner.assertOpen();
+            const result = await gateway.elicit(params, AbortSignal.any([incoming, owner.signal]));
+            owner.assertOpen();
+            return result;
+          }
+        }
+      } : {}
+    });
+    const upstream = await owner.track(acquiring);
+    if (!owner.hasResource("upstream")) owner.register("upstream", upstream);
+    if (connection.owner !== owner || owner.retired || signal.aborted || shuttingDown) {
+      owner.retire(new Error("The official connection acquisition belongs to a retired session."));
+      await owner.closeResource("upstream");
+      throw new Error("The target exited or its official connection acquisition was cancelled.");
+    }
+    if (!fullCatalog) throw new Error("Missing fixed tool catalog.");
     try {
-      if (!fullCatalog) throw new Error("Missing fixed tool catalog.");
       fullCatalog.validate(upstream.tools);
     } catch (error2) {
-      await closeUpstream(connection);
+      await owner.closeResource("upstream");
       throw error2;
     }
+    owner.assertOpen();
+    connection.upstream = upstream;
     upstream.onExit(() => {
-      if (connection.upstream !== upstream || connection.closingUpstream === upstream) return;
+      if (connection.owner !== owner || owner.retired || connection.upstream !== upstream) return;
       delete connection.upstream;
       connection.controller.officialDisconnected();
-    });
-  }
-  function clearNotice(connection, sessionId) {
-    if (!sessionId || notices.get(connection.connectionId)?.sessionId === sessionId)
-      notices.delete(connection.connectionId);
-    if (!sessionId || connectionNotices.get(connection.connectionId)?.sessionId === sessionId)
-      connectionNotices.delete(connection.connectionId);
-  }
-  async function remove(connection) {
-    if (connections.get(connection.connectionId) !== connection) return;
-    clearNotice(connection);
-    if (!connection.removal) {
-      connection.removal = connection.router.close().then(() => {
-        if (connections.get(connection.connectionId) === connection)
-          connections.delete(connection.connectionId);
+      failures.set(noticeKey(connection.connectionId, owner.sessionId), {
+        kind: "connection-failure",
+        entryId,
+        connectionId: connection.connectionId,
+        sessionId: owner.sessionId,
+        code: "CONNECTION_RECOVERY_REQUIRED",
+        reason: "official-disconnected"
       });
-    }
-    try {
-      await connection.removal;
-    } catch (error2) {
-      delete connection.removal;
-      throw error2;
-    }
-  }
-  async function removeRetired(connection, previous) {
-    try {
-      await remove(connection);
-    } catch (error2) {
-      if (previous.sessionId) connection.failedStartupSessionId = previous.sessionId;
-      connection.retainedStatus = {
-        ...previous,
-        status: "close-failed",
-        taskActive: false,
-        reason: "router-close-failed"
-      };
-      const retained = new DetailedError(errorMessage(error2));
-      retained.details = { ...statusOf(connection) };
-      throw retained;
-    }
-  }
-  function observeExit(connection, event) {
-    if (shuttingDown || connections.get(connection.connectionId) !== connection) return;
-    if (event.taskActive) {
-      notices.set(connection.connectionId, event);
-      return;
-    }
-    clearNotice(connection, event.sessionId);
-    const previous = statusOf(connection);
-    const pending = (async () => {
-      const result = await connection.controller.retireExited({ sessionId: event.sessionId });
-      if (result.status === "idle") await removeRetired(connection, previous);
-    })();
-    retirements.add(pending);
-    void pending.catch((error2) => {
-      process.stderr.write(
-        "Retired target connection cleanup failed: " + connection.connectionId + ": " + errorMessage(error2) + "\n"
-      );
-    }).finally(() => retirements.delete(pending));
+    });
   }
   function hookStatus(hookEventName) {
-    const messages = [];
-    const completed = lifecycle.takeNotices().filter((operation) => {
-      if (!operation.connectionId || !operation.sessionId) return true;
-      const current = connections.get(operation.connectionId);
-      return !current || statusOf(current).sessionId === operation.sessionId;
-    });
-    const failures = [...connectionNotices.values()];
-    connectionNotices.clear();
-    for (const [connectionId, event] of notices) {
-      notices.delete(connectionId);
-      const connection = connections.get(connectionId);
-      if (!connection) continue;
-      const current = statusOf(connection);
-      if (current.sessionId !== event.sessionId || !current.taskActive || current.reason !== "process-exited")
-        continue;
-      messages.push(
-        JSON.stringify({
-          entryId,
-          connectionId,
-          sessionId: event.sessionId,
-          targetKind: current.targetKind,
-          processId: current.processId,
-          port: current.port,
-          reason: event.reason
-        })
+    const completed = lifecycle.takeNotices(
+      (operation) => ![...notices.values()].some(
+        (event) => event.operationId === operation.operationId && event.cleanupStatus === "pending"
+      )
+    );
+    const observedExits = [...notices.values()].filter((event) => event.cleanupStatus !== "pending");
+    const operations = completed.map((operation) => {
+      const exits2 = observedExits.filter(
+        (event) => event.expected && event.operationId === operation.operationId
       );
-    }
-    if (!messages.length && !completed.length && !failures.length) return {};
-    const context = (messages.length ? "CDP target process exited during active work. " : "") + messages.join("\n") + (messages.length ? "\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent." : "") + (completed.length ? `
-CDP lifecycle operation results: ${JSON.stringify(completed)}` : "") + (failures.length ? "\nCDP connection requires explicit recovery; never restart or replay tools automatically. " + JSON.stringify(failures) : "");
+      return { ...operation, ...exits2.length ? { exits: exits2 } : {} };
+    });
+    const exits = observedExits.filter((event) => !event.expected || !event.operationId);
+    const connectionFailures = [...failures.values()];
+    for (const event of [...exits, ...operations.flatMap((operation) => operation.exits ?? [])])
+      notices.delete(noticeKey(event.connectionId, event.sessionId));
+    failures.clear();
+    if (!completed.length && !exits.length && !connectionFailures.length) return {};
+    const context = "CDP lifecycle events: " + JSON.stringify({ exits, operations, connections: connectionFailures }) + (exits.some((event) => event.taskActive && !event.expected) ? "\nThe target exited and its old connection/session is closed. Ask the user whether to start a new task with a new start. Never restart or replay automatically." : "") + (connectionFailures.length ? "\nInspect the connection error and ask before explicit restart or Close; never replay automatically." : "");
     return hookEventName === "Stop" ? { decision: "block", reason: context } : { hookSpecificOutput: { hookEventName, additionalContext: context } };
   }
   async function start(options, context = {}) {
     if (shuttingDown) throw new Error("The gateway is closing.");
     context.signal?.throwIfAborted();
-    buildServerArguments("http://127.0.0.1:1", process.env, options.mcpArgs);
     const connectionId = randomUUID3();
     const sessionId = randomUUID3();
-    context.onIdentity?.({ connectionId, sessionId });
+    const initialArgs = buildServerArguments("http://127.0.0.1:1", process.env, options.mcpArgs).slice(1);
+    const owner = newOwner(sessionId);
+    owner.expectedOperationId = context.operationId;
+    let connection;
     const diagnostics = [];
-    const diagnose = (event) => {
-      diagnostics.push({ ...event, sessionId: connection.controller.status().sessionId ?? sessionId });
-      if (diagnostics.length > 64) diagnostics.shift();
-    };
-    const router = await createRouter({ diagnose });
-    const connection = {
-      connectionId,
-      activeCalls: 0,
-      diagnostics,
-      diagnose,
-      router,
-      controller: createTargetController({
-        entryId,
-        router,
-        host: createHost(),
-        onProcessExit: (event) => observeExit(connection, event),
-        server: {
-          ensure: (options2) => ensureUpstream(connection, options2),
-          close: () => closeUpstream(connection)
-        }
-      })
-    };
-    connections.set(connectionId, connection);
+    function diagnoseFor(selectedOwner) {
+      return (event) => {
+        if (selectedOwner.retired || connection && connection.owner !== selectedOwner) return;
+        diagnostics.push({ ...event, sessionId: selectedOwner.sessionId });
+        if (diagnostics.length > 64) diagnostics.shift();
+      };
+    }
     try {
-      await connection.controller.start(options, sessionId, context);
-      return statusOf(connection);
+      context.onIdentity?.({ connectionId, sessionId });
+      context.onPhase?.("validating-official-server");
+      if (createConnection === createOfficialConnection) await resolveServerBin();
+      context.signal?.throwIfAborted();
+      if (shuttingDown) throw new Error("The gateway is closing.");
+      const diagnose = diagnoseFor(owner);
+      context.onPhase?.("creating-router");
+      const router = await createRouter({ diagnose });
+      owner.register("router", router);
+      context.signal?.throwIfAborted();
+      if (shuttingDown) throw new Error("The gateway is closing.");
+      const managed = {
+        connectionId,
+        owner,
+        router,
+        diagnostics,
+        diagnose,
+        mcpArgs: initialArgs,
+        activeCalls: 0,
+        quarantined: false,
+        controller: createTargetController({
+          entryId,
+          host: makeHost(),
+          router: {
+            setTarget: (target) => managed.router.setTarget(target),
+            clearTarget: () => managed.router.clearTarget(),
+            isBusy: () => managed.router.isBusy(),
+            pause: () => managed.router.pause?.(),
+            resume: () => managed.router.resume?.()
+          },
+          createOwner: async (id) => {
+            if (managed.owner.sessionId === id) return managed.owner;
+            const replacement = newOwner(id);
+            managed.owner = replacement;
+            delete managed.upstream;
+            delete managed.quarantine;
+            managed.quarantined = false;
+            const diagnose2 = diagnoseFor(replacement);
+            const router2 = await createRouter({ diagnose: diagnose2 });
+            replacement.register("router", router2);
+            managed.router = router2;
+            managed.diagnose = diagnose2;
+            replacement.assertOpen();
+            return replacement;
+          },
+          onProcessExit: (event) => observeExit(managed, event),
+          onObservationFailure: (id) => {
+            if (managed.owner.sessionId !== id) return;
+            managed.quarantined = true;
+            failures.set(noticeKey(connectionId, id), {
+              kind: "connection-failure",
+              entryId,
+              connectionId,
+              sessionId: id,
+              code: "PROCESS_OBSERVATION_UNAVAILABLE",
+              reason: "process-monitor-lost"
+            });
+            trackRetirement(closeUpstream(managed));
+          },
+          server: {
+            ensure: (options2, context2) => ensureUpstream(managed, options2, context2),
+            close: (selectedOwner = managed.owner) => disposeResources(selectedOwner)
+          }
+        })
+      };
+      connection = managed;
+      connections.set(connectionId, managed);
+      await managed.controller.start(options, sessionId, context);
+      managed.owner.assertOpen();
+      return summary(managed);
     } catch (error2) {
-      if (connection.controller.status().status === "idle") {
+      const managed = connection;
+      const failedOwner = managed?.owner ?? owner;
+      if (!failedOwner.target || failedOwner.exited) {
+        failedOwner.retire(error2);
         try {
-          await closeUpstream(connection);
-          await remove(connection);
+          await disposeResources(failedOwner);
         } catch (cleanupError) {
-          connection.failedStartupSessionId = sessionId;
-          const retained2 = new DetailedError(errorMessage(error2));
-          retained2.details = {
-            ...errorDetails(error2),
-            ...statusOf(connection),
+          const failure3 = new DetailedError(errorMessage(error2));
+          failure3.details = {
+            ...lifecycleFailureEvidence(errorDetails(error2) ?? {}),
+            entryId,
+            connectionId,
+            sessionId: failedOwner.sessionId,
+            phase: "resource-cleanup",
             cleanupError: errorMessage(cleanupError)
           };
-          throw retained2;
+          connections.delete(connectionId);
+          throw failure3;
         }
+        connections.delete(connectionId);
       }
-      if (context.signal?.aborted && error2 === context.signal.reason && !connections.has(connectionId))
-        throw error2;
-      const retained = new DetailedError(errorMessage(error2));
-      retained.details = { ...errorDetails(error2), ...statusOf(connection) };
-      throw retained;
+      if (context.signal?.aborted && error2 === context.signal.reason && (!failedOwner.target || failedOwner.exited))
+        throw context.signal.reason;
+      const failure2 = new DetailedError(errorMessage(error2));
+      failure2.details = {
+        ...lifecycleFailureEvidence(errorDetails(error2) ?? {}),
+        entryId,
+        connectionId,
+        sessionId: failedOwner.sessionId,
+        ...managed ? connectionSummary(statusOf(managed)) : {},
+        processExited: failedOwner.exited
+      };
+      throw failure2;
     }
   }
   const handler = {
     status,
     start: (options, context) => {
-      const pending = start(options, context);
-      starts.add(pending);
-      void pending.finally(() => starts.delete(pending)).catch(() => {
+      const job = start(options, context);
+      starts.add(job);
+      void job.finally(() => starts.delete(job)).catch(() => {
       });
-      return pending;
+      return job;
     },
-    restart: async (request, context = {}) => {
-      const connection = routed(request);
-      if (connection.quarantine) await connection.quarantine;
-      if (connection.activeCalls) throw new Error("An official request is still running for this connection.");
-      buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
-      clearNotice(connection, request.sessionId);
-      const result = await connection.controller.restart(request, {
-        ...context,
-        onSession: (sessionId) => context.onIdentity?.({ connectionId: request.connectionId, sessionId })
+    restart: (request, context = {}) => {
+      const job = (async () => {
+        const connection = routed(request);
+        connection.owner.expectedOperationId = context.operationId;
+        buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
+        try {
+          const result = await connection.controller.restart(request, {
+            ...context,
+            onSession: (sessionId) => context.onIdentity?.({ connectionId: request.connectionId, sessionId })
+          });
+          if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
+          return { ...summary(connection), ...result, connectionId: request.connectionId };
+        } catch (error2) {
+          const owner = connection.owner;
+          if (!owner.target || owner.exited) {
+            owner.retire(error2);
+            try {
+              await disposeResources(owner);
+            } catch {
+            }
+          }
+          if (connection.owner.retired || connection.controller.status().status === "idle")
+            connections.delete(request.connectionId);
+          throw error2;
+        }
+      })();
+      replacements.add(job);
+      void job.finally(() => replacements.delete(job)).catch(() => {
       });
-      return { ...statusOf(connection), ...result, connectionId: connection.connectionId };
+      return job;
     },
-    stop: async (request) => {
+    stop: async (request, context = {}) => {
       const connection = routed(request);
-      if (connection.quarantine) await connection.quarantine;
-      if (request.disposition === "Close" && connection.activeCalls)
-        throw new Error("An official request is still running for this connection.");
-      if (connection.failedStartupSessionId) {
-        if (request.disposition !== "Close")
-          throw new Error("The retained connection requires an explicit Close retry.");
-        await closeUpstream(connection);
-        await remove(connection);
-        return {
-          entryId,
-          connectionId: connection.connectionId,
-          status: "idle",
-          disposition: "Close",
-          pageIdsInvalidated: true
-        };
+      connection.owner.expectedOperationId = context.operationId;
+      const result = await connection.controller.stop(request, context);
+      if (request.disposition === "Close") {
+        if (connections.get(request.connectionId) === connection) connections.delete(request.connectionId);
+        if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
       }
-      const previous = statusOf(connection);
-      const result = await connection.controller.stop(request);
-      clearNotice(connection, request.sessionId);
-      if (result.status === "idle") await removeRetired(connection, previous);
-      return { ...result, connectionId: connection.connectionId };
+      return {
+        ...result,
+        connectionId: connection.connectionId,
+        enabledToolCount: request.disposition === "Close" ? 0 : summary(connection).enabledToolCount ?? 0,
+        upstreamStatus: request.disposition === "Close" ? "disconnected" : summary(connection).upstreamStatus ?? "disconnected"
+      };
     },
     endTask: async (request) => {
       const connection = routed(request);
-      clearNotice(connection, request.sessionId);
-      const previous = statusOf(connection);
-      const result = await connection.controller.endTask(request);
-      if (result.status === "idle") await removeRetired(connection, previous);
-      return { ...result, connectionId: connection.connectionId };
+      return {
+        ...await connection.controller.endTask(request),
+        connectionId: connection.connectionId,
+        upstreamStatus: summary(connection).upstreamStatus ?? "disconnected",
+        enabledToolCount: summary(connection).enabledToolCount ?? 0
+      };
     }
   };
   const lifecycle = createLifecycleService({ entryId, handler });
@@ -41387,110 +42367,129 @@ CDP lifecycle operation results: ${JSON.stringify(completed)}` : "") + (failures
       structuredContent: details
     };
   }
+  const catalogOwner = newOwner(randomUUID3());
+  const catalogRouter = await createRouter();
+  catalogOwner.register("router", catalogRouter);
   async function cleanup() {
     if (cleanupPromise) return cleanupPromise;
     shuttingDown = true;
+    const closing = [];
+    const cleaning = /* @__PURE__ */ new Map();
+    for (const connection of connections.values()) {
+      connection.owner.retire(new Error("The gateway is closing."));
+      connection.router.clearTarget();
+      closing.push(
+        connection.controller.cleanupOnDisconnect().then((retained) => {
+          if (retained)
+            process.stderr.write(
+              "Target did not close normally; inspect PID " + retained.processId + ", port " + retained.port + ".\n"
+            );
+        })
+      );
+    }
+    for (const owner of owners) {
+      owner.retire(new Error("The gateway is closing."));
+      cleaning.set(owner, { version: owner.resourceVersion, joined: owner.isCleaning() });
+      closing.push(owner.retryResources());
+    }
+    closing.push(lifecycle.close());
     cleanupPromise = (async () => {
-      notices.clear();
-      const operationsClosed = lifecycle.close();
-      const closingTargets = /* @__PURE__ */ new Map();
-      function closeTarget(connection) {
-        const previous = closingTargets.get(connection.connectionId);
-        if (previous) return previous;
-        const closing = (async () => {
-          clearNotice(connection);
-          try {
-            const retained = await connection.controller.cleanupOnDisconnect();
-            if (retained)
-              process.stderr.write(
-                `Target connection ${connection.connectionId} did not close normally; inspect PID ${retained.processId}, port ${retained.port}.
-`
-              );
-          } finally {
-            await connection.router.close();
-          }
-        })().then(
-          () => ({ status: "fulfilled", value: void 0 }),
-          (reason) => ({ status: "rejected", reason })
-        );
-        closingTargets.set(connection.connectionId, closing);
-        return closing;
-      }
-      for (const connection of connections.values())
-        if (connection.controller.status().processId) void closeTarget(connection);
-      await operationsClosed;
-      await Promise.allSettled([...retirements]);
-      try {
-        await closeCatalogConnection();
-      } catch (error2) {
-        catalogCleanupError = errorMessage(error2);
-        process.stderr.write(`Catalog upstream cleanup failed for entry ${entryId}: ${catalogCleanupError}
-`);
-      } finally {
-        await closeCatalogRouter();
-      }
-      await Promise.allSettled([...starts]);
-      for (const connection of connections.values()) void closeTarget(connection);
-      const results = await Promise.all(closingTargets.values());
+      const results = await Promise.allSettled(closing);
+      await Promise.allSettled([...starts, ...replacements, ...retirements]);
+      await Promise.allSettled(
+        [...owners].filter((owner) => {
+          const initial = cleaning.get(owner);
+          return !initial || initial.joined || initial.version !== owner.resourceVersion;
+        }).map((owner) => owner.retryResources())
+      );
       connections.clear();
       for (const result of results)
         if (result.status === "rejected")
-          process.stderr.write(`Target cleanup failed: ${errorMessage(result.reason)}
+          process.stderr.write(`Gateway cleanup failed: ${errorMessage(result.reason)}
 `);
     })();
     return cleanupPromise;
   }
-  const catalogRouter = await createRouter();
-  async function closeCatalogConnection() {
-    const selected2 = catalogConnection;
-    if (!selected2) return;
-    await selected2.close();
-    if (catalogConnection === selected2) catalogConnection = void 0;
-  }
-  async function closeCatalogRouter() {
-    if (catalogRouterClosed) return;
-    await catalogRouter.close();
-    catalogRouterClosed = true;
-  }
   try {
-    catalogConnection = await createConnection(catalogRouter.url);
-    catalog = catalogConnection.tools;
-    fullCatalog = await loadCatalog(catalog);
-    fullCatalog.validate(catalog);
-    catalog = fullCatalog.tools;
-    await closeCatalogConnection();
-    await closeCatalogRouter();
+    const catalogConnection = await createConnection(catalogRouter.url, {
+      signal: catalogOwner.signal,
+      onAcquired: (resource) => catalogOwner.register("upstream", resource)
+    });
+    if (!catalogOwner.hasResource("upstream")) catalogOwner.register("upstream", catalogConnection);
+    fullCatalog = await loadCatalog(catalogConnection.tools);
+    fullCatalog.validate(catalogConnection.tools);
+    const catalog = fullCatalog.tools;
+    await disposeResources(catalogOwner);
+    catalogOwner.retire(new Error("Catalog discovery completed."));
+    owners.delete(catalogOwner);
     entry = createEntry({
       tools: catalog,
       status: (hookEventName) => hookEventName ? hookStatus(hookEventName) : { ...status() },
       control: async (request, signal) => {
         const result = await lifecycle.control(request, signal);
-        if (request.action !== "status" || !fullCatalog) return result;
+        const snapshot = isRecord(result.operation) ? result.operation : result;
+        if (snapshot.state === "succeeded" || snapshot.state === "failed" || snapshot.state === "cancelled") {
+          for (const [key, event] of notices) {
+            if (event.expected && event.operationId === snapshot.operationId) notices.delete(key);
+          }
+          if (typeof snapshot.connectionId === "string" && typeof snapshot.sessionId === "string") {
+            const key = noticeKey(snapshot.connectionId, snapshot.sessionId);
+            const exit = notices.get(key);
+            const error2 = isRecord(snapshot.error) ? snapshot.error : void 0;
+            if (exit?.expected || error2?.processExited === true) notices.delete(key);
+          }
+        }
+        if (request.action !== "status" || request.operationId || !fullCatalog) return result;
         const connection = request.connectionId ? selected(request.connectionId) : void 0;
+        if (!connection)
+          return {
+            ...result,
+            ...request.toolNames ? {
+              toolAvailability: fullCatalog.describe(
+                buildServerArguments("http://127.0.0.1:1").slice(1),
+                void 0,
+                request.toolNames
+              )
+            } : {}
+          };
         return {
-          ...result,
-          ...request.operationId ? {} : {
+          ...connectionSummary(statusOf(connection)),
+          ...request.toolNames ? {} : { enabledTools: statusOf(connection).enabledTools ?? [] },
+          ...request.toolNames ? {
             toolAvailability: fullCatalog.describe(
-              connection?.mcpArgs ?? buildServerArguments("http://127.0.0.1:1").slice(1),
-              connection?.upstream?.tools,
+              connection.mcpArgs,
+              !connection.quarantined ? connection.upstream?.tools : void 0,
               request.toolNames
             )
-          }
+          } : {},
+          ...request.include?.includes("configuration") ? {
+            mcpArgs: [...connection.mcpArgs],
+            workspace: workspaceSources(connection.mcpArgs, entry?.supportsRoots() ?? false)
+          } : {},
+          ...request.include?.includes("diagnostics") ? { diagnostics: [...connection.diagnostics] } : {}
         };
       },
       onRootsChanged: async () => {
-        await Promise.all([...connections.values()].map((connection) => connection.upstream?.rootsChanged()));
+        await Promise.allSettled(
+          [...connections.values()].filter((item) => !item.owner.retired).map(async (item) => {
+            const owner = item.owner;
+            owner.assertOpen();
+            await item.upstream?.rootsChanged();
+            owner.assertOpen();
+          })
+        );
       },
       invoke: async (name, arguments_, signal, onProgress) => {
         const route = parseConnectionRoute(arguments_._dct);
         signal.throwIfAborted();
         const connection = routed(route);
+        const owner = connection.owner;
         if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
           return lifecycleResult({
             code: "TOOL_NOT_ENABLED",
             entryId,
             ...route,
-            ...fullCatalog?.requirements(name, connection.mcpArgs ?? []),
+            ...fullCatalog?.requirements(name, connection.mcpArgs, true),
             nextAction: "explicit-start-or-restart"
           });
         connection.controller.beginTask(route);
@@ -41498,48 +42497,65 @@ CDP lifecycle operation results: ${JSON.stringify(completed)}` : "") + (failures
         await connection.controller.checkHealth();
         healthTiming();
         routed(route);
-        const current = statusOf(connection);
-        if (current.status === "lost" && current.sessionId) {
+        const current = summary(connection);
+        const upstream = connection.upstream;
+        if (!connection.controller.canInvoke() || !upstream)
           return lifecycleResult({
             ...current,
-            nextAction: current.reason === "process-exited" ? "ask-user" : "inspect-connection-error",
-            pageIdsInvalidated: true
+            reason: current.reason ?? "target-not-ready",
+            nextAction: "inspect-connection-error"
           });
-        }
-        if (!connection.controller.canInvoke() || !connection.upstream)
-          return lifecycleResult({ ...current, reason: "target-not-ready" });
         const { _dct: routing, ...upstreamArguments } = arguments_;
         void routing;
-        signal.throwIfAborted();
+        const callSignal = AbortSignal.any([signal, owner.signal]);
+        callSignal.throwIfAborted();
         connection.activeCalls += 1;
         const upstreamTiming = measured(connection.diagnose, "upstream-processing");
         try {
-          const result = await connection.upstream.call(name, upstreamArguments, signal, onProgress);
+          const result = await upstream.call(name, upstreamArguments, callSignal, (progress) => {
+            if (connection.owner === owner && !owner.retired && !callSignal.aborted && connection.upstream === upstream)
+              onProgress(progress);
+          });
+          owner.assertOpen();
+          routed(route);
+          callSignal.throwIfAborted();
           upstreamTiming();
           measured(connection.diagnose, "result-ready")();
           return result;
         } catch (error2) {
-          const reason = interruptedOfficialCall(error2, signal);
+          const reason = interruptedOfficialCall(error2, callSignal);
           upstreamTiming(reason ? "interrupted" : "failed");
-          if (!reason || statusOf(connection).sessionId !== route.sessionId) throw error2;
+          if (owner.retired || connection.owner !== owner)
+            throw new Error("The target session exited or closed during the official call.");
+          if (!reason) throw error2;
+          connection.quarantined = true;
           connection.controller.quarantine(reason);
-          if (!connection.quarantine) {
-            connection.quarantine = closeUpstream(connection).then(
+          if (!connection.quarantine)
+            connection.quarantine = closeUpstream(connection, owner).then(
               () => true,
               () => false
             );
-          }
           const quarantine = connection.quarantine;
           const upstreamClosed = await quarantine;
           if (connection.quarantine === quarantine) delete connection.quarantine;
+          if (owner.retired || connection.owner !== owner)
+            throw new Error("The target session exited during upstream cleanup.");
           const details = {
             code: "CONNECTION_RECOVERY_REQUIRED",
-            ...statusOf(connection),
+            ...summary(connection),
             reason,
             upstreamClosed,
             nextAction: "explicit-restart-or-close"
           };
-          connectionNotices.set(connection.connectionId, details);
+          failures.set(noticeKey(connection.connectionId, owner.sessionId), {
+            kind: "connection-failure",
+            entryId,
+            connectionId: connection.connectionId,
+            sessionId: owner.sessionId,
+            code: details.code,
+            reason,
+            upstreamClosed
+          });
           return lifecycleResult(details);
         } finally {
           connection.activeCalls -= 1;
@@ -41563,16 +42579,6 @@ CDP lifecycle operation results: ${JSON.stringify(completed)}` : "") + (failures
       await entry?.close();
     } finally {
       await cleanup();
-    }
-    if (catalogConnection) {
-      const retained = new DetailedError(errorMessage(error2));
-      retained.details = {
-        ...errorDetails(error2),
-        entryId,
-        catalogUpstreamRetained: true,
-        cleanupError: catalogCleanupError
-      };
-      throw retained;
     }
     throw error2;
   }

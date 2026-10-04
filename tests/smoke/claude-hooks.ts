@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertSummary, hookEvents, hookMarker } from '../fixtures/hook-gateway-events.ts';
 import type { ClaudeBlock, ClaudeRequest } from './claude-host.ts';
 import { claudeContext, claudeRequest, claudeSse, claudeToolResult, record } from './claude-host.ts';
 import { claudeCli, claudeHost, sandbox } from './claude-process.ts';
@@ -11,8 +12,7 @@ import { claudeCli, claudeHost, sandbox } from './claude-process.ts';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable =
     process.argv[2] ?? (process.platform === 'win32' ? path.join(os.homedir(), '.local/bin/claude.exe') : 'claude');
-const marker = 'CDP target process exited during active work.';
-const modes = ['pre', 'post', 'stop', 'idle', 'lifecycle', 'skill', 'disabled'] as const;
+const modes = ['pre', 'post', 'stop', 'idle', 'inactive', 'lifecycle', 'skill', 'disabled'] as const;
 type Mode = (typeof modes)[number];
 
 async function scenario(mode: Mode) {
@@ -53,6 +53,7 @@ async function scenario(mode: Mode) {
     const calls: string[] = [];
     let state: Record<string, unknown> | undefined;
     let failure: unknown;
+    let operationId: string | undefined;
     function tool(value: ClaudeRequest, name: string, input: Record<string, unknown>, index: number): ClaudeBlock {
         const declaration = value.tools.find(
             (candidate) => typeof candidate.name === 'string' && candidate.name.endsWith(`__${name}`),
@@ -95,6 +96,7 @@ async function scenario(mode: Mode) {
             if (index === 1) block = tool(value, 'dct_connection_status', {}, index);
             else if (index === 2) {
                 const status = claudeToolResult(value.messages, 'toolu_1');
+                assertSummary(status);
                 assert.ok(
                     Array.isArray(status.connections) &&
                         record(status.connections[0]) &&
@@ -114,27 +116,47 @@ async function scenario(mode: Mode) {
                               {
                                   entryId: state.entryId,
                                   requestId: 'claude-start',
-                                  launch: { executable: 'fake target', args: [], env: { DCT_FIXTURE: 'test' } },
+                                  launch: {
+                                      executable: 'fake target',
+                                      args: [],
+                                      env: { DCT_FIXTURE: 'HOOK_PRIVATE_APP_ARGUMENTS' },
+                                  },
                                   mcpArgs: ['--workspace', workspace],
                               },
                               index,
                           )
-                        : tool(
-                              value,
-                              'list_pages',
-                              { _dct: { connectionId: state.connectionId, sessionId: state.sessionId } },
-                              index,
-                          );
+                        : mode === 'inactive'
+                          ? tool(
+                                value,
+                                'dct_connection_end_task',
+                                {
+                                    entryId: state.entryId,
+                                    connectionId: state.connectionId,
+                                    sessionId: state.sessionId,
+                                    requestId: 'claude-end-task',
+                                },
+                                index,
+                            )
+                          : tool(
+                                value,
+                                'list_pages',
+                                { _dct: { connectionId: state.connectionId, sessionId: state.sessionId } },
+                                index,
+                            );
             } else if (mode === 'lifecycle' && index === 3) {
                 const accepted = claudeToolResult(value.messages, 'toolu_2');
                 assert.equal(typeof accepted.operationId, 'string');
+                assert.ok(typeof accepted.operationId === 'string');
+                operationId = accepted.operationId;
+                assert.ok(typeof state?.releaseUrl === 'string');
+                assert.equal((await fetch(state.releaseUrl, { method: 'POST' })).status, 200);
                 block = tool(
                     value,
                     'dct_operation_wait',
                     { entryId: state?.entryId, operationId: accepted.operationId, cursor: 0 },
                     index,
                 );
-            } else if (mode === 'stop' && index === 3) await signalExit();
+            } else if ((mode === 'stop' || mode === 'inactive') && index === 3) await signalExit();
             response.writeHead(200, { 'content-type': 'text/event-stream' });
             response.end(claudeSse(value.model, index, block));
         } catch (error) {
@@ -168,7 +190,9 @@ async function scenario(mode: Mode) {
             async (turn) => {
                 if (mode === 'idle' && turn === 1) {
                     assert.equal(requests.length, 3);
-                    assert.ok(requests.every((value) => !claudeContext(value).some((text) => text.includes(marker))));
+                    assert.ok(
+                        requests.every((value) => !claudeContext(value).some((text) => text.includes(hookMarker))),
+                    );
                     await signalExit();
                     // Hold the idle host across the observed exit before sending a new prompt.
                     await new Promise<void>((resolve) => setTimeout(resolve, 200));
@@ -190,7 +214,10 @@ async function scenario(mode: Mode) {
             JSON.stringify(hooks),
         );
         const contexts = requests.map(claudeContext);
-        const notices = contexts.map((entries) => entries.filter((text) => text.includes(marker)));
+        const projected = contexts.map((entries) => entries.flatMap(hookEvents));
+        const notices = contexts.map((entries) =>
+            entries.filter((text) => hookEvents(text).some((events) => events.exits.length > 0)),
+        );
         if (mode === 'disabled') {
             assert.equal(hooks.length, 0);
             assert.ok(notices.every((entries) => entries.length === 0));
@@ -202,11 +229,27 @@ async function scenario(mode: Mode) {
                     `Actual Claude did not execute ${event}.`,
                 );
             if (mode === 'lifecycle') {
+                const notices = projected.flatMap((events) => events.flatMap((event) => event.operations));
+                assert.equal(
+                    notices.length,
+                    1,
+                    'One unread completion must reach actual model context before wait without a Stop duplicate.',
+                );
+                assert.equal(notices[0]?.operationId, operationId);
+                assert.equal(notices[0]?.action, 'start');
+                assert.equal(notices[0]?.state, 'succeeded');
+                assert.equal(notices[0]?.phase, 'succeeded');
+                assert.notEqual(notices[0]?.connectionId, state.connectionId);
+                assert.notEqual(notices[0]?.sessionId, state.sessionId);
+                const result = claudeToolResult(requests.at(-1)?.messages ?? [], 'toolu_3');
+                assert.ok(result.complete === true && record(result.operation));
+                assert.equal(result.operation.operationId, operationId);
+                assert.equal(result.operation.state, 'succeeded');
+                assertSummary(result.operation.result);
+                assert.ok(!JSON.stringify(projected).includes('HOOK_PRIVATE_APP_ARGUMENTS'));
                 assert.ok(
-                    contexts.some((entries) =>
-                        entries.some(
-                            (text) => text.includes('CDP lifecycle operation results:') && text.includes('succeeded'),
-                        ),
+                    projected.every((events) =>
+                        events.every((event) => event.exits.length === 0 && event.connections.length === 0),
                     ),
                 );
                 for (const field of ['mcpArgs', 'executable', 'requestId', 'operationId', 'cursor'])
@@ -227,10 +270,19 @@ async function scenario(mode: Mode) {
                 // Claude renders one blocking Stop reason in both a system reminder
                 // and Stop feedback. Hook execution and continuation count establish
                 // single delivery independently of those host context wrappers.
-                if (mode === 'stop') assert.ok((notices[delivery]?.length ?? 0) >= 1);
+                if (mode === 'stop' || mode === 'inactive') assert.ok((notices[delivery]?.length ?? 0) >= 1);
                 else assert.equal(notices[delivery]?.length, 1, JSON.stringify({ contexts, hooks }));
                 assert.ok(notices[delivery]?.[0]?.includes(String(state.connectionId)));
                 assert.ok(notices[delivery]?.[0]?.includes(String(state.sessionId)));
+                const exits = projected[delivery]?.flatMap((event) => event.exits);
+                assert.ok(exits && exits.length >= 1);
+                for (const event of exits) {
+                    assert.equal(event.connectionId, state.connectionId);
+                    assert.equal(event.sessionId, state.sessionId);
+                    assert.equal(event.taskActive, mode !== 'inactive');
+                    assert.equal(event.expected, undefined);
+                }
+                if (mode === 'inactive') assert.ok(!notices[delivery]?.[0]?.includes('Ask the user whether to start'));
                 const event =
                     mode === 'pre'
                         ? 'PreToolUse'
@@ -240,10 +292,40 @@ async function scenario(mode: Mode) {
                             ? 'UserPromptSubmit'
                             : 'Stop';
                 const delivered = hooks.filter(
-                    (hook) => typeof hook.output === 'string' && hook.output.includes(marker),
+                    (hook) =>
+                        typeof hook.output === 'string' &&
+                        hookEvents(hook.output).some((events) => events.exits.length > 0),
                 );
                 assert.equal(delivered.length, 1, 'Exit reminder is delivered once across all Hook boundaries.');
                 assert.equal(delivered[0]?.hook_event, event);
+                if (mode === 'post') {
+                    const returned = requests[delivery]?.messages
+                        .flatMap((message) => (Array.isArray(message.content) ? message.content : []))
+                        .find(
+                            (item: unknown) =>
+                                record(item) && item.type === 'tool_result' && item.tool_use_id === 'toolu_2',
+                        );
+                    assert.ok(record(returned));
+                    assert.notEqual(
+                        returned.is_error,
+                        true,
+                        'PostToolUse requires a successful original official result.',
+                    );
+                    const content = returned.content;
+                    const text = typeof content === 'string' ? [content] : content;
+                    assert.ok(Array.isArray(text));
+                    assert.ok(
+                        text.some((part: unknown) =>
+                            typeof part === 'string'
+                                ? part.split('\n\n<system-reminder>')[0] === '0: fixture page'
+                                : record(part) &&
+                                  part.type === 'text' &&
+                                  typeof part.text === 'string' &&
+                                  part.text.trimEnd() === '0: fixture page',
+                        ),
+                        JSON.stringify(returned),
+                    );
+                }
                 assert.equal(
                     requests.length,
                     delivery + 1,
@@ -251,7 +333,7 @@ async function scenario(mode: Mode) {
                 );
                 assert.equal(
                     hooks.filter((hook) => hook.hook_event === 'Stop').length,
-                    mode === 'stop' || mode === 'idle' ? 2 : 1,
+                    mode === 'stop' || mode === 'idle' || mode === 'inactive' ? 2 : 1,
                 );
             }
         }
@@ -259,7 +341,7 @@ async function scenario(mode: Mode) {
             calls,
             mode === 'lifecycle'
                 ? ['dct_connection_status', 'dct_connection_start', 'dct_operation_wait']
-                : ['dct_connection_status', 'list_pages'],
+                : ['dct_connection_status', mode === 'inactive' ? 'dct_connection_end_task' : 'list_pages'],
         );
         await writeFile(path.join(temporary, 'requests.json'), JSON.stringify(requests, null, 4));
         console.log(

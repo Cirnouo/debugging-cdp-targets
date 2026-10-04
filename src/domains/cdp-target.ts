@@ -32,6 +32,8 @@ export interface ProcessEvidence {
     listeners: ListenerEvidence[];
 }
 export interface ManagedTarget extends ProcessTarget {
+    /** Resolves only from the actual application exit observation. */
+    waitForExit?: (signal?: AbortSignal) => Promise<void>;
     launchDefinition?: LaunchDefinition;
     browserProduct?: string;
     webSocketDebuggerUrl?: string;
@@ -43,6 +45,8 @@ export interface ManagedTarget extends ProcessTarget {
         monitoringFailure?: string;
         onMonitorError?(listener: () => void): () => void;
         disposeMonitor?(): void;
+        ref?(): void;
+        unref?(): void;
         once(event: 'exit', listener: () => void): unknown;
         off?(event: 'exit', listener: () => void): unknown;
     };

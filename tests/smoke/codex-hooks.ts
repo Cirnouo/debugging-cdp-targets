@@ -6,11 +6,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
+import { assertSummary, hookEvents, hookMarker } from '../fixtures/hook-gateway-events.ts';
 import { createStdioClient } from './mcp-client.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable = process.argv[2] ?? 'codex';
-const marker = 'CDP target process exited during active work.';
+const scenarios = ['untrusted', 'pre', 'post', 'stop', 'idle', 'inactive', 'lifecycle'] as const;
+type Mode = (typeof scenarios)[number];
 
 function texts(request: Record<string, unknown>): string[] {
     assert.ok(Array.isArray(request.input));
@@ -44,7 +46,7 @@ function toolRoute(value: unknown, name: string, namespace?: string): { name: st
     return undefined;
 }
 
-async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | 'lifecycle') {
+async function scenario(mode: Mode) {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-codex-hooks-'));
     const home = path.join(temporary, 'home');
     const workspace = path.join(temporary, 'workspace');
@@ -61,6 +63,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
     const calls: string[] = [];
     let failure: unknown;
     let state: Record<string, unknown> | undefined;
+    let operationId: string | undefined;
     const model = createServer(async (request, response) => {
         try {
             assert.equal(request.url, '/v1/responses');
@@ -82,7 +85,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                         query:
                             mode === 'lifecycle'
                                 ? 'dct_connection_start dct_connection_status dct_operation_wait dct_connection_restart dct_connection_stop dct_connection_end_task dct_operation_cancel'
-                                : 'dct_connection_status list_pages',
+                                : 'dct_connection_status list_pages dct_connection_end_task',
                         limit: 20,
                     },
                 };
@@ -92,7 +95,9 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                         ? 'dct_connection_status'
                         : mode === 'lifecycle'
                           ? 'dct_connection_start'
-                          : 'list_pages';
+                          : mode === 'inactive'
+                            ? 'dct_connection_end_task'
+                            : 'list_pages';
                 if (index === 3) {
                     assert.ok(Array.isArray(value.input));
                     const output = value.input.find(
@@ -102,6 +107,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                     assert.ok(isRecord(output) && typeof output.output === 'string');
                     const status: unknown = JSON.parse(output.output.slice(output.output.indexOf('{')));
                     assert.ok(isRecord(status) && Array.isArray(status.connections) && isRecord(status.connections[0]));
+                    assertSummary(status);
                     const actual: unknown = JSON.parse(
                         await readFile(`${statePath}.${String(status.connections[0].connectionId)}`, 'utf8'),
                     );
@@ -126,10 +132,21 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                               ? {
                                     entryId: state?.entryId,
                                     requestId: 'codex-start',
-                                    launch: { executable: 'fake target', args: [], env: { DCT_FIXTURE: 'test' } },
+                                    launch: {
+                                        executable: 'fake target',
+                                        args: [],
+                                        env: { DCT_FIXTURE: 'HOOK_PRIVATE_APP_ARGUMENTS' },
+                                    },
                                     mcpArgs: ['--workspace', workspace],
                                 }
-                              : { _dct: { connectionId: state?.connectionId, sessionId: state?.sessionId } },
+                              : mode === 'inactive'
+                                ? {
+                                      entryId: state?.entryId,
+                                      connectionId: state?.connectionId,
+                                      sessionId: state?.sessionId,
+                                      requestId: 'codex-end-task',
+                                  }
+                                : { _dct: { connectionId: state?.connectionId, sessionId: state?.sessionId } },
                     ),
                 };
             } else if (mode === 'lifecycle' && index === 4) {
@@ -141,6 +158,9 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                 assert.ok(isRecord(output) && typeof output.output === 'string');
                 const accepted: unknown = JSON.parse(output.output.slice(output.output.indexOf('{')));
                 assert.ok(isRecord(accepted) && typeof accepted.operationId === 'string');
+                operationId = accepted.operationId;
+                assert.ok(typeof state?.releaseUrl === 'string');
+                assert.equal((await fetch(state.releaseUrl, { method: 'POST' })).status, 200);
                 const route =
                     toolRoute(value.tools, 'dct_operation_wait') ?? toolRoute(value.input, 'dct_operation_wait');
                 assert.ok(route);
@@ -156,7 +176,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                     }),
                 };
             } else {
-                if (mode === 'stop' && index === 4) {
+                if ((mode === 'stop' || mode === 'inactive') && index === 4) {
                     assert.equal(typeof state?.signalUrl, 'string');
                     await fetch(String(state?.signalUrl), { method: 'POST' });
                 }
@@ -250,6 +270,7 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
         codex(['plugin', 'add', 'debugging-cdp-targets@dct-hook-test', '--json']);
         const completed: Record<string, unknown>[] = [];
         const hookNotifications: unknown[] = [];
+        const toolCompletions: Record<string, unknown>[] = [];
         let wake: (() => void) | undefined;
         app = createStdioClient(
             executable,
@@ -258,6 +279,8 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
             undefined,
             (method, params) => {
                 if (/hook/i.test(method)) hookNotifications.push({ method, params });
+                if (method === 'item/completed' && isRecord(params.item) && params.item.type === 'mcpToolCall')
+                    toolCompletions.push(params.item);
                 if (method === 'turn/completed') {
                     completed.push(params);
                     wake?.();
@@ -353,26 +376,51 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
         await turn('Use the CDP fixture once, then finish.');
         assert.ok(state, 'The model must receive the started fixture identity from its actual status call.');
         if (mode === 'idle') {
-            assert.ok(requests.every((request) => !texts(request).some((text) => text.includes(marker))));
+            assert.ok(requests.every((request) => !texts(request).some((text) => text.includes(hookMarker))));
             await fetch(String(state.signalUrl), { method: 'POST' });
             assert.equal(requests.length, 4, 'Idle exit must not wake the model.');
             await turn('Continue with the fixture.');
         }
         const contexts = requests.map(texts);
-        const notices = contexts.map((entries) => entries.filter((entry) => entry.includes(marker)));
+        const projected = contexts.map((entries) => entries.flatMap(hookEvents));
+        const notices = contexts.map((entries) =>
+            entries.filter((entry) => hookEvents(entry).some((events) => events.exits.length > 0)),
+        );
         if (mode === 'lifecycle') {
-            assert.ok(
-                contexts.some((entries) =>
-                    entries.some(
-                        (entry) => entry.includes('CDP lifecycle operation results:') && entry.includes('succeeded'),
-                    ),
-                ),
-                'Completed operation must reach actual model context through a trusted Hook.',
+            const notices = projected.flatMap((events) => events.flatMap((event) => event.operations));
+            assert.equal(
+                notices.length,
+                1,
+                'One unread completion must reach actual model context before wait without a Stop duplicate.',
             );
+            assert.equal(notices[0]?.operationId, operationId);
+            assert.equal(notices[0]?.action, 'start');
+            assert.equal(notices[0]?.state, 'succeeded');
+            assert.equal(notices[0]?.phase, 'succeeded');
+            assert.notEqual(notices[0]?.connectionId, state.connectionId);
+            assert.notEqual(notices[0]?.sessionId, state.sessionId);
+            assert.ok(
+                projected.every((events) =>
+                    events.every((event) => event.exits.length === 0 && event.connections.length === 0),
+                ),
+            );
+            const output = requests.at(-1)?.input;
+            assert.ok(Array.isArray(output));
+            const waited = output.find(
+                (item: unknown) => isRecord(item) && item.type === 'function_call_output' && item.call_id === 'call-4',
+            );
+            assert.ok(isRecord(waited) && typeof waited.output === 'string');
+            const result: unknown = JSON.parse(waited.output.slice(waited.output.indexOf('{')));
+            assert.ok(isRecord(result) && result.complete === true && isRecord(result.operation));
+            assert.equal(result.operation.operationId, operationId);
+            assert.equal(result.operation.state, 'succeeded');
+            assertSummary(result.operation.result);
+            assert.ok(!JSON.stringify(projected).includes('HOOK_PRIVATE_APP_ARGUMENTS'));
             const received = JSON.stringify(requests);
             for (const field of ['mcpArgs', 'executable', 'requestId', 'operationId', 'cursor'])
                 assert.ok(received.includes(field));
             assert.ok(!received.includes('launchCommand'));
+            assert.equal(requests.length, 5);
         } else if (mode === 'untrusted')
             assert.ok(
                 notices.every((entries) => entries.length === 0),
@@ -389,19 +437,60 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
                 1,
                 'Exit reminder must reach an actual model request: ' +
                     JSON.stringify({
-                        marker: requests.map((request) => JSON.stringify(request).includes(marker)),
+                        marker: requests.map((request) => JSON.stringify(request).includes(hookMarker)),
                         hookNotifications,
                     }),
             );
             assert.ok(notices[delivery]?.[0]?.includes(String(state.connectionId)));
             assert.ok(notices[delivery]?.[0]?.includes(String(state.sessionId)));
+            const exits = projected[delivery]?.flatMap((event) => event.exits);
+            assert.ok(exits);
+            assert.equal(exits?.length, 1);
+            assert.equal(exits[0]?.connectionId, state.connectionId);
+            assert.equal(exits[0]?.sessionId, state.sessionId);
+            assert.equal(exits[0]?.taskActive, mode !== 'inactive');
+            assert.equal(exits[0]?.expected, undefined);
+            if (mode === 'post') {
+                const completed = toolCompletions.find((item) => item.tool === 'list_pages');
+                assert.ok(completed, JSON.stringify(toolCompletions));
+                assert.equal(completed.status, 'completed');
+                assert.ok(completed.error === null || completed.error === undefined);
+                assert.ok(isRecord(completed.result));
+                assert.notEqual(completed.result.isError, true);
+                assert.deepEqual(completed.result.content, [{ type: 'text', text: '0: fixture page' }]);
+                assert.ok(Array.isArray(requests[delivery]?.input));
+                const returned = requests[delivery].input.find(
+                    (item: unknown) =>
+                        isRecord(item) && item.type === 'function_call_output' && item.call_id === 'call-3',
+                );
+                assert.ok(isRecord(returned));
+                const output = returned.output;
+                const text = typeof output === 'string' ? [output] : output;
+                assert.ok(Array.isArray(text));
+                assert.ok(
+                    text.some((part: unknown) =>
+                        typeof part === 'string'
+                            ? part.trimEnd() === '0: fixture page'
+                            : isRecord(part) &&
+                              part.type === 'input_text' &&
+                              typeof part.text === 'string' &&
+                              part.text.trimEnd() === '0: fixture page',
+                    ),
+                    JSON.stringify(returned),
+                );
+            }
+            if (mode === 'inactive') assert.ok(!notices[delivery]?.[0]?.includes('Ask the user whether to start'));
             assert.equal(requests.length, mode === 'pre' || mode === 'post' ? 4 : 5, 'Stop must resume at most once.');
         }
         assert.deepEqual(
             calls,
             mode === 'lifecycle'
                 ? ['tool_search', 'dct_connection_status', 'dct_connection_start', 'dct_operation_wait']
-                : ['tool_search', 'dct_connection_status', 'list_pages'],
+                : [
+                      'tool_search',
+                      'dct_connection_status',
+                      mode === 'inactive' ? 'dct_connection_end_task' : 'list_pages',
+                  ],
         );
         assert.ok(requests.every((request) => !JSON.stringify(request.tools).includes('dct_watch_target')));
         console.log(
@@ -419,5 +508,5 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | '
     }
 }
 
-const scenarios = ['untrusted', 'pre', 'post', 'stop', 'idle', 'lifecycle'] as const;
+assert.ok(!process.argv[3] || scenarios.some((mode) => mode === process.argv[3]), 'Unknown Codex Hook scenario.');
 for (const mode of scenarios) if (!process.argv[3] || process.argv[3] === mode) await scenario(mode);

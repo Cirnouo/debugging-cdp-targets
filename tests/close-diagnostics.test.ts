@@ -47,5 +47,5 @@ test('failed normal close preserves native diagnostics and exact retry identity'
     let result = await operations.wait(accepted.operationId, 0);
     while (!result.complete) result = await operations.wait(accepted.operationId, result.cursor);
     assert.equal(result.operation.error?.cause, 'Normal close failed.');
-    assert.match(String(result.operation.error?.message), /identity remain available for retry/);
+    assert.match(String(result.operation.error?.message), /identity remains available for Close retry/);
 });

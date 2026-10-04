@@ -12,7 +12,7 @@ function fixture() {
     let closeSucceeds = false;
     let routeFails = true;
     const closed: number[] = [];
-    const child = new EventEmitter();
+    const children = new Map<number, EventEmitter & { exitCode: number | null }>();
     const controller = createTargetController({
         entryId,
         router: {
@@ -23,25 +23,37 @@ function fixture() {
             clearTarget: () => {},
         },
         host: {
-            launch: async (): Promise<ManagedTarget> => ({
-                processId: 42 + launchCount++,
-                port: 9222,
-                executablePath: process.execPath,
-                startedAtUtc: '2026-10-02T00:00:00Z',
-                targetKind: 'generic-cdp',
-                child,
-                launchDefinition: { executablePath: process.execPath, arguments: [], cwd: process.cwd() },
-            }),
+            launch: async (_options, context): Promise<ManagedTarget> => {
+                const processId = 42 + launchCount++;
+                const child = Object.assign(new EventEmitter(), { exitCode: null as number | null });
+                children.set(processId, child);
+                const target: ManagedTarget = {
+                    processId,
+                    port: 9222,
+                    executablePath: process.execPath,
+                    startedAtUtc: '2026-10-02T00:00:00Z',
+                    targetKind: 'generic-cdp',
+                    child,
+                    launchDefinition: { executablePath: process.execPath, arguments: [], cwd: process.cwd() },
+                };
+                context?.onCreated?.(target);
+                return target;
+            },
             close: async (target) => {
                 closed.push(target.processId);
-                return closeSucceeds;
+                if (!closeSucceeds) return false;
+                const child = children.get(target.processId);
+                assert.ok(child);
+                child.exitCode = 0;
+                child.emit('exit', 0);
+                return true;
             },
         },
         server: { ensure: async () => {}, close: async () => {} },
     });
     return {
         controller,
-        child,
+        children,
         closed,
         launches: () => launchCount,
         allowClose: () => {
@@ -80,7 +92,8 @@ test('failed attachment and failed rollback retain a gated session until explici
 
 test('restart rollback retains the new failed target and never overwrites it with the previous session', async () => {
     let launches = 0;
-    const child = new EventEmitter();
+    const children = new Map<number, EventEmitter & { exitCode: number | null }>();
+    let allowFailedClose = false;
     const controller = createTargetController({
         entryId,
         router: {
@@ -91,35 +104,55 @@ test('restart rollback retains the new failed target and never overwrites it wit
             clearTarget: () => {},
         },
         host: {
-            launch: async () => ({
-                processId: 50 + launches++,
-                port: 9222,
-                targetKind: 'generic-cdp',
-                executablePath: process.execPath,
-                startedAtUtc: '2026-10-02T00:00:00Z',
-                child,
-                launchDefinition: { executablePath: process.execPath, arguments: [], cwd: process.cwd() },
-            }),
-            close: async () => false,
-            health: async (target) => (target.processId === 50 ? 'gone' : 'healthy'),
+            launch: async (_options, context) => {
+                const processId = 50 + launches++;
+                const child = Object.assign(new EventEmitter(), { exitCode: null as number | null });
+                children.set(processId, child);
+                const target: ManagedTarget = {
+                    processId,
+                    port: 9222,
+                    targetKind: 'generic-cdp',
+                    executablePath: process.execPath,
+                    startedAtUtc: '2026-10-02T00:00:00Z',
+                    child,
+                    launchDefinition: { executablePath: process.execPath, arguments: [], cwd: process.cwd() },
+                };
+                context?.onCreated?.(target);
+                return target;
+            },
+            close: async (target) => {
+                if (target.processId !== 50 && !allowFailedClose) return false;
+                const child = children.get(target.processId);
+                assert.ok(child);
+                child.exitCode = 0;
+                child.emit('exit', 0);
+                return true;
+            },
         },
         server: { ensure: async () => {}, close: async () => {} },
     });
     const active = await controller.start({ launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
-    child.emit('exit');
     await assert.rejects(controller.restart({ sessionId: active.sessionId }), /normally/);
     const retained = controller.status();
     assert.equal(retained.status, 'close-failed');
     assert.equal(retained.processId, 51);
     assert.notEqual(retained.sessionId, active.sessionId);
     assert.equal(controller.canInvoke(), false);
+    children.get(50)?.emit('exit', 0);
+    assert.equal(controller.status().sessionId, retained.sessionId);
+    assert.equal(children.get(50)?.listenerCount('exit'), 0);
+    assert.ok(retained.sessionId);
+    allowFailedClose = true;
+    await controller.stop({ sessionId: retained.sessionId, disposition: 'Close' });
+    assert.equal(controller.status().status, 'idle');
 });
 
 test('unverified host startup with failed normal cleanup retains typed identity without serializing launch evidence', async () => {
     let clock = 0;
     let launches = 0;
     let closeSucceeds = false;
+    const child = Object.assign(new EventEmitter(), { pid: 90, exitCode: null as number | null });
     const host = createTargetHost({
         platformAdapter: {
             reservedRanges: async () => [],
@@ -135,12 +168,17 @@ test('unverified host startup with failed normal cleanup retains typed identity 
                 listeners: [{ localAddress: '127.0.0.1', owningProcess: pid }],
             }),
             validateNewRoot: () => {},
-            close: async () => closeSucceeds,
+            close: async () => {
+                if (!closeSucceeds) return false;
+                child.exitCode = 0;
+                child.emit('exit', 0);
+                return true;
+            },
         },
         probe: async () => true,
         spawn: async () => {
             launches++;
-            return { pid: 90, exitCode: null, once: () => {} };
+            return child;
         },
         getVersion: async () => {
             throw new Error('unavailable');

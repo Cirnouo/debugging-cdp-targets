@@ -295,6 +295,7 @@ async function adversarialHost(
     mode: 'resistant' | 'callback' | 'initial-input' | 'next-input' | 'callback-error' | 'driver-cleanup',
     afterEvidence?: (pidFile: string) => Promise<void>,
     versionDelayMs = 0,
+    hostReadyDelayMs = 0,
 ) {
     const { temporary } = await sandbox(process.cwd(), `adversarial-${mode}`);
     const fixture = path.join(temporary, 'private-fixture.ts');
@@ -303,12 +304,13 @@ async function adversarialHost(
         fixture,
         `
 import { writeFileSync } from 'node:fs';
-writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify(process.pid));
 if (process.argv.includes('--version')) {
     await new Promise((resolve) => setTimeout(resolve, ${versionDelayMs}));
     console.log('2.1.283 (Claude Code)'); process.exit(0);
 }
+writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify(process.pid));
 process.on('SIGTERM', () => {});
+if (${hostReadyDelayMs} > 0) await new Promise((resolve) => setTimeout(resolve, ${hostReadyDelayMs}));
 const result = JSON.stringify({ type: 'result', subtype: 'success', is_error: false }) + String.fromCharCode(10);
 const evidence = JSON.stringify({ type: 'fixture', label: 'private-child-evidence' }) + String.fromCharCode(10);
 const mode = ${JSON.stringify(mode)};
@@ -325,6 +327,7 @@ else if (mode === 'initial-input') {
         else { process.stdin.destroy(); process.stdout.write(evidence + result); setInterval(() => {}, 1000); }
     });
 }
+if (['initial-input', 'next-input'].includes(mode) && process.send) process.send('fixture-ready');
 `,
         'utf8',
     );
@@ -336,6 +339,8 @@ const cp = createRequire(import.meta.url)('node:child_process');
 const original = cp.spawn;
 const owned = new Set();
 let cleaning;
+let readyHost;
+let initialWriteAttempted = false;
 function cleanup() {
     return cleaning ??= Promise.all([...owned].map((child) => new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Private fixture cleanup did not close.')), 3000);
@@ -352,7 +357,7 @@ process.on('message', () => { void fail(new Error('Outer private driver deadline
 process.on('uncaughtException', (error) => { void fail(error); });
 process.on('unhandledRejection', (error) => { void fail(error); });
 cp.spawn = (executable, args, options) => {
-    const child = original(executable, executable === process.execPath && ['--version', '-p'].includes(args[0]) ? [${JSON.stringify(fixture)}, ...args] : args, options);
+    const child = args[0] === '-p' && readyHost ? readyHost : original(executable, executable === process.execPath && ['--version', '-p'].includes(args[0]) ? [${JSON.stringify(fixture)}, ...args] : args, options);
     owned.add(child);
     child.once('close', () => owned.delete(child));
     if (${JSON.stringify(mode)} === 'driver-cleanup')
@@ -362,7 +367,11 @@ cp.spawn = (executable, args, options) => {
         // has arrived, instead of relying on OS pipe buffering timing.
         const write = child.stdin.write.bind(child.stdin);
         child.stdin.write = (input, callback) => {
-            child.stdout.once('data', () => { child.stdin.end(); write(input, callback); });
+            child.stdout.once('data', () => {
+                child.stdin.end();
+                initialWriteAttempted = true;
+                write(input, callback);
+            });
             return true;
         };
     }
@@ -376,11 +385,36 @@ cp.spawn = (executable, args, options) => {
     }
     return child;
 };
+if (['initial-input', 'next-input'].includes(${JSON.stringify(mode)})) {
+    // Interpreter startup precedes this input-failure experiment. Return a real
+    // ready child at the spawn I/O boundary so its unchanged 400ms budget tests
+    // the closed input stream, rather than interpreter scheduling.
+    readyHost = original(process.execPath, [${JSON.stringify(fixture)}, '-p'], {
+        cwd: process.cwd(), env: process.env, windowsHide: true, shell: false,
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+    });
+    owned.add(readyHost);
+    readyHost.once('close', () => owned.delete(readyHost));
+    await new Promise((resolve, reject) => {
+        readyHost.once('message', (message) => message === 'fixture-ready' ? resolve() : reject(new Error('Unexpected private fixture readiness message.')));
+        readyHost.once('error', reject);
+        readyHost.once('exit', () => reject(new Error('Private fixture exited before input-failure readiness.')));
+    });
+}
 syncBuiltinESMExports();
 const { claudeCli, claudeHost } = await import(${JSON.stringify(helper)});
 const mode = ${JSON.stringify(mode)};
+let completedTurns = 0;
 if (mode === 'resistant' || mode === 'driver-cleanup') await assert.rejects(() => claudeCli(process.execPath, [${JSON.stringify(fixture)}], ${JSON.stringify(temporary)}, 'http://127.0.0.1:32123', mode === 'driver-cleanup' ? 30000 : 300), /timed out/);
-else await assert.rejects(() => claudeHost(process.execPath, ${JSON.stringify(temporary)}, 'http://127.0.0.1:32123', [], mode === 'initial-input' ? 'input'.repeat(400000) : 'initial', () => mode === 'callback' ? new Promise(() => {}) : mode === 'callback-error' ? Promise.reject(new Error('next-turn-callback-failure')) : Promise.resolve('next'.repeat(400000)), 400), mode === 'callback' ? /timed out/ : mode === 'callback-error' ? /next-turn-callback-failure/ : /EPIPE|stdin|write after end|stream/i);
+else await assert.rejects(() => claudeHost(process.execPath, ${JSON.stringify(temporary)}, 'http://127.0.0.1:32123', [], mode === 'initial-input' ? 'input'.repeat(400000) : 'initial', () => {
+    completedTurns++;
+    return mode === 'callback' ? new Promise(() => {}) : mode === 'callback-error' ? Promise.reject(new Error('next-turn-callback-failure')) : Promise.resolve('next'.repeat(400000));
+}, 400), mode === 'callback' ? /timed out/ : mode === 'callback-error' ? /next-turn-callback-failure/ : /EPIPE|stdin|write after end|stream/i);
+if (mode === 'initial-input') {
+    assert.equal(initialWriteAttempted, true, 'The initial-input failure must follow a real write to the ended stream.');
+    assert.equal(completedTurns, 0, 'Initial input must fail before any completed turn.');
+}
+if (mode === 'next-input') assert.equal(completedTurns, 1, 'The closed-stream failure must follow a completed initial turn.');
 console.log('CONTROLLED_FAILURE');
 await cleanup();
 process.disconnect();
@@ -441,12 +475,12 @@ process.disconnect();
     });
     try {
         const code = await Promise.race([closed, deadline]);
-        const pid: unknown = JSON.parse(await readFile(pidFile, 'utf8'));
-        assert.ok(typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0);
-        assert.throws(() => process.kill(pid, 0), /ESRCH|not found|no such process/i);
         assert.equal(watchdog, false, `Private helper failed to settle: ${stderr}`);
         assert.equal(code, 0, stderr);
         assert.ok(stdout.includes('CONTROLLED_FAILURE'), stderr);
+        const pid: unknown = JSON.parse(await readFile(pidFile, 'utf8'));
+        assert.ok(typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0);
+        assert.throws(() => process.kill(pid, 0), /ESRCH|not found|no such process/i);
         if (mode !== 'resistant') {
             assert.ok(
                 (await readFile(path.join(temporary, 'stdout.jsonl'), 'utf8')).includes('private-child-evidence'),
@@ -481,6 +515,12 @@ for (const mode of ['resistant', 'callback', 'initial-input', 'next-input', 'cal
 
 test('slow interpreter version startup preserves the bounded callback failure and transcript', () =>
     adversarialHost('callback', undefined, 2700));
+
+test('slow private host startup preserves the controlled next-input write failure and transcript', () =>
+    adversarialHost('next-input', undefined, 0, 1000));
+
+test('slow private host startup preserves the controlled initial-input write failure and transcript', () =>
+    adversarialHost('initial-input', undefined, 0, 1000));
 
 test('outer watchdog requests owned fixture cleanup before its private driver closes', async () => {
     await assert.rejects(() => adversarialHost('driver-cleanup'), /Private helper failed to settle/);

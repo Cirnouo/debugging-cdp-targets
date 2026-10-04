@@ -17,8 +17,12 @@ mapped hard-link alias: its regular-file device/inode must match the kernel's
 `lsof` text mapping for the target PID. This covers Chrome's asynchronous
 [code-sign clone](https://chromium.googlesource.com/chromium/src.git/+/2d20934f814ddd688b6dd4bd0052019391114f8d/chrome/browser/mac/code_sign_clone_manager.mm)
 without accepting same-name copies, missing identity or ambiguous aliases.
-Skip occupied, privileged, and OS-excluded ports on new launches. Recovery must use the original
-port and refuse clearly when it is occupied; never silently choose another port.
+Reserve each candidate port synchronously for its session owner before probing;
+skip occupied, privileged, and OS-excluded ports on new launches. Gateway-local
+reservations prevent peer launches from selecting the same port and remain held
+until actual app exit or evidence that no app was created. Explicit live restart
+must use the original port and refuse clearly when it is occupied. A foreign
+listener found after app creation cannot authorize automatic relaunch or takeover.
 
 The official SDK gateway owns host stdio and preserves the official Server's tool
 names and results. Exposed schemas add required _dct connection/session routing;
@@ -26,46 +30,76 @@ validate and remove it before forwarding original arguments. Reject missing,
 unknown, closed, stale or colliding routing identities. Never select an implicit
 current target. Seven MCP lifecycle/operation tools extend the catalog; status
 also carries four automatic Hook event names. Empty discovery is read-only.
-The fixed full catalog combines verified variants and reports exact per-connection
-schemas/enablement. Disabled tools return complete explicit configuration recipes.
+The fixed full catalog combines verified variants. Status discovery returns
+connection summaries; selected status adds tool names, and explicit toolNames
+requests receive exact schemas only from a valid actual upstream. Configuration
+and diagnostics require selected include values. Operation selection excludes
+connection/tool/include selectors; an automatic hookEventName is the sole argument.
+Enabled tools have no suggestedMcpArgs. Supported explicitly disabled tools and
+TOOL_NOT_ENABLED return complete replacement recipes; unavailable upstreams return
+requirements only, and unsupported tools return their reason without a recipe.
 Lifecycle requests use MCP, with no plugin CLI or dedicated control IPC.
 Diagnostics retain bounded identity/phase/error-category/elapsed metadata only.
 Do not log commands, page contents,
 cookies, network/console data, secrets, or tool calls.
 
-Require explicit Close/Keep before ending a target's work. Keep retains
-both application and upstream child. Close requests normal shutdown of both and
-removes only that connection and keeps the host transport reusable. Failure
-retains retry identity and reports PID/port without force kill.
-Handled host disconnect attempts normal close for every connection despite
-individual failures; force termination cannot guarantee
-cleanup. Preserve old experimental state and global installations.
+Create one session owner before acquiring target/router/upstream resources or
+pending work. Require explicit Close/Keep before ending a target's work. Keep
+retains live application, upstream, router and observation. Close requests normal
+application shutdown and waits for actual exit without a target-close deadline.
+Cancelled or failed normal Close retains ownership, observation and retry identity
+while the app remains alive. Never force-kill applications. Normal app Close is
+independent of unrelated CDP listeners and official MCP transport lifetime.
+Preserve old experimental state and global installations.
 
-Observe the gateway-launched child's exit event from startup and retain exit
-state to close subscription gaps. Revoke listeners and verify current identities
-before applying callbacks. Task activity is independent of process lifetime;
+Observe the actual gateway-launched application from startup and retain confirmed
+exit state to close subscription gaps. Windows Node children are helpers; native
+actual-app handles and reliable waits/events establish exit without process
+polling. Helper exit and observation failure cannot prove application exit. Revoke
+listeners and verify current identities before applying callbacks. Task activity
+is independent of process lifetime;
 start/restart and official reuse activate it, Keep/end-task end it. No background
 process scan, automatic restart or tool replay is permitted. Keep
 bounded startup readiness and pre-tool process/listener/endpoint verification.
 
-Active unexpected exit gates forwarding, retains exact launch identity and
-queues one reminder per connection/session. Enabled, authorized host MCP Tool Hooks drain
+Actual exit gates forwarding, ends task activity, cancels dependent pending work,
+attempts disposal of every owned resource and removes the old connection/session.
+Exit cleanup bypasses lifecycle admission and blocked startup/tool work. Disposal
+failure retains plugin-owned resource evidence in an internal retry ledger rather
+than preserving a routable dead session. Enabled, authorized host MCP Tool Hooks drain
 in-memory events at PreToolUse, PostToolUse, UserPromptSubmit or Stop; no events
 return empty JSON without model context. Stop continues once for an undelivered
-event. Idle chats wait for the next turn. Only target kind, PID, port, identities
-and exit reason belong in exit reminders. Operation completion and quarantine
-events report corresponding operation/session evidence without application inputs.
+event. Idle chats wait for the next turn. Exit reminders contain target kind,
+PID, port, identities, native exit facts, expected operation ID and cleanup status.
+Operation completion and quarantine
+events report compact operation/session evidence without full results, errors,
+configuration, diagnostics, schemas, recipes or application inputs. Successful
+terminal status/wait, terminal cancel or identical mutation retry delivery
+acknowledges its notice; aborted requests and nonterminal responses leave it
+unread. Inactive exit remains informational; active unexpected exit may suggest a
+new start. Group every expected Close/restart actual exit by operation ID into
+its notice, including new Target rollback. Pending related cleanup retains both
+exit facts and the operation notice until all cleanup results are ready. Compact
+failure notices retain phase/code and primitive native evidence without complete
+message/cause error text or tool names/counts.
 Follow each host's standard controls: Codex requires explicit definition trust;
 Claude Code loads enabled Plugin Hooks and honors disableAllHooks. Review the
-Plugin before enabling its code and Hooks. End-task/Keep/Close/restart
-clear notices. Expected close/restart/disconnect events stay silent. CDP/upstream
-failure while a process lives reports a connection error, not process exit.
+Plugin before enabling its code and Hooks. CDP/upstream or observation failure
+while an app lives reports a connection error, not process exit.
 
-Ended tasks retain live targets/upstreams. On exit, close only that upstream and
-router and remove its connection; end-task/Keep after exit also clean up. Failed
-cleanup retains retry identity and reports the actual failure without force kill.
-Explicit recovery retains argv/cwd/profile/port and connection identity, replaces
-session identity and requires fresh list_pages evidence and page IDs.
+Retry after ordinary exit requires start with new connection/session IDs.
+Explicit restart of a live connection retains argv/cwd/profile/exact port and
+connection identity, waits for old exit and disposes old resources before creating
+a fresh owner/router/upstream and session. Require fresh list_pages evidence and
+page IDs. Never automatically restart or replay tools.
+
+Official Server disposal immediately closes its public SDK transport and rejects
+pending calls, then proves the plugin-owned child exited. Allow two seconds after
+stdin EOF, two seconds after TERM, then KILL within a total ten-second budget for
+this child only. Retain failed disposal ownership in the internal ledger for
+gateway cleanup retries. Handled gateway disconnect gates/cancels all owners and
+attempts every Server/catalog/router disposal in parallel with normal target
+shutdown despite peer failures, without imposing a new target-close deadline.
 
 Chrome uses the fixed user-home .cache/chrome-devtools-mcp/chrome-profile unless
 an explicit --user-data-dir overrides it. Check native profile ownership and
@@ -78,13 +112,13 @@ Windows launch preserves env/argv/cwd across elevation, distinguishes native
 manifest/AppCompat/elevation errors from unrelated access denial, and observes
 the actual app handle. Permission waiting is separate from CDP readiness. Fixed
 helpers use private authenticated one-shot pipes; no resident privileged service.
-A helper exit never proves app exit. Elevated normal-close helpers are allowed
-when needed. Native close reports request/exit evidence; missing/foreign listeners
-are distinct. Never force-kill applications.
+Elevated normal-close helpers are allowed when needed. Native close reports
+request/actual-exit evidence; listener evidence is separate from application
+lifetime. Keep the actual-app observer until exit even if a Close wait is cancelled.
 
 After an interrupted official call, revoke that connection's forwarding, close
 its upstream normally and clear pending HTTP/CDP transports. Preserve app identity
-for explicit recovery; never automatically restart or replay. Cancellation races
+for explicit live restart or Close; never automatically restart or replay. Cancellation races
 must normally close created apps or report accurate retained identity. Idempotent
 request IDs, current-session checks and bounded event cursors protect mutations.
 Cancelling a protocol wait leaves the operation running and queryable.

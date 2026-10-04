@@ -5,10 +5,32 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Principal;
 using System.Text;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 public static class NativeWindowFixture
 {
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] private static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(string text, uint revision, out IntPtr descriptor, out uint size);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool SetKernelObjectSecurity(IntPtr handle, uint information, IntPtr descriptor);
+    private static void RestrictOwnProcessQuery()
+    {
+        if (Environment.GetEnvironmentVariable("DCT_TEST_DENY_MEDIUM_QUERY") != "true") return;
+        IntPtr descriptor;
+        uint size;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptor("D:(A;;0x001FFFFF;;;BA)(A;;0x001FFFFF;;;SY)", 1, out descriptor, out size))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        try {
+            // Restrict only this disposable elevated process object's DACL.
+            // Admins and SYSTEM retain access; no file, user or global ACL changes.
+            if (!SetKernelObjectSecurity(GetCurrentProcess(), 0x4, descriptor))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+        } finally { LocalFree(descriptor); }
+    }
     private static TcpListener StartDiscovery()
     {
         int port;
@@ -41,10 +63,12 @@ public static class NativeWindowFixture
     public static void Main(string[] arguments)
     {
         if (arguments.Length != 1) return;
+        RestrictOwnProcessQuery();
         string marker = arguments[0];
         TcpListener discovery = StartDiscovery();
         using (Form window = new Form())
         using (Timer expiry = new Timer())
+        using (Timer closeDelay = new Timer())
         {
             window.Text = "DCT disposable native launch test";
             window.Width = 320;
@@ -56,6 +80,17 @@ public static class NativeWindowFixture
                 expiry.Start();
             };
             window.FormClosed += delegate { File.WriteAllText(marker + ".closed", "normal-close"); };
+            int delay;
+            if (Int32.TryParse(Environment.GetEnvironmentVariable("DCT_TEST_CLOSE_DELAY_MS"), out delay) && delay > 0 && delay <= 30000) {
+                bool delayStarted = false, delayFinished = false;
+                closeDelay.Interval = delay;
+                window.FormClosing += delegate(object sender, FormClosingEventArgs request) {
+                    if (delayFinished) return;
+                    request.Cancel = true;
+                    if (!delayStarted) { delayStarted = true; closeDelay.Start(); }
+                };
+                closeDelay.Tick += delegate { closeDelay.Stop(); delayFinished = true; window.Close(); };
+            }
             int lifetime;
             expiry.Interval = Int32.TryParse(Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_LIFETIME_MS"), out lifetime) && lifetime > 0 && lifetime <= 120000 ? lifetime : 15000;
             expiry.Tick += delegate { window.Close(); };

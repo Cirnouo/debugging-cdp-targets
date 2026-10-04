@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import childProcess, { ChildProcess, type SpawnOptions } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -89,12 +90,13 @@ test('permission waiting does not consume CDP startup time and pre-cancelled lau
     let clock = Date.parse('2026-10-04T00:00:00Z');
     const abort = new AbortController();
     const closed: number[] = [];
+    const child = Object.assign(new EventEmitter(), { pid: 101, exitCode: null });
     const host = createTargetHost({
         now: () => clock,
         probe: async () => true,
         spawn: async () => {
             clock += 90_000;
-            return { pid: 101, exitCode: null, once: () => {} };
+            return child;
         },
         platformAdapter: {
             reservedRanges: async () => [],
@@ -112,6 +114,7 @@ test('permission waiting does not consume CDP startup time and pre-cancelled lau
             validateNewRoot: () => {},
             close: async (target) => {
                 closed.push(target.processId);
+                child.emit('exit', 0);
                 return true;
             },
         },
@@ -136,9 +139,10 @@ test('permission waiting does not consume CDP startup time and pre-cancelled lau
 test('cancellation racing with endpoint readiness closes the newly created application', async () => {
     const abort = new AbortController();
     const closed: number[] = [];
+    const child = Object.assign(new EventEmitter(), { pid: 102, exitCode: null });
     const host = createTargetHost({
         probe: async () => true,
-        spawn: async () => ({ pid: 102, exitCode: null, once: () => {} }),
+        spawn: async () => child,
         platformAdapter: {
             reservedRanges: async () => [],
             snapshot: async () => ({
@@ -155,6 +159,7 @@ test('cancellation racing with endpoint readiness closes the newly created appli
             validateNewRoot: () => {},
             close: async (target) => {
                 closed.push(target.processId);
+                child.emit('exit', 0);
                 return true;
             },
         },

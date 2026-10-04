@@ -25,9 +25,9 @@ function Invoke-Launch {
     return [DctNative]::Launch([string] $Launch.executablePath, [string[]] $Launch.arguments, [string] $Launch.cwd, $environment)
 }
 
-function Invoke-Close {
+function Open-Close {
     param([object] $Target)
-    return [DctNative]::Close([int] $Target.processId, [string] $Target.executablePath, [string] $Target.startedAtUtc, 10000)
+    return [DctNative]::RequestClose([int] $Target.processId, [string] $Target.executablePath, [string] $Target.startedAtUtc)
 }
 
 function Get-NativeError {
@@ -67,6 +67,13 @@ function Invoke-Elevated {
         $reply = $reader.ReadLine()
         if ([string]::IsNullOrEmpty($reply)) { throw 'The native permission helper exited without a result.' }
         $value = $reply | ConvertFrom-Json
+        if ($value.event -eq 'close-requested') {
+            Write-Event $value
+            $script:phase = 'wait-exit'
+            $reply = $reader.ReadLine()
+            if ([string]::IsNullOrEmpty($reply)) { throw 'Native close observer ended without actual application exit evidence.' }
+            $value = $reply | ConvertFrom-Json
+        }
         if ($value.event -eq 'created') {
             # Identity arrives before handle transfer. Later failures retain the real target for normal cleanup.
             Write-Event @{ event = 'started'; processId = $value.processId; executablePath = $value.executablePath; startedAtUtc = $value.startedAtUtc; elevated = $true }
@@ -112,13 +119,20 @@ try {
                     if (-not $ack.Wait(30000) -or $ack.Result -ne 'observed') { throw 'Native monitor did not acknowledge application identity.' }
                     $result = $null
                 }
-                elseif ($request.action -eq 'close') { $result = Invoke-Close $request.target }
+                elseif ($request.action -eq 'close') {
+                    $close = Open-Close $request.target
+                    try {
+                        $writer.WriteLine(($close.Evidence | ConvertTo-Json -Depth 10 -Compress))
+                        $result = [DctNative]::WaitForClose($close)
+                    }
+                    finally { $close.Dispose() }
+                }
                 else { throw 'Invalid native operation.' }
             }
             catch {
                 $nativeError = Get-NativeError $_.Exception
                 if ($null -ne $nativeProcess) {
-                    try { $null = [DctNative]::Close($nativeProcess.ProcessId, $nativeProcess.ExecutablePath, $nativeProcess.StartedAtUtc, 10000) } catch { }
+                    try { $null = [DctNative]::Close($nativeProcess.ProcessId, $nativeProcess.ExecutablePath, $nativeProcess.StartedAtUtc) } catch { }
                 }
                 $result = @{ event = 'error'; phase = 'launching'; nativeError = $nativeError; category = 'native-operation-failed' }
             }
@@ -159,18 +173,38 @@ try {
         else {
             Write-Event @{ event = 'started'; processId = $nativeProcess.ProcessId; executablePath = $nativeProcess.ExecutablePath; startedAtUtc = $nativeProcess.StartedAtUtc; elevated = $nativeProcess.Elevated }
         }
+        $phase = 'wait-exit'
         $code = [DctNative]::WaitForExit($nativeProcess)
-        if ($code -ne [int]::MinValue) { Write-Event @{ event = 'exited'; processId = $nativeProcess.ProcessId; exitCode = $code } }
+        if ($null -ne $code) { Write-Event @{ event = 'exited'; processId = $nativeProcess.ProcessId; exitCode = $code } }
     }
     elseif ($request.action -eq 'close') {
         $phase = 'normal-close'
-        if (-not [DctNative]::IsElevated() -and [DctNative]::IsProcessElevated([int] $request.target.processId)) {
+        $close = $null
+        $needsElevation = $false
+        $canElevate = -not [DctNative]::IsElevated()
+        try {
+            $needsElevation = $canElevate -and [DctNative]::IsProcessElevated([int] $request.target.processId)
+            if (-not $needsElevation) {
+                $close = Open-Close $request.target
+                $needsElevation = $canElevate -and $close.Evidence.nativeError -eq 5
+            }
+        }
+        catch {
+            if (-not $canElevate -or (Get-NativeError $_.Exception) -ne 5) { throw }
+            $needsElevation = $true
+        }
+        if ($needsElevation) {
+            if ($null -ne $close) { $close.Dispose(); $close = $null }
             $phase = 'awaiting-permission'
             $result = Invoke-Elevated $request
         }
         else {
-            $result = Invoke-Close $request.target
-            if ($result.nativeError -eq 5 -and -not [DctNative]::IsElevated()) { $result = Invoke-Elevated $request }
+            try {
+                Write-Event $close.Evidence
+                $phase = 'wait-exit'
+                $result = [DctNative]::WaitForClose($close)
+            }
+            finally { if ($null -ne $close) { $close.Dispose() } }
         }
         Write-Event $result
     }
@@ -178,7 +212,7 @@ try {
 }
 catch {
     $code = Get-NativeError $_.Exception
-    $category = if ($code -eq 1223) { 'authorization-cancelled' } elseif ($code -eq 5) { 'access-denied' } else { 'native-operation-failed' }
+    $category = if ($code -eq 1223) { 'authorization-cancelled' } elseif ($code -eq 5) { 'access-denied' } elseif ($phase -eq 'wait-exit') { 'native-monitor-failed' } else { 'native-operation-failed' }
     Write-Event @{ event = 'error'; phase = $phase; nativeError = $code; category = $category; exceptionType = $_.Exception.GetType().Name }
     exit 1
 }

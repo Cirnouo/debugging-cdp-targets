@@ -7,7 +7,8 @@
 - **Static entry**: reusable host stdio configuration cdp-targets.
 - **Entry identity**: random UUID for one live MCP gateway.
 - **Connection identity**: random UUID for one independent target task and its official MCP connection.
-- **Session identity**: fresh UUID for every successful target start or recovery in a connection.
+- **Session identity**: fresh UUID for one target lifetime, assigned before its launch begins.
+- **Session owner**: in-memory owner of one target lifetime and every resource acquired for it.
 - **Current target**: verified newly launched process belonging to one session.
 - **CDP endpoint**: verified loopback discovery and browser WebSocket address.
 - **Official Server**: unmodified upstream chrome-devtools-mcp child for one connection.
@@ -17,19 +18,28 @@
 - **Request identity**: caller identifier binding identical mutation retries to one operation.
 - **Event cursor**: replay position in an operation's bounded in-memory event queue.
 - **Native application identity**: actual application PID, creation time, path and observed process handle.
+- **Actual exit**: confirmed end of the managed application's process lifetime.
+- **Observation failure**: loss of reliable application lifetime evidence without confirmed actual exit.
 - **Permission wait**: OS authorization phase before application creation, separate from CDP readiness.
 - **Fixed tool catalog**: complete reviewed official tool names and compatible schema variants exposed to the host.
 - **Enabled tools**: one connection's actual official tools/list, with its exact input schemas.
+- **Connection summary**: identity and bounded target/upstream state without configuration, tool schemas or diagnostics.
 - **Configuration recipe**: complete explicit mcpArgs satisfying a tool's reviewed activation conditions.
 - **Quarantined connection**: session whose forwarding/transport is isolated after an incomplete timeout or cancellation.
 - **Disposition**: explicit Close or Keep choice without a default.
 - **Kept target**: application and upstream retained within its live connection.
-- **Active task**: dependent work activated by start, recovery or official use and ended by Keep/end-task.
+- **Active task**: dependent work activated by start, live restart or official use and ended by Keep/end-task or actual exit.
 - **Exit reminder**: one in-memory process exit event awaiting delivery to Agent context through an enabled, authorized host Hook.
-- **Retired connection**: ended task whose exited process permits scoped upstream/router cleanup.
+- **Operation notice**: compact, unread terminal operation event awaiting authorized Hook delivery; expected exits are grouped by operation ID with each actual exit and cleanup result, and delivery waits for all related cleanup.
+- **Delivered terminal result**: terminal operation snapshot successfully returned through operation status, complete wait, terminal cancel or an identical mutation retry; aborted requests and nonterminal responses do not acknowledge it.
+- **Exit cleanup**: revocation of a terminated session followed by disposal of all its owned resources.
+- **Cleanup ledger**: in-memory record of plugin-owned resources awaiting disposal retries after their session is removed.
+- **Retired connection**: connection removed after actual target exit and attempted exit cleanup.
+- **Port reservation**: gateway-local ownership of a selected target port for one session lifetime.
 - **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory.
-- **Closed connection**: removed target connection after normal shutdown; the gateway remains reusable.
-- **Recovery**: user-authorized launch from memory on the same port, with new session identity.
+- **Closed connection**: removed target connection after actual exit; the gateway remains reusable.
+- **Live restart**: user-authorized replacement of a still-live target with the same connection and port and a fresh session.
+- **Recovery**: explicit live restart of a quarantined or disconnected connection whose application has not exited.
 - **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.
 - **Host distribution**: complete Plugin payload adapted to one Plugin host's installation interface.
 - **Packaging input**: maintained material used to assemble a host distribution.

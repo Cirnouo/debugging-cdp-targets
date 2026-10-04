@@ -123,3 +123,142 @@ test('releasing native observation ends only the helper transport, without repor
     assert.equal(child.exitCode, null);
     assert.equal(child.monitoringFailure, undefined);
 });
+
+test('native creation callback observes identity synchronously and close requests finish before the actual handle wait', async () => {
+    const f = fixture();
+    let created = false;
+    const pending = f.launcher.launch(launch, {
+        onCreated: (child) => {
+            created = child.pid === 601;
+        },
+    });
+    f.emit(identity);
+    assert.equal(created, true);
+    const child = await pending;
+    const closer = fixture();
+    const target = {
+        processId: 601,
+        executablePath: launch.executablePath,
+        startedAtUtc: identity.startedAtUtc,
+        targetKind: 'generic-cdp' as const,
+        port: 9222,
+    };
+    const requested = closer.launcher.requestNormalClose(target);
+    closer.emit({
+        event: 'close-requested',
+        closeRequested: true,
+        processExited: false,
+        processId: 601,
+        startedAtUtc: identity.startedAtUtc,
+        nativeError: 0,
+        phase: 'normal-close',
+    });
+    assert.equal((await requested).closeRequested, true);
+    let exited = false;
+    const waiting = closer.launcher.waitForExit(target).then(() => {
+        exited = true;
+    });
+    await Promise.resolve();
+    assert.equal(exited, false);
+    closer.emit({
+        event: 'closed',
+        closed: true,
+        closeRequested: true,
+        processExited: true,
+        processId: 601,
+        startedAtUtc: identity.startedAtUtc,
+        waitResult: 0,
+        waitError: 0,
+        exitCode: 0,
+    });
+    await waiting;
+    assert.equal(exited, true);
+    assert.equal(child.exitCode, null);
+    child.disposeMonitor();
+});
+
+test('close helper EOF after an accepted request reports observer failure without exit evidence', async () => {
+    const f = fixture();
+    const target = {
+        processId: 601,
+        executablePath: launch.executablePath,
+        startedAtUtc: identity.startedAtUtc,
+        targetKind: 'generic-cdp' as const,
+        port: 9222,
+    };
+    const requested = f.launcher.requestNormalClose(target);
+    f.emit({
+        event: 'close-requested',
+        closeRequested: true,
+        processExited: false,
+        processId: 601,
+        startedAtUtc: identity.startedAtUtc,
+        nativeError: 0,
+    });
+    await requested;
+    f.helper.emit('close', 0);
+    await assert.rejects(f.launcher.waitForExit(target), /without.*exit|observer/i);
+});
+
+test('a matching close handle receipt recovers a failed launch observer and emits actual exit once', async () => {
+    const monitors = [0, 1].map((index) => {
+        const helper = Object.assign(new ChildProcess(), {
+            stdin: new PassThrough(),
+            stdout: new PassThrough(),
+            stderr: new PassThrough(),
+        });
+        Object.defineProperty(helper, 'pid', { value: 501 + index });
+        return helper;
+    });
+    let helperIndex = 0;
+    const launcher = createWindowsLauncher({
+        spawn: () => {
+            const helper = monitors[helperIndex++];
+            assert.ok(helper);
+            return helper;
+        },
+    });
+    const pending = launcher.launch(launch);
+    monitors[0]?.stdout.write(`${JSON.stringify(identity)}\n`);
+    const child = await pending;
+    monitors[0]?.emit('close', 1);
+    assert.equal(child.monitoringFailure, 'native-helper-exited');
+    let exits = 0;
+    child.once('exit', () => {
+        exits += 1;
+    });
+    const target = {
+        processId: child.pid,
+        executablePath: launch.executablePath,
+        startedAtUtc: child.startedAtUtc,
+        targetKind: 'generic-cdp' as const,
+        port: 9222,
+    };
+    const request = launcher.requestNormalClose(target);
+    monitors[1]?.stdout.write(
+        `${JSON.stringify({
+            event: 'close-requested',
+            closeRequested: true,
+            processExited: false,
+            processId: 601,
+            startedAtUtc: identity.startedAtUtc,
+        })}\n`,
+    );
+    await request;
+    monitors[1]?.stdout.write(
+        `${JSON.stringify({
+            event: 'closed',
+            closed: true,
+            closeRequested: true,
+            processExited: true,
+            processId: 601,
+            startedAtUtc: identity.startedAtUtc,
+            waitResult: 0,
+            waitError: 0,
+            exitCode: 0,
+        })}\n`,
+    );
+    await launcher.waitForExit(target);
+    assert.equal(child.exitCode, 0);
+    assert.equal(exits, 1);
+});

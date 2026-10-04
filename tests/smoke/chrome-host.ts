@@ -65,6 +65,16 @@ export function chromeSmokeVersion(endpoint: unknown): string {
     return version;
 }
 
+/** External stimulus only; the gateway owns actual application exit observation. */
+export async function requestChromeSmokeClose(
+    fixture: ProcessTarget,
+    platform: Pick<PlatformAdapter, 'requestNormalClose'>,
+): Promise<boolean> {
+    if (!platform.requestNormalClose) throw new Error('The platform has no normal Close request API.');
+    const receipt = await platform.requestNormalClose(fixture);
+    return receipt.closeRequested === true;
+}
+
 export async function inspectChromeSmokeTarget(
     target: ConnectionStatus,
     executable: string,

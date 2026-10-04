@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import type { OfficialConnection } from '../src/adapters/mcp-bridge.ts';
 import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
@@ -8,6 +8,7 @@ import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import { RetainedTargetError } from '../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlHandler, LaunchOptions } from '../src/domains/control-contract.ts';
+import { isRecord } from '../src/shared/errors.ts';
 
 function connectionStatus(controller: ControlHandler, connectionId: string): ConnectionStatus {
     const status = controller.status(connectionId);
@@ -37,6 +38,7 @@ async function fixture({
     const targets: EventEmitter[] = [];
     let releaseLaunch: () => void = () => {};
     let targetCloses = 0;
+    let targetCloseFails = failTargetClose;
     let resolveClosed: () => void = () => {};
     const gatewayClosed = new Promise<void>((resolve) => {
         resolveClosed = resolve;
@@ -74,7 +76,7 @@ async function fixture({
                 }
                 launches.push(options);
                 if (options.launch.executable === failLaunch && !retainLaunch) throw new Error('Launch failed.');
-                const child = new EventEmitter();
+                const child = Object.assign(new EventEmitter(), { exitCode: null as number | null, signalCode: null });
                 targets.push(child);
                 const target = {
                     processId: 42 + targets.length,
@@ -89,13 +91,19 @@ async function fixture({
                         cwd: process.cwd(),
                     },
                 };
+                context?.onCreated?.(target);
                 if (options.launch.executable === failLaunch && retainLaunch)
                     throw new RetainedTargetError('Rollback failed.', target);
                 return target;
             },
-            close: async () => {
+            close: async (target) => {
                 targetCloses++;
-                return !failTargetClose;
+                if (targetCloseFails) return false;
+                const child = targets[target.processId - 43];
+                assert.ok(child);
+                Object.assign(child, { exitCode: 0 });
+                child.emit('exit', 0);
+                return true;
             },
         }),
         createConnection: async (url): Promise<OfficialConnection> => {
@@ -154,6 +162,9 @@ async function fixture({
         counts: () => ({ connections, closes, calls }),
         releaseLaunch: () => releaseLaunch(),
         targetCloses: () => targetCloses,
+        allowTargetClose: () => {
+            targetCloseFails = false;
+        },
     };
 }
 
@@ -261,7 +272,7 @@ test('an unfinished official timeout isolates only its connection and retains ap
     }
 });
 
-test('an official close failure retains identity until a matching Close retry succeeds', async () => {
+test('an official cleanup failure after actual target exit removes routing and retries through gateway cleanup', async () => {
     const f = await fixture({ failOfficialClose: true });
     try {
         const active = await f.controller.start({ launch: { executable: 'fixture' } });
@@ -270,21 +281,25 @@ test('an official close failure retains identity until a matching Close retry su
             f.controller.stop({ connectionId: active.connectionId, sessionId: active.sessionId, disposition: 'Close' }),
             /timed out/,
         );
-        assert.equal(connectionStatus(f.controller, active.connectionId).status, 'close-failed');
-        assert.equal(connectionStatus(f.controller, active.connectionId).sessionId, active.sessionId);
+        assert.throws(() => f.controller.status(active.connectionId), /closed/);
         const other = await f.controller.start({ launch: { executable: 'next' } });
         assert.notEqual(other.connectionId, active.connectionId);
         await assert.rejects(
             f.controller.stop({ connectionId: active.connectionId, sessionId: active.sessionId, disposition: 'Keep' }),
-            /Close retry/,
+            /closed/,
         );
-        const closed = await f.controller.stop({
-            connectionId: active.connectionId,
-            sessionId: active.sessionId,
-            disposition: 'Close',
-        });
-        assert.equal(closed.status, 'idle');
-        assert.equal(f.counts().closes, 3);
+        await assert.rejects(
+            f.controller.stop({
+                connectionId: active.connectionId,
+                sessionId: active.sessionId,
+                disposition: 'Close',
+            }),
+            /closed/,
+        );
+        assert.equal(f.counts().closes, 2, 'Closed routes must not retry failed resources automatically.');
+        assert.equal(connectionStatus(f.controller, other.connectionId).status, 'active');
+        await f.runtime.close();
+        assert.equal(f.counts().closes, 4);
     } finally {
         await f.runtime.close();
     }
@@ -442,18 +457,22 @@ test('failed startup rolls back one provisional connection while retained startu
         assert.ok('connections' in aggregate);
         assert.equal(aggregate.connections.length, 1);
         assert.equal(aggregate.connections[0]?.connectionId, active.connectionId);
-        assert.equal(f.counts().closes, 2);
+        assert.equal(f.counts().closes, 1, 'Target launch failure precedes official connection acquisition.');
         assert.equal(f.routerCloses(), 2);
     } finally {
         await f.runtime.close();
     }
-    const retained = await fixture({ failLaunch: 'bad', retainLaunch: true });
+    const retained = await fixture({ failLaunch: 'bad', retainLaunch: true, failTargetClose: true });
     try {
         await retained.controller.start({ launch: { executable: 'good' } });
         await assert.rejects(retained.controller.start({ launch: { executable: 'bad' } }), (error: unknown) => {
             assert.ok(error instanceof Error && 'details' in error);
             const details = error.details;
-            assert.ok(details && typeof details === 'object' && 'connectionId' in details && 'sessionId' in details);
+            assert.ok(isRecord(details));
+            assert.equal(typeof details.connectionId, 'string');
+            assert.equal(typeof details.sessionId, 'string');
+            assert.equal(details.processId, 44);
+            assert.equal(details.port, 9222);
             return true;
         });
         const aggregate = retained.controller.status();
@@ -461,6 +480,7 @@ test('failed startup rolls back one provisional connection while retained startu
         assert.equal(aggregate.connections.length, 2);
         const failed = aggregate.connections.find((connection) => connection.status === 'close-failed');
         assert.ok(failed?.sessionId);
+        retained.allowTargetClose();
         await retained.controller.stop({
             connectionId: failed.connectionId,
             sessionId: failed.sessionId,
@@ -474,13 +494,12 @@ test('failed startup rolls back one provisional connection while retained startu
     }
 });
 
-test('recovery retains only selected connection and preserves original profile across repeated runs', async () => {
+test('live restart preserves the selected connection and original profile across independent target runs', async () => {
     const f = await fixture();
     try {
         const first = await f.controller.start({ launch: { executable: 'fixture' } });
         const second = await f.controller.start({ launch: { executable: 'other' } });
         assert.ok(first.sessionId);
-        f.targets[0]?.emit('exit');
         const restarted = await f.controller.restart({ connectionId: first.connectionId, sessionId: first.sessionId });
         assert.equal(restarted.connectionId, first.connectionId);
         assert.notEqual(restarted.sessionId, first.sessionId);
@@ -491,8 +510,10 @@ test('recovery retains only selected connection and preserves original profile a
             cwd: process.cwd(),
         });
         assert.ok(restarted.sessionId);
-        f.targets[2]?.emit('exit');
         await f.controller.restart({ connectionId: restarted.connectionId, sessionId: restarted.sessionId });
+        f.targets[0]?.emit('exit');
+        assert.equal(f.targets[0]?.listenerCount('exit'), 0);
+        assert.equal(f.targets[2]?.listenerCount('exit'), 0);
         await assert.rejects(
             f.callbacks.invoke(
                 'list_pages',
@@ -512,62 +533,43 @@ test('disconnect cleanup continues across a failed official Close', async () => 
     const f = await fixture({ failOfficialClose: true });
     await Promise.all(Array.from({ length: 4 }, () => f.controller.start({ launch: { executable: 'fixture' } })));
     await f.runtime.close();
-    assert.equal(f.counts().closes, 5);
+    assert.equal(f.counts().closes, 6, 'Gateway cleanup retries its failed official resource once.');
     assert.equal(f.routerCloses(), 5);
 });
 
-test('upstream-only failed startup remains retryable through its connection and session IDs', async () => {
+test('target launch failure never acquires an official child or retains a public connection', async () => {
     const f = await fixture({ failLaunch: 'bad', failOfficialClose: true });
     try {
         await assert.rejects(f.controller.start({ launch: { executable: 'bad' } }), /Launch failed/);
         const aggregate = f.controller.status();
         assert.ok('connections' in aggregate);
-        const retained = aggregate.connections[0];
-        assert.ok(retained?.sessionId);
-        assert.equal(retained.reason, 'startup-cleanup-failed');
-        await assert.rejects(
-            f.controller.stop({
-                connectionId: retained.connectionId,
-                sessionId: retained.sessionId,
-                disposition: 'Keep',
-            }),
-            /Close retry/,
-        );
-        await f.controller.stop({
-            connectionId: retained.connectionId,
-            sessionId: retained.sessionId,
-            disposition: 'Close',
-        });
-        const after = f.controller.status();
-        assert.ok('connections' in after);
-        assert.equal(after.connections.length, 0);
+        assert.equal(aggregate.connections.length, 0);
+        assert.deepEqual(f.counts(), { connections: 1, closes: 1, calls: 0 });
+        assert.equal(f.launches.length, 1);
+        assert.equal(f.routerCloses(), 2);
     } finally {
         await f.runtime.close();
     }
 });
 
-test('a catalog mismatch whose normal close fails retains the official child for retry', async () => {
-    const f = await fixture({ mismatchCatalog: true, failOfficialClose: true, failCloseUntil: 3 });
+test('a catalog mismatch retires its actual target and keeps failed upstream disposal in the gateway ledger', async () => {
+    const f = await fixture({ mismatchCatalog: true, failOfficialClose: true, failCloseUntil: 2 });
     try {
         await assert.rejects(f.controller.start({ launch: { executable: 'fixture' } }), /timed out/);
-        assert.equal(f.launches.length, 0);
+        assert.equal(f.launches.length, 1);
+        assert.equal(f.targets[0]?.listenerCount('exit'), 0);
         const aggregate = f.controller.status();
         assert.ok('connections' in aggregate);
-        const retained = aggregate.connections[0];
-        assert.ok(retained?.sessionId);
-        assert.equal(retained.reason, 'startup-cleanup-failed');
-        await f.controller.stop({
-            connectionId: retained.connectionId,
-            sessionId: retained.sessionId,
-            disposition: 'Close',
-        });
-        assert.equal(f.counts().closes, 4);
+        assert.equal(aggregate.connections.length, 0);
+        assert.equal(f.counts().closes, 2);
+        await f.runtime.close();
+        assert.equal(f.counts().closes, 3);
     } finally {
         await f.runtime.close();
     }
 });
 
-test('catalog bootstrap retries failed normal upstream close before closing its router', async () => {
+test('catalog bootstrap attempts its router disposal even when official disposal needs a retry', async () => {
     const events: string[] = [];
     let closeAttempts = 0;
     await assert.rejects(
@@ -595,12 +597,17 @@ test('catalog bootstrap retries failed normal upstream close before closing its 
         /Catalog normal close failed/,
     );
     assert.equal(closeAttempts, 2);
-    assert.deepEqual(events, ['upstream-close', 'upstream-close', 'router-close']);
+    assert.deepEqual(events, ['upstream-close', 'router-close', 'upstream-close']);
 });
 
-test('catalog cleanup reports retained upstream evidence when normal close retry also fails', async () => {
+test('catalog cleanup reports a persistent official disposal failure after attempting its router', async () => {
     let closeAttempts = 0;
     let routerCloses = 0;
+    const diagnostics: string[] = [];
+    const observing = mock.method(process.stderr, 'write', (chunk: unknown) => {
+        diagnostics.push(String(chunk));
+        return true;
+    });
     await assert.rejects(
         startPluginRuntime({
             createRouter: async () => ({
@@ -623,21 +630,10 @@ test('catalog cleanup reports retained upstream evidence when normal close retry
                 rootsChanged: async () => {},
             }),
         }),
-        (error: unknown) => {
-            assert.ok(error instanceof Error && 'details' in error);
-            const details = error.details;
-            assert.ok(
-                details &&
-                    typeof details === 'object' &&
-                    'catalogUpstreamRetained' in details &&
-                    'entryId' in details &&
-                    'cleanupError' in details,
-            );
-            assert.equal(details.catalogUpstreamRetained, true);
-            assert.equal(details.cleanupError, 'Catalog close still failed.');
-            return true;
-        },
+        /Catalog close still failed/,
     );
+    observing.mock.restore();
     assert.equal(closeAttempts, 2);
     assert.equal(routerCloses, 1);
+    assert.ok(diagnostics.some((message) => message.includes('Gateway cleanup failed: Catalog close still failed.')));
 });

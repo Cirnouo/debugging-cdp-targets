@@ -35,6 +35,7 @@ test('connections keep independent actual catalogs and explicit restart invalida
     const calls: { url: string; name: string; args: Record<string, unknown> }[] = [];
     let routers = 0;
     let launched = 0;
+    const children = new Map<number, EventEmitter>();
     let end: () => void = () => {};
     const closed = new Promise<void>((resolve) => {
         end = resolve;
@@ -49,16 +50,23 @@ test('connections keep independent actual catalogs and explicit restart invalida
             close: async () => {},
         }),
         createHost: () => ({
-            launch: async () => ({
-                processId: ++launched,
-                port: 9222 + launched,
-                executablePath: process.execPath,
-                startedAtUtc: '2026-10-04T00:00:00Z',
-                targetKind: 'generic-cdp',
-                child: new EventEmitter(),
-                launchDefinition: { executablePath: process.execPath, arguments: [] },
-            }),
-            close: async () => true,
+            launch: async () => {
+                const child = new EventEmitter();
+                children.set(++launched, child);
+                return {
+                    processId: launched,
+                    port: 9222 + launched,
+                    executablePath: process.execPath,
+                    startedAtUtc: '2026-10-04T00:00:00Z',
+                    targetKind: 'generic-cdp',
+                    child,
+                    launchDefinition: { executablePath: process.execPath, arguments: [] },
+                };
+            },
+            close: async (target) => {
+                children.get(target.processId)?.emit('exit');
+                return true;
+            },
         }),
         createConnection: async (url, options) => ({
             tools: options?.args?.includes('--slim')
@@ -90,11 +98,22 @@ test('connections keep independent actual catalogs and explicit restart invalida
     const control = callbacks.control;
     try {
         const preflight = await control({ action: 'status', entryId: runtime.entryId, toolNames: ['evaluate'] });
-        assert.match(JSON.stringify(preflight), /--slim=true/);
+        assert.match(JSON.stringify(preflight), /slim=true/);
+        assert.equal(JSON.stringify(preflight).includes('suggestedMcpArgs'), false);
         const first = await runtime.controller.start({ launch: { executable: 'fixture' } });
         const second = await runtime.controller.start({ launch: { executable: 'fixture' }, mcpArgs: ['--slim'] });
-        assert.deepEqual(first.enabledTools, ['evaluate_script']);
-        assert.deepEqual(second.enabledTools, ['evaluate']);
+        const firstStatus = await control({
+            action: 'status',
+            entryId: runtime.entryId,
+            connectionId: first.connectionId,
+        });
+        const secondStatus = await control({
+            action: 'status',
+            entryId: runtime.entryId,
+            connectionId: second.connectionId,
+        });
+        assert.deepEqual(firstStatus.enabledTools, ['evaluate_script']);
+        assert.deepEqual(secondStatus.enabledTools, ['evaluate']);
         const signal = new AbortController().signal;
         const args = { _dct: { connectionId: second.connectionId, sessionId: second.sessionId }, function: '() => 1' };
         const before = structuredClone(args);

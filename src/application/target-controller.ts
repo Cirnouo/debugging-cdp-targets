@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { type ManagedTarget, RetainedTargetError } from '../domains/cdp-target.ts';
-import type { Disposition, LaunchContext, LaunchOptions, TargetStatus } from '../domains/control-contract.ts';
+import type {
+    ControlContext,
+    Disposition,
+    LaunchContext,
+    LaunchOptions,
+    TargetStatus,
+} from '../domains/control-contract.ts';
 import { DetailedError, errorDetails, errorMessage } from '../shared/errors.ts';
+import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 
 export interface ControllerRouter {
     setTarget(target: ManagedTarget): void;
@@ -11,21 +18,60 @@ export interface ControllerRouter {
     resume?: () => void;
 }
 export type TargetHealth = 'healthy' | 'gone' | 'unavailable' | 'identity-changed';
+export interface TargetLaunchContext extends LaunchContext {
+    onCreated?: (target: ManagedTarget) => void;
+    onRollback?: (target: ManagedTarget) => void;
+}
 export interface ControllerHost {
-    launch(options: LaunchOptions, context?: LaunchContext): Promise<ManagedTarget>;
+    launch(options: LaunchOptions, context?: TargetLaunchContext): Promise<ManagedTarget>;
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
+    requestNormalClose?(target: ManagedTarget, context?: LaunchContext): Promise<Record<string, unknown>>;
+    waitForExit?(target: ManagedTarget, signal?: AbortSignal): Promise<void>;
     health?(target: ManagedTarget): Promise<TargetHealth>;
 }
-export type TargetEvent = { sessionId: string; reason: 'process-exited'; taskActive: boolean };
-type Current = {
-    target: ManagedTarget;
-    options: LaunchOptions;
+export type TargetEvent = {
     sessionId: string;
-    exited: boolean;
-    expectedExit?: boolean;
+    reason: 'process-exited';
+    taskActive: boolean;
+    expected?: ConnectionOwner['expectedExit'];
+    operationId?: string;
+    processId: number;
+    port: number;
+    targetKind: ManagedTarget['targetKind'];
+    exitedAt: string;
+    exitCode?: number;
+    signalCode?: string;
+};
+type Current = {
+    owner: ConnectionOwner;
+    options: LaunchOptions;
     unsubscribe?: () => void;
     closeFailure?: Record<string, unknown>;
+    closeRequest?: Promise<void>;
 };
+
+function waitWithSignal<T>(wait: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return wait;
+    signal.throwIfAborted();
+    return new Promise<T>((resolve, reject) => {
+        const aborted = () => {
+            signal.removeEventListener('abort', aborted);
+            reject(signal.reason);
+        };
+        signal.addEventListener('abort', aborted, { once: true });
+        void wait.then(
+            (value) => {
+                signal.removeEventListener('abort', aborted);
+                resolve(value);
+            },
+            (error: unknown) => {
+                signal.removeEventListener('abort', aborted);
+                reject(error);
+            },
+        );
+        if (signal.aborted) aborted();
+    });
+}
 
 export function createTargetController({
     entryId,
@@ -33,330 +79,397 @@ export function createTargetController({
     host,
     server,
     onProcessExit,
+    onObservationFailure,
+    createOwner,
 }: {
     entryId: string;
     router: ControllerRouter;
     host: ControllerHost;
-    server: { ensure(options: LaunchOptions): Promise<void>; close(): Promise<void> };
+    server: {
+        ensure(options: LaunchOptions, context?: LaunchContext): Promise<void>;
+        close(owner?: ConnectionOwner): Promise<void>;
+    };
     onProcessExit?: (event: TargetEvent) => void;
+    onObservationFailure?: (sessionId: string) => void;
+    createOwner?: (sessionId: string) => Promise<ConnectionOwner>;
 }) {
     let current: Current | undefined;
     let state: TargetStatus['status'] = 'idle';
     let reason: string | undefined;
     let taskActive = false;
-    let gated = false;
-    let serial = Promise.resolve();
-    let checking: Promise<void> | undefined;
+    let gated = true;
+    let changing = false;
+    let checking: { owner: ConnectionOwner; job: Promise<void> } | undefined;
     function status(): TargetStatus {
+        const target = current?.owner.target;
         return {
             entryId,
             status: state,
             taskActive,
-            ...(current
-                ? {
-                      sessionId: current.sessionId,
-                      port: current.target.port,
-                      processId: current.target.processId,
-                      targetKind: current.target.targetKind,
-                  }
-                : {}),
+            ...(current ? { sessionId: current.owner.sessionId } : {}),
+            ...(target ? { port: target.port, processId: target.processId, targetKind: target.targetKind } : {}),
             ...(reason ? { reason } : {}),
         };
     }
-    function run<T>(operation: () => Promise<T>): Promise<T> {
-        const result = serial.then(operation);
-        serial = result.then(
-            () => {},
-            () => {},
-        );
-        return result;
+    async function run<T>(job: () => Promise<T>): Promise<T> {
+        if (changing) throw new Error('The target connection is busy with a lifecycle change.');
+        changing = true;
+        try {
+            return await job();
+        } finally {
+            changing = false;
+        }
     }
     function requireSession(sessionId: string) {
-        if (!current || current.sessionId !== sessionId) throw new Error('The target session is absent or stale.');
+        if (!current || current.owner.sessionId !== sessionId || current.owner.retired)
+            throw new Error('The target session is absent, closed or stale.');
         return current;
     }
     function gate() {
         if (!gated) router.clearTarget();
         gated = true;
     }
-    function confirmExit(selected: Current) {
-        if (!selected.exited) {
-            selected.exited = true;
-            selected.target.releaseProfile?.();
-        }
-        selected.target.child?.disposeMonitor?.();
-    }
     function processExited(selected: Current) {
-        if (current !== selected || selected.exited) return;
-        confirmExit(selected);
-        gate();
-        // Explicit cleanup owns expected exits, including late delivery after its failure.
-        if (state === 'closing' || selected.expectedExit) return;
-        state = 'lost';
-        reason = 'process-exited';
+        if (!selected.owner.confirmExit()) return;
+        const target = selected.owner.target;
+        target?.releaseProfile?.();
+        if (current === selected) {
+            gate();
+            state = 'lost';
+            reason = 'process-exited';
+        }
+        if (!target) return;
         onProcessExit?.({
-            sessionId: selected.sessionId,
+            sessionId: selected.owner.sessionId,
             reason: 'process-exited',
             taskActive,
+            ...(selected.owner.expectedExit ? { expected: selected.owner.expectedExit } : {}),
+            ...(selected.owner.expectedExit && selected.owner.expectedOperationId
+                ? { operationId: selected.owner.expectedOperationId }
+                : {}),
+            processId: target.processId,
+            port: target.port,
+            targetKind: target.targetKind,
+            exitedAt: new Date().toISOString(),
+            ...(typeof target.child?.exitCode === 'number' ? { exitCode: target.child.exitCode } : {}),
+            ...(typeof target.child?.signalCode === 'string' ? { signalCode: target.child.signalCode } : {}),
         });
     }
-    function subscribe(selected: Current) {
-        const child = selected.target.child;
-        if (!child) return;
-        const exited = () => processExited(selected);
-        child.once('exit', exited);
-        const stopMonitor = child.onMonitorError?.(() => lose(selected, 'process-monitor-lost'));
-        selected.unsubscribe = () => {
-            child.off?.('exit', exited);
-            stopMonitor?.();
-        };
-        // Node retains exitCode/signalCode even when exit preceded this subscription.
-        if (typeof child.exitCode === 'number' || typeof child.signalCode === 'string') exited();
-    }
     function lose(selected: Current, why: string) {
-        if (current !== selected || selected.exited || state === 'closing' || state === 'close-failed') return;
+        if (current !== selected || selected.owner.exited) return;
         gate();
         state = 'lost';
         reason = why;
-    }
-    async function tryClose(selected: Current, requireListener = true) {
-        delete selected.closeFailure;
-        try {
-            if (selected.exited) return true;
-            if (!requireListener && host.health && (await host.health(selected.target)) === 'gone') {
-                confirmExit(selected);
-                return true;
-            }
-            const closed = await host.close(selected.target, { requireListener });
-            if (closed) confirmExit(selected);
-            if (!closed) selected.closeFailure = { phase: 'normal-close', reason: 'application-still-running' };
-            return selected.exited || closed;
-        } catch (error) {
-            selected.closeFailure = { phase: 'normal-close', ...errorDetails(error), cause: errorMessage(error) };
-            return selected.exited;
+        if (why === 'process-monitor-lost') {
+            selected.owner.abortWork(new Error('Target process observation is unavailable.'));
+            onObservationFailure?.(selected.owner.sessionId);
         }
     }
-    function failedClose(selected: Current) {
+    function acquire(selected: Current, target: ManagedTarget) {
+        if (selected.owner.target) {
+            if (selected.owner.target !== target) throw new Error('A target run cannot acquire a second application.');
+            return;
+        }
+        selected.owner.target = target;
+        const child = target.child;
+        if (child) {
+            const exited = () => processExited(selected);
+            child.once('exit', exited);
+            const stopMonitor = child.onMonitorError?.(() => lose(selected, 'process-monitor-lost'));
+            selected.unsubscribe = () => {
+                child.off?.('exit', exited);
+                stopMonitor?.();
+            };
+            if (typeof child.exitCode === 'number' || typeof child.signalCode === 'string') exited();
+            else if (child.monitoringFailure) lose(selected, 'process-monitor-lost');
+        } else if (target.waitForExit) {
+            void target.waitForExit().then(
+                () => processExited(selected),
+                () => lose(selected, 'process-monitor-lost'),
+            );
+        }
+    }
+    async function normalClose(selected: Current, signal?: AbortSignal, onPhase?: LaunchContext['onPhase']) {
+        const target = selected.owner.target;
+        if (!target || selected.owner.exited) return;
+        signal?.throwIfAborted();
+        if (!selected.closeRequest) {
+            onPhase?.('requesting-normal-close');
+            const requestAbort = new AbortController();
+            void selected.owner.exit.then(() => requestAbort.abort(new Error('The target process exited.')));
+            const requestSignal = signal ? AbortSignal.any([signal, requestAbort.signal]) : requestAbort.signal;
+            selected.closeRequest = (async () => {
+                if (host.requestNormalClose) {
+                    const result = await host.requestNormalClose(target, {
+                        signal: requestSignal,
+                        ...(onPhase ? { onPhase } : {}),
+                    });
+                    if (result.closeRequested !== true && result.closed !== true && !selected.owner.exited)
+                        throw new Error('The application rejected its normal close request.');
+                } else if (!(await host.close(target, { requireListener: false })) && !selected.owner.exited) {
+                    throw new Error('The application rejected its normal close request.');
+                }
+            })();
+            void selected.closeRequest.catch(() => {
+                delete selected.closeRequest;
+            });
+        }
+        try {
+            await waitWithSignal(Promise.race([selected.closeRequest, selected.owner.exit]), signal);
+            if (!selected.owner.exited) {
+                onPhase?.('awaiting-target-exit');
+                const observed = host.waitForExit ? host.waitForExit(target, signal) : target.waitForExit?.(signal);
+                if (observed) {
+                    await observed;
+                    processExited(selected);
+                } else if (target.child) await waitWithSignal(selected.owner.exit, signal);
+                else throw new Error('No actual application exit observation is available.');
+            }
+        } catch (error) {
+            if (selected.owner.exited) return;
+            selected.closeFailure = { phase: 'normal-close', ...errorDetails(error), cause: errorMessage(error) };
+            throw error;
+        }
+    }
+    function failedClose(selected: Current, cause: unknown) {
         const error = new DetailedError(
-            'The target did not close normally; its official connection and identity remain available for retry.',
+            'The application did not close normally; its live identity remains available for Close retry.',
         );
         error.details = {
             ...selected.closeFailure,
+            ...errorDetails(cause),
             entryId,
-            sessionId: selected.sessionId,
-            retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }],
+            sessionId: selected.owner.sessionId,
+            ...(selected.owner.target
+                ? {
+                      processId: selected.owner.target.processId,
+                      port: selected.owner.target.port,
+                      retainedTargets: [
+                          { processId: selected.owner.target.processId, port: selected.owner.target.port },
+                      ],
+                  }
+                : {}),
         };
         return error;
     }
-    function retainFailedRollback(target: ManagedTarget, options: LaunchOptions, sessionId: string) {
-        current = { target, options, sessionId, exited: false };
-        taskActive = false;
-        state = 'close-failed';
-        reason = 'target-rollback-failed';
-        gate();
-        subscribe(current);
-    }
-    async function attach(options: LaunchOptions, sessionId: string = randomUUID(), context: LaunchContext = {}) {
-        context.signal?.throwIfAborted();
-        context.onPhase?.('starting-official-server');
-        await server.ensure(options);
-        context.signal?.throwIfAborted();
-        let target: ManagedTarget;
+    async function dispose(selected: Current) {
+        selected.owner.retire(new Error('The target session is retired.'));
+        if (current === selected) gate();
         try {
-            target = await host.launch(options, context);
-        } catch (error) {
-            if (error instanceof RetainedTargetError) retainFailedRollback(error.target, options, sessionId);
-            throw error;
-        }
-        const selected: Current = { target, options, sessionId, exited: false };
-        try {
-            context.signal?.throwIfAborted();
-            router.setTarget(target);
-        } catch (error) {
-            if (!(await tryClose(selected, false))) {
-                retainFailedRollback(target, options, sessionId);
-                throw failedClose(selected);
+            await server.close(selected.owner);
+        } finally {
+            if (selected.owner.exited) {
+                selected.unsubscribe?.();
+                selected.owner.target?.child?.disposeMonitor?.();
             }
+            if (current === selected) {
+                current = undefined;
+                taskActive = false;
+                state = 'idle';
+                reason = undefined;
+            }
+        }
+    }
+    async function attach(options: LaunchOptions, sessionId: string, context: ControlContext) {
+        context.signal?.throwIfAborted();
+        const owner = createOwner ? await createOwner(sessionId) : createConnectionOwner(sessionId);
+        owner.expectedOperationId = context.operationId;
+        const selected: Current = { owner, options };
+        current = selected;
+        state = 'starting';
+        reason = undefined;
+        taskActive = true;
+        const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
+        try {
+            const target = await host.launch(options, {
+                ...context,
+                signal,
+                onCreated: (target) => acquire(selected, target),
+                onRollback: (target) => {
+                    acquire(selected, target);
+                    if (!owner.exited) owner.expectedExit = 'rollback';
+                },
+            });
+            acquire(selected, target);
+            signal.throwIfAborted();
+            owner.assertOpen();
+            router.setTarget(target);
+            gated = false;
+            context.onPhase?.('starting-official-server');
+            await server.ensure(options, { ...context, signal });
+            signal.throwIfAborted();
+            owner.assertOpen();
+            state = 'active';
+            return status();
+        } catch (error) {
+            if (error instanceof RetainedTargetError) {
+                acquire(selected, error.target);
+                if (!owner.exited) {
+                    owner.expectedExit = undefined;
+                    state = 'close-failed';
+                    taskActive = false;
+                    reason = 'target-rollback-failed';
+                    gate();
+                    throw error;
+                }
+            }
+            if (owner.target && !owner.exited) {
+                owner.expectedExit = 'rollback';
+                try {
+                    await normalClose(selected);
+                } catch (closeError) {
+                    owner.expectedExit = undefined;
+                    state = 'close-failed';
+                    taskActive = false;
+                    reason = 'target-rollback-failed';
+                    gate();
+                    throw failedClose(selected, closeError);
+                }
+            }
+            await dispose(selected);
             throw error;
         }
-        current = selected;
-        gated = false;
-        taskActive = true;
-        reason = undefined;
-        state = 'active';
-        subscribe(selected);
-        return status();
     }
-    function start(options: LaunchOptions, sessionId?: string, context: LaunchContext = {}) {
+    function start(options: LaunchOptions, sessionId: string = randomUUID(), context: ControlContext = {}) {
         return run(async () => {
-            if (current)
-                throw new Error('An existing target session must be explicitly closed before this entry is reused.');
+            if (current) throw new Error('An existing target session must be closed before starting another.');
             return attach(options, sessionId, context);
         });
     }
-    async function dispose(selected: Current) {
-        taskActive = false;
-        state = 'closing';
-        gate();
-        try {
-            await server.close();
-        } catch (error) {
-            state = 'close-failed';
-            reason = 'official-close-failed';
-            throw error;
-        }
-        selected.unsubscribe?.();
-        selected.target.child?.disposeMonitor?.();
-        current = undefined;
-        state = 'idle';
-        reason = undefined;
-    }
-    function retireExited({ sessionId }: { sessionId: string }) {
-        return run(async () => {
-            const selected = current;
-            if (selected?.sessionId === sessionId && selected.exited && !taskActive) await dispose(selected);
-            return status();
-        });
+    async function retireExited({ sessionId }: { sessionId: string }) {
+        const selected = current;
+        if (selected?.owner.sessionId === sessionId && selected.owner.exited) await dispose(selected);
+        return status();
     }
     function restart(
         { sessionId, mcpArgs }: { sessionId: string; mcpArgs?: string[] },
-        context: LaunchContext & { onSession?: (sessionId: string) => void } = {},
+        context: ControlContext & { onSession?: (sessionId: string) => void } = {},
     ) {
         return run(async () => {
-            context.signal?.throwIfAborted();
             const previous = requireSession(sessionId);
-            if (state !== 'lost' && state !== 'active')
-                throw new Error('Only an active or lost target session can be explicitly restarted.');
-            if (router.isBusy()) throw new Error('CDP is busy; retry after the current request completes.');
-            if (!previous.target.launchDefinition)
-                throw new Error('The exact launch definition is unavailable; cannot safely restart.');
-            previous.expectedExit = true;
-            router.pause?.();
+            if (state !== 'active' && state !== 'lost')
+                throw new Error('Only active or lost live targets can restart.');
+            const target = previous.owner.target;
+            if (!target?.launchDefinition)
+                throw new Error('The exact launch definition is unavailable; cannot restart.');
             const previousState = state;
+            previous.owner.expectedExit = 'restart';
+            router.pause?.();
             state = 'closing';
-            if (!(await tryClose(previous, false))) {
-                delete previous.expectedExit;
+            try {
+                await normalClose(previous, context.signal, context.onPhase);
+            } catch (error) {
+                previous.owner.expectedExit = undefined;
                 state = previousState;
                 router.resume?.();
-                throw failedClose(previous);
+                if (context.signal?.aborted) throw context.signal.reason;
+                throw failedClose(previous, error);
             }
-            try {
-                await server.close();
-            } catch (error) {
-                state = 'close-failed';
-                reason = 'official-close-failed';
-                taskActive = false;
-                throw error;
-            }
-            previous.unsubscribe?.();
-            previous.target.child?.disposeMonitor?.();
-            previous.exited = true;
-            const options: LaunchOptions = {
-                ...previous.options,
-                exactPort: previous.target.port,
-                launchDefinition: previous.target.launchDefinition,
-                ...(mcpArgs === undefined ? {} : { mcpArgs }),
+            context.onPhase?.('closing-resources');
+            await dispose(previous);
+            context.signal?.throwIfAborted();
+            const nextSession = randomUUID();
+            context.onSession?.(nextSession);
+            return {
+                ...(await attach(
+                    {
+                        ...previous.options,
+                        exactPort: target.port,
+                        launchDefinition: target.launchDefinition,
+                        ...(mcpArgs === undefined ? {} : { mcpArgs }),
+                    },
+                    nextSession,
+                    context,
+                )),
+                pageIdsInvalidated: true,
             };
-            try {
-                const nextSession = randomUUID();
-                context.onSession?.(nextSession);
-                return { ...(await attach(options, nextSession, context)), pageIdsInvalidated: true };
-            } catch (error) {
-                if (current === previous) {
-                    state = 'lost';
-                    reason = 'restart-incomplete';
-                    gate();
-                    context.onSession?.(previous.sessionId);
-                }
-                throw error;
-            }
         });
     }
-    function stop({ sessionId, disposition }: { sessionId: string; disposition: Disposition }) {
+    function stop(
+        { sessionId, disposition }: { sessionId: string; disposition: Disposition },
+        context: ControlContext = {},
+    ) {
         return run(async () => {
             const selected = requireSession(sessionId);
-            if (disposition !== 'Close' && disposition !== 'Keep') throw new Error('Choose Close or Keep.');
             if (state === 'close-failed' && disposition !== 'Close')
-                throw new Error('The retained target requires an explicit Close retry.');
+                throw new Error('The retained target requires Close retry.');
             if (disposition === 'Keep') {
                 taskActive = false;
-                if (selected.exited) await dispose(selected);
                 return { ...status(), disposition };
             }
-            if (state === 'active' && router.isBusy())
-                throw new Error('CDP is busy; retry after the current request completes.');
+            if (disposition !== 'Close') throw new Error('Choose Close or Keep.');
+            const previous = status();
             const previousState = state;
+            selected.owner.expectedExit = 'close';
             router.pause?.();
-            selected.expectedExit = true;
             state = 'closing';
-            if (!(await tryClose(selected, previousState === 'active'))) {
-                delete selected.expectedExit;
-                state = previousState;
-                router.resume?.();
-                throw failedClose(selected);
+            try {
+                await normalClose(selected, context.signal, context.onPhase);
+            } catch (error) {
+                selected.owner.expectedExit = undefined;
+                if (!selected.owner.exited) {
+                    state = previousState;
+                    router.resume?.();
+                }
+                if (context.signal?.aborted) throw context.signal.reason;
+                throw failedClose(selected, error);
             }
+            context.onPhase?.('closing-resources');
             await dispose(selected);
-            return { ...status(), disposition, pageIdsInvalidated: true };
+            return { ...previous, status: 'idle' as const, taskActive: false, disposition, pageIdsInvalidated: true };
         });
     }
     function endTask({ sessionId }: { sessionId: string }) {
         return run(async () => {
-            const selected = requireSession(sessionId);
-            if (state === 'close-failed') throw new Error('The retained target requires an explicit Close retry.');
+            requireSession(sessionId);
+            if (state === 'close-failed') throw new Error('The retained target requires Close retry.');
             taskActive = false;
-            if (selected.exited) await dispose(selected);
             return status();
         });
     }
     function beginTask({ sessionId }: { sessionId: string }) {
-        const selected = requireSession(sessionId);
-        if (!selected.exited && state !== 'closing' && state !== 'close-failed') taskActive = true;
+        requireSession(sessionId);
+        if (state === 'active' || state === 'lost') taskActive = true;
     }
     async function checkHealth() {
-        if (checking) return checking;
         const selected = current;
-        if (!selected || selected.exited || state !== 'active') return;
-        checking = (async () => {
+        const target = selected?.owner.target;
+        if (!selected || !target || selected.owner.retired || state !== 'active') return;
+        if (checking?.owner === selected.owner) return checking.job;
+        const job = (async () => {
             let health: TargetHealth;
             try {
-                if (host.health) health = await host.health(selected.target);
+                if (host.health) health = await waitWithSignal(host.health(target), selected.owner.signal);
                 else {
-                    await selected.target.verify?.();
+                    await waitWithSignal(Promise.resolve(target.verify?.()), selected.owner.signal);
                     health = 'healthy';
                 }
-            } catch {
+            } catch (error) {
+                if (selected.owner.signal.aborted) throw error;
                 health = 'unavailable';
             }
-            if (current !== selected || state !== 'active') return;
-            if (health === 'gone') processExited(selected);
-            else if (health !== 'healthy')
+            if (current === selected && state === 'active' && health !== 'healthy')
                 lose(selected, health === 'identity-changed' ? health : 'target-unavailable');
         })().finally(() => {
-            checking = undefined;
+            if (checking?.job === job) checking = undefined;
         });
-        return checking;
+        checking = { owner: selected.owner, job };
+        return job;
     }
-    function cleanupOnDisconnect() {
-        return run(async () => {
-            taskActive = false;
-            const selected = current;
-            if (selected) selected.expectedExit = true;
-            state = 'closing';
-            const closed = !selected || (await tryClose(selected, false));
-            gate();
-            try {
-                await server.close();
-            } finally {
-                selected?.unsubscribe?.();
-                selected?.target.child?.disposeMonitor?.();
-            }
-            current = undefined;
-            state = 'idle';
-            reason = undefined;
-            return closed || !selected
-                ? undefined
-                : { processId: selected.target.processId, port: selected.target.port };
-        });
+    async function cleanupOnDisconnect() {
+        const selected = current;
+        gate();
+        taskActive = false;
+        if (!selected) return;
+        selected.owner.expectedExit = 'disconnect';
+        selected.owner.abortWork(new Error('The gateway is closing.'));
+        const resources = server.close(selected.owner);
+        const results = await Promise.allSettled([normalClose(selected), resources]);
+        if (selected.owner.exited) await dispose(selected);
+        if (results.some((result) => result.status === 'rejected') && !selected.owner.exited) {
+            const target = selected.owner.target;
+            return target ? { processId: target.processId, port: target.port } : undefined;
+        }
     }
     return {
         status,
@@ -371,9 +484,9 @@ export function createTargetController({
         officialDisconnected: () => {
             if (current) lose(current, 'official-disconnected');
         },
-        quarantine: (reason: string) => {
-            if (current) lose(current, reason);
+        quarantine: (why: string) => {
+            if (current) lose(current, why);
         },
-        canInvoke: () => state === 'active' && !gated,
+        canInvoke: () => state === 'active' && !gated && !!current && !current.owner.retired,
     };
 }

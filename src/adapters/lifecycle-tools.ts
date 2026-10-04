@@ -32,12 +32,17 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
     return [
         make(
             'dct_connection_status',
-            'Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. hookEventName is reserved for automatic host Hooks.',
+            'Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. Selected connections accept include for configuration or diagnostics. Operation status cannot combine connectionId, toolNames, or include. hookEventName is reserved for automatic host Hooks.',
             {
                 entryId: uuid,
                 connectionId: uuid,
                 operationId: uuid,
                 toolNames: stringList,
+                include: {
+                    type: 'array',
+                    items: { type: 'string', enum: ['configuration', 'diagnostics'] },
+                    uniqueItems: true,
+                },
                 hookEventName: { type: 'string', enum: [...hookEvents] },
             },
         ),

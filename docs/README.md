@@ -1,6 +1,8 @@
 # Documentation
 
 - `domain-language.md` defines the shared vocabulary.
+- `lifecycle-protocol.md` defines current MCP selectors, operation delivery,
+  session lifetime, restart, resource disposal and automatic Hook output.
 - `mcp-native-validation.md` records the unreleased MCP/native delivery checklist,
   reproducible evidence, upstream attribution and remaining integration limits.
 - `policies/` contains repository-wide contribution requirements.

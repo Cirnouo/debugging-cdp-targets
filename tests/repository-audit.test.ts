@@ -196,6 +196,130 @@ test('runtime audit rejects force termination, persistent sessions, extra entry 
     assert.ok(validateRuntimeSource('src/adapters/platform-process.ts', 'process.kill(pid, signal);').length);
 });
 
+const ownedOfficialBridge = `
+import { spawn } from 'node:child_process';
+import { resolveServerBin } from './official-server.ts';
+export async function createOfficialConnection(browserUrl: string, options: { bin?: string; args?: string[] } = {}) {
+    const arguments_ = options.args ?? [];
+    const bin = options.bin ?? (await resolveServerBin());
+    const child = spawn(process.execPath, [bin, ...arguments_], { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+    async function reapOwnedChild() {
+        child.kill('SIGTERM');
+        child.kill('SIGKILL');
+    }
+    return { close: reapOwnedChild };
+}
+`;
+
+test('runtime audit permits TERM and KILL only for the official bridge owned Server child', async () => {
+    assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', ownedOfficialBridge), []);
+    const maintained = await readFile(new URL('../src/adapters/mcp-bridge.ts', import.meta.url), 'utf8');
+    assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', maintained), []);
+});
+
+test('owned Server reclamation cannot authorize arbitrary, Target or global process termination', () => {
+    for (const file of ['src/adapters/target-host.ts', 'src/adapters/example.ts', 'src/adapters/platform-process.ts']) {
+        assert.ok(
+            validateRuntimeSource(file, ownedOfficialBridge).some((error) => error.includes('termination API')),
+            file,
+        );
+    }
+    for (const source of [
+        "child.kill('SIGTERM');",
+        "child.kill('SIGKILL');",
+        "target.child.kill('SIGKILL');",
+        'process.kill(pid, 0);',
+        "process.kill(pid, 'SIGTERM');",
+        "process.kill(pid, 'SIGKILL');",
+    ]) {
+        assert.ok(
+            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+                error.includes('termination API'),
+            ),
+            source,
+        );
+    }
+});
+
+test('official child termination allowance rejects dynamic signals and unproven or shadowed ownership', () => {
+    for (const source of [
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", 'child.kill();'),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child.kill('SIGINT');"),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", 'child.kill(signal);'),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child.kill('SIGTERM', true);"),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "process.kill(pid, 'SIGTERM');"),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "target.child.kill('SIGKILL');"),
+        ownedOfficialBridge.replace("from 'node:child_process'", "from 'node:worker_threads'"),
+        ownedOfficialBridge.replace('{ spawn }', '{ spawn as anotherSpawn }'),
+        ownedOfficialBridge.replace(
+            'spawn(process.execPath, [bin, ...arguments_]',
+            'spawn(targetPath, [bin, ...arguments_]',
+        ),
+        ownedOfficialBridge.replace('[bin, ...arguments_]', '[targetPath]'),
+        ownedOfficialBridge.replace('shell: false', 'shell: true'),
+        ownedOfficialBridge.replace('const child = spawn', 'let child = spawn'),
+        ownedOfficialBridge.replace(
+            "spawn(process.execPath, [bin, ...arguments_], { shell: false, stdio: ['pipe', 'pipe', 'pipe'] })",
+            'target',
+        ),
+        ownedOfficialBridge.replace(
+            'return { close: reapOwnedChild };',
+            "child.kill('SIGKILL'); return { close: reapOwnedChild };",
+        ),
+        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function closeTarget()'),
+        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(child)'),
+        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(spawn)'),
+        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(process)'),
+        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(bin)'),
+        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(arguments_)'),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child = target; child.kill('SIGTERM');"),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child.kill = target.kill; child.kill('SIGTERM');"),
+        ownedOfficialBridge.replace("child.kill('SIGTERM');", "{ const child = target; child.kill('SIGTERM'); }"),
+    ]) {
+        assert.ok(
+            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+                error.includes('termination API'),
+            ),
+            source,
+        );
+    }
+});
+
+for (const mutation of [
+    'Object.assign(child, { kill: target.child.kill.bind(target.child) });',
+    'Object.assign(child, { kill: replacementFn });',
+    "Object.defineProperty(child, 'kill', { value: target.child.kill.bind(target.child) });",
+    'Object.defineProperties(child, { kill: { value: replacementFn } });',
+    "Reflect.set(child, 'kill', replacementFn);",
+    'for (child.kill of [target.child.kill.bind(target.child)]) {}',
+    'for (child.kill in replacements) {}',
+    'for ([child.kill] of replacements) {}',
+    'for ({ kill: child.kill } of replacements) {}',
+    'const alias = child; alias.kill = target.child.kill.bind(target.child);',
+]) {
+    test(`official child ownership proof rejects mutation: ${mutation}`, () => {
+        const source = ownedOfficialBridge.replace("child.kill('SIGTERM');", `${mutation}\nchild.kill('SIGTERM');`);
+        assert.ok(
+            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+                error.includes('termination API'),
+            ),
+            source,
+        );
+    });
+}
+
+for (const override of ["['shell']: true", 'get shell() { return true; }', 'shell() { return true; }']) {
+    test(`official child spawn proof rejects computed or method options: ${override}`, () => {
+        const source = ownedOfficialBridge.replace('shell: false, stdio:', `shell: false, ${override}, stdio:`);
+        assert.ok(
+            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+                error.includes('termination API'),
+            ),
+            source,
+        );
+    });
+}
+
 test('text audit enforces four spaces, LF, final newline, and no tabs', () => {
     assert.deepEqual(validateTextStyle('example.yaml', 'name:\n    value: true\n'), []);
     for (const text of ['name:\n  value: true\n', 'name:\r\n', '\tname\n', 'name']) {

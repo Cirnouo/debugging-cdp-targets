@@ -78,7 +78,7 @@ test('Windows native helper launches a disposable process with exact argv, cwd, 
     }
 });
 
-test('Windows GUI launch preserves visibility and closes normally; native manifest inspection distinguishes elevation', {
+test('Windows GUI launch preserves visibility and waits past ten seconds for normal close; native manifest inspection distinguishes elevation', {
     skip: process.platform !== 'win32',
     timeout: 30_000,
 }, async () => {
@@ -115,7 +115,12 @@ test('Windows GUI launch preserves visibility and closes normally; native manife
             executablePath: executable,
             arguments: [marker],
             cwd: directory,
-            env: { DCT_TEST_NATIVE: 'GUI 中文', SystemRoot: process.env.SystemRoot ?? 'C:/Windows' },
+            env: {
+                DCT_TEST_NATIVE: 'GUI 中文',
+                DCT_TEST_CLOSE_DELAY_MS: '11000',
+                DCT_TEST_WINDOW_LIFETIME_MS: '45000',
+                SystemRoot: process.env.SystemRoot ?? 'C:/Windows',
+            },
         });
         const deadline = Date.now() + 8000;
         for (;;) {
@@ -127,16 +132,30 @@ test('Windows GUI launch preserves visibility and closes normally; native manife
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }
         }
-        const result = await native.close({
+        child.disposeMonitor();
+        const target: ProcessTarget = {
             processId: child.pid,
             executablePath: executable,
             startedAtUtc: child.startedAtUtc,
             targetKind: 'generic-cdp',
             port: 9222,
+        };
+        const request = await native.requestNormalClose(target);
+        assert.equal(request.closeRequested, true);
+        let exited = false;
+        const waiting = native.waitForExit(target).then((result) => {
+            exited = true;
+            return result;
         });
+        await new Promise((resolve) => setTimeout(resolve, 10_100));
+        assert.equal(exited, false, 'Actual normal close must remain pending beyond the former ten-second limit.');
+        const result = await waiting;
         assert.equal(result.closeRequested, true);
         assert.equal(result.processExited, true);
         assert.equal(result.closed, true);
+        assert.equal(result.waitResult, 0);
+        assert.equal(result.waitError, 0);
+        assert.equal(child.exitCode, 0, 'The replacement close handle must latch actual exit after monitor disposal.');
         assert.equal(await readFile(`${marker}.closed`, 'utf8'), 'normal-close');
     } finally {
         assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));

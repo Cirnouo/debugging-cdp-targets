@@ -9,7 +9,7 @@ metadata:
 # Debugging CDP targets
 
 Use the cdp-targets MCP gateway. Start with `dct_connection_status({})` to
-discover entryId and connections. Each newly launched target has independent
+discover entryId and connection summaries. Each newly launched target has independent
 connectionId, sessionId and official MCP. Never attach to an existing application.
 A framework name alone does not establish browser-level CDP compatibility.
 
@@ -41,8 +41,10 @@ diagnosis, startup wrapper or launch script.
 
 Start returns an operationId immediately. Call `dct_operation_wait` with
 `{ "entryId": "<entry-uuid>", "operationId": "<operation-uuid>", "cursor": 0 }`,
-then use its returned cursor until complete. Its bounded event wait
-chooses the waiting interval. A cancelled wait leaves the operation running;
+then use its returned cursor until complete. Each wait lasts up to 25 seconds;
+an incomplete response does not expire the operation. Continue with its cursor,
+including while normal application Close is still waiting for actual exit.
+A cancelled wait leaves the operation running;
 `dct_operation_cancel` explicitly cancels it and reports cleanup or retained
 identity. Retrying the same requestId and identical input returns the same
 operation; a new intent needs a new requestId.
@@ -54,17 +56,26 @@ targets. `{port}` works in args and env; never reuse occupied profiles or ports.
 ## Tool availability and routing
 
 The global catalog is the complete official catalog, not the enabled tools of
-every connection. Start/wait/status report actual enabledTools. Query
+every connection. Start/wait lifecycle results are summaries. Query status with
+entryId and connectionId for enabledTools names and upstreamStatus. Query
 `dct_connection_status` with entryId, connectionId and
 `toolNames: ["click_at", "evaluate_script"]` for exact input schemas and conditions.
-Before launch, omit connectionId to query configuration requirements.
+Before launch, omit connectionId to query configuration requirements. Exact
+schemas require a connected, valid actual upstream; disconnected/quarantined
+connections provide requirements only. Request selected
+`include: ["configuration"]` for mcpArgs/workspace sources or
+`include: ["diagnostics"]` for bounded diagnostics; includes can combine with
+toolNames. Do not request configuration, schemas or diagnostics unless needed.
 
 For example, click_at needs experimentalVision=true with its other conditions.
-TOOL_NOT_ENABLED includes missing conditions and complete suggestedMcpArgs.
+Supported explicitly disabled tools and TOOL_NOT_ENABLED include missing
+conditions and complete replacement suggestedMcpArgs. Enabled tools have no
+activation recipe; unsupported tools provide a reason without a recipe.
 Use those only in an explicitly authorized start/restart; the gateway never
 silently enables tools. Slim connections retain their actual slim tool names;
 the global catalog remains full. Working directory does not grant file access:
-use official `--workspace` directories and inspect status workspace sources.
+use official `--workspace` directories and explicitly include status configuration
+when inspecting workspace sources.
 
 Every official call needs `_dct: { connectionId, sessionId }`. The gateway
 removes only this routing field and preserves original arguments/results.
@@ -86,8 +97,10 @@ named official tools or configuration variants.
 ## Errors, native dialogs and task completion
 
 CONNECTION_RECOVERY_REQUIRED means the affected upstream is isolated after
-timeout/cancellation. Preserve reported identities; explicitly restart or Close
-when authorized. Never automatically restart, replay tools, extend timeouts or
+timeout/cancellation while the app remains owned. Preserve reported identities;
+explicitly restart the live connection or Close when authorized. After actual
+application exit its connection/session is removed; retry requires start with
+new connection/session identities. Never automatically start/restart, replay tools, extend timeouts or
 add a screenshot preflight/foreground checklist.
 
 A Windows file picker is a native window. Locate it by the managed application's
@@ -100,21 +113,37 @@ Before ending a target's work, obtain **Close** or **Keep** with no default, unl
 the user has already supplied that choice. `dct_connection_stop` takes entryId,
 connectionId, sessionId, requestId and disposition. Keep retains app/upstream;
 The disposition values are exactly `"Close"` and `"Keep"`.
-Close requests normal shutdown and reports detailed retained identity on failure.
-Never force-kill. `dct_connection_end_task` ends work while retaining a live target.
+Close requests normal shutdown and waits for actual app exit without a target
+deadline. Continue operation waits while it remains incomplete. Failed/cancelled
+Close preserves live app ownership, observation and retry identity. Never
+force-kill. `dct_connection_end_task` ends work while retaining live resources;
+their later actual exit still removes that connection and is reported.
 
 `dct_connection_restart` requires entryId, connectionId, sessionId and requestId;
-optional mcpArgs explicitly replaces configuration. It preserves the connection
-and original port, creates a new session, and invalidates old page IDs.
+optional mcpArgs explicitly replaces configuration. Use it only for a still-live
+connection. It waits for old app exit and disposes old resources before creating
+fresh resources and session on the same connection and exact original port.
+It refuses a busy original port and invalidates old page IDs.
 Old operations cannot cancel a later session.
 
-Enabled, authorized host Hooks deliver operation results, connection errors and
-active-task exit reminders at task boundaries. Review and enable the four definitions
+Enabled, authorized host Hooks deliver compact operation notices, connection
+errors and exit events at task boundaries. Review and enable the four definitions
 using the current host's Plugin/Hook controls, described in the installed Plugin guide.
 Idle chats receive events next turn; they are not
-woken automatically. A process-exited reminder asks whether to restart or end
-dependent work. Keep other connections usable. hookEventName is reserved for
-automatic Hooks. All runtime identities and operation queues stay in memory.
+woken automatically. An active unexpected exit reports the removed session and
+may suggest an explicitly authorized new start; inactive exit is informational.
+Expected Close/restart exits belong to the operation notice's exits array, grouped
+by operationId. It retains every related actual exit and cleanup result, including
+old Target exit and new Target rollback during restart. Delivery may wait until
+all related cleanup is ready; pending cleanup keeps both notice and exit facts
+unread. Successfully reading a terminal result through operation status, complete
+wait, cancel of an already terminal operation or an identical mutation retry
+acknowledges that notice. Aborted requests and nonterminal responses leave it
+unread. Hooks never embed complete results, errors, configuration, diagnostics,
+schemas, tool names/counts or recipes. With no pending event, Hooks return {}.
+Keep other connections usable. hookEventName must be the sole argument and is
+reserved for automatic Hooks. operationId status cannot combine connectionId,
+toolNames or include. All runtime identities and operation queues stay in memory.
 
 If these lifecycle tools are absent, report a plugin/runtime version mismatch.
 Use an updated plugin in a new chat once installation is authorized; do not

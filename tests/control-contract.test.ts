@@ -59,3 +59,24 @@ test('explicit restart and event wait retain the selected identities and cursors
     ])
         assert.deepEqual(parseControlRequest(request), request);
 });
+
+test('selected status accepts only explicit configuration and diagnostic includes', () => {
+    const request = {
+        action: 'status',
+        entryId,
+        connectionId,
+        include: ['configuration', 'diagnostics'],
+        toolNames: ['evaluate_script'],
+    };
+    assert.deepEqual(parseControlRequest(request), request);
+    for (const invalid of [
+        { action: 'status', entryId, include: ['configuration'] },
+        { action: 'status', entryId, include: [] },
+        { ...request, include: ['launch'] },
+        { ...request, include: 'configuration' },
+        { ...request, include: ['diagnostics', 'diagnostics'] },
+        { action: 'status', entryId, operationId: sessionId, toolNames: ['evaluate_script'] },
+        { action: 'status', entryId, operationId: sessionId, include: ['diagnostics'] },
+    ])
+        assert.throws(() => parseControlRequest(invalid), Error, JSON.stringify(invalid));
+});
