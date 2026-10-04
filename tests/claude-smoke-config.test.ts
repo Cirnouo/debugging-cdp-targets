@@ -327,7 +327,7 @@ else if (mode === 'initial-input') {
         else { process.stdin.destroy(); process.stdout.write(evidence + result); setInterval(() => {}, 1000); }
     });
 }
-if (mode === 'next-input' && process.send) process.send('fixture-ready');
+if (['initial-input', 'next-input'].includes(mode) && process.send) process.send('fixture-ready');
 `,
         'utf8',
     );
@@ -340,6 +340,7 @@ const original = cp.spawn;
 const owned = new Set();
 let cleaning;
 let readyHost;
+let initialWriteAttempted = false;
 function cleanup() {
     return cleaning ??= Promise.all([...owned].map((child) => new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Private fixture cleanup did not close.')), 3000);
@@ -366,7 +367,11 @@ cp.spawn = (executable, args, options) => {
         // has arrived, instead of relying on OS pipe buffering timing.
         const write = child.stdin.write.bind(child.stdin);
         child.stdin.write = (input, callback) => {
-            child.stdout.once('data', () => { child.stdin.end(); write(input, callback); });
+            child.stdout.once('data', () => {
+                child.stdin.end();
+                initialWriteAttempted = true;
+                write(input, callback);
+            });
             return true;
         };
     }
@@ -380,10 +385,10 @@ cp.spawn = (executable, args, options) => {
     }
     return child;
 };
-if (${JSON.stringify(mode)} === 'next-input') {
+if (['initial-input', 'next-input'].includes(${JSON.stringify(mode)})) {
     // Interpreter startup precedes this input-failure experiment. Return a real
     // ready child at the spawn I/O boundary so its unchanged 400ms budget tests
-    // the closed next-input stream, rather than interpreter scheduling.
+    // the closed input stream, rather than interpreter scheduling.
     readyHost = original(process.execPath, [${JSON.stringify(fixture)}, '-p'], {
         cwd: process.cwd(), env: process.env, windowsHide: true, shell: false,
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
@@ -405,6 +410,10 @@ else await assert.rejects(() => claudeHost(process.execPath, ${JSON.stringify(te
     completedTurns++;
     return mode === 'callback' ? new Promise(() => {}) : mode === 'callback-error' ? Promise.reject(new Error('next-turn-callback-failure')) : Promise.resolve('next'.repeat(400000));
 }, 400), mode === 'callback' ? /timed out/ : mode === 'callback-error' ? /next-turn-callback-failure/ : /EPIPE|stdin|write after end|stream/i);
+if (mode === 'initial-input') {
+    assert.equal(initialWriteAttempted, true, 'The initial-input failure must follow a real write to the ended stream.');
+    assert.equal(completedTurns, 0, 'Initial input must fail before any completed turn.');
+}
 if (mode === 'next-input') assert.equal(completedTurns, 1, 'The closed-stream failure must follow a completed initial turn.');
 console.log('CONTROLLED_FAILURE');
 await cleanup();
@@ -466,12 +475,12 @@ process.disconnect();
     });
     try {
         const code = await Promise.race([closed, deadline]);
-        const pid: unknown = JSON.parse(await readFile(pidFile, 'utf8'));
-        assert.ok(typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0);
-        assert.throws(() => process.kill(pid, 0), /ESRCH|not found|no such process/i);
         assert.equal(watchdog, false, `Private helper failed to settle: ${stderr}`);
         assert.equal(code, 0, stderr);
         assert.ok(stdout.includes('CONTROLLED_FAILURE'), stderr);
+        const pid: unknown = JSON.parse(await readFile(pidFile, 'utf8'));
+        assert.ok(typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0);
+        assert.throws(() => process.kill(pid, 0), /ESRCH|not found|no such process/i);
         if (mode !== 'resistant') {
             assert.ok(
                 (await readFile(path.join(temporary, 'stdout.jsonl'), 'utf8')).includes('private-child-evidence'),
@@ -509,6 +518,9 @@ test('slow interpreter version startup preserves the bounded callback failure an
 
 test('slow private host startup preserves the controlled next-input write failure and transcript', () =>
     adversarialHost('next-input', undefined, 0, 1000));
+
+test('slow private host startup preserves the controlled initial-input write failure and transcript', () =>
+    adversarialHost('initial-input', undefined, 0, 1000));
 
 test('outer watchdog requests owned fixture cleanup before its private driver closes', async () => {
     await assert.rejects(() => adversarialHost('driver-cleanup'), /Private helper failed to settle/);
