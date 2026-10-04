@@ -17,7 +17,8 @@ after complete release verification; it requires no repository README additions.
 
 Keep authoritative contributor rules in root AGENTS.md and these policies.
 CONTRIBUTING.md provides the human setup and contribution entry point and links
-to those rules. SECURITY.md owns vulnerability reporting.
+to those rules. SECURITY.md owns vulnerability reporting; CODE_OF_CONDUCT.md
+owns community behavior and private incident reporting.
 Maintain progressive disclosure rather than copying all policies everywhere.
 Plugin instructions must be concise and application-agnostic. Do not collect
 application-specific debugging recipes; Agents explore after connecting.

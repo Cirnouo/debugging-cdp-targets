@@ -1,7 +1,7 @@
 # Contributing
 
 Bug reports, documentation improvements, and focused code contributions are
-welcome. Report suspected
+welcome. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report suspected
 vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 
 ## Prepare a checkout
