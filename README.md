@@ -8,6 +8,8 @@ and extension tools come directly from the official Server.
 
 Version 0.1.0 is under development and has not been released.
 
+See [SECURITY.md](SECURITY.md) to report a vulnerability privately.
+
 ## Requirements and compatibility
 
 - Codex with Plugin support, and Node 24.21.0 available on PATH.
