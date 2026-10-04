@@ -14,7 +14,8 @@
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
   nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
   and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
-- `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology.
+- `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology,
+  missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
 - `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
@@ -55,7 +56,9 @@
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
 - `windows-native.test.ts` runs disposable ordinary Node/WinForms fixtures on Windows;
   it checks argv/cwd/env/PID/NUL stdio, limited-query identity, visible close, owned
-  discovery readiness and manifest detection without UAC prompts.
+  discovery readiness and manifest detection without UAC prompts. A real 8.3
+  executable alias exercises normal close while mismatched path/time identities
+  must leave the fixture running.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP processes.
 - `smoke/` owns opt-in isolated Codex Hook, official Server, local Marketplace, and Windows visible

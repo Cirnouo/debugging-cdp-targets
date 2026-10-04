@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -175,6 +175,30 @@ function run() {
         eventName,
         currentBranch,
     });
+    if (
+        eventName === 'push' &&
+        isRecord(event) &&
+        event.forced === true &&
+        typeof event.before === 'string' &&
+        !zeroSha.test(event.before) &&
+        typeof event.after === 'string' &&
+        !zeroSha.test(event.after)
+    ) {
+        const base = spawnSync('git', ['cat-file', '-e', `${event.before}^{commit}`], {
+            cwd: root,
+            encoding: 'utf8',
+            windowsHide: true,
+        });
+        if (base.error) throw base.error;
+        if (base.status !== 0) {
+            // A fresh checkout cannot fetch an unreachable, replaced commit. Audit
+            // every current ancestor instead of skipping messages or changing history.
+            if (git(root, ['rev-parse', '--is-shallow-repository']) !== 'false')
+                throw new Error('Complete history is required to audit a forced push with a missing base.');
+            request.range = event.after;
+            request.includeAncestors = true;
+        }
+    }
     const errors = [];
     for (const branch of request.branches) {
         errors.push(...validateBranchName(branch).map((error) => `${branch}: ${error}`));

@@ -34,6 +34,11 @@ titles, and source branches; Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
 
+For a forced push whose previous commit is absent from the checkout, commit
+auditing requires complete history and checks every ancestor of the new head.
+Ordinary pushes still require their base; missing heads and shallow fallback
+checkouts fail closed. This audit behavior does not authorize rewriting history.
+
 The tag-triggered Release workflow reuses the same-commit read-only CI gates.
 Only the downstream publication job receives contents write permission, and
 only its publisher step receives the built-in token. Same-tag Release runs

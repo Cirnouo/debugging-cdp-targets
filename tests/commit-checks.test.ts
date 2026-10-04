@@ -195,6 +195,97 @@ test('runs the workflow_dispatch checker from a detached GitHub checkout', async
     }
 });
 
+test('audits all rewritten history when a forced push base is absent from the checkout', async (context) => {
+    for (const invalidAncestor of [false, true]) {
+        await context.test(
+            invalidAncestor ? 'rejects an invalid ancestor' : 'accepts valid rewritten history',
+            async () => {
+                const directory = await mkdtemp(path.join(os.tmpdir(), 'cdp-rewritten-push-'));
+                const fixtureEnvironment = sanitizedGitEnvironment();
+                const git = (cwd: string, args: string[]) => {
+                    const result = spawnSync('git', args, {
+                        cwd,
+                        encoding: 'utf8',
+                        env: fixtureEnvironment,
+                        windowsHide: true,
+                    });
+                    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+                    return result.stdout.trim();
+                };
+                try {
+                    git(directory, ['init', '--initial-branch=main', 'source']);
+                    const source = path.join(directory, 'source');
+                    git(source, ['config', 'user.name', 'CI Fixture']);
+                    git(source, ['config', 'user.email', 'ci-fixture@example.invalid']);
+                    git(source, ['config', 'core.hooksPath', '.git/no-hooks']);
+                    git(source, ['config', 'commit.gpgSign', 'false']);
+                    git(source, [
+                        'commit',
+                        '--allow-empty',
+                        '-m',
+                        invalidAncestor ? 'invalid ancestor' : 'test(tooling): create base',
+                    ]);
+                    const ancestor = git(source, ['rev-parse', 'HEAD']);
+                    git(source, ['commit', '--allow-empty', '-m', 'feat(session): original title']);
+                    const before = git(source, ['rev-parse', 'HEAD']);
+                    git(source, ['commit', '--amend', '--allow-empty', '-m', 'feat(session): revised title']);
+                    const after = git(source, ['rev-parse', 'HEAD']);
+                    // A transport clone contains reachable history, not the replaced loose object.
+                    git(directory, ['clone', '--no-local', '--single-branch', '--branch', 'main', source, 'checkout']);
+                    const checkout = path.join(directory, 'checkout');
+                    git(checkout, ['checkout', '--detach', after]);
+                    const missing = spawnSync('git', ['cat-file', '-e', `${before}^{commit}`], {
+                        cwd: checkout,
+                        env: fixtureEnvironment,
+                        windowsHide: true,
+                    });
+                    assert.notEqual(missing.status, 0);
+                    const eventPath = path.join(directory, 'event.json');
+                    const check = async (forced: boolean, head = after, cwd = checkout) => {
+                        await writeFile(
+                            eventPath,
+                            JSON.stringify({ ref: 'refs/heads/main', before, after: head, forced }),
+                        );
+                        return spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
+                            cwd,
+                            encoding: 'utf8',
+                            env: { ...fixtureEnvironment, GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: eventPath },
+                            windowsHide: true,
+                        });
+                    };
+                    const result = await check(true);
+                    assert.equal(result.status, invalidAncestor ? 1 : 0, `${result.stdout}\n${result.stderr}`);
+                    if (invalidAncestor) {
+                        assert.ok(result.stderr.includes(ancestor), result.stderr);
+                        const availableBase = await check(true, after, source);
+                        assert.equal(
+                            availableBase.status,
+                            0,
+                            'An available base still limits the audit to new commits.',
+                        );
+                        git(directory, ['clone', '--no-local', '--depth', '1', source, 'shallow']);
+                        const shallow = await check(true, after, path.join(directory, 'shallow'));
+                        assert.equal(shallow.status, 1, 'Incomplete ancestry must not conceal the invalid ancestor.');
+                        assert.match(shallow.stderr, /complete history/i);
+                    } else {
+                        assert.match(result.stdout, /audit passed/i);
+                        assert.notEqual((await check(false)).status, 0, 'An ordinary push must still have its base.');
+                        assert.notEqual(
+                            (await check(true, '1'.repeat(40))).status,
+                            0,
+                            'A missing head must never pass.',
+                        );
+                    }
+                } finally {
+                    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+                    assert.ok(path.basename(directory).startsWith('cdp-rewritten-push-'));
+                    await rm(directory, { recursive: true, force: true });
+                }
+            },
+        );
+    }
+});
+
 test('validates ordinary commit records and skips only topology-proven merges', () => {
     assert.deepEqual(
         validateCommitRecords([

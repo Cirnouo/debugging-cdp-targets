@@ -187,3 +187,27 @@ ordinary cleanup closes only newly owned targets. Diagnostic records contain
 identity, phase, error category and timing, never command arguments, environment
 values, full tool calls or user page content. Screenshot artifacts contain only
 the synthetic dedicated test page.
+
+## CI follow-up on 2026-10-04
+
+[CI run 37179957748](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37179957748)
+passed supply-chain, Quality, Linux and macOS checks, but failed commit auditing
+and two Windows native tests. The authorized title rewrite left the previous
+commit unreachable in the fresh CI checkout. The commit checker attempted its
+old-to-new range before validating any messages. A real transport-clone regression
+now checks the entire new ancestry when a forced push's base is missing, rejects
+an invalid ancestor, and refuses shallow history, a missing head or an ordinary
+push with a missing base.
+
+The two Windows failures reproduced locally by using an actual 8.3 temporary
+directory. Native close compared a normalized requested path with an unnormalized
+process path; .NET Framework expanded only the former to its long form. Identity
+validation consequently refused normal close, and the still-running fixture kept
+its temporary directory busy. Normalizing both paths fixes the comparison while
+retaining PID, creation-time and session checks. The real short-path regression
+also verifies that different executable paths and creation times cannot close
+the fixture. All 20 focused commit/native tests passed after these corrections.
+The original two failing Windows tests also passed with `TEMP`/`TMP` pointing
+to the same 8.3 reproduction directory. `pnpm typecheck`, `pnpm build:plugin`,
+`pnpm check:build` and the complete `pnpm verify:push` passed, including 250/250
+tests without Windows skips and the generated-runtime/distribution audits.
