@@ -5,19 +5,25 @@ import path from 'node:path';
 import test from 'node:test';
 import { applyChromePreset, createTargetHost } from '../src/adapters/target-host.ts';
 
-function fixture(available = true) {
+function fixture(available: boolean | (() => Promise<boolean>) = true) {
     const children: EventEmitter[] = [];
     const inspected: string[] = [];
     const launchedArguments: string[][] = [];
     const host = createTargetHost({
-        profileAvailable: async (directory) => {
-            inspected.push(directory);
-            return available;
-        },
+        profileAvailable:
+            typeof available === 'function'
+                ? available
+                : async (directory) => {
+                      inspected.push(directory);
+                      return available;
+                  },
         platformAdapter: {
             reservedRanges: async () => [],
             validateNewRoot: () => {},
-            close: async () => true,
+            close: async (target) => {
+                children[target.processId - 40]?.emit('exit', 0);
+                return true;
+            },
             snapshot: async (pid) => ({
                 root: {
                     exists: true,
@@ -42,14 +48,17 @@ function fixture(available = true) {
             webSocketDebuggerUrl: `ws://127.0.0.1:${port}/devtools/browser/profile`,
         }),
     });
-    const launch = (directory?: string) =>
-        host.launch({
-            targetKind: 'chrome',
-            launch: {
-                executable: process.execPath,
-                args: [...(directory ? [`--user-data-dir=${directory}`] : []), '--remote-debugging-port={port}'],
+    const launch = (directory?: string, signal?: AbortSignal) =>
+        host.launch(
+            {
+                targetKind: 'chrome',
+                launch: {
+                    executable: process.execPath,
+                    args: [...(directory ? [`--user-data-dir=${directory}`] : []), '--remote-debugging-port={port}'],
+                },
             },
-        });
+            { ...(signal ? { signal } : {}) },
+        );
     return {
         host,
         launch,
@@ -147,6 +156,26 @@ test('normal Close releases a profile claim and failed occupancy checks do not r
     }
 });
 
+test('cancellation after profile availability resolves releases the late acquired profile without spawning', async () => {
+    const abort = new AbortController();
+    const first = fixture(async () => {
+        queueMicrotask(() => queueMicrotask(() => abort.abort(new Error('Profile acquisition cancelled.'))));
+        return true;
+    });
+    const second = fixture();
+    const directory = path.join(os.tmpdir(), 'dct-profile-late-cancel-fixture');
+    try {
+        await assert.rejects(first.launch(directory, abort.signal), /cancelled/);
+        assert.equal(first.children.length, 0);
+        const next = await second.launch(directory);
+        assert.equal(second.children.length, 1, 'The cancelled acquisition must release its eventual claim.');
+        await second.host.close(next);
+    } finally {
+        first.finish();
+        second.finish();
+    }
+});
+
 test('old repeated profile release cannot release a newer owner', async () => {
     const { reserveProfile } = await import('../src/adapters/chrome-profile.ts');
     const directory = path.join(os.tmpdir(), 'dct-profile-generation-fixture');
@@ -161,6 +190,23 @@ test('old repeated profile release cannot release a newer owner', async () => {
         );
     } finally {
         newRelease();
+    }
+});
+
+test('a live Chrome profile remains reserved when cleanup is requested without actual exit', async () => {
+    const first = fixture();
+    const second = fixture();
+    const directory = path.join(os.tmpdir(), 'dct-profile-live-release-fixture');
+    try {
+        const target = await first.launch(directory);
+        target.releaseProfile?.();
+        await assert.rejects(second.launch(directory), /profile.*occupied/i);
+        first.finish();
+        const replacement = await second.launch(directory);
+        assert.equal(await second.host.close(replacement), true);
+    } finally {
+        first.finish();
+        second.finish();
     }
 });
 

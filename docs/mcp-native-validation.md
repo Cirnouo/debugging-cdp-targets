@@ -1,5 +1,11 @@
 # MCP native lifecycle delivery and validation
 
+Current lifecycle follow-up: [ADR 0013](adr/0013-session-owned-exit-cleanup.md)
+and [the lifecycle protocol](lifecycle-protocol.md) replace the earlier retained
+dead-session recovery, target-close waiting and full-result Hook/status semantics.
+The dated acceptance and gate results below are historical evidence; they do not
+verify the later lifecycle changes.
+
 Peer host follow-up, 2026-10-05: [ADR 0012](adr/0012-peer-host-distributions.md)
 adds complete independent Codex and Claude Code distributions. Actual Windows
 acceptance passed with Codex CLI 0.160.0 and Claude Code 2.1.283: local Marketplace

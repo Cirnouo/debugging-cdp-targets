@@ -10,7 +10,11 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `entry-recovery.ts` launches at least three concurrent isolated Chrome targets
   through one gateway. It checks independent UUIDs and parallel tool routing,
   Keep/reuse, scoped Close, later new connections, active-task recorded exit delivery,
-  same-port restart, stale-session rejection, silent cleanup after kept target exit.
+  new-connection retry after actual exit, live same-port restart, stale-session
+  rejection and informational exit delivery after a kept target exits. An actual
+  exit removes the old connection; restart requires a still-live session. Default
+  status and lifecycle success are checked as summaries before test adapters read
+  them, and compact Hook payloads must exclude tool schemas and configuration.
   A normal Close that reports retained identity may be retried twice with the
   same IDs; retries are logged and never escalate to forced termination.
   Fixtures disable the first-run UI, background networking and background mode.
@@ -45,11 +49,21 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `codex-hooks.ts` installs byte-identical Codex manifest/Hook definitions in
   temporary homes and runs the actual Codex app-server against a local SSE model
   substitute and production gateway with fake process/CDP/upstream I/O. It checks
-  actual outbound model requests for PostToolUse, one Stop continuation, and
-  idle-next-turn delivery, checks the gateway tool catalog, and verifies untrusted
-  Hooks do not run. Only temporary config is trusted; no real browser or account API
-  is used. Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects
-  a Codex executable. Enable Hooks in this isolated config for the test.
+  actual outbound model requests for PreToolUse, PostToolUse, one Stop continuation,
+  idle-next-turn delivery, inactive-task exit and operation completion. Every event
+  is parsed at that model-request boundary and checked for exact identity, event
+  kind and operation action, with no full result, tool schema or configuration
+  leakage. The Post scenario checks successful original official content and
+  completed tool status before its separately observed exit, using an event-loop
+  milestone for exit before the immediate PostToolUse boundary. A controlled
+  second launch completes before the wait Hook, proving a
+  compact unread operation notice reaches the model independently of the wait
+  result. It checks the gateway tool catalog and verifies untrusted Hooks do not
+  run. Only temporary config is trusted; no real browser or account API is used.
+  Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects a Codex
+  executable and an optional second selects one of `untrusted`, `pre`, `post`,
+  `stop`, `idle`, `inactive` or `lifecycle`. The default runs all seven scenarios.
+  Hooks are enabled only in the isolated test config.
 
 - `claude-marketplace.ts` validates, adds and installs the actual Claude Marketplace
   into an isolated home outside the repository. It compares the complete installed
@@ -60,11 +74,19 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `claude-hooks.ts` installs the committed Claude manifest, Hook and Skill bytes in
   temporary homes and substitutes only process/CDP/upstream I/O with the production
   gateway fixture. Actual Anthropic model requests prove PreToolUse, PostToolUse,
-  next-turn UserPromptSubmit, one Stop continuation, lifecycle result delivery and
-  complete namespaced Skill instructions. `disableAllHooks` keeps MCP connected and
-  suppresses Hooks. Run `node tests/smoke/claude-hooks.ts`; an optional first argument
-  selects Claude and an optional second selects one scenario. The default runs all
-  seven scenarios. An intentional blocking Stop can emit Claude's `stop-hook-error`
+  next-turn UserPromptSubmit, one Stop continuation, inactive-task exit, compact
+  operation completion and complete namespaced Skill instructions. The payload
+  checks use actual outbound request context and exact event identity/action;
+  operation notices cannot carry results, tool schemas or configuration. The
+  Post scenario verifies the original successful tool_result content in its
+  actual text-array format and exact PostToolUse delivery. Its fixture schedules
+  exit after the SDK success response through an event-loop milestone.
+  separately delivered successful wait result must be a connection summary.
+  `disableAllHooks` keeps MCP connected and suppresses Hooks. Run
+  `node tests/smoke/claude-hooks.ts`; an optional first argument selects Claude and
+  an optional second selects `pre`, `post`, `stop`, `idle`, `inactive`, `lifecycle`,
+  `skill` or `disabled`. The default runs all eight scenarios. An intentional
+  blocking Stop can emit Claude's `stop-hook-error`
   notification while the Hook and final turn succeed; the script checks the actual
   continuation and successful result.
 - `claude-host.ts` owns tested allowlisted environments, explicit loopback model
@@ -91,6 +113,17 @@ then explicitly restarts and normally closes them. It retains test profiles.
   Windows authorization, preserved environment, limited-query identity, actual
   app-handle exit observation and elevated normal close. It may
   show UAC; cancellation is reported, never treated as successful elevated launch.
+  Its first argument is an evidence directory and its second selects a mode:
+
+  | Mode | Evidence |
+  | --- | --- |
+  | `normal` | Actual elevated application identity, preserved environment and native handle-based exit after normal Close. |
+  | `access-denied-return` | The production `RequestClose` native API returns UIPI access denied (`5`) from the unelevated caller. The production helper normally detects elevation before that call, so this is native return-value evidence, without claiming coverage of a return-value fallback branch. |
+  | `access-denied-exception` | An optional fixture-only DACL on its own process makes production `IsProcessElevated` throw native access denied (`5`); normal close then uses one elevation helper. |
+
+  Use a separate evidence directory for each mode. All modes wait for the actual
+  application handle to exit after normal Close. UAC cancellation does not trigger
+  another authorization request, and application targets are never force-killed.
 - `windows-elevated-mcp.ts` verifies the same elevation through the delivered
   gateway's start/wait/status/Close tools, using the fixture's loopback discovery
   endpoint for real process/listener/readiness verification. The fixture does not
@@ -100,6 +133,20 @@ then explicitly restarts and normally closes them. It retains test profiles.
 These scripts are opt-in and may open dedicated test browser/application windows.
 They use the delivered official package without dependency download. The normal
 test suite never runs them. Codex tests create only disposable homes/configuration.
+
+Build the shared delivered payload once with `pnpm build:plugin` before running
+host Hook smokes so their copied manifests, Hooks and Skill match maintained
+sources. On the current Windows host, the discovered executable commands are:
+
+```powershell
+node tests/smoke/codex-hooks.ts 'C:/Users/ciilyn/AppData/Local/Programs/OpenAI/Codex/bin/codex.exe'
+node tests/smoke/claude-hooks.ts 'C:/Users/ciilyn/.local/bin/claude.exe'
+```
+
+Append `lifecycle` or `inactive` to run those isolated scenarios separately.
+These local discovery paths are host-specific. `entry-recovery.ts` is a separate
+opt-in real-Chrome smoke; adapting its protocol assertions does not establish a
+new real-browser acceptance result.
 
 `official-server.ts` and `entry-recovery.ts` support Windows, Linux and macOS.
 Set `DCT_SMOKE_CHROME_EXECUTABLE` to the absolute path of the actual Chrome

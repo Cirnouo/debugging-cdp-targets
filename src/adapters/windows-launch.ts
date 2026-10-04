@@ -35,6 +35,15 @@ class NativeApplication extends EventEmitter {
             this.off('monitor-error', listener);
         };
     }
+    recordExit(code: number) {
+        if (this.exitCode !== null) return;
+        this.exitCode = code;
+        this.emit('exit');
+        this.disposeMonitor();
+    }
+}
+export interface NativeLaunchContext extends LaunchContext {
+    onCreated?: (application: NativeApplication) => void;
 }
 type HelperProcess = Pick<ChildProcessWithoutNullStreams, 'stdin' | 'stdout' | 'stderr' | 'pid'> & {
     once(event: 'error', listener: (error: Error) => void): unknown;
@@ -59,6 +68,10 @@ function nativeFailure(value: Record<string, unknown>) {
         ...(typeof value.exceptionType === 'string' && /^[A-Za-z]+$/.test(value.exceptionType)
             ? { exceptionType: value.exceptionType }
             : {}),
+        ...(typeof value.waitResult === 'number' ? { waitResult: value.waitResult } : {}),
+        ...(typeof value.waitError === 'number' ? { waitError: value.waitError } : {}),
+        closeRequested: value.closeRequested === true,
+        processExited: false,
     };
     return error;
 }
@@ -72,6 +85,10 @@ export function createWindowsLauncher({
 }: {
     spawn?: HelperSpawn;
 } = {}) {
+    const applications = new Map<string, NativeApplication>();
+    const closeWaits = new WeakMap<ProcessTarget, Promise<Record<string, unknown>>>();
+    const key = (target: ProcessTarget) =>
+        `${target.processId}:${target.startedAtUtc}:${path.win32.resolve(target.executablePath).toLowerCase()}`;
     function helper(
         request: Record<string, unknown>,
         context: LaunchContext,
@@ -140,6 +157,7 @@ export function createWindowsLauncher({
             detach();
             ended();
         });
+        child.stdout.once('end', ended);
         child.stdin.write(`${JSON.stringify(request)}\n`);
         if (context.signal?.aborted) cancel();
         return {
@@ -151,8 +169,104 @@ export function createWindowsLauncher({
             },
         };
     }
+    function requestNormalClose(target: ProcessTarget, context: LaunchContext = {}): Promise<Record<string, unknown>> {
+        context.signal?.throwIfAborted();
+        let resolveWait: (value: Record<string, unknown>) => void = () => {};
+        let rejectWait: (error: Error) => void = () => {};
+        const wait = new Promise<Record<string, unknown>>((resolve, reject) => {
+            resolveWait = resolve;
+            rejectWait = reject;
+        });
+        void wait.catch(() => {});
+        closeWaits.set(target, wait);
+        return new Promise((resolve, reject) => {
+            let requested = false;
+            let complete = false;
+            const failed = (error: Error) => {
+                if (complete) return;
+                complete = true;
+                transport.dispose();
+                if (!requested) reject(error);
+                rejectWait(error);
+            };
+            const transport = helper(
+                {
+                    action: 'close',
+                    target: {
+                        processId: target.processId,
+                        executablePath: target.executablePath,
+                        startedAtUtc: target.startedAtUtc,
+                        targetKind: target.targetKind,
+                        port: target.port,
+                    },
+                },
+                context,
+                (value) => {
+                    if (value.event === 'cancelled') {
+                        failed(
+                            context.signal?.reason instanceof Error
+                                ? context.signal.reason
+                                : new DOMException('Windows close authorization cancelled.', 'AbortError'),
+                        );
+                        return;
+                    }
+                    if (
+                        value.processId !== target.processId ||
+                        value.startedAtUtc !== target.startedAtUtc ||
+                        typeof value.closeRequested !== 'boolean' ||
+                        typeof value.processExited !== 'boolean'
+                    )
+                        throw new Error('Invalid native close identity evidence.');
+                    if (value.event === 'close-requested' && !requested) {
+                        requested = true;
+                        resolve(value);
+                        return;
+                    }
+                    if (
+                        value.event !== 'closed' ||
+                        value.closed !== true ||
+                        value.processExited !== true ||
+                        value.waitResult !== 0 ||
+                        value.waitError !== 0 ||
+                        typeof value.exitCode !== 'number'
+                    )
+                        throw new Error('Native handle did not confirm actual application exit.');
+                    complete = true;
+                    applications.get(key(target))?.recordExit(value.exitCode);
+                    if (!requested) resolve(value);
+                    resolveWait(value);
+                    transport.dispose();
+                },
+                failed,
+                () => failed(new Error('Native close observer exited without actual application exit evidence.')),
+            );
+        });
+    }
+    function waitForExit(target: ProcessTarget, signal?: AbortSignal): Promise<Record<string, unknown>> {
+        const pending = closeWaits.get(target);
+        if (!pending) return Promise.reject(new Error('No native close handle observer is available.'));
+        if (!signal) return pending;
+        signal.throwIfAborted();
+        return new Promise((resolve, reject) => {
+            const cancel = () => {
+                signal.removeEventListener('abort', cancel);
+                reject(signal.reason);
+            };
+            signal.addEventListener('abort', cancel, { once: true });
+            pending.then(
+                (value) => {
+                    signal.removeEventListener('abort', cancel);
+                    resolve(value);
+                },
+                (error: unknown) => {
+                    signal.removeEventListener('abort', cancel);
+                    reject(error);
+                },
+            );
+        });
+    }
     return {
-        launch(launch: LaunchDefinition, context: LaunchContext = {}): Promise<NativeApplication> {
+        launch(launch: LaunchDefinition, context: NativeLaunchContext = {}): Promise<NativeApplication> {
             context.signal?.throwIfAborted();
             return new Promise((resolve, reject) => {
                 let application: NativeApplication | undefined;
@@ -199,6 +313,28 @@ export function createWindowsLauncher({
                                 transport.dispose,
                             );
                             if (launchFailure) application.monitoringFailure = 'native-helper-exited';
+                            applications.set(
+                                key({
+                                    processId: application.pid,
+                                    startedAtUtc: application.startedAtUtc,
+                                    executablePath: launch.executablePath,
+                                    targetKind: 'generic-cdp',
+                                    port: 0,
+                                }),
+                                application,
+                            );
+                            const actual = application;
+                            const identityKey = key({
+                                processId: actual.pid,
+                                startedAtUtc: actual.startedAtUtc,
+                                executablePath: launch.executablePath,
+                                targetKind: 'generic-cdp',
+                                port: 0,
+                            });
+                            actual.once('exit', () => {
+                                if (applications.get(identityKey) === actual) applications.delete(identityKey);
+                            });
+                            context.onCreated?.(application);
                             transport.detach();
                             resolve(application);
                         } else if (
@@ -207,9 +343,7 @@ export function createWindowsLauncher({
                             value.processId === application.pid &&
                             typeof value.exitCode === 'number'
                         ) {
-                            application.exitCode = value.exitCode;
-                            application.emit('exit');
-                            application.disposeMonitor();
+                            application.recordExit(value.exitCode);
                         } else throw new Error('Unexpected native process evidence.');
                     },
                     failed,
@@ -217,33 +351,11 @@ export function createWindowsLauncher({
                 );
             });
         },
-        close(target: ProcessTarget): Promise<Record<string, unknown>> {
-            return new Promise((resolve, reject) => {
-                let complete = false;
-                const transport = helper(
-                    { action: 'close', target },
-                    {},
-                    (value) => {
-                        if (
-                            value.event !== 'closed' ||
-                            typeof value.closed !== 'boolean' ||
-                            typeof value.closeRequested !== 'boolean' ||
-                            typeof value.processExited !== 'boolean'
-                        )
-                            throw new Error('Invalid native close evidence.');
-                        complete = true;
-                        resolve(value);
-                        transport.child.stdin.end();
-                    },
-                    (error) => {
-                        transport.dispose();
-                        reject(error);
-                    },
-                    () => {
-                        if (!complete) reject(new Error('Native close helper exited without evidence.'));
-                    },
-                );
-            });
+        requestNormalClose,
+        waitForExit,
+        async close(target: ProcessTarget): Promise<Record<string, unknown>> {
+            await requestNormalClose(target);
+            return waitForExit(target);
         },
     };
 }

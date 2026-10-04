@@ -10,8 +10,8 @@ type Entry = { name: string; requires: Record<string, boolean>; variants: Tool[]
 type Requirements = {
     name: string;
     supported: boolean;
-    conditions: string[];
-    missingConditions: string[];
+    conditions?: string[];
+    missingConditions?: string[];
     suggestedMcpArgs?: string[];
     reason?: string;
 };
@@ -48,24 +48,27 @@ export function createToolCatalog(value: unknown) {
             throw new Error('Invalid official tool variants.');
         entries.set(input.name, { name: input.name, requires: required, variants });
     }
-    function requirements(name: string, mcpArgs: string[]): Requirements {
+    function requirements(name: string, mcpArgs: string[], forceRecipe = false): Requirements {
         const entry = entries.get(name);
         if (!entry) throw new Error(`Unknown official tool: ${name}.`);
+        if (entry.requires.categoryPwa)
+            return {
+                name,
+                supported: false,
+                reason: 'Official PWA tools require a pipe-launched browser; the gateway manages a verified CDP endpoint.',
+            };
         const options = parseMcpArgs(mcpArgs);
         const missingConditions = Object.entries(entry.requires)
             .filter(([flag, expected]) => (options.get(flag)?.values[0] ?? defaults[flag] ?? false) !== expected)
             .map(([flag, expected]) => `--${flag}=${expected}`);
-        const supported = !entry.requires.categoryPwa;
         return {
             name,
-            supported,
+            supported: true,
             conditions: Object.entries(entry.requires).map(([flag, expected]) => `--${flag}=${expected}`),
             missingConditions,
-            ...(supported
+            ...(forceRecipe || missingConditions.length > 0
                 ? { suggestedMcpArgs: suggestMcpArgs(mcpArgs, entry.requires) }
-                : {
-                      reason: 'Official PWA tools require a pipe-launched browser; the gateway manages a verified CDP endpoint.',
-                  }),
+                : {}),
         };
     }
     const tools = [...entries.values()]
@@ -89,7 +92,7 @@ export function createToolCatalog(value: unknown) {
             );
             const conditions = requirements(entry.name, []);
             const description =
-                `${first.description ?? entry.name}\nGateway configuration: ${conditions.conditions.join(', ')}. ${conditions.reason ?? ''}` +
+                `${first.description ?? entry.name}\nGateway configuration: ${conditions.conditions?.join(', ') ?? ''}. ${conditions.reason ?? ''}` +
                 (schemas.length > 1
                     ? '\nCompatible declaration combines official parameter variants. Query dct_connection_status with toolNames for the selected connection’s exact input schema before using configuration-sensitive arguments.'
                     : '');
@@ -112,13 +115,18 @@ export function createToolCatalog(value: unknown) {
                     throw new Error(`The official tool catalog changed outside the reviewed variants: ${tool.name}.`);
             }
         },
-        describe(mcpArgs: string[], actual?: Tool[], names?: string[]) {
+        describe(mcpArgs: string[], actual?: Tool[], names?: string[], forceRecipe = false) {
             const chosen = names ?? (actual ? actual.map((tool) => tool.name) : [...entries.keys()]);
             return chosen.map((name) => {
-                const requirement = requirements(name, mcpArgs);
                 const tool = actual?.find((tool) => tool.name === name);
+                const { suggestedMcpArgs, ...requirement } = requirements(
+                    name,
+                    mcpArgs,
+                    forceRecipe || (actual !== undefined && names !== undefined && tool === undefined),
+                );
                 return {
                     ...requirement,
+                    ...(actual !== undefined && !tool && suggestedMcpArgs ? { suggestedMcpArgs } : {}),
                     ...(actual ? { enabled: tool !== undefined } : {}),
                     ...(tool ? { inputSchema: tool.inputSchema } : {}),
                 };

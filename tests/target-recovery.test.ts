@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
@@ -6,6 +7,7 @@ import { createTargetHost } from '../src/adapters/target-host.ts';
 function fixture({ busy = false, race = false } = {}) {
     const launched: { port: number; args: string[]; cwd: string | undefined }[] = [];
     const closed: number[] = [];
+    const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null });
     const platform: PlatformAdapter = {
         reservedRanges: async () => [],
         snapshot: async (pid) => ({
@@ -22,6 +24,7 @@ function fixture({ busy = false, race = false } = {}) {
         validateNewRoot: () => {},
         close: async (target) => {
             closed.push(target.port);
+            child.emit('exit', 0);
             return true;
         },
     };
@@ -31,7 +34,7 @@ function fixture({ busy = false, race = false } = {}) {
         probe: async () => !busy,
         spawn: async (_exe, args, port, cwd) => {
             launched.push({ port, args, cwd });
-            return { pid: 42, exitCode: null, once: () => {} };
+            return child;
         },
         getVersion: async (port) => ({
             Browser: 'Chrome/153',

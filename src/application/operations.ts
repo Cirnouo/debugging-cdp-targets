@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { ConnectionRoute } from '../domains/control-contract.ts';
-import { errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
+import { type ConnectionRoute, lifecycleFailureEvidence } from '../domains/control-contract.ts';
+import { errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 
 type State = 'accepted' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled';
 export interface OperationSnapshot {
     entryId: string;
     operationId: string;
+    requestId: string;
+    action?: string;
     state: State;
     cursor: number;
     phase: string;
@@ -15,7 +17,27 @@ export interface OperationSnapshot {
     result?: Record<string, unknown>;
     error?: Record<string, unknown> & { message: string };
 }
+export interface OperationNotice {
+    kind: 'operation';
+    entryId: string;
+    operationId: string;
+    action?: string;
+    state: State;
+    phase: string;
+    elapsedMs: number;
+    connectionId?: string;
+    sessionId?: string;
+    code?: string;
+    category?: string;
+    nativeError?: number;
+    exceptionType?: string;
+    closeRequested?: boolean;
+    processExited?: boolean;
+    listenerState?: string;
+    closeConfirmed?: boolean;
+}
 export interface OperationContext {
+    operationId: string;
     signal: AbortSignal;
     phase(value: string): void;
     identity(value: ConnectionRoute): void;
@@ -82,12 +104,25 @@ export function createOperationRegistry(entryId: string) {
         request: unknown,
         job: (context: OperationContext) => Promise<Record<string, unknown>>,
         onSettled?: () => void,
+        initialIdentity?: ConnectionRoute,
     ) {
         const { fingerprint, prior } = lookup(requestId, request);
         if (prior) return prior;
         const operationId = randomUUID();
         const operation: Operation = {
-            snapshot: { entryId, operationId, state: 'accepted', cursor: 0, phase: 'accepted', elapsedMs: 0 },
+            snapshot: {
+                entryId,
+                operationId,
+                requestId,
+                state: 'accepted',
+                cursor: 0,
+                phase: 'accepted',
+                elapsedMs: 0,
+                ...(isRecord(request) && typeof request.action === 'string' ? { action: request.action } : {}),
+                ...(initialIdentity
+                    ? { connectionId: initialIdentity.connectionId, sessionId: initialIdentity.sessionId }
+                    : {}),
+            },
             started: Date.now(),
             abort: new AbortController(),
             events: [],
@@ -103,22 +138,36 @@ export function createOperationRegistry(entryId: string) {
                 operation.snapshot.state = 'running';
                 emit(operation);
                 const result = await job({
+                    operationId,
                     signal: operation.abort.signal,
                     phase: (phase) => {
+                        if (terminal(operation.snapshot.state)) return;
                         operation.snapshot.phase = phase;
                         emit(operation);
                     },
                     identity: (route) => {
-                        Object.assign(operation.snapshot, route);
+                        if (terminal(operation.snapshot.state)) return;
+                        operation.snapshot.connectionId = route.connectionId;
+                        operation.snapshot.sessionId = route.sessionId;
                         emit(operation);
                     },
                 });
+                operation.abort.signal.throwIfAborted();
                 operation.snapshot.result = result;
                 operation.snapshot.state = 'succeeded';
             } catch (error) {
                 const cancelled = operation.abort.signal.aborted && error === operation.abort.signal.reason;
                 operation.snapshot.state = cancelled ? 'cancelled' : 'failed';
-                if (!cancelled) operation.snapshot.error = { ...errorDetails(error), message: errorMessage(error) };
+                if (!cancelled) {
+                    const code = errorCode(error);
+                    const evidence = lifecycleFailureEvidence(errorDetails(error) ?? {});
+                    operation.snapshot.error = {
+                        ...evidence,
+                        phase: typeof evidence.phase === 'string' ? evidence.phase : operation.snapshot.phase,
+                        ...(code === undefined ? {} : { code }),
+                        message: errorMessage(error),
+                    };
+                }
             } finally {
                 onSettled?.();
                 operation.snapshot.phase = operation.snapshot.state;
@@ -168,15 +217,58 @@ export function createOperationRegistry(entryId: string) {
         }
         return get(operationId);
     }
+    function cancelRoute(
+        route: ConnectionRoute,
+        { excludeActions = ['stop', 'restart'] }: { excludeActions?: readonly string[] } = {},
+    ) {
+        return [...operations.values()]
+            .filter(
+                ({ snapshot }) =>
+                    snapshot.connectionId === route.connectionId &&
+                    snapshot.sessionId === route.sessionId &&
+                    !terminal(snapshot.state) &&
+                    !excludeActions.includes(snapshot.action ?? ''),
+            )
+            .map(({ snapshot }) => cancel(snapshot.operationId));
+    }
+    function markRead(operationId: string) {
+        if (terminal(selected(operationId).snapshot.state)) notices.delete(operationId);
+    }
+    function notice(operationId: string): OperationNotice {
+        const snapshot = get(operationId);
+        const failure = snapshot.error;
+        const code = failure?.code;
+        return {
+            kind: 'operation',
+            entryId,
+            operationId,
+            ...(snapshot.action === undefined ? {} : { action: snapshot.action }),
+            state: snapshot.state,
+            phase: typeof snapshot.error?.phase === 'string' ? snapshot.error.phase : snapshot.phase,
+            elapsedMs: snapshot.elapsedMs,
+            ...(snapshot.connectionId === undefined ? {} : { connectionId: snapshot.connectionId }),
+            ...(snapshot.sessionId === undefined ? {} : { sessionId: snapshot.sessionId }),
+            ...(typeof code === 'string' ? { code } : {}),
+            ...(typeof failure?.category === 'string' ? { category: failure.category } : {}),
+            ...(typeof failure?.nativeError === 'number' ? { nativeError: failure.nativeError } : {}),
+            ...(typeof failure?.exceptionType === 'string' ? { exceptionType: failure.exceptionType } : {}),
+            ...(typeof failure?.closeRequested === 'boolean' ? { closeRequested: failure.closeRequested } : {}),
+            ...(typeof failure?.processExited === 'boolean' ? { processExited: failure.processExited } : {}),
+            ...(typeof failure?.listenerState === 'string' ? { listenerState: failure.listenerState } : {}),
+            ...(typeof failure?.closeConfirmed === 'boolean' ? { closeConfirmed: failure.closeConfirmed } : {}),
+        };
+    }
     return {
         get,
         submit,
         wait,
         cancel,
+        cancelRoute,
+        markRead,
         prior: (requestId: string, request: unknown) => lookup(requestId, request).prior,
-        takeNotices: () => {
-            const result = [...notices].map(get);
-            notices.clear();
+        takeNotices: (predicate?: (notice: OperationNotice) => boolean) => {
+            const result = [...notices].map(notice).filter((value) => predicate?.(value) ?? true);
+            for (const value of result) notices.delete(value.operationId);
             return result;
         },
         async close() {

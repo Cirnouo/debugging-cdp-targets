@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -106,6 +107,9 @@ test('CDP router rejects a switch while a request is in flight and invalidates o
     await new Promise<void>((resolve) => setTimeout(resolve, 30));
     assert.equal(router.isBusy(), true);
     assert.throws(() => router.setTarget({ port: listeningPort(target) }), /busy/i);
+    router.pause();
+    assert.equal((await fetch(`${router.url}/json/version`)).status, 409);
+    assert.equal(router.isBusy(), true, 'pause blocks new work without waiting for existing CDP requests');
     router.clearTarget();
     await new Promise<void>((resolve) => socket.once('close', resolve));
     assert.equal(router.isBusy(), false);
@@ -207,6 +211,7 @@ test('target host launches and verifies a browser-level CDP endpoint', async (co
 function hostFixture({ endpointFailure = false, closeSucceeds = true, race = false } = {}) {
     const closed: number[] = [];
     const launched: number[] = [];
+    const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null });
     let clock = 0;
     const platform: PlatformAdapter = {
         reservedRanges: async () => [],
@@ -224,6 +229,7 @@ function hostFixture({ endpointFailure = false, closeSucceeds = true, race = fal
         validateNewRoot: () => {},
         close: async (target) => {
             closed.push(target.port);
+            if (closeSucceeds) child.emit('exit', 0);
             return closeSucceeds;
         },
     };
@@ -232,7 +238,7 @@ function hostFixture({ endpointFailure = false, closeSucceeds = true, race = fal
         probe: async () => true,
         spawn: async (_executable, _args, port) => {
             launched.push(port);
-            return { pid: 42, exitCode: null, once: () => {} };
+            return child;
         },
         getVersion: async (port) => {
             if (endpointFailure) throw new Error('Fixture CDP failure');
@@ -255,11 +261,10 @@ test('target startup failure normally closes only its newly launched process', a
     assert.deepEqual(closed, [9222]);
 });
 
-test('a verified released-probe port race closes the new process before advancing', async () => {
+test('a post-creation port race closes the new process without automatic relaunch', async () => {
     const { host, closed, launched } = hostFixture({ race: true });
-    const target = await host.launch({ launch: { executable: process.execPath }, basePort: 9222 });
-    assert.equal(target.port, 9223);
-    assert.deepEqual(launched, [9222, 9223]);
+    await assert.rejects(host.launch({ launch: { executable: process.execPath }, basePort: 9222 }), /foreign process/);
+    assert.deepEqual(launched, [9222]);
     assert.deepEqual(closed, [9222]);
 });
 
@@ -313,7 +318,7 @@ test('official server switches require explicit boolean environment overrides', 
     assert.throws(() => buildServerArguments('http://127.0.0.1:30000', { DCT_EXTENSIONS: 'yes' }), /boolean/i);
 });
 
-test('controller normal Close pauses routing and preserves identity on failure; busy Close does not signal', async () => {
+test('controller normal Close pauses routing and preserves identity on failure even while CDP is busy', async () => {
     const events: string[] = [];
     let busy = false;
     const controller = createTargetController({
@@ -350,21 +355,20 @@ test('controller normal Close pauses routing and preserves identity on failure; 
     const active = await controller.start({ launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     busy = true;
-    await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), /busy/i);
-    assert.deepEqual(events, ['route']);
-    busy = false;
     await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), (error: unknown) => {
         assert.ok(error instanceof DetailedError && isRecord(error.details));
         assert.deepEqual(error.details.retainedTargets, [{ processId: 42, port: 9222 }]);
         return true;
     });
     assert.deepEqual(events, ['route', 'pause', 'close', 'resume']);
+    busy = false;
     assert.equal(controller.status().sessionId, active.sessionId);
     assert.equal(controller.status().status, 'active');
 });
 
 test('controller route attachment failure normally closes only the newly launched target', async () => {
     const closed: number[] = [];
+    const child = new EventEmitter();
     const controller = createTargetController({
         entryId,
         router: {
@@ -375,9 +379,10 @@ test('controller route attachment failure normally closes only the newly launche
             clearTarget: () => {},
         },
         host: {
-            launch: async () => targetFixture(9222),
+            launch: async () => ({ ...targetFixture(9222), child }),
             close: async (target) => {
                 closed.push(target.processId);
+                child.emit('exit');
                 return true;
             },
         },

@@ -8,6 +8,7 @@ import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { assertSummary, hookResultEvents } from '../fixtures/hook-gateway-events.ts';
 import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
@@ -22,6 +23,15 @@ const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets
 async function tool(name: string, arguments_: Record<string, unknown> = {}) {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
+    if (name === 'dct_connection_status' && !arguments_.hookEventName)
+        assertSummary(result.structuredContent, typeof arguments_.connectionId === 'string');
+    if (
+        name === 'dct_operation_wait' &&
+        isRecord(result.structuredContent) &&
+        isRecord(result.structuredContent.operation) &&
+        result.structuredContent.operation.state === 'succeeded'
+    )
+        assertSummary(result.structuredContent.operation.result);
     return result;
 }
 const control = lifecycleClient(tool);
@@ -135,30 +145,66 @@ try {
     await recordOwned(fourth);
     await Promise.all([pages(first, 0), pages(third, 2), pages(fourth, 3)]);
     console.log('Keep/reuse, scoped Close and later new connection passed.');
+    assert.deepEqual(
+        (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
+        {},
+        'Delivered terminal operations must not be repeated by Hooks.',
+    );
     await until(async () => (await selectedStatus(first.connectionId)).taskActive === true);
     closeStarted = Date.now();
     const [normallyClosed] = await Promise.all([closeFixture(first), pages(third, 2), pages(fourth, 3)]);
     assert.equal(normallyClosed, true);
     closeCompleted = Date.now();
-    await until(async () => (await selectedStatus(first.connectionId)).status === 'lost');
+    await until(async () => {
+        const current = await status();
+        return (
+            'connections' in current &&
+            !current.connections.some((connection) => connection.connectionId === first.connectionId)
+        );
+    });
     const reminder = await tool('dct_connection_status', { hookEventName: 'PostToolUse' });
     assert.ok(isRecord(reminder.structuredContent));
-    const context = JSON.stringify(reminder.structuredContent);
-    assert.ok(context.includes(first.connectionId));
-    assert.ok(context.includes('process-exited'));
+    const events = hookResultEvents(reminder.structuredContent);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.exits.length, 1);
+    const exited = events[0]?.exits[0];
+    assert.ok(exited);
+    assert.equal(exited.connectionId, first.connectionId);
+    assert.equal(exited.sessionId, first.sessionId);
+    assert.equal(exited.processId, first.processId);
+    assert.equal(exited.port, first.port);
+    assert.equal(exited.taskActive, true);
+    assert.equal(exited.expected, undefined);
+    assert.equal(exited.cleanupError, undefined);
+    assert.deepEqual(events[0]?.operations, []);
+    assert.deepEqual(events[0]?.connections, []);
     const reminderReceived = Date.now();
     assert.ok(reminderReceived - closeCompleted <= 5_000);
     assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
-    const restarted = await mutate('restart', first);
-    assert.equal(restarted.connectionId, first.connectionId);
-    assert.equal(restarted.port, first.port);
-    assert.notEqual(restarted.processId, first.processId);
-    assert.notEqual(restarted.sessionId, first.sessionId);
+    await rejectsRoute(first);
+    await assert.rejects(() => mutate('restart', first), /absent|closed|session|connection/i);
+    const retried = await start(0);
+    assert.notEqual(retried.connectionId, first.connectionId);
+    assert.notEqual(retried.sessionId, first.sessionId);
+    await recordOwned(retried);
+    await pages(retried, 0);
+    const restarted = await mutate('restart', retried);
+    assert.equal(restarted.connectionId, retried.connectionId);
+    assert.equal(restarted.port, retried.port);
+    assert.notEqual(restarted.processId, retried.processId);
+    assert.notEqual(restarted.sessionId, retried.sessionId);
     assert.equal(restarted.pageIdsInvalidated, true);
     await recordOwned(restarted);
-    await rejectsRoute(first);
+    await rejectsRoute(retried);
     await Promise.all([pages(restarted, 0), pages(third, 2), pages(fourth, 3)]);
-    console.log('Explicit same-port recovery replaced session and rejected old route while peers remained usable.');
+    assert.deepEqual(
+        (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
+        {},
+        'Expected restart belongs to its delivered operation, with no duplicate exit notice.',
+    );
+    console.log(
+        'Ordinary exit used a new start; explicit live restart replaced its session/resources on the exact port while peers remained usable.',
+    );
     await mutate('stop', fourth, 'Keep');
     assert.equal(await closeFixture(fourth), true);
     await until(async () => {
@@ -167,9 +213,17 @@ try {
             'connections' in current && !current.connections.some((item) => item.connectionId === fourth.connectionId)
         );
     });
-    const operationNotice = (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent;
-    assert.match(JSON.stringify(operationNotice), /CDP lifecycle operation results/);
-    assert.doesNotMatch(JSON.stringify(operationNotice), /process-exited/);
+    const keptExit = hookResultEvents(
+        (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
+    );
+    assert.equal(keptExit.length, 1);
+    assert.equal(keptExit[0]?.exits.length, 1);
+    assert.equal(keptExit[0]?.exits[0]?.connectionId, fourth.connectionId);
+    assert.equal(keptExit[0]?.exits[0]?.sessionId, fourth.sessionId);
+    assert.equal(keptExit[0]?.exits[0]?.taskActive, false);
+    assert.equal(keptExit[0]?.exits[0]?.cleanupError, undefined);
+    assert.deepEqual(keptExit[0]?.operations, []);
+    assert.deepEqual(keptExit[0]?.connections, []);
     assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
     await rejectsRoute(fourth);
     await Promise.all([pages(restarted, 0), pages(third, 2)]);
@@ -179,7 +233,13 @@ try {
         JSON.stringify({
             passed: true,
             entryId,
-            connectionIds: [first.connectionId, second.connectionId, third.connectionId, fourth.connectionId],
+            connectionIds: [
+                first.connectionId,
+                second.connectionId,
+                third.connectionId,
+                fourth.connectionId,
+                retried.connectionId,
+            ],
             recordedExitTiming: {
                 closeStarted,
                 closeCompleted,

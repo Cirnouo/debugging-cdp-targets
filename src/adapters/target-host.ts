@@ -2,8 +2,8 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import type { ManagedTarget, ProcessTarget } from '../domains/cdp-target.ts';
-import { choosePort, RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
+import type { ManagedTarget } from '../domains/cdp-target.ts';
+import { RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
 import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
 import { resolveLaunchDefinition } from '../domains/launch-command.ts';
 import {
@@ -16,8 +16,40 @@ import {
 import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 import { chromeProfileArgument, profileAvailable, reserveProfile } from './chrome-profile.ts';
 import type { PlatformAdapter } from './platform-process.ts';
-import { createPlatformAdapter, validateProcessIdentity } from './platform-process.ts';
+import {
+    createPlatformAdapter,
+    observeTargetExit,
+    targetExitObserved,
+    validateProcessIdentity,
+    waitForTargetExit,
+} from './platform-process.ts';
+import { createPortReservations, type PortReservations } from './port-reservation.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
+
+function waitForWork<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    signal?.throwIfAborted();
+    const pending = work();
+    if (!signal) return pending;
+    return new Promise<T>((resolve, reject) => {
+        const aborted = () => {
+            signal.removeEventListener('abort', aborted);
+            reject(signal.reason);
+        };
+        signal.addEventListener('abort', aborted, { once: true });
+        void pending.then(
+            (value) => {
+                signal.removeEventListener('abort', aborted);
+                if (signal.aborted) reject(signal.reason);
+                else resolve(value);
+            },
+            (error: unknown) => {
+                signal.removeEventListener('abort', aborted);
+                reject(error);
+            },
+        );
+        if (signal.aborted) aborted();
+    });
+}
 
 async function probeAddress(port: number, host: string): Promise<boolean | null> {
     const server = net.createServer();
@@ -48,7 +80,9 @@ export async function spawnPortableApplication(
     _port: number,
     cwd = path.dirname(executable),
     env?: NodeJS.ProcessEnv,
+    context: ProcessLaunchContext = {},
 ) {
+    context.signal?.throwIfAborted();
     const child = nodeSpawn(executable, arguments_, {
         cwd,
         detached: true,
@@ -58,7 +92,10 @@ export async function spawnPortableApplication(
         env,
     });
     await new Promise<void>((resolve, reject) => {
-        child.once('spawn', resolve);
+        child.once('spawn', () => {
+            context.onCreated?.(child);
+            resolve();
+        });
         child.once('error', reject);
     });
     child.unref();
@@ -99,6 +136,12 @@ type LaunchProcess = NonNullable<ManagedTarget['child']> & {
     pid?: number | undefined;
     startedAtUtc?: string;
 };
+interface ProcessLaunchContext extends LaunchContext {
+    onCreated?: (child: LaunchProcess) => void;
+}
+export interface TargetLaunchContext extends LaunchContext {
+    onCreated?: (target: ManagedTarget) => void;
+}
 export interface HostDependencies {
     platformAdapter?: PlatformAdapter;
     probe?: (port: number) => Promise<boolean>;
@@ -108,16 +151,23 @@ export interface HostDependencies {
         port: number,
         cwd?: string,
         env?: NodeJS.ProcessEnv,
-        context?: LaunchContext,
+        context?: ProcessLaunchContext,
     ) => Promise<LaunchProcess>;
     getVersion?: (port: number) => Promise<unknown>;
     now?: () => number;
     sleep?: (ms: number) => Promise<void>;
     profileAvailable?: (directory: string) => Promise<boolean>;
+    portReservations?: PortReservations;
 }
 export function createTargetHost(dependencies: HostDependencies = {}) {
-    const platform = dependencies.platformAdapter ?? createPlatformAdapter();
     const launchWindows = createWindowsLauncher();
+    const platform =
+        dependencies.platformAdapter ??
+        createPlatformAdapter({
+            requestWindowsClose: launchWindows.requestNormalClose,
+            waitWindowsExit: launchWindows.waitForExit,
+        });
+    const reservations = dependencies.portReservations ?? createPortReservations();
     const io = {
         probe: probePort,
         spawn:
@@ -128,7 +178,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                       _port: number,
                       cwd: string,
                       env: NodeJS.ProcessEnv,
-                      context: LaunchContext,
+                      context: ProcessLaunchContext,
                   ) =>
                       launchWindows.launch(
                           {
@@ -150,6 +200,22 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         profileAvailable,
         ...dependencies,
     };
+    async function requestNormalClose(
+        target: ManagedTarget,
+        context?: LaunchContext,
+    ): Promise<Record<string, unknown>> {
+        if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+        if (platform.requestNormalClose) return platform.requestNormalClose(target, context);
+        const accepted = await platform.close(target);
+        if (!accepted) throw new Error('The application rejected normal close.');
+        return { closeRequested: true, processExited: targetExitObserved(target) };
+    }
+    async function waitForExit(target: ManagedTarget, signal?: AbortSignal) {
+        if (platform.waitForExit) await platform.waitForExit(target, signal);
+        else await waitForTargetExit(target, signal);
+        target.releaseProfile?.();
+        target.child?.disposeMonitor?.();
+    }
     return {
         async launch(
             {
@@ -159,24 +225,60 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 exactPort,
                 launchDefinition,
             }: LaunchOptions,
-            context: LaunchContext = {},
+            context: TargetLaunchContext = {},
         ): Promise<ManagedTarget> {
             context.signal?.throwIfAborted();
             if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
-            const excluded = await platform.reservedRanges();
+            if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error('Invalid base port.');
+            const excluded = await waitForWork(() => platform.reservedRanges(), context.signal);
             if (
                 exactPort !== undefined &&
                 (!Number.isInteger(exactPort) ||
                     exactPort < 1024 ||
                     exactPort > 65535 ||
-                    excluded.some(([start, end]) => exactPort >= start && exactPort <= end) ||
-                    !(await io.probe(exactPort)))
+                    excluded.some(([start, end]) => exactPort >= start && exactPort <= end))
             )
                 throw new Error('The original CDP port is occupied or excluded; exact-port restart cannot proceed.');
-            let candidate = basePort;
-            while (candidate <= 65535) {
-                const port =
-                    exactPort ?? (await choosePort({ basePort: candidate, reservedRanges: excluded, probe: io.probe }));
+            const candidate = basePort;
+            let port: number | undefined;
+            let releasePort: (() => void) | undefined;
+            for (
+                let probeCandidate = exactPort ?? Math.max(candidate, 1024);
+                probeCandidate <= 65535;
+                probeCandidate += 1
+            ) {
+                if (excluded.some(([start, end]) => probeCandidate >= start && probeCandidate <= end)) continue;
+                const claimed = reservations.claim(probeCandidate);
+                if (!claimed) {
+                    if (exactPort !== undefined) break;
+                    continue;
+                }
+                let available: boolean;
+                try {
+                    available = await waitForWork(() => io.probe(probeCandidate), context.signal);
+                } catch (error) {
+                    claimed();
+                    throw error;
+                }
+                if (available) {
+                    port = probeCandidate;
+                    releasePort = claimed;
+                    break;
+                }
+                claimed();
+                if (exactPort !== undefined) break;
+            }
+            if (port === undefined || releasePort === undefined) {
+                if (exactPort !== undefined)
+                    throw new Error(
+                        'The original CDP port is occupied or excluded; exact-port restart cannot proceed.',
+                    );
+                throw new Error('No available, non-reserved CDP port remains.');
+            }
+            let created: ManagedTarget | undefined;
+            let release: (() => void) | undefined;
+            let readinessSignal = context.signal;
+            try {
                 context.signal?.throwIfAborted();
                 const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env);
                 if (!path.isAbsolute(parsed.executablePath))
@@ -190,43 +292,99 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     environment.set(process.platform === 'win32' ? name.toLowerCase() : name, [name, value]);
                 const env = Object.fromEntries(environment.values());
                 const profile = targetKind === 'chrome' ? chromeProfileArgument(args) : undefined;
-                const release =
+                release =
                     profile === undefined
                         ? undefined
-                        : await reserveProfile(path.resolve(cwd, profile), io.profileAvailable);
+                        : await reserveProfile(path.resolve(cwd, profile), (directory) =>
+                              waitForWork(() => io.profileAvailable(directory), context.signal),
+                          );
+                context.signal?.throwIfAborted();
                 const requestedAt = io.now();
                 context.onPhase?.('launching');
                 let child: LaunchProcess;
                 try {
                     context.signal?.throwIfAborted();
-                    child = await io.spawn(executablePath, args, port, cwd, env, context);
+                    const onCreated = (application: LaunchProcess) => {
+                        if (created) return;
+                        if (application.pid === undefined) throw new Error('The target process has no PID.');
+                        const target: ManagedTarget = {
+                            port,
+                            processId: application.pid,
+                            executablePath,
+                            startedAtUtc: application.startedAtUtc ?? new Date(requestedAt).toISOString(),
+                            targetKind,
+                            child: application,
+                            launchDefinition: {
+                                executablePath,
+                                arguments: args,
+                                cwd,
+                                ...(parsed.env ? { env: { ...parsed.env } } : {}),
+                            },
+                        };
+                        created = target;
+                        observeTargetExit(target);
+                        const observation = new AbortController();
+                        readinessSignal = context.signal
+                            ? AbortSignal.any([context.signal, observation.signal])
+                            : observation.signal;
+                        const exited = () =>
+                            observation.abort(
+                                new Error('The target application exited before CDP readiness or verification.'),
+                            );
+                        const monitorFailed = () =>
+                            observation.abort(
+                                new Error(
+                                    'The native process observer failed; retaining application identity for cleanup.',
+                                ),
+                            );
+                        application.once('exit', exited);
+                        const stopMonitor = application.onMonitorError?.(monitorFailed);
+                        const releaseResources = () => {
+                            if (!targetExitObserved(target)) return;
+                            release?.();
+                            releasePort?.();
+                            application.off?.('exit', releaseResources);
+                            application.off?.('exit', exited);
+                            stopMonitor?.();
+                        };
+                        target.releaseProfile = releaseResources;
+                        target.waitForExit = (signal) => waitForExit(target, signal);
+                        application.once('exit', releaseResources);
+                        if (targetExitObserved(target)) {
+                            exited();
+                            releaseResources();
+                        } else if (application.monitoringFailure) monitorFailed();
+                        context.onCreated?.(target);
+                    };
+                    child = await io.spawn(executablePath, args, port, cwd, env, {
+                        ...(context.signal ? { signal: context.signal } : {}),
+                        ...(context.onPhase ? { onPhase: context.onPhase } : {}),
+                        onCreated,
+                    });
+                    onCreated(child);
                     if (child.pid === undefined) throw new Error('The target process has no PID.');
                 } catch (error) {
-                    release?.();
+                    if (created) {
+                        try {
+                            await requestNormalClose(created);
+                            await waitForExit(created);
+                        } catch (cleanupError) {
+                            const retained = new RetainedTargetError(errorMessage(error), created);
+                            retained.details = {
+                                processId: created.processId,
+                                port,
+                                closeConfirmed: false,
+                                ...errorDetails(cleanupError),
+                            };
+                            throw retained;
+                        }
+                    }
                     throw error;
-                }
-                const releaseProfile = () => {
-                    release?.();
-                    child.off?.('exit', releaseProfile);
-                };
-                if (release) {
-                    child.once('exit', releaseProfile);
-                    if (typeof child.exitCode === 'number' || typeof child.signalCode === 'string') releaseProfile();
                 }
                 const processId = child.pid;
                 if (processId === undefined) throw new Error('The target process has no PID.');
-                const target: ProcessTarget & {
-                    child: NonNullable<ManagedTarget['child']>;
-                    releaseProfile?: () => void;
-                } = {
-                    port,
-                    processId,
-                    executablePath,
-                    startedAtUtc: child.startedAtUtc ?? new Date(requestedAt).toISOString(),
-                    targetKind,
-                    child,
-                    ...(release ? { releaseProfile } : {}),
-                };
+                const target = created;
+                if (!target) throw new Error('The created application identity is missing.');
                 let lastError: unknown;
                 let foreignRace = false;
                 const launchedAt = io.now();
@@ -234,11 +392,13 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 while (io.now() - launchedAt < STARTUP_TIMEOUT_MS) {
                     try {
                         context.signal?.throwIfAborted();
+                        if (targetExitObserved(target))
+                            throw new Error('The target application exited before CDP readiness.');
                         if (child.monitoringFailure)
                             throw new Error(
                                 'The native process observer failed; retaining application identity for cleanup.',
                             );
-                        const evidence = await platform.snapshot(child.pid, port);
+                        const evidence = await waitForWork(() => platform.snapshot(processId, port), readinessSignal);
                         platform.validateNewRoot(evidence, target);
                         if (!evidence.root.exists) throw new Error('The target root process is absent.');
                         target.startedAtUtc = evidence.root.startedAtUtc;
@@ -254,8 +414,10 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             lastError = new Error('A foreign process won the CDP port race.');
                             break;
                         }
-                        const endpoint = await io.getVersion(port);
+                        const endpoint = await waitForWork(() => io.getVersion(port), readinessSignal);
                         context.signal?.throwIfAborted();
+                        if (targetExitObserved(target))
+                            throw new Error('The target application exited before CDP readiness.');
                         const identity = validateCdpIdentity({
                             endpoint,
                             port,
@@ -263,90 +425,85 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             processIds: evidence.processIds,
                             targetKind,
                         });
-                        return {
-                            ...target,
-                            ...identity,
-                            launchDefinition: {
-                                executablePath,
-                                arguments: args,
-                                cwd,
-                                ...(parsed.env ? { env: { ...parsed.env } } : {}),
-                            },
-                            async verify() {
-                                const current = await platform.snapshot(processId, port);
-                                validateProcessIdentity(current, target);
-                                const endpointNow = await io.getVersion(port);
-                                const checked = validateCdpIdentity({
-                                    endpoint: endpointNow,
-                                    port,
-                                    listeners: current.listeners,
-                                    processIds: current.processIds,
-                                    targetKind,
-                                });
-                                if (
-                                    checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl ||
-                                    checked.browserProduct !== identity.browserProduct
-                                )
-                                    throw new Error('The target CDP endpoint identity changed.');
-                            },
+                        Object.assign(target, identity);
+                        target.verify = async () => {
+                            const current = await waitForWork(
+                                () => platform.snapshot(processId, port),
+                                readinessSignal,
+                            );
+                            validateProcessIdentity(current, target);
+                            const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
+                            const checked = validateCdpIdentity({
+                                endpoint: endpointNow,
+                                port,
+                                listeners: current.listeners,
+                                processIds: current.processIds,
+                                targetKind,
+                            });
+                            if (
+                                checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl ||
+                                checked.browserProduct !== identity.browserProduct
+                            )
+                                throw new Error('The target CDP endpoint identity changed.');
                         };
+                        return target;
                     } catch (error) {
                         lastError = error;
                         if (
-                            context.signal?.aborted ||
+                            readinessSignal?.aborted ||
                             child.monitoringFailure ||
+                            targetExitObserved(target) ||
                             child.exitCode !== null ||
                             typeof child.signalCode === 'string' ||
                             /exposed|identity|Google Chrome|PID/.test(errorMessage(error))
                         )
                             break;
-                        await io.sleep(POLL_INTERVAL_MS);
+                        try {
+                            await waitForWork(() => io.sleep(POLL_INTERVAL_MS), readinessSignal);
+                        } catch (waitingError) {
+                            lastError = waitingError;
+                            break;
+                        }
                     }
                 }
                 let closeConfirmed = false;
                 let cleanupError: unknown;
                 try {
-                    closeConfirmed = await platform.close(target, { requireListener: false });
+                    await requestNormalClose(target);
+                    await waitForExit(target);
+                    closeConfirmed = true;
                 } catch (error) {
                     cleanupError = error;
                 }
                 if (closeConfirmed) {
-                    releaseProfile?.();
+                    target.releaseProfile?.();
                     child.disposeMonitor?.();
                 }
                 if (closeConfirmed && context.signal?.aborted) throw context.signal.reason;
-                if (foreignRace && closeConfirmed && exactPort === undefined) {
-                    candidate = port + 1;
-                    continue;
-                }
                 const message = `The new target did not expose a verified CDP endpoint: ${lastError === undefined ? undefined : errorMessage(lastError)}`;
-                const error = closeConfirmed
-                    ? new DetailedError(message)
-                    : new RetainedTargetError(message, {
-                          ...target,
-                          launchDefinition: {
-                              executablePath,
-                              arguments: args,
-                              cwd,
-                              ...(parsed.env ? { env: { ...parsed.env } } : {}),
-                          },
-                      });
+                const error = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, target);
                 error.details = { processId: child.pid, port, closeConfirmed, ...errorDetails(cleanupError) };
                 throw error;
+            } catch (error) {
+                if (!created) {
+                    release?.();
+                    releasePort();
+                    context.signal?.throwIfAborted();
+                }
+                throw error;
             }
-            throw new Error('The CDP port range is exhausted.');
         },
-        async close(target: ManagedTarget, options?: { requireListener?: boolean }) {
-            const closed = await platform.close(target, options);
-            if (closed) {
-                target.releaseProfile?.();
-                target.child?.disposeMonitor?.();
-            }
-            return closed;
+        async close(target: ManagedTarget, _options?: { requireListener?: boolean }) {
+            await requestNormalClose(target);
+            await waitForExit(target);
+            return true;
         },
+        requestNormalClose,
+        waitForExit,
         async health(target: ManagedTarget): Promise<'healthy' | 'gone' | 'unavailable' | 'identity-changed'> {
+            if (targetExitObserved(target)) return 'gone';
             const evidence = await platform.snapshot(target.processId, target.port);
-            if (!evidence.root.exists) return 'gone';
+            if (!evidence.root.exists) return targetExitObserved(target) ? 'gone' : 'unavailable';
             try {
                 validateProcessIdentity(evidence, target);
             } catch {

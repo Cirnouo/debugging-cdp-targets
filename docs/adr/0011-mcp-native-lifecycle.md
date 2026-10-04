@@ -1,6 +1,9 @@
 # 0011 — Native MCP lifecycle and fixed official capabilities
 
 Status: accepted for unreleased 0.1.0.
+Partially superseded by [0013](0013-session-owned-exit-cleanup.md) for resource
+ownership, actual-exit cleanup, live restart, child disposal, status projection
+and Hook acknowledgement. The text below records the original decision.
 
 The CLI/control IPC split made Agents responsible for launching wrappers, while
 Codex cached the initial tool catalog and ignored later local list changes.

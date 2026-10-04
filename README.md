@@ -43,7 +43,10 @@ Real desktop Chrome acceptance passed on the following hosts on 2026-10-04:
 The Linux and macOS evidence comes from GitHub's `ubuntu-24.04` and `macos-15`
 runners. The acceptance checks cover official page/CSS tools, concurrent independent
 connections, Keep/reuse, scoped Close, same-port recovery, stale sessions and exit
-cleanup. See [the smoke instructions](tests/smoke/README.md) for the test boundaries.
+cleanup. These dated results precede the actual-exit lifecycle revision in
+[ADR 0013](docs/adr/0013-session-owned-exit-cleanup.md); they do not establish
+acceptance of that later revision. See [the smoke instructions](tests/smoke/README.md)
+for the test boundaries.
 Other application/OS/browser combinations remain best effort.
 Linux and macOS require `ps` and `lsof`; Linux additionally requires `getconf`
 and readable `/proc` process evidence.
@@ -146,7 +149,7 @@ The connection starts with no target. The Plugin only controls an application it
 launches and verifies; it does not attach to an already running browser. Chrome
 uses a dedicated debugging profile, separate from your usual browsing profile.
 
-## Keep, close, or recover a target
+## Keep, close, or restart a live target
 
 The Plugin exposes one stdio MCP entry, `cdp-targets`. Each new target receives its
 own connection and official Server child. Multiple targets can be inspected
@@ -155,25 +158,33 @@ Creating a target preserves existing connections. The host connection remains
 usable after normal Close, so you can launch another target without reconnecting.
 
 Before ending work on a target, the Agent asks **Close** or **Keep**. Close requests
-normal shutdown of that target and its official Server, then removes the
-connection. Keep retains both for later tasks. Other connections continue
-working. There is no default and no force kill. If normal shutdown
-fails, inspect the reported process and port and close the application manually.
+normal application shutdown and waits for actual exit, then removes that
+connection and disposes its owned resources. Keep retains live app, upstream and
+router for later tasks. Other connections continue working. There is no default,
+target-close deadline or application force kill. Continue operation waits while
+Close remains incomplete. If normal shutdown fails or is cancelled, live target
+identity and observation remain available for retry or manual normal close.
 
-If you close a window during dependent work, the Agent asks whether it was accidental
-and should be recovered on the same port, or intentional and work should end.
-The gateway automatically observes native process exit events from launch.
-Enabled and authorized host Hooks deliver one reminder at a tool boundary or
-before the turn ends; idle chats receive it on the next turn. A pending Stop
-reminder requests one continuation. Follow the host's setup below.
-After Keep/end-task, a live target remains usable; its later exit silently removes
-its connection and official Server. Reuse resumes task monitoring automatically.
-CDP or Server failure with a live process reports a connection error.
-Recovery is explicit, retains connection
-identity, launch arguments,
-working directory and profile from memory, refuses an occupied original port,
-and creates a new session identity requiring fresh page IDs. No tool calls replay automatically and no session
-state is saved across host connections.
+The gateway observes the actual application's native exit from launch. Any actual
+exit ends that session and removes its connection, including after Keep/end-task.
+If work needs to continue after ordinary exit, explicitly start a new target with
+new connection/session identities. Old page IDs and routes cannot be reused.
+Enabled, authorized host Hooks deliver compact exit/operation/connection events
+at task boundaries; idle chats receive them on the next turn. Inactive exit is
+informational; an active unexpected exit may suggest a new start. Expected
+Close/restart exits are grouped by operationId in its operation notice, including
+any new Target rollback during restart. Delivery waits until all related cleanup
+results are ready. A ready Stop event requests one continuation. Follow the host's
+setup below.
+
+CDP, Server or native observation failure while an app remains alive reports a
+connection error. Explicit restart of a live connection retains its connection,
+launch arguments, working directory, profile and exact original port. It waits
+for old app exit and resource disposal before creating a fresh session, router
+and upstream; an occupied original port fails clearly. Obtain fresh page IDs with
+list_pages after restart. No launch/restart or tool replay happens automatically.
+Failed resource disposal after confirmed app exit is retained internally for
+gateway cleanup retries and does not keep the dead session routable.
 
 ### Automatic Hooks in each host
 
@@ -192,7 +203,7 @@ Hooks are discovered from `hooks/hooks.json`; they call the scoped server
 definitions. An effective `disableAllHooks: true` setting disables their execution
 while the Plugin MCP server can remain connected. Plugin enablement and these
 settings are Claude's controls; see [Claude Hooks](https://code.claude.com/docs/en/hooks).
-Recovery reminders require Hooks to execute in the current host.
+Lifecycle events require Hooks to execute in the current host.
 
 ## Data and privacy
 
@@ -218,7 +229,7 @@ Chrome retains its debugging profile separately:
 | Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
 
 The Chrome profile retains browser data, including cookies and browsing state.
-Starts and recovery reuse this fixed default directory. Occupied or unverifiable
+Starts and live restarts reuse this fixed default directory. Occupied or unverifiable
 profiles fail clearly; explicitly choose another --user-data-dir for concurrency. Profiles are retained after Close for inspection.
 Older npm/package caches are no longer used; upgrades leave them and existing
 profiles, user configuration and global Skills in place.
@@ -236,7 +247,7 @@ The plugin manages targets directly through MCP:
 | --- | --- |
 | `dct_connection_status` | Discovery, connection/operation status, tool requirements and automatic Hooks. |
 | `dct_connection_start` | Accept a structured new launch and return an operation immediately. |
-| `dct_connection_restart` | Explicitly replace one session, optionally with new mcpArgs. |
+| `dct_connection_restart` | Explicitly replace a live session, optionally with new mcpArgs. |
 | `dct_connection_stop` | Apply the user’s Close/Keep choice to one session. |
 | `dct_connection_end_task` | End work and retain a live target/upstream. |
 | `dct_operation_wait` | Wait for operation events/results using a replay cursor. |
@@ -274,18 +285,27 @@ elevated helper when required. Agents need no startup wrapper or privilege scrip
 
 Start returns operationId immediately. Call `dct_operation_wait` with entryId,
 operationId and cursor; continue with the returned cursor until complete.
-The wait is bounded internally, so callers choose no polling interval. Canceling
-a wait leaves the operation running; operation_cancel owns actual cancellation.
-Trusted Hooks deliver new results at task boundaries without waking idle chats.
+Each wait lasts up to 25 seconds and may return incomplete; this bounds one
+response, not the operation or application Close. Canceling a wait leaves the
+operation running; operation_cancel owns actual cancellation and cleanup.
+Successful terminal status/wait, terminal cancel or identical mutation retry
+delivery acknowledges its operation notice, preventing redundant Hook delivery.
+Aborted requests and nonterminal responses leave the notice unread. Trusted Hooks
+deliver compact events without waking idle chats.
 
 Each connection has its own `mcpArgs: string[]`, separate from application args/env.
 The gateway reserves endpoint/browser-launch options and rejects configuration
 files or CLI mode overrides. Configuration changes require explicit restart.
 
 The gateway advertises a fixed full official catalog because Codex does not refresh
-ordinary local MCP tools from list-changed notifications. Start/wait/status report
-actual enabledTools. Status with toolNames returns activation conditions, complete
-suggestedMcpArgs and the selected connection’s exact input schemas.
+ordinary local MCP tools from list-changed notifications. Discovery and lifecycle
+successes return connection summaries. Selected status adds enabledTools names
+and upstreamStatus (`connected`, `disconnected` or `quarantined`). Explicit
+toolNames requests return configuration requirements and exact input schemas
+only when an actual upstream is valid. Supported explicitly disabled tools and
+TOOL_NOT_ENABLED provide complete replacement suggestedMcpArgs; enabled tools
+have no recipe, and unsupported tools provide their reason. An unavailable
+upstream supplies requirements without asserting actual schemas or enablement.
 TOOL_NOT_ENABLED never enables a feature or restarts a target. For example, click_at
 additionally needs `--experimentalVision=true`; `--slim` limits actual connection
 tools without shrinking Codex’s global catalog. PWA tools require an official
@@ -296,9 +316,15 @@ before forwarding original arguments; official names, execution and results stay
 unchanged. Restart preserves connectionId and the original port but creates a
 new session. Obtain fresh page IDs with list_pages.
 
-Use official `--workspace` for file access. Status distinguishes explicit directories,
-the system temporary-directory default and negotiated roots forwarding. cwd does
-not grant file access. Negotiation alone does not prove which roots a host supplied.
+Use official `--workspace` for file access. Selected status with
+`include: ["configuration"]` exposes mcpArgs and workspace sources: explicit
+directories, the system temporary-directory default and negotiated roots
+forwarding. cwd does not grant file access. Request `include: ["diagnostics"]`
+only when bounded phase/outcome evidence is needed. Includes require connectionId
+and can combine with toolNames. operationId excludes those selectors;
+hookEventName is the sole argument reserved for automatic Hooks. See
+[the lifecycle protocol](docs/lifecycle-protocol.md) for complete selector and
+delivery rules. Negotiation alone does not prove which roots a host supplied.
 
 ### Ports and Chrome profiles
 
@@ -308,7 +334,10 @@ Without a placeholder or explicit debugging port, the plugin appends the Chromiu
 debugging-port argument. Other CDP runtimes use their documented args/env.
 
 Port selection starts at 9222; start’s optional basePort selects another range.
-Occupied, privileged and OS-reserved ports are skipped. Explicit restart refuses
+Each session reserves a candidate port before probing, preventing concurrent
+launches in the same gateway from selecting it. Occupied, privileged and
+OS-reserved ports are skipped. A collision after app creation fails clearly and
+does not trigger automatic relaunch. Explicit restart refuses
 an occupied original port. Chrome uses a fixed dedicated profile unless args
 specifies an unused --user-data-dir. Concurrent targets require distinct profiles;
 profiles remain after Close.
@@ -327,15 +356,17 @@ DCT_USAGE_STATISTICS and DCT_PERFORMANCE_CRUX accept true/false.
     `pnpm build:plugin` in a prepared contributor checkout. Runtime does not fetch replacements.
 - **Missing, unknown or stale routing identity**: refresh
     `dct_connection_status` and use the target's connection/current session UUIDs.
-    Recovery changes session identity; Close removes the connection.
-- **The recovery port is busy**: identify its owner and resolve the conflict
-    before retrying; recovery retains the original port and target identity.
+    Live restart changes session identity; actual exit removes the connection.
+- **The restart port is busy**: identify its owner and resolve the conflict
+    before retrying; live restart requires the exact original port. After ordinary
+    app exit, use a new start with new connection/session identities.
 - **The application has no verified CDP endpoint**: check the executable path,
     debugging option, and browser-level endpoint support. A framework name alone
     does not establish compatibility.
 - **CONNECTION_RECOVERY_REQUIRED**: the affected upstream is isolated after timeout
     or cancellation, transport pending state is cleared, and app identity remains
-    available for explicit restart or normal Close. Other connections remain usable.
+    available for explicit live restart or normal Close. After actual app exit its
+    session is removed. Other connections remain usable.
 - **Chrome reports a locked profile**: close that Chrome instance manually,
     or explicitly select another dedicated `--user-data-dir`.
 

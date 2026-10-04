@@ -53,17 +53,35 @@
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
-- `entry-lifecycle.test.ts` checks entry Keep/Close and independent lifecycle.
+- `entry-lifecycle.test.ts` checks entry Keep/Close, confirmed exit retirement,
+  live same-port restart and independent child observation for each launch.
 - `entry-runtime.test.ts` checks gateway identity, independent connections and upstream lifetime.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
   output validation, legacy stdio ID-zero cancellation and gateway status.
+- `official-child-lifecycle.test.ts` checks immediate logical transport close,
+  actual child exit, EOF-resistant Server disposal, abort during initialization
+  and tools/list, retained observation and retry after cleanup failure.
+- `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
+  pending health/request cancellation, busy Close, immutable compact Hook facts,
+  replacement rollback, deleted routes and peer shutdown isolation.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
-- `target-recovery.test.ts` checks manual closure and explicit same-port recovery.
+- `target-recovery.test.ts` checks explicit same-port recovery, literal launch
+  evidence and rejection of port races after an application is created.
+- `target-ownership.test.ts` checks early application acquisition, shared gateway
+  port claims before asynchronous probes, retained live resources, real child
+  exit release, cancellation of pending readiness/verification and old callback
+  generation safety with injected processes.
+- `port-reservation.test.ts` checks synchronous exclusive port claims, independent
+  gateway registries and owner-checked release without opening sockets.
 - `target-events.test.ts` checks silent exit monitoring, task resumption, Hook
   deduplication and isolated cleanup with retained retry identity on failure.
 - `chrome-profile.test.ts` checks stable defaults, explicit directories, occupancy
-  rejection, concurrent reservations and release generation safety with fake targets.
+  rejection, concurrent reservations, cancelled late acquisition and release
+  generation safety with fake targets.
 - `plugin-hooks.test.ts` checks the four automatic MCP Tool Hook declarations.
+- `hook-events.test.ts` parses actual Hook text through serialized model requests
+  and nested host wrappers, preserves native string escaping, and rejects leaked
+  payload fields, mismatched operation exits and pending cleanup delivery.
 - `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
   process options at the native child-process boundary without launching a target.
 - `structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
@@ -72,17 +90,20 @@
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous identity/deduplication/cursor/cancel behavior and real SDK tools.
 - `close-diagnostics.test.ts`, `platform-close.test.ts` cover absent/foreign listeners,
-  native failure causes through operation wrappers, retry identity and bounded
-  Unix exit confirmation across incomplete executable mappings.
-- `windows-launch.test.ts` checks private native protocol and actual app observation.
+  native failure causes through operation wrappers, retry identity and actual
+  child/handle exit evidence without a target deadline or Unix process polling.
+- `windows-launch.test.ts` checks synchronous actual application acquisition,
+  separate close request and exit wait, helper monitoring failures and matching
+  native handle receipts that supplement a lost original observer.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
 - `windows-native.test.ts` runs disposable ordinary Node/WinForms fixtures on Windows;
   it checks argv/cwd/env/PID/NUL stdio, limited-query identity, visible close, owned
   discovery readiness and manifest detection without UAC prompts. A real 8.3
   executable alias exercises normal close while mismatched path/time identities
-  must leave the fixture running.
+  must leave the fixture running. A delayed normal close remains pending past
+  ten seconds and confirms the same native process handle after observer loss.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
-- `fixtures/` owns isolated CDP processes.
+- `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
 - `AGENTS.md` sets test safety and evidence rules.

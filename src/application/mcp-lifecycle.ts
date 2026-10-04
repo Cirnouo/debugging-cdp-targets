@@ -1,4 +1,10 @@
-import type { ConnectionStatus, ControlContext, ControlHandler, ControlRequest } from '../domains/control-contract.ts';
+import {
+    type ConnectionStatus,
+    type ControlContext,
+    type ControlHandler,
+    type ControlRequest,
+    connectionSummary,
+} from '../domains/control-contract.ts';
 import { createOperationRegistry } from './operations.ts';
 
 export function createLifecycleService({ entryId, handler }: { entryId: string; handler: ControlHandler }) {
@@ -9,13 +15,32 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
         if (request.entryId !== undefined && request.entryId !== entryId)
             throw new Error('This request identifies another entry.');
         if (request.action === 'status') {
-            if (request.operationId) return { ...operations.get(request.operationId) };
+            if (request.operationId) {
+                const result = operations.get(request.operationId);
+                signal?.throwIfAborted();
+                operations.markRead(request.operationId);
+                return { ...result };
+            }
             return { ...handler.status(request.connectionId) };
         }
-        if (request.action === 'wait') return operations.wait(request.operationId, request.cursor, signal);
-        if (request.action === 'cancel') return { ...operations.cancel(request.operationId) };
+        if (request.action === 'wait') {
+            const result = await operations.wait(request.operationId, request.cursor, signal);
+            signal?.throwIfAborted();
+            if (result.complete) operations.markRead(request.operationId);
+            return result;
+        }
+        if (request.action === 'cancel') {
+            const result = operations.cancel(request.operationId);
+            signal?.throwIfAborted();
+            operations.markRead(request.operationId);
+            return { ...result };
+        }
         const prior = operations.prior(request.requestId, request);
-        if (prior) return { ...prior };
+        if (prior) {
+            signal?.throwIfAborted();
+            operations.markRead(prior.operationId);
+            return { ...prior };
+        }
         if (closing) throw new Error('The gateway is closing.');
         const connectionId = request.action === 'start' ? undefined : request.connectionId;
         if (request.action !== 'start') {
@@ -32,6 +57,7 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
             request,
             async (operation) => {
                 const context: ControlContext = {
+                    operationId: operation.operationId,
                     signal: operation.signal,
                     onPhase: operation.phase,
                     onIdentity: (route) => {
@@ -52,26 +78,32 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
                     if (operation.signal.aborted && (request.action === 'start' || request.action === 'restart')) {
                         if (result.sessionId) {
                             operation.phase('cancelling-created-target');
-                            await handler.stop({
-                                connectionId: result.connectionId,
-                                sessionId: result.sessionId,
-                                disposition: 'Close',
-                            });
+                            await handler.stop(
+                                {
+                                    connectionId: result.connectionId,
+                                    sessionId: result.sessionId,
+                                    disposition: 'Close',
+                                },
+                                { operationId: operation.operationId },
+                            );
                         }
                         throw operation.signal.reason;
                     }
-                    return { ...result };
+                    return { ...connectionSummary(result) };
                 }
             },
             () => {
                 if (boundConnection) changing.delete(boundConnection);
             },
+            request.action === 'start' ? undefined : request,
         );
         return { ...accepted };
     }
     return {
         control,
         takeNotices: operations.takeNotices,
+        cancelRoute: operations.cancelRoute,
+        markRead: operations.markRead,
         async close() {
             closing = true;
             await operations.close();

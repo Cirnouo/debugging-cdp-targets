@@ -4,6 +4,8 @@ import { type ApplicationLaunch, type LaunchDefinition, parseApplicationLaunch }
 
 export type TargetKind = 'chrome' | 'generic-cdp';
 export type Disposition = 'Close' | 'Keep';
+export type StatusInclude = 'configuration' | 'diagnostics';
+export type UpstreamStatus = 'connected' | 'disconnected' | 'quarantined';
 export interface LaunchOptions {
     launch: ApplicationLaunch;
     targetKind?: TargetKind;
@@ -17,10 +19,18 @@ export interface LaunchContext {
     onPhase?: (phase: string) => void;
 }
 export interface ControlContext extends LaunchContext {
+    operationId?: string;
     onIdentity?: (identity: ConnectionRoute) => void;
 }
 export type ControlRequest =
-    | { action: 'status'; entryId?: string; connectionId?: string; operationId?: string; toolNames?: string[] }
+    | {
+          action: 'status';
+          entryId?: string;
+          connectionId?: string;
+          operationId?: string;
+          toolNames?: string[];
+          include?: StatusInclude[];
+      }
     | ({ action: 'start'; entryId: string; requestId: string } & Pick<
           LaunchOptions,
           'launch' | 'targetKind' | 'basePort' | 'mcpArgs'
@@ -42,8 +52,12 @@ export interface TargetStatus {
     disposition?: Disposition;
     pageIdsInvalidated?: boolean;
 }
-export interface ConnectionStatus extends TargetStatus {
+export interface ConnectionSummary extends TargetStatus {
     connectionId: string;
+    enabledToolCount?: number;
+    upstreamStatus?: UpstreamStatus;
+}
+export interface ConnectionStatus extends ConnectionSummary {
     mcpArgs?: string[];
     enabledTools?: string[];
     workspace?: Record<string, unknown>;
@@ -60,6 +74,82 @@ export interface ControlHandler {
     restart(options: ConnectionRoute & { mcpArgs?: string[] }, context?: ControlContext): Promise<ConnectionStatus>;
     stop(options: ConnectionRoute & { disposition: Disposition }, context?: ControlContext): Promise<ConnectionStatus>;
     endTask(options: ConnectionRoute): Promise<ConnectionStatus>;
+}
+
+/** Default lifecycle output never contains configuration, tools, or diagnostics. */
+export function connectionSummary(value: ConnectionStatus): ConnectionSummary {
+    return {
+        entryId: value.entryId,
+        connectionId: value.connectionId,
+        status: value.status,
+        ...(value.sessionId === undefined ? {} : { sessionId: value.sessionId }),
+        ...(value.port === undefined ? {} : { port: value.port }),
+        ...(value.processId === undefined ? {} : { processId: value.processId }),
+        ...(value.targetKind === undefined ? {} : { targetKind: value.targetKind }),
+        ...(value.reason === undefined ? {} : { reason: value.reason }),
+        ...(value.taskActive === undefined ? {} : { taskActive: value.taskActive }),
+        ...(value.disposition === undefined ? {} : { disposition: value.disposition }),
+        ...(value.pageIdsInvalidated === undefined ? {} : { pageIdsInvalidated: value.pageIdsInvalidated }),
+        ...(value.enabledToolCount === undefined ? {} : { enabledToolCount: value.enabledToolCount }),
+        ...(value.upstreamStatus === undefined ? {} : { upstreamStatus: value.upstreamStatus }),
+    };
+}
+
+/** Retain retry and native failure evidence without nesting arbitrary status payloads. */
+export function lifecycleFailureEvidence(value: Record<string, unknown>): Record<string, unknown> {
+    const fields = new Set([
+        'entryId',
+        'connectionId',
+        'sessionId',
+        'status',
+        'port',
+        'processId',
+        'targetKind',
+        'reason',
+        'taskActive',
+        'disposition',
+        'pageIdsInvalidated',
+        'upstreamStatus',
+        'phase',
+        'code',
+        'category',
+        'nativeError',
+        'exceptionType',
+        'closeRequested',
+        'processExited',
+        'listenerState',
+        'closeConfirmed',
+        'cause',
+        'catalogUpstreamRetained',
+        'cleanupError',
+        'executableClaim',
+        'candidateCount',
+        'matchCount',
+    ]);
+    const evidence = Object.fromEntries(
+        Object.entries(value).filter(
+            ([key, item]) =>
+                fields.has(key) &&
+                (typeof item === 'string' ||
+                    typeof item === 'boolean' ||
+                    (typeof item === 'number' && Number.isFinite(item))),
+        ),
+    );
+    if (Array.isArray(value.retainedTargets))
+        evidence.retainedTargets = value.retainedTargets
+            .filter(isRecord)
+            .map((target) =>
+                Object.fromEntries(
+                    ['processId', 'port'].flatMap((key) =>
+                        typeof target[key] === 'number' && Number.isFinite(target[key]) ? [[key, target[key]]] : [],
+                    ),
+                ),
+            );
+    if (Array.isArray(value.mappedExecutablePaths))
+        evidence.mappedExecutablePaths = value.mappedExecutablePaths
+            .filter((item: unknown) => typeof item === 'string')
+            .slice(0, 32);
+    return evidence;
 }
 
 export function validateIdentity(value: unknown, label: string): asserts value is string {
@@ -82,23 +172,38 @@ function strings(value: unknown): string[] {
         throw new Error('Expected an array of strings.');
     return value;
 }
+function statusIncludes(value: unknown): StatusInclude[] {
+    if (
+        !Array.isArray(value) ||
+        !value.every((item: unknown) => item === 'configuration' || item === 'diagnostics') ||
+        new Set(value).size !== value.length
+    )
+        throw new Error('Status include accepts unique configuration and diagnostics values.');
+    return value;
+}
 export function parseControlRequest(value: unknown): ControlRequest {
     if (!isRecord(value)) throw new Error('Invalid control request.');
     const action = value.action;
     if (action === 'status') {
-        fields(value, ['action', 'entryId', 'connectionId', 'operationId', 'toolNames']);
+        fields(value, ['action', 'entryId', 'connectionId', 'operationId', 'toolNames', 'include']);
         if (Object.keys(value).length === 1) return { action };
         validateIdentity(value.entryId, 'entry ID');
         if (value.connectionId !== undefined) validateIdentity(value.connectionId, 'connection ID');
         if (value.operationId !== undefined) validateIdentity(value.operationId, 'operation ID');
-        if (value.connectionId !== undefined && value.operationId !== undefined)
-            throw new Error('Select a connection or an operation, not both.');
+        if (
+            value.operationId !== undefined &&
+            (value.connectionId !== undefined || value.toolNames !== undefined || value.include !== undefined)
+        )
+            throw new Error('Operation status cannot also select a connection, tools, or includes.');
+        if (value.include !== undefined && value.connectionId === undefined)
+            throw new Error('Status include requires a selected connection.');
         return {
             action,
             entryId: value.entryId,
             ...(value.connectionId === undefined ? {} : { connectionId: value.connectionId }),
             ...(value.operationId === undefined ? {} : { operationId: value.operationId }),
             ...(value.toolNames === undefined ? {} : { toolNames: strings(value.toolNames) }),
+            ...(value.include === undefined ? {} : { include: statusIncludes(value.include) }),
         };
     }
     validateIdentity(value.entryId, 'entry ID');

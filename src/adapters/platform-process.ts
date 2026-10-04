@@ -4,12 +4,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
     ListenerEvidence,
+    ManagedTarget,
     PortRange,
     ProcessEvidence,
     ProcessTarget,
     RootEvidence,
 } from '../domains/cdp-target.ts';
-import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
+import type { LaunchContext } from '../domains/control-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
@@ -20,7 +21,111 @@ export interface PlatformAdapter {
     snapshot(pid: number, port: number): Promise<ProcessEvidence>;
     validateNewRoot(evidence: ProcessEvidence, target: ProcessTarget): void;
     reservedRanges(): Promise<PortRange[]>;
-    close(target: ProcessTarget, options?: { requireListener?: boolean }): Promise<boolean>;
+    close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
+    requestNormalClose?(target: ManagedTarget, context?: LaunchContext): Promise<Record<string, unknown>>;
+    waitForExit?(target: ManagedTarget, signal?: AbortSignal): Promise<void>;
+}
+
+const exitObservations = new WeakMap<NonNullable<ManagedTarget['child']>, { exited: boolean }>();
+
+export function observeTargetExit(target: ManagedTarget) {
+    const child = target.child;
+    if (!child || exitObservations.has(child)) return;
+    const state = { exited: typeof child.exitCode === 'number' || typeof child.signalCode === 'string' };
+    exitObservations.set(child, state);
+    child.once('exit', () => {
+        state.exited = true;
+    });
+}
+
+export function targetExitObserved(target: ManagedTarget) {
+    observeTargetExit(target);
+    return target.child !== undefined && exitObservations.get(target.child)?.exited === true;
+}
+
+function recordTargetExit(target: ManagedTarget) {
+    observeTargetExit(target);
+    if (target.child) {
+        const state = exitObservations.get(target.child);
+        if (state) state.exited = true;
+    }
+}
+
+export function waitForTargetExit(target: ManagedTarget, signal?: AbortSignal): Promise<void> {
+    observeTargetExit(target);
+    if (targetExitObserved(target)) return Promise.resolve();
+    signal?.throwIfAborted();
+    const child = target.child;
+    if (!child) return Promise.reject(new Error('No actual application exit observer is available.'));
+    return new Promise((resolve, reject) => {
+        let releaseMonitoring: (() => void) | undefined;
+        const cleanup = () => {
+            child.off?.('exit', exited);
+            releaseMonitoring?.();
+            signal?.removeEventListener('abort', aborted);
+        };
+        const exited = () => {
+            cleanup();
+            resolve();
+        };
+        const failed = () => {
+            cleanup();
+            reject(new Error('The actual application exit observer failed.'));
+        };
+        const aborted = () => {
+            cleanup();
+            reject(signal?.reason);
+        };
+        child.once('exit', exited);
+        signal?.addEventListener('abort', aborted, { once: true });
+        releaseMonitoring = child.onMonitorError?.(failed);
+        if (targetExitObserved(target)) exited();
+        else if (child.monitoringFailure) failed();
+    });
+}
+
+export function validateNativeExitReceipt(result: Record<string, unknown>, target: ProcessTarget): void {
+    if (
+        result.processId === target.processId &&
+        result.startedAtUtc === target.startedAtUtc &&
+        result.closed === true &&
+        result.processExited === true &&
+        result.waitResult === 0 &&
+        result.waitError === 0
+    )
+        return;
+    const error = new DetailedError('The native handle did not supply matching application exit evidence.');
+    error.details = {
+        phase: result.waitResult === 4294967295 ? 'wait-exit' : (result.phase ?? 'normal-close'),
+        nativeError: result.nativeError ?? 0,
+        waitResult: result.waitResult,
+        waitError: result.waitError,
+        closeRequested: result.closeRequested === true,
+        processExited: false,
+    };
+    throw error;
+}
+
+function abortable<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return pending;
+    signal.throwIfAborted();
+    return new Promise((resolve, reject) => {
+        const cancel = () => {
+            signal.removeEventListener('abort', cancel);
+            reject(signal.reason);
+        };
+        signal.addEventListener('abort', cancel, { once: true });
+        pending.then(
+            (value) => {
+                signal.removeEventListener('abort', cancel);
+                resolve(value);
+            },
+            (error: unknown) => {
+                signal.removeEventListener('abort', cancel);
+                reject(error);
+            },
+        );
+    });
 }
 
 async function run(executable: string, arguments_: string[]): Promise<ProcessResult> {
@@ -374,20 +479,83 @@ export function createPlatformAdapter(
         platform?: NodeJS.Platform;
         snapshot?: PlatformAdapter['snapshot'];
         closeWindows?: (target: ProcessTarget) => Promise<Record<string, unknown>>;
+        requestWindowsClose?: (target: ProcessTarget, context?: LaunchContext) => Promise<Record<string, unknown>>;
+        waitWindowsExit?: (target: ProcessTarget, signal?: AbortSignal) => Promise<Record<string, unknown>>;
         requestUnixClose?: (pid: number) => void;
         sleep?: (ms: number) => Promise<void>;
     } = {},
 ): PlatformAdapter {
     const platform = dependencies.platform ?? process.platform;
-    const closeWindows = dependencies.closeWindows ?? createWindowsLauncher().close;
+    const windows = createWindowsLauncher();
+    const closeWindows = dependencies.closeWindows;
     const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, 'SIGTERM'));
-    const sleep = dependencies.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
     if (!['win32', 'linux', 'darwin'].includes(platform)) throw new Error('Unsupported operating system.');
     const snapshot: PlatformAdapter['snapshot'] =
         dependencies.snapshot ??
         (platform === 'win32'
             ? async (pid, port) => parseSnapshot(await windowsHelper('Snapshot', { RootProcessId: pid, Port: port }))
             : unixSnapshot);
+    const nativeExit = new WeakMap<ManagedTarget, Promise<Record<string, unknown>>>();
+    async function requestNormalClose(
+        target: ManagedTarget,
+        context: LaunchContext = {},
+    ): Promise<Record<string, unknown>> {
+        observeTargetExit(target);
+        if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+        const evidence = await snapshot(target.processId, target.port);
+        const owned = new Set(evidence.processIds);
+        const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess))
+            ? 'foreign'
+            : evidence.listeners.length
+              ? 'owned'
+              : 'absent';
+        if (!evidence.root.exists) {
+            const error = new DetailedError('The target root is absent without actual application exit evidence.');
+            error.details = { phase: 'process-identity', listenerState, closeRequested: false, processExited: false };
+            throw error;
+        }
+        validateProcessIdentity(evidence, target);
+        if (platform !== 'win32') {
+            requestUnixClose(target.processId);
+            return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
+        }
+        try {
+            if (closeWindows) {
+                const result = await closeWindows(target);
+                const completion = Promise.resolve(result);
+                nativeExit.set(target, completion);
+                validateNativeExitReceipt(result, target);
+                recordTargetExit(target);
+                return { ...result, listenerState };
+            }
+            const result = await (dependencies.requestWindowsClose ?? windows.requestNormalClose)(target, context);
+            const completion = (dependencies.waitWindowsExit ?? windows.waitForExit)(target);
+            void completion.catch(() => {});
+            nativeExit.set(target, completion);
+            if (result.closeRequested !== true && result.processExited !== true) {
+                const error = new DetailedError('The application rejected normal close.');
+                error.details = { ...result, listenerState, processExited: false };
+                throw error;
+            }
+            return { ...result, listenerState };
+        } catch (cause) {
+            const error = new DetailedError(errorMessage(cause));
+            error.details = { ...errorDetails(cause), listenerState, processExited: false };
+            throw error;
+        }
+    }
+    async function waitForExit(target: ManagedTarget, signal?: AbortSignal) {
+        if (targetExitObserved(target)) return;
+        signal?.throwIfAborted();
+        const completion = nativeExit.get(target);
+        if (completion) {
+            const result = await abortable(completion, signal);
+            validateNativeExitReceipt(result, target);
+            recordTargetExit(target);
+            return;
+        }
+        await waitForTargetExit(target, signal);
+    }
     return {
         snapshot,
         validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
@@ -414,66 +582,12 @@ export function createPlatformAdapter(
             }
             return ranges;
         },
-        async close(target, { requireListener = true } = {}) {
-            const evidence = await snapshot(target.processId, target.port);
-            if (!evidence.root.exists)
-                return !evidence.listeners.some((listener) => evidence.processIds.includes(listener.owningProcess));
-            validateProcessIdentity(evidence, target);
-            const owned = new Set(evidence.processIds);
-            const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess))
-                ? 'foreign'
-                : evidence.listeners.length
-                  ? 'owned'
-                  : 'absent';
-            if (requireListener && listenerState === 'foreign') {
-                const error = new DetailedError('The CDP listener belongs to another process.');
-                error.details = { phase: 'listener-identity', listenerState, closeRequested: false };
-                throw error;
-            }
-            if (platform === 'win32') {
-                let result: Record<string, unknown>;
-                try {
-                    result = await closeWindows(target);
-                } catch (cause) {
-                    const error = new DetailedError(errorMessage(cause));
-                    error.details = { ...errorDetails(cause), listenerState };
-                    throw error;
-                }
-                const after = await snapshot(target.processId, target.port);
-                if (after.root.exists) validateProcessIdentity(after, target);
-                const remaining = after.listeners.filter((listener) => owned.has(listener.owningProcess));
-                if (result.closed === true && !after.root.exists && !remaining.length) return true;
-                const error = new DetailedError('The application did not close normally.');
-                error.details = {
-                    phase: result.phase ?? 'normal-close',
-                    nativeError: result.nativeError ?? 0,
-                    closeRequested: result.closeRequested === true,
-                    processExited: !after.root.exists,
-                    listenerState: remaining.length ? 'owned' : after.listeners.length ? 'foreign' : 'absent',
-                };
-                throw error;
-            }
-            // SIGTERM asks the recorded process to exit; no escalation to SIGKILL.
-            requestUnixClose(target.processId);
-            let inspectionFailure: unknown;
-            for (let attempt = 0; attempt < CLOSE_TIMEOUT_SECONDS * 5; attempt += 1) {
-                await sleep(200);
-                let after: ProcessEvidence;
-                try {
-                    after = await snapshot(target.processId, target.port);
-                    inspectionFailure = undefined;
-                } catch (error) {
-                    // An exiting process can unmap its executable between ps and lsof.
-                    // Wait for complete evidence; never infer exit or send another signal.
-                    inspectionFailure = error;
-                    continue;
-                }
-                if (!after.root.exists && !after.listeners.some((listener) => owned.has(listener.owningProcess)))
-                    return true;
-                if (after.root.exists) validateProcessIdentity(after, target);
-            }
-            if (inspectionFailure !== undefined) throw inspectionFailure;
-            return false;
+        requestNormalClose,
+        waitForExit,
+        async close(target) {
+            await requestNormalClose(target);
+            await waitForExit(target);
+            return true;
         },
     };
 }

@@ -8,19 +8,23 @@
 - `official-package.ts` verifies the complete official release tree and returns its original bytes.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
   path/metadata changes and closes the descriptor on success or failure.
-- `mcp-bridge.ts` connects the official Server through the public SDK Client.
+- `mcp-bridge.ts` connects the official Server through the public SDK Client,
+  closes its public transport independently of actual child exit, and owns
+  bounded stdin/TERM/KILL disposal for that Server child.
 - `mcp-entry-server.ts` exposes routed official and MCP lifecycle tools
   through the SDK gateway on stdio.
 - `target-host.ts` launches and verifies a newly created target. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
   the debugging process and preserves explicit switches during recovery.
 - `chrome-profile.ts` checks native profile locks and reserves canonical directories.
+- `port-reservation.ts` reserves CDP ports synchronously for one gateway and
+  checks owner identity before releasing a live-run claim.
 - `platform-process.ts` obtains OS identity/reservations and normal shutdown;
   Linux root creation evidence preserves kernel start tick precision.
   Darwin verifies mapped hard-link aliases against the installed executable's
   device/inode, and failures retain bounded executable identity metadata.
-  Unix normal close waits for complete exit evidence across disappearing mappings,
-  retaining identity failures and the bounded wait without sending another signal.
+  Unix normal close validates the owned application identity and requests
+  shutdown; actual Node child exit completes the separate unbounded wait.
 - `windows-cdp-helper.ps1` supplies Windows process/listener evidence.
 - `windows-launch.ts` validates the native helper protocol and actual app events.
 - `windows-native-helper.ps1` orchestrates native launch/close, permission waiting

@@ -235,9 +235,7 @@ export async function createCdpRouter({ diagnose }: { diagnose?: Diagnose } = {}
             [...sockets].some(({ upstream }) => upstream.readyState === WebSocket.CONNECTING) ||
             [...pending.values()].some((requests) => requests.size > 0),
         pause() {
-            if (this.isBusy()) throw new Error('CDP router is busy with in-flight requests.');
             paused = true;
-            disconnect();
         },
         resume() {
             paused = false;

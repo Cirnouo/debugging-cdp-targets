@@ -25,6 +25,13 @@ public sealed class DctNativeProcess : IDisposable
     public void Dispose() { if (Handle != IntPtr.Zero) { DctNative.CloseHandle(Handle); Handle = IntPtr.Zero; } }
 }
 
+public sealed class DctNativeClose : IDisposable
+{
+    public DctNativeProcess Target;
+    public Hashtable Evidence;
+    public void Dispose() { if (Target != null) { Target.Dispose(); Target = null; } }
+}
+
 public static class DctNative
 {
     private const uint Query = 0x1000;
@@ -256,12 +263,12 @@ public static class DctNative
         try { IntPtr handle; if (!DuplicateHandle(GetCurrentProcess(), process.Handle, monitor, out handle, Query | Synchronize, false, 0)) throw Error(); return handle.ToInt64(); }
         finally { CloseHandle(monitor); }
     }
-    public static int WaitForExit(DctNativeProcess process)
+    public static int? WaitForExit(DctNativeProcess process)
     {
         // An OS process handle supplies exit evidence. No process/listener polling.
         using (EventWaitHandle target = new EventWaitHandle(false, EventResetMode.ManualReset)) {
             target.SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(process.Handle, false);
-            if (WaitHandle.WaitAny(new WaitHandle[] { target, cancelled }) != 0) return Int32.MinValue;
+            if (WaitHandle.WaitAny(new WaitHandle[] { target, cancelled }) != 0) return null;
         }
         uint code;
         if (!GetExitCodeProcess(process.Handle, out code)) throw Error();
@@ -285,9 +292,10 @@ public static class DctNative
         if (pid != expectedPid) throw new InvalidDataException("Unexpected native helper peer.");
         using (DctNativeProcess peer = Inspect(expectedPid)) if (peer.CreatedTicks != expectedCreatedTicks) throw new InvalidDataException("Native helper peer identity changed.");
     }
-    public static Hashtable Close(int pid, string executable, string startedAtUtc, int timeoutMilliseconds)
+    public static DctNativeClose RequestClose(int pid, string executable, string startedAtUtc)
     {
-        using (DctNativeProcess target = Inspect(pid)) {
+        DctNativeProcess target = Inspect(pid);
+        try {
             int targetSession, ownSession;
             if (!ProcessIdToSessionId(pid, out targetSession) || !ProcessIdToSessionId(Process.GetCurrentProcess().Id, out ownSession)) throw Error();
             // .NET Framework expands 8.3 aliases here; normalize both identity paths.
@@ -298,10 +306,35 @@ public static class DctNative
                 IntPtr window = process.MainWindowHandle;
                 bool requested = window != IntPtr.Zero && PostMessage(window, 0x0010, IntPtr.Zero, IntPtr.Zero);
                 int error = window != IntPtr.Zero && !requested ? Marshal.GetLastWin32Error() : 0;
-                bool exited = WaitForSingleObject(target.Handle, requested ? (uint)timeoutMilliseconds : 0) == 0;
-                return new Hashtable { { "event", "closed" }, { "closed", exited }, { "processExited", exited }, { "closeRequested", requested }, { "nativeError", error },
-                    { "phase", requested ? "wait-exit" : "normal-close" }, { "reason", exited ? "process-exited" : window == IntPtr.Zero ? "no-main-window" : requested ? "application-still-running" : "close-request-rejected" } };
+                return new DctNativeClose { Target = target, Evidence = new Hashtable {
+                    { "event", "close-requested" }, { "processId", pid }, { "startedAtUtc", startedAtUtc },
+                    { "processExited", false }, { "closeRequested", requested }, { "nativeError", error },
+                    { "phase", "normal-close" }, { "reason", requested ? "close-request-accepted" : window == IntPtr.Zero ? "no-main-window" : "close-request-rejected" } } };
             }
+        } catch { target.Dispose(); throw; }
+    }
+    public static Hashtable WaitForClose(DctNativeClose close)
+    {
+        uint waited = WaitForSingleObject(close.Target.Handle, close.Evidence["closeRequested"].Equals(true) ? UInt32.MaxValue : 0);
+        int error = waited == UInt32.MaxValue ? Marshal.GetLastWin32Error() : 0;
+        bool exited = waited == 0;
+        uint code = 0;
+        if (exited && !GetExitCodeProcess(close.Target.Handle, out code)) {
+            error = Marshal.GetLastWin32Error(); waited = UInt32.MaxValue; exited = false;
         }
+        Hashtable result = (Hashtable)close.Evidence.Clone();
+        result["event"] = waited == UInt32.MaxValue ? "error" : "closed";
+        result["closed"] = exited;
+        result["processExited"] = exited;
+        result["waitResult"] = waited;
+        result["waitError"] = error;
+        result["phase"] = "wait-exit";
+        if (exited) result["exitCode"] = unchecked((int)code);
+        if (waited == UInt32.MaxValue) result["category"] = "native-wait-failed";
+        return result;
+    }
+    public static Hashtable Close(int pid, string executable, string startedAtUtc)
+    {
+        using (DctNativeClose close = RequestClose(pid, executable, startedAtUtc)) return WaitForClose(close);
     }
 }

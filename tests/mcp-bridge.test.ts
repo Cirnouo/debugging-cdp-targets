@@ -259,10 +259,16 @@ test('official bridge rejects pending calls on unexpected subprocess exit once',
     const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         let exits = 0;
+        let markExit: () => void = () => {};
+        const actualExit = new Promise<void>((resolve) => {
+            markExit = resolve;
+        });
         connection.onExit(() => {
             exits += 1;
+            markExit();
         });
         await assert.rejects(connection.call('echo', { exit: true }));
+        await boundedSignal(actualExit, 'official child exit must be independently observed');
         assert.equal(exits, 1);
     } finally {
         await connection.close();
@@ -484,6 +490,7 @@ test('official catalog rejects reserved routing collisions and malformed tool ro
             'connectionId',
             'operationId',
             'toolNames',
+            'include',
             'hookEventName',
         ]);
         for (const hookEventName of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'])

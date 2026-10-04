@@ -30,6 +30,12 @@ test('the real MCP transport declares structured lifecycle tools and validates b
             'dct_operation_cancel',
             'dct_operation_wait',
         ]);
+        const statusTool = tools.find((tool) => tool.name === 'dct_connection_status');
+        assert.deepEqual(statusTool?.inputSchema.properties?.include, {
+            type: 'array',
+            items: { type: 'string', enum: ['configuration', 'diagnostics'] },
+            uniqueItems: true,
+        });
         const request = {
             entryId: '11111111-1111-4111-8111-111111111111',
             requestId: 'start-1',
@@ -47,6 +53,23 @@ test('the real MCP transport declares structured lifecycle tools and validates b
         assert.equal(received.length, 1);
         const hook = await client.callTool({ name: 'dct_connection_status', arguments: { hookEventName: 'Stop' } });
         assert.deepEqual(hook.structuredContent, {});
+        const statusArguments = {
+            entryId: request.entryId,
+            connectionId: '22222222-2222-4222-8222-222222222222',
+            include: ['diagnostics'],
+        };
+        const statusResult = await client.callTool({ name: 'dct_connection_status', arguments: statusArguments });
+        assert.deepEqual(statusResult.structuredContent, { accepted: true });
+        assert.deepEqual(statusResult.content, [{ type: 'text', text: '{"accepted":true}' }]);
+        assert.deepEqual(received[1], { action: 'status', ...statusArguments });
+        for (const arguments_ of [
+            { entryId: request.entryId, include: ['configuration'] },
+            { ...statusArguments, operationId: '33333333-3333-4333-8333-333333333333' },
+            { hookEventName: 'Stop', entryId: request.entryId },
+            { hookEventName: 'Stop', include: ['diagnostics'] },
+        ])
+            await assert.rejects(client.callTool({ name: 'dct_connection_status', arguments: arguments_ }));
+        assert.equal(received.length, 2);
     } finally {
         await client.close();
         await gateway.close();
