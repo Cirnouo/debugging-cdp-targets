@@ -89,9 +89,8 @@ CI runs both smokes on `ubuntu-24.04` with Xvfb and on `macos-15` with ordinary
 Chrome. It uses the runner's existing Chrome, `ps` and `lsof`; Linux additionally
 requires Xvfb, xvfb-run, xauth and getconf. It downloads no browser, starts no headless
 substitute and uploads no profiles or browser content. These jobs are also part
-of the reusable release CI. Their first successful GitHub runner evidence is
-required before adding their checks to main protection or claiming tested
-Linux/macOS compatibility.
+of the reusable release CI. Both platform checks passed on GitHub before becoming
+required main checks; see the root README for tested hosts and actual Chrome versions.
 
 Each target has its own temporary profile and synthetic local page. The tests
 preselect normal Close for their newly launched fixtures; they never take over

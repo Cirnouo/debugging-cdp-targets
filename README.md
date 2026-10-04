@@ -23,10 +23,21 @@ to report a vulnerability privately.
     known-compatible target. Other CDP-capable applications are best effort;
     Electron, Tauri, or WebView2 alone does not establish compatibility.
 
-Windows has real-process verification and Chrome smoke-test coverage. Linux and
-macOS have simulated CDP test coverage, but real application sessions have not
-been validated. They also require `ps` and `lsof`.
-Linux additionally requires `getconf` and readable `/proc` process evidence.
+Real desktop Chrome acceptance passed on the following hosts on 2026-10-04:
+
+| Tested host | Architecture | Chrome version |
+| --- | --- | --- |
+| Windows, OS build 10.0.26300 | x64 | 154.0.8037.98 |
+| Ubuntu 24.04.5 LTS with Xvfb | x64 | 154.0.8037.57 |
+| macOS 15.7.9 | arm64 | 152.0.7977.83 |
+
+The Linux and macOS evidence comes from GitHub's `ubuntu-24.04` and `macos-15`
+runners. The acceptance checks cover official page/CSS tools, concurrent independent
+connections, Keep/reuse, scoped Close, same-port recovery, stale sessions and exit
+cleanup. See [the smoke instructions](tests/smoke/README.md) for the test boundaries.
+Other application/OS/browser combinations remain best effort.
+Linux and macOS require `ps` and `lsof`; Linux additionally requires `getconf`
+and readable `/proc` process evidence.
 
 Chrome extension tools require compatible Google Chrome 149 or newer. Their
 presence in the tool catalog does not mean another application supports them.

@@ -82,16 +82,20 @@ installation must not require TypeScript or project dependencies.
 The active main Ruleset requires PRs, up-to-date branches, linear history, no
 force pushes/deletion, and strict GitHub Actions checks: Supply chain security,
 Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
+It also requires CodeQL (javascript-typescript), CodeQL (csharp), CodeQL (actions),
+Real Chrome (ubuntu-24.04) and Real Chrome (macos-15), for eleven checks total.
 It has no routine bypass actors. Single-maintainer PRs require zero additional
 approvals. Only squash merges are allowed, using the PR title as commit title.
 Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
 
-After successful initial scans and findings review, add all three CodeQL
-analysis checks and high/critical security findings to the main merge gate.
-After the two real Chrome jobs pass on GitHub, add their observed check names
-and update the compatibility statement with the tested systems and actual Chrome
-versions. Until those runs succeed, the active Ruleset retains its six established
-checks; local simulated or Windows results cannot establish Linux/macOS acceptance.
+Successful initial CodeQL scans returned no findings and confirmed native helper
+extraction; both real Chrome jobs passed on GitHub before promoting their observed
+check names. A code scanning rule additionally requires CodeQL results and rejects
+high/critical security alerts. GitHub applies its
+[code scanning alert gate](https://docs.github.com/en/code-security/concepts/code-scanning/merge-protection) to PR
+findings whose reported lines are in the diff. Existing findings still require
+review through code scanning alerts. The README records the tested systems and
+actual Chrome versions; local simulated tests cannot establish real acceptance.
 
 Supply chain security is the first CI gate: dependency-free lockfile preflight
 with full vulnerability/signature audits, script/hook-disabled frozen install,
