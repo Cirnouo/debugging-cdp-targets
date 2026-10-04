@@ -15,12 +15,9 @@ Version 0.1.0 remains under development; no release has been published.
   contributor attribution, and required security and cross-platform CI gates.
 - One reusable stdio gateway that creates independent official chrome-devtools-mcp
   1.10.1 connections for new targets, without a fixed connection limit.
-- Bundled gateway using official split MCP SDK 2.2.0 with legacy stdio, roots,
-  form elicitation, progress and cancellation compatibility.
-- Complete unchanged official chrome-devtools-mcp 1.10.1 release delivered with
-  the Plugin, with reviewed tarball/file evidence and a frozen isolated audit lock.
-  Each launch verifies the delivered files and resolves the public Server bin
-  relative to the Plugin; runtime npm/npx acquisition and its preload are removed.
+- MCP support for stdio, roots, form elicitation, progress and cancellation.
+- Complete unchanged official chrome-devtools-mcp 1.10.1 bundled with each Plugin,
+  with integrity-verified startup and no runtime package downloads.
   Automatic update checks are disabled only for the official Server child.
 - Parallel official tool calls with explicit connection/session routing and
   independent progress, cancellation, actual-exit observation and lifecycle events.
@@ -46,11 +43,10 @@ Version 0.1.0 remains under development; no release has been published.
   requests and nonterminal responses leave them unread. Failure notices retain
   the active failure phase and compact native evidence without error payloads.
 - Structured executable/args/cwd/env launches with native Windows privilege
-  detection, private one-shot elevation, actual app handles and separate permission
-  and CDP readiness budgets. No plugin CLI, control IPC or Agent startup wrappers.
-  Normal close accepts 8.3 executable paths while retaining process identity checks.
+  detection, private one-shot elevation, actual app handles and separate
+  authorization and CDP readiness waits.
 - Timeout quarantine, pending transport cleanup and phase-only diagnostics;
-  absent-listener close and native failure/retry evidence.
+  normal close without a listener and explicit retries after native failures.
 - Chrome presets for a fixed dedicated browser profile, occupancy checks and
   launch reservations, explicit alternative directories, and preserved profiles
   during live restart. Gateway-local port ownership is reserved before probing
@@ -58,14 +54,13 @@ Version 0.1.0 remains under development; no release has been published.
   Automatic updater scheduling is disabled in the new process.
 - Chrome extension debugging, with usage statistics and CrUX disabled by default
   and explicit overrides.
-- Verified Windows, Ubuntu 24.04 and macOS 15 Chrome operation with real desktop
-  browser acceptance, normal shutdown and simulated CDP regression coverage.
-  Windows auxiliary process consoles remain hidden.
+- Chrome support on Windows, Ubuntu 24.04 and macOS 15, with normal shutdown
+  and hidden Windows auxiliary consoles.
 
 ### Security
 
-- Descriptor-based release and review-evidence reads reject path replacement and
-  observed in-place file changes during integrity verification.
+- Integrity verification rejects observed file replacement or mutation in
+  bundled release files and review evidence.
 - Target process, listener, and endpoint identity verification, loopback-only
   CDP connections, and fail-closed handling of identity mismatches.
 - Normal target shutdown only, without force-killing or taking over existing
@@ -84,22 +79,10 @@ Version 0.1.0 remains under development; no release has been published.
   reviewed esbuild installation script allowed after the audit gate.
 - Exact, fingerprint-bound review exceptions with a maximum 30-day lifetime;
   signature, registry and scan failures cannot be waived.
-- Private vulnerability reporting, dependency alerts and weekly complete audits,
-  contribution/community policies and GitHub collaboration templates.
-- Protected main with PR/squash-only merging, eleven required Actions checks,
-  maintained-source CodeQL analysis and high/critical security alert merge protection.
-
-### Fixed
-
-- Linux target creation evidence preserves kernel start tick precision, avoiding
-  false identity rejection caused by the rounded `ps lstart` display while
-  retaining creation-time, process/user, listener and endpoint checks.
-- macOS executable evidence verifies Chrome's mapped code-sign hard link through
-  the installed file's device/inode, preventing false path changes while rejecting
-  different files, incomplete mapping evidence and ambiguous aliases.
-- Actual application exit gates and cancels pending startup/tool work before
-  cleanup, preventing blocked requests from retaining dead sessions and resources.
-- Windows helper exit and observer faults no longer masquerade as actual app exit;
-  reliable native application handle waits/events avoid process polling.
-- Normal application Close remains independent of an unrelated CDP listener and
-  official MCP lifetime, preserving identity checks and avoiding force kill.
+- Private vulnerability reporting, dependency alerts and weekly supply-chain audits.
+- Protected source changes require pull requests, CodeQL analysis and security checks.
+- Actual application exit revokes routes and cancels pending work before cleanup.
+- Native application handle waits/events on Windows provide actual-exit evidence
+  without process polling; helper exit and observer faults cannot establish app exit.
+- Normal application Close is independent of unrelated CDP listeners and official
+  MCP lifetime, with process identity checks and no application force kill.
