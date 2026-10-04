@@ -24,6 +24,10 @@ export function buildCommitCheckRequest({ eventName, event, currentBranch }: Eve
             !isRecord(event.pull_request.base)
         )
             throw new Error('Invalid pull request event.');
+        const number = event.number;
+        if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) {
+            throw new Error('Invalid pull request number: expected a positive safe integer at the event root.');
+        }
         const pr = event.pull_request;
         const head = event.pull_request.head;
         const base = event.pull_request.base;
@@ -35,6 +39,12 @@ export function buildCommitCheckRequest({ eventName, event, currentBranch }: Eve
             (typeof pr.body !== 'string' && pr.body !== null)
         )
             throw new Error('Invalid pull request identity.');
+        if (pr.title.trimEnd().endsWith(`(#${number})`)) {
+            throw new Error(
+                `Remove (#${number}) from the pull request title; GitHub appends this number when squashing.`,
+            );
+        }
+        const squashTitle = `${pr.title} (#${number})`;
         return {
             branches: [head.ref],
             directMessages: [
@@ -44,7 +54,7 @@ export function buildCommitCheckRequest({ eventName, event, currentBranch }: Eve
                 },
                 {
                     label: 'pull request squash message',
-                    message: pr.body ? `${pr.title}\n\n${pr.body}` : pr.title,
+                    message: pr.body ? `${squashTitle}\n\n${pr.body}` : squashTitle,
                 },
             ],
             range: `${event.pull_request.base.sha}..${event.pull_request.head.sha}`,

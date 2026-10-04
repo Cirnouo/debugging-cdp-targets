@@ -27,9 +27,16 @@ also follows a blank line after a body. Body and footer lines are at most 100
 characters. A breaking change may use `!`, a `BREAKING CHANGE:` footer, or both.
 Only Git-topology-proven merge commits are ignored.
 
-PR checks validate both the title and the complete title-plus-description squash
-message before merge. Keep description lines within the same body/footer limit;
-editing a description reruns the gate.
+Topic commits and raw PR titles use the header above without the PR's own number.
+The final squash header uses `<type>(<scope>)!: <subject> (#<PR-number>)`, with
+`!` only for a breaking change. Preserve GitHub's generated PR number and check
+the actual merge message before merging.
+
+The 100-character header limit includes the generated suffix. For example,
+` (#123)` uses seven characters, leaving at most 93 characters for the raw title.
+PR checks validate the raw title and the predicted header with its actual PR
+number plus the original PR description. Keep description lines within the same
+body/footer limit; editing a title or description reruns the existing gate.
 
 Keep each commit coherent, stage only files owned by the task, and preserve
 unrelated worktree changes. Review the staged diff and run the applicable
@@ -37,6 +44,33 @@ focused checks before committing.
 
 Do not push, tag, publish, modify a remote, open a pull request, or change
 repository settings without explicit authorization.
+
+## Optional issue association
+
+Issue association is optional. When the change resolves an issue, use `Closes`,
+`Fixes`, or `Resolves` followed by its issue reference. Use `Refs: #220` for a
+reference only. Put these trailers at the end of the PR description, with a blank
+line after the description body. Use a separate line for each issue and
+`owner/repository#number` for an issue in another repository.
+
+Prefer the PR description for issue association so the reference is visible on
+the PR and carried into the squash body. Topic commits may also include these
+trailers, but keep closing keywords in the PR description so squash merging
+retains them. Closing keywords in a PR description
+create a visible PR-issue link when the PR targets the default branch; merging
+that PR into the default branch closes the issue. See
+[GitHub's issue-linking documentation](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue).
+
+A complete final squash message can look like this:
+
+```text
+fix(target): reject stale session identity (#123)
+
+Reject stale routing before forwarding requests to the official Server.
+
+Closes #219
+Refs: #220
+```
 
 ## Scope evolution
 

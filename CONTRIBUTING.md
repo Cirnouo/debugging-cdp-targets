@@ -57,12 +57,14 @@ Target main and use a PR title accepted by the commit policy, for example
 and actual verification results in the PR template. Update relevant documentation
 and meaningful user-facing changes in the Unreleased changelog.
 Wrap description paragraphs and list continuations within 100 characters; CI
-validates the complete future squash message as well as its title.
+validates the title and predicted squash message with its generated PR number.
+Follow the [commit policy](docs/policies/commits-and-scope.md) for the final header
+limit and optional issue trailers at the end of the description.
 
 The main Ruleset requires an up-to-date PR and successful required GitHub checks.
-The maintainer reviews contributions and merges with squash; the PR title becomes
-the commit title. Current single-maintainer settings require no additional
-approving reviewer. Local Git hooks complement the remote checks.
+The maintainer reviews contributions and merges with squash, checking the actual
+merge message with GitHub's generated PR number. Current single-maintainer settings
+require no additional approving reviewer. Local Git hooks complement the remote checks.
 
 Keep version 0.1.0 unreleased. Pushing, creating releases or tags, and changing
 repository or user configuration require the authorization described in
