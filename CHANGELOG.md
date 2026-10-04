@@ -49,6 +49,8 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Security
 
+- Descriptor-based release and review-evidence reads reject path replacement and
+  observed in-place file changes during integrity verification.
 - Target process, listener, and endpoint identity verification, loopback-only
   CDP connections, and fail-closed handling of identity mismatches.
 - Normal target shutdown only, without force-killing or taking over existing

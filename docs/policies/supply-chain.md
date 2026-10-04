@@ -108,6 +108,11 @@ and the Marketplace catalog. Dependency hashes cover
 the parsed full lock documents, canonically sorted. File hashes include sorted
 relative names, byte lengths and contents. The exception file is not hashed into
 itself. Fingerprints differ between repository and upstream graphs.
+Release verification and file fingerprints inspect and read the same open file
+descriptor. They reject non-regular files, final-component links, path identity
+changes and observed size/modification/change-time changes during the read;
+the descriptor is closed on every outcome. Existing canonical package-root,
+path, complete-file-set and digest checks remain required.
 Maintained TypeScript (`.ts`, `.mts`, `.cts`) and generated JavaScript are both
 included. Compiler, parser and type dependencies are audited like every other
 development dependency. Type or language changes do not authorize automatic

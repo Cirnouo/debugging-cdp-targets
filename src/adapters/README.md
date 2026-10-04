@@ -6,6 +6,8 @@
   actual connection enablement and configuration recipes/workspace sources.
 - `official-server.ts` validates the delivered release before resolving its public Server bin and validates options.
 - `official-package.ts` verifies the complete official release tree and returns its original bytes.
+- `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
+  path/metadata changes and closes the descriptor on success or failure.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client.
 - `mcp-entry-server.ts` exposes routed official and MCP lifecycle tools
   through the SDK gateway on stdio.

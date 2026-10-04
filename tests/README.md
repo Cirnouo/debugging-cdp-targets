@@ -5,6 +5,8 @@
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
   path/link rejection, complete file verification and source/packaged resolution.
+- `file-evidence.test.ts` reproduces path replacement and in-place mutation during
+  integrity reads, checks exact bytes and confirms descriptor cleanup on failures.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
   evidence, independently verified hard links and bounded failure diagnostics,
   precise Linux kernel creation ticks, malformed evidence rejection,
