@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
+import { lstat, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
     validateOfficialManifest,
 } from '../shared/official-package.ts';
+import { readRegularFile } from './file-evidence.ts';
 
 /** Return only the independently verified release bytes; never follow package links. */
 export async function verifyOfficialPackage(
@@ -55,7 +56,7 @@ export async function verifyOfficialPackage(
                 if (options.pnpmInstalled && shims.has(relative)) continue;
                 const record = expected.get(relative);
                 if (!record) throw new Error(`Unexpected official package file: ${relative}`);
-                const bytes = await readFile(absolute);
+                const bytes = await readRegularFile(absolute);
                 if (bytes.length !== record.bytes || createHash('sha256').update(bytes).digest('hex') !== record.sha256)
                     throw new Error(`Official package digest or length changed: ${relative}`);
                 files.set(relative, bytes);

@@ -4,6 +4,7 @@
   signature reports, and narrowly reviewed vulnerability exceptions.
 - `security-evidence.ts` checks installation policy, manifest/lock agreement and installed graph
   completeness, and computes code/configuration/dependency SHA-256 evidence.
+  File fingerprints use the same descriptor-based regular-file reader as release verification.
 - `security-runner.ts` executes pnpm without a shell and audits both the
   repository and a disposable, script-disabled official Server dependency tree;
   upstream vulnerability review precedes actual installation.
