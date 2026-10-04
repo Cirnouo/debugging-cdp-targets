@@ -2,6 +2,12 @@
 
 This directory owns GitHub Actions workflows.
 
+- `codeql.yml` scans maintained TypeScript/JavaScript, native C# and Actions on
+  main pushes, PRs, manual runs and Mondays at 01:47 UTC. It runs security-extended
+  queries without a product build or project install. Only analysis jobs receive
+  security-events write permission. The C# job verifies that its extracted source
+  archive contains the owned native helper before the job can succeed.
+
 - `ci.yml` validates commit governance, repository quality, Windows behavior,
   portable simulated CDP, and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-edit events without uploading runtime
@@ -26,9 +32,9 @@ PowerShell helper with both 5.1 and 7; portable tests remain simulated CDP, not
 claims of real Linux/macOS application acceptance. The first security entry is
 generated JavaScript so lockfile preflight needs no installed dependencies.
 
-Weekly CI runs on Mondays at 01:17 UTC (09:17 Asia/Shanghai). Scheduled commit
-checks use GitHub's explicit branch ref and audit its full ancestry, rejecting
-missing identity or tag refs.
+Weekly CI runs on Mondays at 01:17 UTC (09:17 Asia/Shanghai); CodeQL runs at
+01:47 UTC (09:47 Asia/Shanghai). Scheduled commit checks use GitHub's explicit
+branch ref and audit its full ancestry, rejecting missing identity or tag refs.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

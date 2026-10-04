@@ -8,3 +8,4 @@ repository home page.
   Release publication, with documented trigger and job ownership.
 - `ISSUE_TEMPLATE/` contains bug and feature forms and private security routing.
 - `PULL_REQUEST_TEMPLATE.md` guides change descriptions and verification evidence.
+- `codeql-config.yml` limits security analysis to maintained code and workflows.

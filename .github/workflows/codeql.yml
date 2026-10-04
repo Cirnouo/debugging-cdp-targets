@@ -1,0 +1,75 @@
+name: CodeQL
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+    workflow_dispatch:
+    schedule:
+        -   cron: '47 1 * * 1'
+
+permissions:
+    contents: read
+
+concurrency:
+    group: codeql-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    analyze:
+        name: CodeQL (${{ matrix.language }})
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
+        permissions:
+            contents: read
+            security-events: write
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    -   language: javascript-typescript
+                        os: ubuntu-24.04
+                        build-mode: none
+                    -   language: csharp
+                        os: windows-latest
+                        build-mode: none
+                    -   language: actions
+                        os: ubuntu-24.04
+                        build-mode: none
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                with:
+                    persist-credentials: false
+            -   name: Initialize CodeQL
+                uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # reviewed v4
+                with:
+                    languages: ${{ matrix.language }}
+                    build-mode: ${{ matrix.build-mode }}
+                    config-file: ./.github/codeql-config.yml
+                    db-location: ${{ runner.temp }}/dct-codeql
+            -   name: Analyze maintained code
+                uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # reviewed v4
+                with:
+                    category: /language:${{ matrix.language }}
+            -   name: Verify native helper source extraction
+                id: native-extraction
+                if: matrix.language == 'csharp'
+                shell: pwsh
+                env:
+                    DCT_CODEQL_DATABASE_ROOT: ${{ runner.temp }}/dct-codeql
+                run: |
+                    $ErrorActionPreference = 'Stop'
+                    Add-Type -AssemblyName System.IO.Compression.FileSystem
+                    $sourceArchive = [IO.Compression.ZipFile]::OpenRead((Join-Path $env:DCT_CODEQL_DATABASE_ROOT 'csharp/src.zip'))
+                    try {
+                        $nativeSource = @($sourceArchive.Entries | Where-Object { $_.FullName.Replace('\', '/').EndsWith('/src/adapters/windows-native-process.cs', [StringComparison]::Ordinal) })
+                        if ($nativeSource.Count -ne 1) { throw 'The native helper is missing or ambiguous in the C# extraction source archive.' }
+                        Write-Output 'Verified native helper source extraction: src/adapters/windows-native-process.cs'
+                    }
+                    finally {
+                        $sourceArchive.Dispose()
+                    }

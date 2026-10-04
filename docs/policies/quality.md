@@ -34,6 +34,15 @@ titles, and source branches; Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
 
+Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
+Actions with security-extended queries, on main pushes, PRs and Mondays at
+01:47 UTC. C# uses Windows with build-mode none and must prove extraction of the
+native helper from its database source archive. No product build or project
+dependency install is run. CodeQL Actions use the independently reviewed official
+v4 commit; only analysis jobs can write security events. Generated distribution
+and unchanged upstream directories retain their distribution, integrity and
+supply-chain gates rather than becoming maintained-source scan inputs.
+
 For a forced push whose previous commit is absent from the checkout, commit
 auditing requires complete history and checks every ancestor of the new head.
 Ordinary pushes still require their base; missing heads and shallow fallback
@@ -67,6 +76,9 @@ Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
 It has no routine bypass actors. Single-maintainer PRs require zero additional
 approvals. Only squash merges are allowed, using the PR title as commit title.
 Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
+
+After successful initial scans and findings review, add all three CodeQL
+analysis checks and high/critical security findings to the main merge gate.
 
 Supply chain security is the first CI gate: dependency-free lockfile preflight
 with full vulnerability/signature audits, script/hook-disabled frozen install,

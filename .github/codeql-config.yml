@@ -1,0 +1,11 @@
+name: Maintained repository code
+paths:
+    - src
+    - tooling
+    - .github
+paths-ignore:
+    - plugins/**
+    - tooling/security/dist/**
+    - '**/node_modules/**'
+queries:
+    -   uses: security-extended

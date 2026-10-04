@@ -18,6 +18,8 @@
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
+- `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
+  action pins and rejection of C# source archives missing the native helper.
 - `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
 - `release.test.ts` checks tag/event identity, dated Changelog extraction,
   English notes, paginated draft recovery and fail-closed publication with
