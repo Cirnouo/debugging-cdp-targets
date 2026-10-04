@@ -15,8 +15,6 @@ then explicitly restarts and normally closes them. It retains test profiles.
   exit removes the old connection; restart requires a still-live session. Default
   status and lifecycle success are checked as summaries before test adapters read
   them, and compact Hook payloads must exclude tool schemas and configuration.
-  A normal Close that reports retained identity may be retried twice with the
-  same IDs; retries are logged and never escalate to forced termination.
   Fixtures disable the first-run UI, background networking and background mode.
   On Windows, both browser smokes use the Chrome launch preset to disable the
   automatic updater scheduler for their newly launched targets, following Chromium's
@@ -25,9 +23,13 @@ then explicitly restarts and normally closes them. It retains test profiles.
   excluding that background installer isolates the browser fixture. Fixture
   commands omit this switch to exercise the production preset. Other updater
   requests can still cause a retained normal-Close failure.
-  Manual exits use identity-verified Windows CloseMainWindow or Unix SIGTERM and assert actual
-  process/listener exit. A root that remains alive after window/listener teardown
-  is a retained-close failure, not a successful smoke result.
+  External exit stimuli request identity-verified Windows CloseMainWindow or Unix
+  SIGTERM. These inspect-only fixtures do not own an exit observer; request acceptance
+  is recorded separately from the gateway's actual application exit and cleanup.
+  Bounded status checks require removal of the exited connection, and Hook facts
+  retain the original process and session identities. A root that remains alive
+  after gateway EOF cleanup is reported as retained and fails the smoke, even if a
+  fallback normal Close request is accepted.
   Run `node tests/smoke/entry-recovery.ts` against a verified committed Plugin build.
   Recorded exit latency measures gateway event capture, not Agent context delivery. Cleanup uses
   gateway stdin EOF and identity-verified normal target close; profiles remain in
@@ -36,7 +38,8 @@ then explicitly restarts and normally closes them. It retains test profiles.
   they are never shipped.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
-  version evidence for the two cross-platform browser smokes.
+  version evidence for the two cross-platform browser smokes. Its external normal
+  Close helper reports request acceptance without claiming application exit.
 - `windows-monitor.ps1` samples visible console windows every 20 ms and reports
   newly visible console/terminal windows, without reading application data.
 - `marketplace.ts` installs the local Plugin with an isolated Codex home, compares

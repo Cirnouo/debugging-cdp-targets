@@ -9,7 +9,12 @@ import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { assertSummary, hookResultEvents } from '../fixtures/hook-gateway-events.ts';
-import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
+import {
+    createChromeSmokeLaunch,
+    inspectChromeSmokeTarget,
+    requestChromeSmokeClose,
+    requireChromeSmokeExecutable,
+} from './chrome-host.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
@@ -76,14 +81,7 @@ async function closeFixture(target: ConnectionStatus) {
     assert.ok(target.processId && target.port);
     const fixture = owned.find((item) => item.processId === target.processId && item.port === target.port);
     assert.ok(fixture);
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (await platform.close(fixture, { requireListener: attempt === 0 })) return true;
-        console.log(
-            JSON.stringify({ fixtureNormalCloseRetry: attempt + 1, at: Date.now(), processId: target.processId }),
-        );
-        await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    return false;
+    return requestChromeSmokeClose(fixture, platform);
 }
 async function start(index: number) {
     const target = await control({
@@ -110,8 +108,8 @@ async function pages(target: ConnectionStatus, index: number) {
 async function rejectsRoute(target: ConnectionStatus) {
     await assert.rejects(() => tool('list_pages', { _dct: route(target) }), /unknown|stale|closed|session|connection/i);
 }
-let closeStarted = 0;
-let closeCompleted = 0;
+let normalCloseRequestStartedAt = 0;
+let normalCloseRequestedAt = 0;
 try {
     await client.request('initialize', {
         protocolVersion: '2025-11-25',
@@ -151,10 +149,16 @@ try {
         'Delivered terminal operations must not be repeated by Hooks.',
     );
     await until(async () => (await selectedStatus(first.connectionId)).taskActive === true);
-    closeStarted = Date.now();
-    const [normallyClosed] = await Promise.all([closeFixture(first), pages(third, 2), pages(fourth, 3)]);
-    assert.equal(normallyClosed, true);
-    closeCompleted = Date.now();
+    normalCloseRequestStartedAt = Date.now();
+    const [normalCloseRequested] = await Promise.all([
+        closeFixture(first).then((accepted) => {
+            normalCloseRequestedAt = Date.now();
+            return accepted;
+        }),
+        pages(third, 2),
+        pages(fourth, 3),
+    ]);
+    assert.equal(normalCloseRequested, true);
     await until(async () => {
         const current = await status();
         return (
@@ -162,6 +166,7 @@ try {
             !current.connections.some((connection) => connection.connectionId === first.connectionId)
         );
     });
+    const exitCleanupObservedAt = Date.now();
     const reminder = await tool('dct_connection_status', { hookEventName: 'PostToolUse' });
     assert.ok(isRecord(reminder.structuredContent));
     const events = hookResultEvents(reminder.structuredContent);
@@ -179,7 +184,7 @@ try {
     assert.deepEqual(events[0]?.operations, []);
     assert.deepEqual(events[0]?.connections, []);
     const reminderReceived = Date.now();
-    assert.ok(reminderReceived - closeCompleted <= 5_000);
+    assert.ok(reminderReceived - exitCleanupObservedAt <= 5_000);
     assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
     await rejectsRoute(first);
     await assert.rejects(() => mutate('restart', first), /absent|closed|session|connection/i);
@@ -241,11 +246,13 @@ try {
                 retried.connectionId,
             ],
             recordedExitTiming: {
-                closeStarted,
-                closeCompleted,
+                normalCloseRequestStartedAt,
+                normalCloseRequestedAt,
+                exitCleanupObservedAt,
                 reminderReceived,
-                millisecondsFromCloseStart: reminderReceived - closeStarted,
-                millisecondsFromCloseCompletion: reminderReceived - closeCompleted,
+                millisecondsFromNormalCloseRequestStart: reminderReceived - normalCloseRequestStartedAt,
+                millisecondsFromNormalCloseRequestCompletion: reminderReceived - normalCloseRequestedAt,
+                millisecondsFromGatewayExitCleanup: reminderReceived - exitCleanupObservedAt,
                 measuresUiRendering: false,
             },
             profilesRetainedAt: folder,
@@ -256,12 +263,20 @@ try {
     throw error;
 } finally {
     const closed = await Promise.allSettled([client.close()]);
+    let retainedAfterGatewayCleanup = false;
     for (const fixture of owned) {
         const evidence = await platform.snapshot(fixture.processId, fixture.port);
         if (evidence.root.exists) {
-            const normallyClosed = await platform.close(fixture, { requireListener: false });
-            if (!normallyClosed) console.error('Fixture retained after normal Close:', fixture.processId, fixture.port);
-            assert.equal(normallyClosed, true);
+            retainedAfterGatewayCleanup = true;
+            try {
+                const normalCloseRequested = await requestChromeSmokeClose(fixture, platform);
+                console.error(
+                    'Fixture retained after gateway EOF cleanup:',
+                    JSON.stringify({ processId: fixture.processId, port: fixture.port, normalCloseRequested }),
+                );
+            } catch (error) {
+                console.error('Retained fixture normal Close request failed:', fixture.processId, fixture.port, error);
+            }
         }
     }
     assert.ok(
@@ -269,5 +284,6 @@ try {
         'Gateway EOF cleanup failed.',
     );
     assert.equal(client.child.exitCode, 0, 'Gateway did not exit normally.');
+    assert.equal(retainedAfterGatewayCleanup, false, 'Gateway EOF cleanup retained an application.');
     console.log(JSON.stringify({ gatewayExitCode: client.child.exitCode, profilesRetainedAt: folder }));
 }

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import type { ProcessTarget } from '../src/domains/cdp-target.ts';
 import type { ControlRequest, ControlResult } from '../src/domains/control-contract.ts';
 import { closeSmokeConnection } from './smoke/lifecycle-client.ts';
 
@@ -155,4 +157,71 @@ test('Chrome smoke records the owned browser version and fails unsupported produ
     ]) {
         assert.throws(() => chromeSmokeVersion(endpoint), /Chrome|version/);
     }
+});
+
+test('external Chrome smoke Close only requests normal close without inventing an exit observer', async () => {
+    const { requestChromeSmokeClose } = await host();
+    const fixture: ProcessTarget = {
+        processId: 4100,
+        port: 19422,
+        targetKind: 'chrome',
+        executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        startedAtUtc: '2026-10-04T22:11:00.000Z',
+    };
+    const calls: string[] = [];
+    const platform = {
+        async requestNormalClose(target: ProcessTarget) {
+            assert.equal(target, fixture);
+            calls.push('request');
+            return { closeRequested: true, processExited: false };
+        },
+        async close() {
+            assert.fail('An inspect-only fixture cannot await platform.close.');
+        },
+        async waitForExit() {
+            assert.fail('The gateway owns the actual application exit observer.');
+        },
+        async snapshot() {
+            assert.fail('The close stimulus cannot poll process or listener absence.');
+        },
+    };
+    assert.equal(await requestChromeSmokeClose(fixture, platform), true);
+    assert.deepEqual(calls, ['request']);
+    assert.equal('child' in fixture, false);
+    assert.deepEqual(fixture, {
+        processId: 4100,
+        port: 19422,
+        targetKind: 'chrome',
+        executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        startedAtUtc: '2026-10-04T22:11:00.000Z',
+    });
+    assert.equal(
+        await requestChromeSmokeClose(fixture, {
+            requestNormalClose: async () => ({ closeRequested: false, processExited: true }),
+        }),
+        false,
+        'An observed exit receipt is not acceptance of this external close request.',
+    );
+    const failure = new Error('Native normal Close request failed.');
+    await assert.rejects(
+        requestChromeSmokeClose(fixture, {
+            requestNormalClose: async () => {
+                throw failure;
+            },
+        }),
+        (error: unknown) => error === failure,
+    );
+    await assert.rejects(requestChromeSmokeClose(fixture, {}), /normal Close request/i);
+});
+
+test('connection recovery smoke separates external normal Close requests from gateway exit proof', async () => {
+    const source = await readFile(new URL('./smoke/entry-recovery.ts', import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /platform\.(?:close|waitForExit)\s*\(/);
+    assert.match(source, /requestChromeSmokeClose\(fixture, platform\)/);
+    assert.match(source, /await until\(async \(\) => \{[\s\S]*?!current\.connections\.some/);
+    assert.match(source, /const closed = await Promise\.allSettled\(\[client\.close\(\)\]\)/);
+    assert.match(source, /assert\.equal\(retainedAfterGatewayCleanup, false,/);
+    assert.match(source, /reminderReceived - exitCleanupObservedAt <= 5_000/);
+    assert.match(source, /normalCloseRequestedAt/);
+    assert.doesNotMatch(source, /closeCompleted|normallyClosed|millisecondsFromCloseCompletion/);
 });
