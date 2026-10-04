@@ -45,6 +45,8 @@ export interface ManagedTarget extends ProcessTarget {
         monitoringFailure?: string;
         onMonitorError?(listener: () => void): () => void;
         disposeMonitor?(): void;
+        ref?(): void;
+        unref?(): void;
         once(event: 'exit', listener: () => void): unknown;
         off?(event: 'exit', listener: () => void): unknown;
     };

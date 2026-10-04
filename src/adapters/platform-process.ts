@@ -27,6 +27,29 @@ export interface PlatformAdapter {
 }
 
 const exitObservations = new WeakMap<NonNullable<ManagedTarget['child']>, { exited: boolean }>();
+const exitReferences = new WeakMap<NonNullable<ManagedTarget['child']>, { waiters: number }>();
+
+function retainExitReference(child: NonNullable<ManagedTarget['child']>) {
+    if (!child.ref || !child.unref) return () => {};
+    let reference = exitReferences.get(child);
+    if (!reference) {
+        child.ref();
+        reference = { waiters: 0 };
+        exitReferences.set(child, reference);
+    }
+    reference.waiters += 1;
+    const ownedReference = reference;
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        if (exitReferences.get(child) !== ownedReference) return;
+        ownedReference.waiters -= 1;
+        if (ownedReference.waiters > 0) return;
+        exitReferences.delete(child);
+        child.unref?.();
+    };
+}
 
 export function observeTargetExit(target: ManagedTarget) {
     const child = target.child;
@@ -58,11 +81,16 @@ export function waitForTargetExit(target: ManagedTarget, signal?: AbortSignal): 
     const child = target.child;
     if (!child) return Promise.reject(new Error('No actual application exit observer is available.'));
     return new Promise((resolve, reject) => {
+        const releaseReference = retainExitReference(child);
         let releaseMonitoring: (() => void) | undefined;
+        let finished = false;
         const cleanup = () => {
+            if (finished) return;
+            finished = true;
             child.off?.('exit', exited);
             releaseMonitoring?.();
             signal?.removeEventListener('abort', aborted);
+            releaseReference();
         };
         const exited = () => {
             cleanup();
@@ -79,7 +107,8 @@ export function waitForTargetExit(target: ManagedTarget, signal?: AbortSignal): 
         child.once('exit', exited);
         signal?.addEventListener('abort', aborted, { once: true });
         releaseMonitoring = child.onMonitorError?.(failed);
-        if (targetExitObserved(target)) exited();
+        if (finished) releaseMonitoring?.();
+        else if (targetExitObserved(target)) exited();
         else if (child.monitoringFailure) failed();
     });
 }

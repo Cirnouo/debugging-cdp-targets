@@ -24,6 +24,10 @@ It also checks default lifecycle/status summaries before
 test adapters can strip fields.
 
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
+`target-exit-reference.ts` runs one self-exiting private Node child with detached,
+ignored stdio and an initially unreferenced handle. Its observing subprocess
+proves actual-exit waits retain the event loop, one cancellation preserves another
+waiter, and cancelling all waits leaves the fixture alive without retaining the observer.
 `native-window.cs` supplies a visible, self-closing disposable WinForms window.
 It can expose a loopback discovery fixture for ownership/readiness tests; this
 endpoint does not implement browser tools. Permission/PID markers are test-only.

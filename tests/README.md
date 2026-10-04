@@ -85,6 +85,9 @@
   payload fields, mismatched operation exits and pending cleanup delivery.
 - `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
   process options at the native child-process boundary without launching a target.
+- `target-exit-reference.test.ts` checks real private Node subprocess exit waits,
+  event-loop retention during EOF cleanup, independent waiter cancellation and
+  reference release without target deadlines or process polling.
 - `structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
 - `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
   verify safe options, activation recipes, variants and independent configuration.

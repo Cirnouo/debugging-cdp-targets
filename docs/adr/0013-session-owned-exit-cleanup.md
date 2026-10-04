@@ -21,6 +21,9 @@ no target deadline. Cancellation retains ownership and observation of a live app
 The 25-second operation wait bounds one response; it never expires a Close job.
 Normal application Close is independent of unrelated CDP listener lifetime and
 official Server disposal. Applications are never force-killed.
+Direct Node application children remain unreferenced outside actual-exit waits.
+Each active wait holds a shared child reference until completion or cancellation;
+one cancelled waiter cannot release another waiter's reference during gateway EOF cleanup.
 
 The official Server is a plugin-owned child with a separate disposal policy.
 Closing its public SDK transport immediately rejects pending requests. Child

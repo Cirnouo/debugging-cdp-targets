@@ -39998,6 +39998,29 @@ function createWindowsLauncher({
 
 // src/adapters/platform-process.ts
 var exitObservations = /* @__PURE__ */ new WeakMap();
+var exitReferences = /* @__PURE__ */ new WeakMap();
+function retainExitReference(child) {
+  if (!child.ref || !child.unref) return () => {
+  };
+  let reference = exitReferences.get(child);
+  if (!reference) {
+    child.ref();
+    reference = { waiters: 0 };
+    exitReferences.set(child, reference);
+  }
+  reference.waiters += 1;
+  const ownedReference = reference;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (exitReferences.get(child) !== ownedReference) return;
+    ownedReference.waiters -= 1;
+    if (ownedReference.waiters > 0) return;
+    exitReferences.delete(child);
+    child.unref?.();
+  };
+}
 function observeTargetExit(target) {
   const child = target.child;
   if (!child || exitObservations.has(child)) return;
@@ -40025,11 +40048,16 @@ function waitForTargetExit(target, signal) {
   const child = target.child;
   if (!child) return Promise.reject(new Error("No actual application exit observer is available."));
   return new Promise((resolve, reject) => {
+    const releaseReference = retainExitReference(child);
     let releaseMonitoring;
+    let finished = false;
     const cleanup = () => {
+      if (finished) return;
+      finished = true;
       child.off?.("exit", exited);
       releaseMonitoring?.();
       signal?.removeEventListener("abort", aborted2);
+      releaseReference();
     };
     const exited = () => {
       cleanup();
@@ -40046,7 +40074,8 @@ function waitForTargetExit(target, signal) {
     child.once("exit", exited);
     signal?.addEventListener("abort", aborted2, { once: true });
     releaseMonitoring = child.onMonitorError?.(failed);
-    if (targetExitObserved(target)) exited();
+    if (finished) releaseMonitoring?.();
+    else if (targetExitObserved(target)) exited();
     else if (child.monitoringFailure) failed();
   });
 }
