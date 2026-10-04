@@ -8,7 +8,8 @@ and extension tools come directly from the official Server.
 
 Version 0.1.0 is under development and has not been released.
 
-See [SECURITY.md](SECURITY.md) to report a vulnerability privately.
+See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute and [SECURITY.md](SECURITY.md)
+to report a vulnerability privately.
 
 ## Requirements and compatibility
 
