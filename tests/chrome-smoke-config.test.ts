@@ -1,6 +1,83 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import test from 'node:test';
+import type { ControlRequest, ControlResult } from '../src/domains/control-contract.ts';
+import { closeSmokeConnection } from './smoke/lifecycle-client.ts';
+
+test('an explicit smoke Close waits for busy CDP without changing target identity', async () => {
+    const request = {
+        action: 'stop' as const,
+        entryId: randomUUID(),
+        connectionId: randomUUID(),
+        sessionId: randomUUID(),
+        requestId: randomUUID(),
+        disposition: 'Close' as const,
+    };
+    const calls: ControlRequest[] = [];
+    let clock = 0;
+    const result: ControlResult = { entryId: request.entryId, connectionId: request.connectionId, status: 'idle' };
+    assert.equal(
+        await closeSmokeConnection(
+            async (next) => {
+                calls.push(next);
+                if (calls.length === 1) throw new Error('CDP is busy; retry after the current request completes.');
+                return result;
+            },
+            request,
+            {
+                now: () => clock,
+                sleep: async (ms) => {
+                    clock += ms;
+                },
+            },
+        ),
+        result,
+    );
+    assert.equal(calls.length, 2);
+    const first = calls[0];
+    const second = calls[1];
+    assert.ok(first && second && 'requestId' in first && 'requestId' in second);
+    assert.notEqual(first.requestId, second.requestId);
+    for (const call of calls) {
+        assert.deepEqual({ ...call, requestId: request.requestId }, request);
+    }
+});
+
+test('smoke Close bounds busy waiting and never retries other failures', async () => {
+    const request = {
+        action: 'stop' as const,
+        entryId: randomUUID(),
+        connectionId: randomUUID(),
+        sessionId: randomUUID(),
+        requestId: randomUUID(),
+        disposition: 'Close' as const,
+    };
+    for (const message of ['CDP is busy; retry after the current request completes.', 'Stale session', 'MCP timeout']) {
+        const failure = new Error(message);
+        let calls = 0;
+        let clock = 0;
+        await assert.rejects(
+            closeSmokeConnection(
+                async () => {
+                    calls += 1;
+                    throw failure;
+                },
+                request,
+                {
+                    now: () => clock,
+                    sleep: async (ms) => {
+                        clock += ms;
+                    },
+                    timeoutMs: 250,
+                },
+            ),
+            (error: unknown) => error === failure,
+        );
+        assert.equal(calls, message.startsWith('CDP is busy') ? 2 : 1);
+        assert.ok(clock <= 250);
+    }
+});
 
 async function host() {
     assert.ok(

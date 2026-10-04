@@ -1,7 +1,30 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import type { ConnectionStatus, ControlRequest, ControlResult } from '../../src/domains/control-contract.ts';
 import { validateIdentity } from '../../src/domains/control-contract.ts';
-import { DetailedError, isRecord } from '../../src/shared/errors.ts';
+import { DetailedError, errorMessage, isRecord } from '../../src/shared/errors.ts';
+
+export async function closeSmokeConnection(
+    control: (request: ControlRequest) => Promise<ControlResult>,
+    request: Extract<ControlRequest, { action: 'stop' }> & { disposition: 'Close' },
+    dependencies: { now?: () => number; sleep?: (ms: number) => Promise<void>; timeoutMs?: number } = {},
+): Promise<ControlResult> {
+    const now = dependencies.now ?? Date.now;
+    const sleep = dependencies.sleep ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    const deadline = now() + (dependencies.timeoutMs ?? 10_000);
+    let selected = request;
+    for (;;) {
+        try {
+            return await control(selected);
+        } catch (error) {
+            if (errorMessage(error) !== 'CDP is busy; retry after the current request completes.' || now() >= deadline)
+                throw error;
+            await sleep(Math.min(200, deadline - now()));
+            if (now() >= deadline) throw error;
+            selected = { ...request, requestId: randomUUID() };
+        }
+    }
+}
 
 export function readConnection(value: unknown): ConnectionStatus {
     assert.ok(isRecord(value));

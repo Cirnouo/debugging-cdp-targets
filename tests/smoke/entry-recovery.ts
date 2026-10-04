@@ -9,7 +9,7 @@ import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
-import { lifecycleClient, readStatus } from './lifecycle-client.ts';
+import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
 const chrome = await requireChromeSmokeExecutable();
@@ -39,9 +39,10 @@ async function mutate(
     disposition?: 'Close' | 'Keep',
 ) {
     const identity = { ...route(target), entryId, requestId: randomUUID() };
-    const result = await control(
-        action === 'stop' ? { action, ...identity, disposition: disposition ?? 'Close' } : { action, ...identity },
-    );
+    const result =
+        action === 'stop' && disposition !== 'Keep'
+            ? await closeSmokeConnection(control, { action, ...identity, disposition: 'Close' })
+            : await control(action === 'stop' ? { action, ...identity, disposition: 'Keep' } : { action, ...identity });
     assert.ok(!('connections' in result));
     return result;
 }

@@ -24,7 +24,8 @@
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
 - `chrome-smoke-config.test.ts` checks explicit portable executable selection,
-  literal isolated launch arguments and actual Chrome version requirements
+  literal isolated launch arguments, actual Chrome version requirements and
+  bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser.
 - `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
 - `release.test.ts` checks tag/event identity, dated Changelog extraction,

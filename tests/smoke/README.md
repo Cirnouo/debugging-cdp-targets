@@ -51,7 +51,9 @@ then explicitly restarts and normally closes them. It retains test profiles.
   is used. Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects
   a Codex executable. Enable Hooks in this isolated config for the test.
 
-- `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter.
+- `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
+  retries of explicitly selected normal Close when pending CDP traffic is busy.
+  It keeps the entry/connection/session identity and does not retry other failures.
 - `screenshot-layers.ts` compares official direct/routed screenshots on isolated
   normal and minimized Chrome windows with phase-only CDP timing. It retains its
   profiles, screenshots and metadata; a timeout records evidence and fails.
@@ -85,7 +87,7 @@ The official tools smoke retains its visible-console monitor on Windows.
 
 CI runs both smokes on `ubuntu-24.04` with Xvfb and on `macos-15` with ordinary
 Chrome. It uses the runner's existing Chrome, `ps` and `lsof`; Linux additionally
-requires Xvfb, xvfb-run and xauth. It downloads no browser, starts no headless
+requires Xvfb, xvfb-run, xauth and getconf. It downloads no browser, starts no headless
 substitute and uploads no profiles or browser content. These jobs are also part
 of the reusable release CI. Their first successful GitHub runner evidence is
 required before adding their checks to main protection or claiming tested

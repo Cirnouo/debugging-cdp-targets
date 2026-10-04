@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
-import { lifecycleClient, readStatus } from './lifecycle-client.ts';
+import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
 const chrome = await requireChromeSmokeExecutable();
@@ -124,7 +124,7 @@ try {
     assert.ok(extensions);
     const extensionResult = await tool(extensions.name, route(first));
     assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
-    await control({
+    await closeSmokeConnection(control, {
         action: 'stop',
         requestId: randomUUID(),
         entryId,
@@ -152,7 +152,7 @@ try {
     assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
     assert.match(JSON.stringify(pagesTwo), /SECOND/);
     assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
-    await control({
+    await closeSmokeConnection(control, {
         action: 'stop',
         requestId: randomUUID(),
         entryId,
@@ -165,7 +165,7 @@ try {
     console.log('Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.');
 } finally {
     if (entryId && active?.sessionId)
-        await control({
+        await closeSmokeConnection(control, {
             action: 'stop',
             requestId: randomUUID(),
             entryId,
