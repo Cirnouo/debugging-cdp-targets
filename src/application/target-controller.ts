@@ -20,6 +20,7 @@ export interface ControllerRouter {
 export type TargetHealth = 'healthy' | 'gone' | 'unavailable' | 'identity-changed';
 export interface TargetLaunchContext extends LaunchContext {
     onCreated?: (target: ManagedTarget) => void;
+    onRollback?: (target: ManagedTarget) => void;
 }
 export interface ControllerHost {
     launch(options: LaunchOptions, context?: TargetLaunchContext): Promise<ManagedTarget>;
@@ -284,6 +285,10 @@ export function createTargetController({
                 ...context,
                 signal,
                 onCreated: (target) => acquire(selected, target),
+                onRollback: (target) => {
+                    acquire(selected, target);
+                    if (!owner.exited) owner.expectedExit = 'rollback';
+                },
             });
             acquire(selected, target);
             signal.throwIfAborted();
@@ -300,6 +305,7 @@ export function createTargetController({
             if (error instanceof RetainedTargetError) {
                 acquire(selected, error.target);
                 if (!owner.exited) {
+                    owner.expectedExit = undefined;
                     state = 'close-failed';
                     taskActive = false;
                     reason = 'target-rollback-failed';
@@ -312,6 +318,7 @@ export function createTargetController({
                 try {
                     await normalClose(selected);
                 } catch (closeError) {
+                    owner.expectedExit = undefined;
                     state = 'close-failed';
                     taskActive = false;
                     reason = 'target-rollback-failed';

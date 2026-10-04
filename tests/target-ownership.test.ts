@@ -2,11 +2,20 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createPortReservations } from '../src/adapters/port-reservation.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
+import { createTargetController, type TargetEvent } from '../src/application/target-controller.ts';
 import type { ManagedTarget } from '../src/domains/cdp-target.ts';
+import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
-function fixture(options: { reservations?: ReturnType<typeof createPortReservations>; foreign?: boolean } = {}) {
+function fixture(
+    options: {
+        reservations?: ReturnType<typeof createPortReservations>;
+        foreign?: boolean;
+        requestNormalClose?: NonNullable<PlatformAdapter['requestNormalClose']>;
+    } = {},
+) {
     const children: (EventEmitter & { pid: number; exitCode: number | null; signalCode: string | null })[] = [];
     let probeGate: Promise<void> | undefined;
     let versionGate: Promise<void> | undefined;
@@ -16,9 +25,14 @@ function fixture(options: { reservations?: ReturnType<typeof createPortReservati
     let versionEntered: (() => void) | undefined;
     let sleepEntered: (() => void) | undefined;
     let versionFails = false;
+    let versionFailure: Error = new Error('CDP is not ready.');
+    let clock: number | undefined;
     let failSpawn = false;
     let failAfterCreation = false;
     let failClose = false;
+    let closeFailure: Error | undefined;
+    let holdExit = false;
+    let closeEntered: (() => void) | undefined;
     const probes: number[] = [];
     const closed: number[] = [];
     const host = createTargetHost({
@@ -43,14 +57,17 @@ function fixture(options: { reservations?: ReturnType<typeof createPortReservati
         getVersion: async (port) => {
             versionEntered?.();
             await versionGate;
-            if (versionFails) throw new Error('CDP is not ready.');
+            if (versionFails) throw versionFailure;
             return { Browser: 'DCTFixture/1.0', webSocketDebuggerUrl: `ws://127.0.0.1:${port}/devtools/browser/owned` };
         },
         sleep: async () => {
             sleepEntered?.();
             await sleepGate;
+            if (clock !== undefined) clock += 25_000;
         },
+        now: () => clock ?? Date.now(),
         platformAdapter: {
+            ...(options.requestNormalClose ? { requestNormalClose: options.requestNormalClose } : {}),
             reservedRanges: async () => [],
             validateNewRoot: () => {},
             snapshot: async (pid) => {
@@ -70,9 +87,16 @@ function fixture(options: { reservations?: ReturnType<typeof createPortReservati
             },
             close: async (target) => {
                 closed.push(target.processId);
-                if (failClose) return false;
+                closeEntered?.();
+                if (failClose) {
+                    if (closeFailure) throw closeFailure;
+                    return false;
+                }
                 const child = children.find((candidate) => candidate.pid === target.processId);
-                child?.emit('exit', 0);
+                if (child && !holdExit) {
+                    child.exitCode = 0;
+                    child.emit('exit', 0);
+                }
                 return true;
             },
         },
@@ -100,14 +124,24 @@ function fixture(options: { reservations?: ReturnType<typeof createPortReservati
         failVersion: () => {
             versionFails = true;
         },
+        expireReadiness: (error: Error) => {
+            versionFails = true;
+            versionFailure = error;
+            clock = 0;
+        },
+        holdExit: (entered: () => void) => {
+            holdExit = true;
+            closeEntered = entered;
+        },
         failSpawn: () => {
             failSpawn = true;
         },
         failAfterCreation: () => {
             failAfterCreation = true;
         },
-        failClose: () => {
+        failClose: (error?: Error) => {
             failClose = true;
+            closeFailure = error;
         },
     };
 }
@@ -120,6 +154,263 @@ function deferred() {
         resolve = complete;
     });
     return { promise, resolve };
+}
+
+const sessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const operationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+function controllerFixture(f: ReturnType<typeof fixture>, routeFails = false) {
+    const events: TargetEvent[] = [];
+    const controller = createTargetController({
+        entryId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        host: f.host,
+        router: {
+            isBusy: () => false,
+            setTarget: () => {
+                if (routeFails) throw new Error('Routing failed after readiness.');
+            },
+            clearTarget: () => {},
+        },
+        server: { ensure: async () => {}, close: async () => {} },
+        onProcessExit: (event) => events.push(event),
+    });
+    return { controller, events };
+}
+
+function readinessFailure() {
+    const error = Object.assign(new DetailedError('Controlled CDP readiness probe failure.'), {
+        code: 'ECONNREFUSED',
+    });
+    error.details = { phase: 'waiting-cdp', nativeError: 111, category: 'cdp-readiness' };
+    return error;
+}
+
+function confirmExit(f: ReturnType<typeof fixture>) {
+    const child = f.children[0];
+    assert.ok(child);
+    child.exitCode = 0;
+    child.emit('exit', 0);
+}
+
+for (const cancelDuringRollback of [false, true]) {
+    test(`readiness rollback preserves its original failure after real exit${cancelDuringRollback ? ' and later cancellation' : ''}`, async () => {
+        const reservations = createPortReservations();
+        const f = fixture({ reservations });
+        const failure = readinessFailure();
+        f.expireReadiness(failure);
+        const closeEntered = deferred();
+        f.holdExit(closeEntered.resolve);
+        const { controller, events } = controllerFixture(f);
+        const phases: string[] = [];
+        const abort = new AbortController();
+        let settled = false;
+        const outcome = controller
+            .start(launch, sessionId, {
+                operationId,
+                signal: abort.signal,
+                onPhase: (phase) => phases.push(phase),
+            })
+            .then(
+                () => new Error('Unready application unexpectedly started.'),
+                (error: unknown) => error,
+            )
+            .finally(() => {
+                settled = true;
+            });
+        await closeEntered.promise;
+        if (cancelDuringRollback) abort.abort(new Error('Cancellation after rollback began.'));
+        await Promise.resolve();
+        assert.equal(settled, false, 'Accepted close must still wait for the actual application exit.');
+        assert.equal(reservations.claim(9222), undefined);
+        assert.equal(events.length, 0);
+        assert.equal(phases.at(-1), 'waiting-cdp');
+        confirmExit(f);
+        const result = await outcome;
+        assert.ok(result instanceof Error);
+        assert.match(result.message, /Controlled CDP readiness probe failure/);
+        assert.deepEqual(errorDetails(result), {
+            phase: 'waiting-cdp',
+            nativeError: 111,
+            category: 'cdp-readiness',
+            code: 'ECONNREFUSED',
+            processId: 601,
+            port: 9222,
+            closeConfirmed: true,
+        });
+        assert.equal(events.length, 1);
+        assert.equal(events[0]?.expected, 'rollback');
+        assert.equal(events[0]?.operationId, operationId);
+        assert.equal(controller.status().status, 'idle');
+        const release = reservations.claim(9222);
+        assert.ok(release);
+        release();
+    });
+}
+
+test('cancellation before readiness rollback retains its exact reason while waiting for actual exit', async () => {
+    const f = fixture();
+    const held = block(f, 'endpoint');
+    const closeEntered = deferred();
+    f.holdExit(closeEntered.resolve);
+    const { controller, events } = controllerFixture(f);
+    const abort = new AbortController();
+    const cancellation = new Error('Explicit readiness cancellation.');
+    let settled = false;
+    const outcome = controller
+        .start(launch, sessionId, { operationId, signal: abort.signal })
+        .then(
+            () => new Error('Cancelled start unexpectedly succeeded.'),
+            (error: unknown) => error,
+        )
+        .finally(() => {
+            settled = true;
+        });
+    await held.entered;
+    abort.abort(cancellation);
+    await closeEntered.promise;
+    await Promise.resolve();
+    assert.equal(settled, false);
+    confirmExit(f);
+    const result = await outcome;
+    held.release();
+    assert.equal(result, cancellation);
+    assert.equal(events[0]?.expected, 'rollback');
+    assert.equal(events[0]?.operationId, operationId);
+    assert.equal(controller.status().status, 'idle');
+});
+
+test('host transport rollback attributes its actual exit to the initiating operation', async () => {
+    const f = fixture();
+    f.failAfterCreation();
+    const { controller, events } = controllerFixture(f);
+    await assert.rejects(controller.start(launch, sessionId, { operationId }), /after creation/);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.expected, 'rollback');
+    assert.equal(events[0]?.operationId, operationId);
+    assert.equal(controller.status().status, 'idle');
+});
+
+test('actual exit before rollback remains unexpected and does not acquire a rollback operation identity', async () => {
+    const f = fixture();
+    const held = block(f, 'snapshot');
+    const { controller, events } = controllerFixture(f);
+    const outcome = controller.start(launch, sessionId, { operationId }).then(
+        () => new Error('Exited application unexpectedly started.'),
+        (error: unknown) => error,
+    );
+    await held.entered;
+    confirmExit(f);
+    const result = await outcome;
+    held.release();
+    assert.ok(result instanceof Error);
+    assert.match(result.message, /exited/);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.expected, undefined);
+    assert.equal(events[0]?.operationId, undefined);
+    assert.equal(events[0]?.taskActive, true);
+    assert.deepEqual(f.closed, []);
+    assert.equal(controller.status().status, 'idle');
+});
+
+for (const failureAt of ['host-readiness', 'controller-routing'] as const) {
+    test(`failed ${failureAt} rollback leaves a later real exit independently deliverable`, async () => {
+        const reservations = createPortReservations();
+        const f = fixture({ reservations });
+        if (failureAt === 'host-readiness') f.expireReadiness(readinessFailure());
+        f.failClose();
+        const { controller, events } = controllerFixture(f, failureAt === 'controller-routing');
+        await assert.rejects(controller.start(launch, sessionId, { operationId }));
+        assert.equal(controller.status().status, 'close-failed');
+        assert.equal(controller.status().taskActive, false);
+        assert.equal(reservations.claim(9222), undefined);
+        assert.equal(events.length, 0);
+        confirmExit(f);
+        assert.equal(events.length, 1);
+        assert.equal(events[0]?.expected, undefined);
+        assert.equal(events[0]?.operationId, undefined);
+        assert.equal(events[0]?.taskActive, false);
+        await controller.retireExited({ sessionId });
+        assert.equal(controller.status().status, 'idle');
+        const release = reservations.claim(9222);
+        assert.ok(release);
+        release();
+    });
+}
+
+test('failed rollback prioritizes native close evidence while preserving the original readiness cause', async () => {
+    const f = fixture();
+    const failure = readinessFailure();
+    failure.details = { phase: 'waiting-cdp', nativeError: 77, category: 'cdp-readiness' };
+    f.expireReadiness(failure);
+    const closeFailure = Object.assign(new DetailedError('Native normal close was denied.'), { code: 'EACCES' });
+    closeFailure.details = { phase: 'normal-close', nativeError: 5, category: 'close-request-denied' };
+    f.failClose(closeFailure);
+    const { controller, events } = controllerFixture(f);
+    const result = await controller.start(launch, sessionId, { operationId }).then(
+        () => new Error('Unready application unexpectedly started.'),
+        (error: unknown) => error,
+    );
+    assert.ok(result instanceof Error);
+    assert.match(result.message, /Controlled CDP readiness probe failure/);
+    assert.deepEqual(errorDetails(result), {
+        phase: 'normal-close',
+        nativeError: 5,
+        category: 'close-request-denied',
+        code: 'EACCES',
+        processId: 601,
+        port: 9222,
+        closeConfirmed: false,
+    });
+    assert.equal(controller.status().status, 'close-failed');
+    confirmExit(f);
+    assert.equal(events[0]?.expected, undefined);
+    await controller.retireExited({ sessionId });
+});
+
+for (const failureAt of ['host-readiness', 'launch-transport'] as const) {
+    test(`actual exit interrupts a pending ${failureAt} rollback close request and consumes its late failure`, async () => {
+        const reservations = createPortReservations();
+        const requestEntered = deferred();
+        const held = deferred();
+        let requestSignal: AbortSignal | undefined;
+        const f = fixture({
+            reservations,
+            requestNormalClose: async (target, context) => {
+                assert.equal(target.processId, 601);
+                requestSignal = context?.signal;
+                requestEntered.resolve();
+                await held.promise;
+                throw new Error('Late helper request failure after actual application exit.');
+            },
+        });
+        if (failureAt === 'host-readiness') f.expireReadiness(readinessFailure());
+        else f.failAfterCreation();
+        const { controller, events } = controllerFixture(f);
+        const outcome = controller.start(launch, sessionId, { operationId }).then(
+            () => new Error('Failed startup unexpectedly succeeded.'),
+            (error: unknown) => error,
+        );
+        await requestEntered.promise;
+        confirmExit(f);
+        const earlyResult = await Promise.race([outcome, delay(30, 'still-waiting')]);
+        held.resolve();
+        const result = await outcome;
+        await delay(0);
+        assert.notEqual(earlyResult, 'still-waiting', 'Actual exit must settle rollback before the pending request.');
+        assert.ok(requestSignal?.aborted, 'Actual exit must cancel the outstanding helper request.');
+        assert.ok(result instanceof Error);
+        assert.match(
+            result.message,
+            failureAt === 'host-readiness' ? /Controlled CDP readiness probe failure/ : /after creation/,
+        );
+        assert.equal(events.length, 1);
+        assert.equal(events[0]?.expected, 'rollback');
+        assert.equal(events[0]?.operationId, operationId);
+        assert.equal(controller.status().status, 'idle');
+        const release = reservations.claim(9222);
+        assert.ok(release);
+        release();
+    });
 }
 
 function block(f: ReturnType<typeof fixture>, phase: 'snapshot' | 'endpoint' | 'retry') {

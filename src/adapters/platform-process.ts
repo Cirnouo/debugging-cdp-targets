@@ -503,6 +503,8 @@ export function createPlatformAdapter(
         observeTargetExit(target);
         if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
         const evidence = await snapshot(target.processId, target.port);
+        if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+        context.signal?.throwIfAborted();
         const owned = new Set(evidence.processIds);
         const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess))
             ? 'foreign'

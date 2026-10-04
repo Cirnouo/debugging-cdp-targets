@@ -141,6 +141,7 @@ interface ProcessLaunchContext extends LaunchContext {
 }
 export interface TargetLaunchContext extends LaunchContext {
     onCreated?: (target: ManagedTarget) => void;
+    onRollback?: (target: ManagedTarget) => void;
 }
 export interface HostDependencies {
     platformAdapter?: PlatformAdapter;
@@ -215,6 +216,31 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         else await waitForTargetExit(target, signal);
         target.releaseProfile?.();
         target.child?.disposeMonitor?.();
+    }
+    async function rollbackCreatedTarget(target: ManagedTarget, context: TargetLaunchContext) {
+        if (!targetExitObserved(target)) context.onRollback?.(target);
+        const requestAbort = new AbortController();
+        let resolveExit = () => {};
+        const actualExit = new Promise<void>((resolve) => {
+            resolveExit = resolve;
+        });
+        const exited = () => {
+            resolveExit();
+            requestAbort.abort(new Error('The target application exited during its normal-close request.'));
+        };
+        target.child?.once('exit', exited);
+        if (targetExitObserved(target)) exited();
+        try {
+            const request = requestNormalClose(target, { signal: requestAbort.signal });
+            try {
+                await Promise.race([request, actualExit]);
+            } catch (error) {
+                if (!targetExitObserved(target)) throw error;
+            }
+            await waitForExit(target);
+        } finally {
+            target.child?.off?.('exit', exited);
+        }
     }
     return {
         async launch(
@@ -366,8 +392,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 } catch (error) {
                     if (created) {
                         try {
-                            await requestNormalClose(created);
-                            await waitForExit(created);
+                            await rollbackCreatedTarget(created, context);
                         } catch (cleanupError) {
                             const retained = new RetainedTargetError(errorMessage(error), created);
                             retained.details = {
@@ -466,11 +491,13 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         }
                     }
                 }
+                const cancellationBeforeRollback = context.signal?.aborted
+                    ? { reason: context.signal.reason }
+                    : undefined;
                 let closeConfirmed = false;
                 let cleanupError: unknown;
                 try {
-                    await requestNormalClose(target);
-                    await waitForExit(target);
+                    await rollbackCreatedTarget(target, context);
                     closeConfirmed = true;
                 } catch (error) {
                     cleanupError = error;
@@ -479,10 +506,18 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     target.releaseProfile?.();
                     child.disposeMonitor?.();
                 }
-                if (closeConfirmed && context.signal?.aborted) throw context.signal.reason;
+                if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
                 const message = `The new target did not expose a verified CDP endpoint: ${lastError === undefined ? undefined : errorMessage(lastError)}`;
                 const error = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, target);
-                error.details = { processId: child.pid, port, closeConfirmed, ...errorDetails(cleanupError) };
+                error.details = {
+                    ...errorDetails(lastError),
+                    ...(errorCode(lastError) ? { code: errorCode(lastError) } : {}),
+                    ...errorDetails(cleanupError),
+                    ...(errorCode(cleanupError) ? { code: errorCode(cleanupError) } : {}),
+                    processId: child.pid,
+                    port,
+                    closeConfirmed,
+                };
                 throw error;
             } catch (error) {
                 if (!created) {

@@ -40334,6 +40334,8 @@ function createPlatformAdapter(dependencies = {}) {
     observeTargetExit(target);
     if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
     const evidence = await snapshot(target.processId, target.port);
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    context.signal?.throwIfAborted();
     const owned = new Set(evidence.processIds);
     const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess)) ? "foreign" : evidence.listeners.length ? "owned" : "absent";
     if (!evidence.root.exists) {
@@ -40637,6 +40639,32 @@ function createTargetHost(dependencies = {}) {
     target.releaseProfile?.();
     target.child?.disposeMonitor?.();
   }
+  async function rollbackCreatedTarget(target, context) {
+    if (!targetExitObserved(target)) context.onRollback?.(target);
+    const requestAbort = new AbortController();
+    let resolveExit = () => {
+    };
+    const actualExit = new Promise((resolve) => {
+      resolveExit = resolve;
+    });
+    const exited = () => {
+      resolveExit();
+      requestAbort.abort(new Error("The target application exited during its normal-close request."));
+    };
+    target.child?.once("exit", exited);
+    if (targetExitObserved(target)) exited();
+    try {
+      const request = requestNormalClose(target, { signal: requestAbort.signal });
+      try {
+        await Promise.race([request, actualExit]);
+      } catch (error2) {
+        if (!targetExitObserved(target)) throw error2;
+      }
+      await waitForExit(target);
+    } finally {
+      target.child?.off?.("exit", exited);
+    }
+  }
   return {
     async launch({
       launch,
@@ -40768,8 +40796,7 @@ function createTargetHost(dependencies = {}) {
         } catch (error3) {
           if (created) {
             try {
-              await requestNormalClose(created);
-              await waitForExit(created);
+              await rollbackCreatedTarget(created, context);
             } catch (cleanupError2) {
               const retained = new RetainedTargetError(errorMessage(error3), created);
               retained.details = {
@@ -40856,11 +40883,11 @@ function createTargetHost(dependencies = {}) {
             }
           }
         }
+        const cancellationBeforeRollback = context.signal?.aborted ? { reason: context.signal.reason } : void 0;
         let closeConfirmed = false;
         let cleanupError;
         try {
-          await requestNormalClose(target);
-          await waitForExit(target);
+          await rollbackCreatedTarget(target, context);
           closeConfirmed = true;
         } catch (error3) {
           cleanupError = error3;
@@ -40869,10 +40896,18 @@ function createTargetHost(dependencies = {}) {
           target.releaseProfile?.();
           child.disposeMonitor?.();
         }
-        if (closeConfirmed && context.signal?.aborted) throw context.signal.reason;
+        if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
         const message = `The new target did not expose a verified CDP endpoint: ${lastError === void 0 ? void 0 : errorMessage(lastError)}`;
         const error2 = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, target);
-        error2.details = { processId: child.pid, port, closeConfirmed, ...errorDetails(cleanupError) };
+        error2.details = {
+          ...errorDetails(lastError),
+          ...errorCode(lastError) ? { code: errorCode(lastError) } : {},
+          ...errorDetails(cleanupError),
+          ...errorCode(cleanupError) ? { code: errorCode(cleanupError) } : {},
+          processId: child.pid,
+          port,
+          closeConfirmed
+        };
         throw error2;
       } catch (error2) {
         if (!created) {
@@ -41699,7 +41734,11 @@ function createTargetController({
       const target = await host.launch(options, {
         ...context,
         signal,
-        onCreated: (target2) => acquire(selected, target2)
+        onCreated: (target2) => acquire(selected, target2),
+        onRollback: (target2) => {
+          acquire(selected, target2);
+          if (!owner.exited) owner.expectedExit = "rollback";
+        }
       });
       acquire(selected, target);
       signal.throwIfAborted();
@@ -41716,6 +41755,7 @@ function createTargetController({
       if (error2 instanceof RetainedTargetError) {
         acquire(selected, error2.target);
         if (!owner.exited) {
+          owner.expectedExit = void 0;
           state = "close-failed";
           taskActive = false;
           reason = "target-rollback-failed";
@@ -41728,6 +41768,7 @@ function createTargetController({
         try {
           await normalClose(selected);
         } catch (closeError) {
+          owner.expectedExit = void 0;
           state = "close-failed";
           taskActive = false;
           reason = "target-rollback-failed";

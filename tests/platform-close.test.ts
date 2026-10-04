@@ -158,3 +158,43 @@ test('an already observed direct-child exit latches success without snapshotting
     });
     assert.equal(await platform.close({ ...identity, child }), true);
 });
+
+for (const change of ['actual-exit', 'cancelled-live'] as const) {
+    test(`a pending Unix close snapshot cannot authorize a later signal after ${change}`, async () => {
+        const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null });
+        const target: ManagedTarget = { ...identity, child };
+        const abort = new AbortController();
+        const cancellation = new Error('Close request cancelled during identity snapshot.');
+        let releaseSnapshot = () => {};
+        let enterSnapshot = () => {};
+        const snapshotGate = new Promise<void>((resolve) => {
+            releaseSnapshot = resolve;
+        });
+        const entered = new Promise<void>((resolve) => {
+            enterSnapshot = resolve;
+        });
+        const signals: number[] = [];
+        const platform = createPlatformAdapter({
+            platform: 'darwin',
+            snapshot: async () => {
+                enterSnapshot();
+                await snapshotGate;
+                return evidence();
+            },
+            requestUnixClose: (pid) => signals.push(pid),
+        });
+        assert.ok(platform.requestNormalClose);
+        const outcome = platform.requestNormalClose(target, { signal: abort.signal }).then(
+            (result) => result,
+            (error: unknown) => error,
+        );
+        await entered;
+        if (change === 'actual-exit') child.emit('exit', 0);
+        abort.abort(cancellation);
+        releaseSnapshot();
+        const result = await outcome;
+        assert.deepEqual(signals, [], 'A late snapshot must never cause a signal to an exited or cancelled PID.');
+        if (change === 'actual-exit') assert.deepEqual(result, { closeRequested: false, processExited: true });
+        else assert.equal(result, cancellation);
+    });
+}
