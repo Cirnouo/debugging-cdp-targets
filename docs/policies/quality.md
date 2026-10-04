@@ -61,18 +61,17 @@ syntax checks, including type-only dependencies. Node --check is used only for
 generated JavaScript. Plugin and standalone auditor ship self-contained JS;
 installation must not require TypeScript or project dependencies.
 
-After CI succeeds on GitHub, the user may enable a main Ruleset requiring PRs,
-up-to-date branches, linear history, no force pushes/deletion, and strict
-required checks: Commit messages, Quality, Windows tests, and both Portable
-tests matrix checks. Keep squash merge only. Actions runs after GitHub accepts
-a push, not before; pre-push is the local pre-transfer gate. This change does
-not alter GitHub settings.
+The active main Ruleset requires PRs, up-to-date branches, linear history, no
+force pushes/deletion, and strict GitHub Actions checks: Supply chain security,
+Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
+It has no routine bypass actors. Single-maintainer PRs require zero additional
+approvals. Only squash merges are allowed, using the PR title as commit title.
+Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
 
 Supply chain security is the first CI gate: dependency-free lockfile preflight
 with full vulnerability/signature audits, script/hook-disabled frozen install,
 installed-tree verification, repeat audits and reproducible audit tooling, with
 narrowly reviewed exceptions
 under [supply-chain policy](supply-chain.md). Commit messages and Quality require
-its success before normal installation/builds. Add Supply chain security to the
-future strict required checks. `pnpm check:security` requires network access and
+its success before normal installation/builds. `pnpm check:security` requires network access and
 is deliberately separate from offline regression tests and verify:push.
