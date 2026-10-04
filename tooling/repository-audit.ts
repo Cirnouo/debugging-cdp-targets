@@ -53,6 +53,196 @@ function propertyName(node: Node): string | undefined {
     return node.type === 'Identifier' ? node.name : node.type === 'StringLiteral' ? node.value : undefined;
 }
 
+function bindingNames(node: Node | null | undefined): string[] {
+    if (!node) return [];
+    if (node.type === 'Identifier') return [node.name];
+    if (node.type === 'RestElement') return bindingNames(node.argument);
+    if (node.type === 'AssignmentPattern') return bindingNames(node.left);
+    if (node.type === 'ArrayPattern') return node.elements.flatMap(bindingNames);
+    if (node.type === 'ObjectPattern')
+        return node.properties.flatMap((property) =>
+            bindingNames(property.type === 'RestElement' ? property.argument : property.value),
+        );
+    return [];
+}
+
+/** The fixed bridge may reap only the child obtained from its own native spawn. */
+function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
+    const allowed = new Set<Node>();
+    const imports = (name: string, source: string) =>
+        ast.program.body.some(
+            (node) =>
+                node.type === 'ImportDeclaration' &&
+                node.importKind !== 'type' &&
+                node.source.value === source &&
+                node.specifiers.some(
+                    (specifier) =>
+                        specifier.type === 'ImportSpecifier' &&
+                        specifier.importKind !== 'type' &&
+                        propertyName(specifier.imported) === name &&
+                        specifier.local.name === name,
+                ),
+        );
+    if (!imports('spawn', 'node:child_process') || !imports('resolveServerBin', './official-server.ts')) return allowed;
+    const declaration = ast.program.body.find(
+        (node) =>
+            node.type === 'ExportNamedDeclaration' &&
+            node.declaration?.type === 'FunctionDeclaration' &&
+            node.declaration.id?.name === 'createOfficialConnection',
+    );
+    if (declaration?.type !== 'ExportNamedDeclaration' || declaration.declaration?.type !== 'FunctionDeclaration')
+        return allowed;
+    const body = declaration.declaration.body.body;
+    const constant = (name: string) =>
+        body
+            .filter((node) => node.type === 'VariableDeclaration' && node.kind === 'const')
+            .flatMap((node) => (node.type === 'VariableDeclaration' ? node.declarations : []))
+            .find((node) => node.id.type === 'Identifier' && node.id.name === name);
+    const child = constant('child');
+    const bin = constant('bin');
+    if (!constant('arguments_') || !child?.init || !bin?.init) return allowed;
+    const binValue = expression(bin.init);
+    if (binValue.type !== 'LogicalExpression' || binValue.operator !== '??') return allowed;
+    const fallback = expression(binValue.right);
+    if (
+        fallback.type !== 'AwaitExpression' ||
+        fallback.argument.type !== 'CallExpression' ||
+        fallback.argument.callee.type !== 'Identifier' ||
+        fallback.argument.callee.name !== 'resolveServerBin' ||
+        fallback.argument.arguments.length !== 0
+    )
+        return allowed;
+    const creation = expression(child.init);
+    if (creation.type !== 'CallExpression' || creation.callee.type !== 'Identifier' || creation.callee.name !== 'spawn')
+        return allowed;
+    const [executable, arguments_, options] = creation.arguments;
+    if (
+        creation.arguments.length !== 3 ||
+        executable?.type !== 'MemberExpression' ||
+        executable.computed ||
+        executable.object.type !== 'Identifier' ||
+        executable.object.name !== 'process' ||
+        propertyName(executable.property) !== 'execPath' ||
+        arguments_?.type !== 'ArrayExpression' ||
+        arguments_.elements.length !== 2 ||
+        arguments_.elements[0]?.type !== 'Identifier' ||
+        arguments_.elements[0].name !== 'bin' ||
+        arguments_.elements[1]?.type !== 'SpreadElement' ||
+        arguments_.elements[1].argument.type !== 'Identifier' ||
+        arguments_.elements[1].argument.name !== 'arguments_' ||
+        options?.type !== 'ObjectExpression' ||
+        options.properties.some((property) => property.type !== 'ObjectProperty' || property.computed)
+    )
+        return allowed;
+    const shells = options.properties.filter(
+        (property) =>
+            property.type === 'ObjectProperty' && !property.computed && propertyName(property.key) === 'shell',
+    );
+    if (
+        shells.length !== 1 ||
+        shells[0]?.type !== 'ObjectProperty' ||
+        shells[0].value.type !== 'BooleanLiteral' ||
+        shells[0].value.value
+    )
+        return allowed;
+    const expected = new Map([
+        ['spawn', 1],
+        ['resolveServerBin', 1],
+        ['child', 1],
+        ['bin', 1],
+        ['process', 0],
+    ]);
+    const mutators = new Map([
+        ['Object', new Set(['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'])],
+        ['Reflect', new Set(['set', 'defineProperty', 'deleteProperty', 'setPrototypeOf'])],
+    ]);
+    const protectedWrite = (node: Node): boolean => {
+        const written = expression(node);
+        if (written.type === 'MemberExpression' || written.type === 'OptionalMemberExpression')
+            return protectedWrite(written.object);
+        if (written.type === 'RestElement') return protectedWrite(written.argument);
+        if (written.type === 'AssignmentPattern') return protectedWrite(written.left);
+        if (written.type === 'ArrayPattern')
+            return written.elements.some((element) => element !== null && protectedWrite(element));
+        if (written.type === 'ObjectPattern')
+            return written.properties.some((property) =>
+                protectedWrite(property.type === 'RestElement' ? property.argument : property.value),
+            );
+        return bindingNames(written).some((name) => expected.has(name));
+    };
+    const bindings = new Map<string, number>();
+    let reassigned = false;
+    visit(ast, (node) => {
+        let names: string[] = [];
+        if (node.type === 'VariableDeclarator') {
+            names = bindingNames(node.id);
+            const value = node.init && expression(node.init);
+            if (value?.type === 'Identifier' && value.name === 'child') reassigned = true;
+        } else if (
+            node.type === 'ImportSpecifier' ||
+            node.type === 'ImportDefaultSpecifier' ||
+            node.type === 'ImportNamespaceSpecifier'
+        )
+            names = bindingNames(node.local);
+        else if (node.type === 'CatchClause') names = bindingNames(node.param);
+        else if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') names = bindingNames(node.id);
+        else if (
+            node.type === 'FunctionDeclaration' ||
+            node.type === 'FunctionExpression' ||
+            node.type === 'ArrowFunctionExpression' ||
+            node.type === 'ObjectMethod' ||
+            node.type === 'ClassMethod' ||
+            node.type === 'ClassPrivateMethod'
+        ) {
+            names = node.params.flatMap(bindingNames);
+            if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression')
+                names.push(...bindingNames(node.id));
+        }
+        for (const name of names) bindings.set(name, (bindings.get(name) ?? 0) + 1);
+        if (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression') {
+            if (protectedWrite(node.type === 'AssignmentExpression' ? node.left : node.argument)) reassigned = true;
+            if (node.type === 'AssignmentExpression') {
+                const value = expression(node.right);
+                if (value.type === 'Identifier' && value.name === 'child') reassigned = true;
+            }
+        }
+        if ((node.type === 'ForInStatement' || node.type === 'ForOfStatement') && protectedWrite(node.left))
+            reassigned = true;
+        if (node.type !== 'CallExpression' && node.type !== 'OptionalCallExpression') return;
+        const callee = expression(node.callee);
+        if (callee.type !== 'MemberExpression' && callee.type !== 'OptionalMemberExpression') return;
+        const object = expression(callee.object);
+        const method = propertyName(callee.property);
+        const target = node.arguments[0];
+        if (
+            object.type === 'Identifier' &&
+            method &&
+            mutators.get(object.name)?.has(method) &&
+            target &&
+            protectedWrite(target)
+        )
+            reassigned = true;
+    });
+    if (reassigned || [...expected].some(([name, count]) => (bindings.get(name) ?? 0) !== count)) return allowed;
+    const reaper = body.find((node) => node.type === 'FunctionDeclaration' && node.id?.name === 'reapOwnedChild');
+    if (reaper?.type !== 'FunctionDeclaration' || !reaper.async || reaper.params.length !== 0) return allowed;
+    visit(reaper, (node) => {
+        if (
+            node.type === 'CallExpression' &&
+            node.callee.type === 'MemberExpression' &&
+            !node.callee.computed &&
+            node.callee.object.type === 'Identifier' &&
+            node.callee.object.name === 'child' &&
+            propertyName(node.callee.property) === 'kill' &&
+            node.arguments.length === 1 &&
+            node.arguments[0]?.type === 'StringLiteral' &&
+            ['SIGTERM', 'SIGKILL'].includes(node.arguments[0].value)
+        )
+            allowed.add(node);
+    });
+    return allowed;
+}
+
 export function validateRuntimeSource(file: string, source: string) {
     const errors = [];
     let ast: ReturnType<typeof parse>;
@@ -68,6 +258,7 @@ export function validateRuntimeSource(file: string, source: string) {
     const layer = file.split('/')[1];
     const domain = layer === 'domains';
     const entry = file === 'src/interface/mcp-bootstrap.ts';
+    const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
     function dependency(specifier: unknown) {
         if (typeof specifier !== 'string') {
             errors.push(`${file}: computed module dependencies are prohibited.`);
@@ -145,11 +336,12 @@ export function validateRuntimeSource(file: string, source: string) {
         ) {
             if (
                 !(
-                    file === 'src/adapters/platform-process.ts' &&
-                    expression(callee.object).type === 'Identifier' &&
-                    propertyName(expression(callee.object)) === 'process' &&
-                    ((node.arguments[1]?.type === 'StringLiteral' && node.arguments[1].value === 'SIGTERM') ||
-                        (node.arguments[1]?.type === 'NumericLiteral' && node.arguments[1].value === 0))
+                    (file === 'src/adapters/platform-process.ts' &&
+                        expression(callee.object).type === 'Identifier' &&
+                        propertyName(expression(callee.object)) === 'process' &&
+                        ((node.arguments[1]?.type === 'StringLiteral' && node.arguments[1].value === 'SIGTERM') ||
+                            (node.arguments[1]?.type === 'NumericLiteral' && node.arguments[1].value === 0))) ||
+                    ownedTerminations.has(node)
                 )
             )
                 errors.push(`${file}: unapproved process termination API.`);
