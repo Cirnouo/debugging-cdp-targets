@@ -101,19 +101,32 @@ export function resolveAuditBranch({
     if (eventName !== 'workflow_dispatch' && eventName !== 'schedule') {
         return localBranch;
     }
+    const refType = environment.GITHUB_REF_TYPE;
+    if (refType !== undefined && refType !== 'branch') return undefined;
+    const branches: string[] = [];
+    let branchProof = refType === 'branch';
     const githubRef = environment.GITHUB_REF;
-    if (githubRef && !githubRef.startsWith('refs/heads/')) return undefined;
-    if (githubRef?.startsWith('refs/heads/')) {
-        return githubRef.slice('refs/heads/'.length);
+    if (githubRef !== undefined) {
+        if (!githubRef.startsWith('refs/heads/')) return undefined;
+        branches.push(githubRef.slice('refs/heads/'.length));
+        branchProof = true;
     }
-    if (environment.GITHUB_REF_TYPE === 'branch' && environment.GITHUB_REF_NAME) {
-        return environment.GITHUB_REF_NAME;
-    }
+    if (environment.GITHUB_REF_NAME !== undefined) branches.push(environment.GITHUB_REF_NAME);
     const eventRef = isRecord(event) ? event.ref : undefined;
-    if (typeof eventRef === 'string' && eventRef.length > 0 && !githubRef?.startsWith('refs/tags/')) {
-        return eventRef.startsWith('refs/heads/') ? eventRef.slice('refs/heads/'.length) : eventRef;
+    if (eventRef !== undefined) {
+        if (typeof eventRef !== 'string' || eventRef.length === 0) return undefined;
+        if (eventRef.startsWith('refs/heads/')) {
+            branches.push(eventRef.slice('refs/heads/'.length));
+            branchProof = true;
+        } else {
+            if (eventRef.startsWith('refs/')) return undefined;
+            branches.push(eventRef);
+            if (eventName === 'workflow_dispatch') branchProof = true;
+        }
     }
-    return undefined;
+    return branchProof && branches.every((branch) => branch.length > 0) && new Set(branches).size === 1
+        ? branches[0]
+        : undefined;
 }
 
 function git(root: string, arguments_: string[]) {
@@ -199,6 +212,9 @@ function run() {
             request.range = event.after;
             request.includeAncestors = true;
         }
+    }
+    if (request.includeAncestors && git(root, ['rev-parse', '--is-shallow-repository']) !== 'false') {
+        throw new Error('Complete history is required to audit all commit ancestors.');
     }
     const errors = [];
     for (const branch of request.branches) {
