@@ -40755,7 +40755,7 @@ function createTargetController({
       if (!closed) selected.closeFailure = { phase: "normal-close", reason: "application-still-running" };
       return selected.exited || closed;
     } catch (error2) {
-      selected.closeFailure = { phase: "normal-close", message: errorMessage(error2), ...errorDetails(error2) };
+      selected.closeFailure = { phase: "normal-close", ...errorDetails(error2), cause: errorMessage(error2) };
       return selected.exited;
     }
   }

@@ -132,7 +132,7 @@ export function createTargetController({
             if (!closed) selected.closeFailure = { phase: 'normal-close', reason: 'application-still-running' };
             return selected.exited || closed;
         } catch (error) {
-            selected.closeFailure = { phase: 'normal-close', message: errorMessage(error), ...errorDetails(error) };
+            selected.closeFailure = { phase: 'normal-close', ...errorDetails(error), cause: errorMessage(error) };
             return selected.exited;
         }
     }

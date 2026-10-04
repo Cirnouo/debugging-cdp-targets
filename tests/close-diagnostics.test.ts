@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createOperationRegistry } from '../src/application/operations.ts';
 import { createTargetController } from '../src/application/target-controller.ts';
 import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
@@ -34,7 +35,17 @@ test('failed normal close preserves native diagnostics and exact retry identity'
         assert.equal(detail?.nativeError, 5);
         assert.equal(detail?.closeRequested, false);
         assert.equal(detail?.listenerState, 'absent');
+        assert.equal(detail?.cause, 'Normal close failed.');
         return true;
     });
     assert.equal(controller.status().sessionId, active.sessionId);
+    const sessionId = active.sessionId;
+    const operations = createOperationRegistry(entryId);
+    const accepted = operations.submit('preserve-close-cause', { action: 'stop', sessionId }, async () =>
+        controller.stop({ sessionId, disposition: 'Close' }),
+    );
+    let result = await operations.wait(accepted.operationId, 0);
+    while (!result.complete) result = await operations.wait(accepted.operationId, result.cursor);
+    assert.equal(result.operation.error?.cause, 'Normal close failed.');
+    assert.match(String(result.operation.error?.message), /identity remain available for retry/);
 });
