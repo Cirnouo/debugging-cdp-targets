@@ -3,38 +3,11 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { parseControlArguments } from '../src/interface/control-arguments.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { isSemVer } from '../tooling/version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pluginRoot = path.join(root, 'plugins', 'debugging-cdp-targets');
-
-test('documented lifecycle command templates match each command schema', () => {
-    const entry = ['--entry-id', '11111111-1111-4111-8111-111111111111'];
-    const connection = ['--connection-id', '33333333-3333-4333-8333-333333333333'];
-    const session = ['--session-id', '22222222-2222-4222-8222-222222222222'];
-    const templates = [
-        ['status', ...entry],
-        ['status', ...entry, ...connection],
-        ['start', ...entry, '--target-kind', 'chrome', '--launch-command', 'chrome --remote-debugging-port={port}'],
-        ['restart', ...entry, ...connection, ...session],
-        ['end-task', ...entry, ...connection, ...session],
-        ['stop', ...entry, ...connection, ...session, '--disposition', 'Close'],
-        ['stop', ...entry, ...connection, ...session, '--disposition', 'Keep'],
-    ];
-    for (const template of templates) assert.equal(parseControlArguments(template).action, template[0]);
-    for (const template of [
-        ['status', ...entry, ...session],
-        ['start', ...entry, ...session, '--launch-command', 'chrome'],
-        ['start', ...entry, ...connection, '--launch-command', 'chrome'],
-        ['end-task', ...entry, ...connection, ...session, '--disposition', 'Keep'],
-        ['restart', ...entry, ...connection, ...session, '--disposition', 'Close'],
-        ['stop', ...entry, ...connection, ...session],
-        ['restart', ...entry, ...session],
-    ])
-        assert.throws(() => parseControlArguments(template));
-});
 
 test('portable plugin registers one stdio gateway for independent target connections', async () => {
     const manifest: unknown = JSON.parse(await readFile(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
@@ -63,10 +36,11 @@ test('plugin payload has only manifests, one skill, license, and self-contained 
     assert.deepEqual(distribution.sort(), [
         'README.md',
         'THIRD-PARTY-NOTICES.txt',
-        'control.mjs',
         'mcp-bootstrap.mjs',
         'official-server',
         'windows-cdp-helper.ps1',
+        'windows-native-helper.ps1',
+        'windows-native-process.cs',
     ]);
     const skill = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets'));
     assert.deepEqual(skill.sort(), ['README.md', 'SKILL.md']);

@@ -44,7 +44,7 @@ function toolRoute(value: unknown, name: string, namespace?: string): { name: st
     return undefined;
 }
 
-async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
+async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted' | 'lifecycle') {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-codex-hooks-'));
     const home = path.join(temporary, 'home');
     const workspace = path.join(temporary, 'workspace');
@@ -78,10 +78,21 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
                     type: 'tool_search_call',
                     call_id: 'discover-cdp',
                     execution: 'client',
-                    arguments: { query: 'dct_connection_status list_pages', limit: 20 },
+                    arguments: {
+                        query:
+                            mode === 'lifecycle'
+                                ? 'dct_connection_start dct_connection_status dct_operation_wait dct_connection_restart dct_connection_stop dct_connection_end_task dct_operation_cancel'
+                                : 'dct_connection_status list_pages',
+                        limit: 20,
+                    },
                 };
             } else if (index <= 3) {
-                const name = index === 2 ? 'dct_connection_status' : 'list_pages';
+                const name =
+                    index === 2
+                        ? 'dct_connection_status'
+                        : mode === 'lifecycle'
+                          ? 'dct_connection_start'
+                          : 'list_pages';
                 if (index === 3) {
                     assert.ok(Array.isArray(value.input));
                     const output = value.input.find(
@@ -109,8 +120,40 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
                     call_id: `call-${index}`,
                     ...route,
                     arguments: JSON.stringify(
-                        index === 2 ? {} : { _dct: { connectionId: state?.connectionId, sessionId: state?.sessionId } },
+                        index === 2
+                            ? {}
+                            : mode === 'lifecycle'
+                              ? {
+                                    entryId: state?.entryId,
+                                    requestId: 'codex-start',
+                                    launch: { executable: 'fake target', args: [], env: { DCT_FIXTURE: 'test' } },
+                                    mcpArgs: ['--workspace', workspace],
+                                }
+                              : { _dct: { connectionId: state?.connectionId, sessionId: state?.sessionId } },
                     ),
+                };
+            } else if (mode === 'lifecycle' && index === 4) {
+                assert.ok(Array.isArray(value.input));
+                const output = value.input.find(
+                    (entry: unknown) =>
+                        isRecord(entry) && entry.type === 'function_call_output' && entry.call_id === 'call-3',
+                );
+                assert.ok(isRecord(output) && typeof output.output === 'string');
+                const accepted: unknown = JSON.parse(output.output.slice(output.output.indexOf('{')));
+                assert.ok(isRecord(accepted) && typeof accepted.operationId === 'string');
+                const route =
+                    toolRoute(value.tools, 'dct_operation_wait') ?? toolRoute(value.input, 'dct_operation_wait');
+                assert.ok(route);
+                calls.push('dct_operation_wait');
+                item = {
+                    type: 'function_call',
+                    call_id: 'call-4',
+                    ...route,
+                    arguments: JSON.stringify({
+                        entryId: state?.entryId,
+                        operationId: accepted.operationId,
+                        cursor: 0,
+                    }),
                 };
             } else {
                 if (mode === 'stop' && index === 4) {
@@ -273,6 +316,18 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
             isRecord(fixtureServer) && isRecord(fixtureServer.tools) && fixtureServer.tools.dct_connection_status,
             JSON.stringify(servers),
         );
+        for (const name of [
+            'dct_connection_start',
+            'dct_connection_restart',
+            'dct_connection_stop',
+            'dct_connection_end_task',
+            'dct_operation_wait',
+            'dct_operation_cancel',
+        ])
+            assert.ok(
+                isRecord(fixtureServer.tools) && fixtureServer.tools[name],
+                `Missing lifecycle declaration: ${name}`,
+            );
         async function turn(prompt: string) {
             assert.ok(app);
             const before = completed.length;
@@ -305,7 +360,20 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
         }
         const contexts = requests.map(texts);
         const notices = contexts.map((entries) => entries.filter((entry) => entry.includes(marker)));
-        if (mode === 'untrusted')
+        if (mode === 'lifecycle') {
+            assert.ok(
+                contexts.some((entries) =>
+                    entries.some(
+                        (entry) => entry.includes('CDP lifecycle operation results:') && entry.includes('succeeded'),
+                    ),
+                ),
+                'Completed operation must reach actual model context through a trusted Hook.',
+            );
+            const received = JSON.stringify(requests);
+            for (const field of ['mcpArgs', 'executable', 'requestId', 'operationId', 'cursor'])
+                assert.ok(received.includes(field));
+            assert.ok(!received.includes('launchCommand'));
+        } else if (mode === 'untrusted')
             assert.ok(
                 notices.every((entries) => entries.length === 0),
                 'Installing a Plugin must not trust its Hooks.',
@@ -329,7 +397,12 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
             assert.ok(notices[delivery]?.[0]?.includes(String(state.sessionId)));
             assert.equal(requests.length, mode === 'pre' || mode === 'post' ? 4 : 5, 'Stop must resume at most once.');
         }
-        assert.deepEqual(calls, ['tool_search', 'dct_connection_status', 'list_pages']);
+        assert.deepEqual(
+            calls,
+            mode === 'lifecycle'
+                ? ['tool_search', 'dct_connection_status', 'dct_connection_start', 'dct_operation_wait']
+                : ['tool_search', 'dct_connection_status', 'list_pages'],
+        );
         assert.ok(requests.every((request) => !JSON.stringify(request.tools).includes('dct_watch_target')));
         console.log(
             JSON.stringify({
@@ -346,4 +419,5 @@ async function scenario(mode: 'pre' | 'post' | 'stop' | 'idle' | 'untrusted') {
     }
 }
 
-for (const mode of ['untrusted', 'pre', 'post', 'stop', 'idle'] as const) await scenario(mode);
+const scenarios = ['untrusted', 'pre', 'post', 'stop', 'idle', 'lifecycle'] as const;
+for (const mode of scenarios) if (!process.argv[3] || process.argv[3] === mode) await scenario(mode);

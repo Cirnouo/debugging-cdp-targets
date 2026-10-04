@@ -10,7 +10,8 @@ import type {
     RootEvidence,
 } from '../domains/cdp-target.ts';
 import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
-import { errorCode, isRecord } from '../shared/errors.ts';
+import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
+import { createWindowsLauncher } from './windows-launch.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
 export type ProcessExecutor = (executable: string, arguments_: string[]) => Promise<ProcessResult>;
@@ -240,12 +241,21 @@ async function unixSnapshot(pid: number, port: number): Promise<ProcessEvidence>
     };
 }
 
-export function createPlatformAdapter(): PlatformAdapter {
-    if (!['win32', 'linux', 'darwin'].includes(process.platform)) throw new Error('Unsupported operating system.');
+export function createPlatformAdapter(
+    dependencies: {
+        platform?: NodeJS.Platform;
+        snapshot?: PlatformAdapter['snapshot'];
+        closeWindows?: (target: ProcessTarget) => Promise<Record<string, unknown>>;
+    } = {},
+): PlatformAdapter {
+    const platform = dependencies.platform ?? process.platform;
+    const closeWindows = dependencies.closeWindows ?? createWindowsLauncher().close;
+    if (!['win32', 'linux', 'darwin'].includes(platform)) throw new Error('Unsupported operating system.');
     const snapshot: PlatformAdapter['snapshot'] =
-        process.platform === 'win32'
+        dependencies.snapshot ??
+        (platform === 'win32'
             ? async (pid, port) => parseSnapshot(await windowsHelper('Snapshot', { RootProcessId: pid, Port: port }))
-            : unixSnapshot;
+            : unixSnapshot);
     return {
         snapshot,
         validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
@@ -274,33 +284,50 @@ export function createPlatformAdapter(): PlatformAdapter {
         },
         async close(target, { requireListener = true } = {}) {
             const evidence = await snapshot(target.processId, target.port);
-            if (!evidence.root.exists) return evidence.listeners.length === 0;
+            if (!evidence.root.exists)
+                return !evidence.listeners.some((listener) => evidence.processIds.includes(listener.owningProcess));
             validateProcessIdentity(evidence, target);
-            if (process.platform === 'win32') {
-                const result = await windowsHelper('Close', {
-                    RootProcessId: target.processId,
-                    Port: target.port,
-                    ExecutablePath: target.executablePath,
-                    StartedAtUtc: target.startedAtUtc,
-                    ListenerPolicy: requireListener ? 'OwnedExclusive' : 'ProcessIdentityOnly',
-                    TimeoutSeconds: CLOSE_TIMEOUT_SECONDS,
-                });
-                return result.closed === true;
-            }
             const owned = new Set(evidence.processIds);
-            if (
-                requireListener &&
-                (!evidence.listeners.length ||
-                    evidence.listeners.some((listener) => !owned.has(listener.owningProcess)))
-            ) {
-                throw new Error('The CDP listener ownership changed.');
+            const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess))
+                ? 'foreign'
+                : evidence.listeners.length
+                  ? 'owned'
+                  : 'absent';
+            if (requireListener && listenerState === 'foreign') {
+                const error = new DetailedError('The CDP listener belongs to another process.');
+                error.details = { phase: 'listener-identity', listenerState, closeRequested: false };
+                throw error;
+            }
+            if (platform === 'win32') {
+                let result: Record<string, unknown>;
+                try {
+                    result = await closeWindows(target);
+                } catch (cause) {
+                    const error = new DetailedError(errorMessage(cause));
+                    error.details = { ...errorDetails(cause), listenerState };
+                    throw error;
+                }
+                const after = await snapshot(target.processId, target.port);
+                if (after.root.exists) validateProcessIdentity(after, target);
+                const remaining = after.listeners.filter((listener) => owned.has(listener.owningProcess));
+                if (result.closed === true && !after.root.exists && !remaining.length) return true;
+                const error = new DetailedError('The application did not close normally.');
+                error.details = {
+                    phase: result.phase ?? 'normal-close',
+                    nativeError: result.nativeError ?? 0,
+                    closeRequested: result.closeRequested === true,
+                    processExited: !after.root.exists,
+                    listenerState: remaining.length ? 'owned' : after.listeners.length ? 'foreign' : 'absent',
+                };
+                throw error;
             }
             // SIGTERM asks the recorded process to exit; no escalation to SIGKILL.
             process.kill(target.processId, 'SIGTERM');
             for (let attempt = 0; attempt < CLOSE_TIMEOUT_SECONDS * 5; attempt += 1) {
                 await new Promise((resolve) => setTimeout(resolve, 200));
                 const after = await snapshot(target.processId, target.port);
-                if (!after.root.exists && after.listeners.length === 0) return true;
+                if (!after.root.exists && !after.listeners.some((listener) => owned.has(listener.owningProcess)))
+                    return true;
                 if (after.root.exists) validateProcessIdentity(after, target);
             }
             return false;

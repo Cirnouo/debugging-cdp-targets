@@ -1,5 +1,9 @@
 # Explicit integration smoke
 
+`timeout-isolation.ts` exercises an intentionally unfinished official handler on
+two isolated Chrome targets, validates timeout quarantine and peer availability,
+then explicitly restarts and normally closes them. It retains test profiles.
+
 - `official-server.ts` tests the bundled bootstrap against an isolated Chrome,
   including tool discovery, snapshot-based CSS style inspection, reusable entry
   start/Close, and normal closure.
@@ -44,5 +48,25 @@
   is used. Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects
   a Codex executable. Enable Hooks in this isolated config for the test.
 
-These scripts are opt-in and may download the pinned official Server or open
-dedicated test browser windows. The normal test suite never runs them.
+- `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter.
+- `screenshot-layers.ts` compares official direct/routed screenshots on isolated
+  normal and minimized Chrome windows with phase-only CDP timing. It retains its
+  profiles, screenshots and metadata; a timeout records evidence and fails.
+- `readest-native.ts` accepts an explicitly selected Readest executable and creates
+  independent portable copies, comparing native/CDP launch window geometry and
+  actual normal close. It preserves the source and all test directories.
+- `windows-window-evidence.ps1` samples window identity, visibility, classes and
+  geometry for one test PID; no titles or page content are recorded.
+- `windows-elevation.ts` compiles a disposable manifested GUI and exercises real
+  Windows authorization, preserved environment, limited-query identity, actual
+  app-handle exit observation and elevated normal close. It may
+  show UAC; cancellation is reported, never treated as successful elevated launch.
+- `windows-elevated-mcp.ts` verifies the same elevation through the delivered
+  gateway's start/wait/status/Close tools, using the fixture's loopback discovery
+  endpoint for real process/listener/readiness verification. The fixture does not
+  implement browser tools; Chrome smokes verify those separately. Run from an
+  ordinary process; launch and normal close may each require Windows authorization.
+
+These scripts are opt-in and may open dedicated test browser/application windows.
+They use the delivered official package without dependency download. The normal
+test suite never runs them. Codex tests create only disposable homes/configuration.

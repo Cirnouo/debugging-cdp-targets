@@ -4,7 +4,7 @@
 - **Framework**: application technology; its name does not prove CDP compatibility.
 - **Rendering implementation**: renderer such as Chromium or WebView2.
 - **Static entry**: reusable Desktop stdio configuration cdp-targets.
-- **Entry identity**: random UUID for one live gateway and its control pipe.
+- **Entry identity**: random UUID for one live MCP gateway.
 - **Connection identity**: random UUID for one independent target task and its official MCP connection.
 - **Session identity**: fresh UUID for every successful target start or recovery in a connection.
 - **Current target**: verified newly launched process belonging to one session.
@@ -12,7 +12,15 @@
 - **Official Server**: unmodified upstream chrome-devtools-mcp child for one connection.
 - **Gateway**: official SDK host transport managing independent connections and routing official tools.
 - **Routing identity**: required _dct connection/session object removed before official tool invocation.
-- **Control channel**: temporary entry-specific local IPC for lifecycle commands.
+- **Lifecycle operation**: MCP-accepted asynchronous mutation with stable operation identity.
+- **Request identity**: caller identifier binding identical mutation retries to one operation.
+- **Event cursor**: replay position in an operation's bounded in-memory event queue.
+- **Native application identity**: actual application PID, creation time, path and observed process handle.
+- **Permission wait**: OS authorization phase before application creation, separate from CDP readiness.
+- **Fixed tool catalog**: complete reviewed official tool names and compatible schema variants exposed to Codex.
+- **Enabled tools**: one connection's actual official tools/list, with its exact input schemas.
+- **Configuration recipe**: complete explicit mcpArgs satisfying a tool's reviewed activation conditions.
+- **Quarantined connection**: session whose forwarding/transport is isolated after an incomplete timeout or cancellation.
 - **Disposition**: explicit Close or Keep choice without a default.
 - **Kept target**: application and upstream retained within its live connection.
 - **Active task**: dependent work activated by start, recovery or official use and ended by Keep/end-task.

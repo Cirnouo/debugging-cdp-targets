@@ -1,33 +1,61 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import * as contract from '../src/domains/control-contract.ts';
+import { parseConnectionRoute, parseControlRequest } from '../src/domains/control-contract.ts';
 
-test('IPC boundary accepts validated commands and rejects malformed external values', () => {
-    assert.equal(typeof contract.parseControlRequest, 'function');
-    const { parseControlRequest, parseControlResponse } = contract;
-    const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const sessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-    assert.deepEqual(parseControlRequest({ action: 'status', entryId }), { action: 'status', entryId });
-    assert.deepEqual(parseControlRequest({ action: 'start', entryId, launchCommand: 'app' }), {
+const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const connectionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const sessionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+test('MCP control accepts structured launch and explicit official arguments without a command string', () => {
+    const request = {
         action: 'start',
         entryId,
-        launchCommand: 'app',
+        requestId: 'launch-1',
+        launch: { executable: '/opt/app', args: ['a b'], env: { PORT: '{port}' } },
+        mcpArgs: ['--workspace=/work'],
+    };
+    assert.deepEqual(parseControlRequest(request), request);
+    assert.deepEqual(parseControlRequest({ action: 'status' }), { action: 'status' });
+    assert.deepEqual(parseControlRequest({ action: 'status', entryId, toolNames: ['click_at'] }), {
+        action: 'status',
+        entryId,
+        toolNames: ['click_at'],
     });
-    for (const value of [
-        null,
-        [],
-        { action: 'status' },
-        { action: 'invoke', entryId },
-        { action: 'stop', entryId, sessionId, disposition: 'Kill' },
-        { action: 'start', entryId, launchCommand: 123 },
-        { action: 'start', entryId, launchCommand: 'app', basePort: '9222' },
-    ]) {
-        assert.throws(() => parseControlRequest(value));
-    }
-    assert.deepEqual(parseControlResponse({ ok: true, result: { entryId, connections: [] } }), {
-        ok: true,
-        result: { entryId, connections: [] },
-    });
-    for (const value of [null, { ok: true, result: {} }, { ok: false, error: 1 }])
-        assert.throws(() => parseControlResponse(value));
+});
+
+test('MCP controls reject missing identities, ambiguous selectors and inapplicable fields', () => {
+    for (const request of [
+        { action: 'start', entryId, requestId: 'one', launchCommand: 'app' },
+        { action: 'start', entryId, launch: { executable: '/app' } },
+        { action: 'start', entryId, requestId: 'one', launch: { executable: '/app' }, sessionId },
+        { action: 'status', connectionId },
+        { action: 'status', entryId, sessionId },
+        { action: 'status', entryId, connectionId, operationId: sessionId },
+        { action: 'restart', entryId, requestId: 'one', connectionId },
+        { action: 'restart', entryId, requestId: 'one', connectionId, sessionId, disposition: 'Keep' },
+        { action: 'stop', entryId, requestId: 'one', connectionId, sessionId, disposition: 'Kill' },
+        { action: 'wait', entryId, operationId: sessionId, cursor: -1 },
+        { action: 'cancel', entryId, operationId: sessionId, disposition: 'Close' },
+        { action: 'start', entryId, requestId: 'one', launch: { executable: '/app' }, mcpArgs: [1] },
+    ])
+        assert.throws(() => parseControlRequest(request));
+    assert.throws(() => parseConnectionRoute({ connectionId, sessionId, extra: true }));
+});
+
+test('explicit restart and event wait retain the selected identities and cursors', () => {
+    for (const request of [
+        {
+            action: 'restart',
+            entryId,
+            requestId: 'restart-1',
+            connectionId,
+            sessionId,
+            mcpArgs: ['--experimentalVision=true'],
+        },
+        { action: 'end-task', entryId, requestId: 'end-1', connectionId, sessionId },
+        { action: 'stop', entryId, requestId: 'stop-1', connectionId, sessionId, disposition: 'Keep' },
+        { action: 'wait', entryId, operationId: sessionId, cursor: 3 },
+        { action: 'cancel', entryId, operationId: sessionId },
+    ])
+        assert.deepEqual(parseControlRequest(request), request);
 });

@@ -13,6 +13,10 @@
   schema declaration and byte-identical packaging into a disposable directory;
   this is not a Codex install claim.
 - `payload-policy.ts` owns the exact Plugin file allowlist.
+- `official-tool-catalog.ts` verifies the fixed public tools/list configuration
+  matrix; `--write` deliberately regenerates tool metadata for the verified release.
+- `official-tool-catalog.json` records complete names, schema variants, activation
+  conditions and probe hashes from the unchanged official 1.10.1 public bin.
 - `official-server-release.json` records the reviewed official npm release, its
   source tag/commit, tarball integrity and every published file digest and length.
 - `governance.ts` owns commit type/scope and branch grammar.

@@ -45,7 +45,10 @@ function fixture(available = true) {
     const launch = (directory?: string) =>
         host.launch({
             targetKind: 'chrome',
-            launchCommand: `"${process.execPath}" ${directory ? `"--user-data-dir=${directory}"` : ''} --remote-debugging-port={port}`,
+            launch: {
+                executable: process.execPath,
+                args: [...(directory ? [`--user-data-dir=${directory}`] : []), '--remote-debugging-port={port}'],
+            },
         });
     return {
         host,
@@ -83,7 +86,7 @@ test('Chrome launch disables updater scheduling and preserves the switch during 
         assert.equal(await f.host.close(target), true);
         await f.host.launch({
             targetKind: 'chrome',
-            launchCommand: '',
+            launch: { executable: '' },
             exactPort: target.port,
             launchDefinition: target.launchDefinition,
         });

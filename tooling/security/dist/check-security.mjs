@@ -7695,7 +7695,6 @@ import path2 from "node:path";
 
 // src/shared/constants.ts
 var MAX_HTTP_BYTES = 8 * 1024 * 1024;
-var MAX_CONTROL_BYTES = 64 * 1024;
 var TARGET_KINDS = Object.freeze(["chrome", "generic-cdp"]);
 var DISPOSITIONS = Object.freeze(["Close", "Keep"]);
 var PACKAGE_NAME = "chrome-devtools-mcp";

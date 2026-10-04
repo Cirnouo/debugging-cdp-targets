@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type ManagedTarget, RetainedTargetError } from '../domains/cdp-target.ts';
-import type { Disposition, LaunchOptions, TargetStatus } from '../domains/control-contract.ts';
-import { DetailedError } from '../shared/errors.ts';
+import type { Disposition, LaunchContext, LaunchOptions, TargetStatus } from '../domains/control-contract.ts';
+import { DetailedError, errorDetails, errorMessage } from '../shared/errors.ts';
 
 export interface ControllerRouter {
     setTarget(target: ManagedTarget): void;
@@ -12,7 +12,7 @@ export interface ControllerRouter {
 }
 export type TargetHealth = 'healthy' | 'gone' | 'unavailable' | 'identity-changed';
 export interface ControllerHost {
-    launch(options: LaunchOptions): Promise<ManagedTarget>;
+    launch(options: LaunchOptions, context?: LaunchContext): Promise<ManagedTarget>;
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
     health?(target: ManagedTarget): Promise<TargetHealth>;
 }
@@ -24,6 +24,7 @@ type Current = {
     exited: boolean;
     expectedExit?: boolean;
     unsubscribe?: () => void;
+    closeFailure?: Record<string, unknown>;
 };
 
 export function createTargetController({
@@ -36,7 +37,7 @@ export function createTargetController({
     entryId: string;
     router: ControllerRouter;
     host: ControllerHost;
-    server: { ensure(): Promise<void>; close(): Promise<void> };
+    server: { ensure(options: LaunchOptions): Promise<void>; close(): Promise<void> };
     onProcessExit?: (event: TargetEvent) => void;
 }) {
     let current: Current | undefined;
@@ -78,9 +79,16 @@ export function createTargetController({
         if (!gated) router.clearTarget();
         gated = true;
     }
+    function confirmExit(selected: Current) {
+        if (!selected.exited) {
+            selected.exited = true;
+            selected.target.releaseProfile?.();
+        }
+        selected.target.child?.disposeMonitor?.();
+    }
     function processExited(selected: Current) {
         if (current !== selected || selected.exited) return;
-        selected.exited = true;
+        confirmExit(selected);
         gate();
         // Explicit cleanup owns expected exits, including late delivery after its failure.
         if (state === 'closing' || selected.expectedExit) return;
@@ -97,7 +105,11 @@ export function createTargetController({
         if (!child) return;
         const exited = () => processExited(selected);
         child.once('exit', exited);
-        selected.unsubscribe = () => child.off?.('exit', exited);
+        const stopMonitor = child.onMonitorError?.(() => lose(selected, 'process-monitor-lost'));
+        selected.unsubscribe = () => {
+            child.off?.('exit', exited);
+            stopMonitor?.();
+        };
         // Node retains exitCode/signalCode even when exit preceded this subscription.
         if (typeof child.exitCode === 'number' || typeof child.signalCode === 'string') exited();
     }
@@ -108,12 +120,19 @@ export function createTargetController({
         reason = why;
     }
     async function tryClose(selected: Current, requireListener = true) {
+        delete selected.closeFailure;
         try {
             if (selected.exited) return true;
-            if (!requireListener && host.health && (await host.health(selected.target)) === 'gone') return true;
+            if (!requireListener && host.health && (await host.health(selected.target)) === 'gone') {
+                confirmExit(selected);
+                return true;
+            }
             const closed = await host.close(selected.target, { requireListener });
+            if (closed) confirmExit(selected);
+            if (!closed) selected.closeFailure = { phase: 'normal-close', reason: 'application-still-running' };
             return selected.exited || closed;
-        } catch {
+        } catch (error) {
+            selected.closeFailure = { phase: 'normal-close', message: errorMessage(error), ...errorDetails(error) };
             return selected.exited;
         }
     }
@@ -121,7 +140,12 @@ export function createTargetController({
         const error = new DetailedError(
             'The target did not close normally; its official connection and identity remain available for retry.',
         );
-        error.details = { retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }] };
+        error.details = {
+            ...selected.closeFailure,
+            entryId,
+            sessionId: selected.sessionId,
+            retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }],
+        };
         return error;
     }
     function retainFailedRollback(target: ManagedTarget, options: LaunchOptions, sessionId: string) {
@@ -132,17 +156,21 @@ export function createTargetController({
         gate();
         subscribe(current);
     }
-    async function attach(options: LaunchOptions, sessionId: string = randomUUID()) {
-        await server.ensure();
+    async function attach(options: LaunchOptions, sessionId: string = randomUUID(), context: LaunchContext = {}) {
+        context.signal?.throwIfAborted();
+        context.onPhase?.('starting-official-server');
+        await server.ensure(options);
+        context.signal?.throwIfAborted();
         let target: ManagedTarget;
         try {
-            target = await host.launch(options);
+            target = await host.launch(options, context);
         } catch (error) {
             if (error instanceof RetainedTargetError) retainFailedRollback(error.target, options, sessionId);
             throw error;
         }
         const selected: Current = { target, options, sessionId, exited: false };
         try {
+            context.signal?.throwIfAborted();
             router.setTarget(target);
         } catch (error) {
             if (!(await tryClose(selected, false))) {
@@ -159,11 +187,11 @@ export function createTargetController({
         subscribe(selected);
         return status();
     }
-    function start(options: LaunchOptions, sessionId?: string) {
+    function start(options: LaunchOptions, sessionId?: string, context: LaunchContext = {}) {
         return run(async () => {
             if (current)
                 throw new Error('An existing target session must be explicitly closed before this entry is reused.');
-            return attach(options, sessionId);
+            return attach(options, sessionId, context);
         });
     }
     async function dispose(selected: Current) {
@@ -178,6 +206,7 @@ export function createTargetController({
             throw error;
         }
         selected.unsubscribe?.();
+        selected.target.child?.disposeMonitor?.();
         current = undefined;
         state = 'idle';
         reason = undefined;
@@ -189,18 +218,26 @@ export function createTargetController({
             return status();
         });
     }
-    function restart({ sessionId }: { sessionId: string }) {
+    function restart(
+        { sessionId, mcpArgs }: { sessionId: string; mcpArgs?: string[] },
+        context: LaunchContext & { onSession?: (sessionId: string) => void } = {},
+    ) {
         return run(async () => {
+            context.signal?.throwIfAborted();
             const previous = requireSession(sessionId);
-            if (state !== 'lost')
-                throw new Error('Only a lost target session can be restarted after an explicit user choice.');
+            if (state !== 'lost' && state !== 'active')
+                throw new Error('Only an active or lost target session can be explicitly restarted.');
+            if (router.isBusy()) throw new Error('CDP is busy; retry after the current request completes.');
             if (!previous.target.launchDefinition)
                 throw new Error('The exact launch definition is unavailable; cannot safely restart.');
             previous.expectedExit = true;
+            router.pause?.();
+            const previousState = state;
             state = 'closing';
             if (!(await tryClose(previous, false))) {
                 delete previous.expectedExit;
-                state = 'lost';
+                state = previousState;
+                router.resume?.();
                 throw failedClose(previous);
             }
             try {
@@ -212,17 +249,24 @@ export function createTargetController({
                 throw error;
             }
             previous.unsubscribe?.();
+            previous.target.child?.disposeMonitor?.();
+            previous.exited = true;
             const options: LaunchOptions = {
                 ...previous.options,
                 exactPort: previous.target.port,
                 launchDefinition: previous.target.launchDefinition,
+                ...(mcpArgs === undefined ? {} : { mcpArgs }),
             };
             try {
-                return { ...(await attach(options)), pageIdsInvalidated: true };
+                const nextSession = randomUUID();
+                context.onSession?.(nextSession);
+                return { ...(await attach(options, nextSession, context)), pageIdsInvalidated: true };
             } catch (error) {
                 if (current === previous) {
                     state = 'lost';
+                    reason = 'restart-incomplete';
                     gate();
+                    context.onSession?.(previous.sessionId);
                 }
                 throw error;
             }
@@ -304,6 +348,7 @@ export function createTargetController({
                 await server.close();
             } finally {
                 selected?.unsubscribe?.();
+                selected?.target.child?.disposeMonitor?.();
             }
             current = undefined;
             state = 'idle';
@@ -325,6 +370,9 @@ export function createTargetController({
         cleanupOnDisconnect,
         officialDisconnected: () => {
             if (current) lose(current, 'official-disconnected');
+        },
+        quarantine: (reason: string) => {
+            if (current) lose(current, reason);
         },
         canInvoke: () => state === 'active' && !gated,
     };

@@ -1,6 +1,6 @@
 # Tests
 
-- `plugin-runtime.test.ts` covers command templates, routing, lifecycle, IPC,
+- `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
@@ -31,9 +31,6 @@
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
-- `entry-control.test.ts` checks entry/connection/session identity and command-specific schemas.
-- `control-endpoint.test.ts` checks portable socket path lengths in UTF-8 bytes,
-  entry/user isolation and Windows named pipe compatibility.
 - `entry-lifecycle.test.ts` checks entry Keep/Close and independent lifecycle.
 - `entry-runtime.test.ts` checks gateway identity, independent connections and upstream lifetime.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
@@ -47,6 +44,19 @@
 - `plugin-hooks.test.ts` checks the four automatic MCP Tool Hook declarations.
 - `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
   process options at the native child-process boundary without launching a target.
+- `structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
+- `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
+  verify safe options, activation recipes, variants and independent configuration.
+- `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
+  cover asynchronous identity/deduplication/cursor/cancel behavior and real SDK tools.
+- `close-diagnostics.test.ts`, `platform-close.test.ts` cover absent/foreign listeners,
+  native failure evidence and retry identity.
+- `windows-launch.test.ts` checks private native protocol and actual app observation.
+- `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
+- `windows-native.test.ts` runs disposable ordinary Node/WinForms fixtures on Windows;
+  it checks argv/cwd/env/PID/NUL stdio, limited-query identity, visible close, owned
+  discovery readiness and manifest detection without UAC prompts.
+- `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP processes.
 - `smoke/` owns opt-in isolated Codex Hook, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.

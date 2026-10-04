@@ -75,7 +75,7 @@ function fixture() {
 
 test('Keep preserves both sides across tasks; Close retires the session and reuses its entry', async () => {
     const f = fixture();
-    const first = await f.controller.start({ launchCommand: 'fixture', targetKind: 'chrome' });
+    const first = await f.controller.start({ launch: { executable: 'fixture' }, targetKind: 'chrome' });
     assert.equal(first.entryId, entryId);
     assert.ok(first.sessionId);
     assert.equal((await f.controller.stop({ sessionId: first.sessionId, disposition: 'Keep' })).status, 'active');
@@ -84,7 +84,7 @@ test('Keep preserves both sides across tasks; Close retires the session and reus
     assert.equal(f.controller.status().status, 'active');
     assert.equal((await f.controller.stop({ sessionId: first.sessionId, disposition: 'Close' })).status, 'idle');
     assert.equal(f.counts().serverCloses, 1);
-    const second = await f.controller.start({ launchCommand: 'new-fixture' });
+    const second = await f.controller.start({ launch: { executable: 'new-fixture' } });
     assert.notEqual(second.sessionId, first.sessionId);
     await assert.rejects(f.controller.stop({ sessionId: first.sessionId, disposition: 'Close' }), /session/i);
     assert.equal(f.controller.status().status, 'active');
@@ -93,7 +93,7 @@ test('Keep preserves both sides across tasks; Close retires the session and reus
 
 test('manual exit invalidates routes, retains exact launch evidence, and notifies once', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launchCommand: 'fixture' });
+    const active = await f.controller.start({ launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     assert.equal(f.controller.status().taskActive, true);
     f.child.emit('exit', 0);
@@ -114,7 +114,7 @@ test('manual exit invalidates routes, retains exact launch evidence, and notifie
 
 test('connection unavailability gates tools while process monitoring stays active', async () => {
     const f = fixture();
-    await f.controller.start({ launchCommand: 'fixture' });
+    await f.controller.start({ launch: { executable: 'fixture' } });
     f.setHealth('unavailable');
     await f.controller.checkHealth();
     assert.equal(f.controller.status().status, 'lost');
@@ -127,7 +127,7 @@ test('connection unavailability gates tools while process monitoring stays activ
 
 test('failed normal close keeps evidence and official connection for retry', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launchCommand: 'fixture' });
+    const active = await f.controller.start({ launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     f.failClose();
     await assert.rejects(f.controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), /normally/i);
@@ -139,7 +139,7 @@ test('failed normal close keeps evidence and official connection for retry', asy
 
 test('Close forgets an exited owned process even when its old port now belongs to another process', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launchCommand: 'fixture' });
+    const active = await f.controller.start({ launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     f.child.emit('exit', 0);
     f.setHealth('gone');

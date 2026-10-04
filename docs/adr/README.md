@@ -19,6 +19,9 @@
   automatic trusted Codex Hooks, retired-connection cleanup and fixed profiles.
 - `0010-bundled-official-server.md`: accepted build-time delivery of the reviewed
   official npm release, exact artifact verification and runtime package resolution.
+- `0011-mcp-native-lifecycle.md`: pure MCP operations, native launch/elevation,
+  fixed catalog variants, per-connection configuration and timeout quarantine;
+  supersedes previous CLI/control IPC and status-only extension constraints.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

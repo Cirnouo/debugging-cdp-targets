@@ -1,17 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { controlEndpoint, sendControlRequest } from '../../src/adapters/control-ipc.ts';
-import {
-    type ConnectionStatus,
-    type ControlRequest,
-    parseControlResponse,
-    validateIdentity,
-} from '../../src/domains/control-contract.ts';
+import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
 if (process.platform !== 'win32') throw new Error('This real Chrome smoke is Windows-only.');
@@ -38,31 +34,12 @@ monitor.stdout.on('data', (data) => {
 });
 await new Promise<void>((resolve) => monitor.stdout.once('data', () => resolve()));
 const client = createClient(path.join(root, 'plugins/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
-async function control(request: ControlRequest) {
-    let retainedCloseAttempts = 0;
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-        const result = await sendControlRequest(controlEndpoint(request.entryId), request);
-        if (result.ok) return result.result;
-        const retainedClose =
-            request.action === 'stop' && request.disposition === 'Close' && /did not close normally/.test(result.error);
-        if (retainedClose) {
-            retainedCloseAttempts += 1;
-            console.log(
-                JSON.stringify({ normalCloseRetry: retainedCloseAttempts, at: Date.now(), retained: result.details }),
-            );
-        }
-        if ((!/busy/.test(result.error) && !retainedClose) || retainedCloseAttempts > 2)
-            assert.fail(JSON.stringify(result));
-        if (attempt === 0) console.log('Waiting for background CDP requests to finish before disposition.');
-        await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-    assert.fail('CDP never became idle for disposition.');
-}
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
     return result;
 };
+const control = lifecycleClient(tool);
 function textContent(result: Record<string, unknown>) {
     assert.ok(Array.isArray(result.content));
     return result.content
@@ -74,7 +51,17 @@ function textContent(result: Record<string, unknown>) {
 }
 const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 function launch(profile: string, title: string) {
-    return `"${chrome}" --no-first-run --disable-background-networking --disable-background-mode --user-data-dir="${path.join(folder, profile)}" --remote-debugging-port={port} "data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>"`;
+    return {
+        executable: chrome,
+        args: [
+            '--no-first-run',
+            '--disable-background-networking',
+            '--disable-background-mode',
+            `--user-data-dir=${path.join(folder, profile)}`,
+            '--remote-debugging-port={port}',
+            `data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>`,
+        ],
+    };
 }
 let entryId: string | undefined;
 let active: ConnectionStatus | undefined;
@@ -101,18 +88,19 @@ try {
     assert.ok(tools.some((entry) => entry.name === 'get_css_styles'));
     assert.ok(tools.some((entry) => /extension/.test(entry.name)));
     const statusTool = await tool('dct_connection_status');
-    const response = parseControlResponse({ ok: true, result: statusTool.structuredContent });
-    assert.ok(response.ok && 'connections' in response.result);
-    entryId = response.result.entryId;
+    const response = readStatus(statusTool.structuredContent);
+    assert.ok('connections' in response);
+    entryId = response.entryId;
     validateIdentity(entryId, 'entry ID');
     await emptyGateway(entryId);
     await assert.rejects(() => tool('list_pages'), /routing/);
     const first = await control({
         action: 'start',
+        requestId: randomUUID(),
         entryId,
         targetKind: 'chrome',
         basePort: 19222,
-        launchCommand: launch('profile-one', 'FIRST'),
+        launch: launch('profile-one', 'FIRST'),
     });
     assert.ok(!('connections' in first) && first.sessionId);
     active = first;
@@ -136,6 +124,7 @@ try {
     assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
     await control({
         action: 'stop',
+        requestId: randomUUID(),
         entryId,
         connectionId: first.connectionId,
         sessionId: first.sessionId,
@@ -145,10 +134,11 @@ try {
     await emptyGateway(entryId);
     const second = await control({
         action: 'start',
+        requestId: randomUUID(),
         entryId,
         targetKind: 'chrome',
         basePort: 19222,
-        launchCommand: launch('profile-two', 'SECOND'),
+        launch: launch('profile-two', 'SECOND'),
     });
     assert.ok(!('connections' in second) && second.sessionId);
     assert.notEqual(second.connectionId, first.connectionId);
@@ -161,6 +151,7 @@ try {
     assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
     await control({
         action: 'stop',
+        requestId: randomUUID(),
         entryId,
         connectionId: second.connectionId,
         sessionId: second.sessionId,
@@ -173,6 +164,7 @@ try {
     if (entryId && active?.sessionId)
         await control({
             action: 'stop',
+            requestId: randomUUID(),
             entryId,
             connectionId: active.connectionId,
             sessionId: active.sessionId,

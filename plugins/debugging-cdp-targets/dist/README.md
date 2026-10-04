@@ -1,7 +1,9 @@
 # Bundled runtime
 
-`mcp-bootstrap.mjs` and `control.mjs` are generated from source; they need no
-Plugin-local install. `windows-cdp-helper.ps1` provides OS evidence.
+`mcp-bootstrap.mjs` is generated from source and needs no Plugin-local install.
+`windows-cdp-helper.ps1` provides OS evidence. `windows-native-helper.ps1` and
+`windows-native-process.cs` provide maintained Windows launch/permission/close
+support; the helper compiles its bundled C# in memory using Windows .NET.
 `THIRD-PARTY-NOTICES.txt` contains licenses for all bundled third-party packages,
 including the official MCP SDK packages, their dependencies, and verified vendored code.
 Do not edit generated files directly; rebuild with pnpm build:plugin.

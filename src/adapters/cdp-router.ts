@@ -3,6 +3,7 @@ import http from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 import type { ManagedTarget } from '../domains/cdp-target.ts';
 import { LOOPBACK, MAX_HTTP_BYTES, REQUEST_TIMEOUT_MS } from '../shared/constants.ts';
+import { type Diagnose, type Diagnostic, measured } from '../shared/diagnostics.ts';
 import { isRecord } from '../shared/errors.ts';
 
 function rewriteDiscovery(value: unknown, routerPort: number): unknown {
@@ -32,13 +33,13 @@ function messageId(data: RawData, isBinary: boolean): number | null {
     }
 }
 
-export async function createCdpRouter() {
+export async function createCdpRouter({ diagnose }: { diagnose?: Diagnose } = {}) {
     let target: Pick<ManagedTarget, 'port' | 'verify'> | null = null;
     let paused = false;
-    let inFlightHttp = 0;
+    const httpRequests = new Set<() => void>();
     type Connection = { upstream: WebSocket; downstream: WebSocket | null };
     const sockets = new Set<Connection>();
-    const pending = new Map<Connection, Set<number>>();
+    const pending = new Map<Connection, Map<number, ReturnType<typeof measured>>>();
     function routerPort() {
         const address = server.address();
         if (!address || typeof address === 'string') throw new Error('Router is not listening on TCP.');
@@ -62,18 +63,22 @@ export async function createCdpRouter() {
             response.end(JSON.stringify({ error: 'NO_TARGET', message: 'No CDP target has been started.' }));
             return;
         }
-        inFlightHttp += 1;
-        let completed = false;
-        const complete = () => {
-            if (!completed) inFlightHttp -= 1;
-            completed = true;
+        const finishDiscovery = measured(diagnose, 'discovery-response');
+        const cancel = () => {
+            finishDiscovery('interrupted');
+            response.destroy();
         };
-        response.once('close', complete);
+        httpRequests.add(cancel);
+        response.once('close', () => httpRequests.delete(cancel));
         const selected = target;
+        const finishVerify = measured(diagnose, 'identity-check');
         try {
             await selected.verify?.();
             if (target !== selected) throw new Error('Target disappeared during verification.');
+            finishVerify();
         } catch {
+            finishVerify('failed');
+            if (response.destroyed) return;
             response.writeHead(503, { 'content-type': 'application/json' });
             response.end(JSON.stringify({ error: 'TARGET_IDENTITY_UNVERIFIABLE' }));
             return;
@@ -96,6 +101,7 @@ export async function createCdpRouter() {
                     else chunks.push(chunk);
                 });
                 upstreamResponse.on('end', () => {
+                    if (response.destroyed) return;
                     const body = Buffer.concat(chunks);
                     let output = body;
                     if (request.url?.startsWith('/json')) {
@@ -114,12 +120,15 @@ export async function createCdpRouter() {
                     delete headers['transfer-encoding'];
                     response.writeHead(upstreamResponse.statusCode ?? 502, headers);
                     response.end(output);
+                    finishDiscovery();
                 });
             },
         );
         response.once('close', () => upstream.destroy());
         upstream.once('timeout', () => upstream.destroy(new Error('CDP target request timed out.')));
         upstream.once('error', (error) => {
+            finishDiscovery('failed');
+            if (response.destroyed) return;
             if (!response.headersSent) response.writeHead(502, { 'content-type': 'application/json' });
             response.end(JSON.stringify({ error: 'TARGET_UNAVAILABLE', message: error.message }));
         });
@@ -137,42 +146,64 @@ export async function createCdpRouter() {
             return;
         }
         const selected = target;
-        inFlightHttp += 1;
+        const finishVerify = measured(diagnose, 'identity-check');
+        const cancel = () => socket.destroy();
+        httpRequests.add(cancel);
         try {
             await selected.verify?.();
             if (target !== selected || paused) throw new Error('Target changed during verification.');
+            finishVerify();
         } catch {
+            finishVerify('failed');
             socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
             return;
         } finally {
-            inFlightHttp -= 1;
+            httpRequests.delete(cancel);
         }
         const upstream = new WebSocket(`ws://${LOOPBACK}:${selected.port}${request.url}`);
+        const finishConnect = measured(diagnose, 'cdp-connect');
         socket.once('error', () => upstream.terminate());
         const tracked: Connection = { upstream, downstream: null };
         sockets.add(tracked);
-        pending.set(tracked, new Set());
+        pending.set(tracked, new Map());
         upstream.once('open', () => {
+            finishConnect();
             websocketServer.handleUpgrade(request, socket, head, (downstream) => {
                 tracked.downstream = downstream;
                 downstream.on('message', (data, isBinary) => {
                     const id = messageId(data, isBinary);
-                    if (id !== null) pending.get(tracked)?.add(id);
+                    if (id !== null) {
+                        let phase: Diagnostic['phase'] = 'cdp-response';
+                        try {
+                            const message: unknown = JSON.parse(data.toString());
+                            if (isRecord(message) && message.method === 'Page.captureScreenshot')
+                                phase = 'cdp-screenshot';
+                        } catch {
+                            /* Frame bytes are still forwarded unchanged. */
+                        }
+                        pending.get(tracked)?.set(id, measured(diagnose, phase));
+                    }
                     if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary: isBinary });
                 });
                 upstream.on('message', (data, isBinary) => {
                     const id = messageId(data, isBinary);
-                    if (id !== null) pending.get(tracked)?.delete(id);
+                    if (id !== null) {
+                        pending.get(tracked)?.get(id)?.();
+                        pending.get(tracked)?.delete(id);
+                    }
                     if (downstream.readyState === WebSocket.OPEN) downstream.send(data, { binary: isBinary });
                 });
                 downstream.once('close', () => upstream.close());
             });
         });
         upstream.once('error', () => {
+            finishConnect('failed');
             if (!tracked.downstream) socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');
             else tracked.downstream.terminate();
         });
         upstream.once('close', () => {
+            finishConnect('interrupted');
+            for (const finish of pending.get(tracked)?.values() ?? []) finish('interrupted');
             tracked.downstream?.terminate();
             sockets.delete(tracked);
             pending.delete(tracked);
@@ -185,7 +216,10 @@ export async function createCdpRouter() {
     });
 
     function disconnect() {
+        for (const cancel of httpRequests) cancel();
+        httpRequests.clear();
         for (const connection of sockets) {
+            for (const finish of pending.get(connection)?.values() ?? []) finish('interrupted');
             connection.downstream?.terminate();
             connection.upstream.terminate();
         }
@@ -197,7 +231,7 @@ export async function createCdpRouter() {
         port: routerPort(),
         url: `http://${LOOPBACK}:${routerPort()}`,
         isBusy: () =>
-            inFlightHttp > 0 ||
+            httpRequests.size > 0 ||
             [...sockets].some(({ upstream }) => upstream.readyState === WebSocket.CONNECTING) ||
             [...pending.values()].some((requests) => requests.size > 0),
         pause() {

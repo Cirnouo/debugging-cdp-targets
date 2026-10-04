@@ -5,7 +5,6 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
 
-const helperPath = 'src/adapters/windows-cdp-helper.ps1';
 const powershellParser = [
     '$tokens = $null',
     '$parseErrors = $null',
@@ -27,10 +26,10 @@ export function buildScriptCheckPlan({ files, platform }: { files: string[]; pla
             executable: process.execPath,
             file,
         }));
-    if (files.includes(helperPath)) {
-        plan.push({ kind: 'powershell', executable: 'pwsh', file: helperPath });
+    for (const file of files.filter((file) => file.endsWith('.ps1')).sort()) {
+        plan.push({ kind: 'powershell', executable: 'pwsh', file });
         if (platform === 'win32') {
-            plan.push({ kind: 'powershell', executable: 'powershell.exe', file: helperPath });
+            plan.push({ kind: 'powershell', executable: 'powershell.exe', file });
         }
     }
     return plan;

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import path from 'node:path';
@@ -9,7 +8,6 @@ import type { RawData } from 'ws';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import type { ManagedTarget } from '../src/domains/cdp-target.ts';
-import type { ControlHandler, LaunchOptions } from '../src/domains/control-contract.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
 
 function targetFixture(port: number, processId = 42): ManagedTarget {
@@ -27,85 +25,13 @@ function listeningPort(server: http.Server) {
     return address.port;
 }
 
-const runtime = await import('../src/domains/launch-command.ts');
 const { createCdpRouter } = await import('../src/adapters/cdp-router.ts');
 const { createTargetController } = await import('../src/application/target-controller.ts');
 const { choosePort, validateCdpIdentity } = await import('../src/domains/cdp-target.ts');
 const { createTargetHost } = await import('../src/adapters/target-host.ts');
 const { applyChromePreset } = await import('../src/adapters/target-host.ts');
 const { buildServerArguments } = await import('../src/adapters/official-server.ts');
-const { createControlServer, sendControlRequest } = await import('../src/adapters/control-ipc.ts');
 const entryId = randomUUID();
-const connectionId = '33333333-3333-4333-8333-333333333333';
-const sessionId = randomUUID();
-const { parseControlArguments } = await import('../src/interface/control-arguments.ts');
-
-test('launch command substitutes a selected CDP port without a shell', () => {
-    const command = runtime.parseLaunchCommand({
-        template: '"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port={port} --flag',
-        port: 9223,
-        environment: {},
-    });
-    assert.deepEqual(command, {
-        executable: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        arguments: ['--remote-debugging-port=9223', '--flag'],
-    });
-});
-
-test('launch command appends Chrome CDP switch when no placeholder is present', () => {
-    const command = runtime.parseLaunchCommand({
-        template: '"%BROWSER%" --new-window',
-        port: 9223,
-        environment: { BROWSER: 'C:\\Chrome\\chrome.exe' },
-    });
-    assert.deepEqual(command, {
-        executable: 'C:\\Chrome\\chrome.exe',
-        arguments: ['--new-window', '--remote-debugging-port=9223'],
-    });
-});
-
-test('launch command rejects fixed conflicting debugging ports', () => {
-    assert.throws(
-        () =>
-            runtime.parseLaunchCommand({
-                template: 'chrome --remote-debugging-port=9222',
-                port: 9223,
-                environment: {},
-            }),
-        /conflict/i,
-    );
-});
-
-test('launch command rejects shell operators and unresolved variables', () => {
-    for (const template of ['chrome && whoami', 'chrome | more', '"%MISSING%"']) {
-        assert.throws(() => runtime.parseLaunchCommand({ template, port: 9222, environment: {} }));
-    }
-});
-
-test('launch command rejects duplicate port sources and debugging pipe mode', () => {
-    for (const template of [
-        'chrome --remote-debugging-port=9222 --remote-debugging-port={port}',
-        'chrome --remote-debugging-port={port} --remote-debugging-pipe',
-        'chrome --remote-debugging-port=9222 --app-port={port}',
-    ]) {
-        assert.throws(() => runtime.parseLaunchCommand({ template, port: 9223 }));
-    }
-});
-
-test('launch command preserves separate, equals, colon port templates and quoted environment values', () => {
-    const fixtures: [string, string[]][] = [
-        ['app --debug {port}', ['--debug', '9223']],
-        ['app --debug={port}', ['--debug=9223']],
-        ['app --debug:{port}', ['--debug:9223']],
-        ['app --profile="%PROFILE%" --debug={port}', ['--profile=C:\\a b', '--debug=9223']],
-    ];
-    for (const [template, expected] of fixtures) {
-        assert.deepEqual(
-            runtime.parseLaunchCommand({ template, port: 9223, environment: { PROFILE: 'C:\\a b' } }).arguments,
-            expected,
-        );
-    }
-});
 
 test('CDP router rewrites discovery URLs and forwards WebSocket frames', async (context) => {
     const target = http.createServer((request, response) => {
@@ -266,9 +192,12 @@ test('CDP identity rejects foreign and exposed listeners', () => {
 test('target host launches and verifies a browser-level CDP endpoint', async (context) => {
     if (process.platform !== 'win32') return context.skip('Windows process ownership smoke test');
     const fixture = fileURLToPath(new URL('./fixtures/fake-cdp-target.ts', import.meta.url));
-    const command = `"${process.execPath}" "${fixture}" --remote-debugging-port={port}`;
     const host = createTargetHost();
-    const target = await host.launch({ launchCommand: command, targetKind: 'generic-cdp', basePort: 19000 });
+    const target = await host.launch({
+        launch: { executable: process.execPath, args: [fixture, '--remote-debugging-port={port}'] },
+        targetKind: 'generic-cdp',
+        basePort: 19000,
+    });
     context.after(() => process.kill(target.processId, 'SIGTERM'));
     assert.equal(target.port >= 19000, true);
     assert.equal(target.browserProduct, 'Chrome/153.0.0.0');
@@ -322,13 +251,13 @@ function hostFixture({ endpointFailure = false, closeSucceeds = true, race = fal
 
 test('target startup failure normally closes only its newly launched process', async () => {
     const { host, closed } = hostFixture({ endpointFailure: true });
-    await assert.rejects(host.launch({ launchCommand: `"${process.execPath}"`, basePort: 9222 }), /CDP/);
+    await assert.rejects(host.launch({ launch: { executable: process.execPath }, basePort: 9222 }), /CDP/);
     assert.deepEqual(closed, [9222]);
 });
 
 test('a verified released-probe port race closes the new process before advancing', async () => {
     const { host, closed, launched } = hostFixture({ race: true });
-    const target = await host.launch({ launchCommand: `"${process.execPath}"`, basePort: 9222 });
+    const target = await host.launch({ launch: { executable: process.execPath }, basePort: 9222 });
     assert.equal(target.port, 9223);
     assert.deepEqual(launched, [9222, 9223]);
     assert.deepEqual(closed, [9222]);
@@ -336,7 +265,7 @@ test('a verified released-probe port race closes the new process before advancin
 
 test('startup cleanup failure reports the retained process and does not retry', async () => {
     const { host, launched } = hostFixture({ endpointFailure: true, closeSucceeds: false });
-    await assert.rejects(host.launch({ launchCommand: `"${process.execPath}"`, basePort: 9222 }), (error) => {
+    await assert.rejects(host.launch({ launch: { executable: process.execPath }, basePort: 9222 }), (error) => {
         assert.ok(error instanceof DetailedError && isRecord(error.details));
         assert.equal(error.details.processId, 42);
         assert.equal(error.details.port, 9222);
@@ -356,22 +285,6 @@ test('Chrome rejects every duplicate or non-loopback debugging address before la
     ])
         assert.throws(() => applyChromePreset(arguments_), /loopback|Duplicate/);
     assert.ok(applyChromePreset(['--remote-debugging-address', '127.0.0.1']).includes('127.0.0.1'));
-});
-
-test('per-entry IPC rejects a second live controller without replacing the first', async (context) => {
-    const endpoint =
-        process.platform === 'win32' ? `\\\\.\\pipe\\dct-unique-${process.pid}` : `/tmp/dct-unique-${process.pid}.sock`;
-    const controller: ControlHandler = {
-        status: () => ({ entryId, connections: [] }),
-        start: async () => ({ entryId, connectionId, status: 'idle' }),
-        restart: async () => ({ entryId, connectionId, status: 'idle' }),
-        endTask: async () => ({ entryId, connectionId, status: 'idle' }),
-        stop: async () => ({ entryId, connectionId, status: 'idle' }),
-    };
-    const first = await createControlServer({ controller, entryId, endpoint });
-    context.after(() => first.close());
-    await assert.rejects(createControlServer({ controller, entryId, endpoint }), /already active|EADDRINUSE/);
-    assert.equal((await sendControlRequest(endpoint, { action: 'status', entryId })).ok, true);
 });
 
 test('official server receives a stable browser URL and privacy-safe defaults', () => {
@@ -398,130 +311,6 @@ test('official server switches require explicit boolean environment overrides', 
         ],
     );
     assert.throws(() => buildServerArguments('http://127.0.0.1:30000', { DCT_EXTENSIONS: 'yes' }), /boolean/i);
-});
-
-test('local control IPC dispatches management commands without writing a session file', async (context) => {
-    const received: LaunchOptions[] = [];
-    const controller: ControlHandler = {
-        status: () => ({ entryId, connections: [] }),
-        start: async (options) => {
-            received.push(options);
-            return {
-                entryId,
-                connectionId,
-                sessionId,
-                status: 'active',
-                port: 9222,
-                processId: 42,
-                targetKind: 'generic-cdp',
-            };
-        },
-        restart: async () => ({
-            entryId,
-            connectionId,
-            sessionId,
-            status: 'active',
-            port: 9223,
-            processId: 43,
-            targetKind: 'generic-cdp',
-        }),
-        endTask: async () => ({ entryId, connectionId, status: 'idle' }),
-        stop: async () => ({ entryId, connectionId, status: 'idle' }),
-    };
-    const endpoint =
-        process.platform === 'win32'
-            ? `\\\\.\\pipe\\dct-test-${process.pid}`
-            : path.join(process.env.TMPDIR ?? '/tmp', `dct-test-${process.pid}.sock`);
-    const server = await createControlServer({ controller, entryId, endpoint });
-    context.after(() => server.close());
-    assert.deepEqual(await sendControlRequest(endpoint, { action: 'status', entryId }), {
-        ok: true,
-        result: { entryId, connections: [] },
-    });
-    assert.deepEqual(await sendControlRequest(endpoint, { action: 'start', entryId, launchCommand: 'chrome' }), {
-        ok: true,
-        result: {
-            entryId,
-            connectionId,
-            sessionId,
-            status: 'active',
-            port: 9222,
-            processId: 42,
-            targetKind: 'generic-cdp',
-        },
-    });
-    assert.deepEqual(received, [{ launchCommand: 'chrome' }]);
-    assert.equal((await sendControlRequest(endpoint, { action: 'resume', entryId })).ok, false);
-});
-
-test('public control parser requires entry identity and explicit session disposition', () => {
-    assert.deepEqual(
-        parseControlArguments([
-            'start',
-            '--entry-id',
-            entryId,
-            '--launch-command',
-            'chrome',
-            '--target-kind',
-            'chrome',
-        ]),
-        {
-            action: 'start',
-            entryId,
-            launchCommand: 'chrome',
-            targetKind: 'chrome',
-        },
-    );
-    assert.deepEqual(
-        parseControlArguments([
-            'stop',
-            '--entry-id',
-            entryId,
-            '--connection-id',
-            connectionId,
-            '--session-id',
-            sessionId,
-            '--disposition',
-            'Keep',
-        ]),
-        {
-            action: 'stop',
-            entryId,
-            connectionId,
-            sessionId,
-            disposition: 'Keep',
-        },
-    );
-    assert.throws(() => parseControlArguments(['invoke', '--', 'list_pages']), /unknown/i);
-    assert.throws(() => parseControlArguments(['resume']), /unknown/i);
-    assert.throws(() => parseControlArguments(['switch', '--launch-command', 'chrome']), /unknown/i);
-    assert.throws(
-        () =>
-            parseControlArguments([
-                'start',
-                '--entry-id',
-                entryId,
-                '--launch-command',
-                'one',
-                '--launch-command',
-                'two',
-            ]),
-        /Duplicate/,
-    );
-});
-
-test('control entry rejects invalid grammar before contacting any user MCP connection', () => {
-    const entry = fileURLToPath(new URL('../src/interface/control.ts', import.meta.url));
-    const result = spawnSync(process.execPath, [entry, 'invalid-action'], {
-        encoding: 'utf8',
-        windowsHide: true,
-        shell: false,
-    });
-    assert.equal(result.status, 1);
-    assert.deepEqual(JSON.parse(result.stdout), {
-        ok: false,
-        error: 'Unknown action. Use status, start, restart, stop, or end-task.',
-    });
 });
 
 test('controller normal Close pauses routing and preserves identity on failure; busy Close does not signal', async () => {
@@ -558,7 +347,7 @@ test('controller normal Close pauses routing and preserves identity on failure; 
             },
         },
     });
-    const active = await controller.start({ launchCommand: 'fixture' });
+    const active = await controller.start({ launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     busy = true;
     await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), /busy/i);
@@ -594,7 +383,7 @@ test('controller route attachment failure normally closes only the newly launche
         },
         server: { ensure: async () => {}, close: async () => {} },
     });
-    await assert.rejects(controller.start({ launchCommand: 'fixture' }), /route failed/);
+    await assert.rejects(controller.start({ launch: { executable: 'fixture' } }), /route failed/);
     assert.deepEqual(closed, [42]);
     assert.equal(controller.status().status, 'idle');
 });

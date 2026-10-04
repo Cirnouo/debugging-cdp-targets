@@ -4,8 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ManagedTarget, ProcessTarget } from '../domains/cdp-target.ts';
 import { choosePort, RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
-import type { LaunchOptions } from '../domains/control-contract.ts';
-import { parseLaunchCommand } from '../domains/launch-command.ts';
+import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
+import { resolveLaunchDefinition } from '../domains/launch-command.ts';
 import {
     DEFAULT_BASE_PORT,
     LOOPBACK,
@@ -13,10 +13,11 @@ import {
     STARTUP_TIMEOUT_MS,
     TARGET_KINDS,
 } from '../shared/constants.ts';
-import { DetailedError, errorCode, errorMessage } from '../shared/errors.ts';
+import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 import { chromeProfileArgument, profileAvailable, reserveProfile } from './chrome-profile.ts';
 import type { PlatformAdapter } from './platform-process.ts';
 import { createPlatformAdapter, validateProcessIdentity } from './platform-process.ts';
+import { createWindowsLauncher } from './windows-launch.ts';
 
 async function probeAddress(port: number, host: string): Promise<boolean | null> {
     const server = net.createServer();
@@ -41,13 +42,20 @@ export async function probePort(port: number) {
     return ipv4 === true && ipv6 !== false;
 }
 
-async function spawn(executable: string, arguments_: string[], _port: number, cwd = path.dirname(executable)) {
+export async function spawnPortableApplication(
+    executable: string,
+    arguments_: string[],
+    _port: number,
+    cwd = path.dirname(executable),
+    env?: NodeJS.ProcessEnv,
+) {
     const child = nodeSpawn(executable, arguments_, {
         cwd,
         detached: true,
         stdio: 'ignore',
         windowsHide: false,
         shell: false,
+        env,
     });
     await new Promise<void>((resolve, reject) => {
         child.once('spawn', resolve);
@@ -86,11 +94,22 @@ export function applyChromePreset(arguments_: string[]) {
     return result;
 }
 
-type LaunchProcess = NonNullable<ManagedTarget['child']> & { exitCode: number | null; pid?: number | undefined };
+type LaunchProcess = NonNullable<ManagedTarget['child']> & {
+    exitCode: number | null;
+    pid?: number | undefined;
+    startedAtUtc?: string;
+};
 export interface HostDependencies {
     platformAdapter?: PlatformAdapter;
     probe?: (port: number) => Promise<boolean>;
-    spawn?: (executable: string, arguments_: string[], port: number, cwd?: string) => Promise<LaunchProcess>;
+    spawn?: (
+        executable: string,
+        arguments_: string[],
+        port: number,
+        cwd?: string,
+        env?: NodeJS.ProcessEnv,
+        context?: LaunchContext,
+    ) => Promise<LaunchProcess>;
     getVersion?: (port: number) => Promise<unknown>;
     now?: () => number;
     sleep?: (ms: number) => Promise<void>;
@@ -98,9 +117,33 @@ export interface HostDependencies {
 }
 export function createTargetHost(dependencies: HostDependencies = {}) {
     const platform = dependencies.platformAdapter ?? createPlatformAdapter();
+    const launchWindows = createWindowsLauncher();
     const io = {
         probe: probePort,
-        spawn,
+        spawn:
+            process.platform === 'win32'
+                ? (
+                      executablePath: string,
+                      arguments_: string[],
+                      _port: number,
+                      cwd: string,
+                      env: NodeJS.ProcessEnv,
+                      context: LaunchContext,
+                  ) =>
+                      launchWindows.launch(
+                          {
+                              executablePath,
+                              arguments: arguments_,
+                              cwd,
+                              env: Object.fromEntries(
+                                  Object.entries(env).filter(
+                                      (entry): entry is [string, string] => entry[1] !== undefined,
+                                  ),
+                              ),
+                          },
+                          context,
+                      )
+                : spawnPortableApplication,
         getVersion,
         now: Date.now,
         sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -108,13 +151,17 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         ...dependencies,
     };
     return {
-        async launch({
-            launchCommand,
-            targetKind = 'generic-cdp',
-            basePort = DEFAULT_BASE_PORT,
-            exactPort,
-            launchDefinition,
-        }: LaunchOptions): Promise<ManagedTarget> {
+        async launch(
+            {
+                launch,
+                targetKind = 'generic-cdp',
+                basePort = DEFAULT_BASE_PORT,
+                exactPort,
+                launchDefinition,
+            }: LaunchOptions,
+            context: LaunchContext = {},
+        ): Promise<ManagedTarget> {
+            context.signal?.throwIfAborted();
             if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
             const excluded = await platform.reservedRanges();
             if (
@@ -130,23 +177,29 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
             while (candidate <= 65535) {
                 const port =
                     exactPort ?? (await choosePort({ basePort: candidate, reservedRanges: excluded, probe: io.probe }));
-                const parsed = launchDefinition
-                    ? { executable: launchDefinition.executablePath, arguments: [...launchDefinition.arguments] }
-                    : parseLaunchCommand({ template: launchCommand, port, environment: process.env });
-                if (!path.isAbsolute(parsed.executable))
-                    throw new Error('The launch command must use an absolute executable path.');
-                const executablePath = path.resolve(parsed.executable);
+                context.signal?.throwIfAborted();
+                const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env);
+                if (!path.isAbsolute(parsed.executablePath))
+                    throw new Error('The application must use an absolute executable path.');
+                const executablePath = path.resolve(parsed.executablePath);
                 const args = targetKind === 'chrome' ? applyChromePreset(parsed.arguments) : parsed.arguments;
-                const cwd = launchDefinition?.cwd ?? path.dirname(executablePath);
+                const cwd = parsed.cwd ?? path.dirname(executablePath);
+                if (!path.isAbsolute(cwd)) throw new Error('The application working directory must be absolute.');
+                const environment = new Map<string, [string, string | undefined]>();
+                for (const [name, value] of [...Object.entries(process.env), ...Object.entries(parsed.env ?? {})])
+                    environment.set(process.platform === 'win32' ? name.toLowerCase() : name, [name, value]);
+                const env = Object.fromEntries(environment.values());
                 const profile = targetKind === 'chrome' ? chromeProfileArgument(args) : undefined;
                 const release =
                     profile === undefined
                         ? undefined
                         : await reserveProfile(path.resolve(cwd, profile), io.profileAvailable);
-                const launchedAt = io.now();
+                const requestedAt = io.now();
+                context.onPhase?.('launching');
                 let child: LaunchProcess;
                 try {
-                    child = await io.spawn(executablePath, args, port, cwd);
+                    context.signal?.throwIfAborted();
+                    child = await io.spawn(executablePath, args, port, cwd, env, context);
                     if (child.pid === undefined) throw new Error('The target process has no PID.');
                 } catch (error) {
                     release?.();
@@ -169,15 +222,22 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     port,
                     processId,
                     executablePath,
-                    startedAtUtc: new Date(launchedAt).toISOString(),
+                    startedAtUtc: child.startedAtUtc ?? new Date(requestedAt).toISOString(),
                     targetKind,
                     child,
                     ...(release ? { releaseProfile } : {}),
                 };
                 let lastError: unknown;
                 let foreignRace = false;
+                const launchedAt = io.now();
+                context.onPhase?.('waiting-cdp');
                 while (io.now() - launchedAt < STARTUP_TIMEOUT_MS) {
                     try {
+                        context.signal?.throwIfAborted();
+                        if (child.monitoringFailure)
+                            throw new Error(
+                                'The native process observer failed; retaining application identity for cleanup.',
+                            );
                         const evidence = await platform.snapshot(child.pid, port);
                         platform.validateNewRoot(evidence, target);
                         if (!evidence.root.exists) throw new Error('The target root process is absent.');
@@ -195,6 +255,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             break;
                         }
                         const endpoint = await io.getVersion(port);
+                        context.signal?.throwIfAborted();
                         const identity = validateCdpIdentity({
                             endpoint,
                             port,
@@ -205,7 +266,12 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         return {
                             ...target,
                             ...identity,
-                            launchDefinition: { executablePath, arguments: args, cwd },
+                            launchDefinition: {
+                                executablePath,
+                                arguments: args,
+                                cwd,
+                                ...(parsed.env ? { env: { ...parsed.env } } : {}),
+                            },
                             async verify() {
                                 const current = await platform.snapshot(processId, port);
                                 validateProcessIdentity(current, target);
@@ -227,6 +293,8 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     } catch (error) {
                         lastError = error;
                         if (
+                            context.signal?.aborted ||
+                            child.monitoringFailure ||
                             child.exitCode !== null ||
                             typeof child.signalCode === 'string' ||
                             /exposed|identity|Google Chrome|PID/.test(errorMessage(error))
@@ -236,12 +304,17 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     }
                 }
                 let closeConfirmed = false;
+                let cleanupError: unknown;
                 try {
                     closeConfirmed = await platform.close(target, { requireListener: false });
-                } catch {
-                    /* Keep PID/port evidence for manual recovery. */
+                } catch (error) {
+                    cleanupError = error;
                 }
-                if (closeConfirmed) releaseProfile?.();
+                if (closeConfirmed) {
+                    releaseProfile?.();
+                    child.disposeMonitor?.();
+                }
+                if (closeConfirmed && context.signal?.aborted) throw context.signal.reason;
                 if (foreignRace && closeConfirmed && exactPort === undefined) {
                     candidate = port + 1;
                     continue;
@@ -251,16 +324,24 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     ? new DetailedError(message)
                     : new RetainedTargetError(message, {
                           ...target,
-                          launchDefinition: { executablePath, arguments: args, cwd },
+                          launchDefinition: {
+                              executablePath,
+                              arguments: args,
+                              cwd,
+                              ...(parsed.env ? { env: { ...parsed.env } } : {}),
+                          },
                       });
-                error.details = { processId: child.pid, port, closeConfirmed };
+                error.details = { processId: child.pid, port, closeConfirmed, ...errorDetails(cleanupError) };
                 throw error;
             }
             throw new Error('The CDP port range is exhausted.');
         },
         async close(target: ManagedTarget, options?: { requireListener?: boolean }) {
             const closed = await platform.close(target, options);
-            if (closed) target.releaseProfile?.();
+            if (closed) {
+                target.releaseProfile?.();
+                target.child?.disposeMonitor?.();
+            }
             return closed;
         },
         async health(target: ManagedTarget): Promise<'healthy' | 'gone' | 'unavailable' | 'identity-changed'> {

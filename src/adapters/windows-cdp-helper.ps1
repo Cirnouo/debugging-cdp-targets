@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Snapshot', 'Close')]
+    [ValidateSet('Snapshot')]
     [string] $Action,
 
     [Parameter(Mandatory = $true)]
@@ -9,17 +9,12 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateRange(1, 65535)]
-    [int] $Port,
-    [string] $ExecutablePath,
-    [string] $StartedAtUtc,
-    [ValidateSet('OwnedExclusive', 'ProcessIdentityOnly')]
-    [string] $ListenerPolicy = 'OwnedExclusive',
-    [ValidateRange(1, 300)]
-    [int] $TimeoutSeconds = 10
+    [int] $Port
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 
 function Write-Result {
     param([Parameter(Mandatory = $true)] [hashtable] $Value)
@@ -59,27 +54,9 @@ function Get-ProcessTreeIds {
     return @($accepted.Keys)
 }
 
-function Test-PortHasListener {
-    param([Parameter(Mandatory = $true)] [int] $LocalPort)
-    return @(
-        Get-NetTCPConnection -ErrorAction Stop |
-            Where-Object { $_.State -eq 'Listen' -and [int] $_.LocalPort -eq $LocalPort }
-    ).Count -gt 0
-}
-
-function Test-OwnedPortListener {
-    param(
-        [Parameter(Mandatory = $true)] [int] $LocalPort,
-        [Parameter(Mandatory = $true)] [int[]] $OwnedProcessIds
-    )
-    return @(
-        Get-NetTCPConnection -ErrorAction Stop |
-            Where-Object { $_.State -eq 'Listen' -and [int] $_.LocalPort -eq $LocalPort } |
-            Where-Object { [int] $_.OwningProcess -in $OwnedProcessIds }
-    ).Count -gt 0
-}
 
 try {
+    Add-Type -Path (Join-Path $PSScriptRoot 'windows-native-process.cs') -ReferencedAssemblies 'System.dll', 'System.Core.dll', 'System.Xml.dll'
     $currentSessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
     $root = Get-Process -ErrorAction Stop | Where-Object { $_.Id -eq $RootProcessId }
 
@@ -87,15 +64,23 @@ try {
         $rootData = [ordered]@{ exists = $false }
         $processIds = @()
         if ($null -ne $root) {
-            $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo([string] $root.Path)
-            $rootData = [ordered]@{
-                exists = $true
-                executablePath = [string] $root.Path
-                sessionId = [int] $root.SessionId
-                startedAtUtc = $root.StartTime.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
-                productName = [string] $versionInfo.ProductName
-                companyName = [string] $versionInfo.CompanyName
-                originalFilename = [string] $versionInfo.OriginalFilename
+            # Process.Path uses MainModule/VM_READ on Windows PowerShell. A normal
+            # gateway instead queries path/time through a limited-query handle.
+            $identity = [DctNative]::Inspect($RootProcessId)
+            try {
+                $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($identity.ExecutablePath)
+                $rootData = [ordered]@{
+                    exists = $true
+                    executablePath = $identity.ExecutablePath
+                    sessionId = [int] $root.SessionId
+                    startedAtUtc = $identity.StartedAtUtc
+                    productName = [string] $versionInfo.ProductName
+                    companyName = [string] $versionInfo.CompanyName
+                    originalFilename = [string] $versionInfo.OriginalFilename
+                }
+            }
+            finally {
+                $identity.Dispose()
             }
             $processIds = @(Get-ProcessTreeIds -RootId $RootProcessId)
         }
@@ -121,78 +106,13 @@ try {
         exit 0
     }
 
-    if ($null -eq $root) {
-        $listenerPresent = Test-PortHasListener -LocalPort $Port
-        Write-Result ([ordered]@{
-            ok = $true
-            closed = if ($ListenerPolicy -eq 'ProcessIdentityOnly') { $true } else { -not $listenerPresent }
-            rootProcessId = $RootProcessId
-            reason = if ($ListenerPolicy -eq 'ProcessIdentityOnly') { 'root-absent' } elseif ($listenerPresent) { 'listener-present' } else { 'root-and-listener-absent' }
-        })
-        exit 0
-    }
-    $expectedPath = [IO.Path]::GetFullPath($ExecutablePath)
-    $actualPath = [IO.Path]::GetFullPath([string] $root.Path)
-    $recordedStart = [DateTime]::Parse(
-        $StartedAtUtc,
-        [Globalization.CultureInfo]::InvariantCulture,
-        [Globalization.DateTimeStyles]::AssumeUniversal
-    ).ToUniversalTime()
-    $actualStart = $root.StartTime.ToUniversalTime()
-    $identityMatches = $actualPath.Equals($expectedPath, [StringComparison]::OrdinalIgnoreCase) -and
-        $root.SessionId -eq $currentSessionId -and
-        [Math]::Abs(($actualStart - $recordedStart).TotalMilliseconds) -le 1000
-    if (-not $identityMatches) {
-        Write-Result ([ordered]@{
-            ok = $false
-            errorCode = 'TARGET_IDENTITY_MISMATCH'
-            message = 'The process no longer matches the recorded executable, start time, or Windows session.'
-        })
-        exit 1
-    }
 
-    $ownedProcessIds = @(Get-ProcessTreeIds -RootId $RootProcessId)
-    $currentListeners = @(
-        Get-NetTCPConnection -ErrorAction Stop |
-            Where-Object { $_.State -eq 'Listen' -and [int] $_.LocalPort -eq $Port }
-    )
-    $ownedListenerPresent = @(
-        $currentListeners | Where-Object { [int] $_.OwningProcess -in $ownedProcessIds }
-    ).Count -gt 0
-    $foreignListenerPresent = @(
-        $currentListeners | Where-Object { [int] $_.OwningProcess -notin $ownedProcessIds }
-    ).Count -gt 0
-    if ($ListenerPolicy -eq 'OwnedExclusive' -and (-not $ownedListenerPresent -or $foreignListenerPresent)) {
-        Write-Result ([ordered]@{
-            ok = $false
-            errorCode = 'TARGET_IDENTITY_MISMATCH'
-            message = 'The CDP listener is no longer owned exclusively by the recorded process tree.'
-        })
-        exit 1
-    }
-    [void] $root.CloseMainWindow()
-    $closed = $root.WaitForExit($TimeoutSeconds * 1000)
-    $listenerRemains = if ($ListenerPolicy -eq 'OwnedExclusive') {
-        Test-PortHasListener -LocalPort $Port
-    } else {
-        Test-OwnedPortListener -LocalPort $Port -OwnedProcessIds $ownedProcessIds
-    }
-    if ($closed -and $listenerRemains) {
-        $closed = $false
-    }
-    Write-Result ([ordered]@{
-        ok = $true
-        closed = [bool] $closed
-        rootProcessId = $RootProcessId
-        reason = if ($closed) { 'root-and-listener-closed' } else { 'listener-present' }
-    })
-    exit 0
 }
 catch {
     Write-Result ([ordered]@{
         ok = $false
         errorCode = 'WINDOWS_HELPER_FAILED'
-        message = $_.Exception.Message
+        message = 'Windows process identity or listener inspection failed.'
     })
     exit 1
 }

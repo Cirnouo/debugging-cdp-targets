@@ -8,89 +8,113 @@ metadata:
 
 # Debugging CDP targets
 
-Use the cdp-targets MCP gateway. Call `dct_connection_status` with `{}` first:
-it returns entryId and connections. Each new target gets its own connectionId,
-official MCP and sessionId. There is no fixed connection limit or implicit
-current target. Only newly launched, verified targets are managed; never attach
-to existing applications. All identities and launch settings stay in memory.
+Use the cdp-targets MCP gateway. Start with `dct_connection_status({})` to
+discover entryId and connections. Each newly launched target has independent
+connectionId, sessionId and official MCP. Never attach to an existing application.
+A framework name alone does not establish browser-level CDP compatibility.
 
-Resolve the Plugin root two parents above this file's containing directory.
-Run `node <plugin-root>/dist/control.mjs <action>`. Actions are status, start,
-restart, stop and end-task. Every command requires --entry-id.
-Status optionally accepts --connection-id and prohibits --session-id.
-Start creates a new connection and prohibits connection/session identity.
-Restart/end-task/stop require --connection-id and --session-id in addition to
-entry identity. Only stop accepts --disposition. Obtain IDs from status/results,
-never from the static gateway name. Launch a new target with:
+## Start and wait
 
-```powershell
-node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
-```
-
-Commands parse argv without a shell. `{port}` selects an available non-reserved
-port; missing Chromium port options are appended. Chrome uses a dedicated
-fixed profile at <user-home>/.cache/chrome-devtools-mcp/chrome-profile unless
---user-data-dir overrides it. Occupied or unverifiable directories fail before
-launch; explicitly choose another available dedicated directory.
-Use --target-kind generic-cdp only for applications explicitly supporting
-command-line debugging and browser-level CDP; a framework name alone does not
-establish compatibility. Never reuse a profile locked by another target.
-
-Every official tool call requires `_dct: { connectionId, sessionId }` using the
-target's current IDs. This is routing metadata: the gateway removes it before
-forwarding original parameters and preserves official tool names and results.
-Never substitute a DevTools CLI, custom inspection tool or generic invoke action.
-For example, call official list_pages for target A with:
+Call `dct_connection_start` with a fresh requestId and structured launch.
+For a known CDP application, adapt this example to its documented debugging
+argument or environment setting:
 
 ```json
-{ "_dct": { "connectionId": "<A-connection-uuid>", "sessionId": "<A-session-uuid>" } }
+{
+    "entryId": "<entry-uuid>",
+    "requestId": "launch-reader-1",
+    "targetKind": "generic-cdp",
+    "launch": {
+        "executable": "C:/Apps/Reader/reader.exe",
+        "args": [],
+        "cwd": "C:/Work",
+        "env": { "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS": "--remote-debugging-port={port}" }
+    },
+    "mcpArgs": ["--workspace", "C:/Work"]
+}
 ```
 
-Calls for target B use B's IDs and can run concurrently. After start or recovery,
-refresh status, discard old page IDs and call list_pages with the current route
-for fresh URL/title evidence. Recovery keeps connectionId but replaces sessionId.
-Old sessions and closed connections are rejected. Extension tools require
-verified Google Chrome 149 or newer. Usage statistics and CrUX default to off.
+The plugin detects Windows elevation requirements and launches the actual app
+with its arguments, cwd and environment. Windows controls authorization prompts.
+Use this native capability; Agents need no registry inspection, privilege
+diagnosis, startup wrapper or launch script.
 
-The gateway observes process exit automatically from launch. Start/restart and
-official use activate dependent work; Keep and end-task end it.
-Reusing a live kept target automatically resumes monitoring
-for its new task. Empty status calls are read-only; hookEventName is reserved
-for packaged automatic Codex Hooks, never an Agent monitoring request.
+Start returns an operationId immediately. Call `dct_operation_wait` with
+`{ "entryId": "<entry-uuid>", "operationId": "<operation-uuid>", "cursor": 0 }`,
+then use its returned cursor until complete. Its bounded event wait
+chooses the waiting interval. A cancelled wait leaves the operation running;
+`dct_operation_cancel` explicitly cancels it and reports cleanup or retained
+identity. Retrying the same requestId and identical input returns the same
+operation; a new intent needs a new requestId.
 
-Enable Codex Hooks and review/trust this plugin's four definitions through the
-standard Codex flow. Installation does not grant trust. See
-[Codex Hooks](https://learn.chatgpt.com/docs/hooks). Without pending exit events,
-Hooks add no context. An active task's unexpected exit queues one reminder with target
-kind, PID, port and entry/connection/session identities. Delivery occurs at a
-tool boundary or before the turn ends; idle chats receive it next turn.
+Use `targetKind: "chrome"` for Chrome. It uses a dedicated fixed debugging
+profile; choose an explicit unused `--user-data-dir` for concurrent Chrome
+targets. `{port}` works in args and env; never reuse occupied profiles or ports.
 
-On a process-exited reminder, ask the user whether to restart or end dependent
-work. Keep other targets usable. Never automatically restart or replay tools.
-If authorized to restart, run restart with all three IDs and the event's old
-session. Recovery retains original argv/cwd/profile/port, rejects an occupied
-port, returns a new session and invalidates page IDs. Refresh status and
-list_pages before resuming. If work should end, apply the user's Close/Keep
-choice to that connection. A CDP/upstream error while the process lives requires
-inspection of the connection error; it does not prove the process exited.
+## Tool availability and routing
 
-Before ending or abandoning a target's task, ask **Close** or **Keep**, with no
-default. Keep retains a live target and official MCP for later work in the same chat.
-If it exits after Keep/end-task, the gateway silently closes that upstream and
-removes only that connection; reuse its identities only while still present.
-Close normally shuts down both and removes only that connection; the gateway
-and other connections remain available. Use stop with all identities:
+The global catalog is the complete official catalog, not the enabled tools of
+every connection. Start/wait/status report actual enabledTools. Query
+`dct_connection_status` with entryId, connectionId and
+`toolNames: ["click_at", "evaluate_script"]` for exact input schemas and conditions.
+Before launch, omit connectionId to query configuration requirements.
 
-```powershell
-node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid> --disposition Close
+For example, click_at needs experimentalVision=true with its other conditions.
+TOOL_NOT_ENABLED includes missing conditions and complete suggestedMcpArgs.
+Use those only in an explicitly authorized start/restart; the gateway never
+silently enables tools. Slim connections retain their actual slim tool names;
+the global catalog remains full. Working directory does not grant file access:
+use official `--workspace` directories and inspect status workspace sources.
+
+Every official call needs `_dct: { connectionId, sessionId }`. The gateway
+removes only this routing field and preserves original arguments/results.
+After start/restart, obtain fresh page IDs with list_pages for that route.
+For a default connection's page, evaluate_script uses:
+
+```json
+{
+    "_dct": { "connectionId": "<connection-uuid>", "sessionId": "<session-uuid>" },
+    "pageId": 1,
+    "function": "() => document.title"
+}
 ```
 
-Failed close reports retained identity/PID/port for retry; never force-kill.
-Keep leaves CDP reachable by local processes. Creating another target does not
-end existing tasks or dispose their connections. Handled gateway disconnect
-attempts normal cleanup for every connection; forced termination cannot guarantee
-cleanup. Report unverifiable remnants without taking over their processes.
+Use the selected connection's exact schema. For default navigate_page, navigation
+uses type="url" and url plus its pageId; do not copy parameters between differently
+named official tools or configuration variants.
 
-Common mistakes: omitting _dct, using another target's IDs, reusing session/page
-IDs after recovery, treating Keep as an MCP disconnect, silently changing a busy
-recovery port, or assuming window disappearance authorizes restart.
+## Errors, native dialogs and task completion
+
+CONNECTION_RECOVERY_REQUIRED means the affected upstream is isolated after
+timeout/cancellation. Preserve reported identities; explicitly restart or Close
+when authorized. Never automatically restart, replay tools, extend timeouts or
+add a screenshot preflight/foreground checklist.
+
+A Windows file picker is a native window. Locate it by the managed application's
+identity and handle that existing dialog with available native UI capabilities.
+If those capabilities are unavailable, ask the user to handle it. After cancellation,
+stop repeating the import action. Official handle_dialog handles page JavaScript
+dialogs, not Windows file pickers.
+
+Before ending a target's work, obtain **Close** or **Keep** with no default, unless
+the user has already supplied that choice. `dct_connection_stop` takes entryId,
+connectionId, sessionId, requestId and disposition. Keep retains app/upstream;
+The disposition values are exactly `"Close"` and `"Keep"`.
+Close requests normal shutdown and reports detailed retained identity on failure.
+Never force-kill. `dct_connection_end_task` ends work while retaining a live target.
+
+`dct_connection_restart` requires entryId, connectionId, sessionId and requestId;
+optional mcpArgs explicitly replaces configuration. It preserves the connection
+and original port, creates a new session, and invalidates old page IDs.
+Old operations cannot cancel a later session.
+
+Trusted Codex Hooks deliver operation results, connection errors and active-task
+exit reminders at task boundaries. Enable/review the four definitions through
+the standard Codex trust flow. Idle chats receive events next turn; they are not
+woken automatically. A process-exited reminder asks whether to restart or end
+dependent work. Keep other connections usable. hookEventName is reserved for
+automatic Hooks. All runtime identities and operation queues stay in memory.
+
+If these lifecycle tools are absent, report a plugin/runtime version mismatch.
+Use an updated plugin in a new chat once installation is authorized; do not
+invent tool fields or fall back to a launch script.

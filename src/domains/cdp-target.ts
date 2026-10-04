@@ -1,6 +1,7 @@
 import { DEFAULT_BASE_PORT, FIRST_USER_PORT, MAX_PORT } from '../shared/constants.ts';
 import { DetailedError, isRecord } from '../shared/errors.ts';
 import type { TargetKind } from './control-contract.ts';
+import type { LaunchDefinition } from './launch-command.ts';
 
 export type PortRange = readonly [number, number];
 export interface ListenerEvidence {
@@ -31,7 +32,7 @@ export interface ProcessEvidence {
     listeners: ListenerEvidence[];
 }
 export interface ManagedTarget extends ProcessTarget {
-    launchDefinition?: { executablePath: string; arguments: string[]; cwd: string };
+    launchDefinition?: LaunchDefinition;
     browserProduct?: string;
     webSocketDebuggerUrl?: string;
     verify?: () => Promise<void>;
@@ -39,6 +40,9 @@ export interface ManagedTarget extends ProcessTarget {
     child?: {
         exitCode?: number | null;
         signalCode?: string | null;
+        monitoringFailure?: string;
+        onMonitorError?(listener: () => void): () => void;
+        disposeMonitor?(): void;
         once(event: 'exit', listener: () => void): unknown;
         off?(event: 'exit', listener: () => void): unknown;
     };

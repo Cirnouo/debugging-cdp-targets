@@ -66,7 +66,7 @@ export function validateRuntimeSource(file: string, source: string) {
     }
     const layer = file.split('/')[1];
     const domain = layer === 'domains';
-    const entry = ['src/interface/control.ts', 'src/interface/mcp-bootstrap.ts'].includes(file);
+    const entry = file === 'src/interface/mcp-bootstrap.ts';
     function dependency(specifier: unknown) {
         if (typeof specifier !== 'string') {
             errors.push(`${file}: computed module dependencies are prohibited.`);

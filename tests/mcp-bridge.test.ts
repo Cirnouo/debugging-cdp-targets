@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
-import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
+import { createOfficialConnection, interruptedOfficialCall } from '../src/adapters/mcp-bridge.ts';
 import { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
@@ -51,6 +51,7 @@ server.setRequestHandler('tools/call', async (request, ctx) => {
         return { content: [], structuredContent: { result } };
     }
     if (request.params.arguments?.exit) process.exit(0);
+    if (request.params.arguments?.ignoreCancel) await new Promise(() => {});
     if (request.params.arguments?.wait) {
         await new Promise((resolve) => ctx.mcpReq.signal.addEventListener('abort', resolve, { once: true }));
         return { content: [{ type: 'text', text: 'cancelled' }] };
@@ -83,6 +84,32 @@ test('update-check suppression is set only in the independent official child env
         await fixture.cleanup();
         if (previous === undefined) delete process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS;
         else process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS = previous;
+    }
+});
+
+test('real SDK timeout and cancellation are identified even when an upstream handler ignores cancellation', async () => {
+    const fixture = await fakeOfficial();
+    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+        bin: fixture.bin,
+        args: [],
+        requestTimeoutMs: 40,
+    });
+    try {
+        await assert.rejects(connection.call('echo', { ignoreCancel: true }), (error) => {
+            assert.equal(interruptedOfficialCall(error), 'upstream-timeout');
+            return true;
+        });
+        const abort = new AbortController();
+        const pending = connection.call('echo', { ignoreCancel: true }, abort.signal);
+        abort.abort(new Error('Cancelled by client'));
+        await assert.rejects(pending, (error) => {
+            assert.equal(interruptedOfficialCall(error, abort.signal), 'upstream-cancelled');
+            return true;
+        });
+        assert.equal(interruptedOfficialCall(new Error('Request timed out')), undefined);
+    } finally {
+        await connection.close();
+        await fixture.cleanup();
     }
 });
 
@@ -452,7 +479,13 @@ test('official catalog rejects reserved routing collisions and malformed tool ro
             false,
         );
         const status = tools.find((tool) => tool.name === 'dct_connection_status');
-        assert.deepEqual(Object.keys(status?.inputSchema.properties ?? {}), ['hookEventName']);
+        assert.deepEqual(Object.keys(status?.inputSchema.properties ?? {}), [
+            'entryId',
+            'connectionId',
+            'operationId',
+            'toolNames',
+            'hookEventName',
+        ]);
         for (const hookEventName of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'])
             assert.deepEqual(
                 (await client.callTool({ name: 'dct_connection_status', arguments: { hookEventName } }))

@@ -45,14 +45,17 @@ function fixture({ busy = false, race = false } = {}) {
 
 test('exact-port recovery rejects a busy original port without spawning or advancing', async () => {
     const f = fixture({ busy: true });
-    await assert.rejects(f.host.launch({ launchCommand: 'unused', exactPort: 9227 }), /original CDP port/);
+    await assert.rejects(f.host.launch({ launch: { executable: 'unused' }, exactPort: 9227 }), /original CDP port/);
     assert.deepEqual(f.launched, []);
     assert.deepEqual(f.closed, []);
 });
 
 test('an exact-port race closes only the new process and never moves to another port', async () => {
     const f = fixture({ race: true });
-    await assert.rejects(f.host.launch({ launchCommand: `"${process.execPath}"`, exactPort: 9227 }), /foreign process/);
+    await assert.rejects(
+        f.host.launch({ launch: { executable: process.execPath }, exactPort: 9227 }),
+        /foreign process/,
+    );
     assert.deepEqual(
         f.launched.map(({ port }) => port),
         [9227],
@@ -64,7 +67,7 @@ test('recovery keeps argv, cwd and profile even if the original template environ
     const f = fixture();
     const args = ['--remote-debugging-port=9227', '--user-data-dir=unchanged', '--flag=a b'];
     const result = await f.host.launch({
-        launchCommand: '"%MISSING%"',
+        launch: { executable: '"%MISSING%"' },
         exactPort: 9227,
         targetKind: 'chrome',
         launchDefinition: { executablePath: process.execPath, arguments: args, cwd: process.cwd() },

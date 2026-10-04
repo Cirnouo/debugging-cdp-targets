@@ -1,7 +1,9 @@
 # Pure domain rules
 
-- `launch-command.ts` tokenizes templates, expands provided variables, and
+- `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.
-- `control-contract.ts` owns command/result unions and validates IPC envelopes.
+- `control-contract.ts` owns MCP lifecycle request/result unions and identities.
+- `official-options.ts` validates reviewed official options and complete recipes,
+  reserving browser attachment/launch options for the gateway.
 - `AGENTS.md` restricts this layer to deterministic rules.

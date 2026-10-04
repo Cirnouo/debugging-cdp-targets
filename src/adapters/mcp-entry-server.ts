@@ -10,7 +10,8 @@ import type {
 import { getSupportedElicitationModes } from '@modelcontextprotocol/client';
 import { ProtocolError, ProtocolErrorCode, Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import { parseConnectionRoute } from '../domains/control-contract.ts';
+import { type ControlRequest, parseConnectionRoute, parseControlRequest } from '../domains/control-contract.ts';
+import { LIFECYCLE_ACTIONS, lifecycleTools } from './lifecycle-tools.ts';
 
 export const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
 export type HookEventName = (typeof HOOK_EVENTS)[number];
@@ -18,6 +19,7 @@ export type HookEventName = (typeof HOOK_EVENTS)[number];
 export function createMcpEntryServer(options: {
     tools: Tool[];
     status: (hookEventName?: HookEventName) => Record<string, unknown>;
+    control?: (request: ControlRequest, signal?: AbortSignal) => Promise<Record<string, unknown>>;
     invoke: (
         name: string,
         arguments_: Record<string, unknown>,
@@ -34,6 +36,8 @@ export function createMcpEntryServer(options: {
         additionalProperties: false,
     };
     const tools = options.tools.map((tool) => {
+        if (Object.hasOwn(LIFECYCLE_ACTIONS, tool.name))
+            throw new Error('Official tool collides with a lifecycle tool.');
         if (Object.hasOwn(tool.inputSchema.properties ?? {}, '_dct'))
             throw new Error(`Official tool ${tool.name} already owns the reserved _dct routing field.`);
         return {
@@ -70,37 +74,39 @@ export function createMcpEntryServer(options: {
         return server.elicitInput(params, signal ? { signal } : {});
     };
     server.setRequestHandler('tools/list', async () => ({
-        tools: [
-            ...tools,
-            {
-                name: 'dct_connection_status',
-                description: '查看目标连接状态',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        hookEventName: {
-                            type: 'string',
-                            enum: [...HOOK_EVENTS],
-                            description: 'Only for automatic Codex Hooks; Agents use empty arguments for status.',
-                        },
-                    },
-                    additionalProperties: false,
-                },
-            },
-        ],
+        tools: [...tools, ...lifecycleTools(HOOK_EVENTS)],
     }));
     server.setRequestHandler('tools/call', async (request, ctx) => {
         const name = request.params.name;
-        if (name === 'dct_connection_status') {
+        if (Object.hasOwn(LIFECYCLE_ACTIONS, name)) {
             const arguments_ = request.params.arguments ?? {};
             const hook = arguments_.hookEventName;
-            if (
-                Object.keys(arguments_).some((key) => key !== 'hookEventName') ||
-                (hook !== undefined && !HOOK_EVENTS.some((event) => event === hook))
-            )
-                throw new ProtocolError(ProtocolErrorCode.InvalidParams, 'Invalid lifecycle status Hook arguments.');
-            const result = options.status(HOOK_EVENTS.find((event) => event === hook));
-            return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+            try {
+                let result: Record<string, unknown>;
+                if (hook !== undefined) {
+                    if (
+                        name !== 'dct_connection_status' ||
+                        Object.keys(arguments_).length !== 1 ||
+                        !HOOK_EVENTS.some((event) => event === hook)
+                    )
+                        throw new Error('Invalid lifecycle status Hook arguments.');
+                    result = options.status(HOOK_EVENTS.find((event) => event === hook));
+                } else {
+                    if (Object.hasOwn(arguments_, 'action'))
+                        throw new Error('The tool name selects its lifecycle action.');
+                    const control = parseControlRequest({ ...arguments_, action: LIFECYCLE_ACTIONS[name] });
+                    if (options.control) result = await options.control(control, ctx.mcpReq.signal);
+                    else if (control.action === 'status' && Object.keys(arguments_).length === 0)
+                        result = options.status();
+                    else throw new Error('Lifecycle control is unavailable.');
+                }
+                return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+            } catch (error) {
+                throw new ProtocolError(
+                    ProtocolErrorCode.InvalidParams,
+                    error instanceof Error ? error.message : 'Invalid lifecycle request.',
+                );
+            }
         }
         if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
         parseConnectionRoute(request.params.arguments?._dct);

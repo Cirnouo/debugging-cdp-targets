@@ -6,8 +6,10 @@ nearest source AGENTS.md and only the relevant policies before editing.
 ## Boundaries
 
 - The reusable stdio gateway relays official MCP tools and results using
-  the official SDK. Only dct_connection_status extends it, including automatic Hooks.
-  Do not create custom DevTools tools, a CLI daemon, or persistent session state.
+  the official SDK. Seven MCP lifecycle/operation tools extend it; status also
+  carries automatic Hooks. Fixed official catalog variants and per-connection
+  enablement follow ADR 0011. Do not create custom DevTools tools, a plugin CLI,
+  dedicated control IPC, or persistent session state.
 - Manage one newly launched target per connection. Verify process, listener,
   and endpoint identity; bind only loopback. Never take over existing targets.
 - Create one independent official MCP connection per new target, without a
@@ -20,6 +22,11 @@ nearest source AGENTS.md and only the relevant policies before editing.
   one. Status/start forbid session identity; only stop takes disposition.
 - Keep 0.1.0 unreleased. Never push, publish, tag, open a PR, or modify user
   config/global Skills/old state without explicit authorization.
+- Launch through structured executable/args/cwd/env and native platform support.
+  Windows privilege detection and one-shot elevation helpers belong to the
+  plugin; manage the actual app PID/time/handle. Never force-kill applications.
+  Keep authorization waiting separate from CDP readiness. Quarantine timed-out
+  upstreams and clear pending transport state; never restart/replay automatically.
 
 ## Navigation and commands
 

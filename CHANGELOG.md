@@ -23,15 +23,20 @@ Version 0.1.0 remains under development; no release has been published.
   Automatic update checks are disabled only for the official Server child.
 - Parallel official tool calls with explicit connection/session routing and
   independent progress, cancellation, exit monitoring and recovery reminders.
-- Entry/connection/session-addressed status, start, restart, stop, and end-task commands,
-  explicit Close/Keep choices, and reusable host connections after normal Close.
+- Seven native MCP lifecycle/operation tools with idempotent asynchronous requests,
+  bounded event waits, explicit cancellation, Close/Keep and automatic Hook results.
+- Fixed complete official tool catalog with per-connection mcpArgs, activation
+  recipes, actual enabled schemas and explicit workspace directory sources.
 - Reuse of kept live targets and scoped upstream/router cleanup after an ended
   target exits, with retained identity for cleanup retries.
 - Lifecycle status and native process exit monitoring with automatic, reviewed
   Codex MCP Tool Hooks, one reminder per active session, and explicit same-port
   recovery with fresh page identities.
-- Shell-free launch-command templates with environment expansion and selection
-  of a free, non-reserved debugging port.
+- Structured executable/args/cwd/env launches with native Windows privilege
+  detection, private one-shot elevation, actual app handles and separate permission
+  and CDP readiness budgets. No plugin CLI, control IPC or Agent startup wrappers.
+- Timeout quarantine, pending transport cleanup and phase-only diagnostics;
+  absent-listener close and native failure/retry evidence.
 - Chrome presets for a fixed dedicated browser profile, occupancy checks and
   launch reservations, explicit alternative directories, and preserved profiles
   during recovery. Automatic updater scheduling is disabled in the new process.

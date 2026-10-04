@@ -83,14 +83,14 @@ export function createStdioClient(
     });
     return {
         child,
-        request(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+        request(method: string, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<unknown> {
             id += 1;
             const current = id;
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     pending.delete(current);
                     reject(new Error(`MCP timeout: ${method}: ${stderr}`));
-                }, 60_000);
+                }, timeoutMs);
                 pending.set(current, { resolve, reject, timeout });
                 child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: current, method, params })}\n`);
             });

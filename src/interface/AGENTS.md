@@ -1,14 +1,16 @@
 # Interface implementation
 
 Keep MCP stdout reserved for the official SDK stdio transport. Diagnostics use
-stderr. Control outputs one JSON result. Accept status/start/restart/stop/end-task
-with mandatory entry identity. Status optionally selects a connection; start
+stderr. Lifecycle requests use MCP tools and structured output. Except initial
+empty status discovery, require entry identity. Status optionally selects a connection; start
 allocates one. Restart/end-task/stop require connection and current session
 identity; status/start prohibit session identity. Only stop accepts disposition. End-task
 ends task activity while retaining a live target and upstream; exited targets retire.
-Reject ambiguous, duplicate, missing, unknown, or inapplicable options. Parse
-commands into argv, never a shell command.
+Reject missing, unknown, or inapplicable fields. Launch receives structured
+executable/args/cwd/env and separate mcpArgs; never a shell command.
+Mutations return an idempotent operation immediately; wait replays bounded events,
+and explicit operation cancellation owns cleanup. Wait cancellation is independent.
 The gateway adds required _dct connection/session routing to official input
 schemas, rejects collisions, and strips it before forwarding original arguments.
-Results are unchanged; only lifecycle status belongs to this Plugin. Optional
+Results are unchanged; lifecycle/operation tools belong to this Plugin. Optional
 hookEventName accepts exactly the four packaged Codex events; empty status is read-only.

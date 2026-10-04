@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
+import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { isOfficialRelativePath } from '../src/shared/official-package.ts';
 import { readDistributionTree } from './distribution-audit.ts';
@@ -217,11 +218,14 @@ export async function generatePluginFiles() {
         evidence,
         { pnpmInstalled: true },
     );
+    const toolCatalog: unknown = JSON.parse(
+        await readFile(path.join(root, 'tooling', 'official-tool-catalog.json'), 'utf8'),
+    );
+    createToolCatalog(toolCatalog);
     const result = await build({
         absWorkingDir: root,
         entryPoints: {
             'mcp-bootstrap': path.join(root, 'src', 'interface', 'mcp-bootstrap.ts'),
-            control: path.join(root, 'src', 'interface', 'control.ts'),
         },
         outdir: output,
         outExtension: { '.js': '.mjs' },
@@ -230,7 +234,10 @@ export async function generatePluginFiles() {
         format: 'esm',
         target: 'node24',
         packages: 'bundle',
-        define: { __DCT_OFFICIAL_RELEASE__: JSON.stringify(evidence) },
+        define: {
+            __DCT_OFFICIAL_RELEASE__: JSON.stringify(evidence),
+            __DCT_TOOL_CATALOG__: JSON.stringify(toolCatalog),
+        },
         legalComments: 'none',
         banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
         logLevel: 'warning',
@@ -244,7 +251,7 @@ export async function generatePluginFiles() {
         ]),
     );
     for (const [file, bytes] of official) files.set(`official-server/${file}`, bytes);
-    for (const file of ['windows-cdp-helper.ps1']) {
+    for (const file of ['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs']) {
         files.set(file, await readFile(path.join(root, 'src', 'adapters', file)));
     }
     const notice = await collectBundledLicenses(Object.keys(result.metafile.inputs));
@@ -263,7 +270,7 @@ export async function syncPluginFiles(
     if (!(await lstat(owned)).isDirectory() || path.relative(owned, await realpath(owned)) !== '')
         throw new Error('Generated output directory must not be linked.');
     const existing = await readDistributionTree(owned);
-    const obsolete = new Set(['hide-npm-console.cjs']);
+    const obsolete = new Set(['hide-npm-console.cjs', 'control.mjs']);
     for (const name of existing.keys()) {
         if (files.has(name) || name === 'README.md') continue;
         if (options.check || !obsolete.has(name)) throw new Error(`Unexpected Plugin build output: ${name}`);

@@ -55,11 +55,20 @@ var init_define_DCT_OFFICIAL_RELEASE = __esm({
   }
 });
 
+// <define:__DCT_TOOL_CATALOG__>
+var define_DCT_TOOL_CATALOG_default;
+var init_define_DCT_TOOL_CATALOG = __esm({
+  "<define:__DCT_TOOL_CATALOG__>"() {
+    define_DCT_TOOL_CATALOG_default = { version: "1.10.1", tools: [{ name: "click", requires: { slim: false, categoryInput: true }, variants: [{ name: "click", description: "Clicks on the provided element", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, dblClick: { description: "Set to true for double clicks. Default is false.", type: "boolean" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "click", description: "Clicks on the provided element", inputSchema: { type: "object", properties: { uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, dblClick: { description: "Set to true for double clicks. Default is false.", type: "boolean" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "click_at", requires: { slim: false, categoryInput: true, experimentalVision: true }, variants: [{ name: "click_at", description: "Clicks at the provided coordinates", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, x: { type: "number", description: "The x coordinate" }, y: { type: "number", description: "The y coordinate" }, dblClick: { description: "Set to true for double clicks. Default is false.", type: "boolean" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "x", "y"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "click_at", description: "Clicks at the provided coordinates", inputSchema: { type: "object", properties: { x: { type: "number", description: "The x coordinate" }, y: { type: "number", description: "The y coordinate" }, dblClick: { description: "Set to true for double clicks. Default is false.", type: "boolean" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["x", "y"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "close_heapsnapshot", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "close_heapsnapshot", description: "Closes a previously loaded memory heapsnapshot, freeing its memory.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to the .heapsnapshot file to close." } }, required: ["filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "close_page", requires: { slim: false, categoryNavigation: true }, variants: [{ name: "close_page", description: "Closes the page by its index. The last open page cannot be closed.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "The ID of the page to close. Call list_pages to list pages." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "compare_heapsnapshots", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "compare_heapsnapshots", description: "Loads two memory heapsnapshots and returns the comparison. If classIndex is provided, returns detailed diff for that class, otherwise returns summary diff.", inputSchema: { type: "object", properties: { baseFilePath: { type: "string", description: "A path to the base .heapsnapshot file (earlier snapshot)." }, currentFilePath: { type: "string", description: "A path to the current .heapsnapshot file (later snapshot)." }, classIndex: { description: "Optional 0-based index of the class in the summary list to filter results, showing individual objects.", type: "number" } }, required: ["baseFilePath", "currentFilePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "drag", requires: { slim: false, categoryInput: true }, variants: [{ name: "drag", description: "Drag an element onto another element", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, from_uid: { type: "string", description: "The uid of the element to drag" }, to_uid: { type: "string", description: "The uid of the element to drop into" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "from_uid", "to_uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "drag", description: "Drag an element onto another element", inputSchema: { type: "object", properties: { from_uid: { type: "string", description: "The uid of the element to drag" }, to_uid: { type: "string", description: "The uid of the element to drop into" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["from_uid", "to_uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "emulate", requires: { slim: false, categoryEmulation: true }, variants: [{ name: "emulate", description: "Emulates various features on the target page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, networkConditions: { description: "Throttle network. Omit to disable throttling.", type: "string", enum: ["Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G"] }, cpuThrottlingRate: { description: "Represents the CPU slowdown factor. Omit or set the rate to 1 to disable throttling", type: "number", minimum: 1, maximum: 20 }, geolocation: { description: "Geolocation (`<latitude>,<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.", type: "string" }, userAgent: { description: "User agent to emulate. Set to empty string to clear the user agent override.", type: "string" }, colorScheme: { description: 'Emulate the dark or the light mode. Set to "auto" to reset to the default.', type: "string", enum: ["dark", "light", "auto"] }, viewport: { description: "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.", type: "string" }, extraHttpHeaders: { description: 'Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.', type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "emulate", description: "Emulates various features on the target page.", inputSchema: { type: "object", properties: { networkConditions: { description: "Throttle network. Omit to disable throttling.", type: "string", enum: ["Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G"] }, cpuThrottlingRate: { description: "Represents the CPU slowdown factor. Omit or set the rate to 1 to disable throttling", type: "number", minimum: 1, maximum: 20 }, geolocation: { description: "Geolocation (`<latitude>,<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.", type: "string" }, userAgent: { description: "User agent to emulate. Set to empty string to clear the user agent override.", type: "string" }, colorScheme: { description: 'Emulate the dark or the light mode. Set to "auto" to reset to the default.', type: "string", enum: ["dark", "light", "auto"] }, viewport: { description: "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.", type: "string" }, extraHttpHeaders: { description: 'Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.', type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "evaluate", requires: { slim: true, categoryDebugging: true, javascriptEvaluation: true }, variants: [{ name: "evaluate", description: "Evaluates a JavaScript script", inputSchema: { type: "object", properties: { script: { type: "string", description: "JS script to run on the page" } }, required: ["script"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "evaluate_script", requires: { slim: false, categoryDebugging: true, javascriptEvaluation: true }, variants: [{ name: "evaluate_script", description: "Evaluate a JavaScript function inside the target page or service worker. Returns the response as JSON, so returned values have to be JSON-serializable.", inputSchema: { type: "object", properties: { pageId: { description: "Targets a specific page by ID. Required when not evaluating in a service worker.", type: "number" }, function: { type: "string", description: 'A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch("example.com")`.\nExample with arguments: `(el) => el.innerText`\n' }, args: { description: "An optional list of arguments to pass to the function.", type: "array", items: { type: "string", description: "The uid of an element on the page from the page content snapshot" } }, filePath: { description: "The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.", type: "string" }, dialogAction: { description: 'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.', type: "string" }, waitForStableDom: { description: "Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.", type: "boolean" }, serviceWorkerId: { description: "The optional service worker id to evaluate the script in. If provided, 'pageId' should be omitted. Note: 'args' (element UIDs) cannot be used when evaluating in a service worker.", type: "string" } }, required: ["function"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "evaluate_script", description: "Evaluate a JavaScript function inside the target page. Returns the response as JSON, so returned values have to be JSON-serializable.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, function: { type: "string", description: 'A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch("example.com")`.\nExample with arguments: `(el) => el.innerText`\n' }, args: { description: "An optional list of arguments to pass to the function.", type: "array", items: { type: "string", description: "The uid of an element on the page from the page content snapshot" } }, filePath: { description: "The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.", type: "string" }, dialogAction: { description: 'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.', type: "string" }, waitForStableDom: { description: "Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.", type: "boolean" } }, required: ["pageId", "function"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "evaluate_script", description: "Evaluate a JavaScript function inside the target page. Returns the response as JSON, so returned values have to be JSON-serializable.", inputSchema: { type: "object", properties: { function: { type: "string", description: 'A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch("example.com")`.\nExample with arguments: `(el) => el.innerText`\n' }, args: { description: "An optional list of arguments to pass to the function.", type: "array", items: { type: "string", description: "The uid of an element on the page from the page content snapshot" } }, filePath: { description: "The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.", type: "string" }, dialogAction: { description: 'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.', type: "string" }, waitForStableDom: { description: "Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.", type: "boolean" } }, required: ["function"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "evaluate_script", description: "Evaluate a JavaScript function inside the target page or service worker. Returns the response as JSON, so returned values have to be JSON-serializable.", inputSchema: { type: "object", properties: { function: { type: "string", description: 'A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch("example.com")`.\nExample with arguments: `(el) => el.innerText`\n' }, args: { description: "An optional list of arguments to pass to the function.", type: "array", items: { type: "string", description: "The uid of an element on the page from the page content snapshot" } }, filePath: { description: "The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.", type: "string" }, dialogAction: { description: 'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.', type: "string" }, waitForStableDom: { description: "Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.", type: "boolean" }, serviceWorkerId: { description: "The optional service worker id to evaluate the script in. If provided, 'pageId' should be omitted. Note: 'args' (element UIDs) cannot be used when evaluating in a service worker.", type: "string" } }, required: ["function"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "execute_3p_developer_tool", requires: { slim: false, categoryExperimentalThirdParty: true }, variants: [{ name: "execute_3p_developer_tool", description: "Executes a tool exposed by the page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, toolName: { type: "string", description: "The name of the tool to execute" }, params: { description: "The JSON-stringified parameters to pass to the tool", type: "string" } }, required: ["pageId", "toolName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "execute_3p_developer_tool", description: "Executes a tool exposed by the page.", inputSchema: { type: "object", properties: { toolName: { type: "string", description: "The name of the tool to execute" }, params: { description: "The JSON-stringified parameters to pass to the tool", type: "string" } }, required: ["toolName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "execute_webmcp_tool", requires: { slim: false, categoryExperimentalWebmcp: true }, variants: [{ name: "execute_webmcp_tool", description: "Executes a WebMCP tool exposed by the page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, toolName: { type: "string", description: "The name of the WebMCP tool to execute" }, input: { description: "The JSON-stringified parameters to pass to the WebMCP tool", type: "string" } }, required: ["pageId", "toolName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "execute_webmcp_tool", description: "Executes a WebMCP tool exposed by the page.", inputSchema: { type: "object", properties: { toolName: { type: "string", description: "The name of the WebMCP tool to execute" }, input: { description: "The JSON-stringified parameters to pass to the WebMCP tool", type: "string" } }, required: ["toolName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "fill", requires: { slim: false, categoryInput: true }, variants: [{ name: "fill", description: "Type text into an input, text area or select an option from a <select> element.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, value: { type: "string", description: 'The value to fill in. "true" or "false" for checkboxes and toggles, "true" for radio buttons.' }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid", "value"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "fill", description: "Type text into an input, text area or select an option from a <select> element.", inputSchema: { type: "object", properties: { uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, value: { type: "string", description: 'The value to fill in. "true" or "false" for checkboxes and toggles, "true" for radio buttons.' }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["uid", "value"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "fill_form", requires: { slim: false, categoryInput: true }, variants: [{ name: "fill_form", description: `Fill out multiple form elements (inputs, selects, checkboxes, radios) at once. ALWAYS prefer this tool over multiple individual 'fill' or 'click' calls when interacting with forms. It is significantly faster, more reliable, and reduces turn count. Example: Fill username, password, and check "Remember Me" in one call.`, inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, elements: { type: "array", items: { type: "object", properties: { uid: { type: "string", description: "The uid of the element to fill out" }, value: { type: "string", description: 'Value for the element. "true" or "false" for checkboxes and toggles, "true" for radio buttons.' } }, required: ["uid", "value"], description: "An element to fill out" }, description: "Elements from snapshot to fill out." }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "elements"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "fill_form", description: `Fill out multiple form elements (inputs, selects, checkboxes, radios) at once. ALWAYS prefer this tool over multiple individual 'fill' or 'click' calls when interacting with forms. It is significantly faster, more reliable, and reduces turn count. Example: Fill username, password, and check "Remember Me" in one call.`, inputSchema: { type: "object", properties: { elements: { type: "array", items: { type: "object", properties: { uid: { type: "string", description: "The uid of the element to fill out" }, value: { type: "string", description: 'Value for the element. "true" or "false" for checkboxes and toggles, "true" for radio buttons.' } }, required: ["uid", "value"], description: "An element to fill out" }, description: "Elements from snapshot to fill out." }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["elements"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "get_console_message", requires: { slim: false, categoryDebugging: true }, variants: [{ name: "get_console_message", description: "Gets a console message by its ID. You can get all messages by calling list_console_messages.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, msgid: { type: "number", description: "The msgid of a console message on the page from the listed console messages" } }, required: ["pageId", "msgid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "get_console_message", description: "Gets a console message by its ID. You can get all messages by calling list_console_messages.", inputSchema: { type: "object", properties: { msgid: { type: "number", description: "The msgid of a console message on the page from the listed console messages" } }, required: ["msgid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_css_styles", requires: { slim: false, categoryDebugging: true }, variants: [{ name: "get_css_styles", description: "Retrieve matched CSS rules, inline styles, inherited styles, and cascade information for an element identified by its UID.\nUse this tool to debug why specific CSS properties are applied, overridden, or conflicting. Results are paginated and return 10 rules per page by default; use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of the element on the page from the page content snapshot to inspect CSS styles for" }, pageSize: { default: 10, description: "Maximum number of CSS rules to return per page. Defaults to 10.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { default: 0, description: "Page number to return (0-based). Defaults to 0 (the first page).", type: "integer", minimum: 0, maximum: 9007199254740991 } }, required: ["pageId", "uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "get_css_styles", description: "Retrieve matched CSS rules, inline styles, inherited styles, and cascade information for an element identified by its UID.\nUse this tool to debug why specific CSS properties are applied, overridden, or conflicting. Results are paginated and return 10 rules per page by default; use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.", inputSchema: { type: "object", properties: { uid: { type: "string", description: "The uid of the element on the page from the page content snapshot to inspect CSS styles for" }, pageSize: { default: 10, description: "Maximum number of CSS rules to return per page. Defaults to 10.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { default: 0, description: "Page number to return (0-based). Defaults to 0 (the first page).", type: "integer", minimum: 0, maximum: 9007199254740991 } }, required: ["uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_devtools_comments", requires: { slim: false, categoryDebugging: true, devtoolsComments: true }, variants: [{ name: "get_devtools_comments", description: "Retrieve user comments from the DevTools window for the page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "get_devtools_comments", description: "Retrieve user comments from the DevTools window for the page.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_class_nodes", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_class_nodes", description: "Loads a memory heapsnapshot and returns instances of a specific class with their IDs.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, id: { type: "number", description: "The ID for the class, obtained from details." }, filterName: { description: "An optional filter to apply to the nodes.", type: "string", enum: ["objectsRetainedByDetachedDomNodes", "objectsRetainedByConsole", "objectsRetainedByEventHandlers", "objectsRetainedByContexts", "sharedNativeContext", "noNativeContext", "attributedToSpecificNativeContext"] }, objectId: { description: "The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.", type: "number" }, pageIdx: { description: "The page index for pagination.", type: "number" }, pageSize: { description: "The page size for pagination.", type: "number" } }, required: ["filePath", "id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_details", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_details", description: "Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, filterName: { description: "An optional filter to apply to the aggregates.", type: "string", enum: ["objectsRetainedByDetachedDomNodes", "objectsRetainedByConsole", "objectsRetainedByEventHandlers", "objectsRetainedByContexts", "sharedNativeContext", "noNativeContext", "attributedToSpecificNativeContext"] }, objectId: { description: "The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.", type: "number" }, pageIdx: { description: "The page index for pagination of aggregates.", type: "number" }, pageSize: { description: "The page size for pagination of aggregates.", type: "number" } }, required: ["filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_dominators", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_dominators", description: "Loads a memory heapsnapshot and returns the dominator chain for a specific node ID. This helps to identify which objects are keeping the target node alive.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, nodeId: { type: "number", description: "The node ID to get the dominator chain for." } }, required: ["filePath", "nodeId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_duplicate_strings", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_duplicate_strings", description: "Loads a memory heapsnapshot and returns duplicate strings grouped by their value.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, pageIdx: { description: "The page index for pagination.", type: "number" }, pageSize: { description: "The page size for pagination.", type: "number" } }, required: ["filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_edges", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_edges", description: "Loads a memory heapsnapshot and returns outgoing edges (references) for a specific node ID.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, nodeId: { type: "number", description: "The node ID to get outgoing edges for." }, sortBy: { description: "Sort order for edges. Default is retainedSize.", type: "string", enum: ["retainedSize", "selfSize", "name"] }, retainedSize: { description: 'Inclusive retained size range (e.g. "1MB-2MB", "-1MB", or "1MB-") for target nodes. A single value is treated as a minimum. Currently, only the lower bound is applied.', type: "string" }, excludePrimitives: { description: "Whether to exclude primitive target nodes. Default is true.", type: "boolean" }, pageIdx: { description: "The page index for pagination.", type: "number" }, pageSize: { description: "The page size for pagination.", type: "number" } }, required: ["filePath", "nodeId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_object_details", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_object_details", description: "Loads a memory heapsnapshot and returns detailed information about a specific object by its node ID, including size, type, distance, and DOM detachedness.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, nodeId: { type: "number", description: "The node ID to get object details for." } }, required: ["filePath", "nodeId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_retainers", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_retainers", description: "Loads a memory heapsnapshot and returns retainers for a specific node ID.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, nodeId: { type: "number", description: "The node ID to get retainers for." }, pageIdx: { description: "The page index for pagination.", type: "number" }, pageSize: { description: "The page size for pagination.", type: "number" } }, required: ["filePath", "nodeId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_retaining_paths", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_retaining_paths", description: "Loads a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, nodeId: { type: "number", description: "The node ID to get retaining paths for." }, maxDepth: { description: "The maximum depth to search for retaining paths.", type: "number" }, maxNodes: { description: "The maximum number of nodes to return.", type: "number" }, maxSiblings: { description: "The maximum number of siblings to return.", type: "number" } }, required: ["filePath", "nodeId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_heapsnapshot_summary", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "get_heapsnapshot_summary", description: "Loads a memory heapsnapshot and returns snapshot summary stats, including native contexts and their sizes, and retained by context summary.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." } }, required: ["filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_network_request", requires: { slim: false, categoryNetwork: true }, variants: [{ name: "get_network_request", description: "Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel. Useful for inspecting request headers (including 'Cookie') and response headers (including 'Set-Cookie' and directives).", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, reqid: { description: "The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.", type: "number" }, requestFilePath: { description: "The absolute or relative path to a .network-request file to save the request body to. If omitted, the body is returned inline.", type: "string" }, responseFilePath: { description: "The absolute or relative path to a .network-response file to save the response body to. If omitted, the body is returned inline.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "get_network_request", description: "Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel. Useful for inspecting request headers (including 'Cookie') and response headers (including 'Set-Cookie' and directives).", inputSchema: { type: "object", properties: { reqid: { description: "The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.", type: "number" }, requestFilePath: { description: "The absolute or relative path to a .network-request file to save the request body to. If omitted, the body is returned inline.", type: "string" }, responseFilePath: { description: "The absolute or relative path to a .network-response file to save the response body to. If omitted, the body is returned inline.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "get_os_app_state", requires: { slim: false, categoryPwa: true }, variants: [{ name: "get_os_app_state", description: "Returns the OS integration state (badge count and registered file handlers) for an installed web app, identified by its manifest ID.", inputSchema: { type: "object", properties: { manifestId: { type: "string", description: 'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.' } }, required: ["manifestId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "get_tab_id", requires: { slim: false, categoryNavigation: true, experimentalInteropTools: true }, variants: [{ name: "get_tab_id", description: "Get the tab ID of the page", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "get_tab_id", description: "Get the tab ID of the page", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "handle_dialog", requires: { slim: false, categoryInput: true }, variants: [{ name: "handle_dialog", description: "If a browser dialog was opened, use this command to handle it", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, action: { type: "string", enum: ["accept", "dismiss"], description: "Whether to dismiss or accept the dialog" }, promptText: { description: "Optional prompt text to enter into the dialog.", type: "string" } }, required: ["pageId", "action"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "handle_dialog", description: "If a browser dialog was opened, use this command to handle it", inputSchema: { type: "object", properties: { action: { type: "string", enum: ["accept", "dismiss"], description: "Whether to dismiss or accept the dialog" }, promptText: { description: "Optional prompt text to enter into the dialog.", type: "string" } }, required: ["action"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "hover", requires: { slim: false, categoryInput: true }, variants: [{ name: "hover", description: "Hover over the provided element", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "hover", description: "Hover over the provided element", inputSchema: { type: "object", properties: { uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "install_extension", requires: { slim: false, categoryExtensions: true }, variants: [{ name: "install_extension", description: "Installs a Chrome extension from the given path.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Absolute path to the unpacked extension folder." } }, required: ["path"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "install_pwa", requires: { slim: false, categoryPwa: true }, variants: [{ name: "install_pwa", description: "Installs a Progressive Web App (PWA) identified by its manifest ID. This installs through the PWA CDP domain without a user gesture or install dialog. DevTools installs default to browser display mode.", inputSchema: { type: "object", properties: { manifestId: { type: "string", description: 'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.' }, installUrlOrBundleUrl: { type: "string", description: "The location of the app or bundle. For a normal site this is the page URL; for an Isolated Web App it can be a file:// or http(s):// signed web bundle." }, displayMode: { description: 'Optional user display mode preference applied after install. "standalone" opens the app in its own window; "browser" opens it as a tab. Installs via the PWA CDP domain default to "browser" because they do not simulate the install dialog, so pass "standalone" to get an app-window experience.', type: "string", enum: ["standalone", "browser"] } }, required: ["manifestId", "installUrlOrBundleUrl"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "launch_pwa", requires: { slim: false, categoryPwa: true }, variants: [{ name: "launch_pwa", description: "Launches an installed Progressive Web App using its saved display mode. Optionally opens a specific URL within the same app instead of the default start URL.", inputSchema: { type: "object", properties: { manifestId: { type: "string", description: 'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.' }, url: { description: "Optional URL within the app to open instead of the default start URL.", type: "string" } }, required: ["manifestId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "lighthouse_audit", requires: { slim: false, categoryDebugging: true }, variants: [{ name: "lighthouse_audit", description: "Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, mode: { default: "navigation", description: '"navigation" reloads & audits. "snapshot" analyzes current state.', type: "string", enum: ["navigation", "snapshot"] }, device: { default: "desktop", description: "Device to emulate.", type: "string", enum: ["desktop", "mobile"] }, outputDirPath: { description: "Directory for reports. If omitted, uses temporary files.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "lighthouse_audit", description: "Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace", inputSchema: { type: "object", properties: { mode: { default: "navigation", description: '"navigation" reloads & audits. "snapshot" analyzes current state.', type: "string", enum: ["navigation", "snapshot"] }, device: { default: "desktop", description: "Device to emulate.", type: "string", enum: ["desktop", "mobile"] }, outputDirPath: { description: "Directory for reports. If omitted, uses temporary files.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "list_3p_developer_tools", requires: { slim: false, categoryExperimentalThirdParty: true }, variants: [{ name: "list_3p_developer_tools", description: "Lists all third-party developer tools the page exposes for providing runtime information.\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_3p_developer_tools", description: "Lists all third-party developer tools the page exposes for providing runtime information.\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "list_console_messages", requires: { slim: false, categoryDebugging: true }, variants: [{ name: "list_console_messages", description: "List all console messages for the target page since the last navigation. This includes console messages originating from extensions content scripts.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, pageSize: { description: "Maximum number of messages to return. When omitted, returns all messages.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, types: { description: "Filter messages to only return messages of the specified resource types. When omitted or empty, returns all messages.", type: "array", items: { type: "string", enum: ["log", "debug", "info", "error", "warn", "dir", "dirxml", "table", "trace", "clear", "startGroup", "startGroupCollapsed", "endGroup", "assert", "profile", "profileEnd", "count", "timeEnd", "verbose", "issue"] } }, includePreservedMessages: { description: "Set to true to return the preserved messages over the last 3 navigations.", default: false, type: "boolean" }, includeStackTraces: { description: "Set to true to include the stack trace for each message when available. Increases the response size.", default: false, type: "boolean" }, serviceWorkerId: { description: "Filter messages to only return messages of the specified service worker.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_console_messages", description: "List all console messages for the target page since the last navigation.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, pageSize: { description: "Maximum number of messages to return. When omitted, returns all messages.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, types: { description: "Filter messages to only return messages of the specified resource types. When omitted or empty, returns all messages.", type: "array", items: { type: "string", enum: ["log", "debug", "info", "error", "warn", "dir", "dirxml", "table", "trace", "clear", "startGroup", "startGroupCollapsed", "endGroup", "assert", "profile", "profileEnd", "count", "timeEnd", "verbose", "issue"] } }, includePreservedMessages: { description: "Set to true to return the preserved messages over the last 3 navigations.", default: false, type: "boolean" }, includeStackTraces: { description: "Set to true to include the stack trace for each message when available. Increases the response size.", default: false, type: "boolean" }, serviceWorkerId: { description: "Filter messages to only return messages of the specified service worker.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_console_messages", description: "List all console messages for the target page since the last navigation.", inputSchema: { type: "object", properties: { pageSize: { description: "Maximum number of messages to return. When omitted, returns all messages.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, types: { description: "Filter messages to only return messages of the specified resource types. When omitted or empty, returns all messages.", type: "array", items: { type: "string", enum: ["log", "debug", "info", "error", "warn", "dir", "dirxml", "table", "trace", "clear", "startGroup", "startGroupCollapsed", "endGroup", "assert", "profile", "profileEnd", "count", "timeEnd", "verbose", "issue"] } }, includePreservedMessages: { description: "Set to true to return the preserved messages over the last 3 navigations.", default: false, type: "boolean" }, includeStackTraces: { description: "Set to true to include the stack trace for each message when available. Increases the response size.", default: false, type: "boolean" }, serviceWorkerId: { description: "Filter messages to only return messages of the specified service worker.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_console_messages", description: "List all console messages for the target page since the last navigation. This includes console messages originating from extensions content scripts.", inputSchema: { type: "object", properties: { pageSize: { description: "Maximum number of messages to return. When omitted, returns all messages.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, types: { description: "Filter messages to only return messages of the specified resource types. When omitted or empty, returns all messages.", type: "array", items: { type: "string", enum: ["log", "debug", "info", "error", "warn", "dir", "dirxml", "table", "trace", "clear", "startGroup", "startGroupCollapsed", "endGroup", "assert", "profile", "profileEnd", "count", "timeEnd", "verbose", "issue"] } }, includePreservedMessages: { description: "Set to true to return the preserved messages over the last 3 navigations.", default: false, type: "boolean" }, includeStackTraces: { description: "Set to true to include the stack trace for each message when available. Increases the response size.", default: false, type: "boolean" }, serviceWorkerId: { description: "Filter messages to only return messages of the specified service worker.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "list_extensions", requires: { slim: false, categoryExtensions: true }, variants: [{ name: "list_extensions", description: "Lists all the Chrome extensions installed in the browser. This includes their name, ID, version, and enabled status.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "list_network_requests", requires: { slim: false, categoryNetwork: true }, variants: [{ name: "list_network_requests", description: "Lists the most recent requests for the target page since the last navigation.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, pageSize: { description: "Maximum number of requests to return. When omitted, returns all requests.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, resourceTypes: { description: "Filter requests to only return requests of the specified resource types. When omitted or empty, returns all requests.", type: "array", items: { type: "string", enum: ["document", "stylesheet", "image", "media", "font", "script", "texttrack", "xhr", "fetch", "prefetch", "eventsource", "websocket", "manifest", "signedexchange", "ping", "cspviolationreport", "preflight", "fedcm", "other"] } }, includePreservedRequests: { description: "Set to true to return the preserved requests over the last 3 navigations.", default: false, type: "boolean" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_network_requests", description: "Lists the most recent requests for the target page since the last navigation.", inputSchema: { type: "object", properties: { pageSize: { description: "Maximum number of requests to return. When omitted, returns all requests.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, resourceTypes: { description: "Filter requests to only return requests of the specified resource types. When omitted or empty, returns all requests.", type: "array", items: { type: "string", enum: ["document", "stylesheet", "image", "media", "font", "script", "texttrack", "xhr", "fetch", "prefetch", "eventsource", "websocket", "manifest", "signedexchange", "ping", "cspviolationreport", "preflight", "fedcm", "other"] } }, includePreservedRequests: { description: "Set to true to return the preserved requests over the last 3 navigations.", default: false, type: "boolean" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "list_pages", requires: { slim: false, categoryNavigation: true }, variants: [{ name: "list_pages", description: "Get a list of pages including extension service workers open in the browser.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_pages", description: "Get a list of pages open in the browser.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "list_webmcp_tools", requires: { slim: false, categoryExperimentalWebmcp: true }, variants: [{ name: "list_webmcp_tools", description: "Lists all WebMCP tools the page exposes.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_webmcp_tools", description: "Lists all WebMCP tools the page exposes.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "navigate", requires: { slim: true, categoryNavigation: true }, variants: [{ name: "navigate", description: "Loads a URL", inputSchema: { type: "object", properties: { url: { type: "string", description: "URL to navigate to" } }, required: ["url"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "navigate_page", requires: { slim: false, categoryNavigation: true }, variants: [{ name: "navigate_page", description: "Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, type: { description: "Navigate the page by URL, back or forward in history, or reload.", type: "string", enum: ["url", "back", "forward", "reload"] }, url: { description: "Target URL (only type=url)", type: "string" }, ignoreCache: { description: "Whether to ignore cache on reload.", type: "boolean" }, handleBeforeUnload: { description: "Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.", type: "string", enum: ["accept", "dismiss"] }, initScript: { description: "A JavaScript script to be executed on each new document before any other scripts for the next navigation.", type: "string" }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "navigate_page", description: "Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, type: { description: "Navigate the page by URL, back or forward in history, or reload.", type: "string", enum: ["url", "back", "forward", "reload"] }, url: { description: "Target URL (only type=url)", type: "string" }, ignoreCache: { description: "Whether to ignore cache on reload.", type: "boolean" }, handleBeforeUnload: { description: "Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.", type: "string", enum: ["accept", "dismiss"] }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "navigate_page", description: "Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { type: { description: "Navigate the page by URL, back or forward in history, or reload.", type: "string", enum: ["url", "back", "forward", "reload"] }, url: { description: "Target URL (only type=url)", type: "string" }, ignoreCache: { description: "Whether to ignore cache on reload.", type: "boolean" }, handleBeforeUnload: { description: "Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.", type: "string", enum: ["accept", "dismiss"] }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "navigate_page", description: "Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { type: { description: "Navigate the page by URL, back or forward in history, or reload.", type: "string", enum: ["url", "back", "forward", "reload"] }, url: { description: "Target URL (only type=url)", type: "string" }, ignoreCache: { description: "Whether to ignore cache on reload.", type: "boolean" }, handleBeforeUnload: { description: "Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.", type: "string", enum: ["accept", "dismiss"] }, initScript: { description: "A JavaScript script to be executed on each new document before any other scripts for the next navigation.", type: "string" }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "new_page", requires: { slim: false, categoryNavigation: true }, variants: [{ name: "new_page", description: "Open a new tab and load a URL. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { url: { type: "string", description: "URL to load in a new page." }, background: { description: "Whether to open the page in the background without bringing it to the front. Default is false (foreground).", type: "boolean" }, isolatedContext: { description: "If specified, the page is created in an isolated browser context with the given name. Pages in the same browser context share cookies and storage. Pages in different browser contexts are fully isolated (useful for clean-slate testing of cookies and authentication).", type: "string" }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["url"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "open_devtools", requires: { slim: false, categoryDebugging: true, devtoolsComments: true }, variants: [{ name: "open_devtools", description: "Open a DevTools window for the selected page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "open_devtools", description: "Open a DevTools window for the selected page.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "performance_analyze_insight", requires: { slim: false, categoryPerformance: true }, variants: [{ name: "performance_analyze_insight", description: "Provides more detailed information on a specific Performance Insight of an insight set that was highlighted in the results of a trace recording.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, insightSetId: { type: "string", description: 'The id for the specific insight set. Only use the ids given in the "Available insight sets" list.' }, insightName: { type: "string", description: 'The name of the Insight you want more information on. For example: "DocumentLatency" or "LCPBreakdown"' } }, required: ["pageId", "insightSetId", "insightName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "performance_analyze_insight", description: "Provides more detailed information on a specific Performance Insight of an insight set that was highlighted in the results of a trace recording.", inputSchema: { type: "object", properties: { insightSetId: { type: "string", description: 'The id for the specific insight set. Only use the ids given in the "Available insight sets" list.' }, insightName: { type: "string", description: 'The name of the Insight you want more information on. For example: "DocumentLatency" or "LCPBreakdown"' } }, required: ["insightSetId", "insightName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "performance_start_trace", requires: { slim: false, categoryPerformance: true }, variants: [{ name: "performance_start_trace", description: "Start a performance trace on the target webpage. Use to find frontend performance issues, Core Web Vitals (LCP, INP, CLS), and improve page load speed.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, reload: { default: true, description: "Determines if, once tracing has started, the target page should be automatically reloaded. Navigate the page to the right URL using the navigate_page tool BEFORE starting the trace if reload or autoStop is set to true.", type: "boolean" }, autoStop: { default: true, description: "Determines if the trace recording should be automatically stopped.", type: "boolean" }, filePath: { description: "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "performance_start_trace", description: "Start a performance trace on the target webpage. Use to find frontend performance issues, Core Web Vitals (LCP, INP, CLS), and improve page load speed.", inputSchema: { type: "object", properties: { reload: { default: true, description: "Determines if, once tracing has started, the target page should be automatically reloaded. Navigate the page to the right URL using the navigate_page tool BEFORE starting the trace if reload or autoStop is set to true.", type: "boolean" }, autoStop: { default: true, description: "Determines if the trace recording should be automatically stopped.", type: "boolean" }, filePath: { description: "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "performance_stop_trace", requires: { slim: false, categoryPerformance: true }, variants: [{ name: "performance_stop_trace", description: "Stop the active performance trace recording on the target webpage.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, filePath: { description: "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "performance_stop_trace", description: "Stop the active performance trace recording on the target webpage.", inputSchema: { type: "object", properties: { filePath: { description: "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "press_key", requires: { slim: false, categoryInput: true }, variants: [{ name: "press_key", description: "Press a key or key combination. Use this when other input methods like fill() cannot be used (e.g., keyboard shortcuts, navigation keys, or special key combinations).", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, key: { type: "string", description: 'A key or a combination (e.g., "Enter", "Control+A", "Control++", "Control+Shift+R"). Modifiers: Control, Shift, Alt, Meta' }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "key"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "press_key", description: "Press a key or key combination. Use this when other input methods like fill() cannot be used (e.g., keyboard shortcuts, navigation keys, or special key combinations).", inputSchema: { type: "object", properties: { key: { type: "string", description: 'A key or a combination (e.g., "Enter", "Control+A", "Control++", "Control+Shift+R"). Modifiers: Control, Shift, Alt, Meta' }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["key"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "query_heapsnapshot_objects", requires: { slim: false, categoryMemory: true, memoryDebugging: true }, variants: [{ name: "query_heapsnapshot_objects", description: "Loads a memory heapsnapshot and queries objects matching specific filters (className, propertyName, nodeType, retainedSize, selfSize, isDetached, sortBy).", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to read." }, className: { description: "Optional regex or text matching object class name.", type: "string" }, propertyName: { description: "Optional property name filter for outgoing reference edges.", type: "string" }, nodeType: { description: "Optional V8 node type filter (e.g. object, closure, string, array, code).", type: "string" }, retainedSize: { description: 'Inclusive retained size range (e.g. "1MB-2MB", "-1MB", or "1MB-"). A single value is treated as a minimum.', type: "string" }, selfSize: { description: 'Inclusive self size range (e.g. "1MB-2MB", "-1MB", or "1MB-"). A single value is treated as a minimum.', type: "string" }, isDetached: { description: "Whether to filter for detached DOM nodes.", type: "boolean" }, sortBy: { description: "Sort order for results. Default is retainedSize.", type: "string", enum: ["retainedSize", "selfSize", "id"] }, pageIdx: { description: "The page index for pagination.", type: "number" }, pageSize: { description: "The page size for pagination.", type: "number" } }, required: ["filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "reload_extension", requires: { slim: false, categoryExtensions: true }, variants: [{ name: "reload_extension", description: "Reloads an unpacked Chrome extension by its ID.", inputSchema: { type: "object", properties: { id: { type: "string", description: "ID of the extension to reload." } }, required: ["id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "resize_page", requires: { slim: false, categoryEmulation: true }, variants: [{ name: "resize_page", description: "Resizes the page's window so that the page has specified dimension", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, width: { type: "number", description: "Page width" }, height: { type: "number", description: "Page height" } }, required: ["pageId", "width", "height"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "resize_page", description: "Resizes the page's window so that the page has specified dimension", inputSchema: { type: "object", properties: { width: { type: "number", description: "Page width" }, height: { type: "number", description: "Page height" } }, required: ["width", "height"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "resolve_devtools_comment", requires: { slim: false, categoryDebugging: true, devtoolsComments: true }, variants: [{ name: "resolve_devtools_comment", description: "Append an agent reply to a DevTools comment thread and mark it as resolved.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, threadId: { type: "string", description: 'The unique identifier of the comment thread to resolve (e.g. "comment-1").' }, replyText: { description: "Optional reply explanation from the AI agent to append to the resolved comment thread.", type: "string" } }, required: ["pageId", "threadId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "resolve_devtools_comment", description: "Append an agent reply to a DevTools comment thread and mark it as resolved.", inputSchema: { type: "object", properties: { threadId: { type: "string", description: 'The unique identifier of the comment thread to resolve (e.g. "comment-1").' }, replyText: { description: "Optional reply explanation from the AI agent to append to the resolved comment thread.", type: "string" } }, required: ["threadId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "reveal_in_devtools", requires: { slim: false, categoryDebugging: true, devtoolsComments: true }, variants: [{ name: "reveal_in_devtools", description: "Navigate DevTools to a specified panel and highlight a target DOM node or network request. The parameters uid and reqid are mutually exclusive.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, panelName: { description: 'The target DevTools panel (e.g. "elements", "network", "sources", "console").', type: "string" }, uid: { description: "Optional snapshot element UID to reveal in the Elements panel.", type: "string" }, reqid: { description: "Optional network request ID to reveal in the Network panel.", type: "number" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "reveal_in_devtools", description: "Navigate DevTools to a specified panel and highlight a target DOM node or network request. The parameters uid and reqid are mutually exclusive.", inputSchema: { type: "object", properties: { panelName: { description: 'The target DevTools panel (e.g. "elements", "network", "sources", "console").', type: "string" }, uid: { description: "Optional snapshot element UID to reveal in the Elements panel.", type: "string" }, reqid: { description: "Optional network request ID to reveal in the Network panel.", type: "number" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "screencast_start", requires: { slim: false, categoryDebugging: true, experimentalScreencast: true }, variants: [{ name: "screencast_start", description: "Starts recording a screencast (video) of the target page in specified format.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, filePath: { description: "Output file path (.webm,.mp4 are supported). Uses mkdtemp to generate a unique path if not provided.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "screencast_start", description: "Starts recording a screencast (video) of the target page in specified format.", inputSchema: { type: "object", properties: { filePath: { description: "Output file path (.webm,.mp4 are supported). Uses mkdtemp to generate a unique path if not provided.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "screencast_stop", requires: { slim: false, categoryDebugging: true, experimentalScreencast: true }, variants: [{ name: "screencast_stop", description: "Stops the active screencast recording on the target page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "screencast_stop", description: "Stops the active screencast recording on the target page.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "screenshot", requires: { slim: true, categoryDebugging: true }, variants: [{ name: "screenshot", description: "Takes a screenshot", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "select_page", requires: { slim: false, categoryNavigation: true }, variants: [{ name: "select_page", description: "Select a page as a context for future tool calls.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "The ID of the page to select. Call list_pages to get available pages." }, bringToFront: { description: "Whether to focus the page and bring it to the top.", type: "boolean" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }, { name: "take_heapsnapshot", requires: { slim: false, categoryMemory: true }, variants: [{ name: "take_heapsnapshot", description: "Capture a heap snapshot of the target page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, filePath: { type: "string", description: "A path to a .heapsnapshot file to save the heapsnapshot to." } }, required: ["pageId", "filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "take_heapsnapshot", description: "Capture a heap snapshot of the target page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.", inputSchema: { type: "object", properties: { filePath: { type: "string", description: "A path to a .heapsnapshot file to save the heapsnapshot to." } }, required: ["filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "take_screenshot", requires: { slim: false, categoryDebugging: true }, variants: [{ name: "take_screenshot", description: "Take a screenshot of the page or element.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, format: { default: "png", description: 'Type of format to save the screenshot as. Default is "png"', type: "string", enum: ["png", "jpeg", "webp"] }, quality: { description: "Compression quality for JPEG and WebP formats (0-100). Higher values mean better quality but larger file sizes. Ignored for PNG format.", type: "number", minimum: 0, maximum: 100 }, uid: { description: "The uid of an element on the page from the page content snapshot. If omitted, takes a page screenshot.", type: "string" }, fullPage: { description: "If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid.", type: "boolean" }, filePath: { description: "The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "take_screenshot", description: "Take a screenshot of the page or element.", inputSchema: { type: "object", properties: { format: { default: "png", description: 'Type of format to save the screenshot as. Default is "png"', type: "string", enum: ["png", "jpeg", "webp"] }, quality: { description: "Compression quality for JPEG and WebP formats (0-100). Higher values mean better quality but larger file sizes. Ignored for PNG format.", type: "number", minimum: 0, maximum: 100 }, uid: { description: "The uid of an element on the page from the page content snapshot. If omitted, takes a page screenshot.", type: "string" }, fullPage: { description: "If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid.", type: "boolean" }, filePath: { description: "The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "take_snapshot", requires: { slim: false, categoryDebugging: true }, variants: [{ name: "take_snapshot", description: "Take a text snapshot of the target page based on the a11y tree. The snapshot lists page elements along with a unique\nidentifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected\nin the DevTools Elements panel (if any).", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, verbose: { description: "Whether to include all possible information available in the full a11y tree. Default is false.", type: "boolean" }, filePath: { description: "The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "take_snapshot", description: "Take a text snapshot of the target page based on the a11y tree. The snapshot lists page elements along with a unique\nidentifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected\nin the DevTools Elements panel (if any).", inputSchema: { type: "object", properties: { verbose: { description: "Whether to include all possible information available in the full a11y tree. Default is false.", type: "boolean" }, filePath: { description: "The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.", type: "string" } }, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "trigger_extension_action", requires: { slim: false, categoryExtensions: true }, variants: [{ name: "trigger_extension_action", description: "Triggers the default action of an extension by its ID.", inputSchema: { type: "object", properties: { id: { type: "string", description: "ID of the extension to trigger the action for." } }, required: ["id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "type_text", requires: { slim: false, categoryInput: true }, variants: [{ name: "type_text", description: "Type text using keyboard into a previously focused input", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, text: { type: "string", description: "The text to type" }, submitKey: { description: 'Optional key to press after typing. E.g., "Enter", "Tab", "Escape"', type: "string" } }, required: ["pageId", "text"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "type_text", description: "Type text using keyboard into a previously focused input", inputSchema: { type: "object", properties: { text: { type: "string", description: "The text to type" }, submitKey: { description: 'Optional key to press after typing. E.g., "Enter", "Tab", "Escape"', type: "string" } }, required: ["text"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "uninstall_extension", requires: { slim: false, categoryExtensions: true }, variants: [{ name: "uninstall_extension", description: "Uninstalls a Chrome extension by its ID.", inputSchema: { type: "object", properties: { id: { type: "string", description: "ID of the extension to uninstall." } }, required: ["id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "uninstall_pwa", requires: { slim: false, categoryPwa: true }, variants: [{ name: "uninstall_pwa", description: "Uninstalls a Progressive Web App identified by its manifest ID and closes any open app windows.", inputSchema: { type: "object", properties: { manifestId: { type: "string", description: 'The manifest ID of the web app: the resolved `id` member of its manifest. If `id` is omitted, it defaults to the resolved `start_url` (e.g. "https://example.com/"). See https://w3c.github.io/manifest/#id-member.' } }, required: ["manifestId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "upload_file", requires: { slim: false, categoryInput: true }, variants: [{ name: "upload_file", description: "Upload a file through a provided element.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of the file input element or an element that will open file chooser on the page from the page content snapshot" }, filePaths: { minItems: 1, type: "array", items: { type: "string" }, description: "One or more files paths to upload. File paths have to be local to the browser instance (not the MCP)." }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid", "filePaths"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "upload_file", description: "Upload a file through a provided element.", inputSchema: { type: "object", properties: { uid: { type: "string", description: "The uid of the file input element or an element that will open file chooser on the page from the page content snapshot" }, filePaths: { minItems: 1, type: "array", items: { type: "string" }, description: "One or more files paths to upload. File paths have to be local to the browser instance (not the MCP)." }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["uid", "filePaths"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }] }, { name: "wait_for", requires: { slim: false, categoryNavigation: true }, variants: [{ name: "wait_for", description: "Wait for the specified text to appear on the selected page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, text: { minItems: 1, type: "array", items: { type: "string" }, description: "Non-empty list of texts. Resolves when any value appears on the page." }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["pageId", "text"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "wait_for", description: "Wait for the specified text to appear on the selected page.", inputSchema: { type: "object", properties: { text: { minItems: 1, type: "array", items: { type: "string" }, description: "Non-empty list of texts. Resolves when any value appears on the page." }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["text"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] }], profiles: [{ mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "de65a0fec543b3698e106e7aad43462cb03050f3700ddf411b346ab34f2d55c0" }, { mcpArgs: ["--categoryInput=false", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "3dc3e723c5e53749adc75ca23e8f83ffec5c75cbf4e06825bc58a2edea9df13a" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=false", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "fcc12e8872990c79026d08920573e64efbe47c211c335c50c298dc2197a217c6" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=false", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "09fc6c4844653903ed41fda5dcf4253e85acdc0e01ca4f78c11542943256b049" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=false", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "5211b4563423b8ef5e8a95e566a9459036775320efb2b0cf70deb4fa1c3e8866" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=false", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "92836e518d1c0a9d220f685c941b0f4c11308f60e63728e3fd4eccb69b959252" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=false", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "bcf5066407e94439d5de025bd692f4c4ed0f9f978f35dad8df8049a331268c82" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "ee454dc6b5c312f7a36c063c91c8342789790416c0383851fad3c78f09c1d5c0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=false", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "b1aab55536efe122113ca314d02dc6a6f30b94d8aa49883ac62e77a69cc1feb8" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=false", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "24a630c123f054e228ce2eb56ccb17f80c7f84c1cb15689327005a3fed885732" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=false", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "5607dd57879c7241d5deb5e5b8e8f70743fb53dd6f57d2ad9fd3fbfc5c769a71" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=false", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "9d0c01fe110fe10a7dbb8555ee2a1cc103801c432a7e7f83973448e573f09821" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=false", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "d2bdd4edb07f999d84d830b5828c84d288be644a175c33b3e980c047d06163f2" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=false", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "4cea3379a597bcef009e81d25f84a6a8712dbfc783112dbf1b4fe80de95311cb" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=false", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "93b98b43afa77c50d5914f5540793117fcf1244375c0dce0249de0aba5957c50" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=false", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "0d375b46c15329c27130b5195f141e9b982db29f9a8303b796d16d2485d82ffc" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=false", "--javascriptEvaluation=true", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "f66b1405a648466176880ac07e477ec4c0893e643f0dd74d1ffb600a8db79ca3" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "4a6e304fee287bf337aeeaf0fa64aabba74a606ae74f86733bb349b038d559f7" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=false", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "efb762b5b9ea343a793f3745bbf133d2a4e9b927ec65935f4c5e6b970212a717" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "3d574ae5c0af9141eb75e53cf1ca5c86af2eef4b724ec50ed9eea02b58cde414" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=false", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "ac2cd67f21e6ba4178fc55a1a13e36dae791ccdb198e4dc447fac98f3e61e2e9" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "95f26c09e3cdf8a9a58c76bd5e549b4b72056355e320398bdf94c04ca0182bcd" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=false", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "18deeff651fc1259142acf50a1e150ce0d7e46d84308b53d612c6fc4503e991a" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "ee454dc6b5c312f7a36c063c91c8342789790416c0383851fad3c78f09c1d5c0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=false", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "4a6e304fee287bf337aeeaf0fa64aabba74a606ae74f86733bb349b038d559f7" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=false", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "de65a0fec543b3698e106e7aad43462cb03050f3700ddf411b346ab34f2d55c0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=false", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=false", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "38fe214ab594d5335735d8ec2f246ef429808ed09e6d1ebd1bf11ec12c983652" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=false", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=false", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=false", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=false", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "fad3c366b5907b6e0423feb456ee6fa01b173f8ce9efa88028a7d10b8d07b333" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=false", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=false", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=false", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=false", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=false", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=false", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=false", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=false", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=false", "--javascriptEvaluation=true", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=true", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=true", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--pageIdRouting=false", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=true", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=false", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=false", "--slim=true", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997" }, { mcpArgs: ["--categoryInput=true", "--categoryNavigation=true", "--categoryEmulation=true", "--categoryPerformance=true", "--categoryNetwork=true", "--categoryDebugging=true", "--categoryExtensions=true", "--categoryExperimentalThirdParty=true", "--categoryMemory=true", "--categoryExperimentalWebmcp=true", "--categoryPwa=true", "--experimentalVision=true", "--memoryDebugging=true", "--devtoolsComments=true", "--experimentalInteropTools=true", "--experimentalScreencast=true", "--javascriptEvaluation=true", "--slim=true", "--pageIdRouting=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0" }, { mcpArgs: ["--categoryExtensions=true", "--no-usage-statistics", "--no-performance-crux"], sha256: "bd47725c22e6a2665aea31778816c3be14120d4c39f96671ab439491c31c1d96" }], defaults: [{ name: "click", description: "Clicks on the provided element", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, dblClick: { description: "Set to true for double clicks. Default is false.", type: "boolean" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "close_page", description: "Closes the page by its index. The last open page cannot be closed.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "The ID of the page to close. Call list_pages to list pages." } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "drag", description: "Drag an element onto another element", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, from_uid: { type: "string", description: "The uid of the element to drag" }, to_uid: { type: "string", description: "The uid of the element to drop into" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "from_uid", "to_uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "emulate", description: "Emulates various features on the target page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, networkConditions: { description: "Throttle network. Omit to disable throttling.", type: "string", enum: ["Offline", "Slow 3G", "Fast 3G", "Slow 4G", "Fast 4G"] }, cpuThrottlingRate: { description: "Represents the CPU slowdown factor. Omit or set the rate to 1 to disable throttling", type: "number", minimum: 1, maximum: 20 }, geolocation: { description: "Geolocation (`<latitude>,<longitude>`) to emulate. Latitude between -90 and 90. Longitude between -180 and 180. Omit to clear the geolocation override.", type: "string" }, userAgent: { description: "User agent to emulate. Set to empty string to clear the user agent override.", type: "string" }, colorScheme: { description: 'Emulate the dark or the light mode. Set to "auto" to reset to the default.', type: "string", enum: ["dark", "light", "auto"] }, viewport: { description: "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.", type: "string" }, extraHttpHeaders: { description: 'Extra HTTP headers as a JSON string object, e.g. {"X-Custom": "value", "Authorization": "Bearer token"}. Headers are included into every HTTP request originating from the page and persist across navigations until cleared. Pass an empty string to clear all extra headers.', type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "evaluate_script", description: "Evaluate a JavaScript function inside the target page or service worker. Returns the response as JSON, so returned values have to be JSON-serializable.", inputSchema: { type: "object", properties: { pageId: { description: "Targets a specific page by ID. Required when not evaluating in a service worker.", type: "number" }, function: { type: "string", description: 'A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch("example.com")`.\nExample with arguments: `(el) => el.innerText`\n' }, args: { description: "An optional list of arguments to pass to the function.", type: "array", items: { type: "string", description: "The uid of an element on the page from the page content snapshot" } }, filePath: { description: "The absolute or relative path to a file to save the script output to. If omitted, the output is returned inline.", type: "string" }, dialogAction: { description: 'Handle dialogs while execution. "accept", "dismiss", or string for response of window.prompt. Defaults to accept.', type: "string" }, waitForStableDom: { description: "Whether to wait for the DOM to settle. Pass false if the script only reads data. Defaults to true.", type: "boolean" }, serviceWorkerId: { description: "The optional service worker id to evaluate the script in. If provided, 'pageId' should be omitted. Note: 'args' (element UIDs) cannot be used when evaluating in a service worker.", type: "string" } }, required: ["function"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "fill", description: "Type text into an input, text area or select an option from a <select> element.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, value: { type: "string", description: 'The value to fill in. "true" or "false" for checkboxes and toggles, "true" for radio buttons.' }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid", "value"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "fill_form", description: `Fill out multiple form elements (inputs, selects, checkboxes, radios) at once. ALWAYS prefer this tool over multiple individual 'fill' or 'click' calls when interacting with forms. It is significantly faster, more reliable, and reduces turn count. Example: Fill username, password, and check "Remember Me" in one call.`, inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, elements: { type: "array", items: { type: "object", properties: { uid: { type: "string", description: "The uid of the element to fill out" }, value: { type: "string", description: 'Value for the element. "true" or "false" for checkboxes and toggles, "true" for radio buttons.' } }, required: ["uid", "value"], description: "An element to fill out" }, description: "Elements from snapshot to fill out." }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "elements"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "get_console_message", description: "Gets a console message by its ID. You can get all messages by calling list_console_messages.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, msgid: { type: "number", description: "The msgid of a console message on the page from the listed console messages" } }, required: ["pageId", "msgid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "get_css_styles", description: "Retrieve matched CSS rules, inline styles, inherited styles, and cascade information for an element identified by its UID.\nUse this tool to debug why specific CSS properties are applied, overridden, or conflicting. Results are paginated and return 10 rules per page by default; use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of the element on the page from the page content snapshot to inspect CSS styles for" }, pageSize: { default: 10, description: "Maximum number of CSS rules to return per page. Defaults to 10.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { default: 0, description: "Page number to return (0-based). Defaults to 0 (the first page).", type: "integer", minimum: 0, maximum: 9007199254740991 } }, required: ["pageId", "uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "get_network_request", description: "Gets a network request by an optional reqid, if omitted returns the currently selected request in the DevTools Network panel. Useful for inspecting request headers (including 'Cookie') and response headers (including 'Set-Cookie' and directives).", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, reqid: { description: "The reqid of the network request. If omitted returns the currently selected request in the DevTools Network panel.", type: "number" }, requestFilePath: { description: "The absolute or relative path to a .network-request file to save the request body to. If omitted, the body is returned inline.", type: "string" }, responseFilePath: { description: "The absolute or relative path to a .network-response file to save the response body to. If omitted, the body is returned inline.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "handle_dialog", description: "If a browser dialog was opened, use this command to handle it", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, action: { type: "string", enum: ["accept", "dismiss"], description: "Whether to dismiss or accept the dialog" }, promptText: { description: "Optional prompt text to enter into the dialog.", type: "string" } }, required: ["pageId", "action"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "hover", description: "Hover over the provided element", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of an element on the page from the page content snapshot" }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "install_extension", description: "Installs a Chrome extension from the given path.", inputSchema: { type: "object", properties: { path: { type: "string", description: "Absolute path to the unpacked extension folder." } }, required: ["path"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "lighthouse_audit", description: "Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, mode: { default: "navigation", description: '"navigation" reloads & audits. "snapshot" analyzes current state.', type: "string", enum: ["navigation", "snapshot"] }, device: { default: "desktop", description: "Device to emulate.", type: "string", enum: ["desktop", "mobile"] }, outputDirPath: { description: "Directory for reports. If omitted, uses temporary files.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "list_console_messages", description: "List all console messages for the target page since the last navigation. This includes console messages originating from extensions content scripts.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, pageSize: { description: "Maximum number of messages to return. When omitted, returns all messages.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, types: { description: "Filter messages to only return messages of the specified resource types. When omitted or empty, returns all messages.", type: "array", items: { type: "string", enum: ["log", "debug", "info", "error", "warn", "dir", "dirxml", "table", "trace", "clear", "startGroup", "startGroupCollapsed", "endGroup", "assert", "profile", "profileEnd", "count", "timeEnd", "verbose", "issue"] } }, includePreservedMessages: { description: "Set to true to return the preserved messages over the last 3 navigations.", default: false, type: "boolean" }, includeStackTraces: { description: "Set to true to include the stack trace for each message when available. Increases the response size.", default: false, type: "boolean" }, serviceWorkerId: { description: "Filter messages to only return messages of the specified service worker.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_extensions", description: "Lists all the Chrome extensions installed in the browser. This includes their name, ID, version, and enabled status.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_network_requests", description: "Lists the most recent requests for the target page since the last navigation.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, pageSize: { description: "Maximum number of requests to return. When omitted, returns all requests.", type: "integer", exclusiveMinimum: 0, maximum: 9007199254740991 }, pageIdx: { description: "Page number to return (0-based). When omitted, returns the first page.", type: "integer", minimum: 0, maximum: 9007199254740991 }, resourceTypes: { description: "Filter requests to only return requests of the specified resource types. When omitted or empty, returns all requests.", type: "array", items: { type: "string", enum: ["document", "stylesheet", "image", "media", "font", "script", "texttrack", "xhr", "fetch", "prefetch", "eventsource", "websocket", "manifest", "signedexchange", "ping", "cspviolationreport", "preflight", "fedcm", "other"] } }, includePreservedRequests: { description: "Set to true to return the preserved requests over the last 3 navigations.", default: false, type: "boolean" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "list_pages", description: "Get a list of pages including extension service workers open in the browser.", inputSchema: { type: "object", properties: {}, $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "navigate_page", description: "Go to a URL, or back, forward, or reload. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, type: { description: "Navigate the page by URL, back or forward in history, or reload.", type: "string", enum: ["url", "back", "forward", "reload"] }, url: { description: "Target URL (only type=url)", type: "string" }, ignoreCache: { description: "Whether to ignore cache on reload.", type: "boolean" }, handleBeforeUnload: { description: "Whether to auto accept or beforeunload dialogs triggered by this navigation. Default is accept.", type: "string", enum: ["accept", "dismiss"] }, initScript: { description: "A JavaScript script to be executed on each new document before any other scripts for the next navigation.", type: "string" }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "new_page", description: "Open a new tab and load a URL. Use project URL if not specified otherwise.", inputSchema: { type: "object", properties: { url: { type: "string", description: "URL to load in a new page." }, background: { description: "Whether to open the page in the background without bringing it to the front. Default is false (foreground).", type: "boolean" }, isolatedContext: { description: "If specified, the page is created in an isolated browser context with the given name. Pages in the same browser context share cookies and storage. Pages in different browser contexts are fully isolated (useful for clean-slate testing of cookies and authentication).", type: "string" }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["url"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "performance_analyze_insight", description: "Provides more detailed information on a specific Performance Insight of an insight set that was highlighted in the results of a trace recording.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, insightSetId: { type: "string", description: 'The id for the specific insight set. Only use the ids given in the "Available insight sets" list.' }, insightName: { type: "string", description: 'The name of the Insight you want more information on. For example: "DocumentLatency" or "LCPBreakdown"' } }, required: ["pageId", "insightSetId", "insightName"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "performance_start_trace", description: "Start a performance trace on the target webpage. Use to find frontend performance issues, Core Web Vitals (LCP, INP, CLS), and improve page load speed.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, reload: { default: true, description: "Determines if, once tracing has started, the target page should be automatically reloaded. Navigate the page to the right URL using the navigate_page tool BEFORE starting the trace if reload or autoStop is set to true.", type: "boolean" }, autoStop: { default: true, description: "Determines if the trace recording should be automatically stopped.", type: "boolean" }, filePath: { description: "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "performance_stop_trace", description: "Stop the active performance trace recording on the target webpage.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, filePath: { description: "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "press_key", description: "Press a key or key combination. Use this when other input methods like fill() cannot be used (e.g., keyboard shortcuts, navigation keys, or special key combinations).", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, key: { type: "string", description: 'A key or a combination (e.g., "Enter", "Control+A", "Control++", "Control+Shift+R"). Modifiers: Control, Shift, Alt, Meta' }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "key"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "reload_extension", description: "Reloads an unpacked Chrome extension by its ID.", inputSchema: { type: "object", properties: { id: { type: "string", description: "ID of the extension to reload." } }, required: ["id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "resize_page", description: "Resizes the page's window so that the page has specified dimension", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, width: { type: "number", description: "Page width" }, height: { type: "number", description: "Page height" } }, required: ["pageId", "width", "height"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "select_page", description: "Select a page as a context for future tool calls.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "The ID of the page to select. Call list_pages to get available pages." }, bringToFront: { description: "Whether to focus the page and bring it to the top.", type: "boolean" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }, { name: "take_heapsnapshot", description: "Capture a heap snapshot of the target page. Use to analyze the memory distribution of JavaScript objects and debug memory leaks.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, filePath: { type: "string", description: "A path to a .heapsnapshot file to save the heapsnapshot to." } }, required: ["pageId", "filePath"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "take_screenshot", description: "Take a screenshot of the page or element.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, format: { default: "png", description: 'Type of format to save the screenshot as. Default is "png"', type: "string", enum: ["png", "jpeg", "webp"] }, quality: { description: "Compression quality for JPEG and WebP formats (0-100). Higher values mean better quality but larger file sizes. Ignored for PNG format.", type: "number", minimum: 0, maximum: 100 }, uid: { description: "The uid of an element on the page from the page content snapshot. If omitted, takes a page screenshot.", type: "string" }, fullPage: { description: "If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid.", type: "boolean" }, filePath: { description: "The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "take_snapshot", description: "Take a text snapshot of the target page based on the a11y tree. The snapshot lists page elements along with a unique\nidentifier (uid). Always use the latest snapshot. Prefer taking a snapshot over taking a screenshot. The snapshot indicates the element selected\nin the DevTools Elements panel (if any).", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, verbose: { description: "Whether to include all possible information available in the full a11y tree. Default is false.", type: "boolean" }, filePath: { description: "The absolute path, or a path relative to the current working directory, to save the snapshot to instead of attaching it to the response.", type: "string" } }, required: ["pageId"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "trigger_extension_action", description: "Triggers the default action of an extension by its ID.", inputSchema: { type: "object", properties: { id: { type: "string", description: "ID of the extension to trigger the action for." } }, required: ["id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "type_text", description: "Type text using keyboard into a previously focused input", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, text: { type: "string", description: "The text to type" }, submitKey: { description: 'Optional key to press after typing. E.g., "Enter", "Tab", "Escape"', type: "string" } }, required: ["pageId", "text"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "uninstall_extension", description: "Uninstalls a Chrome extension by its ID.", inputSchema: { type: "object", properties: { id: { type: "string", description: "ID of the extension to uninstall." } }, required: ["id"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "upload_file", description: "Upload a file through a provided element.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, uid: { type: "string", description: "The uid of the file input element or an element that will open file chooser on the page from the page content snapshot" }, filePaths: { minItems: 1, type: "array", items: { type: "string" }, description: "One or more files paths to upload. File paths have to be local to the browser instance (not the MCP)." }, includeSnapshot: { description: "Whether to include a snapshot in the response. Default is false.", type: "boolean" } }, required: ["pageId", "uid", "filePaths"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: false } }, { name: "wait_for", description: "Wait for the specified text to appear on the selected page.", inputSchema: { type: "object", properties: { pageId: { type: "number", description: "Targets a specific page by ID." }, text: { minItems: 1, type: "array", items: { type: "string" }, description: "Non-empty list of texts. Resolves when any value appears on the page." }, timeout: { description: "Maximum wait time in milliseconds. If set to 0, the default timeout will be used.", type: "integer", minimum: -9007199254740991, maximum: 9007199254740991 } }, required: ["pageId", "text"], $schema: "https://json-schema.org/draft/2020-12/schema", additionalProperties: {} }, annotations: { readOnlyHint: true } }] };
+  }
+});
+
 // node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/constants.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
     if (hasBlob) BINARY_TYPES.push("blob");
@@ -84,6 +93,7 @@ var require_buffer_util = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/buffer-util.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
     function concat(list, totalLength) {
@@ -160,6 +170,7 @@ var require_limiter = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/limiter.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var kDone = /* @__PURE__ */ Symbol("kDone");
     var kRun = /* @__PURE__ */ Symbol("kRun");
     var Limiter = class {
@@ -211,6 +222,7 @@ var require_permessage_deflate = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/permessage-deflate.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var zlib = __require("zlib");
     var bufferUtil = require_buffer_util();
     var Limiter = require_limiter();
@@ -595,6 +607,7 @@ var require_validation = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/validation.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { isUtf8 } = __require("buffer");
     var { hasBlob } = require_constants();
     var tokenChars = [
@@ -797,6 +810,7 @@ var require_receiver = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/receiver.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { Writable } = __require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
     var {
@@ -1421,6 +1435,7 @@ var require_sender = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/sender.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { Duplex } = __require("stream");
     var { randomFillSync } = __require("crypto");
     var {
@@ -1915,6 +1930,7 @@ var require_event_target = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/event-target.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = /* @__PURE__ */ Symbol("kCode");
     var kData = /* @__PURE__ */ Symbol("kData");
@@ -2145,6 +2161,7 @@ var require_extension = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/extension.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
       if (dest[name] === void 0) dest[name] = [elem];
@@ -2299,10 +2316,11 @@ var require_websocket = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
-    var EventEmitter = __require("events");
+    init_define_DCT_TOOL_CATALOG();
+    var EventEmitter2 = __require("events");
     var https = __require("https");
     var http2 = __require("http");
-    var net3 = __require("net");
+    var net2 = __require("net");
     var tls = __require("tls");
     var { randomBytes, createHash: createHash3 } = __require("crypto");
     var { Duplex, Readable } = __require("stream");
@@ -2331,7 +2349,7 @@ var require_websocket = __commonJS({
     var protocolVersions = [8, 13];
     var readyStates = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
     var subprotocolRegex = /^[!#$%&'*+\-.0-9A-Z^_`|a-z~]+$/;
-    var WebSocket2 = class _WebSocket extends EventEmitter {
+    var WebSocket2 = class _WebSocket extends EventEmitter2 {
       /**
        * Create a new `WebSocket`.
        *
@@ -3059,12 +3077,12 @@ var require_websocket = __commonJS({
     }
     function netConnect(options) {
       options.path = options.socketPath;
-      return net3.connect(options);
+      return net2.connect(options);
     }
     function tlsConnect(options) {
       options.path = void 0;
       if (!options.servername && options.servername !== "") {
-        options.servername = net3.isIP(options.host) ? "" : options.host;
+        options.servername = net2.isIP(options.host) ? "" : options.host;
       }
       return tls.connect(options);
     }
@@ -3209,6 +3227,7 @@ var require_stream = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/stream.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var WebSocket2 = require_websocket();
     var { Duplex } = __require("stream");
     function emitClose(stream) {
@@ -3308,6 +3327,7 @@ var require_subprotocol = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/subprotocol.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
+    init_define_DCT_TOOL_CATALOG();
     var { tokenChars } = require_validation();
     function parse2(header) {
       const protocols = /* @__PURE__ */ new Set();
@@ -3354,7 +3374,8 @@ var require_websocket_server = __commonJS({
   "node_modules/.pnpm/ws@8.22.0/node_modules/ws/lib/websocket-server.js"(exports, module) {
     "use strict";
     init_define_DCT_OFFICIAL_RELEASE();
-    var EventEmitter = __require("events");
+    init_define_DCT_TOOL_CATALOG();
+    var EventEmitter2 = __require("events");
     var http2 = __require("http");
     var { Duplex } = __require("stream");
     var { createHash: createHash3 } = __require("crypto");
@@ -3367,7 +3388,7 @@ var require_websocket_server = __commonJS({
     var RUNNING = 0;
     var CLOSING = 1;
     var CLOSED = 2;
-    var WebSocketServer2 = class extends EventEmitter {
+    var WebSocketServer2 = class extends EventEmitter2 {
       /**
        * Create a `WebSocketServer` instance.
        *
@@ -3753,17 +3774,21 @@ var require_websocket_server = __commonJS({
 
 // src/interface/mcp-bootstrap.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // src/application/plugin-runtime.ts
 init_define_DCT_OFFICIAL_RELEASE();
-import { randomUUID as randomUUID2 } from "node:crypto";
+init_define_DCT_TOOL_CATALOG();
+import { randomUUID as randomUUID3 } from "node:crypto";
 
 // src/adapters/cdp-router.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 import http from "node:http";
 
 // node_modules/.pnpm/ws@8.22.0/node_modules/ws/wrapper.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var import_stream = __toESM(require_stream(), 1);
 var import_extension = __toESM(require_extension(), 1);
 var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
@@ -3775,17 +3800,16 @@ var import_websocket_server = __toESM(require_websocket_server(), 1);
 
 // src/shared/constants.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var LOOPBACK = "127.0.0.1";
 var DEFAULT_BASE_PORT = 9222;
 var MAX_PORT = 65535;
 var FIRST_USER_PORT = 1024;
 var REQUEST_TIMEOUT_MS = 5e3;
-var CONTROL_TIMEOUT_MS = 45e3;
 var STARTUP_TIMEOUT_MS = 2e4;
 var POLL_INTERVAL_MS = 200;
 var CLOSE_TIMEOUT_SECONDS = 10;
 var MAX_HTTP_BYTES = 8 * 1024 * 1024;
-var MAX_CONTROL_BYTES = 64 * 1024;
 var TARGET_KINDS = Object.freeze(["chrome", "generic-cdp"]);
 var DISPOSITIONS = Object.freeze(["Close", "Keep"]);
 var PACKAGE_NAME = "chrome-devtools-mcp";
@@ -3793,8 +3817,22 @@ var PACKAGE_VERSION = "1.10.1";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
+// src/shared/diagnostics.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function measured(diagnose, phase) {
+  const started = performance.now();
+  let finished = false;
+  return (outcome = "completed") => {
+    if (finished) return;
+    finished = true;
+    diagnose?.({ phase, outcome, elapsedMs: Math.round((performance.now() - started) * 100) / 100 });
+  };
+}
+
 // src/shared/errors.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -3837,10 +3875,10 @@ function messageId(data, isBinary) {
     return null;
   }
 }
-async function createCdpRouter() {
+async function createCdpRouter({ diagnose } = {}) {
   let target = null;
   let paused = false;
-  let inFlightHttp = 0;
+  const httpRequests = /* @__PURE__ */ new Set();
   const sockets = /* @__PURE__ */ new Set();
   const pending = /* @__PURE__ */ new Map();
   function routerPort() {
@@ -3865,18 +3903,22 @@ async function createCdpRouter() {
       response.end(JSON.stringify({ error: "NO_TARGET", message: "No CDP target has been started." }));
       return;
     }
-    inFlightHttp += 1;
-    let completed = false;
-    const complete = () => {
-      if (!completed) inFlightHttp -= 1;
-      completed = true;
+    const finishDiscovery = measured(diagnose, "discovery-response");
+    const cancel = () => {
+      finishDiscovery("interrupted");
+      response.destroy();
     };
-    response.once("close", complete);
+    httpRequests.add(cancel);
+    response.once("close", () => httpRequests.delete(cancel));
     const selected = target;
+    const finishVerify = measured(diagnose, "identity-check");
     try {
       await selected.verify?.();
       if (target !== selected) throw new Error("Target disappeared during verification.");
+      finishVerify();
     } catch {
+      finishVerify("failed");
+      if (response.destroyed) return;
       response.writeHead(503, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "TARGET_IDENTITY_UNVERIFIABLE" }));
       return;
@@ -3899,6 +3941,7 @@ async function createCdpRouter() {
           else chunks.push(chunk);
         });
         upstreamResponse.on("end", () => {
+          if (response.destroyed) return;
           const body = Buffer.concat(chunks);
           let output = body;
           if (request.url?.startsWith("/json")) {
@@ -3916,12 +3959,15 @@ async function createCdpRouter() {
           delete headers["transfer-encoding"];
           response.writeHead(upstreamResponse.statusCode ?? 502, headers);
           response.end(output);
+          finishDiscovery();
         });
       }
     );
     response.once("close", () => upstream.destroy());
     upstream.once("timeout", () => upstream.destroy(new Error("CDP target request timed out.")));
     upstream.once("error", (error2) => {
+      finishDiscovery("failed");
+      if (response.destroyed) return;
       if (!response.headersSent) response.writeHead(502, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "TARGET_UNAVAILABLE", message: error2.message }));
     });
@@ -3939,42 +3985,63 @@ async function createCdpRouter() {
       return;
     }
     const selected = target;
-    inFlightHttp += 1;
+    const finishVerify = measured(diagnose, "identity-check");
+    const cancel = () => socket.destroy();
+    httpRequests.add(cancel);
     try {
       await selected.verify?.();
       if (target !== selected || paused) throw new Error("Target changed during verification.");
+      finishVerify();
     } catch {
+      finishVerify("failed");
       socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
       return;
     } finally {
-      inFlightHttp -= 1;
+      httpRequests.delete(cancel);
     }
     const upstream = new import_websocket.default(`ws://${LOOPBACK}:${selected.port}${request.url}`);
+    const finishConnect = measured(diagnose, "cdp-connect");
     socket.once("error", () => upstream.terminate());
     const tracked = { upstream, downstream: null };
     sockets.add(tracked);
-    pending.set(tracked, /* @__PURE__ */ new Set());
+    pending.set(tracked, /* @__PURE__ */ new Map());
     upstream.once("open", () => {
+      finishConnect();
       websocketServer.handleUpgrade(request, socket, head, (downstream) => {
         tracked.downstream = downstream;
         downstream.on("message", (data, isBinary) => {
           const id = messageId(data, isBinary);
-          if (id !== null) pending.get(tracked)?.add(id);
+          if (id !== null) {
+            let phase = "cdp-response";
+            try {
+              const message = JSON.parse(data.toString());
+              if (isRecord(message) && message.method === "Page.captureScreenshot")
+                phase = "cdp-screenshot";
+            } catch {
+            }
+            pending.get(tracked)?.set(id, measured(diagnose, phase));
+          }
           if (upstream.readyState === import_websocket.default.OPEN) upstream.send(data, { binary: isBinary });
         });
         upstream.on("message", (data, isBinary) => {
           const id = messageId(data, isBinary);
-          if (id !== null) pending.get(tracked)?.delete(id);
+          if (id !== null) {
+            pending.get(tracked)?.get(id)?.();
+            pending.get(tracked)?.delete(id);
+          }
           if (downstream.readyState === import_websocket.default.OPEN) downstream.send(data, { binary: isBinary });
         });
         downstream.once("close", () => upstream.close());
       });
     });
     upstream.once("error", () => {
+      finishConnect("failed");
       if (!tracked.downstream) socket.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
       else tracked.downstream.terminate();
     });
     upstream.once("close", () => {
+      finishConnect("interrupted");
+      for (const finish of pending.get(tracked)?.values() ?? []) finish("interrupted");
       tracked.downstream?.terminate();
       sockets.delete(tracked);
       pending.delete(tracked);
@@ -3985,7 +4052,10 @@ async function createCdpRouter() {
     server.listen(0, LOOPBACK, resolve);
   });
   function disconnect() {
+    for (const cancel of httpRequests) cancel();
+    httpRequests.clear();
     for (const connection of sockets) {
+      for (const finish of pending.get(connection)?.values() ?? []) finish("interrupted");
       connection.downstream?.terminate();
       connection.upstream.terminate();
     }
@@ -3995,7 +4065,7 @@ async function createCdpRouter() {
   return {
     port: routerPort(),
     url: `http://${LOOPBACK}:${routerPort()}`,
-    isBusy: () => inFlightHttp > 0 || [...sockets].some(({ upstream }) => upstream.readyState === import_websocket.default.CONNECTING) || [...pending.values()].some((requests) => requests.size > 0),
+    isBusy: () => httpRequests.size > 0 || [...sockets].some(({ upstream }) => upstream.readyState === import_websocket.default.CONNECTING) || [...pending.values()].some((requests) => requests.size > 0),
     pause() {
       if (this.isBusy()) throw new Error("CDP router is busy with in-flight requests.");
       paused = true;
@@ -4024,242 +4094,22 @@ async function createCdpRouter() {
   };
 }
 
-// src/adapters/control-ipc.ts
-init_define_DCT_OFFICIAL_RELEASE();
-import { createHash } from "node:crypto";
-import { chmod, lstat, unlink } from "node:fs/promises";
-import net from "node:net";
-import os from "node:os";
-import path from "node:path";
-
-// src/domains/control-contract.ts
-init_define_DCT_OFFICIAL_RELEASE();
-function validateIdentity(value, label) {
-  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
-    throw new Error(`A canonical lowercase UUID ${label} is required.`);
-}
-function parseConnectionRoute(value) {
-  if (!isRecord(value)) throw new Error("A connection routing object is required.");
-  fields(value, ["connectionId", "sessionId"]);
-  validateIdentity(value.connectionId, "connection ID");
-  validateIdentity(value.sessionId, "session ID");
-  return { connectionId: value.connectionId, sessionId: value.sessionId };
-}
-function fields(value, allowed) {
-  if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error("Unknown control field.");
-}
-function validPort(value) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535;
-}
-function parseControlRequest(value) {
-  if (!isRecord(value)) throw new Error("Invalid control request.");
-  validateIdentity(value.entryId, "entry ID");
-  const entryId = value.entryId;
-  const action = value.action;
-  if (action === "status") {
-    fields(value, ["action", "entryId", "connectionId"]);
-    if (value.connectionId !== void 0) validateIdentity(value.connectionId, "connection ID");
-    return { action, entryId, ...value.connectionId === void 0 ? {} : { connectionId: value.connectionId } };
-  }
-  if (action === "start") {
-    fields(value, ["action", "entryId", "launchCommand", "targetKind", "basePort"]);
-    if (typeof value.launchCommand !== "string" || !value.launchCommand.trim())
-      throw new Error("A launch command is required.");
-    if (value.targetKind !== void 0 && value.targetKind !== "chrome" && value.targetKind !== "generic-cdp")
-      throw new Error("Unknown target kind.");
-    if (value.basePort !== void 0 && !validPort(value.basePort)) throw new Error("Base port is invalid.");
-    return {
-      action,
-      entryId,
-      launchCommand: value.launchCommand,
-      ...value.targetKind === void 0 ? {} : { targetKind: value.targetKind },
-      ...value.basePort === void 0 ? {} : { basePort: value.basePort }
-    };
-  }
-  if (action !== "restart" && action !== "stop" && action !== "end-task") throw new Error("Unknown control action.");
-  fields(value, ["action", "entryId", "connectionId", "sessionId", ...action === "stop" ? ["disposition"] : []]);
-  validateIdentity(value.connectionId, "connection ID");
-  validateIdentity(value.sessionId, "session ID");
-  if (action === "stop") {
-    if (value.disposition !== "Close" && value.disposition !== "Keep") throw new Error("Choose Close or Keep.");
-    return {
-      action,
-      entryId,
-      connectionId: value.connectionId,
-      sessionId: value.sessionId,
-      disposition: value.disposition
-    };
-  }
-  return { action, entryId, connectionId: value.connectionId, sessionId: value.sessionId };
-}
-
-// src/adapters/control-ipc.ts
-function controlEndpoint(entryId, io = {}) {
-  validateIdentity(entryId, "entry ID");
-  const user = io.user ?? os.userInfo();
-  const identity = `${user.username}:${user.homedir}`;
-  if ((io.platform ?? process.platform) === "win32") {
-    const suffix2 = createHash("sha256").update(identity).digest("hex").slice(0, 16);
-    return `\\\\.\\pipe\\debugging-cdp-targets-${suffix2}-${entryId}`;
-  }
-  const suffix = createHash("sha256").update(JSON.stringify([user.username, user.homedir, entryId])).digest("hex").slice(0, 32);
-  const endpoint = path.posix.join(io.tmpdir ?? os.tmpdir(), `dct-${suffix}.sock`);
-  if (Buffer.byteLength(endpoint, "utf8") > 103)
-    throw new Error(
-      "Unix control endpoint exceeds the 103-byte socket path limit. Use a shorter temporary directory."
-    );
-  return endpoint;
-}
-async function probeEndpoint(endpoint) {
-  return new Promise((resolve, reject) => {
-    const socket = net.connect(endpoint);
-    socket.setTimeout(1e3, () => socket.destroy(new Error("Control endpoint ownership is unverifiable.")));
-    socket.once("connect", () => {
-      socket.end();
-      resolve("live");
-    });
-    socket.once("error", (error2) => {
-      if (errorCode(error2) === "ECONNREFUSED") resolve("refused");
-      else reject(error2);
-    });
-  });
-}
-async function recoverStaleEndpoint(endpoint, io = {}) {
-  const platform = io.platform ?? process.platform;
-  if (platform === "win32") return;
-  const inspect = io.inspect ?? lstat;
-  const probe = io.probe ?? probeEndpoint;
-  const remove = io.remove ?? unlink;
-  const uid = io.uid ?? process.getuid?.();
-  let before;
-  try {
-    before = await inspect(endpoint);
-  } catch (error2) {
-    if (errorCode(error2) === "ENOENT") return;
-    throw error2;
-  }
-  if (!before.isSocket() || before.uid !== uid) throw new Error("The control endpoint is not an owned Unix socket.");
-  if (await probe(endpoint) !== "refused")
-    throw new Error("A debugging-cdp-targets MCP connection is already active for this entry.");
-  const after = await inspect(endpoint);
-  if (before.ino !== after.ino || before.dev !== after.dev || before.ctimeMs !== after.ctimeMs)
-    throw new Error("The control endpoint identity changed during recovery.");
-  await remove(endpoint);
-}
-async function dispatch(controller, request) {
-  switch (request?.action) {
-    case "status":
-      return request.connectionId === void 0 ? controller.status() : controller.status(request.connectionId);
-    case "start":
-      return controller.start({
-        launchCommand: request.launchCommand,
-        ...request.targetKind === void 0 ? {} : { targetKind: request.targetKind },
-        ...request.basePort === void 0 ? {} : { basePort: request.basePort }
-      });
-    case "restart":
-      return controller.restart({ connectionId: request.connectionId, sessionId: request.sessionId });
-    case "stop":
-      return controller.stop({
-        connectionId: request.connectionId,
-        sessionId: request.sessionId,
-        disposition: request.disposition
-      });
-    case "end-task":
-      return controller.endTask({ connectionId: request.connectionId, sessionId: request.sessionId });
-    default:
-      throw new Error("Unknown control action. Use status, start, restart, stop, or end-task.");
-  }
-}
-async function createControlServer({
-  controller,
-  entryId,
-  endpoint = controlEndpoint(entryId)
-}) {
-  validateIdentity(entryId, "entry ID");
-  await recoverStaleEndpoint(endpoint);
-  const clients = /* @__PURE__ */ new Set();
-  const server = net.createServer((socket) => {
-    clients.add(socket);
-    socket.once("close", () => clients.delete(socket));
-    let received = "";
-    let submitted = false;
-    socket.on("error", () => {
-    });
-    socket.setTimeout(CONTROL_TIMEOUT_MS, () => socket.destroy());
-    socket.setEncoding("utf8");
-    socket.on("data", (chunk) => {
-      if (submitted) return;
-      received += chunk;
-      if (Buffer.byteLength(received) > MAX_CONTROL_BYTES) {
-        submitted = true;
-        socket.end(JSON.stringify({ ok: false, error: "Control request is too large." }));
-        return;
-      }
-      if (!received.includes("\n")) return;
-      submitted = true;
-      const line = received.slice(0, received.indexOf("\n"));
-      received = "";
-      void (async () => {
-        try {
-          const raw = JSON.parse(line);
-          const request = parseControlRequest(raw);
-          if (request.entryId !== entryId)
-            throw new Error("Control entry ID does not match this connection.");
-          const result = await dispatch(controller, request);
-          socket.end(`${JSON.stringify({ ok: true, result })}
-`);
-        } catch (error2) {
-          socket.end(
-            `${JSON.stringify({ ok: false, error: errorMessage(error2), ...errorDetails(error2) ? { details: errorDetails(error2) } : {} })}
-`
-          );
-        }
-      })();
-    });
-  });
-  const previousMask = process.platform === "win32" ? void 0 : process.umask(63);
-  try {
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen({ path: endpoint, readableAll: false, writableAll: false }, resolve);
-    });
-  } finally {
-    if (previousMask !== void 0) process.umask(previousMask);
-  }
-  if (process.platform !== "win32") await chmod(endpoint, 384);
-  return {
-    endpoint,
-    async close() {
-      await new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          for (const socket of clients) socket.destroy();
-        }, CONTROL_TIMEOUT_MS);
-        server.close(() => {
-          clearTimeout(timer);
-          resolve();
-        });
-        for (const socket of clients) socket.end();
-      });
-      if (process.platform !== "win32")
-        await unlink(endpoint).catch((error2) => {
-          if (errorCode(error2) !== "ENOENT") throw error2;
-        });
-    }
-  };
-}
-
 // src/adapters/mcp-bridge.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 import { spawn } from "node:child_process";
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/src-xKF0PJN-.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/chunk-Br0eD_fh.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -4301,6 +4151,7 @@ var __toESM2 = (mod, isNodeMode, target) => (target = mod != null ? __create2(__
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/dialects-BOhdv1Fc.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var DRAFT_2020_12_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -4319,18 +4170,23 @@ function declaredDialect(schema, remedy) {
 
 // node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/internal.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/auth-BNDyLTqp.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/index.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/core.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -4412,6 +4268,7 @@ __export(util_exports, {
   unwrapMessage: () => unwrapMessage
 });
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function assertEqual(val) {
   return val;
 }
@@ -5299,9 +5156,11 @@ function config(newConfig) {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/parse.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/errors.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -5386,9 +5245,9 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
           let i = 0;
           while (i < fullpath.length) {
             const el = fullpath[i];
-            const terminal = i === fullpath.length - 1;
+            const terminal2 = i === fullpath.length - 1;
             if (el === "_errors") {
-              if (terminal)
+              if (terminal2)
                 curr._errors.push(mapper(issue2));
               i++;
               continue;
@@ -5402,7 +5261,7 @@ function formatError(error2, mapper = (issue2) => issue2.message) {
               });
             }
             const node2 = curr[el];
-            if (terminal) {
+            if (terminal2) {
               node2._errors.push(mapper(issue2));
             }
             curr = node2;
@@ -5566,12 +5425,15 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/schemas.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/checks.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/regexes.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var cuid = /^[cC][0-9a-z]{6,}$/;
 var cuid2 = /^[0-9a-z]+$/;
 var ulid = /^[0-7][0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{25}$/;
@@ -5953,6 +5815,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/doc.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var Doc = class {
   constructor(args = [], closed = {}) {
     this.content = [];
@@ -5995,6 +5858,7 @@ ${content.join("\n")}
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/versions.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var version = {
   major: 4,
   minor: 6,
@@ -7711,6 +7575,7 @@ function handleRefineResult(result, payload, input, inst) {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/memoizer.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var $ZodCyclicError = class extends Error {
   constructor() {
     super(`Cannot parse a reference cycle that closes through a transform`);
@@ -7986,6 +7851,7 @@ function isBackEdge(ctx, value) {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/en.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var error = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -8112,6 +7978,7 @@ function en_default() {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/registries.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var _a2;
 var $ZodRegistry = class {
   constructor() {
@@ -8161,6 +8028,7 @@ var globalRegistry = globalThis.__zod_globalRegistry;
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/api.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -8715,6 +8583,7 @@ function _check(fn, params) {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/to-json-schema.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
@@ -9246,6 +9115,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/json-schema-processors.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var narrowMin = (agg, key, value) => {
   if (agg[key] === void 0 || value > agg[key])
     agg[key] = value;
@@ -9995,15 +9865,19 @@ function toJSONSchema(input, params) {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/schemas.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/checks.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/parse.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/errors.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
@@ -11098,6 +10972,7 @@ function preprocess(fn, schema) {
 
 // node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/compat.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -11128,6 +11003,7 @@ __export(iso_exports, {
   time: () => time2
 });
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function datetime2(params) {
   return _isoDateTime(ZodISODateTime, params);
 }
@@ -11151,6 +11027,7 @@ __export(coerce_exports, {
   string: () => string3
 });
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function string3(params) {
   return _coercedString(ZodString, params);
 }
@@ -15102,9 +14979,9 @@ function buildMcpParamHeaders(declarations, args) {
   for (const decl of declarations) {
     const raw = valueAtPath(args, decl.path);
     if (raw === void 0 || raw === null) continue;
-    const stringValue = mcpParamPrimitiveToString(raw);
-    if (stringValue === void 0) continue;
-    out[`${MCP_PARAM_HEADER_PREFIX}${decl.headerName}`] = encodeMcpParamValue(stringValue);
+    const stringValue2 = mcpParamPrimitiveToString(raw);
+    if (stringValue2 === void 0) continue;
+    out[`${MCP_PARAM_HEADER_PREFIX}${decl.headerName}`] = encodeMcpParamValue(stringValue2);
   }
   return out;
 }
@@ -16747,9 +16624,11 @@ function serializeMessage(message) {
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/shimsNode.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -18697,8 +18576,8 @@ var require_resolve = /* @__PURE__ */ __commonJSMin(((exports) => {
     }
     return count;
   }
-  function getFullPath(resolver, id = "", normalize) {
-    if (normalize !== false) id = normalizeId(id);
+  function getFullPath(resolver, id = "", normalize2) {
+    if (normalize2 !== false) id = normalizeId(id);
     return _getFullPath(resolver, resolver.parse(id));
   }
   exports.getFullPath = getFullPath;
@@ -19793,7 +19672,7 @@ var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 var require_fast_uri = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   const { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils();
   const { SCHEMES, getSchemeHandler } = require_schemes();
-  function normalize(uri, options) {
+  function normalize2(uri, options) {
     if (typeof uri === "string") uri = serialize(parse2(uri, options), options);
     else if (typeof uri === "object") uri = parse2(serialize(uri, options), options);
     return uri;
@@ -19971,7 +19850,7 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   }
   const fastUri = {
     SCHEMES,
-    normalize,
+    normalize: normalize2,
     resolve,
     resolveComponent,
     equal,
@@ -23761,6 +23640,7 @@ var Ajv = import_ajv.Ajv;
 
 // node_modules/.pnpm/pkce-challenge@5.0.1/node_modules/pkce-challenge/dist/index.node.js
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var crypto2;
 crypto2 = globalThis.crypto?.webcrypto ?? // Node.js [18-16] REPL
 globalThis.crypto ?? // Node.js >18
@@ -26242,19 +26122,123 @@ var SseError = class extends Error {
 
 // node_modules/.pnpm/@modelcontextprotocol+core@2.2.0/node_modules/@modelcontextprotocol/core/dist/index.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // src/adapters/official-server.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 import { readFile as readFile2 } from "node:fs/promises";
-import path3 from "node:path";
+import path2 from "node:path";
 import { fileURLToPath } from "node:url";
+
+// src/domains/official-options.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+var CATALOG_FLAGS = [
+  "categoryInput",
+  "categoryNavigation",
+  "categoryEmulation",
+  "categoryPerformance",
+  "categoryNetwork",
+  "categoryDebugging",
+  "categoryExtensions",
+  "categoryExperimentalThirdParty",
+  "categoryMemory",
+  "categoryExperimentalWebmcp",
+  "categoryPwa",
+  "experimentalVision",
+  "memoryDebugging",
+  "devtoolsComments",
+  "experimentalInteropTools",
+  "experimentalScreencast",
+  "javascriptEvaluation"
+];
+var booleans = [
+  ...CATALOG_FLAGS,
+  "pageIdRouting",
+  "acceptInsecureCerts",
+  "experimentalDevtools",
+  "experimentalStructuredContent",
+  "experimentalToonFormat",
+  "experimentalIncludeAllPages",
+  "performanceCrux",
+  "usageStatistics",
+  "sourceMaps",
+  "slim",
+  "redactNetworkHeaders",
+  "allowUnrestrictedPaths"
+];
+var scalars = [
+  "logFile",
+  "viewport",
+  "experimentalDataFormat",
+  "experimentalFfmpegPath",
+  "experimentalScreencastFps",
+  "screenshotFormat",
+  "screenshotQuality",
+  "screenshotMaxWidth",
+  "screenshotMaxHeight"
+];
+var arrays = ["filesystemRoot", "blockedUrlPattern", "allowedUrlPattern"];
+var normalize = (name) => name.replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
+var alias = (name) => name === "workspace" ? "filesystemRoot" : name === "experimentalMemory" ? "memoryDebugging" : name;
+function parseMcpArgs(args) {
+  const options = /* @__PURE__ */ new Map();
+  for (let index = 0; index < args.length; index++) {
+    const raw = args[index];
+    if (typeof raw !== "string" || raw.includes("\0")) throw new Error("Invalid official Server argument.");
+    const match = /^--(no-)?([A-Za-z][A-Za-z-]*)(?:=(.*))?$/.exec(raw);
+    if (!match?.[2])
+      throw new Error("Use supported explicit long official Server options; positional commands are prohibited.");
+    const key = alias(normalize(match[2]));
+    const boolean4 = booleans.some((option) => option === key);
+    const array2 = arrays.includes(key);
+    if (!boolean4 && !array2 && !scalars.includes(key))
+      throw new Error(`Unsupported or gateway-owned official Server option: ${key}.`);
+    const previous = options.get(key);
+    if (previous && !array2) throw new Error(`Duplicate official Server option: ${key}.`);
+    const tokens = [raw];
+    let value;
+    if (boolean4) {
+      if (match[1] && match[3] !== void 0)
+        throw new Error("Negated boolean options cannot also supply a value.");
+      let provided = match[3];
+      if (provided === void 0 && (args[index + 1] === "true" || args[index + 1] === "false")) {
+        provided = args[++index];
+        if (provided) tokens.push(provided);
+      }
+      if (provided !== void 0 && provided !== "true" && provided !== "false")
+        throw new Error(`Expected a boolean for ${key}.`);
+      value = match[1] ? false : provided !== "false";
+    } else {
+      if (match[1]) throw new Error("Only boolean official options can be negated.");
+      const provided = match[3] ?? args[++index];
+      if (typeof provided !== "string" || !provided || provided.startsWith("-") || provided.includes("\0"))
+        throw new Error(`A literal value is required for ${key}.`);
+      if (match[3] === void 0) tokens.push(provided);
+      value = provided;
+    }
+    options.set(key, {
+      values: [...previous?.values ?? [], value],
+      args: [...previous?.args ?? [], ...tokens]
+    });
+  }
+  return options;
+}
+function suggestMcpArgs(args, required2) {
+  const options = parseMcpArgs(args);
+  for (const [key, value] of Object.entries(required2))
+    options.set(key, { values: [value], args: [`--${key}=${value}`] });
+  return [...options.values()].flatMap((option) => option.args);
+}
 
 // src/shared/official-package.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 function demand(condition, message) {
   if (!condition) throw new Error(`Invalid official release: ${message}`);
 }
-function fields2(value, names) {
+function fields(value, names) {
   demand(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), "evidence fields.");
 }
 function isOfficialRelativePath(value) {
@@ -26263,7 +26247,7 @@ function isOfficialRelativePath(value) {
   );
 }
 function parseOfficialReleaseEvidence(input) {
-  fields2(input, ["schemaVersion", "name", "version", "registry", "tarball", "integrity", "bin", "source", "files"]);
+  fields(input, ["schemaVersion", "name", "version", "registry", "tarball", "integrity", "bin", "source", "files"]);
   demand(
     input.schemaVersion === 1 && input.name === PACKAGE_NAME && input.version === PACKAGE_VERSION,
     "package identity."
@@ -26277,7 +26261,7 @@ function parseOfficialReleaseEvidence(input) {
     "SHA-512 integrity."
   );
   demand(input.bin === "build/src/bin/chrome-devtools-mcp.js", "public Server bin.");
-  fields2(input.source, ["repository", "tag", "commit"]);
+  fields(input.source, ["repository", "tag", "commit"]);
   demand(
     input.source.repository === "https://github.com/ChromeDevTools/chrome-devtools-mcp" && input.source.tag === `chrome-devtools-mcp-v${PACKAGE_VERSION}` && typeof input.source.commit === "string" && /^[a-f0-9]{40}$/.test(input.source.commit),
     "source provenance."
@@ -26287,7 +26271,7 @@ function parseOfficialReleaseEvidence(input) {
   const aliases = /* @__PURE__ */ new Set();
   let previous = "";
   for (const file of input.files) {
-    fields2(file, ["path", "sha256", "bytes"]);
+    fields(file, ["path", "sha256", "bytes"]);
     demand(isOfficialRelativePath(file.path), "unsafe relative path.");
     demand(file.path > previous && !aliases.has(file.path.toLowerCase()), "duplicate, alias or unsorted path.");
     demand(typeof file.sha256 === "string" && /^[a-f0-9]{64}$/.test(file.sha256), "SHA-256 digest.");
@@ -26346,22 +26330,23 @@ function validateOfficialManifest(input, evidence) {
 
 // src/adapters/official-package.ts
 init_define_DCT_OFFICIAL_RELEASE();
-import { createHash as createHash2 } from "node:crypto";
-import { lstat as lstat2, readdir, readFile, realpath } from "node:fs/promises";
-import path2 from "node:path";
+init_define_DCT_TOOL_CATALOG();
+import { createHash } from "node:crypto";
+import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import path from "node:path";
 async function verifyOfficialPackage(directory, input, options = {}) {
   const evidence = parseOfficialReleaseEvidence(input);
-  const root = path2.resolve(directory);
-  const rootStat = await lstat2(root);
+  const root = path.resolve(directory);
+  const rootStat = await lstat(root);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory())
     throw new Error("Official package root must be a directory without links.");
-  const canonical = await realpath(root);
-  if (path2.relative(root, canonical) !== "") throw new Error("Official package root has a linked or aliased parent.");
+  const canonical2 = await realpath(root);
+  if (path.relative(root, canonical2) !== "") throw new Error("Official package root has a linked or aliased parent.");
   const expected = new Map(evidence.files.map((file) => [file.path, file]));
   const directories = new Set(
     evidence.files.flatMap((file) => {
       const parents = [];
-      for (let parent = path2.posix.dirname(file.path); parent !== "."; parent = path2.posix.dirname(parent))
+      for (let parent = path.posix.dirname(file.path); parent !== "."; parent = path.posix.dirname(parent))
         parents.push(parent);
       return parents;
     })
@@ -26375,10 +26360,10 @@ async function verifyOfficialPackage(directory, input, options = {}) {
   async function visit(current, prefix = "") {
     for (const name of await readdir(current)) {
       const relative = `${prefix}${name}`;
-      const absolute = path2.join(current, name);
-      const stat = await lstat2(absolute);
+      const absolute = path.join(current, name);
+      const stat = await lstat(absolute);
       if (stat.isSymbolicLink()) throw new Error(`Official package contains a link: ${relative}`);
-      if (path2.relative(canonical, await realpath(absolute)).replaceAll("\\", "/") !== relative)
+      if (path.relative(canonical2, await realpath(absolute)).replaceAll("\\", "/") !== relative)
         throw new Error(`Official package path escaped or changed: ${relative}`);
       if (stat.isDirectory()) {
         if (options.pnpmInstalled && ["node_modules", "node_modules/.bin"].includes(relative)) {
@@ -26393,7 +26378,7 @@ async function verifyOfficialPackage(directory, input, options = {}) {
         const record2 = expected.get(relative);
         if (!record2) throw new Error(`Unexpected official package file: ${relative}`);
         const bytes = await readFile(absolute);
-        if (bytes.length !== record2.bytes || createHash2("sha256").update(bytes).digest("hex") !== record2.sha256)
+        if (bytes.length !== record2.bytes || createHash("sha256").update(bytes).digest("hex") !== record2.sha256)
           throw new Error(`Official package digest or length changed: ${relative}`);
         files.set(relative, bytes);
       }
@@ -26414,7 +26399,7 @@ function booleanSetting(environment, name, fallback) {
   if (value === "false") return false;
   throw new Error(`${name} must be a boolean: true or false.`);
 }
-function buildServerArguments(browserUrl, environment = process.env) {
+function buildServerArguments(browserUrl, environment = process.env, mcpArgs = []) {
   const url2 = new URL(browserUrl);
   if (url2.protocol !== "http:" || url2.hostname !== "127.0.0.1") {
     throw new Error("The official Server must connect to a local loopback browser URL.");
@@ -26422,11 +26407,17 @@ function buildServerArguments(browserUrl, environment = process.env) {
   const extensions = booleanSetting(environment, "DCT_EXTENSIONS", true);
   const statistics = booleanSetting(environment, "DCT_USAGE_STATISTICS", false);
   const crux = booleanSetting(environment, "DCT_PERFORMANCE_CRUX", false);
+  const provided = parseMcpArgs(mcpArgs);
+  if (provided.get("categoryPwa")?.values[0] === true)
+    throw new Error(
+      "Official PWA tools require a pipe-launched browser and cannot use a gateway-managed CDP endpoint."
+    );
   return [
     `--browserUrl=${browserUrl}`,
-    `--categoryExtensions=${extensions}`,
-    statistics ? "--usage-statistics" : "--no-usage-statistics",
-    crux ? "--performance-crux" : "--no-performance-crux"
+    ...provided.has("categoryExtensions") ? [] : [`--categoryExtensions=${extensions}`],
+    ...provided.has("usageStatistics") ? [] : [statistics ? "--usage-statistics" : "--no-usage-statistics"],
+    ...provided.has("performanceCrux") ? [] : [crux ? "--performance-crux" : "--no-performance-crux"],
+    ...mcpArgs
   ];
 }
 async function resolveServerBin() {
@@ -26444,7 +26435,7 @@ async function resolveServerBin() {
       )
     );
     await verifyOfficialPackage(directory, evidence);
-    return path3.join(directory, evidence.bin);
+    return path2.join(directory, evidence.bin);
   } catch (error2) {
     throw new Error(
       `Bundled official MCP package verification failed; reinstall the Plugin or run pnpm build:plugin. ${errorMessage(error2)}`
@@ -26453,6 +26444,11 @@ async function resolveServerBin() {
 }
 
 // src/adapters/mcp-bridge.ts
+function interruptedOfficialCall(error2, signal) {
+  if (signal?.aborted) return "upstream-cancelled";
+  if (error2 instanceof SdkError && error2.code === SdkErrorCode.RequestTimeout) return "upstream-timeout";
+  return void 0;
+}
 async function createOfficialConnection(browserUrl, options = {}) {
   const arguments_ = options.args ?? buildServerArguments(browserUrl);
   const bin = options.bin ?? await resolveServerBin();
@@ -26570,6 +26566,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
           await client.callTool(
             { name, arguments: arguments_2 },
             {
+              timeout: options.requestTimeoutMs ?? 6e4,
               ...toolDefinition ? { toolDefinition } : {},
               ...signal ? { signal } : {},
               ...onProgress ? { onprogress: onProgress } : {}
@@ -26592,18 +26589,23 @@ async function createOfficialConnection(browserUrl, options = {}) {
 
 // src/adapters/mcp-entry-server.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/index.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/mcp-DYuW2ZSs.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/src-BHSMhZ_W.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/chunk-Br0eD_fh.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var __create3 = Object.create;
 var __defProp3 = Object.defineProperty;
 var __getOwnPropDesc3 = Object.getOwnPropertyDescriptor;
@@ -26645,6 +26647,7 @@ var __toESM3 = (mod, isNodeMode, target) => (target = mod != null ? __create3(__
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/dialects-DoSzNhcb.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var DRAFT_2020_12_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2020-12/schema", "http://json-schema.org/draft/2020-12/schema"]);
 var DRAFT_2019_09_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft/2019-09/schema", "http://json-schema.org/draft/2019-09/schema"]);
 var DRAFT_07_URIS2 = /* @__PURE__ */ new Set(["https://json-schema.org/draft-07/schema", "http://json-schema.org/draft-07/schema"]);
@@ -31086,9 +31089,11 @@ function serializeMessage2(message) {
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/shimsNode.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/ajvProvider-CEoC__sr.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var require_code$12 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -33036,8 +33041,8 @@ var require_resolve2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     }
     return count;
   }
-  function getFullPath(resolver, id = "", normalize) {
-    if (normalize !== false) id = normalizeId(id);
+  function getFullPath(resolver, id = "", normalize2) {
+    if (normalize2 !== false) id = normalizeId(id);
     return _getFullPath(resolver, resolver.parse(id));
   }
   exports.getFullPath = getFullPath;
@@ -34132,7 +34137,7 @@ var require_schemes2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
 var require_fast_uri2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
   const { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils2();
   const { SCHEMES, getSchemeHandler } = require_schemes2();
-  function normalize(uri, options) {
+  function normalize2(uri, options) {
     if (typeof uri === "string") uri = serialize(parse2(uri, options), options);
     else if (typeof uri === "object") uri = parse2(serialize(uri, options), options);
     return uri;
@@ -34310,7 +34315,7 @@ var require_fast_uri2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
   }
   const fastUri = {
     SCHEMES,
-    normalize,
+    normalize: normalize2,
     resolve,
     resolveComponent,
     equal,
@@ -38857,6 +38862,7 @@ var DEFAULT_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
 
 // node_modules/.pnpm/@modelcontextprotocol+server@2.2.0/node_modules/@modelcontextprotocol/server/dist/stdio.mjs
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var swallowsErrorsAfterClose = /* @__PURE__ */ Symbol("swallowsErrorsAfterClose");
 var StdioServerTransport = class {
   _readBuffer;
@@ -38958,6 +38964,319 @@ var StdioServerTransport = class {
   }
 };
 
+// src/domains/control-contract.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+
+// src/domains/launch-command.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+var PORT_PLACEHOLDER = "{port}";
+var DEFAULT_DEBUGGING_SWITCH = "--remote-debugging-port";
+function expandEnvironment(argument, environment) {
+  const expanded = argument.replace(/%([A-Za-z_][A-Za-z\d_]*)%/g, (_match, name) => {
+    if (!(name in environment)) throw new Error(`Environment variable ${name} is undefined.`);
+    return String(environment[name]);
+  }).replace(/\$\{([A-Za-z_][A-Za-z\d_]*)\}/g, (_match, name) => {
+    if (!(name in environment)) throw new Error(`Environment variable ${name} is undefined.`);
+    return String(environment[name]);
+  });
+  if (/%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/.test(expanded)) {
+    throw new Error("The launch command contains an unresolved environment variable.");
+  }
+  return expanded;
+}
+function explicitDebuggingPort(arguments_) {
+  const ports = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const argument = arguments_[index];
+    if (argument === void 0) throw new Error("Missing launch argument.");
+    const match = argument.match(/^--remote-debugging-port(?:=|:)(.*)$/i);
+    if (match) ports.push(match[1]);
+    if (/^--remote-debugging-port$/i.test(argument)) ports.push(arguments_[index + 1]);
+    if (/^--remote-debugging-pipe(?:=|$)/i.test(argument))
+      throw new Error("Debugging pipe conflicts with a CDP port.");
+  }
+  if (ports.length > 1) throw new Error("Duplicate remote debugging port sources conflict.");
+  return ports.length === 0 ? null : ports[0];
+}
+function stringValue(value, label, empty = false) {
+  if (typeof value !== "string" || value.includes("\0") || !empty && !value.trim())
+    throw new Error(`Invalid ${label}.`);
+}
+function parseApplicationLaunch(value) {
+  if (!isRecord(value) || Object.keys(value).some((key) => !["executable", "args", "cwd", "env"].includes(key)))
+    throw new Error("A structured application launch is required.");
+  stringValue(value.executable, "executable");
+  if (value.executable.includes(PORT_PLACEHOLDER)) throw new Error("The executable cannot contain {port}.");
+  if (value.args !== void 0 && !Array.isArray(value.args)) throw new Error("Arguments must be an array.");
+  const args = value.args?.map((argument) => {
+    stringValue(argument, "argument", true);
+    return argument;
+  });
+  if (value.cwd !== void 0) {
+    stringValue(value.cwd, "working directory");
+    if (value.cwd.includes(PORT_PLACEHOLDER)) throw new Error("The working directory cannot contain {port}.");
+  }
+  let env;
+  if (value.env !== void 0) {
+    if (!isRecord(value.env)) throw new Error("Environment must be an object.");
+    env = Object.fromEntries(
+      Object.entries(value.env).map(([name, setting]) => {
+        if (!name || /[=\0]/.test(name)) throw new Error("Invalid environment variable name.");
+        stringValue(setting, "environment variable value", true);
+        return [name, setting];
+      })
+    );
+  }
+  return {
+    executable: value.executable,
+    ...args === void 0 ? {} : { args },
+    ...value.cwd === void 0 ? {} : { cwd: value.cwd },
+    ...env === void 0 ? {} : { env }
+  };
+}
+function resolveLaunchDefinition(value, port, environment) {
+  const launch = parseApplicationLaunch(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("The CDP port is invalid.");
+  const substitute = (argument) => expandEnvironment(argument, environment).replaceAll(PORT_PLACEHOLDER, String(port));
+  const raw = [...launch.args ?? [], ...Object.values(launch.env ?? {})].map(
+    (argument) => expandEnvironment(argument, environment)
+  );
+  const hasPlaceholder = raw.some((argument) => argument.includes(PORT_PLACEHOLDER));
+  const args = (launch.args ?? []).map(substitute);
+  const env = launch.env === void 0 ? void 0 : Object.fromEntries(Object.entries(launch.env).map(([key, setting]) => [key, substitute(setting)]));
+  const argumentPort = explicitDebuggingPort(args);
+  const environmentPorts = [];
+  for (const setting of Object.values(env ?? {})) {
+    if (/(?:^|\s)--remote-debugging-pipe(?:=|\s|$)/i.test(setting))
+      throw new Error("Debugging pipe conflicts with a CDP port.");
+    for (const match of setting.matchAll(/(?:^|\s)--remote-debugging-port(?:[=:]|\s+|$)([^\s]*)/gi)) {
+      environmentPorts.push(match[1] ?? "");
+    }
+  }
+  const ports = [...argumentPort === null ? [] : [argumentPort], ...environmentPorts];
+  if (ports.length > 1) throw new Error("Duplicate remote debugging port sources conflict.");
+  if (ports.some((selected) => Number(selected) !== port))
+    throw new Error("A conflicting remote debugging port was supplied.");
+  if (!hasPlaceholder && ports.length === 0) args.push(`${DEFAULT_DEBUGGING_SWITCH}=${port}`);
+  const executablePath = expandEnvironment(launch.executable, environment);
+  const cwd = launch.cwd === void 0 ? void 0 : expandEnvironment(launch.cwd, environment);
+  if (executablePath.includes(PORT_PLACEHOLDER) || cwd?.includes(PORT_PLACEHOLDER))
+    throw new Error("Application paths cannot contain {port}.");
+  return {
+    executablePath,
+    arguments: args,
+    ...cwd === void 0 ? {} : { cwd },
+    ...env === void 0 ? {} : { env }
+  };
+}
+
+// src/domains/control-contract.ts
+function validateIdentity(value, label) {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value))
+    throw new Error(`A canonical lowercase UUID ${label} is required.`);
+}
+function parseConnectionRoute(value) {
+  if (!isRecord(value)) throw new Error("A connection routing object is required.");
+  fields2(value, ["connectionId", "sessionId"]);
+  validateIdentity(value.connectionId, "connection ID");
+  validateIdentity(value.sessionId, "session ID");
+  return { connectionId: value.connectionId, sessionId: value.sessionId };
+}
+function fields2(value, allowed) {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) throw new Error("Unknown control field.");
+}
+function strings(value) {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string" && !item.includes("\0")))
+    throw new Error("Expected an array of strings.");
+  return value;
+}
+function parseControlRequest(value) {
+  if (!isRecord(value)) throw new Error("Invalid control request.");
+  const action = value.action;
+  if (action === "status") {
+    fields2(value, ["action", "entryId", "connectionId", "operationId", "toolNames"]);
+    if (Object.keys(value).length === 1) return { action };
+    validateIdentity(value.entryId, "entry ID");
+    if (value.connectionId !== void 0) validateIdentity(value.connectionId, "connection ID");
+    if (value.operationId !== void 0) validateIdentity(value.operationId, "operation ID");
+    if (value.connectionId !== void 0 && value.operationId !== void 0)
+      throw new Error("Select a connection or an operation, not both.");
+    return {
+      action,
+      entryId: value.entryId,
+      ...value.connectionId === void 0 ? {} : { connectionId: value.connectionId },
+      ...value.operationId === void 0 ? {} : { operationId: value.operationId },
+      ...value.toolNames === void 0 ? {} : { toolNames: strings(value.toolNames) }
+    };
+  }
+  validateIdentity(value.entryId, "entry ID");
+  const entryId = value.entryId;
+  if (action === "wait" || action === "cancel") {
+    fields2(value, ["action", "entryId", "operationId", ...action === "wait" ? ["cursor"] : []]);
+    validateIdentity(value.operationId, "operation ID");
+    if (value.cursor !== void 0 && (typeof value.cursor !== "number" || !Number.isSafeInteger(value.cursor) || value.cursor < 0))
+      throw new Error("Invalid event cursor.");
+    return {
+      action,
+      entryId,
+      operationId: value.operationId,
+      ...value.cursor === void 0 ? {} : { cursor: value.cursor }
+    };
+  }
+  if (typeof value.requestId !== "string" || !value.requestId.trim() || value.requestId.length > 128 || value.requestId.includes("\0"))
+    throw new Error("A nonempty requestId of at most 128 characters is required.");
+  const requestId = value.requestId;
+  if (action === "start") {
+    fields2(value, ["action", "entryId", "requestId", "launch", "targetKind", "basePort", "mcpArgs"]);
+    if (value.targetKind !== void 0 && value.targetKind !== "chrome" && value.targetKind !== "generic-cdp")
+      throw new Error("Unknown target kind.");
+    if (value.basePort !== void 0 && (typeof value.basePort !== "number" || !Number.isInteger(value.basePort) || value.basePort < 1 || value.basePort > 65535))
+      throw new Error("Base port is invalid.");
+    return {
+      action,
+      entryId,
+      requestId,
+      launch: parseApplicationLaunch(value.launch),
+      ...value.targetKind === void 0 ? {} : { targetKind: value.targetKind },
+      ...value.basePort === void 0 ? {} : { basePort: value.basePort },
+      ...value.mcpArgs === void 0 ? {} : { mcpArgs: strings(value.mcpArgs) }
+    };
+  }
+  if (action !== "restart" && action !== "stop" && action !== "end-task") throw new Error("Unknown control action.");
+  fields2(value, [
+    "action",
+    "entryId",
+    "requestId",
+    "connectionId",
+    "sessionId",
+    ...action === "stop" ? ["disposition"] : [],
+    ...action === "restart" ? ["mcpArgs"] : []
+  ]);
+  const route = parseConnectionRoute({ connectionId: value.connectionId, sessionId: value.sessionId });
+  if (action === "stop") {
+    if (value.disposition !== "Close" && value.disposition !== "Keep") throw new Error("Choose Close or Keep.");
+    return { action, entryId, requestId, ...route, disposition: value.disposition };
+  }
+  if (action === "restart")
+    return {
+      action,
+      entryId,
+      requestId,
+      ...route,
+      ...value.mcpArgs === void 0 ? {} : { mcpArgs: strings(value.mcpArgs) }
+    };
+  return { action, entryId, requestId, ...route };
+}
+
+// src/adapters/lifecycle-tools.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+var LIFECYCLE_ACTIONS = {
+  dct_connection_status: "status",
+  dct_connection_start: "start",
+  dct_connection_restart: "restart",
+  dct_connection_stop: "stop",
+  dct_connection_end_task: "end-task",
+  dct_operation_wait: "wait",
+  dct_operation_cancel: "cancel"
+};
+function lifecycleTools(hookEvents) {
+  const uuid2 = { type: "string", format: "uuid" };
+  const stringList = { type: "array", items: { type: "string" } };
+  const identity = {
+    entryId: uuid2,
+    connectionId: uuid2,
+    sessionId: uuid2,
+    requestId: { type: "string", minLength: 1, maxLength: 128 }
+  };
+  const make = (name, description, properties, required2 = []) => ({
+    name,
+    description,
+    inputSchema: { type: "object", properties, required: required2, additionalProperties: false }
+  });
+  return [
+    make(
+      "dct_connection_status",
+      "Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. hookEventName is reserved for automatic Codex Hooks.",
+      {
+        entryId: uuid2,
+        connectionId: uuid2,
+        operationId: uuid2,
+        toolNames: stringList,
+        hookEventName: { type: "string", enum: [...hookEvents] }
+      }
+    ),
+    make(
+      "dct_connection_start",
+      "Launch a new application natively and create an independent official MCP connection. Returns an operation immediately; use dct_operation_wait for completion. Reuse requestId only when retrying the same request. The plugin detects Windows elevation requirements. Port placeholders are supported in args and env. cwd is not file-access authorization; use the official --workspace argument in mcpArgs.",
+      {
+        entryId: uuid2,
+        requestId: identity.requestId,
+        launch: {
+          type: "object",
+          properties: {
+            executable: { type: "string", description: "Absolute executable path." },
+            args: stringList,
+            cwd: { type: "string" },
+            env: { type: "object", additionalProperties: { type: "string" } }
+          },
+          required: ["executable"],
+          additionalProperties: false
+        },
+        mcpArgs: stringList,
+        targetKind: { type: "string", enum: ["chrome", "generic-cdp"] },
+        basePort: { type: "integer", minimum: 1, maximum: 65535 }
+      },
+      ["entryId", "requestId", "launch"]
+    ),
+    make(
+      "dct_connection_restart",
+      "Explicitly restart this connection with the same application and port, optionally replacing all mcpArgs. Keeps connectionId and creates a new sessionId; old page IDs and routes expire. Never restart or replay tools automatically.",
+      {
+        ...identity,
+        mcpArgs: stringList
+      },
+      Object.keys(identity)
+    ),
+    make(
+      "dct_connection_stop",
+      "Apply the user\u2019s Close or Keep choice to this connection. Close requests normal application shutdown and closes its upstream only; Keep retains both. Ask Close/Keep before ending target work. Returns an operation for waiting or cancellation.",
+      {
+        ...identity,
+        disposition: { type: "string", enum: ["Close", "Keep"] }
+      },
+      [...Object.keys(identity), "disposition"]
+    ),
+    make(
+      "dct_connection_end_task",
+      "End current work for the identified session while retaining its live application and upstream connection.",
+      identity,
+      Object.keys(identity)
+    ),
+    make(
+      "dct_operation_wait",
+      "Wait up to 25 seconds for operation events or a final result. Replay uses the returned cursor. Continue waiting with that cursor when incomplete; cancelling this wait leaves the operation running.",
+      {
+        entryId: uuid2,
+        operationId: uuid2,
+        cursor: { type: "integer", minimum: 0 }
+      },
+      ["entryId", "operationId"]
+    ),
+    make(
+      "dct_operation_cancel",
+      "Cancel this operation and perform actual cleanup. Cancellation may remain in progress during Windows authorization or normal close. Wait for the terminal result; failed cleanup preserves target identity for retry.",
+      {
+        entryId: uuid2,
+        operationId: uuid2
+      },
+      ["entryId", "operationId"]
+    )
+  ];
+}
+
 // src/adapters/mcp-entry-server.ts
 var HOOK_EVENTS = ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"];
 function createMcpEntryServer(options) {
@@ -38968,6 +39287,8 @@ function createMcpEntryServer(options) {
     additionalProperties: false
   };
   const tools = options.tools.map((tool) => {
+    if (Object.hasOwn(LIFECYCLE_ACTIONS, tool.name))
+      throw new Error("Official tool collides with a lifecycle tool.");
     if (Object.hasOwn(tool.inputSchema.properties ?? {}, "_dct"))
       throw new Error(`Official tool ${tool.name} already owns the reserved _dct routing field.`);
     return {
@@ -39004,34 +39325,35 @@ function createMcpEntryServer(options) {
     return server.elicitInput(params, signal ? { signal } : {});
   };
   server.setRequestHandler("tools/list", async () => ({
-    tools: [
-      ...tools,
-      {
-        name: "dct_connection_status",
-        description: "\u67E5\u770B\u76EE\u6807\u8FDE\u63A5\u72B6\u6001",
-        inputSchema: {
-          type: "object",
-          properties: {
-            hookEventName: {
-              type: "string",
-              enum: [...HOOK_EVENTS],
-              description: "Only for automatic Codex Hooks; Agents use empty arguments for status."
-            }
-          },
-          additionalProperties: false
-        }
-      }
-    ]
+    tools: [...tools, ...lifecycleTools(HOOK_EVENTS)]
   }));
   server.setRequestHandler("tools/call", async (request, ctx) => {
     const name = request.params.name;
-    if (name === "dct_connection_status") {
+    if (Object.hasOwn(LIFECYCLE_ACTIONS, name)) {
       const arguments_ = request.params.arguments ?? {};
       const hook = arguments_.hookEventName;
-      if (Object.keys(arguments_).some((key) => key !== "hookEventName") || hook !== void 0 && !HOOK_EVENTS.some((event) => event === hook))
-        throw new ProtocolError3(ProtocolErrorCode2.InvalidParams, "Invalid lifecycle status Hook arguments.");
-      const result = options.status(HOOK_EVENTS.find((event) => event === hook));
-      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+      try {
+        let result;
+        if (hook !== void 0) {
+          if (name !== "dct_connection_status" || Object.keys(arguments_).length !== 1 || !HOOK_EVENTS.some((event) => event === hook))
+            throw new Error("Invalid lifecycle status Hook arguments.");
+          result = options.status(HOOK_EVENTS.find((event) => event === hook));
+        } else {
+          if (Object.hasOwn(arguments_, "action"))
+            throw new Error("The tool name selects its lifecycle action.");
+          const control = parseControlRequest({ ...arguments_, action: LIFECYCLE_ACTIONS[name] });
+          if (options.control) result = await options.control(control, ctx.mcpReq.signal);
+          else if (control.action === "status" && Object.keys(arguments_).length === 0)
+            result = options.status();
+          else throw new Error("Lifecycle control is unavailable.");
+        }
+        return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+      } catch (error2) {
+        throw new ProtocolError3(
+          ProtocolErrorCode2.InvalidParams,
+          error2 instanceof Error ? error2.message : "Invalid lifecycle request."
+        );
+      }
     }
     if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
     parseConnectionRoute(request.params.arguments?._dct);
@@ -39062,13 +39384,15 @@ function createMcpEntryServer(options) {
 
 // src/adapters/target-host.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 import { spawn as nodeSpawn } from "node:child_process";
-import net2 from "node:net";
-import os3 from "node:os";
+import net from "node:net";
+import os2 from "node:os";
 import path6 from "node:path";
 
 // src/domains/cdp-target.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 var RetainedTargetError = class extends DetailedError {
   target;
   constructor(message, target) {
@@ -39126,114 +39450,236 @@ function validateCdpIdentity({
   return { browserProduct, webSocketDebuggerUrl: url2.toString() };
 }
 
-// src/domains/launch-command.ts
-init_define_DCT_OFFICIAL_RELEASE();
-var PORT_PLACEHOLDER = "{port}";
-var DEFAULT_DEBUGGING_SWITCH = "--remote-debugging-port";
-var SHELL_OPERATORS = /* @__PURE__ */ new Set(["&", "|", ";", "<", ">", "`", "\n", "\r"]);
-function tokenize(command) {
-  const result = [];
-  let value = "";
-  let quote = null;
-  let started = false;
-  for (let index = 0; index < command.length; index += 1) {
-    const character = command.charAt(index);
-    if (quote === null && /\s/.test(character)) {
-      if (started) result.push(value);
-      value = "";
-      started = false;
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      if (quote === character) {
-        quote = null;
-      } else if (quote === null) {
-        quote = character;
-      } else {
-        value += character;
-      }
-      started = true;
-      continue;
-    }
-    if (quote === null && SHELL_OPERATORS.has(character)) {
-      throw new Error("Shell operators are not accepted in launch commands.");
-    }
-    if (character === "\\" && command[index + 1] === '"') {
-      value += '"';
-      index += 1;
-    } else {
-      value += character;
-    }
-    started = true;
-  }
-  if (quote !== null) throw new Error("The launch command contains an unclosed quote.");
-  if (started) result.push(value);
-  return result;
-}
-function expandEnvironment(argument, environment) {
-  const expanded = argument.replace(/%([A-Za-z_][A-Za-z\d_]*)%/g, (_match, name) => {
-    if (!(name in environment)) throw new Error(`Environment variable ${name} is undefined.`);
-    return String(environment[name]);
-  }).replace(/\$\{([A-Za-z_][A-Za-z\d_]*)\}/g, (_match, name) => {
-    if (!(name in environment)) throw new Error(`Environment variable ${name} is undefined.`);
-    return String(environment[name]);
-  });
-  if (/%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/.test(expanded)) {
-    throw new Error("The launch command contains an unresolved environment variable.");
-  }
-  return expanded;
-}
-function explicitDebuggingPort(arguments_) {
-  const ports = [];
-  for (let index = 0; index < arguments_.length; index += 1) {
-    const argument = arguments_[index];
-    if (argument === void 0) throw new Error("Missing launch argument.");
-    const match = argument.match(/^--remote-debugging-port(?:=|:)(.+)$/i);
-    if (match) ports.push(match[1]);
-    if (/^--remote-debugging-port$/i.test(argument)) ports.push(arguments_[index + 1]);
-    if (/^--remote-debugging-pipe(?:=|$)/i.test(argument))
-      throw new Error("Debugging pipe conflicts with a CDP port.");
-  }
-  if (ports.length > 1) throw new Error("Duplicate remote debugging port sources conflict.");
-  return ports.length === 0 ? null : ports[0];
-}
-function parseLaunchCommand({
-  template,
-  port,
-  environment = {}
-}) {
-  if (typeof template !== "string" || !template.trim()) throw new Error("A launch command is required.");
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("The CDP port is invalid.");
-  const tokens = tokenize(template).map((token) => expandEnvironment(token, environment));
-  if (tokens.length === 0 || !tokens[0]) throw new Error("The executable path is required.");
-  const executable = tokens[0];
-  const rawArguments = tokens.slice(1);
-  if (executable.includes(PORT_PLACEHOLDER)) throw new Error("The executable cannot contain {port}.");
-  const hasPlaceholder = rawArguments.some((argument) => argument.includes(PORT_PLACEHOLDER));
-  const arguments_ = rawArguments.map((argument) => argument.replaceAll(PORT_PLACEHOLDER, String(port)));
-  const fixedPort = explicitDebuggingPort(arguments_);
-  if (fixedPort !== null && Number(fixedPort) !== port) {
-    throw new Error("The launch command contains a conflicting remote debugging port.");
-  }
-  if (!hasPlaceholder && fixedPort === null) arguments_.push(`${DEFAULT_DEBUGGING_SWITCH}=${port}`);
-  return { executable, arguments: arguments_ };
-}
-
 // src/adapters/chrome-profile.ts
 init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
 import { open as open2, readlink as readlink2, realpath as realpath2 } from "node:fs/promises";
-import os2 from "node:os";
+import os from "node:os";
 import path5 from "node:path";
 
 // src/adapters/platform-process.ts
 init_define_DCT_OFFICIAL_RELEASE();
-import { spawn as spawn2 } from "node:child_process";
+init_define_DCT_TOOL_CATALOG();
+import { spawn as spawn3 } from "node:child_process";
 import { readFile as readFile3, readlink } from "node:fs/promises";
 import path4 from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+
+// src/adapters/windows-launch.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { spawn as spawn2 } from "node:child_process";
+import { EventEmitter } from "node:events";
+import path3 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
+var NativeApplication = class extends EventEmitter {
+  pid;
+  startedAtUtc;
+  elevated;
+  exitCode = null;
+  signalCode = null;
+  monitoringFailure;
+  monitorDisposed = false;
+  releaseMonitor;
+  constructor(pid, startedAtUtc, elevated, releaseMonitor) {
+    super();
+    this.pid = pid;
+    this.startedAtUtc = startedAtUtc;
+    this.elevated = elevated;
+    this.releaseMonitor = releaseMonitor;
+  }
+  disposeMonitor() {
+    if (this.monitorDisposed) return;
+    this.monitorDisposed = true;
+    this.releaseMonitor();
+  }
+  onMonitorError(listener) {
+    this.once("monitor-error", listener);
+    if (this.monitoringFailure) listener();
+    return () => {
+      this.off("monitor-error", listener);
+    };
+  }
+};
+var phases = /* @__PURE__ */ new Set([
+  "inspecting-permission",
+  "launching",
+  "awaiting-permission",
+  "permission-handshake",
+  "native-operation",
+  "normal-close",
+  "wait-exit"
+]);
+function nativeFailure(value) {
+  const error2 = new DetailedError("Windows native application operation failed.");
+  error2.details = {
+    phase: typeof value.phase === "string" && phases.has(value.phase) ? value.phase : "native-helper",
+    ...typeof value.nativeError === "number" ? { nativeError: value.nativeError } : {},
+    ...typeof value.category === "string" && /^[a-z-]+$/.test(value.category) ? { category: value.category } : {},
+    ...typeof value.exceptionType === "string" && /^[A-Za-z]+$/.test(value.exceptionType) ? { exceptionType: value.exceptionType } : {}
+  };
+  return error2;
+}
+function createWindowsLauncher({
+  spawn: launchHelper = (executable, args) => spawn2(executable, args, {
+    shell: false,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"]
+  })
+} = {}) {
+  function helper(request, context, event, failure2, ended) {
+    const windows = process.env.SystemRoot ?? "C:/Windows";
+    const executable = path3.join(windows, "System32/WindowsPowerShell/v1.0/powershell.exe");
+    const script = fileURLToPath2(new URL("./windows-native-helper.ps1", import.meta.url));
+    const child = launchHelper(executable, [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      script
+    ]);
+    let buffer = "";
+    const cancel = () => {
+      if (!child.stdin.destroyed) child.stdin.write('{"cancel":true}\n');
+    };
+    context.signal?.addEventListener("abort", cancel, { once: true });
+    const detach = () => context.signal?.removeEventListener("abort", cancel);
+    child.stderr.resume();
+    child.stdin.on("error", () => {
+    });
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      if (buffer.length > 65536) {
+        buffer = "";
+        failure2(new Error("Native helper exceeded its evidence limit."));
+        child.stdin.end();
+        return;
+      }
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        try {
+          const value = JSON.parse(line);
+          if (!isRecord(value)) throw new Error("Invalid native process evidence.");
+          if (value.event === "phase") {
+            if (typeof value.phase !== "string" || !phases.has(value.phase))
+              throw new Error("Invalid native process phase.");
+            context.onPhase?.(value.phase);
+          } else if (value.event === "error") failure2(nativeFailure(value), true);
+          else event(value);
+        } catch {
+          failure2(new Error("Invalid native process evidence."));
+        }
+        newline = buffer.indexOf("\n");
+      }
+    });
+    child.once("error", (error2) => {
+      detach();
+      failure2(
+        nativeFailure({
+          category: "helper-start-failed",
+          nativeError: "errno" in error2 ? error2.errno : void 0
+        }),
+        true
+      );
+    });
+    child.once("close", () => {
+      detach();
+      ended();
+    });
+    child.stdin.write(`${JSON.stringify(request)}
+`);
+    if (context.signal?.aborted) cancel();
+    return {
+      child,
+      detach,
+      dispose: () => {
+        detach();
+        child.stdin.end();
+      }
+    };
+  }
+  return {
+    launch(launch, context = {}) {
+      context.signal?.throwIfAborted();
+      return new Promise((resolve, reject) => {
+        let application;
+        let launchFailure;
+        const failed = (error2, terminal2 = false) => {
+          launchFailure ??= error2;
+          if (application?.monitorDisposed) return;
+          if (!application && terminal2) reject(launchFailure);
+          else if (application && application.exitCode === null && !application.monitoringFailure) {
+            application.monitoringFailure = "native-helper-exited";
+            application.emit("monitor-error");
+          }
+          transport.dispose();
+        };
+        const transport = helper(
+          { action: "launch", launch },
+          context,
+          (value) => {
+            if (value.event === "cancelled" && !application) {
+              reject(
+                context.signal?.reason ?? new DOMException("Windows launch cancelled.", "AbortError")
+              );
+              transport.child.stdin.end();
+            } else if (value.event === "started" && !application) {
+              if (typeof value.processId !== "number" || !Number.isInteger(value.processId) || value.processId <= 0 || value.processId === transport.child.pid || typeof value.startedAtUtc !== "string" || !Number.isFinite(Date.parse(value.startedAtUtc)) || typeof value.executablePath !== "string" || path3.win32.resolve(value.executablePath).toLowerCase() !== path3.win32.resolve(launch.executablePath).toLowerCase() || typeof value.elevated !== "boolean")
+                throw new Error("Invalid actual application identity from native launch.");
+              application = new NativeApplication(
+                value.processId,
+                value.startedAtUtc,
+                value.elevated,
+                transport.dispose
+              );
+              if (launchFailure) application.monitoringFailure = "native-helper-exited";
+              transport.detach();
+              resolve(application);
+            } else if (value.event === "exited" && application && value.processId === application.pid && typeof value.exitCode === "number") {
+              application.exitCode = value.exitCode;
+              application.emit("exit");
+              application.disposeMonitor();
+            } else throw new Error("Unexpected native process evidence.");
+          },
+          failed,
+          () => failed(new Error("The native launch helper exited before completion."), true)
+        );
+      });
+    },
+    close(target) {
+      return new Promise((resolve, reject) => {
+        let complete = false;
+        const transport = helper(
+          { action: "close", target },
+          {},
+          (value) => {
+            if (value.event !== "closed" || typeof value.closed !== "boolean" || typeof value.closeRequested !== "boolean" || typeof value.processExited !== "boolean")
+              throw new Error("Invalid native close evidence.");
+            complete = true;
+            resolve(value);
+            transport.child.stdin.end();
+          },
+          (error2) => {
+            transport.dispose();
+            reject(error2);
+          },
+          () => {
+            if (!complete) reject(new Error("Native close helper exited without evidence."));
+          }
+        );
+      });
+    }
+  };
+}
+
+// src/adapters/platform-process.ts
 async function run(executable, arguments_) {
   return new Promise((resolve, reject) => {
-    const child = spawn2(executable, arguments_, {
+    const child = spawn3(executable, arguments_, {
       windowsHide: true,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"]
@@ -39251,7 +39697,7 @@ async function run(executable, arguments_) {
   });
 }
 async function windowsHelper(action, fields3) {
-  const helper = fileURLToPath2(new URL("./windows-cdp-helper.ps1", import.meta.url));
+  const helper = fileURLToPath3(new URL("./windows-cdp-helper.ps1", import.meta.url));
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helper, "-Action", action];
   for (const [name, value] of Object.entries(fields3)) if (value !== void 0) args.push(`-${name}`, String(value));
   const result = await run("powershell.exe", args);
@@ -39394,9 +39840,11 @@ async function unixSnapshot(pid, port) {
     listeners
   };
 }
-function createPlatformAdapter() {
-  if (!["win32", "linux", "darwin"].includes(process.platform)) throw new Error("Unsupported operating system.");
-  const snapshot = process.platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot;
+function createPlatformAdapter(dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const closeWindows = dependencies.closeWindows ?? createWindowsLauncher().close;
+  if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
+  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
   return {
     snapshot,
     validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
@@ -39421,28 +39869,45 @@ function createPlatformAdapter() {
     },
     async close(target, { requireListener = true } = {}) {
       const evidence = await snapshot(target.processId, target.port);
-      if (!evidence.root.exists) return evidence.listeners.length === 0;
+      if (!evidence.root.exists)
+        return !evidence.listeners.some((listener) => evidence.processIds.includes(listener.owningProcess));
       validateProcessIdentity(evidence, target);
-      if (process.platform === "win32") {
-        const result = await windowsHelper("Close", {
-          RootProcessId: target.processId,
-          Port: target.port,
-          ExecutablePath: target.executablePath,
-          StartedAtUtc: target.startedAtUtc,
-          ListenerPolicy: requireListener ? "OwnedExclusive" : "ProcessIdentityOnly",
-          TimeoutSeconds: CLOSE_TIMEOUT_SECONDS
-        });
-        return result.closed === true;
-      }
       const owned = new Set(evidence.processIds);
-      if (requireListener && (!evidence.listeners.length || evidence.listeners.some((listener) => !owned.has(listener.owningProcess)))) {
-        throw new Error("The CDP listener ownership changed.");
+      const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess)) ? "foreign" : evidence.listeners.length ? "owned" : "absent";
+      if (requireListener && listenerState === "foreign") {
+        const error2 = new DetailedError("The CDP listener belongs to another process.");
+        error2.details = { phase: "listener-identity", listenerState, closeRequested: false };
+        throw error2;
+      }
+      if (platform === "win32") {
+        let result;
+        try {
+          result = await closeWindows(target);
+        } catch (cause) {
+          const error3 = new DetailedError(errorMessage(cause));
+          error3.details = { ...errorDetails(cause), listenerState };
+          throw error3;
+        }
+        const after = await snapshot(target.processId, target.port);
+        if (after.root.exists) validateProcessIdentity(after, target);
+        const remaining = after.listeners.filter((listener) => owned.has(listener.owningProcess));
+        if (result.closed === true && !after.root.exists && !remaining.length) return true;
+        const error2 = new DetailedError("The application did not close normally.");
+        error2.details = {
+          phase: result.phase ?? "normal-close",
+          nativeError: result.nativeError ?? 0,
+          closeRequested: result.closeRequested === true,
+          processExited: !after.root.exists,
+          listenerState: remaining.length ? "owned" : after.listeners.length ? "foreign" : "absent"
+        };
+        throw error2;
       }
       process.kill(target.processId, "SIGTERM");
       for (let attempt = 0; attempt < CLOSE_TIMEOUT_SECONDS * 5; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 200));
         const after = await snapshot(target.processId, target.port);
-        if (!after.root.exists && after.listeners.length === 0) return true;
+        if (!after.root.exists && !after.listeners.some((listener) => owned.has(listener.owningProcess)))
+          return true;
         if (after.root.exists) validateProcessIdentity(after, target);
       }
       return false;
@@ -39483,7 +39948,7 @@ async function profileAvailable(directory) {
   const split = lock.lastIndexOf("-");
   const host = lock.slice(0, split);
   const pid = Number(lock.slice(split + 1));
-  if (host !== os2.hostname() || !Number.isSafeInteger(pid) || pid < 1) return false;
+  if (host !== os.hostname() || !Number.isSafeInteger(pid) || pid < 1) return false;
   return !probeProcessExists(pid);
 }
 async function canonicalDirectory(directory) {
@@ -39500,13 +39965,13 @@ async function reserveProfile(directory, available = profileAvailable) {
   const occupied = () => new Error(
     `Chrome profile is occupied or unverifiable; explicitly choose another --user-data-dir: ${directory}`
   );
-  let canonical;
+  let canonical2;
   try {
-    canonical = await canonicalDirectory(directory);
+    canonical2 = await canonicalDirectory(directory);
   } catch {
     throw occupied();
   }
-  const identity = process.platform === "win32" ? canonical.toLowerCase() : canonical;
+  const identity = process.platform === "win32" ? canonical2.toLowerCase() : canonical2;
   if (claims.has(identity)) throw occupied();
   claims.add(identity);
   let released = false;
@@ -39517,7 +39982,7 @@ async function reserveProfile(directory, available = profileAvailable) {
     }
   };
   try {
-    if (!await available(canonical)) throw occupied();
+    if (!await available(canonical2)) throw occupied();
   } catch {
     release();
     throw occupied();
@@ -39539,7 +40004,7 @@ function chromeProfileArgument(arguments_) {
 
 // src/adapters/target-host.ts
 async function probeAddress(port, host) {
-  const server = net2.createServer();
+  const server = net.createServer();
   try {
     return await new Promise((resolve, reject) => {
       server.once("error", (error2) => {
@@ -39559,13 +40024,14 @@ async function probePort(port) {
   const ipv62 = await probeAddress(port, "::1");
   return ipv42 === true && ipv62 !== false;
 }
-async function spawn3(executable, arguments_, _port, cwd = path6.dirname(executable)) {
+async function spawnPortableApplication(executable, arguments_, _port, cwd = path6.dirname(executable), env) {
   const child = nodeSpawn(executable, arguments_, {
     cwd,
     detached: true,
     stdio: "ignore",
     windowsHide: false,
-    shell: false
+    shell: false,
+    env
   });
   await new Promise((resolve, reject) => {
     child.once("spawn", resolve);
@@ -39592,7 +40058,7 @@ function applyChromePreset(arguments_) {
   if (addresses.length && addresses[0] !== "127.0.0.1") throw new Error("Chrome debugging must use loopback.");
   const result = [...arguments_];
   if (chromeProfileArgument(result) === void 0) {
-    const home = process.platform === "win32" ? process.env.USERPROFILE : os3.homedir();
+    const home = process.platform === "win32" ? process.env.USERPROFILE : os2.homedir();
     if (!home || !path6.isAbsolute(home)) throw new Error("The Chrome profile home directory is unavailable.");
     result.push(`--user-data-dir=${path6.join(home, ".cache", "chrome-devtools-mcp", "chrome-profile")}`);
   }
@@ -39603,9 +40069,22 @@ function applyChromePreset(arguments_) {
 }
 function createTargetHost(dependencies = {}) {
   const platform = dependencies.platformAdapter ?? createPlatformAdapter();
+  const launchWindows = createWindowsLauncher();
   const io = {
     probe: probePort,
-    spawn: spawn3,
+    spawn: process.platform === "win32" ? (executablePath, arguments_, _port, cwd, env, context) => launchWindows.launch(
+      {
+        executablePath,
+        arguments: arguments_,
+        cwd,
+        env: Object.fromEntries(
+          Object.entries(env).filter(
+            (entry) => entry[1] !== void 0
+          )
+        )
+      },
+      context
+    ) : spawnPortableApplication,
     getVersion,
     now: Date.now,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
@@ -39614,12 +40093,13 @@ function createTargetHost(dependencies = {}) {
   };
   return {
     async launch({
-      launchCommand,
+      launch,
       targetKind = "generic-cdp",
       basePort = DEFAULT_BASE_PORT,
       exactPort,
       launchDefinition
-    }) {
+    }, context = {}) {
+      context.signal?.throwIfAborted();
       if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
       const excluded = await platform.reservedRanges();
       if (exactPort !== void 0 && (!Number.isInteger(exactPort) || exactPort < 1024 || exactPort > 65535 || excluded.some(([start, end]) => exactPort >= start && exactPort <= end) || !await io.probe(exactPort)))
@@ -39627,18 +40107,26 @@ function createTargetHost(dependencies = {}) {
       let candidate = basePort;
       while (candidate <= 65535) {
         const port = exactPort ?? await choosePort({ basePort: candidate, reservedRanges: excluded, probe: io.probe });
-        const parsed = launchDefinition ? { executable: launchDefinition.executablePath, arguments: [...launchDefinition.arguments] } : parseLaunchCommand({ template: launchCommand, port, environment: process.env });
-        if (!path6.isAbsolute(parsed.executable))
-          throw new Error("The launch command must use an absolute executable path.");
-        const executablePath = path6.resolve(parsed.executable);
+        context.signal?.throwIfAborted();
+        const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env);
+        if (!path6.isAbsolute(parsed.executablePath))
+          throw new Error("The application must use an absolute executable path.");
+        const executablePath = path6.resolve(parsed.executablePath);
         const args = targetKind === "chrome" ? applyChromePreset(parsed.arguments) : parsed.arguments;
-        const cwd = launchDefinition?.cwd ?? path6.dirname(executablePath);
+        const cwd = parsed.cwd ?? path6.dirname(executablePath);
+        if (!path6.isAbsolute(cwd)) throw new Error("The application working directory must be absolute.");
+        const environment = /* @__PURE__ */ new Map();
+        for (const [name, value] of [...Object.entries(process.env), ...Object.entries(parsed.env ?? {})])
+          environment.set(process.platform === "win32" ? name.toLowerCase() : name, [name, value]);
+        const env = Object.fromEntries(environment.values());
         const profile = targetKind === "chrome" ? chromeProfileArgument(args) : void 0;
         const release = profile === void 0 ? void 0 : await reserveProfile(path6.resolve(cwd, profile), io.profileAvailable);
-        const launchedAt = io.now();
+        const requestedAt = io.now();
+        context.onPhase?.("launching");
         let child;
         try {
-          child = await io.spawn(executablePath, args, port, cwd);
+          context.signal?.throwIfAborted();
+          child = await io.spawn(executablePath, args, port, cwd, env, context);
           if (child.pid === void 0) throw new Error("The target process has no PID.");
         } catch (error3) {
           release?.();
@@ -39658,15 +40146,22 @@ function createTargetHost(dependencies = {}) {
           port,
           processId,
           executablePath,
-          startedAtUtc: new Date(launchedAt).toISOString(),
+          startedAtUtc: child.startedAtUtc ?? new Date(requestedAt).toISOString(),
           targetKind,
           child,
           ...release ? { releaseProfile } : {}
         };
         let lastError;
         let foreignRace = false;
+        const launchedAt = io.now();
+        context.onPhase?.("waiting-cdp");
         while (io.now() - launchedAt < STARTUP_TIMEOUT_MS) {
           try {
+            context.signal?.throwIfAborted();
+            if (child.monitoringFailure)
+              throw new Error(
+                "The native process observer failed; retaining application identity for cleanup."
+              );
             const evidence = await platform.snapshot(child.pid, port);
             platform.validateNewRoot(evidence, target);
             if (!evidence.root.exists) throw new Error("The target root process is absent.");
@@ -39682,6 +40177,7 @@ function createTargetHost(dependencies = {}) {
               break;
             }
             const endpoint = await io.getVersion(port);
+            context.signal?.throwIfAborted();
             const identity = validateCdpIdentity({
               endpoint,
               port,
@@ -39692,7 +40188,12 @@ function createTargetHost(dependencies = {}) {
             return {
               ...target,
               ...identity,
-              launchDefinition: { executablePath, arguments: args, cwd },
+              launchDefinition: {
+                executablePath,
+                arguments: args,
+                cwd,
+                ...parsed.env ? { env: { ...parsed.env } } : {}
+              },
               async verify() {
                 const current = await platform.snapshot(processId, port);
                 validateProcessIdentity(current, target);
@@ -39710,17 +40211,23 @@ function createTargetHost(dependencies = {}) {
             };
           } catch (error3) {
             lastError = error3;
-            if (child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
+            if (context.signal?.aborted || child.monitoringFailure || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
               break;
             await io.sleep(POLL_INTERVAL_MS);
           }
         }
         let closeConfirmed = false;
+        let cleanupError;
         try {
           closeConfirmed = await platform.close(target, { requireListener: false });
-        } catch {
+        } catch (error3) {
+          cleanupError = error3;
         }
-        if (closeConfirmed) releaseProfile?.();
+        if (closeConfirmed) {
+          releaseProfile?.();
+          child.disposeMonitor?.();
+        }
+        if (closeConfirmed && context.signal?.aborted) throw context.signal.reason;
         if (foreignRace && closeConfirmed && exactPort === void 0) {
           candidate = port + 1;
           continue;
@@ -39728,16 +40235,24 @@ function createTargetHost(dependencies = {}) {
         const message = `The new target did not expose a verified CDP endpoint: ${lastError === void 0 ? void 0 : errorMessage(lastError)}`;
         const error2 = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, {
           ...target,
-          launchDefinition: { executablePath, arguments: args, cwd }
+          launchDefinition: {
+            executablePath,
+            arguments: args,
+            cwd,
+            ...parsed.env ? { env: { ...parsed.env } } : {}
+          }
         });
-        error2.details = { processId: child.pid, port, closeConfirmed };
+        error2.details = { processId: child.pid, port, closeConfirmed, ...errorDetails(cleanupError) };
         throw error2;
       }
       throw new Error("The CDP port range is exhausted.");
     },
     async close(target, options) {
       const closed = await platform.close(target, options);
-      if (closed) target.releaseProfile?.();
+      if (closed) {
+        target.releaseProfile?.();
+        target.child?.disposeMonitor?.();
+      }
       return closed;
     },
     async health(target) {
@@ -39761,9 +40276,363 @@ function createTargetHost(dependencies = {}) {
   };
 }
 
+// src/adapters/tool-catalog.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { readFile as readFile4 } from "node:fs/promises";
+import os3 from "node:os";
+var defaults = {
+  categoryInput: true,
+  categoryNavigation: true,
+  categoryEmulation: true,
+  categoryPerformance: true,
+  categoryNetwork: true,
+  categoryDebugging: true,
+  categoryMemory: true,
+  categoryExtensions: true,
+  javascriptEvaluation: true,
+  pageIdRouting: true
+};
+function distinct(items) {
+  return [...new Map(items.map((item) => [JSON.stringify(item), item])).values()];
+}
+function createToolCatalog(value) {
+  if (!isRecord(value) || value.version !== "1.10.1" || !Array.isArray(value.tools))
+    throw new Error("Invalid fixed official tool catalog.");
+  const entries = /* @__PURE__ */ new Map();
+  for (const input of value.tools) {
+    if (!isRecord(input) || typeof input.name !== "string" || !isRecord(input.requires))
+      throw new Error("Invalid official tool requirements.");
+    const required2 = {};
+    for (const [flag, enabled] of Object.entries(input.requires)) {
+      if (typeof enabled !== "boolean") throw new Error("Invalid official tool condition.");
+      parseMcpArgs([`--${flag}=${enabled}`]);
+      required2[flag] = enabled;
+    }
+    const variants = ListToolsResultSchema.parse({ tools: input.variants }).tools;
+    if (!variants.length || variants.some((tool) => tool.name !== input.name) || entries.has(input.name))
+      throw new Error("Invalid official tool variants.");
+    entries.set(input.name, { name: input.name, requires: required2, variants });
+  }
+  function requirements(name, mcpArgs) {
+    const entry = entries.get(name);
+    if (!entry) throw new Error(`Unknown official tool: ${name}.`);
+    const options = parseMcpArgs(mcpArgs);
+    const missingConditions = Object.entries(entry.requires).filter(([flag, expected]) => (options.get(flag)?.values[0] ?? defaults[flag] ?? false) !== expected).map(([flag, expected]) => `--${flag}=${expected}`);
+    const supported = !entry.requires.categoryPwa;
+    return {
+      name,
+      supported,
+      conditions: Object.entries(entry.requires).map(([flag, expected]) => `--${flag}=${expected}`),
+      missingConditions,
+      ...supported ? { suggestedMcpArgs: suggestMcpArgs(mcpArgs, entry.requires) } : {
+        reason: "Official PWA tools require a pipe-launched browser; the gateway manages a verified CDP endpoint."
+      }
+    };
+  }
+  const tools = [...entries.values()].map((entry) => {
+    const first = entry.variants[0];
+    if (!first) throw new Error("Missing official tool definition.");
+    const schemas = distinct(entry.variants.map((tool) => tool.inputSchema));
+    const keys = new Set(schemas.flatMap((schema) => Object.keys(schema.properties ?? {})));
+    const properties = Object.fromEntries(
+      [...keys].map((key) => {
+        const definitions = distinct(
+          schemas.flatMap(
+            (schema) => schema.properties?.[key] === void 0 ? [] : [schema.properties[key]]
+          )
+        );
+        return [key, definitions.length === 1 ? definitions[0] : { anyOf: definitions }];
+      })
+    );
+    const required2 = (first.inputSchema.required ?? []).filter(
+      (key) => schemas.every((schema) => schema.required?.includes(key))
+    );
+    const conditions = requirements(entry.name, []);
+    const description = `${first.description ?? entry.name}
+Gateway configuration: ${conditions.conditions.join(", ")}. ${conditions.reason ?? ""}` + (schemas.length > 1 ? "\nCompatible declaration combines official parameter variants. Query dct_connection_status with toolNames for the selected connection\u2019s exact input schema before using configuration-sensitive arguments." : "");
+    return ListToolsResultSchema.parse({
+      tools: [{ ...first, description, inputSchema: { ...first.inputSchema, properties, required: required2 } }]
+    }).tools[0];
+  }).filter((tool) => tool !== void 0);
+  return {
+    tools,
+    requirements,
+    validate(actual) {
+      for (const tool of actual) {
+        const entry = entries.get(tool.name);
+        if (!entry?.variants.some(
+          (variant) => JSON.stringify(variant.inputSchema) === JSON.stringify(tool.inputSchema)
+        ))
+          throw new Error(`The official tool catalog changed outside the reviewed variants: ${tool.name}.`);
+      }
+    },
+    describe(mcpArgs, actual, names) {
+      const chosen = names ?? (actual ? actual.map((tool) => tool.name) : [...entries.keys()]);
+      return chosen.map((name) => {
+        const requirement = requirements(name, mcpArgs);
+        const tool = actual?.find((tool2) => tool2.name === name);
+        return {
+          ...requirement,
+          ...actual ? { enabled: tool !== void 0 } : {},
+          ...tool ? { inputSchema: tool.inputSchema } : {}
+        };
+      });
+    }
+  };
+}
+async function loadOfficialToolCatalog(_defaults) {
+  const value = typeof define_DCT_TOOL_CATALOG_default !== "undefined" ? define_DCT_TOOL_CATALOG_default : JSON.parse(await readFile4(new URL("../../tooling/official-tool-catalog.json", import.meta.url), "utf8"));
+  return createToolCatalog(value);
+}
+function workspaceSources(mcpArgs, supportsRoots) {
+  const args = parseMcpArgs(mcpArgs);
+  return {
+    officialDirectories: args.get("filesystemRoot")?.values ?? [os3.tmpdir()],
+    officialSource: args.has("filesystemRoot") ? "explicit-workspace" : "system-temporary-directory",
+    clientRoots: supportsRoots ? "negotiated-forwarding-on-demand" : "not-negotiated",
+    unrestrictedPaths: args.get("allowUnrestrictedPaths")?.values[0] === true,
+    cwdGrantsAccess: false
+  };
+}
+
+// src/application/mcp-lifecycle.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+
+// src/application/operations.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { createHash as createHash2, randomUUID } from "node:crypto";
+var terminal = (state) => state === "succeeded" || state === "failed" || state === "cancelled";
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (isRecord(value))
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonical(value[key])])
+    );
+  return value;
+}
+function createOperationRegistry(entryId) {
+  const operations = /* @__PURE__ */ new Map();
+  const requests = /* @__PURE__ */ new Map();
+  const notices = /* @__PURE__ */ new Set();
+  function selected(operationId) {
+    const operation = operations.get(operationId);
+    if (!operation) throw new Error("The operation is absent from this entry.");
+    return operation;
+  }
+  function get(operationId) {
+    return structuredClone(selected(operationId).snapshot);
+  }
+  function emit(operation) {
+    operation.snapshot.cursor += 1;
+    operation.snapshot.elapsedMs = Math.max(0, Date.now() - operation.started);
+    const { cursor, state, phase, elapsedMs, connectionId, sessionId } = operation.snapshot;
+    operation.events.push({
+      cursor,
+      state,
+      phase,
+      elapsedMs,
+      ...connectionId ? { connectionId, sessionId } : {}
+    });
+    if (operation.events.length > 128) operation.events.shift();
+    for (const listener of [...operation.listeners]) listener();
+  }
+  function lookup(requestId, request) {
+    const fingerprint = createHash2("sha256").update(JSON.stringify(canonical(request))).digest("hex");
+    const prior = requests.get(requestId);
+    if (prior && prior.fingerprint !== fingerprint)
+      throw new Error("This requestId already identifies a different request.");
+    return { fingerprint, prior: prior ? get(prior.operationId) : void 0 };
+  }
+  function submit(requestId, request, job, onSettled) {
+    const { fingerprint, prior } = lookup(requestId, request);
+    if (prior) return prior;
+    const operationId = randomUUID();
+    const operation = {
+      snapshot: { entryId, operationId, state: "accepted", cursor: 0, phase: "accepted", elapsedMs: 0 },
+      started: Date.now(),
+      abort: new AbortController(),
+      events: [],
+      listeners: /* @__PURE__ */ new Set()
+    };
+    operations.set(operationId, operation);
+    requests.set(requestId, { fingerprint, operationId });
+    emit(operation);
+    const accepted = get(operationId);
+    operation.finished = Promise.resolve().then(async () => {
+      try {
+        operation.abort.signal.throwIfAborted();
+        operation.snapshot.state = "running";
+        emit(operation);
+        const result = await job({
+          signal: operation.abort.signal,
+          phase: (phase) => {
+            operation.snapshot.phase = phase;
+            emit(operation);
+          },
+          identity: (route) => {
+            Object.assign(operation.snapshot, route);
+            emit(operation);
+          }
+        });
+        operation.snapshot.result = result;
+        operation.snapshot.state = "succeeded";
+      } catch (error2) {
+        const cancelled = operation.abort.signal.aborted && error2 === operation.abort.signal.reason;
+        operation.snapshot.state = cancelled ? "cancelled" : "failed";
+        if (!cancelled) operation.snapshot.error = { ...errorDetails(error2), message: errorMessage(error2) };
+      } finally {
+        onSettled?.();
+        operation.snapshot.phase = operation.snapshot.state;
+        notices.add(operationId);
+        emit(operation);
+      }
+    });
+    return accepted;
+  }
+  async function wait(operationId, cursor = 0, signal) {
+    const operation = selected(operationId);
+    if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > operation.snapshot.cursor)
+      throw new Error("Invalid event cursor for this operation.");
+    signal?.throwIfAborted();
+    if (!terminal(operation.snapshot.state) && cursor === operation.snapshot.cursor) {
+      await new Promise((resolve, reject) => {
+        const finish = (error2) => {
+          clearTimeout(timer);
+          operation.listeners.delete(changed);
+          signal?.removeEventListener("abort", aborted2);
+          if (error2) reject(error2);
+          else resolve();
+        };
+        const changed = () => finish();
+        const aborted2 = () => finish(signal?.reason);
+        const timer = setTimeout(changed, 25e3);
+        operation.listeners.add(changed);
+        signal?.addEventListener("abort", aborted2, { once: true });
+        if (signal?.aborted) aborted2();
+      });
+    }
+    const events = operation.events.filter((event) => event.cursor > cursor);
+    return {
+      operation: get(operationId),
+      events: structuredClone(events),
+      cursor: operation.snapshot.cursor,
+      replayTruncated: cursor < (operation.events[0]?.cursor ?? 1) - 1,
+      complete: terminal(operation.snapshot.state)
+    };
+  }
+  function cancel(operationId) {
+    const operation = selected(operationId);
+    if (!terminal(operation.snapshot.state) && !operation.abort.signal.aborted) {
+      operation.snapshot.state = "cancelling";
+      operation.abort.abort(new DOMException("Operation aborted; cleanup required.", "AbortError"));
+      emit(operation);
+    }
+    return get(operationId);
+  }
+  return {
+    get,
+    submit,
+    wait,
+    cancel,
+    prior: (requestId, request) => lookup(requestId, request).prior,
+    takeNotices: () => {
+      const result = [...notices].map(get);
+      notices.clear();
+      return result;
+    },
+    async close() {
+      for (const id of operations.keys()) cancel(id);
+      await Promise.all([...operations.values()].map((operation) => operation.finished));
+    }
+  };
+}
+
+// src/application/mcp-lifecycle.ts
+function createLifecycleService({ entryId, handler }) {
+  const operations = createOperationRegistry(entryId);
+  const changing = /* @__PURE__ */ new Set();
+  let closing = false;
+  async function control(request, signal) {
+    if (request.entryId !== void 0 && request.entryId !== entryId)
+      throw new Error("This request identifies another entry.");
+    if (request.action === "status") {
+      if (request.operationId) return { ...operations.get(request.operationId) };
+      return { ...handler.status(request.connectionId) };
+    }
+    if (request.action === "wait") return operations.wait(request.operationId, request.cursor, signal);
+    if (request.action === "cancel") return { ...operations.cancel(request.operationId) };
+    const prior = operations.prior(request.requestId, request);
+    if (prior) return { ...prior };
+    if (closing) throw new Error("The gateway is closing.");
+    const connectionId = request.action === "start" ? void 0 : request.connectionId;
+    if (request.action !== "start") {
+      const current = handler.status(request.connectionId);
+      if (!("sessionId" in current) || current.sessionId !== request.sessionId)
+        throw new Error("The target session is absent or stale.");
+      if (changing.has(request.connectionId))
+        throw new Error("A lifecycle operation is already running for this connection.");
+      changing.add(request.connectionId);
+    }
+    let boundConnection = connectionId;
+    const accepted = operations.submit(
+      request.requestId,
+      request,
+      async (operation) => {
+        const context = {
+          signal: operation.signal,
+          onPhase: operation.phase,
+          onIdentity: (route) => {
+            boundConnection = route.connectionId;
+            changing.add(route.connectionId);
+            operation.identity(route);
+          }
+        };
+        {
+          if (request.action !== "start") operation.identity(request);
+          let result;
+          if (request.action === "start") result = await handler.start(request, context);
+          else if (request.action === "restart") result = await handler.restart(request, context);
+          else if (request.action === "stop") result = await handler.stop(request, context);
+          else result = await handler.endTask(request);
+          if (result.sessionId)
+            operation.identity({ connectionId: result.connectionId, sessionId: result.sessionId });
+          if (operation.signal.aborted && (request.action === "start" || request.action === "restart")) {
+            if (result.sessionId) {
+              operation.phase("cancelling-created-target");
+              await handler.stop({
+                connectionId: result.connectionId,
+                sessionId: result.sessionId,
+                disposition: "Close"
+              });
+            }
+            throw operation.signal.reason;
+          }
+          return { ...result };
+        }
+      },
+      () => {
+        if (boundConnection) changing.delete(boundConnection);
+      }
+    );
+    return { ...accepted };
+  }
+  return {
+    control,
+    takeNotices: operations.takeNotices,
+    async close() {
+      closing = true;
+      await operations.close();
+    }
+  };
+}
+
 // src/application/target-controller.ts
 init_define_DCT_OFFICIAL_RELEASE();
-import { randomUUID } from "node:crypto";
+init_define_DCT_TOOL_CATALOG();
+import { randomUUID as randomUUID2 } from "node:crypto";
 function createTargetController({
   entryId,
   router,
@@ -39810,9 +40679,16 @@ function createTargetController({
     if (!gated) router.clearTarget();
     gated = true;
   }
+  function confirmExit(selected) {
+    if (!selected.exited) {
+      selected.exited = true;
+      selected.target.releaseProfile?.();
+    }
+    selected.target.child?.disposeMonitor?.();
+  }
   function processExited(selected) {
     if (current !== selected || selected.exited) return;
-    selected.exited = true;
+    confirmExit(selected);
     gate();
     if (state === "closing" || selected.expectedExit) return;
     state = "lost";
@@ -39828,7 +40704,11 @@ function createTargetController({
     if (!child) return;
     const exited = () => processExited(selected);
     child.once("exit", exited);
-    selected.unsubscribe = () => child.off?.("exit", exited);
+    const stopMonitor = child.onMonitorError?.(() => lose(selected, "process-monitor-lost"));
+    selected.unsubscribe = () => {
+      child.off?.("exit", exited);
+      stopMonitor?.();
+    };
     if (typeof child.exitCode === "number" || typeof child.signalCode === "string") exited();
   }
   function lose(selected, why) {
@@ -39838,12 +40718,19 @@ function createTargetController({
     reason = why;
   }
   async function tryClose(selected, requireListener = true) {
+    delete selected.closeFailure;
     try {
       if (selected.exited) return true;
-      if (!requireListener && host.health && await host.health(selected.target) === "gone") return true;
+      if (!requireListener && host.health && await host.health(selected.target) === "gone") {
+        confirmExit(selected);
+        return true;
+      }
       const closed = await host.close(selected.target, { requireListener });
+      if (closed) confirmExit(selected);
+      if (!closed) selected.closeFailure = { phase: "normal-close", reason: "application-still-running" };
       return selected.exited || closed;
-    } catch {
+    } catch (error2) {
+      selected.closeFailure = { phase: "normal-close", message: errorMessage(error2), ...errorDetails(error2) };
       return selected.exited;
     }
   }
@@ -39851,7 +40738,12 @@ function createTargetController({
     const error2 = new DetailedError(
       "The target did not close normally; its official connection and identity remain available for retry."
     );
-    error2.details = { retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }] };
+    error2.details = {
+      ...selected.closeFailure,
+      entryId,
+      sessionId: selected.sessionId,
+      retainedTargets: [{ processId: selected.target.processId, port: selected.target.port }]
+    };
     return error2;
   }
   function retainFailedRollback(target, options, sessionId) {
@@ -39862,17 +40754,21 @@ function createTargetController({
     gate();
     subscribe(current);
   }
-  async function attach(options, sessionId = randomUUID()) {
-    await server.ensure();
+  async function attach(options, sessionId = randomUUID2(), context = {}) {
+    context.signal?.throwIfAborted();
+    context.onPhase?.("starting-official-server");
+    await server.ensure(options);
+    context.signal?.throwIfAborted();
     let target;
     try {
-      target = await host.launch(options);
+      target = await host.launch(options, context);
     } catch (error2) {
       if (error2 instanceof RetainedTargetError) retainFailedRollback(error2.target, options, sessionId);
       throw error2;
     }
     const selected = { target, options, sessionId, exited: false };
     try {
+      context.signal?.throwIfAborted();
       router.setTarget(target);
     } catch (error2) {
       if (!await tryClose(selected, false)) {
@@ -39889,11 +40785,11 @@ function createTargetController({
     subscribe(selected);
     return status();
   }
-  function start(options, sessionId) {
+  function start(options, sessionId, context = {}) {
     return run2(async () => {
       if (current)
         throw new Error("An existing target session must be explicitly closed before this entry is reused.");
-      return attach(options, sessionId);
+      return attach(options, sessionId, context);
     });
   }
   async function dispose(selected) {
@@ -39908,6 +40804,7 @@ function createTargetController({
       throw error2;
     }
     selected.unsubscribe?.();
+    selected.target.child?.disposeMonitor?.();
     current = void 0;
     state = "idle";
     reason = void 0;
@@ -39919,18 +40816,23 @@ function createTargetController({
       return status();
     });
   }
-  function restart({ sessionId }) {
+  function restart({ sessionId, mcpArgs }, context = {}) {
     return run2(async () => {
+      context.signal?.throwIfAborted();
       const previous = requireSession(sessionId);
-      if (state !== "lost")
-        throw new Error("Only a lost target session can be restarted after an explicit user choice.");
+      if (state !== "lost" && state !== "active")
+        throw new Error("Only an active or lost target session can be explicitly restarted.");
+      if (router.isBusy()) throw new Error("CDP is busy; retry after the current request completes.");
       if (!previous.target.launchDefinition)
         throw new Error("The exact launch definition is unavailable; cannot safely restart.");
       previous.expectedExit = true;
+      router.pause?.();
+      const previousState = state;
       state = "closing";
       if (!await tryClose(previous, false)) {
         delete previous.expectedExit;
-        state = "lost";
+        state = previousState;
+        router.resume?.();
         throw failedClose(previous);
       }
       try {
@@ -39942,17 +40844,24 @@ function createTargetController({
         throw error2;
       }
       previous.unsubscribe?.();
+      previous.target.child?.disposeMonitor?.();
+      previous.exited = true;
       const options = {
         ...previous.options,
         exactPort: previous.target.port,
-        launchDefinition: previous.target.launchDefinition
+        launchDefinition: previous.target.launchDefinition,
+        ...mcpArgs === void 0 ? {} : { mcpArgs }
       };
       try {
-        return { ...await attach(options), pageIdsInvalidated: true };
+        const nextSession = randomUUID2();
+        context.onSession?.(nextSession);
+        return { ...await attach(options, nextSession, context), pageIdsInvalidated: true };
       } catch (error2) {
         if (current === previous) {
           state = "lost";
+          reason = "restart-incomplete";
           gate();
+          context.onSession?.(previous.sessionId);
         }
         throw error2;
       }
@@ -40034,6 +40943,7 @@ function createTargetController({
         await server.close();
       } finally {
         selected?.unsubscribe?.();
+        selected?.target.child?.disposeMonitor?.();
       }
       current = void 0;
       state = "idle";
@@ -40054,6 +40964,9 @@ function createTargetController({
     officialDisconnected: () => {
       if (current) lose(current, "official-disconnected");
     },
+    quarantine: (reason2) => {
+      if (current) lose(current, reason2);
+    },
     canInvoke: () => state === "active" && !gated
   };
 }
@@ -40062,20 +40975,21 @@ function createTargetController({
 async function startPluginRuntime({
   createRouter = createCdpRouter,
   createHost = createTargetHost,
-  createControl = createControlServer,
   createConnection = createOfficialConnection,
-  createEntry = createMcpEntryServer
+  createEntry = createMcpEntryServer,
+  loadCatalog = loadOfficialToolCatalog
 } = {}) {
-  const entryId = randomUUID2();
+  const entryId = randomUUID3();
   const connections = /* @__PURE__ */ new Map();
   let entry;
-  let control;
   let catalog = [];
+  let fullCatalog;
   let catalogConnection;
   let catalogRouterClosed = false;
   let catalogCleanupError;
   let cleanupPromise;
   const notices = /* @__PURE__ */ new Map();
+  const connectionNotices = /* @__PURE__ */ new Map();
   const retirements = /* @__PURE__ */ new Set();
   let shuttingDown = false;
   const starts = /* @__PURE__ */ new Set();
@@ -40095,6 +41009,10 @@ async function startPluginRuntime({
     return {
       ...connection.controller.status(),
       connectionId: connection.connectionId,
+      mcpArgs: connection.mcpArgs ?? [],
+      enabledTools: connection.upstream?.tools.map((tool) => tool.name) ?? [],
+      workspace: workspaceSources(connection.mcpArgs ?? [], entry?.supportsRoots() ?? false),
+      diagnostics: [...connection.diagnostics],
       ...connection.failedStartupSessionId ? { sessionId: connection.failedStartupSessionId, reason: "startup-cleanup-failed" } : {},
       ...connection.retainedStatus
     };
@@ -40114,17 +41032,23 @@ async function startPluginRuntime({
       delete connection.closingUpstream;
     }
   }
-  async function ensureUpstream(connection) {
+  async function ensureUpstream(connection, options) {
     if (connection.upstream) return;
     const gateway = entry;
+    const args = buildServerArguments(connection.router.url, process.env, options.mcpArgs);
     const upstream = await createConnection(connection.router.url, {
+      args,
       ...gateway?.supportsRoots() ? { roots: () => gateway.roots() } : {},
       ...gateway?.supportsFormElicitation() ? { elicitation: { form: true, request: (params, signal) => gateway.elicit(params, signal) } } : {}
     });
     connection.upstream = upstream;
-    if (JSON.stringify(upstream.tools) !== JSON.stringify(catalog)) {
+    connection.mcpArgs = args.slice(1);
+    try {
+      if (!fullCatalog) throw new Error("Missing fixed tool catalog.");
+      fullCatalog.validate(upstream.tools);
+    } catch (error2) {
       await closeUpstream(connection);
-      throw new Error("The official tool catalog changed. Reconnect this entry before starting a target.");
+      throw error2;
     }
     upstream.onExit(() => {
       if (connection.upstream !== upstream || connection.closingUpstream === upstream) return;
@@ -40135,6 +41059,8 @@ async function startPluginRuntime({
   function clearNotice(connection, sessionId) {
     if (!sessionId || notices.get(connection.connectionId)?.sessionId === sessionId)
       notices.delete(connection.connectionId);
+    if (!sessionId || connectionNotices.get(connection.connectionId)?.sessionId === sessionId)
+      connectionNotices.delete(connection.connectionId);
   }
   async function remove(connection) {
     if (connections.get(connection.connectionId) !== connection) return;
@@ -40189,6 +41115,13 @@ async function startPluginRuntime({
   }
   function hookStatus(hookEventName) {
     const messages = [];
+    const completed = lifecycle.takeNotices().filter((operation) => {
+      if (!operation.connectionId || !operation.sessionId) return true;
+      const current = connections.get(operation.connectionId);
+      return !current || statusOf(current).sessionId === operation.sessionId;
+    });
+    const failures = [...connectionNotices.values()];
+    connectionNotices.clear();
     for (const [connectionId, event] of notices) {
       notices.delete(connectionId);
       const connection = connections.get(connectionId);
@@ -40208,29 +41141,44 @@ async function startPluginRuntime({
         })
       );
     }
-    if (!messages.length) return {};
-    const context = "CDP target process exited during active work. " + messages.join("\n") + "\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent.";
+    if (!messages.length && !completed.length && !failures.length) return {};
+    const context = (messages.length ? "CDP target process exited during active work. " : "") + messages.join("\n") + (messages.length ? "\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent." : "") + (completed.length ? `
+CDP lifecycle operation results: ${JSON.stringify(completed)}` : "") + (failures.length ? "\nCDP connection requires explicit recovery; never restart or replay tools automatically. " + JSON.stringify(failures) : "");
     return hookEventName === "Stop" ? { decision: "block", reason: context } : { hookSpecificOutput: { hookEventName, additionalContext: context } };
   }
-  async function start(options) {
+  async function start(options, context = {}) {
     if (shuttingDown) throw new Error("The gateway is closing.");
-    const connectionId = randomUUID2();
-    const sessionId = randomUUID2();
-    const router = await createRouter();
+    context.signal?.throwIfAborted();
+    buildServerArguments("http://127.0.0.1:1", process.env, options.mcpArgs);
+    const connectionId = randomUUID3();
+    const sessionId = randomUUID3();
+    context.onIdentity?.({ connectionId, sessionId });
+    const diagnostics = [];
+    const diagnose = (event) => {
+      diagnostics.push({ ...event, sessionId: connection.controller.status().sessionId ?? sessionId });
+      if (diagnostics.length > 64) diagnostics.shift();
+    };
+    const router = await createRouter({ diagnose });
     const connection = {
       connectionId,
+      activeCalls: 0,
+      diagnostics,
+      diagnose,
       router,
       controller: createTargetController({
         entryId,
         router,
         host: createHost(),
         onProcessExit: (event) => observeExit(connection, event),
-        server: { ensure: () => ensureUpstream(connection), close: () => closeUpstream(connection) }
+        server: {
+          ensure: (options2) => ensureUpstream(connection, options2),
+          close: () => closeUpstream(connection)
+        }
       })
     };
     connections.set(connectionId, connection);
     try {
-      await connection.controller.start(options, sessionId);
+      await connection.controller.start(options, sessionId, context);
       return statusOf(connection);
     } catch (error2) {
       if (connection.controller.status().status === "idle") {
@@ -40248,6 +41196,8 @@ async function startPluginRuntime({
           throw retained2;
         }
       }
+      if (context.signal?.aborted && error2 === context.signal.reason && !connections.has(connectionId))
+        throw error2;
       const retained = new DetailedError(errorMessage(error2));
       retained.details = { ...errorDetails(error2), ...statusOf(connection) };
       throw retained;
@@ -40255,21 +41205,30 @@ async function startPluginRuntime({
   }
   const handler = {
     status,
-    start: (options) => {
-      const pending = start(options);
+    start: (options, context) => {
+      const pending = start(options, context);
       starts.add(pending);
       void pending.finally(() => starts.delete(pending)).catch(() => {
       });
       return pending;
     },
-    restart: async (request) => {
+    restart: async (request, context = {}) => {
       const connection = routed(request);
+      if (connection.quarantine) await connection.quarantine;
+      if (connection.activeCalls) throw new Error("An official request is still running for this connection.");
+      buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
       clearNotice(connection, request.sessionId);
-      const result = await connection.controller.restart(request);
-      return { ...result, connectionId: connection.connectionId };
+      const result = await connection.controller.restart(request, {
+        ...context,
+        onSession: (sessionId) => context.onIdentity?.({ connectionId: request.connectionId, sessionId })
+      });
+      return { ...statusOf(connection), ...result, connectionId: connection.connectionId };
     },
     stop: async (request) => {
       const connection = routed(request);
+      if (connection.quarantine) await connection.quarantine;
+      if (request.disposition === "Close" && connection.activeCalls)
+        throw new Error("An official request is still running for this connection.");
       if (connection.failedStartupSessionId) {
         if (request.disposition !== "Close")
           throw new Error("The retained connection requires an explicit Close retry.");
@@ -40298,6 +41257,7 @@ async function startPluginRuntime({
       return { ...result, connectionId: connection.connectionId };
     }
   };
+  const lifecycle = createLifecycleService({ entryId, handler });
   function lifecycleResult(details) {
     return {
       isError: true,
@@ -40310,19 +41270,12 @@ async function startPluginRuntime({
     shuttingDown = true;
     cleanupPromise = (async () => {
       notices.clear();
-      await Promise.allSettled([...retirements]);
-      try {
-        await closeCatalogConnection();
-      } catch (error2) {
-        catalogCleanupError = errorMessage(error2);
-        process.stderr.write(`Catalog upstream cleanup failed for entry ${entryId}: ${catalogCleanupError}
-`);
-      } finally {
-        await closeCatalogRouter();
-      }
-      await Promise.allSettled([...starts]);
-      const results = await Promise.allSettled(
-        [...connections.values()].map(async (connection) => {
+      const operationsClosed = lifecycle.close();
+      const closingTargets = /* @__PURE__ */ new Map();
+      function closeTarget(connection) {
+        const previous = closingTargets.get(connection.connectionId);
+        if (previous) return previous;
+        const closing = (async () => {
           clearNotice(connection);
           try {
             const retained = await connection.controller.cleanupOnDisconnect();
@@ -40334,10 +41287,30 @@ async function startPluginRuntime({
           } finally {
             await connection.router.close();
           }
-        })
-      );
+        })().then(
+          () => ({ status: "fulfilled", value: void 0 }),
+          (reason) => ({ status: "rejected", reason })
+        );
+        closingTargets.set(connection.connectionId, closing);
+        return closing;
+      }
+      for (const connection of connections.values())
+        if (connection.controller.status().processId) void closeTarget(connection);
+      await operationsClosed;
+      await Promise.allSettled([...retirements]);
+      try {
+        await closeCatalogConnection();
+      } catch (error2) {
+        catalogCleanupError = errorMessage(error2);
+        process.stderr.write(`Catalog upstream cleanup failed for entry ${entryId}: ${catalogCleanupError}
+`);
+      } finally {
+        await closeCatalogRouter();
+      }
+      await Promise.allSettled([...starts]);
+      for (const connection of connections.values()) void closeTarget(connection);
+      const results = await Promise.all(closingTargets.values());
       connections.clear();
-      await control?.close();
       for (const result of results)
         if (result.status === "rejected")
           process.stderr.write(`Target cleanup failed: ${errorMessage(result.reason)}
@@ -40360,19 +41333,48 @@ async function startPluginRuntime({
   try {
     catalogConnection = await createConnection(catalogRouter.url);
     catalog = catalogConnection.tools;
+    fullCatalog = await loadCatalog(catalog);
+    fullCatalog.validate(catalog);
+    catalog = fullCatalog.tools;
     await closeCatalogConnection();
     await closeCatalogRouter();
     entry = createEntry({
       tools: catalog,
       status: (hookEventName) => hookEventName ? hookStatus(hookEventName) : { ...status() },
+      control: async (request, signal) => {
+        const result = await lifecycle.control(request, signal);
+        if (request.action !== "status" || !fullCatalog) return result;
+        const connection = request.connectionId ? selected(request.connectionId) : void 0;
+        return {
+          ...result,
+          ...request.operationId ? {} : {
+            toolAvailability: fullCatalog.describe(
+              connection?.mcpArgs ?? buildServerArguments("http://127.0.0.1:1").slice(1),
+              connection?.upstream?.tools,
+              request.toolNames
+            )
+          }
+        };
+      },
       onRootsChanged: async () => {
         await Promise.all([...connections.values()].map((connection) => connection.upstream?.rootsChanged()));
       },
       invoke: async (name, arguments_, signal, onProgress) => {
         const route = parseConnectionRoute(arguments_._dct);
+        signal.throwIfAborted();
         const connection = routed(route);
+        if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
+          return lifecycleResult({
+            code: "TOOL_NOT_ENABLED",
+            entryId,
+            ...route,
+            ...fullCatalog?.requirements(name, connection.mcpArgs ?? []),
+            nextAction: "explicit-start-or-restart"
+          });
         connection.controller.beginTask(route);
+        const healthTiming = measured(connection.diagnose, "connection-health");
         await connection.controller.checkHealth();
+        healthTiming();
         routed(route);
         const current = statusOf(connection);
         if (current.status === "lost" && current.sessionId) {
@@ -40386,15 +41388,48 @@ async function startPluginRuntime({
           return lifecycleResult({ ...current, reason: "target-not-ready" });
         const { _dct: routing, ...upstreamArguments } = arguments_;
         void routing;
-        return connection.upstream.call(name, upstreamArguments, signal, onProgress);
+        signal.throwIfAborted();
+        connection.activeCalls += 1;
+        const upstreamTiming = measured(connection.diagnose, "upstream-processing");
+        try {
+          const result = await connection.upstream.call(name, upstreamArguments, signal, onProgress);
+          upstreamTiming();
+          measured(connection.diagnose, "result-ready")();
+          return result;
+        } catch (error2) {
+          const reason = interruptedOfficialCall(error2, signal);
+          upstreamTiming(reason ? "interrupted" : "failed");
+          if (!reason || statusOf(connection).sessionId !== route.sessionId) throw error2;
+          connection.controller.quarantine(reason);
+          if (!connection.quarantine) {
+            connection.quarantine = closeUpstream(connection).then(
+              () => true,
+              () => false
+            );
+          }
+          const quarantine = connection.quarantine;
+          const upstreamClosed = await quarantine;
+          if (connection.quarantine === quarantine) delete connection.quarantine;
+          const details = {
+            code: "CONNECTION_RECOVERY_REQUIRED",
+            ...statusOf(connection),
+            reason,
+            upstreamClosed,
+            nextAction: "explicit-restart-or-close"
+          };
+          connectionNotices.set(connection.connectionId, details);
+          return lifecycleResult(details);
+        } finally {
+          connection.activeCalls -= 1;
+        }
       }
     });
-    control = await createControl({ entryId, controller: handler });
     await entry.connect();
     const selectedEntry = entry;
     const closed = selectedEntry.closed.then(cleanup);
     return {
       entryId,
+      controller: handler,
       closed,
       async close() {
         await selectedEntry.close();

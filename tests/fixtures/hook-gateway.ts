@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { createToolCatalog } from '../../src/adapters/tool-catalog.ts';
 import { startPluginRuntime } from '../../src/application/plugin-runtime.ts';
-import type { ControlHandler } from '../../src/domains/control-contract.ts';
 
 // Replace only OS/CDP/upstream I/O; use the production gateway, controller and SDK.
 const statePath = process.env.DCT_HOOK_FIXTURE_STATE;
@@ -21,6 +21,11 @@ await new Promise<void>((resolve) => signal.listen(0, '127.0.0.1', resolve));
 const address = signal.address();
 if (!address || typeof address === 'string') throw new Error('Missing fixture listener.');
 const runtime = await startPluginRuntime({
+    loadCatalog: async (tools = []) =>
+        createToolCatalog({
+            version: '1.10.1',
+            tools: tools.map((tool) => ({ name: tool.name, requires: {}, variants: [tool] })),
+        }),
     createRouter: async () => ({
         url: 'http://127.0.0.1:12345',
         isBusy: () => false,
@@ -41,16 +46,6 @@ const runtime = await startPluginRuntime({
         close: async () => true,
         health: async () => 'healthy',
     }),
-    createControl: async ({ controller }) => {
-        const control: ControlHandler = controller;
-        // Publish identity before MCP negotiation so cached catalogs need no readiness poll.
-        const current = await control.start({ launchCommand: 'fake target' });
-        await writeFile(
-            `${statePath}.${current.connectionId}`,
-            JSON.stringify({ ...current, signalUrl: `http://127.0.0.1:${address.port}` }),
-        );
-        return { close: async () => {} };
-    },
     createConnection: async () => ({
         tools: [{ name: 'list_pages', inputSchema: { type: 'object', properties: {} } }],
         call: async () => {
@@ -62,5 +57,10 @@ const runtime = await startPluginRuntime({
         rootsChanged: async () => {},
     }),
 });
+const current = await runtime.controller.start({ launch: { executable: 'fake target' } });
+await writeFile(
+    `${statePath}.${current.connectionId}`,
+    JSON.stringify({ ...current, signalUrl: `http://127.0.0.1:${address.port}` }),
+);
 await runtime.closed;
 await new Promise<void>((resolve, reject) => signal.close((error) => (error ? reject(error) : resolve())));

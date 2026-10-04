@@ -15,7 +15,7 @@ Version 0.1.0 is under development and has not been released.
     creating connections needs no npm/npx, pnpm, or dependency download.
 - Internet access to obtain or update the Plugin. The installed Server can initialize
     its tool catalog offline; browser tools and visited pages may require network access.
-- An application that supports a command-line debugging port and exposes a
+- An application that supports an argument or environment configured debugging port and exposes a
     **browser-level Chrome DevTools Protocol (CDP) endpoint**. Chrome is the
     known-compatible target. Other CDP-capable applications are best effort;
     Electron, Tauri, or WebView2 alone does not establish compatibility.
@@ -105,8 +105,9 @@ state is saved across host connections.
 
 ## Data and privacy
 
-Target identity and launch arguments are held in memory. The temporary named
-pipe or Unix socket is a local control channel, not a saved session. The Plugin
+Target identity, launch settings and operation events are held in memory.
+Windows elevation uses an authenticated one-shot helper pipe; app data never
+appears in its command line. The Plugin
 does not log launch commands, page contents, cookies, network or console data,
 secrets, or tool calls.
 
@@ -136,102 +137,98 @@ CDP transport and the target's debugging endpoint must listen on loopback only.
 Never expose or tunnel these ports to a network. Loopback does not protect
 against malicious software running as your user.
 
-## Advanced usage
+## MCP lifecycle and launch configuration
 
-### Manual target control
+The plugin manages targets directly through MCP:
 
-Codex normally manages targets for you. For manual control, replace
-`<plugin-root>` with the installed Plugin directory containing `.codex-plugin/plugin.json`,
-`dist/`, and `skills/`. You can locate it from the installed Skill file at
-`<plugin-root>/skills/debugging-cdp-targets/SKILL.md`.
+| Tool | Behavior |
+| --- | --- |
+| `dct_connection_status` | Discovery, connection/operation status, tool requirements and automatic Hooks. |
+| `dct_connection_start` | Accept a structured new launch and return an operation immediately. |
+| `dct_connection_restart` | Explicitly replace one session, optionally with new mcpArgs. |
+| `dct_connection_stop` | Apply the user’s Close/Keep choice to one session. |
+| `dct_connection_end_task` | End work and retain a live target/upstream. |
+| `dct_operation_wait` | Wait for operation events/results using a replay cursor. |
+| `dct_operation_cancel` | Cancel the selected operation and report actual cleanup. |
 
-Call `dct_connection_status` with `{}` to obtain the gateway entry UUID and its
-connections. Each target has a connection UUID and current session UUID.
-Every CLI command requires `--entry-id`; restart, end-task and stop additionally
-require `--connection-id` and `--session-id`. Status optionally selects a
-connection and prohibits session identity; start creates a new connection and
-accepts neither connection nor session identity. Only stop accepts disposition.
-Never infer an identity from the static entry name.
+Except initial empty status discovery, requests identify entryId. Restart,
+end-task and stop also require connectionId and sessionId; start accepts neither.
+Mutations use a requestId: identical retries return the original operation;
+different input cannot reuse that identifier. Cancel is idempotent for its
+operation and cannot affect a newer session.
 
-```powershell
-node "<plugin-root>/dist/control.mjs" status --entry-id <entry-uuid>
-node "<plugin-root>/dist/control.mjs" status --entry-id <entry-uuid> --connection-id <connection-uuid>
-node "<plugin-root>/dist/control.mjs" start --entry-id <entry-uuid> --target-kind chrome --launch-command '"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port={port}'
-node "<plugin-root>/dist/control.mjs" end-task --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid>
-node "<plugin-root>/dist/control.mjs" stop --entry-id <entry-uuid> --connection-id <connection-uuid> --session-id <session-uuid> --disposition Close
-```
-
-Actions are status, start, restart, stop and end-task. End-task ends dependent
-work and retains a live target and Server; an already exited target is cleaned up. Use stop with an explicit Close/Keep
-choice for disposition.
-Monitoring and reminder delivery are automatic. All official tool calls require the additional
-`_dct` argument, which the gateway removes before forwarding to the official
-Server. For example, `list_pages` receives:
+Call `dct_connection_start` with structured application settings:
 
 ```json
 {
-    "_dct": {
-        "connectionId": "<connection-uuid>",
-        "sessionId": "<session-uuid>"
-    }
+    "entryId": "<entry-uuid>",
+    "requestId": "chrome-start-1",
+    "targetKind": "chrome",
+    "launch": {
+        "executable": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+        "args": ["--remote-debugging-port={port}"],
+        "cwd": "C:/Work",
+        "env": {}
+    },
+    "mcpArgs": ["--workspace", "C:/Work"]
 }
 ```
 
-Starting a target returns new connection/session UUIDs. Recovery retains the
-connection UUID and replaces the session UUID. Refresh status and call official
-`list_pages` with the new route for fresh page evidence. Old session and page IDs
-must not be reused.
+Windows launch is a plugin capability: maintained native helpers inspect manifests
+and compatibility settings, preserve argv/cwd/environment across ordinary or elevated
+creation, and observe the actual app PID, creation time and process handle.
+Windows policy determines whether authorization appears. Permission waiting does
+not consume the subsequent CDP readiness budget. Normal closing uses a one-shot
+elevated helper when required. Agents need no startup wrapper or privilege script.
 
-### Launch commands and ports
+Start returns operationId immediately. Call `dct_operation_wait` with entryId,
+operationId and cursor; continue with the returned cursor until complete.
+The wait is bounded internally, so callers choose no polling interval. Canceling
+a wait leaves the operation running; operation_cancel owns actual cancellation.
+Trusted Hooks deliver new results at task boundaries without waking idle chats.
 
-Use `--target-kind chrome` for Google Chrome, or `--target-kind generic-cdp` for
-another known CDP-capable application. Provide the complete launch command with
-an absolute executable path, and quote paths containing spaces.
+Each connection has its own `mcpArgs: string[]`, separate from application args/env.
+The gateway reserves endpoint/browser-launch options and rejects configuration
+files or CLI mode overrides. Configuration changes require explicit restart.
 
-Launch commands are parsed into arguments without a shell. Pipes, redirects,
-command substitution, and shell scripts are not supported. Environment variables
-`%NAME%` and `${NAME}` expand within individual arguments.
+The gateway advertises a fixed full official catalog because Codex does not refresh
+ordinary local MCP tools from list-changed notifications. Start/wait/status report
+actual enabledTools. Status with toolNames returns activation conditions, complete
+suggestedMcpArgs and the selected connection’s exact input schemas.
+TOOL_NOT_ENABLED never enables a feature or restarts a target. For example, click_at
+additionally needs `--experimentalVision=true`; `--slim` limits actual connection
+tools without shrinking Codex’s global catalog. PWA tools require an official
+pipe-launched browser and are marked unsupported for managed CDP connections.
 
-`{port}` is replaced with an available non-reserved port. It can appear after a
-space, equals sign, or colon, according to the application's option syntax. If
-neither a placeholder nor an explicit Chromium debugging port is supplied, the
-Plugin appends `--remote-debugging-port=<port>`. An explicit Chromium debugging
-port must match the selected port. Applications with custom option names need a
-correct `{port}` template.
+Official calls carry `_dct: { connectionId, sessionId }`. Only that field is removed
+before forwarding original arguments; official names, execution and results stay
+unchanged. Restart preserves connectionId and the original port but creates a
+new session. Obtain fresh page IDs with list_pages.
 
-Port selection starts at 9222 by default. Use `--base-port <port>` with `start`
-to choose another starting point. Occupied, privileged, and
-OS-excluded ports are skipped.
+Use official `--workspace` for file access. Status distinguishes explicit directories,
+the system temporary-directory default and negotiated roots forwarding. cwd does
+not grant file access. Negotiation alone does not prove which roots a host supplied.
 
-With `--target-kind chrome`, the recommended launch preset adds
-`--no-first-run`, `--no-default-browser-check` and `--disable-updater-scheduler`.
-The updater switch suppresses automatic updater startup in the debugging process,
-which can otherwise delay normal shutdown. It applies to that launched process
-and does not change the installed updater service's configuration. Explicitly
-supplied preset switches are not appended again during launch or recovery.
+### Ports and Chrome profiles
 
-### Chrome profiles
+`{port}` works in application args/env. `%NAME%` and `${NAME}` expand within
+structured fields. No shell parsing or command-string interface is involved.
+Without a placeholder or explicit debugging port, the plugin appends the Chromium
+debugging-port argument. Other CDP runtimes use their documented args/env.
 
-With `--target-kind chrome`, Chrome uses the dedicated profile listed under
-[Data and privacy](#data-and-privacy) unless you provide `--user-data-dir` in the
-launch command. Use another dedicated directory if needed; do not reuse a profile
-already locked by another Chrome process. The gateway also reserves directories
-during launch and runtime. It never generates a replacement profile or connects
-to the process holding the directory.
+Port selection starts at 9222; start’s optional basePort selects another range.
+Occupied, privileged and OS-reserved ports are skipped. Explicit restart refuses
+an occupied original port. Chrome uses a fixed dedicated profile unless args
+specifies an unused --user-data-dir. Concurrent targets require distinct profiles;
+profiles remain after Close.
 
-### Server options
+The Chrome preset adds --no-first-run, --no-default-browser-check and
+--disable-updater-scheduler to this launched process only, preserving explicit
+switches. It does not modify updater services.
 
-The following environment variables control the official Server's optional
-features. Set them in the environment used to launch the MCP connection, then
-restart that connection for changes to take effect:
-
-| Variable | Default | Effect when `true` |
-| --- | --- | --- |
-| `DCT_EXTENSIONS` | `true` | Enable extension tools; requires compatible Chrome. |
-| `DCT_USAGE_STATISTICS` | `false` | Enable upstream usage statistics. |
-| `DCT_PERFORMANCE_CRUX` | `false` | Enable external CrUX performance lookups. |
-
-Each variable accepts only `true` or `false`.
+Server defaults enable extensions and disable usage statistics/CrUX. Per-connection
+mcpArgs can override them. Gateway environment defaults DCT_EXTENSIONS,
+DCT_USAGE_STATISTICS and DCT_PERFORMANCE_CRUX accept true/false.
 
 ## Troubleshooting
 
@@ -245,8 +242,9 @@ Each variable accepts only `true` or `false`.
 - **The application has no verified CDP endpoint**: check the executable path,
     debugging option, and browser-level endpoint support. A framework name alone
     does not establish compatibility.
-- **Lifecycle change is blocked by an in-flight request**: let the current
-    DevTools request finish, then retry.
+- **CONNECTION_RECOVERY_REQUIRED**: the affected upstream is isolated after timeout
+    or cancellation, transport pending state is cleared, and app identity remains
+    available for explicit restart or normal Close. Other connections remain usable.
 - **Chrome reports a locked profile**: close that Chrome instance manually,
     or explicitly select another dedicated `--user-data-dir`.
 

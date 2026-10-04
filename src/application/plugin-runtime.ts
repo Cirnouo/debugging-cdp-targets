@@ -1,19 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createCdpRouter } from '../adapters/cdp-router.ts';
-import { createControlServer } from '../adapters/control-ipc.ts';
-import { createOfficialConnection, type OfficialConnection } from '../adapters/mcp-bridge.ts';
+import { createOfficialConnection, interruptedOfficialCall, type OfficialConnection } from '../adapters/mcp-bridge.ts';
 import { createMcpEntryServer, type HookEventName } from '../adapters/mcp-entry-server.ts';
+import { buildServerArguments } from '../adapters/official-server.ts';
 import { createTargetHost } from '../adapters/target-host.ts';
+import { loadOfficialToolCatalog, workspaceSources } from '../adapters/tool-catalog.ts';
 import {
     type ConnectionRoute,
     type ConnectionStatus,
+    type ControlContext,
     type ControlHandler,
     type GatewayStatus,
     parseConnectionRoute,
     validateIdentity,
 } from '../domains/control-contract.ts';
+import { type Diagnose, type Diagnostic, measured } from '../shared/diagnostics.ts';
 import { DetailedError, errorDetails, errorMessage } from '../shared/errors.ts';
+import { createLifecycleService } from './mcp-lifecycle.ts';
 import type { ControllerHost, ControllerRouter, TargetEvent } from './target-controller.ts';
 import { createTargetController } from './target-controller.ts';
 
@@ -25,36 +29,42 @@ type ManagedConnection = {
     controller: Controller;
     router: RuntimeRouter;
     upstream?: OfficialConnection;
+    mcpArgs?: string[];
     closingUpstream?: OfficialConnection;
     failedStartupSessionId?: string;
     removal?: Promise<void>;
     retainedStatus?: ConnectionStatus;
+    activeCalls: number;
+    diagnostics: (Diagnostic & { sessionId: string })[];
+    diagnose: Diagnose;
+    quarantine?: Promise<boolean>;
 };
 type RuntimeDependencies = {
-    createRouter?: () => Promise<RuntimeRouter>;
+    createRouter?: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
     createHost?: () => ControllerHost;
-    createControl?: (options: { controller: ControlHandler; entryId: string }) => Promise<{ close(): Promise<void> }>;
     createConnection?: typeof createOfficialConnection;
     createEntry?: typeof createMcpEntryServer;
+    loadCatalog?: typeof loadOfficialToolCatalog;
 };
 
 export async function startPluginRuntime({
     createRouter = createCdpRouter,
     createHost = createTargetHost,
-    createControl = createControlServer,
     createConnection = createOfficialConnection,
     createEntry = createMcpEntryServer,
+    loadCatalog = loadOfficialToolCatalog,
 }: RuntimeDependencies = {}) {
     const entryId = randomUUID();
     const connections = new Map<string, ManagedConnection>();
     let entry: Entry | undefined;
-    let control: { close(): Promise<void> } | undefined;
     let catalog: Tool[] = [];
+    let fullCatalog: Awaited<ReturnType<typeof loadOfficialToolCatalog>> | undefined;
     let catalogConnection: OfficialConnection | undefined;
     let catalogRouterClosed = false;
     let catalogCleanupError: string | undefined;
     let cleanupPromise: Promise<void> | undefined;
     const notices = new Map<string, TargetEvent>();
+    const connectionNotices = new Map<string, Record<string, unknown>>();
     const retirements = new Set<Promise<void>>();
     let shuttingDown = false;
     const starts = new Set<Promise<ConnectionStatus>>();
@@ -74,6 +84,10 @@ export async function startPluginRuntime({
         return {
             ...connection.controller.status(),
             connectionId: connection.connectionId,
+            mcpArgs: connection.mcpArgs ?? [],
+            enabledTools: connection.upstream?.tools.map((tool) => tool.name) ?? [],
+            workspace: workspaceSources(connection.mcpArgs ?? [], entry?.supportsRoots() ?? false),
+            diagnostics: [...connection.diagnostics],
             ...(connection.failedStartupSessionId
                 ? { sessionId: connection.failedStartupSessionId, reason: 'startup-cleanup-failed' }
                 : {}),
@@ -97,19 +111,25 @@ export async function startPluginRuntime({
             delete connection.closingUpstream;
         }
     }
-    async function ensureUpstream(connection: ManagedConnection) {
+    async function ensureUpstream(connection: ManagedConnection, options: Parameters<Controller['start']>[0]) {
         if (connection.upstream) return;
         const gateway = entry;
+        const args = buildServerArguments(connection.router.url, process.env, options.mcpArgs);
         const upstream = await createConnection(connection.router.url, {
+            args,
             ...(gateway?.supportsRoots() ? { roots: () => gateway.roots() } : {}),
             ...(gateway?.supportsFormElicitation()
                 ? { elicitation: { form: true, request: (params, signal) => gateway.elicit(params, signal) } }
                 : {}),
         });
         connection.upstream = upstream;
-        if (JSON.stringify(upstream.tools) !== JSON.stringify(catalog)) {
+        connection.mcpArgs = args.slice(1);
+        try {
+            if (!fullCatalog) throw new Error('Missing fixed tool catalog.');
+            fullCatalog.validate(upstream.tools);
+        } catch (error) {
             await closeUpstream(connection);
-            throw new Error('The official tool catalog changed. Reconnect this entry before starting a target.');
+            throw error;
         }
         upstream.onExit(() => {
             if (connection.upstream !== upstream || connection.closingUpstream === upstream) return;
@@ -120,6 +140,8 @@ export async function startPluginRuntime({
     function clearNotice(connection: ManagedConnection, sessionId?: string) {
         if (!sessionId || notices.get(connection.connectionId)?.sessionId === sessionId)
             notices.delete(connection.connectionId);
+        if (!sessionId || connectionNotices.get(connection.connectionId)?.sessionId === sessionId)
+            connectionNotices.delete(connection.connectionId);
     }
     async function remove(connection: ManagedConnection) {
         if (connections.get(connection.connectionId) !== connection) return;
@@ -180,6 +202,13 @@ export async function startPluginRuntime({
     }
     function hookStatus(hookEventName: HookEventName): Record<string, unknown> {
         const messages: string[] = [];
+        const completed = lifecycle.takeNotices().filter((operation) => {
+            if (!operation.connectionId || !operation.sessionId) return true;
+            const current = connections.get(operation.connectionId);
+            return !current || statusOf(current).sessionId === operation.sessionId;
+        });
+        const failures = [...connectionNotices.values()];
+        connectionNotices.clear();
         for (const [connectionId, event] of notices) {
             notices.delete(connectionId);
             const connection = connections.get(connectionId);
@@ -199,34 +228,58 @@ export async function startPluginRuntime({
                 }),
             );
         }
-        if (!messages.length) return {};
+        if (!messages.length && !completed.length && !failures.length) return {};
         const context =
-            'CDP target process exited during active work. ' +
+            (messages.length ? 'CDP target process exited during active work. ' : '') +
             messages.join('\n') +
-            '\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent.';
+            (messages.length
+                ? '\nAsk the user whether to restart or end dependent work. Never restart or replay tools automatically; other connections remain independent.'
+                : '') +
+            (completed.length ? `\nCDP lifecycle operation results: ${JSON.stringify(completed)}` : '') +
+            (failures.length
+                ? '\nCDP connection requires explicit recovery; never restart or replay tools automatically. ' +
+                  JSON.stringify(failures)
+                : '');
         return hookEventName === 'Stop'
             ? { decision: 'block', reason: context }
             : { hookSpecificOutput: { hookEventName, additionalContext: context } };
     }
-    async function start(options: Parameters<Controller['start']>[0]): Promise<ConnectionStatus> {
+    async function start(
+        options: Parameters<Controller['start']>[0],
+        context: ControlContext = {},
+    ): Promise<ConnectionStatus> {
         if (shuttingDown) throw new Error('The gateway is closing.');
+        context.signal?.throwIfAborted();
+        buildServerArguments('http://127.0.0.1:1', process.env, options.mcpArgs);
         const connectionId = randomUUID();
         const sessionId = randomUUID();
-        const router = await createRouter();
+        context.onIdentity?.({ connectionId, sessionId });
+        const diagnostics: (Diagnostic & { sessionId: string })[] = [];
+        const diagnose: Diagnose = (event) => {
+            diagnostics.push({ ...event, sessionId: connection.controller.status().sessionId ?? sessionId });
+            if (diagnostics.length > 64) diagnostics.shift();
+        };
+        const router = await createRouter({ diagnose });
         const connection: ManagedConnection = {
             connectionId,
+            activeCalls: 0,
+            diagnostics,
+            diagnose,
             router,
             controller: createTargetController({
                 entryId,
                 router,
                 host: createHost(),
                 onProcessExit: (event) => observeExit(connection, event),
-                server: { ensure: () => ensureUpstream(connection), close: () => closeUpstream(connection) },
+                server: {
+                    ensure: (options) => ensureUpstream(connection, options),
+                    close: () => closeUpstream(connection),
+                },
             }),
         };
         connections.set(connectionId, connection);
         try {
-            await connection.controller.start(options, sessionId);
+            await connection.controller.start(options, sessionId, context);
             return statusOf(connection);
         } catch (error) {
             if (connection.controller.status().status === 'idle') {
@@ -244,6 +297,8 @@ export async function startPluginRuntime({
                     throw retained;
                 }
             }
+            if (context.signal?.aborted && error === context.signal.reason && !connections.has(connectionId))
+                throw error;
             const retained = new DetailedError(errorMessage(error));
             retained.details = { ...errorDetails(error), ...statusOf(connection) };
             throw retained;
@@ -251,20 +306,29 @@ export async function startPluginRuntime({
     }
     const handler: ControlHandler = {
         status,
-        start: (options) => {
-            const pending = start(options);
+        start: (options, context) => {
+            const pending = start(options, context);
             starts.add(pending);
             void pending.finally(() => starts.delete(pending)).catch(() => {});
             return pending;
         },
-        restart: async (request) => {
+        restart: async (request, context = {}) => {
             const connection = routed(request);
+            if (connection.quarantine) await connection.quarantine;
+            if (connection.activeCalls) throw new Error('An official request is still running for this connection.');
+            buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
             clearNotice(connection, request.sessionId);
-            const result = await connection.controller.restart(request);
-            return { ...result, connectionId: connection.connectionId };
+            const result = await connection.controller.restart(request, {
+                ...context,
+                onSession: (sessionId) => context.onIdentity?.({ connectionId: request.connectionId, sessionId }),
+            });
+            return { ...statusOf(connection), ...result, connectionId: connection.connectionId };
         },
         stop: async (request) => {
             const connection = routed(request);
+            if (connection.quarantine) await connection.quarantine;
+            if (request.disposition === 'Close' && connection.activeCalls)
+                throw new Error('An official request is still running for this connection.');
             if (connection.failedStartupSessionId) {
                 if (request.disposition !== 'Close')
                     throw new Error('The retained connection requires an explicit Close retry.');
@@ -293,6 +357,7 @@ export async function startPluginRuntime({
             return { ...result, connectionId: connection.connectionId };
         },
     };
+    const lifecycle = createLifecycleService({ entryId, handler });
     function lifecycleResult(details: Record<string, unknown>): CallToolResult {
         return {
             isError: true,
@@ -305,18 +370,12 @@ export async function startPluginRuntime({
         shuttingDown = true;
         cleanupPromise = (async () => {
             notices.clear();
-            await Promise.allSettled([...retirements]);
-            try {
-                await closeCatalogConnection();
-            } catch (error) {
-                catalogCleanupError = errorMessage(error);
-                process.stderr.write(`Catalog upstream cleanup failed for entry ${entryId}: ${catalogCleanupError}\n`);
-            } finally {
-                await closeCatalogRouter();
-            }
-            await Promise.allSettled([...starts]);
-            const results = await Promise.allSettled(
-                [...connections.values()].map(async (connection) => {
+            const operationsClosed = lifecycle.close();
+            const closingTargets = new Map<string, Promise<PromiseSettledResult<void>>>();
+            function closeTarget(connection: ManagedConnection) {
+                const previous = closingTargets.get(connection.connectionId);
+                if (previous) return previous;
+                const closing = (async () => {
                     clearNotice(connection);
                     try {
                         const retained = await connection.controller.cleanupOnDisconnect();
@@ -327,10 +386,31 @@ export async function startPluginRuntime({
                     } finally {
                         await connection.router.close();
                     }
-                }),
-            );
+                })().then<PromiseSettledResult<void>, PromiseSettledResult<void>>(
+                    () => ({ status: 'fulfilled', value: undefined }),
+                    (reason) => ({ status: 'rejected', reason }),
+                );
+                closingTargets.set(connection.connectionId, closing);
+                return closing;
+            }
+            // Authorization may still require a user's OS response. Unrelated live
+            // connections begin normal cleanup immediately, without waiting for it.
+            for (const connection of connections.values())
+                if (connection.controller.status().processId) void closeTarget(connection);
+            await operationsClosed;
+            await Promise.allSettled([...retirements]);
+            try {
+                await closeCatalogConnection();
+            } catch (error) {
+                catalogCleanupError = errorMessage(error);
+                process.stderr.write(`Catalog upstream cleanup failed for entry ${entryId}: ${catalogCleanupError}\n`);
+            } finally {
+                await closeCatalogRouter();
+            }
+            await Promise.allSettled([...starts]);
+            for (const connection of connections.values()) void closeTarget(connection);
+            const results = await Promise.all(closingTargets.values());
             connections.clear();
-            await control?.close();
             for (const result of results)
                 if (result.status === 'rejected')
                     process.stderr.write(`Target cleanup failed: ${errorMessage(result.reason)}\n`);
@@ -352,19 +432,50 @@ export async function startPluginRuntime({
     try {
         catalogConnection = await createConnection(catalogRouter.url);
         catalog = catalogConnection.tools;
+        fullCatalog = await loadCatalog(catalog);
+        fullCatalog.validate(catalog);
+        catalog = fullCatalog.tools;
         await closeCatalogConnection();
         await closeCatalogRouter();
         entry = createEntry({
             tools: catalog,
             status: (hookEventName) => (hookEventName ? hookStatus(hookEventName) : { ...status() }),
+            control: async (request, signal) => {
+                const result = await lifecycle.control(request, signal);
+                if (request.action !== 'status' || !fullCatalog) return result;
+                const connection = request.connectionId ? selected(request.connectionId) : undefined;
+                return {
+                    ...result,
+                    ...(request.operationId
+                        ? {}
+                        : {
+                              toolAvailability: fullCatalog.describe(
+                                  connection?.mcpArgs ?? buildServerArguments('http://127.0.0.1:1').slice(1),
+                                  connection?.upstream?.tools,
+                                  request.toolNames,
+                              ),
+                          }),
+                };
+            },
             onRootsChanged: async () => {
                 await Promise.all([...connections.values()].map((connection) => connection.upstream?.rootsChanged()));
             },
             invoke: async (name, arguments_, signal, onProgress) => {
                 const route = parseConnectionRoute(arguments_._dct);
+                signal.throwIfAborted();
                 const connection = routed(route);
+                if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
+                    return lifecycleResult({
+                        code: 'TOOL_NOT_ENABLED',
+                        entryId,
+                        ...route,
+                        ...fullCatalog?.requirements(name, connection.mcpArgs ?? []),
+                        nextAction: 'explicit-start-or-restart',
+                    });
                 connection.controller.beginTask(route);
+                const healthTiming = measured(connection.diagnose, 'connection-health');
                 await connection.controller.checkHealth();
+                healthTiming();
                 routed(route);
                 const current = statusOf(connection);
                 if (current.status === 'lost' && current.sessionId) {
@@ -378,15 +489,48 @@ export async function startPluginRuntime({
                     return lifecycleResult({ ...current, reason: 'target-not-ready' });
                 const { _dct: routing, ...upstreamArguments } = arguments_;
                 void routing;
-                return connection.upstream.call(name, upstreamArguments, signal, onProgress);
+                signal.throwIfAborted();
+                connection.activeCalls += 1;
+                const upstreamTiming = measured(connection.diagnose, 'upstream-processing');
+                try {
+                    const result = await connection.upstream.call(name, upstreamArguments, signal, onProgress);
+                    upstreamTiming();
+                    measured(connection.diagnose, 'result-ready')();
+                    return result;
+                } catch (error) {
+                    const reason = interruptedOfficialCall(error, signal);
+                    upstreamTiming(reason ? 'interrupted' : 'failed');
+                    if (!reason || statusOf(connection).sessionId !== route.sessionId) throw error;
+                    connection.controller.quarantine(reason);
+                    if (!connection.quarantine) {
+                        connection.quarantine = closeUpstream(connection).then(
+                            () => true,
+                            () => false,
+                        );
+                    }
+                    const quarantine = connection.quarantine;
+                    const upstreamClosed = await quarantine;
+                    if (connection.quarantine === quarantine) delete connection.quarantine;
+                    const details = {
+                        code: 'CONNECTION_RECOVERY_REQUIRED',
+                        ...statusOf(connection),
+                        reason,
+                        upstreamClosed,
+                        nextAction: 'explicit-restart-or-close',
+                    };
+                    connectionNotices.set(connection.connectionId, details);
+                    return lifecycleResult(details);
+                } finally {
+                    connection.activeCalls -= 1;
+                }
             },
         });
-        control = await createControl({ entryId, controller: handler });
         await entry.connect();
         const selectedEntry = entry;
         const closed = selectedEntry.closed.then(cleanup);
         return {
             entryId,
+            controller: handler,
             closed,
             async close() {
                 await selectedEntry.close();

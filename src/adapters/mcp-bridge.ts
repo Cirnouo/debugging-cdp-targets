@@ -9,7 +9,15 @@ import type {
     Tool,
     Transport,
 } from '@modelcontextprotocol/client';
-import { Client, ProtocolError, ProtocolErrorCode, ReadBuffer, serializeMessage } from '@modelcontextprotocol/client';
+import {
+    Client,
+    ProtocolError,
+    ProtocolErrorCode,
+    ReadBuffer,
+    SdkError,
+    SdkErrorCode,
+    serializeMessage,
+} from '@modelcontextprotocol/client';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
 import { buildServerArguments, resolveServerBin } from './official-server.ts';
 
@@ -26,11 +34,18 @@ export type OfficialConnection = {
     rootsChanged(): Promise<void>;
 };
 
+export function interruptedOfficialCall(error: unknown, signal?: AbortSignal) {
+    if (signal?.aborted) return 'upstream-cancelled';
+    if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) return 'upstream-timeout';
+    return undefined;
+}
+
 export async function createOfficialConnection(
     browserUrl: string,
     options: {
         bin?: string;
         args?: string[];
+        requestTimeoutMs?: number;
         roots?: () => Promise<ListRootsResult>;
         elicitation?: {
             form: boolean;
@@ -155,6 +170,7 @@ export async function createOfficialConnection(
                     await client.callTool(
                         { name, arguments: arguments_ },
                         {
+                            timeout: options.requestTimeoutMs ?? 60_000,
                             ...(toolDefinition ? { toolDefinition } : {}),
                             ...(signal ? { signal } : {}),
                             ...(onProgress ? { onprogress: onProgress } : {}),

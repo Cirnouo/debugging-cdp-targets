@@ -16,8 +16,13 @@ The official SDK gateway owns host stdio and preserves the official Server's too
 names and results. Exposed schemas add required _dct connection/session routing;
 validate and remove it before forwarding original arguments. Reject missing,
 unknown, closed, stale or colliding routing identities. Never select an implicit
-current target. Only dct_connection_status extends the tool catalog, including
-its four automatic Hook event names. Empty arguments are read-only. Diagnostics go to stderr. Do not log commands, page contents,
+current target. Seven MCP lifecycle/operation tools extend the catalog; status
+also carries four automatic Hook event names. Empty discovery is read-only.
+The fixed full catalog combines verified variants and reports exact per-connection
+schemas/enablement. Disabled tools return complete explicit configuration recipes.
+Lifecycle requests use MCP, with no plugin CLI or dedicated control IPC.
+Diagnostics retain bounded identity/phase/error-category/elapsed metadata only.
+Do not log commands, page contents,
 cookies, network/console data, secrets, or tool calls.
 
 Require explicit Close/Keep before ending a target's work. Keep retains
@@ -40,7 +45,9 @@ queues one reminder per connection/session. Trusted Codex MCP Tool Hooks drain
 in-memory events at PreToolUse, PostToolUse, UserPromptSubmit or Stop; no events
 return empty JSON without model context. Stop continues once for an undelivered
 event. Idle chats wait for the next turn. Only target kind, PID, port, identities
-and exit reason belong in reminders. Require the standard user trust review;
+and exit reason belong in exit reminders. Operation completion and quarantine
+events report corresponding operation/session evidence without application inputs.
+Require the standard user trust review;
 installation cannot implicitly grant Hook trust. End-task/Keep/Close/restart
 clear notices. Expected close/restart/disconnect events stay silent. CDP/upstream
 failure while a process lives reports a connection error, not process exit.
@@ -58,7 +65,22 @@ profiles fail closed and require an explicit alternative; never attach to their
 owner or silently generate another profile. Release a reservation on actual exit
 or confirmed normal close. Profiles remain on disk after Close.
 
+Windows launch preserves env/argv/cwd across elevation, distinguishes native
+manifest/AppCompat/elevation errors from unrelated access denial, and observes
+the actual app handle. Permission waiting is separate from CDP readiness. Fixed
+helpers use private authenticated one-shot pipes; no resident privileged service.
+A helper exit never proves app exit. Elevated normal-close helpers are allowed
+when needed. Native close reports request/exit evidence; missing/foreign listeners
+are distinct. Never force-kill applications.
+
+After an interrupted official call, revoke that connection's forwarding, close
+its upstream normally and clear pending HTTP/CDP transports. Preserve app identity
+for explicit recovery; never automatically restart or replay. Cancellation races
+must normally close created apps or report accurate retained identity. Idempotent
+request IDs, current-session checks and bounded event cursors protect mutations.
+Cancelling a protocol wait leaves the operation running and queryable.
+
 Server defaults enable extensions and disable usage statistics and CrUX. Only
-compatible Chrome may use extension tools. Environment overrides require a new
-connection. Do not permit arbitrary upstream arguments to alter identity or
+compatible Chrome may use extension tools. mcpArgs overrides require an explicit
+start or restart with a fresh session. Do not permit upstream arguments to alter identity or
 inject a shell. See [supply-chain.md](supply-chain.md) for dependency requirements.
