@@ -43,8 +43,9 @@ so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.
 
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
-cancellation of superseded ref runs. Commit messages validates topology, PR
-titles, and source branches; Quality checks policy and coverage; Windows tests
+cancellation of superseded ref runs. Commit messages validates topology, raw PR
+titles, predicted squash messages with the PR number and original description,
+and source branches; Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
 
@@ -97,7 +98,8 @@ Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
 It also requires CodeQL (javascript-typescript), CodeQL (csharp), CodeQL (actions),
 Real Chrome (ubuntu-24.04) and Real Chrome (macos-15), for eleven checks total.
 It has no routine bypass actors. Single-maintainer PRs require zero additional
-approvals. Only squash merges are allowed, using the PR title as commit title.
+approvals. Only squash merges are allowed, using the PR title and generated PR
+number as the commit title under the [commit policy](commits-and-scope.md).
 Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
 
 Successful initial CodeQL scans returned no findings and confirmed native helper
