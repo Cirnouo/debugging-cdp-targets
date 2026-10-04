@@ -15,7 +15,10 @@ because it is a supported installation surface, although its code is generated.
 Its `official-server/` subtree preserves upstream documentation unchanged only
 after complete release verification; it requires no repository README additions.
 
-Keep contributor instructions in root AGENTS.md.
+Keep authoritative contributor rules in root AGENTS.md and these policies.
+CONTRIBUTING.md provides the human setup and contribution entry point and links
+to those rules. SECURITY.md owns vulnerability reporting; CODE_OF_CONDUCT.md
+owns community behavior and private incident reporting.
 Maintain progressive disclosure rather than copying all policies everywhere.
 Plugin instructions must be concise and application-agnostic. Do not collect
 application-specific debugging recipes; Agents explore after connecting.

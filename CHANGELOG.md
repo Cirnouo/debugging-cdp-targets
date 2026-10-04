@@ -43,8 +43,9 @@ Version 0.1.0 remains under development; no release has been published.
   during recovery. Automatic updater scheduling is disabled in the new process.
 - Chrome extension debugging, with usage statistics and CrUX disabled by default
   and explicit overrides.
-- Verified Windows Chrome operation with visible target windows and normal shutdown;
-  auxiliary process consoles remain hidden. Linux/macOS have simulated CDP coverage.
+- Verified Windows, Ubuntu 24.04 and macOS 15 Chrome operation with real desktop
+  browser acceptance, normal shutdown and simulated CDP regression coverage.
+  Windows auxiliary process consoles remain hidden.
 
 ### Security
 
@@ -58,3 +59,20 @@ Version 0.1.0 remains under development; no release has been published.
   reviewed esbuild installation script allowed after the audit gate.
 - Exact, fingerprint-bound review exceptions with a maximum 30-day lifetime;
   signature, registry and scan failures cannot be waived.
+- Private vulnerability reporting, dependency alerts and weekly complete audits,
+  contribution/community policies and GitHub collaboration templates.
+- Protected main with PR/squash-only merging, eleven required Actions checks,
+  maintained-source CodeQL analysis and high/critical security alert merge protection.
+
+### Fixed
+
+- Linux target creation evidence preserves kernel start tick precision, avoiding
+  false identity rejection caused by the rounded `ps lstart` display while
+  retaining creation-time, process/user, listener and endpoint checks.
+- macOS executable evidence verifies Chrome's mapped code-sign hard link through
+  the installed file's device/inode, preventing false path changes while rejecting
+  different files, incomplete mapping evidence and ambiguous aliases.
+- Unix normal close waits for complete process/listener exit evidence when a
+  terminating process loses its executable mappings between inspection steps.
+  It preserves bounded waiting and identity rejection, sends no further signal,
+  and retains the underlying failure cause when normal cleanup cannot be confirmed.

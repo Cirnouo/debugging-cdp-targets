@@ -26,13 +26,31 @@ PATH, invokes no browser tools, and shuts the child down normally through stdin.
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection; safe
 Biome writes are limited to staged TS/JS/JSON, other text is audited read-only.
-pre-push runs verify:push. --no-verify and HUSKY=0 can bypass local hooks.
+pre-push clears Git's repository routing variables before running verify:push,
+so disposable Git fixtures cannot modify the repository that invoked the hook.
+--no-verify and HUSKY=0 can bypass local hooks.
 
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
 cancellation of superseded ref runs. Commit messages validates topology, PR
 titles, and source branches; Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
+
+Separate real Chrome jobs run official tools and connection recovery on
+ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles
+and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
+browser or inspection prerequisites fail. The scripts preserve identity checks,
+normal Close and Windows visible-console monitoring. These jobs also run in
+same-commit release CI; simulated tests do not substitute for real acceptance.
+
+Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
+Actions with security-extended queries, on main pushes, PRs and Mondays at
+01:47 UTC. C# uses Windows with build-mode none and must prove extraction of the
+native helper from its database source archive. No product build or project
+dependency install is run. CodeQL Actions use the independently reviewed official
+v4 commit; only analysis jobs can write security events. Generated distribution
+and unchanged upstream directories retain their distribution, integrity and
+supply-chain gates rather than becoming maintained-source scan inputs.
 
 For a forced push whose previous commit is absent from the checkout, commit
 auditing requires complete history and checks every ancestor of the new head.
@@ -61,18 +79,32 @@ syntax checks, including type-only dependencies. Node --check is used only for
 generated JavaScript. Plugin and standalone auditor ship self-contained JS;
 installation must not require TypeScript or project dependencies.
 
-After CI succeeds on GitHub, the user may enable a main Ruleset requiring PRs,
-up-to-date branches, linear history, no force pushes/deletion, and strict
-required checks: Commit messages, Quality, Windows tests, and both Portable
-tests matrix checks. Keep squash merge only. Actions runs after GitHub accepts
-a push, not before; pre-push is the local pre-transfer gate. This change does
-not alter GitHub settings.
+The active main Ruleset requires PRs, up-to-date branches, linear history, no
+force pushes/deletion, and strict GitHub Actions checks: Supply chain security,
+Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
+It also requires CodeQL (javascript-typescript), CodeQL (csharp), CodeQL (actions),
+Real Chrome (ubuntu-24.04) and Real Chrome (macos-15), for eleven checks total.
+It has no routine bypass actors. Single-maintainer PRs require zero additional
+approvals. Only squash merges are allowed, using the PR title as commit title.
+Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
+
+Successful initial CodeQL scans returned no findings and confirmed native helper
+extraction; both real Chrome jobs passed on GitHub before promoting their observed
+check names. A code scanning rule additionally requires CodeQL results and rejects
+high/critical security alerts. GitHub applies its
+[code scanning alert gate](https://docs.github.com/en/code-security/concepts/code-scanning/merge-protection) to PR
+findings whose reported lines are in the diff. Existing findings still require
+review through code scanning alerts. The README records the tested systems and
+actual Chrome versions; local simulated tests cannot establish real acceptance.
 
 Supply chain security is the first CI gate: dependency-free lockfile preflight
 with full vulnerability/signature audits, script/hook-disabled frozen install,
 installed-tree verification, repeat audits and reproducible audit tooling, with
 narrowly reviewed exceptions
 under [supply-chain policy](supply-chain.md). Commit messages and Quality require
-its success before normal installation/builds. Add Supply chain security to the
-future strict required checks. `pnpm check:security` requires network access and
+its success before normal installation/builds. Weekly CI runs the same gates at
+01:17 UTC on Monday. Scheduled commit auditing requires an explicit GitHub branch
+ref and validates the full ancestry; it cannot infer a branch from a detached
+checkout or accept contradictory identity fields, a tag ref or shallow history.
+`pnpm check:security` requires network access and
 is deliberately separate from offline regression tests and verify:push.

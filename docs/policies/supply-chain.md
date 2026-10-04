@@ -137,8 +137,16 @@ network access. This offline check belongs in verify:push. Generated code is
 checked for reproducibility, not manually formatted; maintained audit source
 remains subject to normal tests and unchanged coverage floors.
 
-After this workflow has run successfully on GitHub, the user should add
-**Supply chain security** to main's strict required checks alongside existing
-jobs. Use a PR-required, up-to-date, linear-history Ruleset with force-push and
-deletion disabled. This change does not configure GitHub settings and Actions
-still runs after a push is received, not before transfer.
+Main's active Ruleset requires **Supply chain security** alongside the existing
+quality, governance and platform checks, with up-to-date PRs, linear history,
+and force-push/deletion disabled. Actions still runs after a push is received,
+not before transfer.
+
+CI repeats the full supply-chain-first verification every Monday at 01:17 UTC
+(09:17 Asia/Shanghai), even without a new commit. Dependabot alerts are enabled
+for the repository; updates remain human-reviewed. Do not enable automatic
+dependency PRs or refresh release evidence as an audit repair. New findings
+follow the same upgrade or bounded-exception policy as push and PR checks.
+Dependabot's graph coverage does not include the official Server's embedded
+libraries, and SHA-pinned Actions do not receive version-based Dependabot alerts.
+Review their upstream security advisories and full-SHA references separately.

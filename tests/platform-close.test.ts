@@ -78,3 +78,72 @@ test('application refusal and elevated-close cancellation retain precise stages 
         });
     assert.equal(denied.requests(), 2);
 });
+
+test('Unix normal close waits for verifiable exit across disappearing executable mappings', async () => {
+    let snapshots = 0;
+    const signals: number[] = [];
+    const platform = createPlatformAdapter({
+        platform: 'darwin',
+        requestUnixClose: (pid) => {
+            signals.push(pid);
+        },
+        sleep: async () => {},
+        snapshot: async () => {
+            snapshots += 1;
+            if (snapshots === 2) throw new Error('The Darwin executable path is unverifiable or ambiguous.');
+            return {
+                root:
+                    snapshots === 1
+                        ? {
+                              exists: true,
+                              executablePath: target.executablePath,
+                              startedAtUtc: target.startedAtUtc,
+                              sessionId: 1,
+                          }
+                        : { exists: false },
+                currentSessionId: 1,
+                processIds: snapshots === 1 ? [target.processId] : [],
+                listeners: [],
+            };
+        },
+    });
+    assert.equal(await platform.close(target), true);
+    assert.deepEqual(signals, [target.processId]);
+    assert.equal(snapshots, 3);
+});
+
+test('Unix close never signals unverifiable identities and bounds incomplete exit evidence', async () => {
+    for (const fault of ['before-signal', 'after-signal', 'changed-identity']) {
+        let snapshots = 0;
+        const signals: number[] = [];
+        const failure = new Error('The Darwin executable path is unverifiable or ambiguous.');
+        const platform = createPlatformAdapter({
+            platform: 'darwin',
+            requestUnixClose: (pid) => {
+                signals.push(pid);
+            },
+            sleep: async () => {},
+            snapshot: async () => {
+                snapshots += 1;
+                if (fault === 'before-signal' || (snapshots > 1 && fault === 'after-signal')) throw failure;
+                return {
+                    root: {
+                        exists: true,
+                        executablePath: target.executablePath,
+                        startedAtUtc: snapshots > 1 ? '2026-10-04T00:00:05Z' : target.startedAtUtc,
+                        sessionId: 1,
+                    },
+                    currentSessionId: 1,
+                    processIds: [target.processId],
+                    listeners: [],
+                };
+            },
+        });
+        await assert.rejects(
+            platform.close(target),
+            fault === 'changed-identity' ? /creation time changed/ : (error: unknown) => error === failure,
+        );
+        assert.deepEqual(signals, fault === 'before-signal' ? [] : [target.processId]);
+        assert.ok(snapshots <= 51);
+    }
+});

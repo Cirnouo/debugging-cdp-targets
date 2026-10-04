@@ -1,0 +1,59 @@
+name: Bug report
+description: Report reproducible unexpected Plugin behavior.
+body:
+    -   type: markdown
+        attributes:
+            value: |
+                Report suspected vulnerabilities through the private channel in SECURITY.md.
+                Remove tokens, cookies, private page content and personal paths from all examples.
+    -   type: input
+        id: operating-system
+        attributes:
+            label: Operating system and version
+            placeholder: Windows 11, Ubuntu 24.04, or macOS 15
+        validations:
+            required: true
+    -   type: input
+        id: codex-version
+        attributes:
+            label: Codex version
+            description: Include the Desktop or CLI version and which host you used.
+        validations:
+            required: true
+    -   type: input
+        id: plugin-version
+        attributes:
+            label: Plugin version or repository commit
+        validations:
+            required: true
+    -   type: input
+        id: target-application
+        attributes:
+            label: Target application and version
+            description: Include the browser or application's name, version and relevant CDP option.
+        validations:
+            required: true
+    -   type: textarea
+        id: reproduction
+        attributes:
+            label: Reproduction steps
+            description: Include a minimal example using an isolated target and non-sensitive data.
+        validations:
+            required: true
+    -   type: textarea
+        id: expected-behavior
+        attributes:
+            label: Expected behavior
+        validations:
+            required: true
+    -   type: textarea
+        id: actual-behavior
+        attributes:
+            label: Actual behavior
+        validations:
+            required: true
+    -   type: textarea
+        id: diagnostics
+        attributes:
+            label: Redacted errors and additional context
+            description: Include relevant error codes and operation phases; remove sensitive data.

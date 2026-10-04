@@ -130,6 +130,103 @@ test('builds a workflow dispatch audit from its explicit event branch', () => {
     );
 });
 
+test('builds a scheduled audit over the explicit branch and complete ancestry', () => {
+    const currentBranch = resolveAuditBranch({
+        environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' },
+        event: { schedule: '17 1 * * 1' },
+        eventName: 'schedule',
+    });
+    assert.deepEqual(buildCommitCheckRequest({ eventName: 'schedule', currentBranch }), {
+        branches: ['main'],
+        directMessages: [],
+        range: 'HEAD',
+        includeAncestors: true,
+    });
+});
+
+test('scheduled audits reject missing and contradictory tag identities instead of local fallback', () => {
+    for (const { environment, event } of [
+        { environment: {}, event: { ref: 'main' } },
+        {
+            environment: { GITHUB_REF: 'refs/tags/v0.1.0', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' },
+            event: {},
+        },
+        { environment: { GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: 'main' }, event: { ref: 'main' } },
+        { environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_TYPE: 'tag' }, event: {} },
+        { environment: { GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' }, event: { ref: 'refs/tags/v0.1.0' } },
+        { environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_NAME: 'codex/other' }, event: {} },
+    ]) {
+        const currentBranch = resolveAuditBranch({
+            environment,
+            event,
+            eventName: 'schedule',
+            localBranch: 'main',
+        });
+        assert.equal(currentBranch, undefined);
+        assert.throws(() => buildCommitCheckRequest({ eventName: 'schedule', currentBranch }), /branch identity/);
+    }
+});
+
+test('scheduled branch evidence accepts explicit matching fallbacks without local inference', () => {
+    for (const { environment, event } of [
+        { environment: { GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' }, event: {} },
+        { environment: {}, event: { ref: 'refs/heads/main' } },
+        { environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_NAME: 'main' }, event: { ref: 'main' } },
+    ]) {
+        assert.equal(
+            resolveAuditBranch({ environment, event, eventName: 'schedule', localBranch: 'codex/other' }),
+            'main',
+        );
+    }
+});
+
+test('scheduled audit rejects shallow ancestry that hides an invalid earlier commit', async () => {
+    const folder = await mkdtemp(path.join(os.tmpdir(), 'cdp-scheduled-ancestry-'));
+    const fixtureEnvironment = sanitizedGitEnvironment();
+    const git = (cwd: string, args: string[]) => {
+        const result = spawnSync('git', args, { cwd, encoding: 'utf8', env: fixtureEnvironment, windowsHide: true });
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+        return result.stdout.trim();
+    };
+    try {
+        git(folder, ['init', '--initial-branch=main', 'source']);
+        const source = path.join(folder, 'source');
+        git(source, ['config', 'user.name', 'CI Fixture']);
+        git(source, ['config', 'user.email', 'ci-fixture@example.invalid']);
+        git(source, ['config', 'core.hooksPath', '.git/no-hooks']);
+        git(source, ['config', 'commit.gpgSign', 'false']);
+        git(source, ['commit', '--allow-empty', '-m', 'invalid hidden ancestor']);
+        const ancestor = git(source, ['rev-parse', 'HEAD']);
+        git(source, ['commit', '--allow-empty', '-m', 'test(tooling): add valid scheduled head']);
+        git(folder, ['clone', '--no-local', '--depth', '1', source, 'shallow']);
+        const eventPath = path.join(folder, 'event.json');
+        await writeFile(eventPath, '{"schedule":"17 1 * * 1"}\n', 'utf8');
+        const check = (cwd: string) =>
+            spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
+                cwd,
+                encoding: 'utf8',
+                windowsHide: true,
+                env: {
+                    ...fixtureEnvironment,
+                    GITHUB_EVENT_NAME: 'schedule',
+                    GITHUB_EVENT_PATH: eventPath,
+                    GITHUB_REF: 'refs/heads/main',
+                    GITHUB_REF_TYPE: 'branch',
+                },
+            });
+        const complete = check(source);
+        assert.equal(complete.status, 1, complete.stdout + complete.stderr);
+        assert.ok(complete.stderr.includes(ancestor));
+        const shallow = check(path.join(folder, 'shallow'));
+        assert.equal(shallow.status, 1, 'A valid visible head must not hide unexamined ancestors.');
+        assert.match(shallow.stderr, /complete history/i);
+    } finally {
+        assert.equal(path.dirname(path.resolve(folder)), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(folder).startsWith('cdp-scheduled-ancestry-'));
+        await rm(folder, { recursive: true, force: true });
+    }
+});
+
 test('runs the workflow_dispatch checker from a detached GitHub checkout', async () => {
     const root = fileURLToPath(new URL('../', import.meta.url));
     const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-workflow-dispatch-'));
@@ -162,34 +259,36 @@ test('runs the workflow_dispatch checker from a detached GitHub checkout', async
             assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
         }
         const checkerPath = path.join(root, 'tooling/check-commits.ts');
-        const result = spawnSync(process.execPath, [checkerPath], {
-            cwd: temporaryDirectory,
-            encoding: 'utf8',
-            env: {
-                ...fixtureEnvironment,
-                GITHUB_EVENT_NAME: 'workflow_dispatch',
-                GITHUB_EVENT_PATH: eventPath,
-                GITHUB_REF: 'refs/heads/main',
-                GITHUB_REF_NAME: 'main',
-                GITHUB_REF_TYPE: 'branch',
-            },
-            windowsHide: true,
-        });
-        assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-        assert.match(result.stdout, /audit passed/i);
+        for (const eventName of ['workflow_dispatch', 'schedule']) {
+            const result = spawnSync(process.execPath, [checkerPath], {
+                cwd: temporaryDirectory,
+                encoding: 'utf8',
+                env: {
+                    ...fixtureEnvironment,
+                    GITHUB_EVENT_NAME: eventName,
+                    GITHUB_EVENT_PATH: eventPath,
+                    GITHUB_REF: 'refs/heads/main',
+                    GITHUB_REF_NAME: 'main',
+                    GITHUB_REF_TYPE: 'branch',
+                },
+                windowsHide: true,
+            });
+            assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+            assert.match(result.stdout, /audit passed/i);
 
-        const missingRef = spawnSync(process.execPath, [checkerPath], {
-            cwd: temporaryDirectory,
-            encoding: 'utf8',
-            env: {
-                ...fixtureEnvironment,
-                GITHUB_EVENT_NAME: 'workflow_dispatch',
-                GITHUB_EVENT_PATH: eventPath,
-            },
-            windowsHide: true,
-        });
-        assert.equal(missingRef.status, 1, `${missingRef.stdout}\n${missingRef.stderr}`);
-        assert.match(missingRef.stderr, /workflow_dispatch.*explicit branch ref.*detached/i);
+            const missingRef = spawnSync(process.execPath, [checkerPath], {
+                cwd: temporaryDirectory,
+                encoding: 'utf8',
+                env: {
+                    ...fixtureEnvironment,
+                    GITHUB_EVENT_NAME: eventName,
+                    GITHUB_EVENT_PATH: eventPath,
+                },
+                windowsHide: true,
+            });
+            assert.equal(missingRef.status, 1, `${missingRef.stdout}\n${missingRef.stderr}`);
+            assert.match(missingRef.stderr, new RegExp(`${eventName}.*explicit branch ref.*detached`, 'i'));
+        }
     } finally {
         await rm(temporaryDirectory, { force: true, recursive: true });
     }

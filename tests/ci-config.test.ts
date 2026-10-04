@@ -8,6 +8,9 @@ import { isRecord } from '../src/shared/errors.ts';
 interface WorkflowStep {
     uses?: string;
     run?: string;
+    if?: string;
+    shell?: string;
+    env?: Record<string, string>;
     'continue-on-error'?: boolean;
 }
 interface WorkflowJob {
@@ -15,14 +18,25 @@ interface WorkflowJob {
     steps: WorkflowStep[];
     needs?: string;
     env?: Record<string, string>;
+    strategy?: { 'fail-fast'?: boolean; matrix: { include: { os: string; chrome: string }[] } };
     'continue-on-error'?: boolean;
 }
 interface Workflow {
-    on: { push: unknown; pull_request: { branches: string[]; types: string[] }; workflow_dispatch: unknown };
+    on: {
+        push: unknown;
+        pull_request: { branches: string[]; types: string[] };
+        workflow_dispatch: unknown;
+        schedule: { cron: string }[];
+    };
     permissions: Record<string, string>;
     concurrency: { 'cancel-in-progress': boolean };
     jobs: Record<
-        'supply-chain-security' | 'commit-messages' | 'quality' | 'windows-tests' | 'portable-tests',
+        | 'supply-chain-security'
+        | 'commit-messages'
+        | 'quality'
+        | 'windows-tests'
+        | 'portable-tests'
+        | 'real-chrome-tests',
         WorkflowJob
     >;
 }
@@ -61,6 +75,12 @@ const workflowUrl = new URL('../.github/workflows/ci.yml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
 
+test('weekly CI runs the same supply-chain-first gates on the default branch', () => {
+    assert.deepEqual(workflow.on.schedule, [{ cron: '17 1 * * 1' }]);
+    assert.equal(workflow.jobs.quality.needs, 'supply-chain-security');
+    assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
+});
+
 test('CI workflow has read-only triggers, concurrency, and exact job display names', () => {
     assert.equal(Object.hasOwn(workflow.on, 'push'), true);
     assert.deepEqual(workflow.on.push, { branches: ['**'] });
@@ -72,7 +92,14 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
     assert.equal(workflow.concurrency['cancel-in-progress'], true);
     assert.deepEqual(
         Object.values(workflow.jobs).map((job) => job.name),
-        ['Supply chain security', 'Commit messages', 'Quality', 'Windows tests', `Portable tests (\${{ matrix.os }})`],
+        [
+            'Supply chain security',
+            'Commit messages',
+            'Quality',
+            'Windows tests',
+            `Portable tests (\${{ matrix.os }})`,
+            `Real Chrome (\${{ matrix.os }})`,
+        ],
     );
     assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
     assert.equal(workflow.jobs.quality.needs, 'supply-chain-security');
@@ -136,7 +163,7 @@ test('CI workflow uses only the approved action pins and uploads no artifacts', 
         'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 15);
+    assert.equal(uses.length, 18);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
@@ -203,4 +230,31 @@ test('every execution platform performs independent type checking before tests',
         assert.match(commands, /pnpm typecheck/);
         assert.ok(commands.indexOf('pnpm typecheck') < commands.indexOf('pnpm test'));
     }
+});
+
+test('real Chrome CI requires both actual desktop browsers and preserves the audit-first boundary', () => {
+    const job = workflow.jobs['real-chrome-tests'];
+    assert.ok(job, 'Real Chrome acceptance must be part of reusable CI.');
+    assert.equal(job.needs, 'quality');
+    assert.equal(job['continue-on-error'], undefined);
+    assert.equal(job.strategy?.['fail-fast'], false);
+    assert.deepEqual(job.strategy?.matrix.include, [
+        { os: 'ubuntu-24.04', chrome: '/opt/google/chrome/chrome' },
+        { os: 'macos-15', chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+    ]);
+    assert.equal(job.env?.DCT_SMOKE_CHROME_EXECUTABLE, `\${{ matrix.chrome }}`);
+    const commands = job.steps.map((step) => step.run ?? '').join('\n');
+    assert.match(commands, /pnpm install --frozen-lockfile/);
+    assert.match(commands, /pnpm typecheck/);
+    assert.ok(commands.indexOf('pnpm typecheck') < commands.indexOf('node tests/smoke/official-server.ts'));
+    const linux = job.steps.find((step) => step.if === "runner.os == 'Linux'");
+    const mac = job.steps.find((step) => step.if === "runner.os == 'macOS'");
+    assert.ok(linux?.run && mac?.run);
+    for (const script of ['official-server', 'entry-recovery']) {
+        assert.match(linux.run, new RegExp(`xvfb-run -a node tests/smoke/${script}\\.ts`));
+        assert.match(mac.run, new RegExp(`node tests/smoke/${script}\\.ts`));
+    }
+    assert.doesNotMatch(mac.run, /xvfb/);
+    assert.ok(job.steps.every((step) => step['continue-on-error'] !== true));
+    assert.doesNotMatch(commands, /--no-sandbox|--headless|kill -9|pkill|download|apt-get|brew install/);
 });

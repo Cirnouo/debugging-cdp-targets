@@ -8,13 +8,13 @@ import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
-import { lifecycleClient, readStatus } from './lifecycle-client.ts';
+import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
+import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
-if (process.platform !== 'win32') throw new Error('The real connection recovery smoke is Windows-only.');
+const chrome = await requireChromeSmokeExecutable();
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-'));
-const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const platform = createPlatformAdapter();
 const owned: ProcessTarget[] = [];
 let entryId = '';
@@ -39,9 +39,10 @@ async function mutate(
     disposition?: 'Close' | 'Keep',
 ) {
     const identity = { ...route(target), entryId, requestId: randomUUID() };
-    const result = await control(
-        action === 'stop' ? { action, ...identity, disposition: disposition ?? 'Close' } : { action, ...identity },
-    );
+    const result =
+        action === 'stop' && disposition !== 'Keep'
+            ? await closeSmokeConnection(control, { action, ...identity, disposition: 'Close' })
+            : await control(action === 'stop' ? { action, ...identity, disposition: 'Keep' } : { action, ...identity });
     assert.ok(!('connections' in result));
     return result;
 }
@@ -57,17 +58,7 @@ async function until(predicate: () => Promise<boolean>, timeout = 15_000) {
     }
 }
 async function recordOwned(target: ConnectionStatus): Promise<ProcessTarget> {
-    assert.ok(target.processId && target.port && target.targetKind);
-    const evidence = await platform.snapshot(target.processId, target.port);
-    assert.ok(evidence.root.exists);
-    assert.equal(path.resolve(evidence.root.executablePath).toLowerCase(), path.resolve(chrome).toLowerCase());
-    const fixture = {
-        processId: target.processId,
-        port: target.port,
-        targetKind: target.targetKind,
-        executablePath: evidence.root.executablePath,
-        startedAtUtc: evidence.root.startedAtUtc,
-    };
+    const fixture = await inspectChromeSmokeTarget(target, chrome, platform);
     owned.push(fixture);
     return fixture;
 }
@@ -91,17 +82,11 @@ async function start(index: number) {
         requestId: randomUUID(),
         targetKind: 'chrome',
         basePort: 19422 + index * 10,
-        launch: {
-            executable: chrome,
-            args: [
-                '--no-first-run',
-                '--disable-background-networking',
-                '--disable-background-mode',
-                `--user-data-dir=${path.join(folder, `profile-${index}`)}`,
-                '--remote-debugging-port={port}',
-                `data:text/html,<title>CONNECTION-${index}</title>`,
-            ],
-        },
+        launch: createChromeSmokeLaunch(
+            chrome,
+            path.join(folder, `profile-${index}`),
+            `data:text/html,<title>CONNECTION-${index}</title>`,
+        ),
     });
     assert.ok(!('connections' in target));
     assert.equal(target.status, 'active');
