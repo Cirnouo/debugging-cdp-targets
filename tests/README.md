@@ -44,6 +44,10 @@
   paths, loopback-only model endpoints, the Claude version baseline, unknown request
   validation, actual tool-result shapes, Hook context extraction, Anthropic SSE,
   responsive subprocess I/O, error/timeout cleanup and complete output draining.
+  Adversarial input/callback and resistant private-child experiments use owned
+  IPC readiness before their unchanged failure deadlines. Resistant coverage
+  records the actual ready child, TERM/KILL requests and native close, including
+  delayed startup before PID and signal-handler initialization.
 - `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
 - `release.test.ts` checks tag/event identity, dated Changelog extraction,
   English notes, paginated draft recovery and fail-closed publication with

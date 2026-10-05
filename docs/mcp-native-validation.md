@@ -544,3 +544,34 @@ their correction. Final focused Hook/runtime/target/configuration tests passed
 skips; typecheck, build:plugin, check:build and check:security passed as well.
 The original five-second smoke timing assertion remains enforced under its
 accurate name. Exact follow-up PR and main push checks remain the delivery gate.
+
+## Resistant private-fixture startup follow-up on 2026-10-05
+
+Reverification after normally merging main's documentation-only PR #10 failed
+one of 461 local tests: the resistant private Claude fixture's PID file was
+absent. Its driver had already accepted a timeout and exited successfully.
+The saved failed run remains a failure. A controlled one-second delay before
+PID evidence reproduced the same missing file without opening a user target.
+
+The resistant experiment started its 300ms helper deadline before the owned
+fixture had written its PID and installed its termination handler. It could
+therefore accept startup timeout without establishing the intended resistance.
+The historical local log does not identify the exact interpreter startup delay.
+As with the input/callback fixtures, a real owned-child IPC readiness barrier
+now precedes the timeout experiment. The resistant CLI's separate spawn entry
+uses that same ready child while retaining the existing Windows refusal wrapper.
+The fixture records TERM then KILL requests on that exact owned child and verifies
+native close before timeout rejection and removal from the ownership set.
+Windows simulates TERM refusal at the private I/O boundary; POSIX sends native
+TERM to the ready handler. Both require the final native KILL and actual close.
+The 300ms helper deadline, termination grace periods, 15000ms outer watchdog,
+actual child close and PID-absence assertions remain unchanged. Production
+helpers and accepted screenshot payloads do not change.
+
+The retained delayed-startup regression failed before the readiness correction;
+the complete Claude configuration file then passed 26/26 tests without skips.
+Final local `pnpm verify:push` passed 462/462 tests without skips, with 92.97%
+line, 87.78% branch and 90.12% function coverage. Typecheck, repository, commit,
+read-only build and distribution checks all passed in that command. The prior
+failed verification is retained separately; exact updated PR-head checks and
+the actual merge SHA's main push CI/CodeQL remain required for delivery.
