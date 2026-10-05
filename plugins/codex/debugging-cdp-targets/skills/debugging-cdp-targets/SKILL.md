@@ -94,6 +94,44 @@ Use the selected connection's exact schema. For default navigate_page, navigatio
 uses type="url" and url plus its pageId; do not copy parameters between differently
 named official tools or configuration variants.
 
+## Conditional minimized screenshot compatibility
+
+For a target independently confirmed to accept the Chromium feature switch,
+investigate a minimized-window screenshot stall in a new isolated instance with
+this explicit application argument, keeping its other required launch arguments:
+
+```json
+{ "launch": { "args": ["--enable-features=CDPScreenshotNewSurface"] } }
+```
+
+This is one `launch.args` element before the first exact `--`, not `mcpArgs`.
+Inspect only effective switches before that boundary. If no enable token exists,
+add one canonical `--enable-features=...` token. If one unambiguous token exists,
+add the bare feature to its comma-separated value while preserving every other
+entry and parameter. If the bare feature already appears once, keep it once.
+
+Report ambiguity and preserve the user's arguments when enable/disable switches
+repeat, the target feature repeats, its entry has surrounding whitespace or is
+decorated (such as `*CDPScreenshotNewSurface` or a `.Group`/trial/parameter suffix),
+or an effective disable list contains it. Equivalent spellings or separate-value
+switches are ambiguous; do not add a competing token. Disable takes precedence
+over enable in the reviewed Chromium implementation. Preserve all other entries
+and arguments after `--`.
+
+Do not infer support from a process/framework name or `generic-cdp`, apply this
+recipe to the WebView2 environment contract, or change personal profiles/config.
+`restart` reuses the exact original application argv. To change it, use the user's
+existing Close choice, or obtain it if absent. Wait for normal Close to complete,
+then start with updated args and a fresh requestId. Use the new returned
+connection/session, fresh page IDs and that connection's actual official schemas.
+
+Verify updated image pixels while the same owned native window remains minimized;
+request acceptance, focus/DOM visibility, a PNG or its changed hash alone is
+insufficient. Completely hidden or fully occluded windows remain unverified.
+The gateway adds no default feature. Official tools, transparent routing,
+the 60-second production timeout, quarantine and explicit recovery remain unchanged.
+Never focus, replay or restart implicitly for a screenshot.
+
 ## Errors, native dialogs and task completion
 
 CONNECTION_RECOVERY_REQUIRED means the affected upstream is isolated after

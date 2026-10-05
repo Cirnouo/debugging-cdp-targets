@@ -82,6 +82,243 @@ preflight checklist added. The remaining upstream action is to reproduce the
 unanswered capture in Chromium/Puppeteer and integrate cancellation in the
 official handler. Any dependency change requires separate reviewed evidence.
 
+## Minimized screenshot follow-up, 2026-10-05
+
+The following research and this branch's acceptance preparation are separate from
+the historical Chrome experiment above. The earlier unexplained Obsidian failures
+did not record native window state. They cannot retrospectively be assigned the
+same cause as a later controlled minimized-window reproduction.
+
+The 2026-10-05 research used an isolated Obsidian profile whose actual application
+was 1.13.7, Electron 43.3.0 and Chromium 150.0.7871.212; the installed launcher was
+1.13.6. With default arguments, official direct capture in a confirmed minimized
+window timed out at 60,014.10 ms. Routed capture also timed out, quarantined only
+its upstream and left a VS Code peer usable. Adding only
+`--enable-features=CDPScreenshotNewSurface` gave a 29.24 ms direct minimized capture
+and routed CDP screenshot intervals of 26.98 and 25.60 ms. Those routed complete
+tool calls took 5,212 and 5,059 ms, including ownership verification. The same
+native window remained minimized while a synthetic banner changed from yellow A
+to green B; the second screenshot contained the update. These research results
+are narrower than the complete screenshot-mode acceptance required below.
+
+Chromium 150's [feature definition](https://raw.githubusercontent.com/chromium/chromium/150.0.7871.212/content/common/features.cc)
+describes a new surface identity that avoids waiting for ForceRedraw. Its
+[browser snapshot implementation](https://raw.githubusercontent.com/chromium/chromium/150.0.7871.212/content/browser/renderer_host/render_widget_host_impl.cc)
+and [CDP screenshot handler](https://raw.githubusercontent.com/chromium/chromium/150.0.7871.212/content/browser/devtools/protocol/page_handler.cc)
+support that mechanism as an inference from source and the controlled comparison;
+no native thread stack or Chromium trace identified the exact blocked callback.
+The feature is disabled by default in the reviewed
+[Chromium 154.0.8037.98 definition](https://raw.githubusercontent.com/chromium/chromium/154.0.8037.98/content/common/features.cc)
+as well. Neither source establishes support in every Chromium embedder, or fresh
+pixels for a completely hidden or fully occluded window.
+
+The reviewed [Chromium command-line implementation](https://raw.githubusercontent.com/chromium/chromium/150.0.7871.212/base/command_line.cc)
+can override duplicate switches and accepts equivalent spellings on Windows.
+Its [feature-list implementation](https://raw.githubusercontent.com/chromium/chromium/150.0.7871.212/base/feature_list.cc)
+registers disable overrides first, so an enable switch cannot override an explicit
+disable. The conditional shared instructions therefore accept only one effective
+canonical enable token before the first exact `--`, preserve other list entries
+and parameters, and keep an already present bare target feature once. Duplicate
+switches/features, decorated target entries, explicit disable conflicts, equivalent
+spellings and separate-value forms are reported as ambiguous without rewriting
+the user's choices. This is guidance for existing `launch.args`, with no new MCP
+field or default injection. Changed argv requires completed normal Close followed
+by a new start with a fresh requestId and newly returned connection/session.
+No WebView2 environment contract, personal profile, user configuration or global
+Skill is changed.
+
+The research VS Code 1.140.0 used Chromium 150.0.7871.250. Foreground and unfocused
+captures succeeded, but native minimization was denied with error 5 and
+IsIconic=false. An unsupported Browser window command also could not establish
+minimization. These cases provide no minimized VS Code A/B acceptance and do not
+attribute its original failure to the Obsidian reproduction.
+
+The current branch adds native identity/state/action evidence, same-HWND before
+and after checks, SW_RESTORE, and bounded observation of an actual state change.
+The Task 1 six-test focused set passed, including the disposable native fixture
+and pure window-evidence regressions. The explicit launch, fixture confinement, fresh diagnostic,
+decoded RGBA pixel and complete peer cleanup checks passed the independent
+12-test focused set and typecheck. These are fixture/helper results, not real
+application screenshot compatibility results.
+
+The [opt-in smoke](../tests/smoke/README.md) requires normal A and minimized B/C
+with fresh opaque updated pixels for viewport, fullPage and element screenshots.
+fullPage also checks a patch below the viewport. Each capture validates the same
+owned window's native state before and after, with a 5,000 ms state observation
+bound. Candidate screenshot work must complete below 5,000 ms and a gateway call
+below 20,000 ms. Normal A must complete every mode; only a confirmed minimized
+baseline B/C timeout is diagnostic and requires a live gateway peer during the
+pending call and after quarantine. A candidate timeout fails. Permission denial,
+unsupported native controls, stale/ambiguous identity, and incomplete modes cannot
+pass. All newly owned targets must normally Close, final gateway status must be
+empty and gateway stdio must actually exit. Fully hidden/occluded windows remain
+outside this matrix.
+
+### VS Code measured matrix
+
+The completed Windows comparison uses actual VS Code 1.140.0, Electron 43.7.3
+and Chromium 150.0.7871.250 in newly launched administrator instances. Both
+variants have independent synthetic profiles/workspaces and identical test-only
+`window.titleBarStyle` and `window.controlsStyle` settings set to `custom`.
+The application clicks its own minimize button; native observations establish
+the resulting state. No AppCompat setting or personal profile is changed. The
+only candidate argv difference is the bare Chromium screenshot feature.
+
+The accepted four-cell matrix combines three valid cells from retained local
+run `vscode-Fc0CSe` with the fresh gateway candidate in `vscode-Ho7I6H`:
+
+| Route / variant | Valid coverage | Measured result |
+| --- | --- | --- |
+| Direct / baseline | Normal A all modes, minimized B all modes and C viewport/fullPage; eight PNGs | C/element SDK timeout at 60,008.69 ms. |
+| Direct / candidate | A/B/C viewport, fullPage and element; nine PNGs | Complete calls 35.69–3,000.95 ms, all below 5,000 ms. |
+| Packaged gateway / baseline | Normal A all modes, minimized B viewport/fullPage; five PNGs | B/element timeout at 65,811.07 ms including verification; isolated upstream and usable peer. |
+| Packaged gateway / candidate | A/B/C viewport, fullPage and element; nine PNGs | Complete calls 5,696.11–9,278.45 ms; fresh CDP screenshot phases 49.80–2,011.97 ms. |
+
+Every valid cell records a fresh application identity. Each attempted capture
+confirms normal A or minimized B/C on the same native HWND before and after it. Independent
+review decoded all 31 accepted PNGs and checked all 126 opaque phase-color pixels,
+exact dimensions and fullPage patches below the viewport. A is yellow, B green
+and C blue. Both candidates capture updated minimized content in every mode;
+their direct calls or fresh CDP phases and gateway complete calls meet their
+separate bounds. Each element capture selects from a fresh snapshot; the same
+node can retain the same UID string across snapshots.
+
+The gateway baseline timeout added an interrupted upstream-processing phase of
+60,007.77 ms and an interrupted CDP screenshot phase of 59,387.01 ms. It returned
+`CONNECTION_RECOVERY_REQUIRED` with reason `upstream-timeout` and closed/quarantined
+only the affected upstream. The independent peer completed official reads in
+11,294.11 ms while the baseline remained pending at both observation boundaries,
+then in 10,857.01 ms after quarantine. Its connection/session/PID/port/native HWND
+and creation time remained stable, status stayed connected and its window stayed
+normal. The baseline window remained minimized; subsequent affected-route calls
+received the explicit quarantine gate. This establishes observable isolation;
+internal pending-map cleanup remains supported by router regressions.
+
+The earlier `vscode-BI8Fqp` run was blocked by native error 5 and is excluded.
+The original Fc0CSe gateway candidate completed only A/viewport, then failed its
+normal-state guard before A/fullPage. Its failed native sample was not retained,
+so that transition's cause is unknown. It is excluded, and Fc0CSe as an entire
+run is not called passed. Ho7I6H supplies a new independent candidate using the
+same maintained capture/window/pixel/cleanup logic and generated gateway.
+All newly acquired instances, including the excluded candidate, normally closed
+with actual exit. Each gateway ended with `connections: []` and stdio exit 0.
+
+These results support conditional explicit launch guidance for the measured
+VS Code environment. Raw records, profiles and synthetic PNGs remain local under
+`.superpowers/sdd/minimized-screenshot-compatibility/acceptance/`; they are retained
+review evidence rather than published repository artifacts. They do not establish
+compatibility for other applications, hidden/occluded windows or the original
+unobserved failures.
+
+### Obsidian measured matrix
+
+The completed fresh run `obsidian-GY23ZX` uses the installed executable's built-in
+Obsidian 1.13.6, Electron 43.3.0 and Chromium 150.0.7871.212. Each cell has a new
+synthetic vault and profile, with the same initialization files and updates
+disabled for this comparison. The old updated 1.13.7 research profile is not
+copied. The only candidate argv difference is the bare screenshot feature.
+
+| Route / variant | Valid coverage | Measured result |
+| --- | --- | --- |
+| Direct / baseline | Normal A all modes; three PNGs | Minimized B/viewport SDK timeout at 60,014.70 ms. |
+| Direct / candidate | A/B/C viewport, fullPage and element; nine PNGs | Complete calls 22.20–1,071.64 ms. |
+| Packaged gateway / baseline | Normal A all modes; three PNGs | Minimized B/viewport timeout at 65,836.38 ms including verification. |
+| Packaged gateway / candidate | A/B/C viewport, fullPage and element; nine PNGs | Complete calls 5,797.59–6,911.37 ms; fresh CDP screenshot phases 17.83–1,038.74 ms. |
+
+Every attempted screenshot has same-HWND/owner/path/creation-time evidence before
+and after it. Normal A remains non-iconic; B/C remain iconic, including the two
+baseline timeouts. The 24 completed PNGs have exact measured viewport, fullPage
+and element dimensions and current opaque yellow/green/blue pixels. Independent
+review decoded all 24 PNGs and checked 96 phase-color sampling points. fullPage
+also contains the current color below the viewport. Both candidates meet the
+separate screenshot-stage and complete-call bounds. Preparation can explicitly
+restore an initially minimized owned window before normal A; capture does not
+focus or restore it.
+
+The gateway baseline quarantines only its timed-out upstream while preserving
+the application identity and minimized window. Its independent peer completes
+official reads in 11,637.67 ms while baseline is pending at both observation
+boundaries, and in 11,387.84 ms after quarantine. Peer identity and normal native
+state remain stable; subsequent baseline calls receive the explicit quarantine
+gate. All five newly acquired applications normally Close with actual exit;
+each gateway finishes with `connections: []` and stdio exit 0. The smoke exits 0
+with no failed or blocked cell, accepting baseline timeout as diagnosis.
+
+The earlier `obsidian-SFcIdr` matrix failed strict size/preparation assertions
+and is excluded. Two separate geometry probes established the fractional CSS
+viewport and official fullPage rounding before correcting the smoke. They are
+tooling evidence, not extra compatibility cells, and both normally closed.
+Neither those trials nor this result attributes the unobserved historical
+Obsidian failure to a specific native callback.
+
+### Chrome measured matrix
+
+The accepted Chrome matrix combines the valid direct cells from `chrome-lDkIqM`
+with fresh gateway baseline `chrome-eZ87rQ` and candidate `chrome-4lVhH9`.
+All newly owned browser endpoints report Chrome 154.0.8037.98; the renderer's
+reduced user-agent reports Chrome/154.0.0.0. Each cell has an independent new
+profile and the same synthetic data URL. Both variants use the same executable
+and initialization contract; the candidate adds only the bare screenshot feature.
+
+| Route / variant | Valid coverage | Measured result |
+| --- | --- | --- |
+| Direct / baseline | Normal A all modes; three PNGs | Minimized B/viewport SDK timeout at 60,002.90 ms. |
+| Direct / candidate | A/B/C viewport, fullPage and element; nine PNGs | Complete calls 31.91–417.06 ms. |
+| Packaged gateway / baseline | Normal A all modes; three PNGs | Minimized B/viewport timeout at 67,439.01 ms including verification. |
+| Packaged gateway / candidate | A/B/C viewport, fullPage and element; nine PNGs | Complete calls 6,001.14–6,586.79 ms; fresh CDP screenshot phases 13.91–39.90 ms. |
+
+The 24 accepted PNGs have exact measured dimensions and current opaque A/B/C
+pixels, including fullPage patches below the viewport. Independent review decoded
+all 24 PNGs and checked 96 sampling points. Every attempted capture
+has stable native HWND/owner/executable/creation evidence before and after it:
+normal A remains non-iconic, and B/C remain iconic. Both candidates meet their
+screenshot-stage and complete-call bounds.
+
+The fresh gateway baseline adds interrupted upstream-processing of 60,014.61 ms
+and CDP screenshot work of 60,011.91 ms, then quarantines only that upstream.
+The independent peer completes in 13,878.51 ms during baseline's pending interval
+and 12,582.58 ms after quarantine, with stable identity, normal window and connected
+status. The affected application remains minimized, and further calls receive
+the explicit quarantine gate. The baseline and peer normally Close, with empty
+final gateway connections and stdio exit 0; the fresh candidate does likewise.
+
+The original gateway baseline is excluded: peer preparation found two visible
+top-level windows, so no baseline screenshot was attempted. Its original gateway
+candidate completed only normal A viewport/fullPage before the A/element native
+normal-state guard failed, also before screenshot invocation. The failed native
+samples were not retained, so their causes remain unknown. Both failed cells
+normally closed. The two fresh cells use exactly the maintained smoke logic,
+with only explicit route/variant selection and relative-path adjustments in
+retained local runners. No failed request or old connection/session was replayed.
+The original whole run is not called passed.
+
+### Local gates and evidence limits
+
+The local generated-payload gates used for these application comparisons
+passed `pnpm typecheck`, `pnpm build:plugin`, `pnpm check:build`,
+`pnpm check:security` and `pnpm verify:push`, all with exit 0. The full verification
+reported 450/450 tests and coverage of 92.69% lines, 87.61% branches and 89.96%
+functions. Both host payloads matched their maintained inputs and passed inventory
+and byte-identity checks. The production runtime is byte-identical to the starting
+main baseline; maintained and generated shared Skill changes remain together.
+Normal push hooks verify the final branch, and delivery additionally requires the
+exact PR head and actual merged-main push CI/CodeQL gates. Version 0.1.0 remains
+Unreleased.
+
+Raw records, synthetic profiles/PNGs, runner provenance, review results and gate
+logs remain local under `.superpowers/sdd/minimized-screenshot-compatibility/`.
+The final Close All ledger covers 27 newly acquired real-test applications:
+11 direct targets have explicit actual-exit/upstream-close receipts, and 16
+gateway targets have successful terminal normal Close results. All 11 gateway
+entries finish with empty connections and stdio exit 0. A final independent
+read-only native check finds all 27 recorded PIDs and exact identities absent,
+with no listeners on test ports 20222 or 20223. This includes failed trials and
+geometry probes; unrelated existing applications are not closed.
+Failed/blocked trials remain explicitly excluded. These measured environments
+support conditional explicit launch guidance; fully hidden/occluded windows,
+other versions/applications and historical unobserved failures remain unverified.
+Normal Close applies only to newly owned test targets; no force kill is used.
+
 ## Readest comparison
 
 Readest 0.11.1 executable SHA-256:
