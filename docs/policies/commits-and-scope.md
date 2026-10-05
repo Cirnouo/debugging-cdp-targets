@@ -2,6 +2,11 @@
 
 ## Branches
 
+The branch rules are this repository's adapted
+[Conventional Branch](https://conventionalbranch.org/) profile. The allowed
+prefixes, lowercase kebab-case topic, and `release/<semver>` syntax below are
+authoritative local choices.
+
 The trunk is `main`. Work branches use exactly one of `feat/`, `fix/`,
 `hotfix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, or `codex/`, followed
 by a lowercase kebab-case topic. Release branches use `release/<semver>`; only
@@ -9,6 +14,11 @@ release branches may use SemVer dots and prerelease/build separators. Do not
 rewrite shared history.
 
 ## Commits
+
+The commit format is based on
+[Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/),
+with this repository's required scope, allowed types/scopes, and length
+constraints below.
 
 Every non-merge commit uses `<type>(<scope>)!: <subject>`, where `!` appears only
 for a breaking change. Allowed types are `build`, `chore`, `ci`, `docs`, `feat`,
@@ -26,6 +36,13 @@ and do not end with a period. A body or footer follows a blank line; a footer
 also follows a blank line after a body. Body and footer lines are at most 100
 characters. A breaking change may use `!`, a `BREAKING CHANGE:` footer, or both.
 Only Git-topology-proven merge commits are ignored.
+
+This repository configures GitHub squash merging with `PR_TITLE` + `PR_BODY`:
+the PR title becomes the commit title with GitHub's generated PR number retained,
+and the PR description becomes the commit body. This is a
+[configured GitHub feature](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/configuring-commit-squashing-for-pull-requests).
+It is repository configuration, not a universal default or a Conventional
+Commits rule.
 
 Topic commits and raw PR titles use the header above. A raw PR title must not
 end in its own `(#<current-PR-number>)`; GitHub appends that suffix when squashing.
