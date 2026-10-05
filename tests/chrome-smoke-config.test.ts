@@ -221,7 +221,7 @@ test('connection recovery smoke separates external normal Close requests from ga
     assert.match(source, /await until\(async \(\) => \{[\s\S]*?!current\.connections\.some/);
     assert.match(source, /const closed = await Promise\.allSettled\(\[client\.close\(\)\]\)/);
     assert.match(source, /assert\.equal\(retainedAfterGatewayCleanup, false,/);
-    assert.match(source, /reminderReceived - exitCleanupObservedAt <= 5_000/);
+    assert.match(source, /reminderReceived - connectionRetirementObservedAt <= 5_000/);
     assert.match(source, /normalCloseRequestedAt/);
     assert.doesNotMatch(source, /closeCompleted|normallyClosed|millisecondsFromCloseCompletion/);
 });

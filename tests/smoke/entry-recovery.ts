@@ -8,7 +8,7 @@ import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
-import { assertSummary, hookResultEvents } from '../fixtures/hook-gateway-events.ts';
+import { assertSummary, waitForSmokeHookEvents } from '../fixtures/hook-gateway-events.ts';
 import {
     createChromeSmokeLaunch,
     inspectChromeSmokeTarget,
@@ -166,10 +166,10 @@ try {
             !current.connections.some((connection) => connection.connectionId === first.connectionId)
         );
     });
-    const exitCleanupObservedAt = Date.now();
-    const reminder = await tool('dct_connection_status', { hookEventName: 'PostToolUse' });
-    assert.ok(isRecord(reminder.structuredContent));
-    const events = hookResultEvents(reminder.structuredContent);
+    const connectionRetirementObservedAt = Date.now();
+    const events = await waitForSmokeHookEvents(
+        async () => (await tool('dct_connection_status', { hookEventName: 'PostToolUse' })).structuredContent,
+    );
     assert.equal(events.length, 1);
     assert.equal(events[0]?.exits.length, 1);
     const exited = events[0]?.exits[0];
@@ -184,7 +184,7 @@ try {
     assert.deepEqual(events[0]?.operations, []);
     assert.deepEqual(events[0]?.connections, []);
     const reminderReceived = Date.now();
-    assert.ok(reminderReceived - exitCleanupObservedAt <= 5_000);
+    assert.ok(reminderReceived - connectionRetirementObservedAt <= 5_000);
     assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
     await rejectsRoute(first);
     await assert.rejects(() => mutate('restart', first), /absent|closed|session|connection/i);
@@ -218,8 +218,8 @@ try {
             'connections' in current && !current.connections.some((item) => item.connectionId === fourth.connectionId)
         );
     });
-    const keptExit = hookResultEvents(
-        (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
+    const keptExit = await waitForSmokeHookEvents(
+        async () => (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
     );
     assert.equal(keptExit.length, 1);
     assert.equal(keptExit[0]?.exits.length, 1);
@@ -248,11 +248,11 @@ try {
             recordedExitTiming: {
                 normalCloseRequestStartedAt,
                 normalCloseRequestedAt,
-                exitCleanupObservedAt,
+                connectionRetirementObservedAt,
                 reminderReceived,
                 millisecondsFromNormalCloseRequestStart: reminderReceived - normalCloseRequestStartedAt,
                 millisecondsFromNormalCloseRequestCompletion: reminderReceived - normalCloseRequestedAt,
-                millisecondsFromGatewayExitCleanup: reminderReceived - exitCleanupObservedAt,
+                millisecondsFromConnectionRetirementObservation: reminderReceived - connectionRetirementObservedAt,
                 measuresUiRendering: false,
             },
             profilesRetainedAt: folder,

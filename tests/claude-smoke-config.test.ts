@@ -296,6 +296,7 @@ async function adversarialHost(
     afterEvidence?: (pidFile: string) => Promise<void>,
     versionDelayMs = 0,
     hostReadyDelayMs = 0,
+    privateHostStartupDelayMs = 0,
 ) {
     const { temporary } = await sandbox(process.cwd(), `adversarial-${mode}`);
     const fixture = path.join(temporary, 'private-fixture.ts');
@@ -308,6 +309,7 @@ if (process.argv.includes('--version')) {
     await new Promise((resolve) => setTimeout(resolve, ${versionDelayMs}));
     console.log('2.1.283 (Claude Code)'); process.exit(0);
 }
+if (${privateHostStartupDelayMs} > 0) await new Promise((resolve) => setTimeout(resolve, ${privateHostStartupDelayMs}));
 writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify(process.pid));
 process.on('SIGTERM', () => {});
 if (${hostReadyDelayMs} > 0) await new Promise((resolve) => setTimeout(resolve, ${hostReadyDelayMs}));
@@ -327,7 +329,7 @@ else if (mode === 'initial-input') {
         else { process.stdin.destroy(); process.stdout.write(evidence + result); setInterval(() => {}, 1000); }
     });
 }
-if (['initial-input', 'next-input', 'callback', 'callback-error'].includes(mode) && process.send) process.send('fixture-ready');
+if (['resistant', 'initial-input', 'next-input', 'callback', 'callback-error'].includes(mode) && process.send) process.send('fixture-ready');
 `,
         'utf8',
     );
@@ -340,6 +342,9 @@ const original = cp.spawn;
 const owned = new Set();
 let cleaning;
 let readyHost;
+let resistantChild;
+let resistantClosed = false;
+const resistantSignals = [];
 let initialWriteAttempted = false;
 function cleanup() {
     return cleaning ??= Promise.all([...owned].map((child) => new Promise((resolve, reject) => {
@@ -357,7 +362,8 @@ process.on('message', () => { void fail(new Error('Outer private driver deadline
 process.on('uncaughtException', (error) => { void fail(error); });
 process.on('unhandledRejection', (error) => { void fail(error); });
 cp.spawn = (executable, args, options) => {
-    const child = args[0] === '-p' && readyHost ? readyHost : original(executable, executable === process.execPath && ['--version', '-p'].includes(args[0]) ? [${JSON.stringify(fixture)}, ...args] : args, options);
+    const selectedReadyHost = readyHost && executable === process.execPath && (args[0] === '-p' || (${JSON.stringify(mode)} === 'resistant' && args.length === 1 && args[0] === ${JSON.stringify(fixture)}));
+    const child = selectedReadyHost ? readyHost : original(executable, executable === process.execPath && ['--version', '-p'].includes(args[0]) ? [${JSON.stringify(fixture)}, ...args] : args, options);
     owned.add(child);
     child.once('close', () => owned.delete(child));
     if (${JSON.stringify(mode)} === 'driver-cleanup')
@@ -377,28 +383,35 @@ cp.spawn = (executable, args, options) => {
     }
     if (args[0] === '-p' && ${JSON.stringify(mode)} === 'next-input')
         child.stdout.once('data', () => child.stdin.end());
-    if (${JSON.stringify(mode)} === 'resistant' && process.platform === 'win32') {
+    if (${JSON.stringify(mode)} === 'resistant') {
+        resistantChild = child;
+        child.once('close', () => { resistantClosed = true; });
         // Windows cannot trap SIGTERM; simulate refusal only at this private
         // process I/O boundary, retaining native final termination and close.
         const kill = child.kill.bind(child);
-        child.kill = (signal) => signal === 'SIGKILL' ? kill(signal) : false;
+        child.kill = (signal) => {
+            const accepted = process.platform === 'win32' && signal !== 'SIGKILL' ? false : kill(signal);
+            resistantSignals.push({ signal, accepted });
+            return accepted;
+        };
     }
     return child;
 };
-if (['initial-input', 'next-input', 'callback', 'callback-error'].includes(${JSON.stringify(mode)})) {
-    // Interpreter startup precedes this input/callback experiment. Return a real
-    // ready child at the spawn I/O boundary so its unchanged 400ms budget tests
-    // the intended failure after PID evidence and the input handler are ready.
-    readyHost = original(process.execPath, [${JSON.stringify(fixture)}, '-p'], {
+if (['resistant', 'initial-input', 'next-input', 'callback', 'callback-error'].includes(${JSON.stringify(mode)})) {
+    // Interpreter startup precedes these experiments. Return the real ready child
+    // at the spawn I/O boundary so the unchanged 300ms/400ms budgets test failures
+    // after PID evidence, signal handling and the mode handler are established.
+    const hostArguments = ${JSON.stringify(mode)} === 'resistant' ? [${JSON.stringify(fixture)}] : [${JSON.stringify(fixture)}, '-p'];
+    readyHost = original(process.execPath, hostArguments, {
         cwd: process.cwd(), env: process.env, windowsHide: true, shell: false,
-        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        stdio: [${JSON.stringify(mode)} === 'resistant' ? 'ignore' : 'pipe', 'pipe', 'pipe', 'ipc'],
     });
     owned.add(readyHost);
     readyHost.once('close', () => owned.delete(readyHost));
     await new Promise((resolve, reject) => {
         readyHost.once('message', (message) => message === 'fixture-ready' ? resolve() : reject(new Error('Unexpected private fixture readiness message.')));
         readyHost.once('error', reject);
-        readyHost.once('exit', () => reject(new Error('Private fixture exited before input/callback readiness.')));
+        readyHost.once('exit', () => reject(new Error('Private fixture exited before failure-experiment readiness.')));
     });
 }
 syncBuiltinESMExports();
@@ -410,6 +423,13 @@ else await assert.rejects(() => claudeHost(process.execPath, ${JSON.stringify(te
     completedTurns++;
     return mode === 'callback' ? new Promise(() => {}) : mode === 'callback-error' ? Promise.reject(new Error('next-turn-callback-failure')) : Promise.resolve('next'.repeat(400000));
 }, 400), mode === 'callback' ? /timed out/ : mode === 'callback-error' ? /next-turn-callback-failure/ : /EPIPE|stdin|write after end|stream/i);
+if (mode === 'resistant') {
+    assert.ok(readyHost);
+    assert.equal(resistantChild, readyHost, 'CLI timeout must operate on the actual ready owned fixture.');
+    assert.deepEqual(resistantSignals, [{ signal: 'SIGTERM', accepted: process.platform !== 'win32' }, { signal: 'SIGKILL', accepted: true }]);
+    assert.equal(resistantClosed, true, 'Resistant fixture close must precede CLI timeout rejection.');
+    assert.equal(owned.has(readyHost), false);
+}
 if (mode === 'initial-input') {
     assert.equal(initialWriteAttempted, true, 'The initial-input failure must follow a real write to the ended stream.');
     assert.equal(completedTurns, 0, 'Initial input must fail before any completed turn.');
@@ -516,6 +536,9 @@ for (const mode of ['resistant', 'callback', 'initial-input', 'next-input', 'cal
 
 test('slow interpreter version startup preserves the bounded callback failure and transcript', () =>
     adversarialHost('callback', undefined, 2700));
+
+test('slow private resistant startup establishes PID and signal readiness before its bounded timeout', () =>
+    adversarialHost('resistant', undefined, 0, 0, 1000));
 
 test('slow private host startup preserves the controlled next-input write failure and transcript', () =>
     adversarialHost('next-input', undefined, 0, 1000));

@@ -27,11 +27,21 @@ then explicitly restarts and normally closes them. It retains test profiles.
   SIGTERM. These inspect-only fixtures do not own an exit observer; request acceptance
   is recorded separately from the gateway's actual application exit and cleanup.
   Bounded status checks require removal of the exited connection, and Hook facts
-  retain the original process and session identities. A root that remains alive
+  retain the original process and session identities. Route removal can precede
+  completion of upstream cleanup, so both exit cases separately wait for the
+  first nonempty Hook response using the existing 15-second/100ms readiness
+  polling budget; pending RPCs keep their existing timeout and responses arriving
+  after readiness expires cannot pass. They validate that first batch without
+  filtering identities or
+  discarding other events, then require the next Hook response to be empty.
+  A root that remains alive
   after gateway EOF cleanup is reported as retained and fails the smoke, even if a
   fallback normal Close request is accepted.
   Run `node tests/smoke/entry-recovery.ts` against a verified committed Plugin build.
-  Recorded exit latency measures gateway event capture, not Agent context delivery. Cleanup uses
+  Recorded timing distinguishes normal Close request acceptance, connection
+  retirement observation, and Hook delivery. Connection retirement observation
+  does not establish that upstream cleanup has completed or measure Agent context
+  delivery. Cleanup uses
   gateway stdin EOF and identity-verified normal target close; profiles remain in
   the printed temporary directory for inspection.
 - `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;

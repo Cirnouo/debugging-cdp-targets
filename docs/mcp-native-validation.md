@@ -505,3 +505,73 @@ local `pnpm verify:push` passed 453/453 tests without skips, with 93.02% line,
 `pnpm check:build` and `pnpm check:security` also passed. These are local results;
 delivery still requires successful checks on the final PR head and actual
 main push after squash.
+
+## Settled exit-Hook smoke follow-up on 2026-10-05
+
+PR #9 merged as `b13665d6b005da66fecb51653e8d6eecea481307` after all eleven
+required checks passed on its exact head. Its
+[main push CI 37298653326](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37298653326)
+subsequently failed macOS Real Chrome at `entry-recovery.ts:224`: the first
+Stop Hook read after a kept application's normal exit contained zero event
+batches. The other seven CI jobs and all three CodeQL jobs succeeded. The
+failed main run remains a failure; a follow-up PR corrects the test boundary.
+
+Runtime status omits a retired connection immediately so old routes cannot
+reach an exited application. Its exit notice remains pending until upstream
+cleanup settles, and only then becomes eligible for Hook delivery. The smoke
+incorrectly assumed that connection absence meant the notice was already
+deliverable. A controlled deferred upstream-close fixture reproduced that
+same observation: the route was absent, a peer remained usable and the Hook
+was empty; releasing cleanup produced the correct exit notice exactly once.
+The historical CI log does not identify the precise cleanup delay in that run.
+The smoke's timing labels now identify the observed connection retirement;
+that observation does not establish the instant upstream cleanup completed.
+Its existing five-second timing assertion remains unchanged.
+
+Both external-exit smoke cases now wait for the first nonempty Hook result
+using their existing 15000ms / 100ms readiness polling budget. The first batch is retained
+unchanged and passes the original event count, identity, cleanup and peer
+assertions; a later empty read still proves single delivery. Malformed or wrong
+nonempty evidence is not discarded while waiting for a different result.
+Production retirement, cleanup and notification ordering remain unchanged.
+No production timeout, packaged runtime, official release, lock or screenshot
+compatibility result changes, and no local real application needs to reopen.
+
+The initial one-shot helper failed five controlled regressions before the wait
+was implemented. Two additional fake-clock deadline cases also failed before
+their correction. Final focused Hook/runtime/target/configuration tests passed
+60/60 without skips. The complete local `pnpm verify:push` passed 461/461 without
+skips; typecheck, build:plugin, check:build and check:security passed as well.
+The original five-second smoke timing assertion remains enforced under its
+accurate name. Exact follow-up PR and main push checks remain the delivery gate.
+
+## Resistant private-fixture startup follow-up on 2026-10-05
+
+Reverification after normally merging main's documentation-only PR #10 failed
+one of 461 local tests: the resistant private Claude fixture's PID file was
+absent. Its driver had already accepted a timeout and exited successfully.
+The saved failed run remains a failure. A controlled one-second delay before
+PID evidence reproduced the same missing file without opening a user target.
+
+The resistant experiment started its 300ms helper deadline before the owned
+fixture had written its PID and installed its termination handler. It could
+therefore accept startup timeout without establishing the intended resistance.
+The historical local log does not identify the exact interpreter startup delay.
+As with the input/callback fixtures, a real owned-child IPC readiness barrier
+now precedes the timeout experiment. The resistant CLI's separate spawn entry
+uses that same ready child while retaining the existing Windows refusal wrapper.
+The fixture records TERM then KILL requests on that exact owned child and verifies
+native close before timeout rejection and removal from the ownership set.
+Windows simulates TERM refusal at the private I/O boundary; POSIX sends native
+TERM to the ready handler. Both require the final native KILL and actual close.
+The 300ms helper deadline, termination grace periods, 15000ms outer watchdog,
+actual child close and PID-absence assertions remain unchanged. Production
+helpers and accepted screenshot payloads do not change.
+
+The retained delayed-startup regression failed before the readiness correction;
+the complete Claude configuration file then passed 26/26 tests without skips.
+Final local `pnpm verify:push` passed 462/462 tests without skips, with 92.97%
+line, 87.78% branch and 90.12% function coverage. Typecheck, repository, commit,
+read-only build and distribution checks all passed in that command. The prior
+failed verification is retained separately; exact updated PR-head checks and
+the actual merge SHA's main push CI/CodeQL remain required for delivery.
