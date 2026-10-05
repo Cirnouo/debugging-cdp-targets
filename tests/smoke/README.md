@@ -173,6 +173,15 @@ target's own documented window control through official evaluate_script. Native
 state remains mandatory. No user profile, application config or global Skill is
 copied or modified by this experiment. Configuration is not a product MCP field.
 
+Window evidence records `actualExecutablePath` exactly as queried from the native
+process. Its compatible `executablePath` uses the caller's spelling only after
+both executable paths pass the same .NET normalization and strict identity
+comparison; without a requested path it uses the native query result. The
+TypeScript sampler retains both fields in before/after evidence and requires
+the actual path for native samples. Synthetic or legacy parsed fixtures may
+omit the additional actual-path field. PID, exact creation ticks and selected
+HWND checks remain mandatory for native mutations.
+
 Build the shared delivered payload once with `pnpm build:plugin` before running
 host Hook smokes so their copied manifests, Hooks and Skill match maintained
 sources. On the current Windows host, the discovered executable commands are:

@@ -327,7 +327,7 @@ else if (mode === 'initial-input') {
         else { process.stdin.destroy(); process.stdout.write(evidence + result); setInterval(() => {}, 1000); }
     });
 }
-if (['initial-input', 'next-input'].includes(mode) && process.send) process.send('fixture-ready');
+if (['initial-input', 'next-input', 'callback', 'callback-error'].includes(mode) && process.send) process.send('fixture-ready');
 `,
         'utf8',
     );
@@ -385,10 +385,10 @@ cp.spawn = (executable, args, options) => {
     }
     return child;
 };
-if (['initial-input', 'next-input'].includes(${JSON.stringify(mode)})) {
-    // Interpreter startup precedes this input-failure experiment. Return a real
+if (['initial-input', 'next-input', 'callback', 'callback-error'].includes(${JSON.stringify(mode)})) {
+    // Interpreter startup precedes this input/callback experiment. Return a real
     // ready child at the spawn I/O boundary so its unchanged 400ms budget tests
-    // the closed input stream, rather than interpreter scheduling.
+    // the intended failure after PID evidence and the input handler are ready.
     readyHost = original(process.execPath, [${JSON.stringify(fixture)}, '-p'], {
         cwd: process.cwd(), env: process.env, windowsHide: true, shell: false,
         stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
@@ -398,7 +398,7 @@ if (['initial-input', 'next-input'].includes(${JSON.stringify(mode)})) {
     await new Promise((resolve, reject) => {
         readyHost.once('message', (message) => message === 'fixture-ready' ? resolve() : reject(new Error('Unexpected private fixture readiness message.')));
         readyHost.once('error', reject);
-        readyHost.once('exit', () => reject(new Error('Private fixture exited before input-failure readiness.')));
+        readyHost.once('exit', () => reject(new Error('Private fixture exited before input/callback readiness.')));
     });
 }
 syncBuiltinESMExports();
@@ -415,6 +415,7 @@ if (mode === 'initial-input') {
     assert.equal(completedTurns, 0, 'Initial input must fail before any completed turn.');
 }
 if (mode === 'next-input') assert.equal(completedTurns, 1, 'The closed-stream failure must follow a completed initial turn.');
+if (mode === 'callback' || mode === 'callback-error') assert.equal(completedTurns, 1, 'The callback failure must follow a completed initial turn.');
 console.log('CONTROLLED_FAILURE');
 await cleanup();
 process.disconnect();
@@ -521,6 +522,10 @@ test('slow private host startup preserves the controlled next-input write failur
 
 test('slow private host startup preserves the controlled initial-input write failure and transcript', () =>
     adversarialHost('initial-input', undefined, 0, 1000));
+
+for (const mode of ['callback', 'callback-error'] as const)
+    test(`slow private host startup preserves the controlled ${mode} failure and transcript`, () =>
+        adversarialHost(mode, undefined, 0, 1000));
 
 test('outer watchdog requests owned fixture cleanup before its private driver closes', async () => {
     await assert.rejects(() => adversarialHost('driver-cleanup'), /Private helper failed to settle/);

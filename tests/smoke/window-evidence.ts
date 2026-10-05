@@ -11,6 +11,7 @@ export interface WindowIdentity {
     startedAtUtc: string;
 }
 export interface WindowSample extends WindowIdentity {
+    actualExecutablePath?: string;
     handle: number;
     isIconic: boolean;
     showCmd: number;
@@ -36,6 +37,9 @@ export function readWindowSample(value: unknown, expected: WindowIdentity, handl
     assert.ok(window);
     assert.equal(window.processId, expected.processId, 'Window owner changed.');
     assert.ok(typeof window.executablePath === 'string');
+    if (window.actualExecutablePath !== undefined) {
+        assert.ok(typeof window.actualExecutablePath === 'string' && window.actualExecutablePath.length > 0);
+    }
     assert.equal(
         path.win32.normalize(window.executablePath).toLowerCase(),
         path.win32.normalize(expected.executablePath).toLowerCase(),
@@ -55,6 +59,7 @@ export function readWindowSample(value: unknown, expected: WindowIdentity, handl
     return {
         processId: expected.processId,
         executablePath: window.executablePath,
+        ...(window.actualExecutablePath === undefined ? {} : { actualExecutablePath: window.actualExecutablePath }),
         startedAtUtc: window.startedAtUtc,
         handle: window.handle,
         isIconic: window.isIconic,
@@ -104,5 +109,10 @@ export async function sampleWindow(expected: WindowIdentity, state: 'None' | 'Mi
         { windowsHide: true, shell: false },
     );
     const value: unknown = JSON.parse(result.stdout);
-    return readWindowSample(value, expected, handle);
+    const sample = readWindowSample(value, expected, handle);
+    assert.ok(
+        typeof sample.actualExecutablePath === 'string',
+        'Native window evidence requires the observed executable path.',
+    );
+    return sample;
 }

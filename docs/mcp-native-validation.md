@@ -464,3 +464,44 @@ The original two failing Windows tests also passed with `TEMP`/`TMP` pointing
 to the same 8.3 reproduction directory. `pnpm typecheck`, `pnpm build:plugin`,
 `pnpm check:build` and the complete `pnpm verify:push` passed, including 250/250
 tests without Windows skips and the generated-runtime/distribution audits.
+
+## Screenshot acceptance CI follow-up on 2026-10-05
+
+[PR CI run 37294117742](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37294117742)
+exposed a window-evidence identity rejection under the Windows runner's 8.3
+temporary path and a private Claude callback fixture's missing PID evidence.
+[Latest-base CI run 37295307782](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37295307782)
+independently repeated the window rejection. These failed runs are retained as
+failures; neither a successful CodeQL run nor a local rerun replaces their result.
+
+The window rejection reproduced with a newly owned asInvoker fixture launched
+through an actual short alias. As with the earlier native-close correction,
+.NET Framework expanded only the requested executable path before comparison.
+The evidence helper now normalizes both paths under the same contract. It still
+rejects a different executable, a creation time differing by one 100ns tick and
+an incorrect HWND before any mutation. `actualExecutablePath` retains the raw
+native query result; the compatible `executablePath` uses the caller's spelling
+only after successful identity validation. Native TypeScript samples require
+and preserve the raw field; legacy parsed fixtures remain compatible.
+
+Controlled private-host startup delays reproduced the callback fixture failure
+without changing the production helper. The test accepted a host startup
+timeout as a callback timeout before a completed turn or transcript existed.
+Callback modes now use the existing owned-child IPC readiness barrier and
+require exactly one completed turn. Their 400ms helper deadline, 15000ms outer
+watchdog and actual owned-child cleanup remain unchanged. The historical CI
+log does not establish why host startup was delayed.
+
+These corrections affect test fixtures and evidence collection. The delivered
+runtime bytes, official release, dependency locks and accepted real-application
+screenshot matrix above remain unchanged. The original three task commits are
+preserved; the latest main was incorporated by a normal merge, with the CI
+corrections added as a subsequent ordinary commit.
+
+The corrected focused window/screenshot/configuration set passed 21/21 and
+the complete Claude fixture file passed 25/25, both without skips. The complete
+local `pnpm verify:push` passed 453/453 tests without skips, with 93.02% line,
+87.83% branch and 90.08% function coverage. `pnpm typecheck`, `pnpm build:plugin`,
+`pnpm check:build` and `pnpm check:security` also passed. These are local results;
+delivery still requires successful checks on the final PR head and actual
+main push after squash.

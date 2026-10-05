@@ -24,7 +24,8 @@ catch {
     throw
 }
 try {
-    if ($ExecutablePath -and ![string]::Equals([IO.Path]::GetFullPath($ExecutablePath), $application.ExecutablePath, [StringComparison]::OrdinalIgnoreCase)) {
+    # .NET Framework expands 8.3 aliases; compare both paths under the same contract.
+    if ($ExecutablePath -and ![string]::Equals([IO.Path]::GetFullPath($ExecutablePath), [IO.Path]::GetFullPath($application.ExecutablePath), [StringComparison]::OrdinalIgnoreCase)) {
         throw 'The window process executable identity changed.'
     }
     if ($StartedAtUtc -and [DateTimeOffset]::Parse($StartedAtUtc).UtcTicks -ne $application.CreatedTicks) {
@@ -105,8 +106,11 @@ public static class DctWindowEvidence {
 }
 '@
     $showState = if ($State -eq 'Minimize') { 6 } elseif ($State -eq 'Restore') { 9 } else { 0 }
+    # Return the verified caller spelling so the TypeScript sampler can compare it strictly.
+    $verifiedExecutablePath = if ($ExecutablePath) { $ExecutablePath } else { $application.ExecutablePath }
     $windows = @([DctWindowEvidence]::Read($ApplicationPid, $showState, $WindowHandle) | ForEach-Object {
-        $_ | Add-Member -NotePropertyName executablePath -NotePropertyValue $application.ExecutablePath -PassThru |
+        $_ | Add-Member -NotePropertyName executablePath -NotePropertyValue $verifiedExecutablePath -PassThru |
+            Add-Member -NotePropertyName actualExecutablePath -NotePropertyValue $application.ExecutablePath -PassThru |
             Add-Member -NotePropertyName startedAtUtc -NotePropertyValue $application.StartedAtUtc -PassThru
     })
     ConvertTo-Json -InputObject $windows -Depth 5 -Compress
