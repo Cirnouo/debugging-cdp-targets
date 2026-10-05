@@ -217,3 +217,23 @@ export function hookResultEvents(value: unknown): HookEvents[] {
     assert.ok(isRecord(value.hookSpecificOutput) && typeof value.hookSpecificOutput.additionalContext === 'string');
     return hookEvents(value.hookSpecificOutput.additionalContext);
 }
+
+export async function waitForSmokeHookEvents(read: () => Promise<unknown>, timeout = 15_000): Promise<HookEvents[]> {
+    const deadline = Date.now() + timeout;
+    const requireBudget = () => {
+        if (Date.now() >= deadline) throw new Error('Expected Hook lifecycle events were not reached.');
+    };
+    for (;;) {
+        requireBudget();
+        const value = await read();
+        requireBudget();
+        assert.ok(isRecord(value), 'Expected a Hook response object.');
+        if (Object.keys(value).length !== 0) {
+            const events = hookResultEvents(value);
+            assert.ok(events.length > 0, 'Nonempty Hook response contains no lifecycle events.');
+            requireBudget();
+            return events;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+}

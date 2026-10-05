@@ -22,6 +22,14 @@ match the parent operation ID and have completed cleanup. Primitive native failu
 evidence is allowed; tool names/counts and complete message/cause text are rejected.
 It also checks default lifecycle/status summaries before
 test adapters can strip fields.
+Its test-only smoke wait reads empty Hook responses at 100ms intervals using
+the existing 15-second readiness polling budget and returns the first nonempty
+batch intact. It checks that budget before another read and after a read returns;
+late responses cannot satisfy readiness. Each pending RPC retains its separate
+existing timeout. It rejects malformed nonempty responses immediately; it never
+filters by expected identity, discards unrelated events, or reads another
+response after delivery. The smoke's identity/count/cleanup and subsequent
+empty-Hook assertions still validate that batch.
 
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
 `target-exit-reference.ts` runs one self-exiting private Node child with detached,

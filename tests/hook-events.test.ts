@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { hookEvents, hookMarker } from './fixtures/hook-gateway-events.ts';
+import { hookEvents, hookMarker, waitForSmokeHookEvents } from './fixtures/hook-gateway-events.ts';
 
 const entryId = '11111111-1111-4111-8111-111111111111';
 const operationId = '22222222-2222-4222-8222-222222222222';
@@ -36,6 +36,84 @@ const events = { exits: [], operations: [operation], connections: [] };
 function context(value: unknown = events) {
     return `<system-reminder>${hookMarker}${JSON.stringify(value)}\nReview the recorded event.</system-reminder>`;
 }
+
+test('smoke Hook wait crosses two empty observations and returns the first event batch intact', async () => {
+    const outputs: unknown[] = [{}, {}, { decision: 'block', reason: context() }, { unread: 'next response' }];
+    const received = await waitForSmokeHookEvents(async () => outputs.shift());
+    assert.deepEqual(received, [events]);
+    assert.deepEqual(outputs, [{ unread: 'next response' }], 'Waiting must not consume the following Hook response.');
+});
+
+test('smoke Hook wait rejects its empty deadline without reading a later event', async () => {
+    const outputs: unknown[] = [{}, { decision: 'block', reason: context() }];
+    await assert.rejects(
+        waitForSmokeHookEvents(async () => outputs.shift(), 0),
+        /Hook.*not reached/i,
+    );
+    assert.deepEqual(outputs, [{}, { decision: 'block', reason: context() }]);
+});
+
+test('smoke Hook wait leaves a later batch unread when its polling sleep crosses the deadline', async (clock) => {
+    clock.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+    const later = { decision: 'block', reason: context() };
+    const outputs: unknown[] = [{}, later];
+    const pending = waitForSmokeHookEvents(async () => outputs.shift(), 1);
+    const rejected = assert.rejects(pending, /Hook.*not reached/i);
+    await new Promise((resolve) => setImmediate(resolve));
+    clock.mock.timers.tick(100);
+    await rejected;
+    assert.deepEqual(outputs, [later]);
+});
+
+test('smoke Hook wait rejects a valid read that returns after its readiness deadline', async (clock) => {
+    clock.mock.timers.enable({ apis: ['Date'], now: 0 });
+    const valid = { decision: 'block', reason: context() };
+    const outputs: unknown[] = [valid, valid];
+    await assert.rejects(
+        waitForSmokeHookEvents(async () => {
+            clock.mock.timers.setTime(2);
+            return outputs.shift();
+        }, 1),
+        /Hook.*not reached/i,
+    );
+    assert.deepEqual(outputs, [valid]);
+});
+
+test('smoke Hook wait returns a valid wrong-identity first batch for the caller to reject', async () => {
+    const correct = {
+        exits: [
+            {
+                ...exit,
+                expected: undefined,
+                operationId: undefined,
+                cleanupStatus: 'succeeded',
+                cleanupError: undefined,
+            },
+        ],
+        operations: [],
+        connections: [],
+    };
+    const wrong = {
+        ...correct,
+        exits: [{ ...correct.exits[0], connectionId: '55555555-5555-4555-8555-555555555555' }],
+    };
+    const later = { decision: 'block', reason: context(correct) };
+    const outputs: unknown[] = [{ decision: 'block', reason: context(wrong) }, later];
+    const received = await waitForSmokeHookEvents(async () => outputs.shift());
+    assert.equal(received.length, 1);
+    assert.equal(received[0]?.exits.length, 1);
+    assert.equal(received[0]?.exits[0]?.connectionId, '55555555-5555-4555-8555-555555555555');
+    assert.throws(() => assert.equal(received[0]?.exits[0]?.connectionId, '33333333-3333-4333-8333-333333333333'));
+    assert.deepEqual(outputs, [later], 'A later correct batch must remain unread after the wrong first batch.');
+});
+
+test('smoke Hook wait rejects the first nonempty malformed response without discarding it', async () => {
+    for (const invalid of [{ decision: 'block', reason: 'No lifecycle event.' }, { unrelated: 'invalid wrapper' }]) {
+        const outputs: unknown[] = [{}, invalid, { decision: 'block', reason: context() }];
+        await assert.rejects(waitForSmokeHookEvents(async () => outputs.shift()));
+        assert.deepEqual(outputs, [{ decision: 'block', reason: context() }]);
+    }
+});
 
 test('Hook payloads in serialized model requests are parsed from their actual text strings', () => {
     const request = {

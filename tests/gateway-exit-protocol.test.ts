@@ -8,7 +8,7 @@ import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import type { ConnectionStatus, ControlRequest } from '../src/domains/control-contract.ts';
 import { parseControlRequest } from '../src/domains/control-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { hookResultEvents } from './fixtures/hook-gateway-events.ts';
+import { hookResultEvents, waitForSmokeHookEvents } from './fixtures/hook-gateway-events.ts';
 
 class Application extends EventEmitter {
     exitCode: number | null = null;
@@ -197,6 +197,72 @@ async function fixture(
         callSignal: () => callSignal,
         lateRouterCloses: () => lateRouterCloses,
     };
+}
+
+for (const kept of [false, true]) {
+    test(`smoke Hook wait preserves ${kept ? 'inactive kept' : 'active'} exit evidence after deferred cleanup`, async () => {
+        let release = () => {};
+        const disposalGate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        let pending: ReturnType<typeof waitForSmokeHookEvents> | undefined;
+        const f = await fixture({ disposalGate });
+        try {
+            const current = await f.start();
+            const peer = await f.start();
+            assert.ok(current.sessionId);
+            if (kept)
+                await f.runtime.controller.stop({
+                    connectionId: current.connectionId,
+                    sessionId: current.sessionId,
+                    disposition: 'Keep',
+                });
+            f.applications[0]?.exit();
+            const status = f.runtime.controller.status();
+            assert.ok('connections' in status);
+            assert.deepEqual(
+                status.connections.map((connection) => connection.connectionId),
+                [peer.connectionId],
+            );
+            assert.deepEqual(f.callbacks.status('Stop'), {});
+            let settled = false;
+            pending = waitForSmokeHookEvents(async () => f.callbacks.status(kept ? 'Stop' : 'PostToolUse'));
+            void pending.then(
+                () => {
+                    settled = true;
+                },
+                () => {
+                    settled = true;
+                },
+            );
+            await tick();
+            assert.equal(settled, false, 'Route removal cannot stand in for completed exit cleanup.');
+            await assert.rejects(f.invoke(current), /closed|retired|exited/i);
+            await f.invoke(peer);
+            release();
+            const batches = await pending;
+            assert.equal(batches.length, 1);
+            assert.equal(batches[0]?.exits.length, 1);
+            const exit = batches[0]?.exits[0];
+            assert.ok(exit);
+            assert.equal(exit.connectionId, current.connectionId);
+            assert.equal(exit.sessionId, current.sessionId);
+            assert.equal(exit.processId, current.processId);
+            assert.equal(exit.port, current.port);
+            assert.equal(exit.taskActive, !kept);
+            assert.equal(exit.expected, undefined);
+            assert.equal(exit.cleanupStatus, 'succeeded');
+            assert.equal(exit.cleanupError, undefined);
+            assert.deepEqual(batches[0]?.operations, []);
+            assert.deepEqual(batches[0]?.connections, []);
+            assert.deepEqual(f.callbacks.status('Stop'), {});
+            await f.invoke(peer);
+        } finally {
+            release();
+            await pending?.catch(() => {});
+            await f.runtime.close();
+        }
+    });
 }
 
 test('actual exit immediately ends a call awaiting health validation and old health cannot block a new session', async () => {
