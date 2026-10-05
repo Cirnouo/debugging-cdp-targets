@@ -1,7 +1,9 @@
 # Changelog
 
 Notable net changes from the previous published version are recorded here
-using Keep a Changelog and SemVer. The initial version uses an empty baseline.
+using [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and
+[SemVer 2.0.0](https://semver.org/spec/v2.0.0.html). The initial version uses an
+empty baseline.
 Version 0.1.0 remains under development; no release has been published.
 
 ## [Unreleased]

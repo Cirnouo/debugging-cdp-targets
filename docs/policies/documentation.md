@@ -28,6 +28,15 @@ CONTRIBUTING.md provides the human setup and contribution entry point and links
 to those rules. SECURITY.md owns vulnerability reporting; CODE_OF_CONDUCT.md
 owns community behavior and private incident reporting.
 Maintain progressive disclosure rather than copying all policies everywhere.
+
+When introducing an external convention or standard, cite its direct primary
+official source at the first relevant policy statement. Name and link the
+version when a suitable versioned source is available. State the adopted basis
+and document repository-specific restrictions or customizations. For platform
+practices, cite official platform documentation and state relevant configuration
+conditions; do not present them as universal industry standards. Repository
+policies continue to define the enforceable local requirements.
+
 Plugin instructions must be concise and application-agnostic. Do not collect
 application-specific debugging recipes; Agents explore after connecting.
 
