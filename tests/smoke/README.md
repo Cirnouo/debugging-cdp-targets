@@ -104,14 +104,32 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
   retries of explicitly selected normal Close when pending CDP traffic is busy.
   It keeps the entry/connection/session identity and does not retry other failures.
-- `screenshot-layers.ts` compares official direct/routed screenshots on isolated
-  normal and minimized Chrome windows with phase-only CDP timing. It retains its
-  profiles, screenshots and metadata; a timeout records evidence and fails.
+- `screenshot-layers.ts` accepts an explicit Windows application fixture JSON and
+  an absolute evidence parent directory. It creates independent baseline/candidate
+  targets for direct official and complete generated gateway routes, with native
+  HWND/process/state evidence before and after every PNG. Candidate normal A and
+  minimized B/C each exercise viewport, fullPage and element with new snapshot
+  selection, DOM readback, opaque updated pixels and a below-viewport color patch.
+  Normal A must complete every mode. Only a confirmed minimized B/C baseline
+  SDK timeout is diagnostic; a candidate timeout fails. Gateway baseline
+  timeout also checks a peer while pending and after quarantine. Normal Close is
+  preselected for these newly created targets; all peers are attempted on failure,
+  with final empty gateway status and actual stdio exit checked. Blocked native
+  state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
+- `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
+  fixture paths, decoded pixels, fresh session diagnostics and complete peer cleanup.
+- `windows-png-evidence.ps1` uses the existing Windows System.Drawing implementation
+  to read PNG dimensions and selected RGBA pixels; no image dependency is added.
 - `readest-native.ts` accepts an explicitly selected Readest executable and creates
   independent portable copies, comparing native/CDP launch window geometry and
   actual normal close. It preserves the source and all test directories.
 - `windows-window-evidence.ps1` samples window identity, visibility, classes and
-  geometry for one test PID; no titles or page content are recorded.
+  geometry for one test PID, plus native minimized state and placement. Mutation
+  requires the launched executable/creation time and selects one owned HWND;
+  asynchronous request acceptance is separate from its bounded state postcondition.
+  Restore uses SW_RESTORE. No titles or page content are recorded.
+- `window-evidence.ts` validates native evidence against the launch identity and
+  rejects missing/ambiguous windows, denied actions and unobserved state changes.
 - `windows-elevation.ts` compiles a disposable manifested GUI and exercises real
   Windows authorization, preserved environment, limited-query identity, actual
   app-handle exit observation and elevated normal close. It may
@@ -136,6 +154,33 @@ then explicitly restarts and normally closes them. It retains test profiles.
 These scripts are opt-in and may open dedicated test browser/application windows.
 They use the delivered official package without dependency download. The normal
 test suite never runs them. Codex tests create only disposable homes/configuration.
+
+For the window screenshot acceptance, supply an explicitly reviewed fixture:
+
+```powershell
+node tests/smoke/screenshot-layers.ts 'C:/Test/fixture.json' 'C:/Test/evidence'
+```
+
+The JSON has `label` (lowercase name), `targetKind`, `launch` (structured
+executable/args/cwd/env), `candidateArgs` (complete argv), and `pageTitle` (a
+literal substring matching exactly one managed main renderer). Baseline uses
+launch.args; candidateArgs may only add the bare CDPScreenshotNewSurface feature
+in one effective canonical enable token before `--`. Both explicitly reference
+the test-only `{fixture}` directory placeholder; `{port}` retains its runtime
+meaning. Optional `fixtureFiles` maps confined relative paths to synthetic UTF-8
+text; its contents also expand `{fixture}`. Optional `minimizeFunction` uses the
+target's own documented window control through official evaluate_script. Native
+state remains mandatory. No user profile, application config or global Skill is
+copied or modified by this experiment. Configuration is not a product MCP field.
+
+Window evidence records `actualExecutablePath` exactly as queried from the native
+process. Its compatible `executablePath` uses the caller's spelling only after
+both executable paths pass the same .NET normalization and strict identity
+comparison; without a requested path it uses the native query result. The
+TypeScript sampler retains both fields in before/after evidence and requires
+the actual path for native samples. Synthetic or legacy parsed fixtures may
+omit the additional actual-path field. PID, exact creation ticks and selected
+HWND checks remain mandatory for native mutations.
 
 Build the shared delivered payload once with `pnpm build:plugin` before running
 host Hook smokes so their copied manifests, Hooks and Skill match maintained

@@ -186,6 +186,24 @@ list_pages after restart. No launch/restart or tool replay happens automatically
 Failed resource disposal after confirmed app exit is retained internally for
 gateway cleanup retries and does not keep the dead session routable.
 
+### Minimized screenshots
+
+If an independently verified Chromium target stalls when its window is minimized,
+an isolated new launch can explicitly use
+`--enable-features=CDPScreenshotNewSurface` in `launch.args`. The shared Skill
+explains safe handling of an existing feature list, explicit disable choices,
+ambiguous switches and the first `--` boundary. The Plugin does not add this
+feature by default; support must be checked for the particular application.
+This guidance does not change WebView2 environment settings or personal profiles.
+
+Restart keeps the exact original application arguments. To change them, choose
+normal Close, wait for it to complete, then start with the updated `launch.args`
+and a fresh requestId. Use the new returned connection/session and page IDs.
+Validate fresh image content while the same native window remains minimized.
+The 60-second timeout, quarantine and explicit recovery still apply. See
+[the dated screenshot research and acceptance limits](docs/mcp-native-validation.md#minimized-screenshot-follow-up-2026-10-05)
+for measured evidence and the scope of acceptance.
+
 ### Automatic Hooks in each host
 
 Both distributions provide PreToolUse, PostToolUse, UserPromptSubmit and Stop
