@@ -47,11 +47,11 @@ test('builds a pull request audit for title, complete squash message, source bra
             title: 'ci(tooling): add quality gates',
             body: 'Explain the final behavior.\n\nCloses #220\nRefs: #221',
             base: { sha: 'base' },
-            head: { ref: 'ci/quality-gates', sha: 'head' },
+            head: { ref: 'chore/quality-gates', sha: 'head' },
         },
     };
     assert.deepEqual(buildCommitCheckRequest({ eventName: 'pull_request', event }), {
-        branches: ['ci/quality-gates'],
+        branches: ['chore/quality-gates'],
         directMessages: [
             {
                 label: 'pull request title',
@@ -71,7 +71,7 @@ test('builds a pull request audit for title, complete squash message, source bra
 test('PR squash validation rejects long descriptions and missing or malformed body evidence', () => {
     const pr = {
         title: 'fix(governance): validate squash messages',
-        head: { ref: 'codex/squash-check', sha: 'head' },
+        head: { ref: 'fix/squash-check', sha: 'head' },
         base: { sha: 'base' },
     };
     const request = buildCommitCheckRequest({
@@ -256,13 +256,13 @@ test('builds normal and first-push audits from GitHub push payloads', () => {
         buildCommitCheckRequest({
             eventName: 'push',
             event: {
-                ref: 'refs/heads/ci/quality-gates',
+                ref: 'refs/heads/chore/quality-gates',
                 before: 'before',
                 after: 'after',
             },
         }),
         {
-            branches: ['ci/quality-gates'],
+            branches: ['chore/quality-gates'],
             directMessages: [],
             range: 'before..after',
             includeAncestors: false,
@@ -293,6 +293,97 @@ test('builds a local audit over current ancestry', () => {
         range: 'HEAD',
         includeAncestors: true,
     });
+});
+
+test('checks task-purpose branches at local, push and pull request entry points', async (context) => {
+    const cases = [
+        { eventName: '', localBranch: 'docs/branch-policy', sourceBranch: 'docs/branch-policy', status: 1 },
+        { eventName: '', localBranch: 'chore/branch-policy', sourceBranch: 'chore/branch-policy', status: 0 },
+        { eventName: 'push', localBranch: 'chore/branch-policy', sourceBranch: 'docs/branch-policy', status: 1 },
+        { eventName: 'push', localBranch: 'docs/branch-policy', sourceBranch: 'chore/branch-policy', status: 0 },
+        {
+            eventName: 'pull_request',
+            localBranch: 'chore/branch-policy',
+            sourceBranch: 'docs/branch-policy',
+            status: 1,
+        },
+        {
+            eventName: 'pull_request',
+            localBranch: 'docs/branch-policy',
+            sourceBranch: 'chore/branch-policy',
+            status: 0,
+        },
+    ];
+    for (const { eventName, localBranch, sourceBranch, status } of cases) {
+        await context.test(
+            `${eventName || 'local'} ${status === 0 ? 'accepts' : 'rejects'} ${sourceBranch}`,
+            async () => {
+                const directory = await mkdtemp(path.join(os.tmpdir(), 'cdp-branch-policy-'));
+                const environment = sanitizedGitEnvironment();
+                const git = (args: string[]) => {
+                    const result = spawnSync('git', args, {
+                        cwd: directory,
+                        encoding: 'utf8',
+                        env: environment,
+                        windowsHide: true,
+                    });
+                    assert.equal(result.status, 0, result.stdout + result.stderr);
+                    return result.stdout.trim();
+                };
+                try {
+                    git(['init', '--initial-branch=main']);
+                    git(['config', 'user.name', 'Branch Fixture']);
+                    git(['config', 'user.email', 'branch-fixture@example.invalid']);
+                    git(['config', 'core.hooksPath', '.git/no-hooks']);
+                    git(['config', 'commit.gpgSign', 'false']);
+                    git(['commit', '--allow-empty', '-m', 'test(governance): create branch fixture']);
+                    const before = git(['rev-parse', 'HEAD']);
+                    git(['checkout', '-b', localBranch]);
+                    git(['commit', '--allow-empty', '-m', 'docs(governance): explain branch policy']);
+                    const after = git(['rev-parse', 'HEAD']);
+                    const eventPath = path.join(directory, 'event.json');
+                    const event =
+                        eventName === 'pull_request'
+                            ? {
+                                  number: 123,
+                                  pull_request: {
+                                      title: 'docs(governance): explain branch policy',
+                                      body: null,
+                                      base: { sha: before },
+                                      head: { ref: sourceBranch, sha: after },
+                                  },
+                              }
+                            : { ref: `refs/heads/${sourceBranch}`, before, after };
+                    await writeFile(eventPath, `${JSON.stringify(event)}\n`, 'utf8');
+                    const result = spawnSync(
+                        process.execPath,
+                        [path.join(repositoryRoot, 'tooling/check-commits.ts')],
+                        {
+                            cwd: directory,
+                            encoding: 'utf8',
+                            env: eventName
+                                ? { ...environment, GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: eventPath }
+                                : environment,
+                            windowsHide: true,
+                        },
+                    );
+                    assert.equal(result.status, status, result.stdout + result.stderr);
+                    if (status === 0) {
+                        assert.match(result.stdout, /Commit and branch audit passed/);
+                        assert.equal(result.stderr, '');
+                    } else {
+                        const errors = result.stderr.trim().split(/\r?\n/);
+                        assert.equal(errors.length, 1, result.stderr);
+                        assert.match(errors[0] ?? '', /^- docs\/branch-policy: Branch must be main or /);
+                    }
+                } finally {
+                    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+                    assert.ok(path.basename(directory).startsWith('cdp-branch-policy-'));
+                    await rm(directory, { recursive: true, force: true });
+                }
+            },
+        );
+    }
 });
 
 test('builds a workflow dispatch audit from its explicit event branch', () => {

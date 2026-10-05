@@ -33,17 +33,7 @@ export const COMMIT_SCOPES = Object.freeze([
     'release',
 ]);
 
-export const BRANCH_PREFIXES = Object.freeze([
-    'feat',
-    'fix',
-    'hotfix',
-    'chore',
-    'docs',
-    'refactor',
-    'test',
-    'ci',
-    'codex',
-]);
+export const BRANCH_PREFIXES = Object.freeze(['feat', 'fix', 'hotfix', 'chore']);
 
 const kebabPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const require = createRequire(import.meta.url);

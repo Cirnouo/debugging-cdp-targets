@@ -7,11 +7,26 @@ The branch rules are this repository's adapted
 prefixes, lowercase kebab-case topic, and `release/<semver>` syntax below are
 authoritative local choices.
 
-The trunk is `main`. Work branches use exactly one of `feat/`, `fix/`,
-`hotfix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, or `codex/`, followed
-by a lowercase kebab-case topic. Release branches use `release/<semver>`; only
-release branches may use SemVer dots and prerelease/build separators. Do not
-rewrite shared history.
+The trunk is `main`. Work branches use exactly one of these short prefixes,
+followed by a lowercase kebab-case topic:
+
+- `feat/` for new functionality.
+- `fix/` for defects.
+- `hotfix/` for urgent fixes.
+- `chore/` for standalone documentation, refactoring, tests, CI, and other
+    maintenance.
+
+Choose the prefix for the task's overall purpose. Classify each commit
+independently using the commit types below; branch and commit types need not
+match. For example, `chore/branch-policy` may contain a
+`docs(governance): explain branch policy` commit, and `chore/quality-gates` may
+contain a `ci(tooling): add quality gates` commit.
+
+Optional release preparation branches use `release/<semver>` with strict
+SemVer syntax; only release branches may use SemVer dots and prerelease/build
+separators. A release branch does not authorize publication. Formal publication
+requires a separately authorized annotated stable `v<major>.<minor>.<patch>`
+tag under the [release policy](releases.md). Do not rewrite shared history.
 
 ## Commits
 
