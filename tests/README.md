@@ -106,6 +106,8 @@
   executable alias exercises normal close while mismatched path/time identities
   must leave the fixture running. A delayed normal close remains pending past
   ten seconds and confirms the same native process handle after observer loss.
+- `window-evidence.test.ts` verifies owned disposable window minimize/restore and
+  rejects stale identities, replaced windows and accepted but unobserved transitions.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible

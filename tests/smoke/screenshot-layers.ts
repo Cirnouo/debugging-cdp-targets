@@ -45,6 +45,10 @@ try {
                 String(target.processId),
                 '-State',
                 mode === 'minimized' ? 'Minimize' : 'None',
+                '-ExecutablePath',
+                target.executablePath,
+                '-StartedAtUtc',
+                target.startedAtUtc,
             ],
             { windowsHide: true, shell: false },
         );

@@ -111,7 +111,12 @@ then explicitly restarts and normally closes them. It retains test profiles.
   independent portable copies, comparing native/CDP launch window geometry and
   actual normal close. It preserves the source and all test directories.
 - `windows-window-evidence.ps1` samples window identity, visibility, classes and
-  geometry for one test PID; no titles or page content are recorded.
+  geometry for one test PID, plus native minimized state and placement. Mutation
+  requires the launched executable/creation time and selects one owned HWND;
+  asynchronous request acceptance is separate from its bounded state postcondition.
+  Restore uses SW_RESTORE. No titles or page content are recorded.
+- `window-evidence.ts` validates native evidence against the launch identity and
+  rejects missing/ambiguous windows, denied actions and unobserved state changes.
 - `windows-elevation.ts` compiles a disposable manifested GUI and exercises real
   Windows authorization, preserved environment, limited-query identity, actual
   app-handle exit observation and elevated normal close. It may
