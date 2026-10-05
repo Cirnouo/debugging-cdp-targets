@@ -1,5 +1,9 @@
 # Tests
 
+- `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
+  escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
+  transparent pixels; cleanup failure still initiates every peer Close.
+
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
