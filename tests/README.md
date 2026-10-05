@@ -1,5 +1,9 @@
 # Tests
 
+- `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
+  escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
+  transparent pixels; cleanup failure still initiates every peer Close.
+
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
@@ -106,6 +110,8 @@
   executable alias exercises normal close while mismatched path/time identities
   must leave the fixture running. A delayed normal close remains pending past
   ten seconds and confirms the same native process handle after observer loss.
+- `window-evidence.test.ts` verifies owned disposable window minimize/restore and
+  rejects stale identities, replaced windows and accepted but unobserved transitions.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible

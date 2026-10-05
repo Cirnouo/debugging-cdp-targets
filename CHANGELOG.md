@@ -46,7 +46,10 @@ Version 0.1.0 remains under development; no release has been published.
   the active failure phase and compact native evidence without error payloads.
 - Structured executable/args/cwd/env launches with native Windows privilege
   detection, private one-shot elevation, actual app handles and separate
-  authorization and CDP readiness waits.
+  authorization and CDP readiness waits. Conditional instructions for explicitly
+  selecting a Chromium screenshot surface through existing launch arguments
+  preserve feature lists and disable choices; changed arguments use normal Close
+  followed by a fresh start.
 - Timeout quarantine, pending transport cleanup and phase-only diagnostics;
   normal close without a listener and explicit retries after native failures.
 - Chrome presets for a fixed dedicated browser profile, occupancy checks and
