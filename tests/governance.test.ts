@@ -79,34 +79,43 @@ test('accepts main, approved topic branches, and SemVer release branches', () =>
         'fix/windows-shell',
         'hotfix/reject-pwa',
         'chore/update-tools',
-        'docs/explain-install',
-        'refactor/split-policy',
-        'test/cover-branch',
-        'ci/pin-actions',
-        'codex/task-three',
         'release/0.1.0',
         'release/1.2.3-alpha.1+build.9',
     ];
 
     for (const branch of valid) {
-        assert.deepEqual(validateBranchName(branch), []);
+        assert.deepEqual(validateBranchName(branch), [], branch);
     }
 });
 
 test('rejects branch names outside the approved grammar', () => {
     const invalid = [
         'master',
+        'docs/explain-install',
+        'refactor/split-policy',
+        'test/cover-branch',
+        'ci/pin-actions',
+        'codex/task-three',
         'feature/add-validator',
+        'bugfix/windows-shell',
+        'feat/',
         'feat/Add-validator',
+        'feat/under_score',
         'feat/two/levels',
         'feat/-leading',
+        'feat/trailing-',
+        'feat/double--dash',
+        'feat/1.2.3',
         'release/v1.2.3',
         'release/1.2',
         'release/01.2.3',
         'release/1-2-3',
+        'release/1.2.3-01',
+        'release/1.2.3-alpha..1',
+        'release/1.2.3+',
     ];
 
     for (const branch of invalid) {
-        assert.notDeepEqual(validateBranchName(branch), []);
+        assert.notDeepEqual(validateBranchName(branch), [], branch);
     }
 });
