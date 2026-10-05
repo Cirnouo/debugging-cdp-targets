@@ -27,10 +27,17 @@ also follows a blank line after a body. Body and footer lines are at most 100
 characters. A breaking change may use `!`, a `BREAKING CHANGE:` footer, or both.
 Only Git-topology-proven merge commits are ignored.
 
-Topic commits and raw PR titles use the header above without the PR's own number.
-The final squash header uses `<type>(<scope>)!: <subject> (#<PR-number>)`, with
-`!` only for a breaking change. Preserve GitHub's generated PR number and check
-the actual merge message before merging.
+Topic commits and raw PR titles use the header above. A raw PR title must not
+end in its own `(#<current-PR-number>)`; GitHub appends that suffix when squashing.
+The final squash header uses `<type>(<scope>)!: <subject> (#<current-PR-number>)`,
+with `!` only for a breaking change. The final GitHub-generated trailing suffix
+identifies the PR that produced the squash commit. Preserve that suffix and
+check the actual merge message before merging.
+
+Other authored `#number` or `(#number)` references in topic commit subjects,
+raw PR titles, and descriptions may identify Issues or other PRs, including a
+PR that introduced a regression. These references are distinct from the final
+generated current-PR suffix and remain in the predicted squash message.
 
 The 100-character header limit includes the generated suffix. For example,
 ` (#123)` uses seven characters, leaving at most 93 characters for the raw title.
@@ -45,28 +52,32 @@ focused checks before committing.
 Do not push, tag, publish, modify a remote, open a pull request, or change
 repository settings without explicit authorization.
 
-## Optional issue association
+## Optional Issue and PR references
 
-Issue association is optional. When the change resolves an issue, use `Closes`,
-`Fixes`, or `Resolves` followed by its issue reference. Use `Refs: #220` for a
-reference only. Put these trailers at the end of the PR description, with a blank
-line after the description body. Use a separate line for each issue and
-`owner/repository#number` for an issue in another repository.
+Issue association and other PR references are optional. When the change resolves
+an Issue, use `Closes`, `Fixes`, or `Resolves` followed by its Issue reference.
+Use `Refs: #220` for a non-closing reference to an Issue or another PR. Put these
+trailers at the end of the PR description, with a blank line after the description
+body. Use one reference per trailer line and `owner/repository#number` for a
+reference in another repository.
 
-Prefer the PR description for issue association so the reference is visible on
-the PR and carried into the squash body. Topic commits may also include these
-trailers, but keep closing keywords in the PR description so squash merging
-retains them. Closing keywords in a PR description
-create a visible PR-issue link when the PR targets the default branch; merging
-that PR into the default branch closes the issue. See
+Prefer the PR description for Issue associations and regression-source
+explanations so references are visible on the PR and carried into the squash
+body. Title references are allowed; titles alone do not close Issues. Topic
+commits may also include these trailers, but keep closing keywords in the PR
+description so squash merging retains them. Closing keywords in a PR description
+create a visible PR-Issue link when the PR targets the default branch; merging
+that PR into the default branch closes the Issue. See
 [GitHub's issue-linking documentation](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue).
 
-A complete final squash message can look like this:
+For example, PR #123 resolves Issue #219 and fixes a regression introduced by
+PR #220. Its raw title may be `fix(target): reject stale identity from #220`,
+and its complete final squash message can look like this:
 
 ```text
-fix(target): reject stale session identity (#123)
+fix(target): reject stale identity from #220 (#123)
 
-Reject stale routing before forwarding requests to the official Server.
+Fix the stale-session regression introduced by PR #220.
 
 Closes #219
 Refs: #220

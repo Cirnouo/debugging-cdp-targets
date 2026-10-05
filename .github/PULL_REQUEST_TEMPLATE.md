@@ -22,9 +22,13 @@ verification limits, including real-platform checks.
 - [ ] Version 0.1.0 remains unreleased.
 
 <!--
-Optional issue association goes at the end of this description after a blank line.
-Use Closes #ISSUE, Fixes #ISSUE, or Resolves #ISSUE when this PR resolves an issue.
-Use Refs: #ISSUE for a reference only.
-Use a separate line for each issue and owner/repository#ISSUE for another repository.
-See docs/policies/commits-and-scope.md for the issue and squash-message conventions.
+Prefer this description for Issue associations and regression-source explanations.
+Optional trailers go at the end of this description after a blank line.
+Use Closes #ISSUE, Fixes #ISSUE, or Resolves #ISSUE when this PR resolves an Issue.
+Use Refs: #NUMBER for a non-closing reference to an Issue or another PR.
+Use one reference per trailer line and owner/repository#NUMBER for another repository.
+Authored #number or (#number) title references may identify Issues or other PRs.
+The raw title must not end in its own (#CURRENT-PR-NUMBER); GitHub appends that suffix.
+Preserve the generated final suffix and keep the complete squash header within 100 characters.
+See docs/policies/commits-and-scope.md for reference and squash-message conventions.
 -->

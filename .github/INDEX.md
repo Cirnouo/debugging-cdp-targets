@@ -8,5 +8,5 @@ repository home page.
   Release publication, with documented trigger and job ownership.
 - `ISSUE_TEMPLATE/` contains bug and feature forms and private security routing.
 - `PULL_REQUEST_TEMPLATE.md` guides change descriptions, verification evidence,
-  and optional issue association.
+  optional Issue associations and other PR references, and generated squash suffixes.
 - `codeql-config.yml` limits security analysis to maintained code and workflows.
