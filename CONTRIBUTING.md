@@ -30,9 +30,18 @@ See [source ownership](src/README.md), [tests](tests/README.md), and
 [tooling](tooling/README.md) for navigation.
 
 Create a topic branch allowed by the [branch and commit policy](docs/policies/commits-and-scope.md),
-for example `fix/describe-the-problem`. Discuss a substantial design or behavior
-change in an issue before investing in its implementation. Preserve unrelated
-work and add a failing regression test before changing behavior.
+using `feat/` for new functionality, `fix/` for defects, `hotfix/` for urgent
+fixes, or `chore/` for standalone documentation, refactoring, tests, CI, and
+other maintenance. Follow the prefix with a lowercase kebab-case topic, for
+example `fix/describe-the-problem`. Choose it for the task's overall purpose
+and classify individual commits independently; a `docs(governance): ...`
+commit may belong on `chore/branch-policy`.
+
+Optional `release/<semver>` branches prepare a release. Formal publication
+requires separately authorized annotated stable tags under the
+[release policy](docs/policies/releases.md). Discuss a substantial design or
+behavior change in an issue before investing in its implementation. Preserve
+unrelated work and add a failing regression test before changing behavior.
 
 Run the affected tests first, followed by the complete local verification:
 
