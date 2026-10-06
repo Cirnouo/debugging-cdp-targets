@@ -6,12 +6,32 @@ export interface SubmissionChecklist {
 
 export interface SubmissionSection {
     heading: string | null;
-    paragraphs: string[];
+    paragraphs: SubmissionParagraph[];
     checklists: SubmissionChecklist[];
+}
+
+export interface SubmissionParagraph {
+    text: string;
+    literal: boolean;
 }
 
 export function normalizeSubmissionText(text: string) {
     return text.replace(/\s+/gu, ' ').trim();
+}
+
+export function readSubmissionHeading(line: string) {
+    const match = /^ {0,3}(#{1,6})(?:\s+|$)(.*?)\s*$/u.exec(line);
+    if (!match?.[1]) return undefined;
+    return {
+        level: match[1].length,
+        text: normalizeSubmissionText((match[2] ?? '').replace(/\s+#+\s*$/u, '')),
+    };
+}
+
+export function readSubmissionChecklist(line: string): SubmissionChecklist | undefined {
+    const match = /^ {0,3}(?:[-+*]|\d+[.)])\s+\[([ xX])\]\s+(.*)$/u.exec(line);
+    if (!match) return undefined;
+    return { label: normalizeSubmissionText(match[2] ?? ''), selected: match[1] !== ' ', continuations: [] };
 }
 
 /** Scan only submission structure and content; this is not a Markdown renderer. */
@@ -20,14 +40,22 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
     const sections: SubmissionSection[] = [section];
     let paragraph: string[] = [];
     let paragraphIsProse = true;
+    let paragraphIsLiteral = false;
     let checklist: SubmissionChecklist | undefined;
     let fence: { marker: string; length: number } | undefined;
     let inComment = false;
     const flushParagraph = () => {
         const text = paragraph.join('\n').trim();
-        if (text) section.paragraphs.push(text);
+        if (text) section.paragraphs.push({ text, literal: paragraphIsLiteral });
         paragraph = [];
         paragraphIsProse = true;
+        paragraphIsLiteral = false;
+    };
+    const appendLine = (line: string, literal: boolean) => {
+        // A quote paragraph can also continue lazily without a new > marker.
+        paragraphIsLiteral ||= literal;
+        paragraph.push(line);
+        if (literal) paragraphIsProse = false;
     };
     const beginSection = (heading: string) => {
         section = { heading: normalizeSubmissionText(heading), paragraphs: [], checklists: [] };
@@ -57,8 +85,7 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
                 flushParagraph();
                 fence = undefined;
             } else {
-                paragraph.push(original);
-                paragraphIsProse = false;
+                appendLine(original, true);
             }
             continue;
         }
@@ -76,10 +103,16 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
             continue;
         }
         // Quotes and indented code provide evidence, never canonical structure.
-        // Indented text directly after a checkbox can instead wrap its label.
-        if (checklist && /^ {2,}\S/u.test(line) && !/^\s*(?:[-+*]|\d+[.)])\s/u.test(line)) {
+        // A list paragraph can wrap lazily without indentation. Actual block
+        // boundaries cannot continue its label; N/A reasons still need indentation.
+        if (
+            checklist &&
+            !/^\s*(?:#{1,6}(?:\s|$)|>|(?:[-+*]|\d+[.)])\s)/u.test(line) &&
+            !/^\s*(?:`{3,}|~{3,})/u.test(line) &&
+            !/^\s*(?:=+|-+|\*(?:\s*\*){2,}|_(?:\s*_){2,})\s*$/u.test(line)
+        ) {
             const continuation = line.trim();
-            if (/^N\/A:/u.test(continuation) || checklist.continuations.length > 0) {
+            if (/^ {2,}\S/u.test(line) && (/^N\/A:/u.test(continuation) || checklist.continuations.length > 0)) {
                 checklist.continuations.push(continuation);
             } else {
                 checklist.label = normalizeSubmissionText(`${checklist.label} ${continuation}`);
@@ -88,13 +121,11 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
         }
         checklist = undefined;
         if (/^ {0,3}>/u.test(line)) {
-            paragraph.push(line.replace(/^ {0,3}(?:>\s*)+/u, ''));
-            paragraphIsProse = false;
+            appendLine(line.replace(/^ {0,3}(?:>\s*)+/u, ''), true);
             continue;
         }
         if (/^(?: {4}|\t)/u.test(line)) {
-            paragraph.push(line.trim());
-            paragraphIsProse = false;
+            appendLine(line.trim(), true);
             continue;
         }
         const setext = /^ {0,3}(=+|-+)\s*$/u.exec(line);
@@ -109,26 +140,22 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
             flushParagraph();
             continue;
         }
-        const heading = /^ {0,3}(#{1,6})(?:\s+|$)(.*?)\s*$/u.exec(line);
-        if (heading?.[1]) {
+        const heading = readSubmissionHeading(line);
+        if (heading) {
             flushParagraph();
-            if (heading[1].length === sectionLevel) {
-                beginSection((heading[2] ?? '').replace(/\s+#+\s*$/u, ''));
+            if (heading.level === sectionLevel) {
+                beginSection(heading.text);
             }
             continue;
         }
-        const check = /^ {0,3}(?:[-+*]|\d+[.)])\s+\[([ xX])\]\s+(.*)$/u.exec(line);
+        const check = readSubmissionChecklist(line);
         if (check) {
             flushParagraph();
-            checklist = {
-                label: normalizeSubmissionText(check[2] ?? ''),
-                selected: check[1] !== ' ',
-                continuations: [],
-            };
+            checklist = check;
             section.checklists.push(checklist);
             continue;
         }
-        paragraph.push(line);
+        appendLine(line, false);
         if (/^ {0,3}(?:[-+*]|\d+[.)])\s/u.test(line)) paragraphIsProse = false;
     }
     flushParagraph();

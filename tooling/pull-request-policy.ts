@@ -1,11 +1,21 @@
-import { normalizeSubmissionText, scanSubmissionMarkdown } from './submission-markdown.ts';
+import {
+    normalizeSubmissionText,
+    readSubmissionChecklist,
+    readSubmissionHeading,
+    scanSubmissionMarkdown,
+} from './submission-markdown.ts';
 
 export function validatePullRequestBody(body: string | null, template: string): string[] {
     const expected = scanSubmissionMarkdown(template).filter((section) => section.heading !== null);
     if (expected.length === 0) throw new Error('The current pull request template has no H2 sections.');
     const scanned = scanSubmissionMarkdown(body ?? '');
     const actual = scanned.filter((section) => section.heading !== null);
-    const placeholders = expected.flatMap((section) => section.paragraphs).map(normalizeSubmissionText);
+    const placeholders = expected
+        .flatMap((section) => section.paragraphs)
+        .map((paragraph) => normalizeSubmissionText(paragraph.text));
+    const templateExamples = template.split(/\r?\n[ \t]*\r?\n/u).map(normalizeSubmissionText);
+    const templateHeadings = expected.map((section) => section.heading);
+    const templateLabels = expected.flatMap((section) => section.checklists).map((check) => check.label);
     const errors: string[] = [];
     if (
         expected.length !== actual.length ||
@@ -47,16 +57,24 @@ export function validatePullRequestBody(body: string | null, template: string): 
                 );
             }
         }
-        // Template prose identifies sections that need an answer. Rescan only
-        // their content to discard quoted/code examples consisting of headings,
-        // checkboxes or starter prose, without making those examples structural.
-        const content = candidate.paragraphs.flatMap((paragraph) =>
-            scanSubmissionMarkdown(paragraph).flatMap((entry) => entry.paragraphs),
+        // Keep literal output literal: TAP counters can resemble Markdown
+        // headings. Exclude only copied template examples and whole starters.
+        const hasContent = candidate.paragraphs.some(({ text, literal }) =>
+            text.split(/\r?\n[ \t]*\r?\n/u).some((block) => {
+                const normalized = normalizeSubmissionText(block);
+                if (!normalized || placeholders.includes(normalized)) return false;
+                if (!literal) return true;
+                if (templateExamples.includes(normalized)) return false;
+                return block.split(/\r?\n/u).some((line) => {
+                    if (!line.trim()) return false;
+                    const heading = readSubmissionHeading(line);
+                    if (heading && templateHeadings.includes(heading.text)) return false;
+                    const check = readSubmissionChecklist(line);
+                    return !check || !templateLabels.includes(check.label);
+                });
+            }),
         );
-        if (
-            section.paragraphs.length > 0 &&
-            !content.some((paragraph) => !placeholders.includes(normalizeSubmissionText(paragraph)))
-        ) {
+        if (section.paragraphs.length > 0 && !hasContent) {
             errors.push(
                 `Pull request body: ${section.heading} needs content or evidence beyond template starter prose.`,
             );

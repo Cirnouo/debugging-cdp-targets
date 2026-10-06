@@ -109,6 +109,30 @@ test('allows logical wrapped labels after whitespace normalization without erasi
     assert.match(errors(compliantBody.replace('`pnpm verify:push`', 'pnpm verify:push')), /checklist/i);
 });
 
+test('accepts unindented lazy continuations of logically wrapped checklist labels', () => {
+    const body = compliantBody.replace(
+        'Focused tests and `pnpm verify:push` pass.',
+        'Focused tests and\n`pnpm verify:push` pass.',
+    );
+    assert.equal(errors(body), '');
+    assert.equal(
+        scanSubmissionMarkdown('- [x] Focused tests and\n`pnpm verify:push` pass.\n')[0]?.checklists[0]?.label,
+        'Focused tests and `pnpm verify:push` pass.',
+    );
+});
+
+test('logical checkbox continuations stop at headings, lists, quotes and code fences', () => {
+    for (const block of [
+        '## Details',
+        '- Next item',
+        '> results',
+        '```text\npassed\n```',
+        '    ```text\n    passed\n    ```',
+    ]) {
+        assert.equal(scanSubmissionMarkdown(`- [x] Confirmed.\n${block}\n`)[0]?.checklists[0]?.label, 'Confirmed.');
+    }
+});
+
 test('requires actual Problem, Resulting behavior and Verification content beyond starter prose', () => {
     for (const [actual, starter] of [
         ['https://github.com/example/project/issues/219', 'Describe the problem or link the relevant issue.'],
@@ -190,6 +214,15 @@ test('accepts fenced result evidence and deeper prose, while respecting both fen
     assert.equal(errors(compliantBody.replace(evidence, '<!-- ## Fake -->checks passed<!-- hidden -->')), '');
 });
 
+test('accepts literal fenced TAP counters as verification evidence without treating them as headings', () => {
+    const body = compliantBody.replace(
+        'Focused policy tests and pnpm verify:push passed; real browser checks were not run.',
+        '```text\n# tests 586\n# pass 586\n# fail 0\n```',
+    );
+    assert.equal(errors(body), '');
+    assert.equal(scanSubmissionMarkdown(body).filter((section) => section.heading !== null).length, 4);
+});
+
 test('accepts equivalent setext H2 sections and rejects headings synthesized by removing comments', () => {
     assert.equal(errors(compliantBody.replace('## Problem', 'Problem\n-------')), '');
     for (const replacement of ['#<!-- comment --># Problem', '<!-- comment -->## Problem']) {
@@ -242,6 +275,6 @@ test('scanner selects section depth for reuse and does not split on deeper headi
     });
     assert.equal(scanned.length, 2);
     assert.equal(scanned[1]?.heading, 'Answer');
-    assert.deepEqual(scanned[1]?.paragraphs, ['ready']);
+    assert.deepEqual(scanned[1]?.paragraphs, [{ text: 'ready', literal: false }]);
     assert.deepEqual(scanned[1]?.checklists, [{ label: 'Confirmed.', selected: true, continuations: [] }]);
 });

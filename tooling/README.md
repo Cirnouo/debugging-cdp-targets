@@ -61,6 +61,9 @@
   the low-level Git range/message builder remains independent of that template.
 - `submission-markdown.ts` scans submission sections at a selected heading depth,
   logical wrapped checkbox labels, adjacent continuations, and content paragraphs.
+  Paragraphs retain their text and whether it includes literal code or quoted
+  content. Shared line readers identify headings/checklists without rescanning
+  literal output as Markdown structure.
   Fences, indented code, quotes, and comments cannot supply structural headings
   or checklists; code and quoted content can supply evidence beyond starter prose.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
