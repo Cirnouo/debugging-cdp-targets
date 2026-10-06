@@ -17,7 +17,7 @@ verification limits, including real-platform checks.
 
 ## Documentation
 
-- [ ] Relevant documentation and meaningful Unreleased user changes are updated.
+- [ ] Relevant documentation and meaningful Unreleased user changes are updated, when applicable.
 - [ ] The PR title and commits follow the repository policy.
 - [ ] Version 0.1.0 remains unreleased.
 

@@ -1,5 +1,10 @@
 # Test fixtures
 
+`issue-feedback-http.ts` replaces only subprocess `fetch` with a private fake
+GitHub boundary for the actual CI entry test. It records request methods/routes
+in a disposable transcript and cannot send network traffic; the test confirms
+feedback publication precedes an invalid exit without printing body or token.
+
 `unwrapped-squash-message.json` preserves a malformed squash message as negative
 input for strict body-length validation, including a formerly exempt identity.
 
@@ -7,6 +12,12 @@ input for strict body-length validation, including a formerly exempt identity.
 and GitHub-wrapped squash message as UTF-8 text without normalizing their bytes.
 The message puts an ordinary body label at a line boundary; commit and PR audit
 regressions distinguish it from explicit trailers without rewriting history.
+Its historical prose does not exempt a current PR from the current template.
+
+`current-pr-body.md` is a literal compliant current PR body with checklist
+selections, conditional N/A reasons, evidence, an ordinary body label and Issue
+trailers. CLI regressions preserve its raw bytes while checking the template and
+complete commitlint message; its declared checks are synthetic fixture input.
 
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
 `hook-gateway.ts` composes the production gateway/SDK with fake process, CDP and

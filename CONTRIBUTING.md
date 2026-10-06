@@ -22,6 +22,31 @@ the [supply-chain policy](docs/policies/supply-chain.md) if a check fails. Do no
 repair the lock automatically or bypass installation trust. The ordinary
 installation enables the reviewed build script and prepares local Git hooks.
 
+## Submit an Issue
+
+Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) for reproducible unexpected
+behavior or the [Feature form](.github/ISSUE_TEMPLATE/feature_request.yml) for a
+problem and proposed behavior. The current YAML forms own the field headings,
+order, required answers, dropdown choices, and corresponding `template:` labels.
+Keep the generated H3 fields when editing the body, including optional fields;
+optional answers may be empty or `_No response_`. Apply only the corresponding
+form label when submitting a typed Issue through another interface. See the
+[typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions)
+and [Agent submission rules](AGENTS.md#issue-submissions).
+
+The [remote Issue workflow](.github/workflows/issues.yml) reads the latest Issue
+and reports structural form errors with a `template: invalid` label and an owned
+bot comment. Edit the body or its form label to rerun validation. A repair clears
+that diagnostic label and updates the existing comment to resolution. Ordinary
+Issues and fresh valid typed Issues receive no new comment. Configuration or
+GitHub API failures are reported as automation failures; see the
+[typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions)
+for classification, label provisioning and stale-state limits.
+
+Ordinary freeform Issues remain available and exempt from the typed form policy.
+Remove tokens, cookies, private page content, and personal paths from public
+examples. Report suspected vulnerabilities privately through [SECURITY.md](SECURITY.md).
+
 ## Make a focused change
 
 Start with [AGENTS.md](AGENTS.md), the nearest source AGENTS.md, and the policies
@@ -62,13 +87,18 @@ targets and agree to normal Close cleanup before running them.
 ## Submit a pull request
 
 Target main and use a PR title accepted by the commit policy, for example
-`fix(target): reject stale session identity`. Explain the problem, final behavior,
-and actual verification results in the PR template. Update relevant documentation
+`fix(target): reject stale session identity`. Read the current
+[PR template](.github/PULL_REQUEST_TEMPLATE.md) before creating or editing the
+description and follow the [Agent submission rules](AGENTS.md#pull-request-submissions).
+The [submission and commit policy](docs/policies/commits-and-scope.md) owns the
+required structure, evidence, conditional N/A reasons, 100-character limits,
+generated squash suffix, and optional Issue trailers. Update relevant documentation
 and meaningful user-facing changes in the Unreleased changelog.
-Wrap description paragraphs and list continuations within 100 characters; CI
-validates the title and predicted squash message with its generated PR number.
-Follow the [commit policy](docs/policies/commits-and-scope.md) for the final header
-limit and optional issue trailers at the end of the description.
+
+The remote Commit messages check rejects a current PR that omits required
+template content or fails commitlint. A failure blocks merge. Fix the reported
+errors in the PR title or body; editing reruns the existing check. The body format
+check runs after GitHub receives the submission.
 
 The main Ruleset requires an up-to-date PR and successful required GitHub checks.
 The maintainer reviews contributions and merges with squash, checking the actual

@@ -99,12 +99,109 @@ PR checks validate the raw title and the predicted header with its actual PR
 number plus the original PR description. Keep description lines within the same
 body/footer limit; editing a title or description reruns the existing gate.
 
+The current [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
+is the sole source of required PR headings, checklist labels, placement, order,
+and starter prose. Keep each H2 section exactly once in order without extra H2
+sections, and each template checklist once in its section and original order.
+Deeper headings, prose, lists, and code evidence are allowed. Wrapped checklist
+labels preserve their original text after whitespace normalization.
+
+Problem and Resulting behavior need content beyond starter prose, comments,
+headings, and checkboxes. An Issue link can explain the problem. Verification
+must record actual checks, results, and remaining limits beyond its checklist.
+Documentation can consist of satisfied checks and conditional reasons. Select
+mandatory checks with `x` or `X`. A check containing `when applicable` may remain
+unchecked only with an adjacent indented `N/A: <reason>` continuation. Do not
+delete unchecked required checks or claim results that have not been observed.
+
+The remote Commit messages check validates the current PR body against this
+template in addition to validating the complete original body with commitlint
+and the predicted squash suffix. A missing or empty body fails. A failed check
+blocks merge; edit the title or body to fix the reported errors and let the
+existing PR `edited` event rerun the check. Older PR numbers or historical prose
+provide no exception for a current submission. Local, push, and scheduled
+history checks continue to validate original commit messages without applying
+the current PR template to history. This remote body gate does not run before
+sending a PR description.
+
 Keep each commit coherent, stage only files owned by the task, and preserve
 unrelated worktree changes. Review the staged diff and run the applicable
 focused checks before committing.
 
 Do not push, tag, publish, modify a remote, open a pull request, or change
 repository settings without explicit authorization.
+
+## Typed Issue submissions
+
+The current [Bug form](../../.github/ISSUE_TEMPLATE/bug_report.yml) and
+[Feature form](../../.github/ISSUE_TEMPLATE/feature_request.yml) are the sole
+authority for their generated field labels, order, required answers, dropdown
+options, and classification labels. GitHub's
+[Issue form syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)
+applies the configured labels when those labels already exist in the repository.
+The current forms use `template: bug-report` and `template: feature-request`;
+Agents using another interface must apply the corresponding form label when
+creating or editing a typed Issue.
+
+Classification uses those form labels only. Ordinary freeform Issues without
+either label remain allowed and exempt, even if their text resembles a form.
+General labels such as `bug` are optional. Both form labels on one Issue are
+ambiguous and invalid; choose the corresponding form. `template: invalid` is
+reserved for validation diagnostics and cannot classify a form. Do not infer a
+type from the body or record persistent Issue identity.
+
+Preserve each generated H3 field heading exactly once and in the form's order,
+including optional fields. Extra field-like H3 headings break that structure;
+deeper headings, prose, lists, and code may appear in responses. Comments and
+headings alone do not answer a required field. Fenced or indented code and
+quotes may provide answer evidence but cannot substitute for generated headings.
+Required answers must be nonempty and cannot be `_No response_`. Optional
+answers may be empty or `_No response_`. A dropdown answer must match exactly
+one configured option. This structural policy does not judge semantic
+completeness, response length, version grammar, or numbered reproduction steps.
+
+Malformed or unsupported form configuration is a configuration failure,
+distinct from invalid contributor content. The supported form profile includes
+input, textarea, single-choice dropdown, and static Markdown. Changes to control
+types or required structure require explicit policy support before use.
+Read the current form before creating or editing a typed Issue, redact sensitive
+examples, and follow [SECURITY.md](../../SECURITY.md) for private vulnerability
+reporting. Typed body validation has no local command or Agent tool hook.
+
+The remote [Issue forms workflow](../../.github/workflows/issues.yml) runs on
+open, body/title edit, reopen, and label changes using the trusted default-branch
+event commit. GitHub requires this workflow on the default branch for
+[Issue events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#issues).
+Classification changes use `labeled` and `unlabeled` events. Changes to the
+diagnostic `template: invalid` label are ignored to prevent feedback recursion.
+Maintainers must provision both current form labels and `template: invalid`
+before deployment; missing labels or malformed forms are automation failures.
+
+A structurally invalid typed Issue receives only the diagnostic label and one
+owned GitHub Actions bot comment with field-specific repair guidance, then its
+workflow reports failure. Edit the body or corresponding form label to repair
+the submission. A repaired Issue loses only the diagnostic label and its existing
+owned comment records resolution. Removing both form labels makes the Issue
+ordinary and exempt, clears stale diagnosis, and resolves any owned comment.
+Fresh valid or ordinary Issues receive no comment. Closed Issues are skipped.
+Other labels, comments and the original body remain intact; automation never
+closes, deletes, locks or reopens an Issue.
+
+Ownership requires the verified [GitHub Actions bot](https://api.github.com/users/github-actions%5Bbot%5D)
+numeric identity, `github-actions[bot]` login
+and Bot type plus the fixed feedback marker. Comment discovery is paginated;
+legacy duplicates select the lowest numeric comment ID for update and preserve
+the others. Marker text copied by a contributor cannot claim a comment.
+API, authentication, network, malformed response and configuration failures are
+automation failures, distinct from contributor content. Logs omit tokens and
+Issue bodies. The workflow queues runs per Issue and checks freshly fetched
+identity, body, title, labels, state and update time before writing. Confirmed
+own label mutations advance the expected update time only while source and label
+identities still match. GitHub REST offers no atomic compare-and-set here; an edit
+in the final request window is repaired by its later queued event.
+A confirmed label write can remain if a later comment request fails. The run
+reports automation failure; a rerun fetches current state and resumes recovery
+without creating duplicate owned comments or changing unrelated content.
 
 ## Optional Issue and PR references
 

@@ -312,6 +312,7 @@ test('builds a local audit over current ancestry', () => {
 });
 
 test('checks task-purpose branches at local, push and pull request entry points', async (context) => {
+    const currentBody = await readFile(new URL('./fixtures/current-pr-body.md', import.meta.url), 'utf8');
     const cases = [
         { eventName: '', localBranch: 'docs/branch-policy', sourceBranch: 'docs/branch-policy', status: 1 },
         { eventName: '', localBranch: 'chore/branch-policy', sourceBranch: 'chore/branch-policy', status: 0 },
@@ -364,7 +365,7 @@ test('checks task-purpose branches at local, push and pull request entry points'
                                   number: 123,
                                   pull_request: {
                                       title: 'docs(governance): explain branch policy',
-                                      body: null,
+                                      body: currentBody,
                                       base: { sha: before },
                                       head: { ref: sourceBranch, sha: after },
                                   },
@@ -792,7 +793,7 @@ test('separated generic footer groups accept adjacent explicit trailers after bo
     assert.equal(commitlintAccepts(message), true);
 });
 
-test('preserved body label messages pass Git and PR audit entry points without rewriting bytes', async (context) => {
+test('preserved body label messages retain their bytes and current PRs require the template', async (context) => {
     const fixture = await wrappedBodyLabelFixture();
     const messageBytes = Buffer.from(fixture.actualMessage);
     const temporaryBase = await realpath(os.tmpdir());
@@ -861,8 +862,9 @@ test('preserved body label messages pass Git and PR audit entry points without r
                 assert.deepEqual(await readFile(messagePath), messageBytes);
                 assert.deepEqual(await readFile(eventPath), eventBytes);
                 assert.equal(result.error, undefined);
-                assert.equal(result.status, 0, result.stdout + result.stderr);
-                assert.match(result.stdout, /audit passed/i);
+                assert.equal(result.status, eventName === 'pull_request' ? 1 : 0, result.stdout + result.stderr);
+                if (eventName === 'pull_request') assert.match(result.stderr, /pull request body/i);
+                else assert.match(result.stdout, /audit passed/i);
             });
         }
     } finally {
@@ -877,6 +879,81 @@ test('accepts URL-only long body lines when commitlint accepts them', () => {
 
     assert.equal(commitlintAccepts(message), true);
     assert.deepEqual(recordErrors(message), []);
+});
+
+test('current PR CLI enforces the template while preserving raw squash description and commitlint rules', async () => {
+    const compliantBody = await readFile(new URL('./fixtures/current-pr-body.md', import.meta.url), 'utf8');
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'cdp-current-pr-'));
+    const fixtureEnvironment = sanitizedGitEnvironment();
+    const git = (args: string[]) => {
+        const result = spawnSync('git', args, {
+            cwd: directory,
+            env: fixtureEnvironment,
+            encoding: 'utf8',
+            windowsHide: true,
+        });
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+        return result.stdout.trim();
+    };
+    try {
+        git(['init', '--initial-branch=main']);
+        git(['config', 'user.name', 'CI Fixture']);
+        git(['config', 'user.email', 'ci-fixture@example.invalid']);
+        git(['config', 'core.hooksPath', '.git/no-hooks']);
+        git(['config', 'commit.gpgSign', 'false']);
+        git(['commit', '--allow-empty', '-m', 'test(tooling): create current PR base']);
+        const base = git(['rev-parse', 'HEAD']);
+        git(['commit', '--allow-empty', '-m', 'chore(tooling): add current PR head']);
+        const head = git(['rev-parse', 'HEAD']);
+        const eventPath = path.join(directory, '.git', 'event.json');
+        for (const [body, status, diagnostic] of [
+            [compliantBody, 0, /audit passed/i],
+            [null, 1, /pull request body/i],
+            ['', 1, /pull request body/i],
+            ['An old PR description cannot waive the current template.', 1, /pull request body/i],
+            [compliantBody.replace('## Verification', '## Results'), 1, /pull request body/i],
+            [
+                compliantBody.replace(
+                    'observations: the complete description is retained for squash validation',
+                    'x'.repeat(101),
+                ),
+                1,
+                /body-max-line-length/i,
+            ],
+            [compliantBody.replace('\n\nCloses #219', '\nCloses #219'), 1, /footer.*blank/i],
+        ] as const) {
+            const event = {
+                number: 219,
+                pull_request: {
+                    title: 'chore(tooling): validate current submissions',
+                    body,
+                    base: { sha: base },
+                    head: { ref: 'chore/current-submissions', sha: head },
+                },
+            };
+            const bytes = Buffer.from(`${JSON.stringify(event)}\n`);
+            await writeFile(eventPath, bytes);
+            const request = buildCommitCheckRequest({ eventName: 'pull_request', event });
+            assert.equal(
+                request.directMessages[1]?.message,
+                `chore(tooling): validate current submissions (#219)${body ? `\n\n${body}` : ''}`,
+            );
+            const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
+                cwd: directory,
+                encoding: 'utf8',
+                env: { ...fixtureEnvironment, GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: eventPath },
+                windowsHide: true,
+            });
+            assert.equal(result.error, undefined);
+            assert.equal(result.status, status, result.stdout + result.stderr);
+            assert.match(result.stdout + result.stderr, diagnostic);
+            assert.deepEqual(await readFile(eventPath), bytes);
+        }
+    } finally {
+        assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(directory).startsWith('cdp-current-pr-'));
+        await rm(directory, { recursive: true, force: true });
+    }
 });
 
 test('accepts backtick-leading subjects when commitlint accepts them', () => {

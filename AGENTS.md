@@ -11,6 +11,32 @@ complete grammar. Optional `release/<semver>` preparation branches follow that
 policy; publication requires separately authorized annotated stable or prerelease tags under
 the [release policy](docs/policies/releases.md).
 
+## Pull request submissions
+
+Whenever creating or editing a PR, read the current
+[PR template](.github/PULL_REQUEST_TEMPLATE.md). Preserve every heading and
+checklist label, their order, and each checklist's section. Fill the problem,
+resulting behavior, and final verification with actual evidence, results, and
+remaining limits. Never fabricate results or delete an unchecked required check.
+Select satisfied checks; only checks containing `when applicable` may remain
+unchecked with an adjacent indented `N/A: <reason>` continuation. The
+[commit policy](docs/policies/commits-and-scope.md), including its 100-character
+body/footer limits and raw-title/generated-squash rules, remains authoritative.
+
+## Issue submissions
+
+When creating or editing a typed Bug or Feature Issue, read the current
+[Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) or
+[Feature form](.github/ISSUE_TEMPLATE/feature_request.yml). Preserve generated H3
+field headings exactly once in their original order, including optional fields.
+Answer each required field and use the exact dropdown choice. Apply the form's
+corresponding `template:` label; the provisioned form applies it on creation.
+Follow the [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions).
+Ordinary freeform Issues are allowed and exempt. Do not infer a typed Issue from
+its body or require a general label. Redact tokens, cookies, private page content,
+and personal paths; report suspected vulnerabilities privately through
+[SECURITY.md](SECURITY.md).
+
 ## Boundaries
 
 - The reusable stdio gateway relays official MCP tools and results using

@@ -1,5 +1,7 @@
 name: Bug report
 description: Report reproducible unexpected Plugin behavior.
+labels:
+    - 'template: bug-report'
 body:
     -   type: markdown
         attributes:

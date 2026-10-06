@@ -45,7 +45,13 @@ so disposable Git fixtures cannot modify the repository that invoked the hook.
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
 cancellation of superseded ref runs. Commit messages validates topology, raw PR
 titles, predicted squash messages with the PR number and original description,
-and source branches; Quality checks policy and coverage; Windows tests
+and source branches. For current PR events it also validates the complete body
+against the current PR template, with no history exemptions or body rewriting.
+Required sections, checklists, actual verification evidence, and conditional N/A
+reasons follow the [submission policy](commits-and-scope.md). Format failure
+blocks merge; editing the PR body reruns Commit messages through the existing
+`edited` trigger. Local/push/scheduled history audits do not apply this template.
+Quality checks policy and coverage; Windows tests
 parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
 fake CDP on Linux/macOS. No account data or profiles are uploaded.
 

@@ -1,5 +1,7 @@
 name: Feature request
 description: Describe a problem and the behavior that would solve it.
+labels:
+    - 'template: feature-request'
 body:
     -   type: textarea
         id: problem
