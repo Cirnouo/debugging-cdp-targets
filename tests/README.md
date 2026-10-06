@@ -32,6 +32,9 @@
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
   They also check predicted squash headers with PR numbers, reject invalid original PR
   descriptions and unwrapped non-merge commit bodies regardless of commit identity.
+  Complete original and GitHub-wrapped message fixtures exercise ordinary body
+  labels, reserved footer boundaries and adjacent trailer groups. Disposable Git
+  and PR entry points verify exact message and event bytes before and after audits.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git

@@ -3,6 +3,11 @@
 `unwrapped-squash-message.json` preserves a malformed squash message as negative
 input for strict body-length validation, including a formerly exempt identity.
 
+`wrapped-body-label-squash.json` preserves the complete original PR description
+and GitHub-wrapped squash message as UTF-8 text without normalizing their bytes.
+The message puts an ordinary body label at a line boundary; commit and PR audit
+regressions distinguish it from explicit trailers without rewriting history.
+
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
 `hook-gateway.ts` composes the production gateway/SDK with fake process, CDP and
 upstream I/O for isolated Codex and Claude model-context tests. Each fake target

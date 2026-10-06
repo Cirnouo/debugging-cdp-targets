@@ -38,6 +38,10 @@
 - `official-server-release.json` records the reviewed official npm release, its
   source tag/commit, tarball integrity and every published file digest and length.
 - `governance.ts` owns commit type/scope and branch grammar.
+- `commit-footer-rule.ts` supplies the local commitlint `footer-leading-blank`
+  rule. It checks original message lines, preserves body labels without a
+  preceding blank line, and requires separation before reserved footer syntax.
+  A separated generic trailer can begin a group of adjacent footer lines.
 - `version-policy.ts` owns strict input guards around node-semver and exact
   Package/Plugin/Skill string agreement. It also supplies security identity validation.
 - `release.ts` reads both maintained packaging and generated host metadata,
