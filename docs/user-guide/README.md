@@ -1,0 +1,23 @@
+# User guide
+
+The [project README](../../README.md) provides an overview and quick start.
+These pages explain installation and operation in detail:
+
+- [installation.md](installation.md): Codex and Claude Code installation, Skill
+    entries, automatic Hook controls, updates, scopes and uninstallation.
+- [compatibility.md](compatibility.md): host and application requirements, platform
+    prerequisites, extension support and dated acceptance results.
+- [workflow.md](workflow.md): launch and inspection, independent connections,
+    Close/Keep, actual exit, live restart, operations and automatic notifications.
+- [configuration.md](configuration.md): MCP lifecycle tools, structured application
+    settings, ports, Chrome profiles, official tool enablement and workspace access.
+- [privacy.md](privacy.md): in-memory state, retained browser data, network access,
+    bundled package integrity and dependency audit limits.
+- [troubleshooting.md](troubleshooting.md): common failures, explicit recovery,
+    normal manual close and conditional minimized screenshot compatibility.
+
+The [lifecycle protocol](../lifecycle-protocol.md) defines exact MCP selectors and
+delivery rules. [Domain language](../domain-language.md) defines terms;
+[validation evidence](../mcp-native-validation.md) records dated research and test
+boundaries. Contributor rules and architecture decisions remain in
+[repository documentation](../README.md).

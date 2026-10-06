@@ -10,6 +10,10 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
+- A project README with a themed icon, a short host-specific quick start and a
+    topic-based user guide for installation, operation, compatibility and privacy.
+- Three Codex starter prompts for screenshot capture, console/network diagnosis
+    and page-load performance profiling.
 - A generated geometric project icon with matching light/dark Codex assets and
   a universal icon for the Claude directory listing.
 - Independent Codex and Claude Code Plugins and Marketplace catalogs, each with

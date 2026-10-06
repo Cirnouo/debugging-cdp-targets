@@ -36,3 +36,6 @@ normally ends only that connection.
 - `skills/` contains the shared complete instructions.
 - `dist/` contains the runtime, native helpers, notices and complete official Server.
 - `LICENSE` contains the shared MIT license.
+
+See the [user guide](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/README.md)
+for detailed installation, compatibility, workflow, configuration, privacy and troubleshooting.

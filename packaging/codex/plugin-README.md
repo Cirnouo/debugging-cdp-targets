@@ -31,3 +31,6 @@ Hook execution requires Codex's standard review and trust of each definition.
 release, including its public Server bin, resources, licenses, vendor notices and
 published skills. The gateway verifies all of these bytes before each launch.
 Consumers need Node 24.21.0; package preparation is a contributor task.
+
+See the [user guide](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/README.md)
+for detailed installation, compatibility, workflow, configuration, privacy and troubleshooting.

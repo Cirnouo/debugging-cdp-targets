@@ -108,8 +108,9 @@ check names. A code scanning rule additionally requires CodeQL results and rejec
 high/critical security alerts. GitHub applies its
 [code scanning alert gate](https://docs.github.com/en/code-security/concepts/code-scanning/merge-protection) to PR
 findings whose reported lines are in the diff. Existing findings still require
-review through code scanning alerts. The README records the tested systems and
-actual Chrome versions; local simulated tests cannot establish real acceptance.
+review through code scanning alerts. The
+[compatibility guide](../user-guide/compatibility.md) records the tested systems
+and actual Chrome versions; local simulated tests cannot establish real acceptance.
 
 Supply chain security is the first CI gate: dependency-free lockfile preflight
 with full vulnerability/signature audits, script/hook-disabled frozen install,
