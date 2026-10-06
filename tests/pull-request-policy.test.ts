@@ -329,3 +329,19 @@ test('scanner selects section depth for reuse and does not split on deeper headi
     assert.deepEqual(scanned[1]?.paragraphs, [{ text: 'ready', literal: false }]);
     assert.deepEqual(scanned[1]?.checklists, [{ label: 'Confirmed.', selected: true, continuations: [] }]);
 });
+
+test('inline comments preserve actual indentation provenance for PR evidence', () => {
+    const scanned = scanSubmissionMarkdown('## Verification\n\n<!-- hint -->checks passed\n');
+    assert.deepEqual(scanned[1]?.paragraphs, [{ text: 'checks passed', literal: false }]);
+    const indented = scanSubmissionMarkdown('## Verification\n\n    <!-- hint -->checks passed\n');
+    assert.deepEqual(indented[1]?.paragraphs, [{ text: 'checks passed', literal: true }]);
+    assert.equal(
+        errors(
+            compliantBody.replace(
+                'Focused policy tests and pnpm verify:push passed; real browser checks were not run.',
+                '<!-- hint -->checks passed',
+            ),
+        ),
+        '',
+    );
+});

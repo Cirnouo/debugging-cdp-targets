@@ -185,9 +185,19 @@ function parseIssueForm(source: string, template: IssueTemplate, location: strin
     return { template, label, fields };
 }
 
-function hasResponse(text: string): boolean {
-    const normalized = normalizeSubmissionText(text);
-    return Boolean(normalized) && !/^(?:_?No response_?|\*{1,2}No response\*{1,2})$/iu.test(normalized);
+function isNoResponse(text: string): boolean {
+    return /^(?:_?No response_?|\*{1,2}No response\*{1,2})$/iu.test(normalizeSubmissionText(text));
+}
+
+function hasResponse(text: string, literal = false): boolean {
+    if (!normalizeSubmissionText(text) || isNoResponse(text)) return false;
+    if (literal) return true;
+    // Empty prose task markers are not answers. Literal output
+    // retains its meaning instead of being rescanned as Markdown formatting.
+    return text.split(/\r?\n/u).some((line) => {
+        const content = line.trim();
+        return Boolean(content) && !isNoResponse(content) && !/^(?:[-+*]|\d+[.)])\s+\[[ xX]\]$/u.test(content);
+    });
 }
 
 export function validateIssueBody(
@@ -232,24 +242,26 @@ export function validateIssueBody(
         if (matches.length !== 1) continue;
         const section = matches[0];
         if (!section) continue;
-        const responses = [
-            ...section.paragraphs.map((paragraph) => paragraph.text),
-            ...section.checklists.map((check) => [check.label, ...check.continuations].join('\n')),
-        ];
-        const answered = responses.some(hasResponse);
+        const answered =
+            section.paragraphs.some(({ text, literal }) => hasResponse(text, literal)) ||
+            section.checklists.some((check) => hasResponse([check.label, ...check.continuations].join('\n')));
         if (field.required && !answered)
             diagnostics.push(
                 `Issue body: ${field.heading} requires a nonempty response; _No response_ does not satisfy a required field.`,
             );
-        if (field.options && (answered || field.required)) {
+        if (field.options) {
             const answer = section.paragraphs[0];
-            if (
-                section.paragraphs.length !== 1 ||
-                section.checklists.length !== 0 ||
-                !answer ||
-                answer.literal ||
-                !field.options.includes(answer.text)
-            ) {
+            const plain =
+                section.paragraphs.length === 1 &&
+                section.checklists.length === 0 &&
+                answer !== undefined &&
+                !answer.literal;
+            const emptyOptional =
+                !field.required &&
+                section.checklists.length === 0 &&
+                (section.paragraphs.length === 0 || (plain && isNoResponse(answer.text)));
+            const exactOption = plain && field.options.includes(answer.text);
+            if (!emptyOptional && !exactOption) {
                 diagnostics.push(
                     `Issue body: ${field.heading} must be exactly one dropdown option: ${field.options.join('; ')}.`,
                 );

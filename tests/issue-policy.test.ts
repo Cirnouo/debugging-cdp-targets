@@ -158,6 +158,40 @@ test('required textarea task-list answers count as authored content without flat
     }
 });
 
+test('required textarea rejects empty prose markers consistently while preserving literal code evidence', async (context) => {
+    for (const marker of ['- [ ]', '- [ ] ', '- [x]', '- [x] ', '+ [X]', '* [ ]', '1. [ ]', '1) [x]', '- [ ]\n- [x]']) {
+        await context.test(`prose marker ${JSON.stringify(marker)}`, () => {
+            assert.match(
+                diagnostics(bugBody.replace('Start an isolated target, then request status.', marker)),
+                /Reproduction steps.*requires|requires.*Reproduction steps/i,
+            );
+        });
+    }
+    for (const answer of ['```text\n- [ ]\n```', '    - [x]', '```text\n**\n```', '```text\n+\n```']) {
+        await context.test(`literal output ${JSON.stringify(answer)}`, () => {
+            assert.equal(
+                bug(bugBody.replace('Start an isolated target, then request status.', answer)).status,
+                'valid',
+            );
+        });
+    }
+    for (const answer of ['*', '**']) {
+        await context.test(`plain punctuation value ${JSON.stringify(answer)}`, () => {
+            assert.equal(
+                bug(bugBody.replace('Start an isolated target, then request status.', answer)).status,
+                'valid',
+            );
+            assert.equal(
+                bug(bugBody.replace('Codex Desktop', answer), {
+                    ...forms,
+                    bugReport: forms.bugReport.replace('- Codex Desktop', `- "${answer}"`),
+                }).status,
+                'valid',
+            );
+        });
+    }
+});
+
 test('rejects duplicate, reordered and extra field-like H3 headings', () => {
     for (const body of [
         bugBody.replace('Windows 11', 'Windows 11\n\n### Operating system and version\n\nUbuntu'),
@@ -287,6 +321,46 @@ test('optional dropdowns accept empty and No response while preserving exact opt
     assert.equal(bug(bugBody.replace('Codex Desktop', '_No response_'), currentForms).status, 'valid');
     assert.equal(bug(bugBody.replace('Codex Desktop', ''), currentForms).status, 'valid');
     assert.equal(bug(bugBody.replace('Codex Desktop', 'Codex'), currentForms).status, 'invalid');
+});
+
+test('optional dropdown No response exemption applies only to empty or plain marker content', async (context) => {
+    const currentForms = {
+        ...forms,
+        bugReport: forms.bugReport.replace(
+            '                - Claude Code\n        validations:\n            required: true',
+            '                - Claude Code\n        validations:\n            required: false',
+        ),
+    };
+    for (const answer of [
+        '',
+        '_No response_',
+        'No response',
+        '**No response**',
+        '<!-- empty -->',
+        '<!-- hint -->\n_No response_',
+        '<!-- hint -->_No response_',
+    ]) {
+        await context.test(`empty/plain ${JSON.stringify(answer)}`, () => {
+            assert.equal(bug(bugBody.replace('Codex Desktop', answer), currentForms).status, 'valid');
+        });
+    }
+    for (const answer of [
+        '- [x] _No response_',
+        '- [ ] _No response_',
+        '1. [ ] _No response_',
+        '```text\n_No response_\n```',
+        '> _No response_',
+        '    _No response_',
+        '- [ ]',
+        '- [ ] ',
+        '_No response_\n\n_No response_',
+    ]) {
+        await context.test(`supplied markup ${JSON.stringify(answer)}`, () => {
+            const result = bug(bugBody.replace('Codex Desktop', answer), currentForms);
+            assert.equal(result.status, 'invalid');
+            assert.match(result.diagnostics.join('\n'), /Plugin host.*option|option.*Plugin host/i);
+        });
+    }
 });
 
 test('form configuration errors are distinct from user-body diagnostics, including ordinary Issues', () => {

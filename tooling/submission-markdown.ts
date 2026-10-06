@@ -124,7 +124,9 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
             appendLine(line.replace(/^ {0,3}(?:>\s*)+/u, ''), true);
             continue;
         }
-        if (/^(?: {4}|\t)/u.test(line)) {
+        // Comment masking preserves columns for structure, but those inserted
+        // spaces cannot turn originally unindented prose into literal code.
+        if (/^(?: {4}|\t)/u.test(original)) {
             appendLine(line.trim(), true);
             continue;
         }
