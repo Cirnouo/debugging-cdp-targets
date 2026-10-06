@@ -111,7 +111,8 @@ continues to apply as described above.
 Composition copies caller arguments and is idempotent. Explicit live restart
 reuses the exact composed argv, profile and port. To change application args,
 complete normal Close and issue a new start with a fresh requestId and the new
-connection/session identities. `generic-cdp` and Chrome on other platforms keep
+application args. Then use the returned connection/session identities and obtain
+fresh page IDs with `list_pages`. `generic-cdp` and Chrome on other platforms keep
 their existing launch semantics; this feature is not an MCP/CDP request option.
 
 Normal user window switching and minimizing require no screenshot foreground
