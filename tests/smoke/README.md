@@ -318,15 +318,20 @@ HWND checks remain mandatory for native mutations.
 
 Build the shared delivered payload once with `pnpm build:plugin` before running
 host Hook smokes so their copied manifests, Hooks and Skill match maintained
-sources. On the current Windows host, the discovered executable commands are:
+sources. Select the actual executable locally. These commands use fictional
+Windows paths:
 
 ```powershell
-node tests/smoke/codex-hooks.ts 'C:/Users/ciilyn/AppData/Local/Programs/OpenAI/Codex/bin/codex.exe'
-node tests/smoke/claude-hooks.ts 'C:/Users/ciilyn/.local/bin/claude.exe'
+node tests/smoke/codex-hooks.ts 'C:/Test/codex.exe'
+node tests/smoke/claude-hooks.ts 'C:/Test/claude.exe'
 ```
 
 Append `lifecycle` or `inactive` to run those isolated scenarios separately.
-These local discovery paths are host-specific. `entry-recovery.ts` is a separate
+Keep actual executable paths, usernames, hostnames, private addresses and local
+experiment receipts in untracked configuration or external evidence directories.
+Tracked tests and documentation must use explicitly synthetic identities and
+paths. Loopback protocol fixtures do not identify a particular host.
+`entry-recovery.ts` is a separate
 opt-in real-Chrome smoke; adapting its protocol assertions does not establish a
 new real-browser acceptance result.
 
