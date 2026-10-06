@@ -187,6 +187,8 @@ omitting it skips selection entirely, while `false` is passed literally. Launch
 args must contain one confined `--user-data-dir={fixture}/profile` (or another
 confined child) in the fresh evidence directory; the runner expands only that
 test placeholder and passes the directory as the official `--workspace`.
+Profile paths containing `%NAME%` or `${NAME}` environment substitutions are
+rejected before acquisition so inherited environment expansion cannot escape.
 
 The first and only screenshot sends `pageId`, `fullPage` and `filePath`, with no
 explicit format/quality. Supplied evaluations retain their exact arguments.
@@ -206,6 +208,12 @@ or occlusion; JS focus never establishes the selected native tab. A failed captu
 is a diagnostic outcome and still triggers every discovered owned connection's
 preselected normal Close, final empty-connection check and gateway exit check.
 Cleanup failure reports retained identities. Evidence/profile files are retained.
+Final `capture` preserves the primary screenshot result/outcome/error separately
+from required post-capture `observations` and their errors. Recovery or client
+timeout retains its primary outcome even when after-evidence fails; a successful
+capture with invalid required evidence reports an overall blocked outcome.
+Native correlation records reliability/reasons for both UIA and MSAA; either
+provider's ambiguity, incomplete traversal or disagreement makes it unknown.
 
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 

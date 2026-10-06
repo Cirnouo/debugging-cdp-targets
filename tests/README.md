@@ -3,7 +3,9 @@
 - `screenshot-timeout-probe.test.ts` checks the opt-in one-shot probe's malformed
   fixture rejection, exact optional selection/evaluation arguments, fresh page ID
   routing, fail-fast preparation, capture without replay, blocked native identity,
-  and cleanup after failure using only external I/O boundary fakes.
+  preserved primary capture failure alongside failed after-observations, reliable
+  native tab-provider agreement, dynamic profile-path rejection, and cleanup after
+  failure using only external I/O boundary fakes.
 
 - `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
   escaped fixture files, stale/malformed screenshot diagnostics and incorrect or

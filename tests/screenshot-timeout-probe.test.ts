@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { runScreenshotTimeoutProbe, type ScreenshotTimeoutAdapter } from './smoke/screenshot-timeout-fixture.ts';
+import {
+    correlateNativeTabs,
+    runScreenshotTimeoutProbe,
+    type ScreenshotTimeoutAdapter,
+} from './smoke/screenshot-timeout-fixture.ts';
 
 const fixture = {
     label: 'readme-background',
@@ -37,6 +41,8 @@ function boundary(
         windows?: unknown[];
         closeFails?: boolean;
         blockedIdentity?: boolean;
+        recoveryCapture?: boolean;
+        afterDiagnosticsFails?: boolean;
     } = {},
 ) {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
@@ -44,6 +50,7 @@ function boundary(
     let opened = 0;
     let closed = 0;
     let sampled = 0;
+    let statusCalls = 0;
     const adapter: ScreenshotTimeoutAdapter = {
         async acquire() {
             opened += 1;
@@ -59,6 +66,12 @@ function boundary(
                         return { isError: true, content: [{ type: 'text', text: 'fixture handler failed' }] };
                     }
                     if (name === 'take_screenshot' && options.rejectCapture) throw new Error('MCP timeout: tools/call');
+                    if (name === 'take_screenshot' && options.recoveryCapture)
+                        return {
+                            isError: true,
+                            structuredContent: { code: 'CONNECTION_RECOVERY_REQUIRED', reason: 'upstream-timeout' },
+                            content: [{ type: 'text', text: 'Gateway requires explicit recovery.' }],
+                        };
                     return {
                         content: [
                             {
@@ -69,6 +82,8 @@ function boundary(
                     };
                 },
                 async status() {
+                    if (statusCalls++ === 1 && options.afterDiagnosticsFails)
+                        throw new Error('After diagnostics unavailable');
                     return { diagnostics: [] };
                 },
                 async sample() {
@@ -94,6 +109,63 @@ function boundary(
     return { adapter, calls, evidence, counts: () => ({ opened, closed }) };
 }
 
+test('native tab provider agreement permits only a unique observed page-title match', () => {
+    const reliable = {
+        status: 'supported',
+        incomplete: false,
+        tabs: [
+            { name: 'README', selected: true },
+            { name: 'New Tab', selected: false },
+        ],
+    };
+    assert.equal(correlateNativeTabs({ uia: reliable, msaa: reliable }, 'README').correlation, 'unique-title-match');
+    assert.equal(
+        correlateNativeTabs(
+            { uia: reliable, msaa: { ...reliable, tabs: [{ name: 'Other', selected: true }] } },
+            'README',
+        ).correlation,
+        'unknown',
+    );
+});
+
+for (const [reason, ambiguous] of [
+    [
+        'multiple-selected',
+        {
+            status: 'supported',
+            incomplete: false,
+            tabs: [
+                { name: 'New Tab', selected: true },
+                { name: 'Other', selected: true },
+            ],
+        },
+    ],
+    [
+        'duplicate-selected-title',
+        {
+            status: 'supported',
+            incomplete: false,
+            tabs: [
+                { name: 'New Tab', selected: true },
+                { name: 'New Tab', selected: false },
+            ],
+        },
+    ],
+    ['incomplete', { status: 'unknown', incomplete: true, tabs: [{ name: 'Other', selected: true }] }],
+] as const) {
+    test(`native ${reason} provider remains unknown even when the other provider matches`, () => {
+        const result = correlateNativeTabs(
+            {
+                uia: { status: 'supported', incomplete: false, tabs: [{ name: 'README', selected: true }] },
+                msaa: ambiguous,
+            },
+            'README',
+        );
+        assert.equal(result.correlation, 'unknown');
+        assert.equal(result.providers.find((provider) => provider.provider === 'msaa')?.reason, reason);
+    });
+}
+
 test('malformed fixture is rejected before gateway acquisition', async () => {
     for (const changed of [
         { background: 'true' },
@@ -111,6 +183,27 @@ test('malformed fixture is rejected before gateway acquisition', async () => {
         assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
     }
 });
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: Exercise a literal production launch substitution token.
+for (const token of ['%DCT_PROBE_ESCAPE%', '${DCT_PROBE_ESCAPE}']) {
+    test(`profile ${token} substitution is rejected before gateway acquisition`, async () => {
+        const io = boundary();
+        await assert.rejects(
+            runScreenshotTimeoutProbe(
+                {
+                    ...fixture,
+                    launch: {
+                        executable: 'C:/Fixture/chrome.exe',
+                        args: [`--user-data-dir={fixture}/profile/${token}/old`],
+                    },
+                },
+                'C:/Evidence/shot.png',
+                io.adapter,
+            ),
+        );
+        assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
+    });
+}
 
 test('independent process or endpoint identity failure is blocked evidence and still cleans the gateway', async () => {
     const io = boundary({ blockedIdentity: true });
@@ -203,3 +296,50 @@ test('replaced native HWND after capture cannot be reported as success', async (
     assert.equal(io.calls.filter((call) => call.name === 'take_screenshot').length, 1);
     assert.equal(io.counts().closed, 1);
 });
+
+for (const options of [
+    { recoveryCapture: true, expected: 'recovery-required', error: 'Gateway requires explicit recovery.' },
+    { rejectCapture: true, expected: 'client-error', error: 'MCP timeout: tools/call' },
+]) {
+    test(`${options.expected} survives failed required after-window evidence`, async () => {
+        const io = boundary({ ...options, windows: [[window], [{ ...window, handle: 121 }]] });
+        const result = await runScreenshotTimeoutProbe(fixture, 'C:/Evidence/shot.png', io.adapter);
+        assert.equal(result.outcome, options.expected);
+        assert.equal(result.error, options.error);
+        assert.equal(result.capture?.outcome, options.expected);
+        assert.equal(result.capture?.error, options.error);
+        assert.equal(result.observations.ok, false);
+        assert.equal(result.observations.errors[0]?.kind, 'native-after');
+        assert.match(result.observations.errors[0]?.error ?? '', /visible top-level window/);
+        assert.equal(io.calls.filter((call) => call.name === 'take_screenshot').length, 1);
+        assert.equal(io.counts().closed, 1);
+    });
+}
+
+for (const options of [
+    { recoveryCapture: true, expected: 'recovery-required' },
+    { rejectCapture: true, expected: 'client-error' },
+    { expected: 'blocked-evidence' },
+]) {
+    test(`after-diagnostics failure keeps ${options.expected} capture separate and still samples the window`, async () => {
+        const io = boundary({ ...options, afterDiagnosticsFails: true });
+        const result = await runScreenshotTimeoutProbe(fixture, 'C:/Evidence/shot.png', io.adapter);
+        assert.equal(result.outcome, options.expected);
+        assert.equal(result.capture?.outcome, options.expected === 'blocked-evidence' ? 'success' : options.expected);
+        if (options.expected !== 'blocked-evidence') {
+            assert.equal(
+                result.error,
+                options.expected === 'recovery-required'
+                    ? 'Gateway requires explicit recovery.'
+                    : 'MCP timeout: tools/call',
+            );
+            assert.equal(result.capture?.error, result.error);
+        }
+        assert.deepEqual(result.observations.errors, [
+            { kind: 'diagnostics-after', error: 'After diagnostics unavailable' },
+        ]);
+        assert.equal(io.evidence.filter((event) => event.kind === 'native-validated').length, 2);
+        assert.equal(io.calls.filter((call) => call.name === 'take_screenshot').length, 1);
+        assert.equal(io.counts().closed, 1);
+    });
+}

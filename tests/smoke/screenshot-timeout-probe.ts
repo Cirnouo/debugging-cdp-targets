@@ -12,7 +12,11 @@ import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
 import { closeEvery, expandFixture } from './screenshot-fixture.ts';
-import { parseScreenshotTimeoutFixture, runScreenshotTimeoutProbe } from './screenshot-timeout-fixture.ts';
+import {
+    correlateNativeTabs,
+    parseScreenshotTimeoutFixture,
+    runScreenshotTimeoutProbe,
+} from './screenshot-timeout-fixture.ts';
 import { assertWindowState, readWindowSample } from './window-evidence.ts';
 
 assert.equal(process.platform, 'win32', 'This opt-in native screenshot probe requires Windows.');
@@ -141,33 +145,9 @@ async function nativeTabs(handle: number, signal?: AbortSignal) {
             signal,
         );
         await record('native-tab-output', output);
-        const observed = output.raw;
-        const selected: string[] = [];
-        if (isRecord(observed)) {
-            for (const method of ['uia', 'msaa']) {
-                const observation = observed[method];
-                if (!isRecord(observation) || observation.status !== 'supported' || !Array.isArray(observation.tabs))
-                    continue;
-                const tabs = observation.tabs.filter(isRecord);
-                const active = tabs.filter((tab) => tab.selected === true && typeof tab.name === 'string');
-                // A duplicate title or incomplete selection makes that source unreliable.
-                if (
-                    active.length === 1 &&
-                    active[0] &&
-                    tabs.filter((tab) => tab.name === active[0]?.name).length === 1
-                ) {
-                    selected.push(String(active[0].name));
-                }
-            }
-        }
-        const unique = [...new Set(selected)];
         await record('native-tab-correlation', {
             pageTitle,
-            selectedTitles: selected,
-            correlation:
-                pageTitle !== undefined && unique.length === 1 && unique[0] === pageTitle
-                    ? 'unique-title-match'
-                    : 'unknown',
+            ...correlateNativeTabs(output.raw, pageTitle),
             basis: 'Read-only owned HWND accessibility selection; JavaScript hasFocus/visibilityState is not used.',
         });
     } catch (error) {
