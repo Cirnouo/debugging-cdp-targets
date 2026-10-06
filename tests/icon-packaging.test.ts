@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -129,7 +129,7 @@ test('listing manifests require exact host icon paths and reject missing or comp
 });
 
 test('assembly copies only approved icons and rejects missing, unexpected and malformed PNG inputs', async () => {
-    const fixture = await mkdtemp(path.join(os.tmpdir(), 'dct-icons-'));
+    const fixture = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-icons-')));
     try {
         await cp(path.join(root, 'packaging'), path.join(fixture, 'packaging'), { recursive: true });
         await cp(path.join(root, 'LICENSE'), path.join(fixture, 'LICENSE'));

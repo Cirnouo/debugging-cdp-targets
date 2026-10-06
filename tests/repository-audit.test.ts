@@ -30,7 +30,7 @@ test('gateway imports only public split SDK entry points', () => {
 });
 
 test('repository audit accepts AGENTS.md as the contributor entry point', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-agents-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-agents-')));
     try {
         execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
         const license = 'Copyright (c) 2026 Cirnouo\n';
@@ -92,7 +92,7 @@ test('repository audit accepts AGENTS.md as the contributor entry point', async 
         await symlink(outside, path.join(asset, 'icon-light.png'));
         assert.ok((await auditRepository(root)).some((error) => /icon-light.png.*link/.test(error)));
     } finally {
-        assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
+        assert.equal(path.dirname(root), await realpath(os.tmpdir()));
         assert.ok(path.basename(root).startsWith('dct-agents-'));
         await rm(root, { recursive: true, force: true });
     }
