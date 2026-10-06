@@ -121,6 +121,10 @@ then explicitly restarts and normally closes them. It retains test profiles.
   the verified owned HWND and samples the foreground HWND separately. Unsupported,
   incomplete or ambiguous selection remains unknown. It never changes selection,
   focus or window state.
+- `screenshot-background-anchor.ts` owns an optional opaque related native window,
+  verified foreground handoff and geometric containment, passive checks of both
+  identities, and normal Close/actual-exit cleanup. It is test-only and requires
+  confirmed cleanup before another anchor acquisition.
 - `screenshot-layers.ts` accepts an explicit Windows application fixture JSON and
   an absolute evidence parent directory. It creates independent baseline/candidate
   targets for direct official and complete generated gateway routes, with native
@@ -191,11 +195,35 @@ Profile paths containing `%NAME%` or `${NAME}` environment substitutions are
 rejected before acquisition, including tokens introduced by the evidence-directory
 placeholder expansion, so inherited environment expansion cannot escape.
 
+Optional `windowCondition` accepts `foreground-normal`, `background-normal`, or
+`minimized`. Omitting it preserves the original official preparation, metadata,
+passive normal-window validation and one-shot capture sequence. Explicit conditions
+are applied after page metadata and verified owned HWND discovery, before required
+before-capture observations. Foreground preparation minimizes/restores only its
+explicitly verified owned window and waits for foreground, normal state and restored
+bounds. Minimized preparation explicitly minimizes that same HWND.
+
+Background preparation compiles and launches one disposable opaque WinForms anchor
+in the evidence directory. Its native bounds must contain the target's bounds. The
+probe verifies the new anchor's executable, exact process creation time and HWND,
+then minimizes/restores only the anchor to make it foreground. The target must
+already be normal/background before guarded `HWND_BOTTOM`/`SWP_NOACTIVATE`; the
+background operation never minimizes/restores the target. Before, during and after
+capture, passive samples verify both identities, foreground handoff and geometric
+containment. Every native transition records before/after identity, state, bounds,
+foreground HWND, request acceptance and postcondition. No unrelated app is activated
+or manipulated. Geometric coverage and z-order do not prove compositor occlusion;
+this controlled owned-window switch differs from the user's ordinary Codex click.
+The anchor remains alive through capture/cleanup, then normally Closes with actual
+native process-exit evidence, even when target preparation or capture fails. Failed
+or uncertain anchor cleanup retains its ownership and forbids another acquisition.
+
 The first and only screenshot sends `pageId`, `fullPage` and `filePath`, with no
 explicit format/quality. Supplied evaluations retain their exact arguments.
 One marked, read-only metadata evaluation records title, URL, focus, viewport and
-scroll dimensions identically across runs. No restore, minimize, additional page
-preparation, screenshot replay, restart or alternate profile is performed.
+scroll dimensions identically across runs. Without an explicit native condition,
+no restore, minimize or extra native preparation is performed. No screenshot replay,
+restart or alternate profile is performed.
 The runner uses a 90-second MCP client deadline to receive the unchanged gateway
 60-second timeout/quarantine result. Tool errors stop dependent preparation.
 
@@ -215,6 +243,12 @@ timeout retains its primary outcome even when after-evidence fails; a successful
 capture with invalid required evidence reports an overall blocked outcome.
 Native correlation records reliability/reasons for both UIA and MSAA; either
 provider's ambiguity, incomplete traversal or disagreement makes it unknown.
+Passive sampling always uses `State None`. A sampling error or condition loss
+invalidates required observations while preserving the primary screenshot result
+and its recovery/client-error classification. Explicit controlled captures also
+require a completed during-capture sample; a capture that finishes too quickly for
+the native observer retains its actual result with an overall blocked-evidence
+outcome. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths.
 
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 

@@ -58,12 +58,20 @@ endpoint does not implement browser tools. Permission/PID markers are test-only.
 Its optional delayed normal close checks unlimited native handle waits.
 Optional `DCT_TEST_WINDOW_TITLE` sets its synthetic title for Unicode observer
 stdout regression tests; ordinary fixtures keep the default title.
+Optional `DCT_TEST_WINDOW_X`, `DCT_TEST_WINDOW_Y`, `DCT_TEST_WINDOW_WIDTH` and
+`DCT_TEST_WINDOW_HEIGHT` together set explicit opaque native window bounds for the
+owned screenshot anchor. `DCT_TEST_WINDOW_NO_EXPIRY=true` disables only its fixture
+timer so the probe can retain the anchor through capture and cleanup; the owner
+must normally Close it and await actual exit in finally. Other fixtures retain
+the existing default geometry and expiry timer.
 The explicit elevation smoke can optionally restrict only this fixture's own process
 DACL to Administrators/SYSTEM, producing a real medium-integrity limited-query
 denial without changing files, user settings or other processes.
 `compile-native-window.ps1` compiles it with ordinary/elevated manifests and
 checks native permission detection without changing compatibility settings;
 manifest inspection alone does not launch an elevated process or validate UAC.
+Its Windows PowerShell JSON stdout is BOM-free UTF-8, including Unicode 8.3 paths;
+the fixture references Windows' existing System.Drawing for explicit geometry.
 `snapshot-limited-access.ps1` denies the legacy MainModule path property while
 testing native limited-query identity of its own disposable process.
 `windows-close-denial.ps1` calls the production native helper against an explicitly

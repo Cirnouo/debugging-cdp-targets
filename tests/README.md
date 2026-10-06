@@ -5,7 +5,15 @@
   routing, fail-fast preparation, capture without replay, blocked native identity,
   preserved primary capture failure alongside failed after-observations, reliable
   native tab-provider agreement, dynamic profile-path rejection, and cleanup after
-  failure using only external I/O boundary fakes.
+  failure using only external I/O boundary fakes. Controlled native conditions
+  validate default sequence preservation, identity/transition refusal, condition
+  loss before/during/after capture and missing passive samples without replay.
+
+- `screenshot-background-anchor.test.ts` verifies the opt-in probe's owned anchor
+  handoff, geometric containment, stale identity/HWND refusal, denied foreground,
+  passive condition loss and retained cleanup identity. On Windows it also launches
+  two disposable WinForms fixtures, proves opaque anchor bounds contain the target
+  and normally Closes both with native actual-exit waits.
 
 - `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
   escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
@@ -151,6 +159,9 @@
   rejects stale identities, replaced windows and accepted but unobserved transitions.
   It also checks the actual passive observer's UTF-8 JSON preserves a Unicode
   window title using an owned WinForms fixture with read-only state sampling.
+  Actual guarded NOACTIVATE background transitions, exact Unicode executable and
+  compiler 8.3 alias output receive native verification; passive State None leaves
+  normal/minimized state unchanged and never refocuses the fixture.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible

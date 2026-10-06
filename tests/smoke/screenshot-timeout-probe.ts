@@ -6,18 +6,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createPlatformAdapter, validateProcessIdentity } from '../../src/adapters/platform-process.ts';
+import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
+import { createScreenshotBackgroundAnchor } from './screenshot-background-anchor.ts';
 import { closeEvery } from './screenshot-fixture.ts';
 import {
     correlateNativeTabs,
     parseScreenshotTimeoutFixture,
     runScreenshotTimeoutProbe,
 } from './screenshot-timeout-fixture.ts';
-import { assertWindowState, readWindowSample } from './window-evidence.ts';
 
 assert.equal(process.platform, 'win32', 'This opt-in native screenshot probe requires Windows.');
 const configPath = process.argv[2];
@@ -70,6 +71,8 @@ let entryId = '';
 const owned: ConnectionStatus[] = [];
 let identity: ProcessTarget | undefined;
 let pageTitle: string | undefined;
+let backgroundPrepared = false;
+const anchorMarkers = new Map<number, string>();
 const tool = async (name: string, args: Record<string, unknown> = {}) => {
     assert.ok(client);
     await record('mcp-request', { name, arguments: args, timeoutMs: 90_000 });
@@ -107,24 +110,104 @@ async function powershell(script: string, args: string[], signal?: AbortSignal) 
     const raw: unknown = JSON.parse(output.stdout);
     return { raw, stdout: output.stdout, stderr: output.stderr };
 }
-async function nativeSample(handle?: number, signal?: AbortSignal) {
-    assert.ok(identity);
+async function sampleOwnedWindow(
+    selected: ProcessTarget | { processId: number; executablePath: string; startedAtUtc: string },
+    state: string,
+    handle?: number,
+    signal?: AbortSignal,
+) {
     const output = await powershell(
         './windows-window-evidence.ps1',
         [
             '-ApplicationPid',
-            String(identity.processId),
+            String(selected.processId),
             '-ExecutablePath',
-            identity.executablePath,
+            selected.executablePath,
             '-StartedAtUtc',
-            identity.startedAtUtc,
+            selected.startedAtUtc,
             '-State',
-            'None',
+            state,
             ...(handle === undefined ? [] : ['-WindowHandle', String(handle)]),
         ],
         signal,
     );
     await record('native-sampler-output', output);
+    return output.raw;
+}
+async function nativeSample(handle?: number, signal?: AbortSignal) {
+    assert.ok(identity);
+    if (backgroundPrepared && handle !== undefined) return backgroundAnchor.observe(identity, handle, signal);
+    return sampleOwnedWindow(identity, 'None', handle, signal);
+}
+const anchorLauncher = createWindowsLauncher();
+const backgroundAnchor = createScreenshotBackgroundAnchor({
+    async launch(bounds) {
+        const executable = path.join(folder, 'background-anchor.exe');
+        await record(
+            'anchor-compilation',
+            await powershell('../fixtures/compile-native-window.ps1', ['-Output', executable]),
+        );
+        const marker = path.join(folder, 'background-anchor-shown');
+        const child = await anchorLauncher.launch({
+            executablePath: executable,
+            arguments: [marker],
+            cwd: folder,
+            env: {
+                SystemRoot: process.env.SystemRoot ?? 'C:/Windows',
+                DCT_TEST_WINDOW_X: String(bounds.x),
+                DCT_TEST_WINDOW_Y: String(bounds.y),
+                DCT_TEST_WINDOW_WIDTH: String(bounds.width),
+                DCT_TEST_WINDOW_HEIGHT: String(bounds.height),
+                DCT_TEST_WINDOW_TITLE: 'DCT private screenshot background anchor',
+                DCT_TEST_WINDOW_NO_EXPIRY: 'true',
+            },
+        });
+        anchorMarkers.set(child.pid, marker);
+        const owned = { processId: child.pid, executablePath: executable, startedAtUtc: child.startedAtUtc };
+        // Ownership is retained by the controller before any subsequent observation can fail.
+        return owned;
+    },
+    async sample(owned, handle, signal) {
+        const marker = anchorMarkers.get(owned.processId);
+        if (marker && handle === undefined) {
+            const deadline = Date.now() + 8000;
+            for (;;) {
+                try {
+                    await readFile(marker);
+                    break;
+                } catch (error) {
+                    if (Date.now() >= deadline) throw error;
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                }
+            }
+        }
+        return sampleOwnedWindow(owned, 'None', handle, signal);
+    },
+    foreground: (owned, handle) => sampleOwnedWindow(owned, 'Foreground', handle),
+    background: (owned, handle) => sampleOwnedWindow(owned, 'Background', handle),
+    close: (owned) => anchorLauncher.close({ ...owned, targetKind: 'generic-cdp', port: 0 }),
+    record,
+});
+async function nativeCondition(condition: 'foreground-normal' | 'background-normal' | 'minimized', handle: number) {
+    assert.ok(identity);
+    if (condition === 'background-normal') {
+        const raw = await backgroundAnchor.prepare(identity, handle);
+        backgroundPrepared = true;
+        return raw;
+    }
+    const output = await powershell('./windows-window-evidence.ps1', [
+        '-ApplicationPid',
+        String(identity.processId),
+        '-ExecutablePath',
+        identity.executablePath,
+        '-StartedAtUtc',
+        identity.startedAtUtc,
+        '-State',
+        condition === 'foreground-normal' ? 'Foreground' : 'Minimize',
+        '-WindowHandle',
+        String(handle),
+    ]);
+    await record('native-condition-output', output);
     return output.raw;
 }
 async function nativeTabs(handle: number, signal?: AbortSignal) {
@@ -272,7 +355,8 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
                     include: ['diagnostics'],
                 }),
             sample: nativeSample,
-            async capture(call, handle) {
+            condition: nativeCondition,
+            async capture(call, handle, observe) {
                 const abort = new AbortController();
                 const startedAt = performance.now();
                 let samplingFailure: string | undefined;
@@ -286,12 +370,15 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
                         try {
                             assert.ok(identity);
                             const raw = await nativeSample(handle, abort.signal);
-                            const sampled = readWindowSample(raw, identity, handle);
-                            assertWindowState(sampled, 'normal');
-                            await record('passive-native-validated', sampled);
+                            await observe(async () => raw);
                             await nativeTabs(handle, abort.signal);
                         } catch (error) {
-                            if (!abort.signal.aborted) samplingFailure = errorMessage(error);
+                            if (!abort.signal.aborted) {
+                                samplingFailure = errorMessage(error);
+                                await observe(async () => {
+                                    throw error;
+                                });
+                            }
                             await record('passive-native-error', {
                                 error: errorMessage(error),
                                 stopped: abort.signal.aborted,
@@ -343,7 +430,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         };
     },
     async cleanup() {
-        if (!client) return { gatewayNotAcquired: true };
+        if (!client) return { gatewayNotAcquired: true, anchor: await backgroundAnchor.cleanup() };
         const failures: string[] = [];
         let final: unknown;
         try {
@@ -399,6 +486,12 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
             failures.push(errorMessage(error));
         } finally {
             try {
+                try {
+                    await backgroundAnchor.cleanup();
+                } catch (error) {
+                    failures.push(`Anchor normal Close: ${errorMessage(error)}`);
+                    await record('anchor-normal-close-error', { error: errorMessage(error) });
+                }
                 await record('before-gateway-shutdown', { failures, owned, final });
             } finally {
                 await client.close();

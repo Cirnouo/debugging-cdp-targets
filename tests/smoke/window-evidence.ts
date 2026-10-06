@@ -18,6 +18,14 @@ export interface WindowSample extends WindowIdentity {
     actionAccepted: boolean | null;
     nativeError: number;
     stateReached: boolean;
+    foregroundHwnd?: number;
+    bounds?: WindowBounds;
+}
+export interface WindowBounds {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
 }
 
 function creationTicks(value: string): bigint {
@@ -56,6 +64,20 @@ export function readWindowSample(value: unknown, expected: WindowIdentity, handl
     assert.ok(typeof window.showCmd === 'number' && Number.isInteger(window.showCmd));
     assert.ok(window.actionAccepted === null || typeof window.actionAccepted === 'boolean');
     assert.ok(typeof window.nativeError === 'number' && Number.isInteger(window.nativeError));
+    if (window.foregroundHwnd !== undefined)
+        assert.ok(
+            typeof window.foregroundHwnd === 'number' &&
+                Number.isSafeInteger(window.foregroundHwnd) &&
+                window.foregroundHwnd >= 0,
+        );
+    let bounds: WindowBounds | undefined;
+    if ([window.x, window.y, window.width, window.height].some((value) => value !== undefined)) {
+        assert.ok(typeof window.x === 'number' && Number.isSafeInteger(window.x));
+        assert.ok(typeof window.y === 'number' && Number.isSafeInteger(window.y));
+        assert.ok(typeof window.width === 'number' && Number.isSafeInteger(window.width) && window.width > 0);
+        assert.ok(typeof window.height === 'number' && Number.isSafeInteger(window.height) && window.height > 0);
+        bounds = { x: window.x, y: window.y, width: window.width, height: window.height };
+    }
     return {
         processId: expected.processId,
         executablePath: window.executablePath,
@@ -67,6 +89,8 @@ export function readWindowSample(value: unknown, expected: WindowIdentity, handl
         actionAccepted: window.actionAccepted,
         nativeError: window.nativeError,
         stateReached: window.stateReached,
+        ...(window.foregroundHwnd === undefined ? {} : { foregroundHwnd: window.foregroundHwnd }),
+        ...(bounds === undefined ? {} : { bounds }),
     };
 }
 

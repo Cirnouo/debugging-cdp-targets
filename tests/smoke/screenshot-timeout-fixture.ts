@@ -12,16 +12,23 @@ export interface ScreenshotTimeoutFixture {
     background: boolean;
     fullPage: boolean;
     bringToFront?: boolean;
+    windowCondition?: WindowCondition;
     colorScheme: 'light' | 'dark';
     viewport: string;
     evaluations: { function: string; waitForStableDom?: boolean }[];
 }
+export type WindowCondition = 'foreground-normal' | 'background-normal' | 'minimized';
 export interface ScreenshotTimeoutRoute {
     identity: WindowIdentity;
     call(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
     status(): Promise<unknown>;
     sample(handle?: number): Promise<unknown>;
-    capture(call: () => Promise<Record<string, unknown>>, handle: number): Promise<Record<string, unknown>>;
+    condition(condition: WindowCondition, handle: number): Promise<unknown>;
+    capture(
+        call: () => Promise<Record<string, unknown>>,
+        handle: number,
+        observe: (action: () => Promise<unknown>) => Promise<void>,
+    ): Promise<Record<string, unknown>>;
     png(filePath: string): Promise<unknown>;
 }
 export interface ScreenshotTimeoutAdapter {
@@ -53,6 +60,7 @@ export function parseScreenshotTimeoutFixture(value: unknown): ScreenshotTimeout
                 'background',
                 'fullPage',
                 'bringToFront',
+                'windowCondition',
                 'colorScheme',
                 'viewport',
                 'evaluations',
@@ -68,6 +76,13 @@ export function parseScreenshotTimeoutFixture(value: unknown): ScreenshotTimeout
         'Boolean capture fields required.',
     );
     assert.ok(value.bringToFront === undefined || typeof value.bringToFront === 'boolean', 'Invalid bringToFront.');
+    assert.ok(
+        value.windowCondition === undefined ||
+            value.windowCondition === 'foreground-normal' ||
+            value.windowCondition === 'background-normal' ||
+            value.windowCondition === 'minimized',
+        'Invalid windowCondition.',
+    );
     assert.ok(value.colorScheme === 'light' || value.colorScheme === 'dark', 'Invalid colorScheme.');
     assert.ok(
         typeof value.viewport === 'string' && value.viewport.length > 0 && !value.viewport.includes('\0'),
@@ -116,6 +131,7 @@ export function parseScreenshotTimeoutFixture(value: unknown): ScreenshotTimeout
         viewport: value.viewport,
         evaluations,
         ...(value.bringToFront === undefined ? {} : { bringToFront: value.bringToFront }),
+        ...(value.windowCondition === undefined ? {} : { windowCondition: value.windowCondition }),
     };
 }
 
@@ -214,16 +230,43 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
         }
         return result;
     };
+    const validate = async (
+        raw: unknown,
+        handle?: number,
+        previous?: WindowSample,
+        expectedCondition = fixture.windowCondition,
+        requireState = true,
+        kind = 'native-validated',
+    ) => {
+        assert.ok(route);
+        await adapter.record('native-raw', raw);
+        const observed = readWindowSample(raw, route.identity, handle);
+        assert.ok(typeof observed.actualExecutablePath === 'string', 'Native executable path is unavailable.');
+        if (requireState) {
+            assertWindowState(observed, expectedCondition === 'minimized' ? 'minimized' : 'normal', previous);
+            if (expectedCondition !== undefined) {
+                assert.ok(observed.foregroundHwnd !== undefined, 'Foreground HWND evidence is unavailable.');
+                if (expectedCondition === 'foreground-normal')
+                    assert.equal(
+                        observed.foregroundHwnd,
+                        observed.handle,
+                        'Owned window lost the required foreground condition.',
+                    );
+                if (expectedCondition === 'background-normal')
+                    assert.notEqual(
+                        observed.foregroundHwnd,
+                        observed.handle,
+                        'Owned window lost the required background condition.',
+                    );
+            }
+        }
+        await adapter.record(requireState ? kind : 'native-condition-before', observed);
+        return observed;
+    };
     const sample = async (handle?: number, previous?: WindowSample) => {
         assert.ok(route);
         try {
-            const raw = await route.sample(handle);
-            await adapter.record('native-raw', raw);
-            const observed = readWindowSample(raw, route.identity, handle);
-            assert.ok(typeof observed.actualExecutablePath === 'string', 'Native executable path is unavailable.');
-            assertWindowState(observed, 'normal', previous);
-            await adapter.record('native-validated', observed);
-            return observed;
+            return await validate(await route.sample(handle), handle, previous);
         } catch (error) {
             throw Object.assign(new Error(errorMessage(error)), { probeOutcome: 'blocked-evidence' });
         }
@@ -261,13 +304,43 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
             waitForStableDom: false,
         });
         await adapter.record('metadata-observation', metadata);
-        const before = await sample();
+        let ownedHandle: number | undefined;
+        if (fixture.windowCondition !== undefined) {
+            try {
+                const initial = await validate(await route.sample(), undefined, undefined, undefined, false);
+                ownedHandle = initial.handle;
+                const raw = await route.condition(fixture.windowCondition, ownedHandle);
+                await adapter.record('native-condition-transition', {
+                    condition: fixture.windowCondition,
+                    raw,
+                    basis: 'Explicit native owned-HWND transition; differs from a human click and does not prove compositor occlusion.',
+                });
+                await validate(raw, ownedHandle, initial);
+            } catch (error) {
+                throw Object.assign(new Error(errorMessage(error)), { probeOutcome: 'blocked-evidence' });
+            }
+        }
+        const before = await sample(ownedHandle);
         await adapter.record('diagnostics-before', await route.status());
         const activeRoute = route;
+        let duringAttempts = 0;
         try {
             const result = await activeRoute.capture(
                 () => call('take_screenshot', { pageId, fullPage: fixture.fullPage, filePath }),
                 before.handle,
+                (action) => {
+                    duringAttempts += 1;
+                    return observe('native-during', async () =>
+                        validate(
+                            await action(),
+                            before.handle,
+                            before,
+                            fixture.windowCondition,
+                            true,
+                            'passive-native-validated',
+                        ),
+                    );
+                },
             );
             outcome = 'success';
             capture = { outcome, result };
@@ -276,6 +349,10 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
             capture = { outcome, error: failure, ...(captureResult === undefined ? {} : { result: captureResult }) };
         }
         await adapter.record('capture-outcome', capture);
+        if (fixture.windowCondition !== undefined && duringAttempts === 0)
+            await observe('native-during', async () => {
+                throw new Error('No passive during-capture window evidence was obtained.');
+            });
         observations.performed = true;
         if (capture.outcome === 'success')
             await observe('png', async () => adapter.record('png', await activeRoute.png(filePath)));

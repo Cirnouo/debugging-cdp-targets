@@ -44,11 +44,16 @@ function boundary(
         blockedIdentity?: boolean;
         recoveryCapture?: boolean;
         afterDiagnosticsFails?: boolean;
+        conditionResult?: unknown;
+        duringWindow?: unknown;
+        duringFailure?: boolean;
     } = {},
 ) {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
     const evidence: { kind: string; value: unknown }[] = [];
     const acquiredFixtures: ScreenshotTimeoutFixture[] = [];
+    const transitions: { condition: string; handle: number }[] = [];
+    const sequence: string[] = [];
     let opened = 0;
     let closed = 0;
     let sampled = 0;
@@ -64,6 +69,7 @@ function boundary(
             return {
                 identity,
                 async call(name, args) {
+                    sequence.push(name);
                     calls.push({ name, args });
                     if (options.fail === name) {
                         return { isError: true, content: [{ type: 'text', text: 'fixture handler failed' }] };
@@ -90,9 +96,29 @@ function boundary(
                     return { diagnostics: [] };
                 },
                 async sample() {
+                    sequence.push('sample');
                     return options.windows?.[sampled++] ?? [window];
                 },
-                async capture(call) {
+                async condition(condition, handle) {
+                    sequence.push('condition');
+                    transitions.push({ condition, handle });
+                    return (
+                        options.conditionResult ?? [
+                            {
+                                ...window,
+                                foregroundHwnd: condition === 'foreground-normal' ? 120 : 300,
+                                isIconic: condition === 'minimized',
+                                showCmd: condition === 'minimized' ? 2 : 4,
+                            },
+                        ]
+                    );
+                },
+                async capture(call, _handle, observe) {
+                    if (options.duringWindow !== undefined || options.duringFailure)
+                        await observe(async () => {
+                            if (options.duringFailure) throw new Error('Passive native sampler unavailable');
+                            return options.duringWindow;
+                        });
                     return call();
                 },
                 async png() {
@@ -109,7 +135,163 @@ function boundary(
             evidence.push({ kind, value });
         },
     };
-    return { adapter, calls, evidence, acquiredFixtures, counts: () => ({ opened, closed }) };
+    return { adapter, calls, evidence, acquiredFixtures, transitions, sequence, counts: () => ({ opened, closed }) };
+}
+
+test('omitted native condition preserves the original passive sequence without mutation', async () => {
+    const io = boundary();
+    const result = await runScreenshotTimeoutProbe(fixture, 'C:/Evidence/shot.png', io.adapter);
+    assert.equal(result.outcome, 'success');
+    assert.deepEqual(io.sequence, [
+        'list_pages',
+        'new_page',
+        'emulate',
+        'evaluate_script',
+        'evaluate_script',
+        'evaluate_script',
+        'sample',
+        'take_screenshot',
+        'sample',
+    ]);
+    assert.deepEqual(io.transitions, []);
+});
+
+for (const condition of ['foreground-normal', 'background-normal', 'minimized'] as const) {
+    test(`explicit ${condition} applies only to the verified HWND after metadata and before capture`, async () => {
+        const expected = {
+            ...window,
+            foregroundHwnd: condition === 'foreground-normal' ? 120 : 300,
+            isIconic: condition === 'minimized',
+            showCmd: condition === 'minimized' ? 2 : 4,
+        };
+        const io = boundary({ windows: [[window], [expected], [expected]], duringWindow: [expected] });
+        const result = await runScreenshotTimeoutProbe(
+            { ...fixture, windowCondition: condition },
+            'C:/Evidence/shot.png',
+            io.adapter,
+        );
+        assert.equal(result.outcome, 'success');
+        assert.deepEqual(io.transitions, [{ condition, handle: 120 }]);
+        assert.deepEqual(io.sequence.slice(3, 9), [
+            'evaluate_script',
+            'evaluate_script',
+            'evaluate_script',
+            'sample',
+            'condition',
+            'sample',
+        ]);
+        assert.equal(result.observations.ok, true);
+        assert.equal(io.counts().closed, 1);
+    });
+}
+
+test('malformed native conditions are rejected before acquisition', async () => {
+    for (const windowCondition of [null, true, 'background', '', {}, ['minimized']]) {
+        const io = boundary();
+        await assert.rejects(
+            runScreenshotTimeoutProbe({ ...fixture, windowCondition }, 'C:/Evidence/shot.png', io.adapter),
+        );
+        assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
+    }
+});
+
+test('controlled capture without any during-window observation retains the screenshot but blocks required evidence', async () => {
+    const expected = { ...window, foregroundHwnd: 300 };
+    const io = boundary({ windows: [[window], [expected], [expected]] });
+    const result = await runScreenshotTimeoutProbe(
+        { ...fixture, windowCondition: 'background-normal' },
+        'C:/Evidence/shot.png',
+        io.adapter,
+    );
+    assert.equal(result.outcome, 'blocked-evidence');
+    assert.equal(result.capture?.outcome, 'success');
+    assert.equal(result.observations.errors[0]?.kind, 'native-during');
+});
+
+test('controlled condition refuses mismatched process identity before any mutation', async () => {
+    for (const changed of [
+        { processId: 4101 },
+        { startedAtUtc: '2026-10-05T00:00:00.0000002Z' },
+        { executablePath: 'C:/Other/chrome.exe' },
+        { handle: 0 },
+    ]) {
+        const io = boundary({ windows: [[{ ...window, ...changed }]] });
+        const result = await runScreenshotTimeoutProbe(
+            { ...fixture, windowCondition: 'background-normal' },
+            'C:/Evidence/shot.png',
+            io.adapter,
+        );
+        assert.equal(result.outcome, 'blocked-evidence');
+        assert.deepEqual(io.transitions, []);
+        assert.equal(
+            io.calls.some((call) => call.name === 'take_screenshot'),
+            false,
+        );
+        assert.equal(io.counts().closed, 1);
+    }
+});
+
+test('failed native transition blocks capture and preserves normal Close', async () => {
+    for (const changed of [
+        { actionAccepted: false, nativeError: 5 },
+        { stateReached: false },
+        { handle: 121 },
+        { foregroundHwnd: 120 },
+        { isIconic: true, showCmd: 2 },
+    ]) {
+        const io = boundary({ conditionResult: [{ ...window, foregroundHwnd: 300, ...changed }] });
+        const result = await runScreenshotTimeoutProbe(
+            { ...fixture, windowCondition: 'background-normal' },
+            'C:/Evidence/shot.png',
+            io.adapter,
+        );
+        assert.equal(result.outcome, 'blocked-evidence');
+        assert.equal(
+            io.calls.some((call) => call.name === 'take_screenshot'),
+            false,
+        );
+        assert.equal(io.counts().closed, 1);
+    }
+});
+
+for (const phase of ['before', 'during', 'after'] as const) {
+    test(`background condition loss ${phase} capture invalidates required evidence`, async () => {
+        const expected = { ...window, foregroundHwnd: 300 };
+        const lost = { ...window, foregroundHwnd: 120 };
+        const io = boundary({
+            windows: [[window], [phase === 'before' ? lost : expected], [phase === 'after' ? lost : expected]],
+            duringWindow: [phase === 'during' ? lost : expected],
+        });
+        const result = await runScreenshotTimeoutProbe(
+            { ...fixture, windowCondition: 'background-normal' },
+            'C:/Evidence/shot.png',
+            io.adapter,
+        );
+        assert.equal(result.outcome, 'blocked-evidence');
+        assert.equal(io.calls.filter((call) => call.name === 'take_screenshot').length, phase === 'before' ? 0 : 1);
+        if (phase !== 'before') {
+            assert.equal(result.capture?.outcome, 'success');
+            assert.ok(result.capture?.result);
+            assert.equal(result.observations.ok, false);
+            assert.equal(result.observations.errors[0]?.kind, `native-${phase}`);
+        }
+    });
+}
+
+for (const recoveryCapture of [false, true]) {
+    test(`passive sampling failure invalidates observations while preserving ${recoveryCapture ? 'quarantine' : 'successful capture'}`, async () => {
+        const io = boundary({ duringFailure: true, recoveryCapture });
+        const result = await runScreenshotTimeoutProbe(fixture, 'C:/Evidence/shot.png', io.adapter);
+        assert.equal(result.outcome, recoveryCapture ? 'recovery-required' : 'blocked-evidence');
+        assert.equal(result.capture?.outcome, recoveryCapture ? 'recovery-required' : 'success');
+        assert.ok(result.capture?.result);
+        assert.equal(result.observations.ok, false);
+        assert.deepEqual(result.observations.errors, [
+            { kind: 'native-during', error: 'Passive native sampler unavailable' },
+        ]);
+        assert.equal(io.calls.filter((call) => call.name === 'take_screenshot').length, 1);
+        assert.equal(io.counts().closed, 1);
+    });
 }
 
 test('native tab provider agreement permits only a unique observed page-title match', () => {
