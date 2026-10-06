@@ -1,4 +1,5 @@
 import { parseAllDocuments } from 'yaml';
+import { isSemVer } from '../version-policy.ts';
 
 export type Severity = 'info' | 'low' | 'moderate' | 'high' | 'critical';
 export type AuditScope = 'repository' | 'upstream';
@@ -67,7 +68,6 @@ export interface FindingDecision {
 }
 const SEVERITIES: Severity[] = ['info', 'low', 'moderate', 'high', 'critical'];
 const SCOPES = ['repository', 'upstream'];
-const VERSION = /^\d+\.\d+\.\d+(?:-[\da-z.-]+)?(?:\+[\da-z.-]+)?$/i;
 const PACKAGE = /^(?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+$/;
 const GHSA = /^GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}$/;
 const MAX_REVIEW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -90,7 +90,7 @@ function nonempty(value: unknown): value is string {
 function identity(key: string) {
     const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+)@([^()]+)(?:\(.*\))?$/.exec(key);
     demand(
-        match?.[1] && match[2] && PACKAGE.test(match[1]) && VERSION.test(match[2]),
+        match?.[1] && match[2] && PACKAGE.test(match[1]) && isSemVer(match[2]),
         `Non-registry or unpinned dependency: ${key}`,
     );
     return { name: match[1], version: match[2] };
@@ -347,7 +347,7 @@ export function validateExceptions(data: unknown, now = new Date()): ReviewExcep
                 GHSA.test(item.ghsa) &&
                 typeof item.package === 'string' &&
                 PACKAGE.test(item.package) &&
-                VERSION.test(item.version) &&
+                isSemVer(item.version) &&
                 SCOPES.includes(item.scope),
             'Exception needs an exact GHSA, package, version and scope.',
         );

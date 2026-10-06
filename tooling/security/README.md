@@ -1,7 +1,9 @@
 # Supply-chain audit tooling
 
 - `audit-policy.ts` validates every pnpm lockfile document, full audit and
-  signature reports, and narrowly reviewed vulnerability exceptions.
+  signature reports, and narrowly reviewed vulnerability exceptions. Dependency
+  and exception versions use the shared strict version wrapper, including its
+  documented node-semver length/core-number limits and arbitrary legal prerelease/build.
 - `security-evidence.ts` checks installation policy, manifest/lock agreement and installed graph
   completeness, and computes code/configuration/dependency SHA-256 evidence.
   File fingerprints use the same descriptor-based regular-file reader as release verification.
@@ -9,7 +11,7 @@
   repository and a disposable, script-disabled official Server dependency tree;
   upstream vulnerability review precedes actual installation.
   All pnpm calls disable pnpmfile hooks and configuration-dependency loading.
-- `dist/` contains the committed standalone checker and original YAML license
+- `dist/` contains the committed standalone checker and original YAML/semver licenses
   so CI can audit before installing project dependencies.
 - `upstream-pnpm-lock.yaml` freezes the isolated official release dependency graph.
 - `official-inputs.ts` binds root declarations/lock, release evidence and isolated

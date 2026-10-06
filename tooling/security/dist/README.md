@@ -1,8 +1,9 @@
 # Standalone security checker
 
 - `check-security.mjs` is the generated Node entry containing the audit sources
-  and YAML parser, runnable before project dependencies are installed.
-- `THIRD-PARTY-NOTICES.txt` preserves the bundled YAML parser's ISC license.
+  and YAML/SemVer parsers, runnable before project dependencies are installed.
+- `THIRD-PARTY-NOTICES.txt` preserves the original complete YAML ISC license,
+  followed by the identified semver ISC license. Type declarations are not distributed.
 
 Generate with `pnpm build:security`; verify without writing with
 `pnpm check:security:build`. Do not edit generated files. `--root` is required
