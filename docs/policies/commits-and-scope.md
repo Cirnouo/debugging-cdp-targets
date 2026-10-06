@@ -52,6 +52,28 @@ also follows a blank line after a body. Body and footer lines are at most 100
 characters. A breaking change may use `!`, a `BREAKING CHANGE:` footer, or both.
 Only Git-topology-proven merge commits are ignored.
 
+Footer boundaries use the original message lines. `BREAKING CHANGE:` and
+`BREAKING-CHANGE:`, `Refs` in any letter case, Issue-closing keywords followed by
+an Issue reference, and hyphenated trailer tokens such as `Reviewed-by:` are
+reserved footer syntax. Cross-repository references
+use the same boundary rule. Their first footer line requires a blank line after
+the header or body; subsequent trailers in that footer group can be adjacent.
+Existing Markdown bullet breaking notes such as `* BREAKING CHANGE:` require
+the same blank line, whether their description starts on that line or the next.
+
+An otherwise unknown bare-word label such as `observations: value` continues
+the body when no blank line precedes it. With a preceding blank line, it can
+start a generic footer group. This is a syntactic convention for ambiguous
+labels, not an inference of prose intent. Hyphenated labels such as
+`quick-start: value` remain reserved trailer syntax and require the footer
+boundary. A body label cannot hide a later unseparated reserved footer, and
+every body or footer still requires a blank line after the header.
+
+The local `footer-leading-blank` rule in `tooling/commit-footer-rule.ts` owns
+these boundaries at error severity. The Conventional Commits parser, original
+message, other commitlint rules and Git topology checks remain authoritative
+for their existing responsibilities.
+
 This repository configures GitHub squash merging with `PR_TITLE` + `PR_BODY`:
 the PR title becomes the commit title with GitHub's generated PR number retained,
 and the PR description becomes the commit body. This is a

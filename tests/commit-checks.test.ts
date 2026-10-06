@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { isRecord } from '../src/shared/errors.ts';
 import { buildCommitCheckRequest, resolveAuditBranch, validateCommitRecords } from '../tooling/check-commits.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -24,6 +25,21 @@ function commitlintAccepts(message: string) {
 
 function recordErrors(message: string) {
     return validateCommitRecords([{ sha: 'fixture', message, parentCount: 1 }]);
+}
+
+async function wrappedBodyLabelFixture() {
+    const fixture: unknown = JSON.parse(
+        await readFile(new URL('./fixtures/wrapped-body-label-squash.json', import.meta.url), 'utf8'),
+    );
+    assert.ok(isRecord(fixture));
+    assert.ok(typeof fixture.number === 'number' && typeof fixture.title === 'string');
+    assert.ok(typeof fixture.actualMessage === 'string' && typeof fixture.originalBody === 'string');
+    return {
+        number: fixture.number,
+        title: fixture.title,
+        actualMessage: fixture.actualMessage,
+        originalBody: fixture.originalBody,
+    };
 }
 
 function sanitizedGitEnvironment(environment = process.env, overrides = {}) {
@@ -681,7 +697,17 @@ test('validates ordinary commit records and skips only topology-proven merges', 
 });
 
 test('keeps ordinary footer separation in parity with commitlint', () => {
-    for (const footer of ['Refs: #123', 'Closes #123', 'Reviewed-by: Example <reviewer@example.com>']) {
+    for (const footer of [
+        'Refs: #123',
+        'refs: #123',
+        'REFS: #123',
+        'Closes #123',
+        'Closes owner/repository#123',
+        'Reviewed-by: Example <reviewer@example.com>',
+        'BREAKING CHANGE: callers must migrate',
+        'BREAKING-CHANGE: callers must migrate',
+        'quick-start: run installation steps',
+    ]) {
         const separated = `feat(tooling): describe validation\n\nbody details\n\n${footer}`;
         const unseparated = `feat(tooling): describe validation\n\nbody details\n${footer}`;
 
@@ -689,6 +715,160 @@ test('keeps ordinary footer separation in parity with commitlint', () => {
         assert.deepEqual(recordErrors(separated), [], footer);
         assert.equal(commitlintAccepts(unseparated), false, footer);
         assert.notDeepEqual(recordErrors(unseparated), [], footer);
+    }
+});
+
+test('accepts complete body label squash messages and preserves original PR prediction bytes', async (context) => {
+    const fixture = await wrappedBodyLabelFixture();
+    const wrappedBody = fixture.actualMessage.slice(fixture.actualMessage.indexOf('\n\n') + 2);
+    for (const [label, body, expected] of [
+        [
+            'original PR description',
+            fixture.originalBody,
+            `${fixture.title} (#${fixture.number})\n\n${fixture.originalBody}`,
+        ],
+        ['actual wrapped squash message', wrappedBody, fixture.actualMessage],
+    ] as const) {
+        await context.test(label, () => {
+            const request = buildCommitCheckRequest({
+                eventName: 'pull_request',
+                event: {
+                    number: fixture.number,
+                    pull_request: {
+                        title: fixture.title,
+                        body,
+                        base: { sha: 'base' },
+                        head: { ref: 'chore/commit-footer-boundaries', sha: 'head' },
+                    },
+                },
+            });
+            const prediction = request.directMessages[1];
+            assert.ok(prediction && expected);
+            assert.deepEqual(Buffer.from(prediction.message), Buffer.from(expected));
+            assert.deepEqual(recordErrors(prediction.message), []);
+            assert.equal(commitlintAccepts(prediction.message), true);
+        });
+    }
+});
+
+test('preserves footer separation for plain and bullet breaking change descriptions on either line', () => {
+    for (const token of ['BREAKING CHANGE', 'BREAKING-CHANGE', '* BREAKING CHANGE']) {
+        for (const separator of [' ', '\n']) {
+            const footer = `${token}:${separator}Callers must migrate.`;
+            const separated = `feat(tooling): describe validation\n\nbody details\n\n${footer}`;
+            const unseparated = `feat(tooling): describe validation\n\nbody details\n${footer}`;
+            assert.deepEqual(recordErrors(separated), [], token);
+            assert.equal(commitlintAccepts(separated), true, token);
+            assert.notDeepEqual(recordErrors(unseparated), [], token);
+            assert.equal(commitlintAccepts(unseparated), false, token);
+        }
+    }
+});
+
+test('ordinary body labels remain prose without a blank and can begin a separated generic footer', async (context) => {
+    for (const token of ['refinements', 'observations', 'Summary']) {
+        await context.test(token, () => {
+            for (const separator of ['\n\n', '\n']) {
+                const message = `docs(tooling): explain validation\n\nDescribe the checks.${separator}${token}: the checks passed`;
+                assert.deepEqual(recordErrors(message), []);
+                assert.equal(commitlintAccepts(message), true);
+            }
+        });
+    }
+});
+
+test('body labels cannot hide header separation or an unseparated explicit footer', () => {
+    assert.notDeepEqual(recordErrors('docs(tooling): explain validation\nobservations: the checks passed'), []);
+    for (const footer of ['Refs: #123', 'Closes owner/repository#123', 'BREAKING CHANGE: callers must migrate']) {
+        const message = `docs(tooling): explain validation\n\nDescribe the checks.\nobservations: the checks passed\n${footer}`;
+        assert.notDeepEqual(recordErrors(message), [], footer);
+    }
+});
+
+test('separated generic footer groups accept adjacent explicit trailers after body labels', () => {
+    const message =
+        'feat(tooling): explain validation\n\nDescribe the checks.\nobservations: the checks passed\n\nValidation: passed\nRefs: #123\nReviewed-by: Example <reviewer@example.com>\nBREAKING CHANGE: callers must migrate';
+    assert.deepEqual(recordErrors(message), []);
+    assert.equal(commitlintAccepts(message), true);
+});
+
+test('preserved body label messages pass Git and PR audit entry points without rewriting bytes', async (context) => {
+    const fixture = await wrappedBodyLabelFixture();
+    const messageBytes = Buffer.from(fixture.actualMessage);
+    const temporaryBase = await realpath(os.tmpdir());
+    const directory = await realpath(await mkdtemp(path.join(temporaryBase, 'cdp-footer-boundaries-')));
+    const fixtureEnvironment = sanitizedGitEnvironment();
+    const git = (arguments_: string[]) => {
+        const result = spawnSync('git', arguments_, {
+            cwd: directory,
+            env: fixtureEnvironment,
+            windowsHide: true,
+        });
+        assert.equal(result.error, undefined);
+        assert.equal(result.status, 0, result.stdout.toString() + result.stderr.toString());
+        return result.stdout;
+    };
+    try {
+        git(['init', '--initial-branch=main']);
+        git(['config', 'user.name', 'CI Fixture']);
+        git(['config', 'user.email', 'ci-fixture@example.invalid']);
+        git(['config', 'core.hooksPath', '.git/no-hooks']);
+        git(['config', 'commit.gpgSign', 'false']);
+        git(['commit', '--allow-empty', '-m', 'test(tooling): create footer base']);
+        const base = git(['rev-parse', 'HEAD']).toString().trim();
+        const messagePath = path.join(directory, '.git', 'fixture-message');
+        await writeFile(messagePath, messageBytes);
+        git(['commit', '--allow-empty', '--cleanup=verbatim', '--file', messagePath]);
+        const wrapped = git(['rev-parse', 'HEAD']).toString().trim();
+        git(['commit', '--allow-empty', '-m', 'test(tooling): add valid footer head']);
+        const head = git(['rev-parse', 'HEAD']).toString().trim();
+        const eventPath = path.join(directory, '.git', 'event.json');
+        const cases: [string, string, unknown][] = [
+            ['ordinary push', 'push', { ref: 'refs/heads/main', before: base, after: wrapped }],
+            ['complete ancestry', '', {}],
+            [
+                'PR direct message',
+                'pull_request',
+                {
+                    number: fixture.number,
+                    pull_request: {
+                        title: fixture.title,
+                        body: fixture.actualMessage.slice(fixture.actualMessage.indexOf('\n\n') + 2),
+                        base: { sha: wrapped },
+                        head: { ref: 'chore/commit-footer-boundaries', sha: head },
+                    },
+                },
+            ],
+        ];
+        for (const [label, eventName, event] of cases) {
+            await context.test(label, async () => {
+                const object = git(['cat-file', 'commit', wrapped]);
+                assert.deepEqual(object.subarray(object.indexOf('\n\n') + 2), messageBytes);
+                const eventBytes = Buffer.from(`${JSON.stringify(event)}\n`);
+                await writeFile(eventPath, eventBytes);
+                const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
+                    cwd: directory,
+                    encoding: 'utf8',
+                    env: {
+                        ...fixtureEnvironment,
+                        GITHUB_EVENT_NAME: eventName,
+                        GITHUB_EVENT_PATH: eventName ? eventPath : '',
+                    },
+                    windowsHide: true,
+                });
+                const after = git(['cat-file', 'commit', wrapped]);
+                assert.deepEqual(after.subarray(after.indexOf('\n\n') + 2), messageBytes);
+                assert.deepEqual(await readFile(messagePath), messageBytes);
+                assert.deepEqual(await readFile(eventPath), eventBytes);
+                assert.equal(result.error, undefined);
+                assert.equal(result.status, 0, result.stdout + result.stderr);
+                assert.match(result.stdout, /audit passed/i);
+            });
+        }
+    } finally {
+        assert.equal(path.dirname(directory), temporaryBase);
+        assert.ok(path.basename(directory).startsWith('cdp-footer-boundaries-'));
+        await rm(directory, { recursive: true, force: true });
     }
 });
 

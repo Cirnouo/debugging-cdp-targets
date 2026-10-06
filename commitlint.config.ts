@@ -1,11 +1,13 @@
 import configConventional from '@commitlint/config-conventional';
 import type { UserConfig } from '@commitlint/types';
 
+import { footerLeadingBlank } from './tooling/commit-footer-rule.ts';
 import { COMMIT_SCOPES, COMMIT_TYPES } from './tooling/governance.ts';
 
 export default {
     defaultIgnores: false,
     ignores: [],
+    plugins: [{ rules: { 'footer-leading-blank': footerLeadingBlank } }],
     parserPreset: {
         name: 'repository-conventional-commits',
         parserOpts: {
