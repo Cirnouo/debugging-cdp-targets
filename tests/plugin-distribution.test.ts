@@ -29,9 +29,20 @@ test('portable plugin registers one stdio gateway for independent target connect
     });
 });
 
-test('plugin payload has only manifests, one skill, license, and self-contained runtime', async () => {
+test('plugin payload has only manifests, artwork, one skill, license, and self-contained runtime', async () => {
     const topLevel = await readdir(pluginRoot);
-    assert.deepEqual(topLevel.sort(), ['.codex-plugin', 'LICENSE', 'README.md', 'dist', 'hooks', 'mcp.json', 'skills']);
+    assert.deepEqual(topLevel.sort(), [
+        '.codex-plugin',
+        'LICENSE',
+        'README.md',
+        'assets',
+        'dist',
+        'hooks',
+        'mcp.json',
+        'skills',
+    ]);
+    const artwork = await readdir(path.join(pluginRoot, 'assets'));
+    assert.deepEqual(artwork.sort(), ['README.md', 'icon-dark.png', 'icon-light.png']);
     const distribution = await readdir(path.join(pluginRoot, 'dist'));
     assert.deepEqual(distribution.sort(), [
         'README.md',

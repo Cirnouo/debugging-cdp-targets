@@ -28,8 +28,9 @@ There is no guaranteed response or remediation deadline.
 
 The Plugin launches and verifies its own local targets, requires loopback CDP
 endpoints, and preserves explicit connection and session identities. Browser
-profiles retain browser data after Close. See the [README](README.md) for privacy
-and operational guidance, the [runtime security policy](docs/policies/security.md)
+profiles retain browser data after Close. See the
+[privacy guide](docs/user-guide/privacy.md) and [workflow](docs/user-guide/workflow.md)
+for user guidance, the [runtime security policy](docs/policies/security.md)
 for implementation boundaries, and the [supply-chain policy](docs/policies/supply-chain.md)
 for dependency verification and audit coverage.
 

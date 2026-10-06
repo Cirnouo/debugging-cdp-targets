@@ -11,6 +11,7 @@ export function requiredPayloadFiles(host: HostDescriptor = CODEX_HOST) {
     return Object.freeze([
         'LICENSE',
         'README.md',
+        ...host.assets.map((file) => `assets/${file}`),
         ...Object.values(host.files).filter((file) => file !== 'README.md'),
         'dist/README.md',
         'dist/THIRD-PARTY-NOTICES.txt',

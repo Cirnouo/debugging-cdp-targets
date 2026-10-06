@@ -225,8 +225,8 @@ test('package, output and repository fixtures work with an aliased system tempor
             [
                 '--test',
                 '--test-reporter=spec',
-                '--test-name-pattern=package verifier|installed pnpm|packaged resolver|build synchronization|only the fully verified official',
-                ...['official-package', 'build-plugin', 'repository-audit'].map((name) =>
+                '--test-name-pattern=package verifier|installed pnpm|packaged resolver|build synchronization|only the fully verified official|assembly copies only approved icons|repository audit accepts AGENTS.md',
+                ...['official-package', 'build-plugin', 'icon-packaging', 'repository-audit'].map((name) =>
                     fileURLToPath(new URL(`./${name}.test.ts`, import.meta.url)),
                 ),
             ],

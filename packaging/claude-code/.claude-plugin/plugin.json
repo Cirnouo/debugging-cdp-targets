@@ -7,5 +7,6 @@
     },
     "repository": "https://github.com/Cirnouo/debugging-cdp-targets",
     "license": "MIT",
-    "keywords": ["cdp", "devtools", "debugging"]
+    "keywords": ["cdp", "devtools", "debugging"],
+    "icon": "./assets/icon.png"
 }

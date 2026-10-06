@@ -18,6 +18,7 @@ import {
 } from './distribution-audit.ts';
 import type { HostDescriptor } from './host-policy.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
+import { SHARED_ASSET_FILES, validateIconPng } from './icon-policy.ts';
 import { validatePayloadFileInventory } from './payload-policy.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';
 import { validateVersionAgreement } from './version-policy.ts';
@@ -305,6 +306,24 @@ async function assemblePayload(runtime: ReadonlyMap<string, Buffer>, host: HostD
         add(destination, bytes);
     }
     add('LICENSE', await readRegularFile(await verifyPackagingPath(packagingRoot, 'LICENSE', false)));
+    const assets = await readDistributionTree(
+        await verifyPackagingPath(packagingRoot, `${SHARED_PACKAGING_ROOT}/assets`, true),
+    );
+    for (const file of assets.keys())
+        if (!SHARED_ASSET_FILES.includes(file)) throw new Error(`Unexpected shared asset: ${file}`);
+    for (const file of SHARED_ASSET_FILES) {
+        const bytes = assets.get(file);
+        if (!bytes) throw new Error(`Missing shared asset: ${file}`);
+        if (file.endsWith('.png')) {
+            const errors = validateIconPng(file, bytes);
+            if (errors.length) throw new Error(errors.join('\n'));
+        }
+    }
+    for (const file of host.assets) {
+        const bytes = assets.get(file);
+        if (!bytes) throw new Error(`Missing shared asset: ${file}`);
+        add(`assets/${file}`, bytes);
+    }
     const skills = await readDistributionTree(
         await verifyPackagingPath(packagingRoot, `${SHARED_PACKAGING_ROOT}/skills`, true),
     );

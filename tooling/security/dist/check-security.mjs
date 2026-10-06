@@ -7880,13 +7880,15 @@ var CODEX_HOST = Object.freeze({
   marketplace: ".agents/plugins/marketplace.json",
   mcp: "mcp.json",
   hooks: "hooks/hooks.json",
+  assets: Object.freeze(["icon-light.png", "icon-dark.png"]),
   files: Object.freeze({
     ".codex-plugin/README.md": ".codex-plugin/README.md",
     ".codex-plugin/plugin.json": ".codex-plugin/plugin.json",
     "mcp.json": "mcp.json",
     "hooks/README.md": "hooks/README.md",
     "hooks/hooks.json": "hooks/hooks.json",
-    "plugin-README.md": "README.md"
+    "plugin-README.md": "README.md",
+    "assets/README.md": "assets/README.md"
   })
 });
 var CLAUDE_CODE_HOST = Object.freeze({
@@ -7897,13 +7899,15 @@ var CLAUDE_CODE_HOST = Object.freeze({
   marketplace: ".claude-plugin/marketplace.json",
   mcp: ".mcp.json",
   hooks: "hooks/hooks.json",
+  assets: Object.freeze(["icon.png"]),
   files: Object.freeze({
     ".claude-plugin/README.md": ".claude-plugin/README.md",
     ".claude-plugin/plugin.json": ".claude-plugin/plugin.json",
     ".mcp.json": ".mcp.json",
     "hooks/README.md": "hooks/README.md",
     "hooks/hooks.json": "hooks/hooks.json",
-    "plugin-README.md": "README.md"
+    "plugin-README.md": "README.md",
+    "assets/README.md": "assets/README.md"
   })
 });
 var PLUGIN_HOSTS = Object.freeze([CODEX_HOST, CLAUDE_CODE_HOST]);

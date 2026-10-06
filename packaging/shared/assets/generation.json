@@ -1,0 +1,26 @@
+{
+    "design": "独界 (dujie)",
+    "method": "Built-in image_gen generation, followed by user-authorized raster cleanup; no manual drawing or vector tracing.",
+    "generatedOn": "2026-10-06",
+    "sourceFile": "icon-source.png",
+    "sourceSha256": "56b4a12d4b0f1e0962e1f627430300fc5dca989068e7a7282ebe72c8d5510606",
+    "refinementPrompts": [
+        "Use case: precise-object-edit / logo-brand.\nInput image 1 is the edit target, a two-panel draft of an original software icon called \"独界\".\nPrimary request: Deliver ONLY ONE standalone square icon extracted conceptually from the LEFT light-theme mark, refined as a production-ready flat geometric bitmap. Preserve its identity: two separate chunky stair-step geometric slabs running from upper-left graphite to lower-right cyan, with an open constant-width diagonal stair-step negative channel between them, aligned orthogonal straight edges, rounded outside northwest and southeast corners, gently rounded small step corners. The upper-left slab resembles a broad three-step shape; the lower-right slab complements it but never touches it. Preserve the reference silhouette, spacing and proportions. Correct the slight bent cyan edge: make each step strictly horizontal and vertical with matching corner radius.\nComposition: 1:1 square canvas, just this single symbol centered, symbol bounds about 70 percent of canvas width/height, symmetrical clear margin. No board, no side-by-side variants, no backdrop.\nPalette: upper-left slab uniform solid graphite #25343B, lower-right slab uniform solid cyan-blue #0896B5. Exactly flat solid fills. Crisp antialiased edges.\nBackground: genuinely transparent alpha everywhere outside the two slabs and throughout the separating channel.\nAvoid: gradients, shading, texture, noise, material rendering, shadows, bevels, outlines, border, mockup, words, letters, caption, watermark, new features, perspective. The two slabs must be disconnected. Output a polished square transparent PNG for an app/plugin icon.",
+        "Use case: precise-object-edit.\nInput image 1 is the EXACT edit target: the selected original \"独界\" square icon.\nChange ONLY the surface finish and edge color cleanliness; preserve EXACT canvas size, the same two separated stepped silhouettes, position, proportions, padding, rounding and the transparent negative channel.\nMake this icon perfectly FLAT digital logo artwork. Fill the entire upper-left slab with one identical constant graphite color #25343B and the entire lower-right slab with one identical constant cyan-blue color #0896B5. Remove every texture, grain, gradient, glow and colored edge artifact. Edges should have smooth clean neutral alpha antialiasing using only the adjacent slab's color, with no white matte or stray blue outline. Solid interior flat fills with zero tonal variation.\nKeep genuine alpha transparency outside the silhouettes and between them. 1:1 square transparent PNG. No words, no border, no shadows, no background, no other elements. This is a technical flat-fill cleanup of the same chosen symbol, not a redesign."
+    ],
+    "postprocessing": {
+        "sourceSize": [1254, 1254],
+        "coreAlphaThreshold": 128,
+        "colorSeparation": "cyan when green minus red is at least 60; graphite otherwise",
+        "support": "Expand each core by two source pixels, retain its source alpha, discard alpha below 8, normalize alpha at least 250 to 255.",
+        "combinedCrop": [194, 198, 1090, 1079],
+        "resizedMaskSize": [717, 705],
+        "resampling": "Pillow LANCZOS",
+        "canvasSize": [1024, 1024],
+        "placement": [153, 159],
+        "lightColors": ["#25343B", "#0896B5"],
+        "darkColors": ["#EAF4F7", "#47CDE3"],
+        "universalBackground": "#F2F7F9",
+        "themeInvariant": "icon-light.png and icon-dark.png have identical alpha bytes"
+    }
+}

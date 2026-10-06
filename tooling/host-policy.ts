@@ -8,6 +8,7 @@ export interface HostDescriptor {
     readonly marketplace: string;
     readonly mcp: string;
     readonly hooks: string;
+    readonly assets: readonly string[];
     readonly files: Readonly<Record<string, string>>;
 }
 export const CODEX_HOST: HostDescriptor = Object.freeze({
@@ -18,6 +19,7 @@ export const CODEX_HOST: HostDescriptor = Object.freeze({
     marketplace: '.agents/plugins/marketplace.json',
     mcp: 'mcp.json',
     hooks: 'hooks/hooks.json',
+    assets: Object.freeze(['icon-light.png', 'icon-dark.png']),
     files: Object.freeze({
         '.codex-plugin/README.md': '.codex-plugin/README.md',
         '.codex-plugin/plugin.json': '.codex-plugin/plugin.json',
@@ -25,6 +27,7 @@ export const CODEX_HOST: HostDescriptor = Object.freeze({
         'hooks/README.md': 'hooks/README.md',
         'hooks/hooks.json': 'hooks/hooks.json',
         'plugin-README.md': 'README.md',
+        'assets/README.md': 'assets/README.md',
     }),
 });
 export const CLAUDE_CODE_HOST: HostDescriptor = Object.freeze({
@@ -35,6 +38,7 @@ export const CLAUDE_CODE_HOST: HostDescriptor = Object.freeze({
     marketplace: '.claude-plugin/marketplace.json',
     mcp: '.mcp.json',
     hooks: 'hooks/hooks.json',
+    assets: Object.freeze(['icon.png']),
     files: Object.freeze({
         '.claude-plugin/README.md': '.claude-plugin/README.md',
         '.claude-plugin/plugin.json': '.claude-plugin/plugin.json',
@@ -42,6 +46,7 @@ export const CLAUDE_CODE_HOST: HostDescriptor = Object.freeze({
         'hooks/README.md': 'hooks/README.md',
         'hooks/hooks.json': 'hooks/hooks.json',
         'plugin-README.md': 'README.md',
+        'assets/README.md': 'assets/README.md',
     }),
 });
 export const PLUGIN_HOSTS = Object.freeze([CODEX_HOST, CLAUDE_CODE_HOST]);
