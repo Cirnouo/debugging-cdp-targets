@@ -80,6 +80,68 @@ test('host metadata rejects wrong argv, discovery fields, hooks and marketplace 
     }
 });
 
+test('Codex accepts three distinct single-line starter prompts and the 128-character boundary', async () => {
+    const manifest: unknown = JSON.parse(
+        await readFile(path.join(root, CODEX_HOST.inputRoot, CODEX_HOST.manifest), 'utf8'),
+    );
+    assert.ok(isRecord(manifest) && isRecord(manifest.interface));
+    for (const prompts of [
+        ['Capture a screenshot.', 'Inspect failed requests.', 'Profile a page load.'],
+        ['x'.repeat(128), 'Inspect failed requests.', 'Profile a page load.'],
+    ]) {
+        assert.deepEqual(
+            validateHostManifest({ ...manifest, interface: { ...manifest.interface, defaultPrompt: prompts } }),
+            [],
+        );
+    }
+});
+
+test('Codex rejects missing or malformed starter prompts while Claude rejects Codex-only fields', async () => {
+    const manifest: unknown = JSON.parse(
+        await readFile(path.join(root, CODEX_HOST.inputRoot, CODEX_HOST.manifest), 'utf8'),
+    );
+    const claude: unknown = JSON.parse(
+        await readFile(path.join(root, CLAUDE_CODE_HOST.inputRoot, CLAUDE_CODE_HOST.manifest), 'utf8'),
+    );
+    assert.ok(isRecord(manifest) && isRecord(manifest.interface) && isRecord(claude));
+    const missing = { ...manifest.interface };
+    delete missing.defaultPrompt;
+    assert.ok(validateHostManifest({ ...manifest, interface: missing }).length, 'missing field');
+    const invalid: [string, unknown][] = [
+        ['null', null],
+        ['object', {}],
+        ['string', 'Capture a screenshot.'],
+        ['empty list', []],
+        ['one prompt', ['Capture a screenshot.']],
+        ['two prompts', ['Capture a screenshot.', 'Inspect failed requests.']],
+        ['four prompts', ['One', 'Two', 'Three', 'Four']],
+        ['non-string', ['One', 'Two', 3]],
+        ['empty', ['One', 'Two', '']],
+        ['whitespace', ['One', 'Two', '   ']],
+        ['duplicate', ['One', 'One', 'Three']],
+        ['trimmed duplicate', ['One', ' One ', 'Three']],
+        ['line feed', ['One', 'Two', 'Three\nFour']],
+        ['carriage return', ['One', 'Two', 'Three\rFour']],
+        ['tab', ['One', 'Two', 'Three\tFour']],
+        ['null byte', ['One', 'Two', 'Three\u0000Four']],
+        ['delete control', ['One', 'Two', 'Three\u007fFour']],
+        ['next-line control', ['One', 'Two', 'Three\u0085Four']],
+        ['line separator', ['One', 'Two', 'Three\u2028Four']],
+        ['paragraph separator', ['One', 'Two', 'Three\u2029Four']],
+        ['oversize', ['One', 'Two', 'x'.repeat(129)]],
+    ];
+    for (const [name, prompts] of invalid)
+        assert.ok(
+            validateHostManifest({ ...manifest, interface: { ...manifest.interface, defaultPrompt: prompts } }).length,
+            name,
+        );
+    assert.ok(validateHostManifest({ ...claude, defaultPrompt: ['One', 'Two', 'Three'] }, CLAUDE_CODE_HOST).length);
+    assert.ok(
+        validateHostManifest({ ...claude, interface: { defaultPrompt: ['One', 'Two', 'Three'] } }, CLAUDE_CODE_HOST)
+            .length,
+    );
+});
+
 test('one runtime produces complete peer payloads with identical shared bytes', async () => {
     const outputs = await generateHostPayloads();
     assert.deepEqual([...outputs.keys()], ['codex', 'claude-code']);
@@ -96,6 +158,15 @@ test('one runtime produces complete peer payloads with identical shared bytes', 
     );
     assert.ok(claude.has('.mcp.json'));
     assert.equal(claude.has('mcp.json'), false);
+    const maintained: unknown = JSON.parse(
+        await readFile(path.join(root, CODEX_HOST.inputRoot, CODEX_HOST.manifest), 'utf8'),
+    );
+    const generated: unknown = JSON.parse(codex.get(CODEX_HOST.manifest)?.toString() ?? '{}');
+    assert.ok(isRecord(maintained) && isRecord(maintained.interface));
+    assert.ok(isRecord(generated) && isRecord(generated.interface));
+    assert.ok(Array.isArray(generated.interface.defaultPrompt));
+    assert.equal(generated.interface.defaultPrompt.length, 3);
+    assert.deepEqual(generated.interface.defaultPrompt, maintained.interface.defaultPrompt);
 });
 
 test('Claude assembly rejects competing, missing, linked and escaped inputs without repairing outputs', async () => {

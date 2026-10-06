@@ -15,6 +15,11 @@
         "shortDescription": "Inspect verified local CDP targets with Chrome DevTools",
         "developerName": "Cirnouo",
         "category": "Developer Tools",
+        "defaultPrompt": [
+            "Use $debugging-cdp-targets to open https://example.com in a new Chrome window and capture a screenshot.",
+            "Use $debugging-cdp-targets to check console errors and failed requests in a new Chrome window.",
+            "Use $debugging-cdp-targets to profile page load performance in a new Chrome window."
+        ],
         "logo": "./assets/icon-light.png",
         "logoDark": "./assets/icon-dark.png",
         "composerIcon": "./assets/icon-light.png",

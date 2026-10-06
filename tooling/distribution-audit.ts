@@ -80,6 +80,7 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
                 'shortDescription',
                 'developerName',
                 'category',
+                'defaultPrompt',
                 'logo',
                 'logoDark',
                 'composerIcon',
@@ -95,6 +96,20 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
             manifest.interface.composerIconDark !== './assets/icon-dark.png'
         )
             return ['Invalid Codex Plugin interface.'];
+        const prompts = manifest.interface.defaultPrompt;
+        if (
+            !Array.isArray(prompts) ||
+            prompts.length !== 3 ||
+            !prompts.every(
+                (prompt: unknown) =>
+                    typeof prompt === 'string' &&
+                    prompt.trim().length > 0 &&
+                    prompt.length <= 128 &&
+                    !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(prompt),
+            ) ||
+            new Set(prompts.map((prompt: string) => prompt.trim())).size !== 3
+        )
+            return ['Codex Plugin requires three distinct single-line starter prompts of at most 128 characters.'];
     } else if (!exactKeys(manifest, [...common, 'icon']) || manifest.icon !== './assets/icon.png')
         return ['Claude Code uses default discovery without Codex manifest fields.'];
     return [];
