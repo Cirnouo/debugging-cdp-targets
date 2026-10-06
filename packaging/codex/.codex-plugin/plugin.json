@@ -14,6 +14,10 @@
         "displayName": "Debugging CDP Targets",
         "shortDescription": "Inspect verified local CDP targets with Chrome DevTools",
         "developerName": "Cirnouo",
-        "category": "Developer Tools"
+        "category": "Developer Tools",
+        "logo": "./assets/icon-light.png",
+        "logoDark": "./assets/icon-dark.png",
+        "composerIcon": "./assets/icon-light.png",
+        "composerIconDark": "./assets/icon-dark.png"
     }
 }

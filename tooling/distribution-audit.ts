@@ -8,6 +8,7 @@ import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import type { HostDescriptor } from './host-policy.ts';
 import { CODEX_HOST, PLUGIN_HOSTS, PLUGIN_NAME } from './host-policy.ts';
+import { validateIconPng } from './icon-policy.ts';
 import { OFFICIAL_RELEASE, requiredPayloadFiles, validatePayloadFileInventory } from './payload-policy.ts';
 import { isSemVer } from './version-policy.ts';
 
@@ -74,14 +75,27 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
         )
             return ['Invalid Codex Plugin manifest paths/interface.'];
         if (
-            !exactKeys(manifest.interface, ['displayName', 'shortDescription', 'developerName', 'category']) ||
+            !exactKeys(manifest.interface, [
+                'displayName',
+                'shortDescription',
+                'developerName',
+                'category',
+                'logo',
+                'logoDark',
+                'composerIcon',
+                'composerIconDark',
+            ]) ||
             manifest.interface.displayName !== 'Debugging CDP Targets' ||
             manifest.interface.shortDescription !== 'Inspect verified local CDP targets with Chrome DevTools' ||
             manifest.interface.developerName !== 'Cirnouo' ||
-            manifest.interface.category !== 'Developer Tools'
+            manifest.interface.category !== 'Developer Tools' ||
+            manifest.interface.logo !== './assets/icon-light.png' ||
+            manifest.interface.logoDark !== './assets/icon-dark.png' ||
+            manifest.interface.composerIcon !== './assets/icon-light.png' ||
+            manifest.interface.composerIconDark !== './assets/icon-dark.png'
         )
             return ['Invalid Codex Plugin interface.'];
-    } else if (!exactKeys(manifest, common))
+    } else if (!exactKeys(manifest, [...common, 'icon']) || manifest.icon !== './assets/icon.png')
         return ['Claude Code uses default discovery without Codex manifest fields.'];
     return [];
 }
@@ -196,6 +210,11 @@ export async function auditDistribution(root: string) {
             errors.push(
                 ...validatePayloadFileInventory([...source.keys()], host).map((error) => `${host.id}: ${error}`),
             );
+            for (const asset of host.assets) {
+                const file = `assets/${asset}`;
+                const bytes = source.get(file);
+                if (bytes) errors.push(...validateIconPng(file, bytes));
+            }
             const official = await verifyOfficialPackage(
                 path.join(root, host.payloadRoot, 'dist/official-server'),
                 OFFICIAL_RELEASE,

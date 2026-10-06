@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -75,6 +75,22 @@ test('repository audit accepts AGENTS.md as the contributor entry point', async 
             await writeFile(target, source);
         }
         assert.deepEqual(await auditRepository(root), []);
+        const asset = path.join(root, 'packaging/shared/assets');
+        await mkdir(asset);
+        await writeFile(path.join(asset, 'README.md'), '# Approved icons\n');
+        const approved = await readFile(new URL('../packaging/shared/assets/icon-light.png', import.meta.url));
+        await writeFile(path.join(asset, 'icon-light.png'), approved);
+        assert.deepEqual(await auditRepository(root), []);
+        await writeFile(path.join(asset, 'unknown.png'), approved);
+        assert.ok((await auditRepository(root)).some((error) => /unknown.png/.test(error)));
+        await rm(path.join(asset, 'unknown.png'));
+        await writeFile(path.join(asset, 'icon-light.png'), approved.subarray(0, 40));
+        assert.ok((await auditRepository(root)).some((error) => /PNG|icon/.test(error)));
+        await rm(path.join(asset, 'icon-light.png'));
+        const outside = path.join(root, 'icon-source.png');
+        await writeFile(outside, approved);
+        await symlink(outside, path.join(asset, 'icon-light.png'));
+        assert.ok((await auditRepository(root)).some((error) => /icon-light.png.*link/.test(error)));
     } finally {
         assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
         assert.ok(path.basename(root).startsWith('dct-agents-'));

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
@@ -8,6 +8,7 @@ import { parse as parseYaml } from 'yaml';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
+import { isApprovedIconPath, validateIconPng } from './icon-policy.ts';
 import { OFFICIAL_RELEASE } from './payload-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
@@ -372,7 +373,21 @@ export async function auditRepository(root: string) {
             errors.push(errorMessage(error));
         }
     }
-    const files = new Map(paths.map((file) => [file, readFileSync(path.join(root, file), 'utf8')]));
+    const files = new Map(
+        paths.map((file) => {
+            const bytes = readFileSync(path.join(root, file));
+            if (isApprovedIconPath(file)) {
+                const absolute = path.resolve(root, file);
+                if (!lstatSync(absolute).isFile() || path.relative(absolute, realpathSync(absolute)) !== '')
+                    errors.push(`${file}: icon PNG must be regular and must not contain linked paths.`);
+                const iconErrors = validateIconPng(file, bytes);
+                errors.push(...iconErrors);
+                return [file, ''] as const;
+            }
+            if (/\.png$/i.test(file)) errors.push(`${file}: unexpected PNG outside approved icon paths.`);
+            return [file, bytes.toString('utf8')] as const;
+        }),
+    );
     const directories = new Set(
         paths.flatMap((file) => {
             const parents = [];

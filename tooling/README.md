@@ -16,6 +16,21 @@
   this is not a host install claim.
 - `host-policy.ts` owns filesystem-free host descriptors and canonical input/output paths.
 - `payload-policy.ts` owns the release-backed exact Plugin file allowlist.
+- `icon-policy.ts` owns approved artwork paths and PNG evidence validation.
+  [Codex artwork requirements](https://developers.openai.com/plugins/deploy/submission#icons-and-screenshots)
+  accept PNG, JPEG, WebP and SVG, with square artwork at least 48 pixels and
+  files at most 5 MiB. Raster dimensions are at most 4096 pixels; SVG uses square
+  dimensions or a square `viewBox` at least 48 pixels.
+  The repository selects static PNG with noninterlaced 8-bit RGBA as its
+  artwork profile; this is narrower than the
+  [PNG specification](https://www.w3.org/TR/png-3/). Validation checks chunk CRCs,
+  a complete bounded pixel stream, and valid row filters. Build assembly checks
+  the exact shared asset inventory and copies only each host's delivery icons.
+  Delivery PNGs use only IHDR, consecutive IDAT and IEND chunks. Source artwork
+  may additionally retain its original `caBX` Content Credentials before IDAT.
+  [Claude directory listing metadata](https://code.claude.com/docs/en/plugins-reference#directory-listing-fields)
+  documents a single `icon` field, ignored by Claude Code during loading, with
+  no documented dark theme counterpart.
 - `official-tool-catalog.ts` verifies the fixed public tools/list configuration
   matrix; `--write` deliberately regenerates tool metadata for the verified release.
 - `official-tool-catalog.json` records complete names, schema variants, activation

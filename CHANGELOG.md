@@ -10,6 +10,8 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
+- A generated geometric project icon with matching light/dark Codex assets and
+  a universal icon for the Claude directory listing.
 - Independent Codex and Claude Code Plugins and Marketplace catalogs, each with
   a complete runtime and shared application-agnostic debugging instructions.
   Claude Code 2.1.283 is the first supported and accepted baseline.
