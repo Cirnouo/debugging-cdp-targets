@@ -247,7 +247,25 @@ export function selectApplicationMainWindow(
 
 function markerFunction(color: 'yellow' | 'green', nonce: string) {
     const rgb = color === 'yellow' ? '255,255,0' : '0,255,0';
-    return `() => { const id = 'DCT_APPLICATION_MARKER'; document.documentElement.style.cssText='margin:0;padding:0;overflow:hidden;'; document.body.style.cssText='margin:0;padding:0;'; let e=document.getElementById(id); if(!e){e=document.createElement('div');e.id=id;document.body.replaceChildren(e);} e.dataset.nonce=${JSON.stringify(nonce)}; e.style.cssText='position:absolute;left:0;top:0;width:'+innerWidth+'px;height:'+(innerHeight*2)+'px;background:rgb(${rgb});z-index:2147483647;opacity:1;'; document.documentElement.style.height=(innerHeight*2)+'px'; document.body.style.height=(innerHeight*2)+'px'; scrollTo(0,0); const box=r=>({x:r.x,y:r.y,width:r.width,height:r.height}); return {nonce:e.dataset.nonce,color:getComputedStyle(e).backgroundColor,dpr:devicePixelRatio,viewport:{x:0,y:0,width:innerWidth,height:innerHeight},root:{rect:{x:0,y:0,width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight},scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight},element:box(e.getBoundingClientRect()),visualViewport:{scale:visualViewport.scale,pageLeft:visualViewport.pageLeft,pageTop:visualViewport.pageTop}}; }`;
+    return `() => {
+        const id = 'DCT_APPLICATION_MARKER';
+        document.documentElement.style.cssText='margin:0;padding:0;overflow:hidden;';
+        document.body.style.cssText='margin:0;padding:0;';
+        let e=document.getElementById(id);
+        if(!e){e=document.createElement('div');e.id=id;document.body.replaceChildren(e);}
+        e.dataset.nonce=${JSON.stringify(nonce)};
+        e.style.cssText='position:absolute;left:0;top:0;width:'+innerWidth+'px;height:'+(innerHeight*2)+'px;background:rgb(${rgb});z-index:2147483647;opacity:1;';
+        document.documentElement.style.height=(innerHeight*2)+'px';
+        document.body.style.height=(innerHeight*2)+'px';
+        scrollTo(0,0);
+        const box=r=>({x:r.x,y:r.y,width:r.width,height:r.height});
+        const probe=document.createElement('div');
+        probe.style.cssText='all:initial;position:fixed;left:0;top:0;width:100vw;height:100vh;opacity:0;pointer-events:none;';
+        let viewport;
+        document.body.appendChild(probe);
+        try { viewport=box(probe.getBoundingClientRect()); } finally { probe.remove(); }
+        return {nonce:e.dataset.nonce,color:getComputedStyle(e).backgroundColor,dpr:devicePixelRatio,viewport,root:{rect:box(document.documentElement.getBoundingClientRect()),scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight},element:box(e.getBoundingClientRect()),visualViewport:{width:visualViewport.width,height:visualViewport.height,scale:visualViewport.scale,pageLeft:visualViewport.pageLeft,pageTop:visualViewport.pageTop},innerWidth,innerHeight};
+    }`;
 }
 
 export async function runApplicationScreenshotProbe(

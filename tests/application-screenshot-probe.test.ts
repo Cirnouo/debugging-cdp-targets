@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
+import { isRecord } from '../src/shared/errors.ts';
 import {
     type ApplicationProbeAdapter,
     type ApplicationProbeConfig,
@@ -22,6 +23,7 @@ import {
     readApplicationProcessEvidence,
     startApplicationExitWitness,
 } from './smoke/application-screenshot-native.ts';
+import { readScreenshotGeometry } from './smoke/screenshot-fixture.ts';
 
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const files = [{ path: 'dist/mcp-bootstrap.mjs', bytes: 4, sha256: sha('code') }];
@@ -103,6 +105,97 @@ const geometry = {
 function jsonResult(value: unknown) {
     return { content: [{ type: 'text', text: `\`\`\`json\n${JSON.stringify(value)}\n\`\`\`` }] };
 }
+const fractionalViewport = { x: 0, y: 0, width: 1025.5999755859375, height: 802.4000244140625 };
+const fractionalRoot = { ...fractionalViewport, height: 1604 };
+function markerDom(failProbeRead = false) {
+    interface Element {
+        id: string;
+        dataset: { nonce: string };
+        style: { cssText: string; height: string };
+        getBoundingClientRect(): { x: number; y: number; width: number; height: number };
+        remove(): void;
+    }
+    let children: Element[] = [];
+    let removed = 0;
+    const reads: string[] = [];
+    const documentElement = {
+        style: { cssText: '', height: '' },
+        scrollWidth: 1026,
+        scrollHeight: 1604,
+        getBoundingClientRect() {
+            reads.push('root');
+            assert.equal(documentElement.style.height, '1604px');
+            return fractionalRoot;
+        },
+    };
+    const context = {
+        innerWidth: 1026,
+        innerHeight: 802,
+        devicePixelRatio: 1.25,
+        visualViewport: { ...fractionalViewport, scale: 1, pageLeft: 0, pageTop: 0 },
+        scrollTo(x: number, y: number) {
+            assert.deepEqual([x, y], [0, 0]);
+        },
+        getComputedStyle(element: Element) {
+            const color = element.style.cssText.match(/background:rgb\((\d+),(\d+),(\d+)\)/);
+            assert.ok(color);
+            return { backgroundColor: `rgb(${color.slice(1).join(', ')})` };
+        },
+        document: {
+            documentElement,
+            body: {
+                style: { cssText: '', height: '' },
+                replaceChildren(element: Element) {
+                    children = [element];
+                },
+                appendChild(element: Element) {
+                    children.push(element);
+                },
+            },
+            getElementById(id: string) {
+                return children.find((element) => element.id === id);
+            },
+            createElement(tag: string): Element {
+                assert.equal(tag, 'div');
+                const element: Element = {
+                    id: '',
+                    dataset: { nonce: '' },
+                    style: { cssText: '', height: '' },
+                    getBoundingClientRect() {
+                        assert.ok(children.includes(element), 'Measure only an attached element.');
+                        if (element.id === 'DCT_APPLICATION_MARKER') {
+                            reads.push('marker');
+                            assert.match(element.style.cssText, /width:1026px;height:1604px;/);
+                            return { x: 0, y: 0, width: 1026, height: 1604 };
+                        }
+                        reads.push('viewport');
+                        assert.match(element.style.cssText, /position:fixed;left:0;top:0;width:100vw;height:100vh;/);
+                        assert.match(element.style.cssText, /opacity:0;pointer-events:none;/);
+                        if (failProbeRead) throw new Error('fake viewport layout read failed');
+                        return fractionalViewport;
+                    },
+                    remove() {
+                        assert.ok(children.includes(element));
+                        assert.notEqual(element.id, 'DCT_APPLICATION_MARKER');
+                        children = children.filter((child) => child !== element);
+                        removed += 1;
+                    },
+                };
+                return element;
+            },
+        },
+    };
+    return {
+        evaluate(expression: string): unknown {
+            return runInNewContext(`(${expression})()`, context);
+        },
+        reads,
+        state: () => ({
+            removed,
+            probes: children.filter((element) => element.id !== 'DCT_APPLICATION_MARKER').length,
+        }),
+    };
+}
 function boundary(
     options: {
         pages?: number[];
@@ -119,6 +212,9 @@ function boundary(
         observerError?: boolean;
         directory?: string;
         workspaceConfinement?: boolean;
+        markerEvaluation?: (expression: string) => unknown;
+        pngDimensions?: { width: number; height: number };
+        badBelowFold?: boolean;
     } = {},
 ) {
     const events: { kind: string; value: unknown }[] = [];
@@ -182,6 +278,7 @@ function boundary(
                         const expression = String(args.function);
                         events.push({ kind: 'evaluate-function', value: expression });
                         if (expression.includes('DCT_APPLICATION_MARKER')) {
+                            if (options.markerEvaluation) return jsonResult(options.markerEvaluation(expression));
                             if (expression.includes('255,255,0')) return jsonResult({ installed: true });
                             return jsonResult(geometry);
                         }
@@ -258,15 +355,17 @@ function boundary(
                 async png(file, points, size) {
                     sequence.push('png');
                     events.push({ kind: 'decoded-file-path', value: file });
+                    events.push({ kind: 'png-request', value: { size, points } });
+                    const dimensions = options.pngDimensions ?? size;
                     return {
                         sha256: 'b'.repeat(64),
                         bytes: 42,
                         decoded: {
-                            ...size,
-                            width: options.badDimensions ? size.width + 1 : size.width,
+                            ...dimensions,
+                            width: options.badDimensions ? dimensions.width + 1 : dimensions.width,
                             pixels: points.map((point) => ({
                                 ...point,
-                                r: options.badPixel ? 255 : 0,
+                                r: options.badPixel || (options.badBelowFold && point.y > 1003) ? 255 : 0,
                                 g: 255,
                                 b: 0,
                                 a: 255,
@@ -469,6 +568,95 @@ test('formal capture installs yellow before condition and reads fresh green afte
     assert.ok(io.sequence.indexOf('condition') < io.sequence.indexOf('marker-green'));
     assert.ok(io.sequence.indexOf('marker-green') < io.sequence.indexOf('take_screenshot'));
     assert.ok(!io.sequence.some((name) => ['new_page', 'select_page', 'emulate'].includes(name)));
+});
+
+for (const arm of ['baseline', 'candidate'] as const)
+    for (const mode of ['viewport', 'fullPage'] as const)
+        test(`actual marker preserves fractional viewport and root geometry for ${arm} ${mode}`, async () => {
+            const dom = markerDom();
+            const dimensions = mode === 'viewport' ? { width: 1282, height: 1003 } : { width: 1281, height: 2005 };
+            const io = boundary({ markerEvaluation: dom.evaluate, pngDimensions: dimensions });
+            const result = await runApplicationScreenshotProbe(
+                config,
+                { arm, condition: 'foreground-normal', mode, parentDirectory: 'C:/Evidence', nonce: 'cell-1' },
+                io.adapter,
+            );
+            assert.equal(result.outcome, 'success', JSON.stringify(result.failures));
+            assert.deepEqual(io.counts(), { capture: 1, opened: 1, closed: 1 });
+            const green = io.events.find((event) => event.kind === 'marker-green')?.value;
+            assert.ok(isRecord(green));
+            const measured = readScreenshotGeometry(green);
+            assert.deepEqual(measured.viewport, fractionalViewport);
+            assert.deepEqual(measured.content, fractionalRoot);
+            assert.equal(green.innerWidth, 1026);
+            assert.equal(green.innerHeight, 802);
+            assert.equal(green.nonce, 'cell-1');
+            assert.equal(green.color, 'rgb(0, 255, 0)');
+            assert.deepEqual(green.visualViewport, {
+                width: fractionalViewport.width,
+                height: fractionalViewport.height,
+                scale: 1,
+                pageLeft: 0,
+                pageTop: 0,
+            });
+            const pngRequest = io.events.find((event) => event.kind === 'png-request')?.value;
+            assert.ok(isRecord(pngRequest));
+            assert.deepEqual(pngRequest.size, dimensions);
+            const right = mode === 'viewport' ? 1279 : 1278;
+            assert.deepEqual(pngRequest.points, [
+                { x: 2, y: 2 },
+                { x: right, y: 2 },
+                { x: 2, y: 1000 },
+                { x: right, y: 1000 },
+                ...(mode === 'fullPage' ? [{ x: 640, y: 2002 }] : []),
+            ]);
+            assert.equal(dom.reads.filter((read) => read === 'viewport').length, 2);
+            assert.equal(dom.reads.filter((read) => read === 'root').length, 2);
+            assert.deepEqual(dom.state(), { removed: 2, probes: 0 });
+            assert.ok(io.sequence.indexOf('marker-initial') < io.sequence.indexOf('condition'));
+            assert.ok(io.sequence.indexOf('condition') < io.sequence.indexOf('marker-green'));
+            assert.ok(io.sequence.indexOf('marker-green') < io.sequence.indexOf('take_screenshot'));
+            assert.equal(io.events.filter((event) => event.kind === 'evaluate-function').length, 3);
+        });
+
+test('actual marker removes its viewport probe after a failed layout read without taking a screenshot', async () => {
+    const dom = markerDom(true);
+    const io = boundary({ markerEvaluation: dom.evaluate });
+    const result = await run(io);
+    assert.equal(result.outcome, 'qualification-blocked');
+    assert.ok(result.failures.some((failure) => /fake viewport layout read failed/.test(failure.error)));
+    assert.deepEqual(dom.state(), { removed: 1, probes: 0 });
+    assert.deepEqual(dom.reads, ['viewport']);
+    assert.deepEqual(io.counts(), { capture: 0, opened: 1, closed: 1 });
+});
+
+for (const mode of ['viewport', 'fullPage'] as const)
+    test(`fractional marker retains exact dimension rejection for a one-pixel wrong ${mode} PNG`, async () => {
+        const dom = markerDom();
+        const io = boundary({
+            markerEvaluation: dom.evaluate,
+            pngDimensions: mode === 'viewport' ? { width: 1282, height: 1003 } : { width: 1281, height: 2005 },
+            badDimensions: true,
+        });
+        const result = await run(io, config, mode);
+        assert.equal(result.capture?.outcome, 'success');
+        assert.equal(result.outcome, 'evidence-insufficient');
+        assert.ok(result.failures.some((failure) => /PNG width differs/.test(failure.error)));
+        assert.equal(io.counts().capture, 1);
+    });
+
+test('fractional marker retains fullPage rejection of an incorrect below-viewport pixel', async () => {
+    const dom = markerDom();
+    const io = boundary({
+        markerEvaluation: dom.evaluate,
+        pngDimensions: { width: 1281, height: 2005 },
+        badBelowFold: true,
+    });
+    const result = await run(io, config, 'fullPage');
+    assert.equal(result.capture?.outcome, 'success');
+    assert.equal(result.outcome, 'evidence-insufficient');
+    assert.ok(result.failures.some((failure) => /stale or incorrect content pixels/.test(failure.error)));
+    assert.equal(io.counts().capture, 1);
 });
 
 test('both formal arms capture and decode the same PNG inside the fresh declared workspace', async () => {
