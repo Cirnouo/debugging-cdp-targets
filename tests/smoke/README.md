@@ -188,7 +188,8 @@ args must contain one confined `--user-data-dir={fixture}/profile` (or another
 confined child) in the fresh evidence directory; the runner expands only that
 test placeholder and passes the directory as the official `--workspace`.
 Profile paths containing `%NAME%` or `${NAME}` environment substitutions are
-rejected before acquisition so inherited environment expansion cannot escape.
+rejected before acquisition, including tokens introduced by the evidence-directory
+placeholder expansion, so inherited environment expansion cannot escape.
 
 The first and only screenshot sends `pageId`, `fullPage` and `filePath`, with no
 explicit format/quality. Supplied evaluations retain their exact arguments.

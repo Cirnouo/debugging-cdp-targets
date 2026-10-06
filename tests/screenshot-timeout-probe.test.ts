@@ -4,6 +4,7 @@ import {
     correlateNativeTabs,
     runScreenshotTimeoutProbe,
     type ScreenshotTimeoutAdapter,
+    type ScreenshotTimeoutFixture,
 } from './smoke/screenshot-timeout-fixture.ts';
 
 const fixture = {
@@ -47,13 +48,15 @@ function boundary(
 ) {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
     const evidence: { kind: string; value: unknown }[] = [];
+    const acquiredFixtures: ScreenshotTimeoutFixture[] = [];
     let opened = 0;
     let closed = 0;
     let sampled = 0;
     let statusCalls = 0;
     const adapter: ScreenshotTimeoutAdapter = {
-        async acquire() {
+        async acquire(selectedFixture) {
             opened += 1;
+            acquiredFixtures.push(selectedFixture);
             if (options.blockedIdentity)
                 throw Object.assign(new Error('Process/listener identity disagreed'), {
                     probeOutcome: 'blocked-evidence',
@@ -106,7 +109,7 @@ function boundary(
             evidence.push({ kind, value });
         },
     };
-    return { adapter, calls, evidence, counts: () => ({ opened, closed }) };
+    return { adapter, calls, evidence, acquiredFixtures, counts: () => ({ opened, closed }) };
 }
 
 test('native tab provider agreement permits only a unique observed page-title match', () => {
@@ -204,6 +207,41 @@ for (const token of ['%DCT_PROBE_ESCAPE%', '${DCT_PROBE_ESCAPE}']) {
         assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
     });
 }
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: Exercise a literal production launch substitution token.
+for (const token of ['%DCT_PROBE_ESCAPE%', '${DCT_PROBE_ESCAPE}']) {
+    test(`evidence directory ${token} cannot introduce a profile substitution before acquisition`, async () => {
+        const io = boundary();
+        await assert.rejects(
+            runScreenshotTimeoutProbe(fixture, `C:/Fresh/${token}/readme-background-AbCd12/screenshot.png`, io.adapter),
+        );
+        assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
+    });
+}
+
+test('legitimate evidence directory preserves the explicitly expanded launch argv', async () => {
+    const io = boundary();
+    await runScreenshotTimeoutProbe(
+        {
+            ...fixture,
+            launch: {
+                executable: 'C:/Fixture/chrome.exe',
+                args: ['--user-data-dir={fixture}/profile', '--no-first-run', '--disable-features=ChromeAppInstaller'],
+            },
+        },
+        'C:/Fresh/readme-background-AbCd12/screenshot.png',
+        io.adapter,
+    );
+    assert.deepEqual(io.acquiredFixtures[0]?.launch, {
+        executable: 'C:/Fixture/chrome.exe',
+        args: [
+            '--user-data-dir=C:/Fresh/readme-background-AbCd12/profile',
+            '--no-first-run',
+            '--disable-features=ChromeAppInstaller',
+        ],
+    });
+    assert.equal(io.counts().opened, 1);
+});
 
 test('independent process or endpoint identity failure is blocked evidence and still cleans the gateway', async () => {
     const io = boundary({ blockedIdentity: true });

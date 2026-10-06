@@ -11,7 +11,7 @@ import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
-import { closeEvery, expandFixture } from './screenshot-fixture.ts';
+import { closeEvery } from './screenshot-fixture.ts';
 import {
     correlateNativeTabs,
     parseScreenshotTimeoutFixture,
@@ -190,7 +190,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
             'connections' in initial && initial.connections.length === 0,
             'Fresh gateway must have no connections.',
         );
-        const launch = expandFixture(selectedFixture.launch, folder);
+        const launch = selectedFixture.launch;
         const started = Date.now();
         const connection = await control({
             action: 'start',

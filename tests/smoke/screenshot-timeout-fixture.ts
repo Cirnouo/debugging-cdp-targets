@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domains/launch-command.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { expandFixture } from './screenshot-fixture.ts';
 import { assertWindowState, readWindowSample, type WindowIdentity, type WindowSample } from './window-evidence.ts';
 
 export interface ScreenshotTimeoutFixture {
@@ -28,6 +30,17 @@ export interface ScreenshotTimeoutAdapter {
     record(kind: string, value: unknown): Promise<void>;
 }
 type Outcome = 'success' | 'tool-error' | 'recovery-required' | 'client-error' | 'blocked-evidence';
+const environmentToken = /%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/;
+
+function profilePaths(launch: ApplicationLaunch) {
+    return (launch.args ?? []).flatMap((arg, index, args) =>
+        arg.startsWith('--user-data-dir=')
+            ? [arg.slice('--user-data-dir='.length)]
+            : arg === '--user-data-dir'
+              ? [args[index + 1]]
+              : [],
+    );
+}
 
 export function parseScreenshotTimeoutFixture(value: unknown): ScreenshotTimeoutFixture {
     assert.ok(isRecord(value), 'Fixture must be an object.');
@@ -71,19 +84,13 @@ export function parseScreenshotTimeoutFixture(value: unknown): ScreenshotTimeout
             assert.ok(!setting.split(/[\\/]/).includes('..'), 'Fixture path escapes its fresh directory.');
         }
     }
-    const profiles = (launch.args ?? []).flatMap((arg, index, args) =>
-        arg.startsWith('--user-data-dir=')
-            ? [arg.slice('--user-data-dir='.length)]
-            : arg === '--user-data-dir'
-              ? [args[index + 1]]
-              : [],
-    );
+    const profiles = profilePaths(launch);
     assert.ok(
         profiles.length === 1 && profiles[0]?.startsWith('{fixture}/'),
         'One explicitly confined fresh profile is required.',
     );
     assert.ok(
-        !/%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/.test(profiles[0] ?? ''),
+        !environmentToken.test(profiles[0] ?? ''),
         'Environment substitutions cannot establish a confined fresh profile.',
     );
     assert.ok(Array.isArray(value.evaluations), 'Evaluations must be an array.');
@@ -175,6 +182,11 @@ export function correlateNativeTabs(observed: unknown, pageTitle?: string) {
 export async function runScreenshotTimeoutProbe(value: unknown, filePath: string, adapter: ScreenshotTimeoutAdapter) {
     // Validation precedes acquisition: malformed fixtures cannot start a gateway or target.
     const fixture = parseScreenshotTimeoutFixture(value);
+    const launch = expandFixture(fixture.launch, path.dirname(filePath));
+    assert.ok(
+        !environmentToken.test(profilePaths(launch)[0] ?? ''),
+        'The expanded fresh profile cannot contain environment substitutions.',
+    );
     let outcome: Outcome = 'client-error';
     let failure: string | undefined;
     let capture: { outcome: Outcome; result?: Record<string, unknown>; error?: string } | undefined;
@@ -226,7 +238,7 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
         }
     };
     try {
-        route = await adapter.acquire(fixture);
+        route = await adapter.acquire({ ...fixture, launch });
         const baseline = pageIds(await call('list_pages', {}));
         const created = pageIds(await call('new_page', { url: fixture.url, background: fixture.background })).filter(
             (id) => !baseline.includes(id),
