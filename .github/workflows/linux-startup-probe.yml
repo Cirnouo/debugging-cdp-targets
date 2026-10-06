@@ -1,0 +1,61 @@
+name: Temporary Linux Chrome startup probe
+
+on:
+    push:
+        branches:
+            - chore/codex-icons-readme-polish
+        paths:
+            - .github/workflows/linux-startup-probe.yml
+            - tests/smoke/linux-startup-probe.ts
+            - tests/smoke/linux-startup-probe-support.ts
+            - tests/linux-startup-probe.test.ts
+
+permissions:
+    contents: read
+
+jobs:
+    linux-startup-probe:
+        name: Temporary Linux startup diagnostics
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            PNPM_CONFIG_IGNORE_PNPMFILE: "true"
+            PNPM_CONFIG_CONFIG_DEPENDENCIES: "{}"
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Validate and audit lockfile before installation
+                run: node tooling/security/dist/check-security.mjs --phase lockfile --root .
+            -   name: Install without dependency lifecycle scripts
+                run: pnpm install --frozen-lockfile --ignore-scripts
+            -   name: Check full dependency trees and registry signatures
+                run: pnpm check:security
+            -   name: Verify standalone security checker matches its source
+                run: pnpm check:security:build
+            -   name: Install dependencies after supply-chain checks
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Capture one isolated Linux Chrome startup
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    xvfb_log="$RUNNER_TEMP/dct-linux-startup-xvfb.log"
+                    trap 'printf "Xvfb diagnostic log: %s\n" "$xvfb_log"; if test -f "$xvfb_log"; then tail -c 65536 "$xvfb_log"; fi' EXIT
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    xvfb-run -a -e "$xvfb_log" node tests/smoke/linux-startup-probe.ts

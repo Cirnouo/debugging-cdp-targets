@@ -1,5 +1,13 @@
 # Explicit integration smoke
 
+`linux-startup-probe.ts` is a temporary opt-in Linux startup diagnostic. It uses
+the real target host with unchanged readiness and identity checks, a new isolated
+profile, file-backed Chrome output, bounded fetch causes and timed native snapshots.
+It normally closes only its newly owned target and retains output in the printed
+temporary directory. Run under Xvfb with the explicit actual Chrome executable;
+this diagnostic does not replace either required real Chrome acceptance check.
+`linux-startup-probe-support.ts` bounds error output and owns probe cleanup.
+
 `timeout-isolation.ts` exercises an intentionally unfinished official handler on
 two isolated Chrome targets, validates timeout quarantine and peer availability,
 then explicitly restarts and normally closes them. It retains test profiles.
