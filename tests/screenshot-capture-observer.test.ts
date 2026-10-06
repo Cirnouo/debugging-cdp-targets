@@ -14,12 +14,13 @@ function deferred<T>() {
 }
 
 const server = `
+setTimeout(() => {
 const lines = require('node:readline').createInterface({ input: process.stdin });
 let held;
 lines.on('line', (line) => {
     const message = JSON.parse(line);
     if (message.method === 'finish') {
-        process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: held.id, result: { captured: true } }) + '\\n');
+        setTimeout(() => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: held.id, result: { captured: true } }) + '\\n'), Number(process.argv[2]));
     } else if (message.params.mode === 'reject') {
         process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -1, message: 'rejected' } }) + '\\n');
     } else if (message.params.mode === 'exit') {
@@ -28,10 +29,44 @@ lines.on('line', (line) => {
         held = message;
     }
 });
+process.stdout.write(JSON.stringify({ jsonrpc: '2.0', method: 'fixture-ready' }) + '\\n');
+}, Number(process.argv[1]));
 `;
 
+async function readyResponder(startupDelayMs = 0, replyDelayMs = 0) {
+    const ready = deferred<void>();
+    const client = createStdioClient(
+        process.execPath,
+        ['-e', server, String(startupDelayMs), String(replyDelayMs)],
+        {},
+        undefined,
+        (method) => {
+            if (method === 'fixture-ready') ready.resolve();
+        },
+    );
+    let fail!: (error: Error) => void;
+    const failed = new Promise<never>((_resolve, reject) => {
+        fail = reject;
+    });
+    const exited = () => fail(new Error('Owned responder exited before readiness.'));
+    client.child.once('error', fail);
+    client.child.once('exit', exited);
+    const timer = setTimeout(() => fail(new Error('Owned responder did not establish readiness.')), 10_000);
+    try {
+        await Promise.race([ready.promise, failed]);
+        return client;
+    } catch (error) {
+        await client.close();
+        throw error;
+    } finally {
+        clearTimeout(timer);
+        client.child.removeListener('error', fail);
+        client.child.removeListener('exit', exited);
+    }
+}
+
 test('stdio dispatch and rejection settlement hooks observe the request independently of result evidence writes', async () => {
-    const client = createStdioClient(process.execPath, ['-e', server]);
+    const client = await readyResponder();
     const events: string[] = [];
     try {
         await assert.rejects(
@@ -53,7 +88,8 @@ test('stdio dispatch and rejection settlement hooks observe the request independ
 
 for (const mode of ['success', 'reject', 'timeout', 'exit'] as const) {
     test(`actual stdio screenshot interval settles on ${mode} and excludes crossing samples`, async () => {
-        const client = createStdioClient(process.execPath, ['-e', server]);
+        // Startup deliberately exceeds the request deadline; readiness must precede dispatch.
+        const client = await readyResponder(mode === 'success' ? 650 : 0);
         const sampling = deferred<void>();
         const release = deferred<void>();
         const settled = deferred<void>();
@@ -125,7 +161,8 @@ for (const mode of ['success', 'reject', 'timeout', 'exit'] as const) {
 }
 
 test('actual screenshot observer retains a completed in-flight sample and ignores record failure after capture', async () => {
-    const client = createStdioClient(process.execPath, ['-e', server]);
+    const client = await readyResponder();
+    const settled = deferred<void>();
     let pending = false;
     let qualified = 0;
     const capture = createScreenshotCaptureObserver({
@@ -134,6 +171,7 @@ test('actual screenshot observer retains a completed in-flight sample and ignore
         },
         async tabs() {
             client.notify('finish');
+            await settled.promise;
         },
         async record() {
             throw new Error('Evidence sink failed');
@@ -150,6 +188,7 @@ test('actual screenshot observer retains a completed in-flight sample and ignore
                     settled() {
                         pending = false;
                         interval.settled();
+                        settled.resolve();
                     },
                 });
                 assert.ok(isRecord(result));
@@ -170,7 +209,7 @@ test('actual screenshot observer retains a completed in-flight sample and ignore
 });
 
 test('throwing interval hooks preserve rejection and subsequent unobserved request behavior', async () => {
-    const client = createStdioClient(process.execPath, ['-e', server]);
+    const client = await readyResponder();
     try {
         await assert.rejects(
             client.request('tools/call', { mode: 'reject' }, 1000, {
@@ -199,7 +238,8 @@ for (const mode of [
     'tabs-failure',
 ] as const) {
     test(`real capture adapter preserves the runner result with ${mode} observation`, async () => {
-        const client = createStdioClient(process.execPath, ['-e', server]);
+        // Reply deliberately exceeds the observer cadence while staying inside its 1000ms request deadline.
+        const client = await readyResponder(0, mode === 'in-flight' ? 650 : 0);
         const settled = deferred<void>();
         const identity = {
             processId: 4100,
@@ -269,9 +309,11 @@ for (const mode of [
                         );
                     });
                 if (mode === 'tabs-failure') throw new Error('Tabs observation failed');
+                await settled.promise;
             },
             async record() {
                 if (mode === 'record-failure') throw new Error('Passive evidence write failed');
+                await settled.promise;
             },
         });
         try {

@@ -191,11 +191,23 @@ The JSON fields are `label`, `url`, structured `launch`, `background`, `fullPage
 of `{function, waitForStableDom?}`). Optional `bringToFront` requests select_page;
 omitting it skips selection entirely, while `false` is passed literally. Launch
 args must contain one confined `--user-data-dir={fixture}/profile` (or another
-confined child) in the fresh evidence directory; the runner expands only that
-test placeholder and passes the directory as the official `--workspace`.
+confined child) in the fresh evidence directory, before any exact literal `--`
+boundary. Only one unpadded canonical `--user-data-dir=value` switch is accepted;
+separate values, case variants, native Windows aliases, duplicate profiles and
+padded profile switches or boundaries are rejected before acquisition. Native
+Windows outer whitespace includes NEL but excludes FEFF, following Chromium's
+command-line parser. Genuine positionals after an exact `--` remain positionals
+and retain their supplied bytes; they cannot establish the required profile.
+The runner expands only the test directory placeholder and passes the directory
+as the official `--workspace`.
 Profile paths containing `%NAME%` or `${NAME}` environment substitutions are
 rejected before acquisition, including tokens introduced by the evidence-directory
-placeholder expansion, so inherited environment expansion cannot escape.
+placeholder expansion, so inherited environment expansion cannot escape. Dynamic
+argument names or whole-argument substitutions before the boundary are also
+rejected because they could conceal a later profile override. Ordinary environment
+substitutions in fixed unrelated switch values or boundary positionals remain
+available to the inherited launch resolver. These are stricter opt-in fixture
+requirements; they do not change product launch/profile parsing.
 
 Optional `windowCondition` accepts `foreground-normal`, `background-normal`, or
 `minimized`. Omitting it preserves the original official preparation, metadata,

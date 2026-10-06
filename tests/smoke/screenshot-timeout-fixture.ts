@@ -40,15 +40,29 @@ export interface ScreenshotTimeoutAdapter {
 }
 type Outcome = 'success' | 'tool-error' | 'recovery-required' | 'client-error' | 'blocked-evidence';
 const environmentToken = /%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/;
+// Chromium 154 base/strings/whitespace_constants.h: Windows outer whitespace, including NEL, excluding FEFF.
+const windowsOuterWhitespace =
+    /^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g;
 
 function profilePaths(launch: ApplicationLaunch) {
-    return (launch.args ?? []).flatMap((arg, index, args) =>
-        arg.startsWith('--user-data-dir=')
-            ? [arg.slice('--user-data-dir='.length)]
-            : arg === '--user-data-dir'
-              ? [args[index + 1]]
-              : [],
-    );
+    const profiles: string[] = [];
+    for (const arg of launch.args ?? []) {
+        const effective = arg.replace(windowsOuterWhitespace, '');
+        if (effective === '--') {
+            assert.equal(arg, '--', 'A switch boundary must be the exact literal --.');
+            break;
+        }
+        const key = effective.split('=', 1)[0] ?? '';
+        assert.ok(!environmentToken.test(key), 'Environment substitutions cannot conceal a profile switch.');
+        if (/^(?:--|-|\/)user-data-dir$/i.test(key)) {
+            assert.ok(
+                arg === effective && arg.startsWith('--user-data-dir='),
+                'A fresh profile must use one unpadded canonical --user-data-dir=value switch.',
+            );
+            profiles.push(arg.slice('--user-data-dir='.length));
+        }
+    }
+    return profiles;
 }
 
 export function parseScreenshotTimeoutFixture(value: unknown): ScreenshotTimeoutFixture {

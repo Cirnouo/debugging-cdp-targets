@@ -418,6 +418,126 @@ test('malformed fixture is rejected before gateway acquisition', async () => {
     }
 });
 
+for (const [label, args] of [
+    ['profile after boundary', ['--', '--user-data-dir={fixture}/profile']],
+    ['separate profile value', ['--user-data-dir', '{fixture}/profile']],
+    ['empty profile value', ['--user-data-dir=', '{fixture}/profile']],
+    ['uppercase profile', ['--USER-DATA-DIR={fixture}/profile']],
+    ['single dash profile', ['-user-data-dir={fixture}/profile']],
+    ['slash profile', ['/user-data-dir={fixture}/profile']],
+    ['duplicate canonical profile', ['--user-data-dir={fixture}/profile', '--user-data-dir={fixture}/other']],
+    ['uppercase override', ['--user-data-dir={fixture}/profile', '--USER-DATA-DIR=C:/Old/profile']],
+    ['single dash override', ['--user-data-dir={fixture}/profile', '-user-data-dir=C:/Old/profile']],
+    ['slash override', ['--user-data-dir={fixture}/profile', '/user-data-dir=C:/Old/profile']],
+    ['padded boundary', [' -- ', '--user-data-dir={fixture}/profile']],
+] as const) {
+    test(`${label} cannot establish an effective confined profile before acquisition`, async () => {
+        const io = boundary();
+        await assert.rejects(
+            runScreenshotTimeoutProbe(
+                { ...fixture, launch: { executable: 'C:/Fixture/chrome.exe', args: [...args] } },
+                'C:/Evidence/shot.png',
+                io.adapter,
+            ),
+        );
+        assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
+    });
+}
+
+// Chromium's Windows TrimWhitespace set includes NEL and excludes FEFF.
+for (const padding of [
+    '\u0009',
+    '\u000a',
+    '\u000b',
+    '\u000c',
+    '\u000d',
+    '\u0020',
+    '\u0085',
+    '\u00a0',
+    '\u1680',
+    '\u2000',
+    '\u2001',
+    '\u2002',
+    '\u2003',
+    '\u2004',
+    '\u2005',
+    '\u2006',
+    '\u2007',
+    '\u2008',
+    '\u2009',
+    '\u200a',
+    '\u2028',
+    '\u2029',
+    '\u202f',
+    '\u205f',
+    '\u3000',
+]) {
+    test(`Windows outer padding U+${padding.charCodeAt(0).toString(16)} cannot hide a profile override`, async () => {
+        for (const args of [
+            [`${padding}--user-data-dir={fixture}/profile`],
+            [`--user-data-dir={fixture}/profile${padding}`],
+            ['--user-data-dir={fixture}/profile', `${padding}--USER-DATA-DIR=C:/Old/profile${padding}`],
+            ['--user-data-dir={fixture}/profile', `${padding}--${padding}`, '--user-data-dir=C:/Old/profile'],
+        ]) {
+            const io = boundary();
+            await assert.rejects(
+                runScreenshotTimeoutProbe(
+                    { ...fixture, launch: { executable: 'C:/Fixture/chrome.exe', args } },
+                    'C:/Evidence/shot.png',
+                    io.adapter,
+                ),
+            );
+            assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
+        }
+    });
+}
+
+// biome-ignore lint/suspicious/noTemplateCurlyInString: Exercise literal production launch substitution tokens.
+for (const token of ['%DCT_PROFILE_SWITCH%', '${DCT_PROFILE_SWITCH}']) {
+    test(`dynamic argument ${token} cannot conceal a profile switch before acquisition`, async () => {
+        for (const args of [
+            ['--user-data-dir={fixture}/profile', token],
+            ['--user-data-dir={fixture}/profile', `${token}=C:/Old/profile`],
+            ['--user-data-dir={fixture}/profile', `--${token}=C:/Old/profile`],
+            [`--${token}={fixture}/profile`],
+        ]) {
+            const io = boundary();
+            await assert.rejects(
+                runScreenshotTimeoutProbe(
+                    { ...fixture, launch: { executable: 'C:/Fixture/chrome.exe', args } },
+                    'C:/Evidence/shot.png',
+                    io.adapter,
+                ),
+            );
+            assert.deepEqual(io.counts(), { opened: 0, closed: 0 });
+        }
+    });
+}
+
+test('effective canonical profile preserves FEFF positionals and literal boundary tails byte for byte', async () => {
+    const args = [
+        '--user-data-dir={fixture}/profile',
+        '\ufeff--USER-DATA-DIR=C:/Positional/profile',
+        '--unrelated=%DCT_ARGUMENT_VALUE%',
+        '--',
+        '--user-data-dir=C:/Positional/profile',
+        '--USER-DATA-DIR=C:/Positional/profile',
+        '-user-data-dir=C:/Positional/profile',
+        '/user-data-dir=C:/Positional/profile',
+        ' --user-data-dir=C:/Positional/profile ',
+        '%DCT_POSITIONAL_VALUE%',
+    ];
+    const io = boundary();
+    const result = await runScreenshotTimeoutProbe(
+        { ...fixture, launch: { executable: 'C:/Fixture/chrome.exe', args } },
+        'C:/Evidence/shot.png',
+        io.adapter,
+    );
+    assert.equal(result.outcome, 'success');
+    assert.deepEqual(io.acquiredFixtures[0]?.launch.args, ['--user-data-dir=C:/Evidence/profile', ...args.slice(1)]);
+    assert.deepEqual(io.counts(), { opened: 1, closed: 1 });
+});
+
 // biome-ignore lint/suspicious/noTemplateCurlyInString: Exercise a literal production launch substitution token.
 for (const token of ['%DCT_PROBE_ESCAPE%', '${DCT_PROBE_ESCAPE}']) {
     test(`profile ${token} substitution is rejected before gateway acquisition`, async () => {

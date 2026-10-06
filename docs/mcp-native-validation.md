@@ -900,3 +900,40 @@ Tauri compatibility. The owned anchor handoff differs from clicking Codex.
 Normal user window switching/minimizing remains supported usage. Fresh full
 branch review, full local verification and successful checks on the final PR
 head and actual merged main commit remain pending; version 0.1.0 is unreleased.
+
+## Final verification fixture follow-up, 2026-10-07
+
+The first complete `pnpm verify:push` at
+`654746327ddab435a304c079515ba6eb66e500ea` passed 820 of 822 tests and failed
+two new private stdio screenshot-observer fixture cases, with no skips. The full
+failed log remains retained. Controlled copies reproduced both causes before
+repair: delaying responder startup by 650 ms consumed the unchanged 500 ms
+success-request deadline; delaying its reply by 650 ms allowed a second valid
+sample before settlement in the unchanged 1000 ms request interval.
+
+The regression fixtures now wait for the owned child's MCP readiness notification
+before dispatching the short experiment request and hold the intended sampling
+cycle until that request actually settles. They retain the real stdio dispatch/
+settlement callbacks, exact sample counts, crossing/cancellation/failure controls,
+primary screenshot results and normal owned-child EOF closure. The focused
+screenshot observer/probe suite passed 90/90 tests; strict typecheck also passed.
+
+Independent review also found that the opt-in profile validator could count an
+ineffective switch after `--`, accept a separate value or miss a later native
+Windows profile override. Its test-only acquisition guard now requires one
+unpadded canonical confined profile before an exact boundary and refuses aliases,
+case variants, duplicate profiles, padded switches/boundaries and dynamic argument
+names that could conceal a profile override. Its Windows outer whitespace set
+follows the pinned Chromium
+[command-line parser](https://raw.githubusercontent.com/chromium/chromium/154.0.8037.98/base/command_line.cc)
+and [whitespace constants](https://raw.githubusercontent.com/chromium/chromium/154.0.8037.98/base/strings/whitespace_constants.h):
+NEL is included and FEFF is excluded. Regression controls preserve genuine
+positionals after an exact boundary and ordinary unrelated value substitutions.
+
+Both accepted native fixtures already used the canonical effective confined
+profile and their original five arguments. Those accepted inputs and captures
+remain unchanged. This repair adds no native capture, product runtime change,
+capture-observer change or deadline increase. Historical acceptance seals and
+the failed verification record remain immutable; the changed fixture validator
+requires explicit provenance reconciliation rather than replacing that seal.
+Fresh independent review and complete local/final PR/main gates remain pending.
