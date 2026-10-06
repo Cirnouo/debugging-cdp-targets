@@ -30,6 +30,9 @@
 - `0013-session-owned-exit-cleanup.md`: ownership before acquisition, event-driven
   actual-exit cleanup, removed dead sessions with internal disposal retries,
   bounded official-child termination, live restart and compact acknowledged events.
+- `0014-windows-chrome-screenshot-surface.md`: fixed Windows Chrome screenshot
+  feature at the existing launch boundary, strict effective feature composition,
+  conflict rollback and idempotent exact restart; generic/platform scope stays separate.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

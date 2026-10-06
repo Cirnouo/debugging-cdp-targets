@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ManagedTarget } from '../domains/cdp-target.ts';
 import { RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
+import { withChromeScreenshotFeature } from '../domains/chromium-features.ts';
 import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
 import { resolveLaunchDefinition } from '../domains/launch-command.ts';
 import {
@@ -112,6 +113,7 @@ async function getVersion(port: number): Promise<unknown> {
 }
 
 export function applyChromePreset(arguments_: string[]) {
+    const result = process.platform === 'win32' ? withChromeScreenshotFeature(arguments_) : [...arguments_];
     const addresses = [];
     for (let index = 0; index < arguments_.length; index += 1) {
         const match = arguments_[index]?.match(/^--remote-debugging-address(?:[=:](.*))?$/i);
@@ -119,7 +121,6 @@ export function applyChromePreset(arguments_: string[]) {
     }
     if (addresses.length > 1) throw new Error('Duplicate Chrome debugging addresses are prohibited.');
     if (addresses.length && addresses[0] !== '127.0.0.1') throw new Error('Chrome debugging must use loopback.');
-    const result = [...arguments_];
     if (chromeProfileArgument(result) === undefined) {
         const home = process.platform === 'win32' ? process.env.USERPROFILE : os.homedir();
         if (!home || !path.isAbsolute(home)) throw new Error('The Chrome profile home directory is unavailable.');

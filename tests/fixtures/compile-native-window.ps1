@@ -5,6 +5,7 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $manifest = $Output + '.manifest'
 $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges><requestedExecutionLevel level="' + $Level + '" uiAccess="false" /></requestedPrivileges></security></trustInfo></assembly>'
 [IO.File]::WriteAllText($manifest, $xml, [Text.UTF8Encoding]::new($false))
@@ -14,6 +15,7 @@ $options.OutputAssembly = $Output
 $options.CompilerOptions = '/target:winexe /win32manifest:"' + $manifest + '"'
 [void] $options.ReferencedAssemblies.Add('System.dll')
 [void] $options.ReferencedAssemblies.Add('System.Windows.Forms.dll')
+[void] $options.ReferencedAssemblies.Add('System.Drawing.dll')
 $compiler = [Microsoft.CSharp.CSharpCodeProvider]::new()
 try {
     $result = $compiler.CompileAssemblyFromFile($options, (Join-Path $PSScriptRoot 'native-window.cs'))

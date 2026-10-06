@@ -56,17 +56,20 @@ Version 0.1.0 remains under development; no release has been published.
   the active failure phase and compact native evidence without error payloads.
 - Structured executable/args/cwd/env launches with native Windows privilege
   detection, private one-shot elevation, actual app handles and separate
-  authorization and CDP readiness waits. Conditional instructions for explicitly
-  selecting a Chromium screenshot surface through existing launch arguments
-  preserve feature lists and disable choices; changed arguments use normal Close
-  followed by a fresh start.
+  authorization and CDP readiness waits. Independently verified generic
+  application recipes can select a Chromium screenshot surface through existing
+  launch arguments; changed arguments use normal Close followed by a fresh start.
 - Timeout quarantine, pending transport cleanup and phase-only diagnostics;
   normal close without a listener and explicit retries after native failures.
 - Chrome presets for a fixed dedicated browser profile, occupancy checks and
   launch reservations, explicit alternative directories, and preserved profiles
   during live restart. Gateway-local port ownership is reserved before probing
   and retained until actual exit or evidence that no app was created.
-  Automatic updater scheduling is disabled in the new process.
+  Automatic updater scheduling is disabled in the new process. Windows Chrome
+  automatically receives one bare CDPScreenshotNewSurface feature for screenshot
+  compatibility, preserving valid unrelated feature parameters and exact restart
+  arguments. Conflicting or ineffective feature input fails before profile
+  acquisition/spawn and releases its transient port claim.
 - Chrome extension debugging, with usage statistics and CrUX disabled by default
   and explicit overrides.
 - Chrome support on Windows, Ubuntu 24.04 and macOS 15, with normal shutdown

@@ -1,8 +1,37 @@
 # Tests
 
+- `screenshot-timeout-probe.test.ts` checks the opt-in one-shot probe's malformed
+  fixture rejection, exact optional selection/evaluation arguments, fresh page ID
+  routing, fail-fast preparation, capture without replay, blocked native identity,
+  preserved primary capture failure alongside failed after-observations, reliable
+  native tab-provider agreement, dynamic profile-path rejection, and cleanup after
+  failure using only external I/O boundary fakes. Controlled native conditions
+  validate default sequence preservation, identity/transition refusal, condition
+  loss before/during/after capture and missing passive samples without replay.
+
+- `screenshot-background-anchor.test.ts` verifies the opt-in probe's owned anchor
+  handoff, geometric containment, stale identity/HWND refusal, denied foreground,
+  passive condition loss and retained cleanup identity. On Windows it also launches
+  two disposable WinForms fixtures, proves opaque anchor bounds contain the target
+  and normally Closes both with native actual-exit waits.
+
+- `screenshot-capture-observer.test.ts` exercises the actual test stdio client and
+  capture adapter's dispatch/settlement interval with a private Node responder.
+  It verifies in-flight sampling, exclusions before/after/crossing settlement,
+  rejection/timeout/exit, intentional sampling/tab cancellation and preservation
+  of capture results when native sampling or evidence writes fail.
+
+- `owned-native-fixtures.test.ts` injects readiness failures after each retained
+  target/anchor launch, requires normal Close with actual exit, avoids duplicate
+  successful controller cleanup and retains ownership for uncertain Close retry.
+
 - `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
   escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
-  transparent pixels; cleanup failure still initiates every peer Close.
+  transparent pixels; fixed-preset Chrome cannot masquerade as a raw comparison,
+  and cleanup failure still initiates every peer Close.
+- `chromium-features.test.ts` checks immutable, idempotent screenshot feature
+  composition, ASCII list/parameter preservation, exact positional boundaries and
+  strict switch/target conflicts. Non-Windows Chrome keeps existing feature choices.
 
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
@@ -112,7 +141,9 @@
   deduplication and isolated cleanup with retained retry identity on failure.
 - `chrome-profile.test.ts` checks stable defaults, explicit directories, occupancy
   rejection, concurrent reservations, cancelled late acquisition and release
-  generation safety with fake targets.
+  generation safety with fake targets. Windows Chrome's fixed screenshot feature
+  reaches spawned argv and exact recovery; conflicts precede profile/spawn and
+  release the claimed port. Generic targets preserve their supplied feature choices.
 - `plugin-hooks.test.ts` checks the four automatic MCP Tool Hook declarations.
 - `hook-events.test.ts` parses actual Hook text through serialized model requests
   and nested host wrappers, preserves native string escaping, and rejects leaked
@@ -142,6 +173,11 @@
   ten seconds and confirms the same native process handle after observer loss.
 - `window-evidence.test.ts` verifies owned disposable window minimize/restore and
   rejects stale identities, replaced windows and accepted but unobserved transitions.
+  It also checks the actual passive observer's UTF-8 JSON preserves a Unicode
+  window title using an owned WinForms fixture with read-only state sampling.
+  Actual guarded NOACTIVATE background transitions, exact Unicode executable and
+  compiler 8.3 alias output receive native verification; passive State None leaves
+  normal/minimized state unchanged and never refocuses the fixture.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
@@ -150,6 +186,15 @@
 
 Run pnpm test or a focused Node test; real-browser integration is separate
 from regression tests and must not touch existing user targets.
+
+Both package test commands use `--test-concurrency=1` to run files sequentially.
+The visible `window-evidence`, `screenshot-background-anchor` and `windows-native`
+fixtures share the inherited Windows desktop and its single foreground window.
+Concurrent files can foreground one owned fixture while invalidating another
+file's required foreground observation. Process ownership does not isolate that
+desktop state. Sequential file execution preserves every test, coverage floor,
+native identity/handoff guard, assertion and deadline. Use the same option for
+focused commands that combine foreground-sensitive native test files.
 
 All maintained tests and fixtures execute as TypeScript directly in Node 24.
 They are covered by the same strict no-emit typecheck as runtime and tooling.

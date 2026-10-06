@@ -70,14 +70,23 @@ public static class NativeWindowFixture
         using (Timer expiry = new Timer())
         using (Timer closeDelay = new Timer())
         {
-            window.Text = "DCT disposable native launch test";
+            window.Text = Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_TITLE") ?? "DCT disposable native launch test";
             window.Width = 320;
             window.Height = 120;
+            int x, y, width, height;
+            if (Int32.TryParse(Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_X"), out x) &&
+                Int32.TryParse(Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_Y"), out y) &&
+                Int32.TryParse(Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_WIDTH"), out width) &&
+                Int32.TryParse(Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_HEIGHT"), out height) && width > 0 && height > 0) {
+                window.StartPosition = FormStartPosition.Manual;
+                window.Bounds = new System.Drawing.Rectangle(x, y, width, height);
+                window.Opacity = 1.0;
+            }
             window.Shown += delegate {
                 File.WriteAllText(marker, Convert.ToBase64String(Encoding.UTF8.GetBytes(Environment.GetEnvironmentVariable("DCT_TEST_NATIVE") ?? "")));
                 File.WriteAllText(marker + ".elevated", new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator) ? "true" : "false");
                 File.WriteAllText(marker + ".pid", Process.GetCurrentProcess().Id.ToString());
-                expiry.Start();
+                if (Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_NO_EXPIRY") != "true") expiry.Start();
             };
             window.FormClosed += delegate { File.WriteAllText(marker + ".closed", "normal-close"); };
             int delay;

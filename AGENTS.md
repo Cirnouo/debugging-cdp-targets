@@ -78,6 +78,11 @@ Use Node 24.21.0 and pnpm 12.4.2. Run focused tests first, then
 Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
 generated JavaScript is distribution output, never a handwritten fallback.
 
+Complete the [trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order)
+in every clone/worktree, then verify the generated Git hook entry under the
+[local hook policy](docs/policies/quality.md#local-git-hook-initialization).
+Do not treat a manual verification run as proof that Git will run `pre-push`.
+
 The official Server is a complete unchanged npm release delivered in Plugin dist.
 Builds verify maintained tarball/file evidence and both locks before copying;
 never refresh release hashes automatically. Dependency/version upgrades require

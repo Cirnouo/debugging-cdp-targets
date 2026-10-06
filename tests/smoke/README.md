@@ -114,6 +114,17 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
   retries of explicitly selected normal Close when pending CDP traffic is busy.
   It keeps the entry/connection/session identity and does not retry other failures.
+- `screenshot-timeout-probe.ts` runs one explicitly supplied screenshot experiment
+  through the complete committed Codex gateway. `screenshot-timeout-fixture.ts`
+  validates its fixture and owns the fail-fast sequence; neither runs in default
+  tests. `windows-selected-tab-evidence.ps1` reads UIA/MSAA selection only within
+  the verified owned HWND and samples the foreground HWND separately. Unsupported,
+  incomplete or ambiguous selection remains unknown. It never changes selection,
+  focus or window state.
+- `screenshot-background-anchor.ts` owns an optional opaque related native window,
+  verified foreground handoff and geometric containment, passive checks of both
+  identities, and normal Close/actual-exit cleanup. It is test-only and requires
+  confirmed cleanup before another anchor acquisition.
 - `screenshot-layers.ts` accepts an explicit Windows application fixture JSON and
   an absolute evidence parent directory. It creates independent baseline/candidate
   targets for direct official and complete generated gateway routes, with native
@@ -127,7 +138,9 @@ then explicitly restarts and normally closes them. It retains test profiles.
   with final empty gateway status and actual stdio exit checked. Blocked native
   state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
+  strict canonical ASCII feature values and effective Windows parsing boundaries,
   fixture paths, decoded pixels, fresh session diagnostics and complete peer cleanup.
+  It rejects fixed-preset Chrome comparisons before acquisition.
 - `windows-png-evidence.ps1` uses the existing Windows System.Drawing implementation
   to read PNG dimensions and selected RGBA pixels; no image dependency is added.
 - `readest-native.ts` accepts an explicitly selected Readest executable and creates
@@ -165,17 +178,122 @@ These scripts are opt-in and may open dedicated test browser/application windows
 They use the delivered official package without dependency download. The normal
 test suite never runs them. Codex tests create only disposable homes/configuration.
 
+For a one-shot screenshot timeout investigation, first verify the committed build
+with `pnpm check:build`, then supply an explicitly reviewed fixture and evidence
+parent outside the worktree:
+
+```powershell
+node tests/smoke/screenshot-timeout-probe.ts 'C:/Test/probe.json' 'C:/Test/evidence'
+```
+
+The JSON fields are `label`, `url`, structured `launch`, `background`, `fullPage`,
+`colorScheme` (`light` or `dark`), `viewport`, and `evaluations` (an ordered array
+of `{function, waitForStableDom?}`). Optional `bringToFront` requests select_page;
+omitting it skips selection entirely, while `false` is passed literally. Launch
+args must contain one confined `--user-data-dir={fixture}/profile` (or another
+confined child) in the fresh evidence directory, before any exact literal `--`
+boundary. Only one unpadded canonical `--user-data-dir=value` switch is accepted;
+separate values, case variants, native Windows aliases, duplicate profiles and
+padded profile switches or boundaries are rejected before acquisition. Native
+Windows outer whitespace includes NEL but excludes FEFF, following Chromium's
+command-line parser. Genuine positionals after an exact `--` remain positionals
+and retain their supplied bytes; they cannot establish the required profile.
+The runner expands only the test directory placeholder and passes the directory
+as the official `--workspace`.
+Profile paths containing `%NAME%` or `${NAME}` environment substitutions are
+rejected before acquisition, including tokens introduced by the evidence-directory
+placeholder expansion, so inherited environment expansion cannot escape. Dynamic
+argument names or whole-argument substitutions before the boundary are also
+rejected because they could conceal a later profile override. Ordinary environment
+substitutions in fixed unrelated switch values or boundary positionals remain
+available to the inherited launch resolver. These are stricter opt-in fixture
+requirements; they do not change product launch/profile parsing.
+
+Optional `windowCondition` accepts `foreground-normal`, `background-normal`, or
+`minimized`. Omitting it preserves the original official preparation, metadata,
+passive normal-window validation and one-shot capture sequence. Explicit conditions
+are applied after page metadata and verified owned HWND discovery, before required
+before-capture observations. Foreground preparation minimizes/restores only its
+explicitly verified owned window and waits for foreground, normal state and restored
+bounds. Minimized preparation explicitly minimizes that same HWND.
+
+Background preparation compiles and launches one disposable opaque WinForms anchor
+in the evidence directory. Its native bounds must contain the target's bounds. The
+probe verifies the new anchor's executable, exact process creation time and HWND,
+then minimizes/restores only the anchor to make it foreground. The target must
+already be normal/background before guarded `HWND_BOTTOM`/`SWP_NOACTIVATE`; the
+background operation never minimizes/restores the target. Before, during and after
+capture, passive samples verify both identities, foreground handoff and geometric
+containment. Every native transition records before/after identity, state, bounds,
+foreground HWND, request acceptance and postcondition. No unrelated app is activated
+or manipulated. Geometric coverage and z-order do not prove compositor occlusion;
+this controlled owned-window switch differs from the user's ordinary Codex click.
+The anchor remains alive through capture/cleanup, then normally Closes with actual
+native process-exit evidence, even when target preparation or capture fails. Failed
+or uncertain anchor cleanup retains its ownership and forbids another acquisition.
+
+The first and only screenshot sends `pageId`, `fullPage` and `filePath`, with no
+explicit format/quality. Supplied evaluations retain their exact arguments.
+One marked, read-only metadata evaluation records title, URL, focus, viewport and
+scroll dimensions identically across runs. Without an explicit native condition,
+no restore, minimize or extra native preparation is performed. No screenshot replay,
+restart or alternate profile is performed.
+The runner uses a 90-second MCP client deadline to receive the unchanged gateway
+60-second timeout/quarantine result. Tool errors stop dependent preparation.
+
+Each printed evidence directory retains the fixture/profile, individual evaluation
+results, timed requests/results/routing, independent process/listener/endpoint
+identity, raw and validated native samples, passive tab observations, before/after
+bounded gateway diagnostics, PNG SHA-256/decoded dimensions, and Close receipts.
+Method-level focus-emulation timing and actual CDP capture params remain explicitly
+unavailable. Native visibility/minimized flags do not prove compositor visibility
+or occlusion; JS focus never establishes the selected native tab. A failed capture
+is a diagnostic outcome and still triggers every discovered owned connection's
+preselected normal Close, final empty-connection check and gateway exit check.
+Cleanup failure reports retained identities. Evidence/profile files are retained.
+Final `capture` preserves the primary screenshot result/outcome/error separately
+from required post-capture `observations` and their errors. Recovery or client
+timeout retains its primary outcome even when after-evidence fails; a successful
+capture with invalid required evidence reports an overall blocked outcome.
+Native correlation records reliability/reasons for both UIA and MSAA; either
+provider's ambiguity, incomplete traversal or disagreement makes it unknown.
+Passive sampling always uses `State None`. A sampling error or condition loss
+invalidates required observations while preserving the primary screenshot result
+and its recovery/client-error classification. Explicit controlled captures also
+require a successful native sample that starts and finishes validation while the
+actual local MCP screenshot request is pending. `screenshot-capture-observer.ts`
+starts from the test stdio client's post-write dispatch hook and stops at its
+resolve-or-reject hook, including timeout or gateway exit. `capture-interval`
+records monotonic ordering/times and qualified counts. Pre-dispatch,
+post-settlement and crossing samples cannot qualify; official/MCP evidence writes
+are outside that interval. These are observed MCP client boundaries, not CDP
+method timing. Intentional AbortError while stopping native or tab observation
+does not invalidate a prior valid sample; genuine observer/write errors do.
+A capture that finishes too quickly for
+the native observer retains its actual result with an overall blocked-evidence
+outcome. Omitted conditions require no minimum count, while any actual passive
+failure still invalidates overall evidence; preservation refers to the official
+call sequence, passive normal-state validation and primary capture/quarantine
+result. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths.
+
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 
 ```powershell
 node tests/smoke/screenshot-layers.ts 'C:/Test/fixture.json' 'C:/Test/evidence'
 ```
 
-The JSON has `label` (lowercase name), `targetKind`, `launch` (structured
+The JSON has `label` (lowercase name), `targetKind: "generic-cdp"`, `launch` (structured
 executable/args/cwd/env), `candidateArgs` (complete argv), and `pageTitle` (a
 literal substring matching exactly one managed main renderer). Baseline uses
 launch.args; candidateArgs may only add the bare CDPScreenshotNewSurface feature
-in one effective canonical enable token before `--`. Both explicitly reference
+in one effective canonical enable token before exact `--`. Fixed Windows Chrome
+presets would enable both arms, so `targetKind: "chrome"` fails before acquiring
+either target. An explicit experimental generic-cdp Chrome launch compares raw
+arguments and retains actual process/listener/endpoint identity evidence.
+Relevant feature values must be ASCII; duplicate or equivalent switches, padded
+terminators, single-argument parsing and target decoration/disable conflicts fail
+before acquisition. Unrelated Unicode args and the exact positional tail remain
+unchanged. Both explicitly reference
 the test-only `{fixture}` directory placeholder; `{port}` retains its runtime
 meaning. Optional `fixtureFiles` maps confined relative paths to synthetic UTF-8
 text; its contents also expand `{fixture}`. Optional `minimizeFunction` uses the

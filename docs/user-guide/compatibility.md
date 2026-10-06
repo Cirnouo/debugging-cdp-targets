@@ -53,6 +53,29 @@ establish acceptance of that later revision. See
 [the smoke instructions](../../tests/smoke/README.md) for the test boundaries.
 Other application/OS/browser combinations remain best effort.
 
+## Windows Chrome window-state compatibility
+
+Windows `targetKind: "chrome"` uses the fixed
+[screenshot feature rule](configuration.md#windows-chrome-screenshot-feature).
+The underlying setting is a Chromium application feature; the Plugin's fixed
+policy is scoped to Windows Chrome. Generic applications and other platforms
+retain their existing launch semantics and require independent verification.
+
+The 2026-10-07 controlled comparison measured Chrome 154.0.8037.98 on Windows
+with the unchanged official Server 1.10.1. All six candidate combinations of
+foreground-normal, background-normal and minimized windows with viewport and
+fullPage capture produced correct screenshots. Minimized viewport baseline
+timed out while the candidate succeeded in both acquisition orders. Both
+background baseline modes and minimized fullPage baseline already succeeded.
+
+These are measured static-state results, not proof of every transition during a
+pending capture, continuous compositor occlusion, another Chrome version or the
+historical Codex-click timeout's cause. Normal user window switching and
+minimizing remain supported usage; no foreground/minimize checklist is added.
+The measured version is acceptance scope, not a prelaunch version gate. See
+[the dated validation record](../mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
+for exact inputs, reverse contrast, cleanup and remaining delivery gates.
+
 ## Chrome extension tools
 
 Chrome extension tools require compatible Google Chrome 149 or newer. Their

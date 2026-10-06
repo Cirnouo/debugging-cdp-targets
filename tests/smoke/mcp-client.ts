@@ -3,6 +3,18 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { isRecord } from '../../src/shared/errors.ts';
 
+export interface McpRequestInterval {
+    dispatched(): void;
+    settled(): void;
+}
+
+function observeInterval(action: (() => void) | undefined) {
+    // Observation cannot change resolution/rejection or strand an unrelated pending request.
+    try {
+        action?.();
+    } catch {}
+}
+
 export function createClient(
     entry: string,
     options: Pick<SpawnOptions, 'cwd' | 'env'> = {},
@@ -83,16 +95,40 @@ export function createStdioClient(
     });
     return {
         child,
-        request(method: string, params: Record<string, unknown> = {}, timeoutMs = 60_000): Promise<unknown> {
+        request(
+            method: string,
+            params: Record<string, unknown> = {},
+            timeoutMs = 60_000,
+            interval?: McpRequestInterval,
+        ): Promise<unknown> {
             id += 1;
             const current = id;
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
+                    const request = pending.get(current);
                     pending.delete(current);
-                    reject(new Error(`MCP timeout: ${method}: ${stderr}`));
+                    request?.reject(new Error(`MCP timeout: ${method}: ${stderr}`));
                 }, timeoutMs);
-                pending.set(current, { resolve, reject, timeout });
-                child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: current, method, params })}\n`);
+                const request = {
+                    resolve(value: unknown) {
+                        observeInterval(interval?.settled);
+                        resolve(value);
+                    },
+                    reject(reason: Error) {
+                        observeInterval(interval?.settled);
+                        reject(reason);
+                    },
+                    timeout,
+                };
+                pending.set(current, request);
+                try {
+                    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: current, method, params })}\n`);
+                    observeInterval(interval?.dispatched);
+                } catch (error) {
+                    pending.delete(current);
+                    clearTimeout(timeout);
+                    request.reject(error instanceof Error ? error : new Error(String(error)));
+                }
             });
         },
         notify(method: string) {

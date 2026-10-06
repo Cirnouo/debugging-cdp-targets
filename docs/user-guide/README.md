@@ -14,7 +14,8 @@ These pages explain installation and operation in detail:
 - [privacy.md](privacy.md): in-memory state, retained browser data, network access,
     bundled package integrity and dependency audit limits.
 - [troubleshooting.md](troubleshooting.md): common failures, explicit recovery,
-    normal manual close and conditional minimized screenshot compatibility.
+    normal manual close, Windows Chrome screenshot compatibility and scoped
+    conditional application guidance.
 
 The [lifecycle protocol](../lifecycle-protocol.md) defines exact MCP selectors and
 delivery rules. [Domain language](../domain-language.md) defines terms;

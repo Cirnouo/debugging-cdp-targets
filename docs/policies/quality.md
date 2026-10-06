@@ -42,6 +42,29 @@ pre-push clears Git's repository routing variables before running verify:push,
 so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.
 
+## Local Git hook initialization
+
+After completing the [trusted installation sequence](supply-chain.md#installation-and-scan-order),
+initialize and verify Husky in every clone and linked worktree before committing
+or pushing. The tracked `.husky/pre-push` is reached through the generated
+`.husky/_/pre-push`; `.husky/_` is ignored and is not copied into a new worktree.
+`--ignore-scripts` skips the root `prepare` script, so the shared Git
+`core.hooksPath` setting can exist while that worktree's generated entry is absent.
+
+Check `git config --show-origin --get core.hooksPath` and the actual hook entry in
+the current worktree. This repository uses `.husky/_`. If initialization is
+missing after the trusted ordinary install, run `pnpm prepare` and check again.
+Preserve existing Git configuration: resolve an unexpected hook path before
+running setup that would replace it; do not silently change user/global settings.
+Also check that `HUSKY=0` and script-disabling settings are not bypassing setup.
+
+Do not push with a missing or bypassed hook. A manual `pnpm verify:push` success
+is useful validation but does not establish that Git will invoke `pre-push`.
+Retain the actual push output and distinguish a hook verification failure from
+a remote transfer failure; never report an absent hook as a successful hook run.
+
+## Remote enforcement
+
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
 cancellation of superseded ref runs. Commit messages validates topology, raw PR
 titles, predicted squash messages with the PR number and original description,

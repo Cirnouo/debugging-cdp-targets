@@ -39668,6 +39668,92 @@ function validateCdpIdentity({
   return { browserProduct, webSocketDebuggerUrl: url2.toString() };
 }
 
+// src/domains/chromium-features.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+var screenshotFeature = "CDPScreenshotNewSurface";
+function trimWindowsArgument(value) {
+  return value.replace(
+    /^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g,
+    ""
+  );
+}
+function namesScreenshotFeature(entry) {
+  const name = entry.trim().replace(/^\*/, "").split(/[<:.]/, 1)[0]?.trim();
+  return name === screenshotFeature;
+}
+function validateEnableFeatureEntry(entry) {
+  let prefix = entry.trim();
+  if (prefix.length === 0) return;
+  for (const separator of [":", ".", "<"]) {
+    const parts = prefix.split(separator);
+    if (prefix.length === 0 || parts.length > 2)
+      throw new Error(
+        "Chrome enable feature list is malformed; repair the ordered feature, trial, group and parameter separators."
+      );
+    prefix = parts[0]?.trim() ?? "";
+  }
+}
+function withChromeScreenshotFeature(arguments_) {
+  const separator = arguments_.indexOf("--");
+  const end = separator < 0 ? arguments_.length : separator;
+  const switches = /* @__PURE__ */ new Set();
+  let enableIndex;
+  let enableValue = "";
+  let occurrences = 0;
+  for (let index = 0; index < end; index += 1) {
+    const argument = arguments_[index];
+    if (argument === void 0) throw new Error("Missing Chrome launch argument.");
+    const trimmed = trimWindowsArgument(argument);
+    if (trimmed === "--")
+      throw new Error("Chrome trims argument whitespace; use an exact -- terminator before positional args.");
+    if (/^[-/]+\s*single-argument(?:[=:\s]|$)/i.test(trimmed))
+      throw new Error("Remove the single-argument switch so the fixed Chrome screenshot feature can apply.");
+    if (!/^[-/]+\s*(?:enable|disable)-features(?:[=:\s]|$)/i.test(trimmed)) continue;
+    const canonical2 = argument.match(/^--(enable|disable)-features=([\s\S]*)$/);
+    if (argument !== trimmed || !canonical2)
+      throw new Error(
+        "Chrome feature switches are ambiguous; use one canonical --enable-features= or --disable-features= token."
+      );
+    const name = canonical2[1];
+    const value = canonical2[2];
+    if (name === void 0 || value === void 0) throw new Error("Invalid Chrome feature switch.");
+    if (switches.has(name))
+      throw new Error(
+        "Duplicate Chrome feature switches are ambiguous; combine each list in one canonical token."
+      );
+    switches.add(name);
+    if (/[^\x00-\x7f]/.test(value))
+      throw new Error("Chrome feature values must be ASCII; use valid ASCII feature names and parameter values.");
+    if (name === "enable") {
+      enableIndex = index;
+      enableValue = value;
+    }
+    for (const entry of value.split(",")) {
+      if (name === "enable") validateEnableFeatureEntry(entry);
+      if (!namesScreenshotFeature(entry)) continue;
+      if (name === "disable")
+        throw new Error(
+          "CDPScreenshotNewSurface disable conflicts with fixed Windows Chrome screenshots; remove the target from --disable-features."
+        );
+      if (entry !== screenshotFeature)
+        throw new Error(
+          "CDPScreenshotNewSurface must be one bare feature; remove whitespace, default, trial, group and parameter decorations."
+        );
+      occurrences += 1;
+      if (occurrences > 1)
+        throw new Error(
+          "CDPScreenshotNewSurface has duplicate entries; retain exactly one bare enabled feature."
+        );
+    }
+  }
+  const result = [...arguments_];
+  if (occurrences === 1) return result;
+  if (enableIndex === void 0) result.splice(end, 0, `--enable-features=${screenshotFeature}`);
+  else result[enableIndex] = `--enable-features=${enableValue}${enableValue ? "," : ""}${screenshotFeature}`;
+  return result;
+}
+
 // src/adapters/chrome-profile.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
@@ -40609,6 +40695,7 @@ async function getVersion(port) {
   return response.json();
 }
 function applyChromePreset(arguments_) {
+  const result = process.platform === "win32" ? withChromeScreenshotFeature(arguments_) : [...arguments_];
   const addresses = [];
   for (let index = 0; index < arguments_.length; index += 1) {
     const match = arguments_[index]?.match(/^--remote-debugging-address(?:[=:](.*))?$/i);
@@ -40616,7 +40703,6 @@ function applyChromePreset(arguments_) {
   }
   if (addresses.length > 1) throw new Error("Duplicate Chrome debugging addresses are prohibited.");
   if (addresses.length && addresses[0] !== "127.0.0.1") throw new Error("Chrome debugging must use loopback.");
-  const result = [...arguments_];
   if (chromeProfileArgument(result) === void 0) {
     const home = process.platform === "win32" ? process.env.USERPROFILE : os2.homedir();
     if (!home || !path6.isAbsolute(home)) throw new Error("The Chrome profile home directory is unavailable.");

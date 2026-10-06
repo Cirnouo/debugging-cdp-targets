@@ -6,6 +6,14 @@ dead-session recovery, target-close waiting and full-result Hook/status semantic
 The dated acceptance and gate results below are historical evidence; they do not
 verify the later lifecycle changes.
 
+Current Windows Chrome screenshot rule: [ADR 0014](adr/0014-windows-chrome-screenshot-surface.md)
+adds the fixed application feature at the Chrome launch boundary. The
+[2026-10-07 controlled comparison](#controlled-chrome-window-state-follow-up-2026-10-07)
+records the promotion evidence and limits. Earlier no-default/conditional-only
+statements remain historical descriptions of their dated payloads.
+The separate [actual fixed-preset acceptance](#actual-fixed-windows-chrome-preset-acceptance-2026-10-07)
+records successful first captures from the rebuilt delivered gateway.
+
 Peer host follow-up, 2026-10-05: [ADR 0012](adr/0012-peer-host-distributions.md)
 adds complete independent Codex and Claude Code distributions. Actual Windows
 acceptance passed with Codex CLI 0.160.0 and Claude Code 2.1.283: local Marketplace
@@ -575,3 +583,388 @@ line, 87.78% branch and 90.12% function coverage. Typecheck, repository, commit,
 read-only build and distribution checks all passed in that command. The prior
 failed verification is retained separately; exact updated PR-head checks and
 the actual merge SHA's main push CI/CodeQL remain required for delivery.
+
+## Controlled Chrome window-state follow-up, 2026-10-07
+
+The completed comparison used Windows x64, Node 24.21.0, pnpm 12.4.2 and the
+unchanged official `chrome-devtools-mcp@1.10.1`. Every actual browser endpoint
+reported Chrome/154.0.8037.98; the reduced renderer user-agent alone was not used
+as build evidence. All fourteen fresh acquisitions were independently reviewed
+as eligible, with correct captures in all six initial candidate combinations
+and a repeated minimized viewport contrast in both acquisition orders.
+The reviewed promotion gate passed for the fixed Windows `targetKind: "chrome"`
+rule in [ADR 0014](adr/0014-windows-chrome-screenshot-surface.md). This evidence
+does not establish arbitrary versions/platforms or a historical timeout cause.
+
+### Pinned inputs and identities
+
+The sealed probe revision was `3148e24594b2ccdec087f7ef07070ff336392e1c`.
+Its test-only changes followed product revision
+`17590e4a8cf68a7fc09911c58b533f3c26bf21ef`; all twenty-nine sealed helper/native
+source hashes matched throughout acquisition. The generated product remained
+byte-identical to the complete retained pre-change Codex payload. The relevant
+SHA-256 identities below identify those actual comparison inputs, not a later
+rebuilt preset-enabled distribution.
+
+| Sealed maintained input | SHA-256 |
+| --- | --- |
+| tests/smoke/screenshot-timeout-probe.ts | 2eb498cf3cea6cf73c2b22ecff6bdfb0a30800c58f3fadaf593163a98678a776 |
+| tests/smoke/screenshot-capture-observer.ts | 210418165ec6ae0aa0589dad5b5551984c0caf4cd634bfe50a2df43d76ddd300 |
+| tests/smoke/window-evidence.ts | e000f5bf2857da153e0537d925f6e4a58a500360738d873a1b27f249f9c09671 |
+| tests/smoke/screenshot-background-anchor.ts | 42bfab9738a33754d7876e6f705739018ec5b72a4a855b7bc4f9b7d8bed4031e |
+| tests/smoke/windows-window-evidence.ps1 | 2e8c7356f78386f5d11ee32673cba58a6042cf58baf55e6c3096e177bced3d9b |
+| tests/fixtures/native-window.cs | 7dc76e122c316f700a8d9efb2601a8040dcd2fd20b18b3ea7e066b6c9f7ded14 |
+| tests/fixtures/compile-native-window.ps1 | 3807f5279e1635513276f72a5e6b609fbbd16fbdcfa909297058243b8b7eff0c |
+
+| File within the retained/current Codex dist | SHA-256 |
+| --- | --- |
+| mcp-bootstrap.mjs | b599db9a4ffa9b600fb5661212ac4b5c617e5755b497cb943d2057f8eb7785d7 |
+| official-server/build/src/McpPage.js | d49b2666cb9c6c5b4d7b9130235c476cb8a3af580363ff224796d9dbde99538d |
+| official-server/build/src/tools/screenshot.js | 8d577186a2486bb9899f3580ea9061bd2acd4a4e71cb0c2644717fa516ba873a |
+| official-server/build/src/third_party/index.js | c988e0684584b75e87ae04b768c4f8ae7064401afe5187ec0d4878b2c6833f12 |
+
+Independent review also hashed all 378 regular files in both complete Codex
+payload trees. Their identical sorted inventory digest was
+`4f950678ccf33c140f0f687da83899b3a6ac67e9b849c4ccd8c63e069cefbead`.
+The digest input is each file's SHA-256, two ASCII spaces, its forward-slash
+relative payload path and LF, sorted by binary relative pathname. This binds
+official resources, licenses and original vendor skills along with the runtime.
+Tracked release/dependency/lock inputs were unchanged. This is comparison with
+the retained approved payload, not a new npm tarball audit or upgrade authority.
+
+Every fixture used the same
+[pinned README source view](https://github.com/Cirnouo/debugging-cdp-targets/blob/d2fc545e16bab75f932c8c27850067bf34e5cab8/README.md).
+The original fixture byte digest was
+`efc64a840a4ae523cd9e13ade8936b503eb3c2836033a3744d621a88e29443ba`.
+Baseline launch args were `--user-data-dir={fixture}/profile`, `--no-first-run`,
+`--disable-background-networking`, `--disable-background-mode` and
+`--disable-features=ChromeAppInstaller`. Candidate adds only one final bare
+`--enable-features=CDPScreenshotNewSurface`. Labels, explicit native condition
+and fullPage selection account for the other controlled fixture differences;
+the normalized fixtures exactly match the original. Reverse fixtures differ
+from their initial counterparts only by label.
+
+Each fixture has a fresh profile, target/process-start identity, endpoint,
+entry/connection/session and gateway. Loopback port 20222 is reused only after
+the preceding normal Close and actual process exit. Requested argv and the
+sealed launch implementation establish argument delivery for this comparison;
+no independent actual command-line or effective feature-state receipt was
+collected. This measured version is applicability evidence, not a prelaunch gate.
+
+### Original official sequence and native conditions
+
+Every cell has exactly seven official requests: `list_pages`,
+`new_page(background:true)`, `emulate` with light 1280x900x1, the two original
+evaluations, one marked metadata evaluation, then one `take_screenshot`.
+The first original evaluation has `waitForStableDom:false`; the second omits it
+and retains the original `scrollIntoView`. There is no `select_page` or
+`bringToFront`. Screenshot args contain only pageId/fullPage/filePath; format
+and quality are omitted. `_dct` carries the owned connection/session and only
+that field is removed before forwarding. No capture preparation or implicit
+recovery is added.
+
+Foreground-normal samples establish the same non-iconic Chrome HWND as the
+foreground window. Minimized samples establish the same owned iconic window
+with showCmd 2. Background-normal setup uses a fresh identity-verified opaque
+owned anchor; its own bounded minimize/restore obtains foreground. Verified
+normal Chrome receives only HWND_BOTTOM/NOACTIVATE, with no Chrome
+minimize/restore. The anchor and Chrome native rectangles are x 10, y 10,
+width 1010, height 1221, so the anchor geometrically contains the target bounds
+at recorded observations. No unrelated window is manipulated.
+
+Required before/during/after observations agree on the owned PID, executable,
+creation time and HWND. All 62 qualifying during callbacks start and complete
+strictly within their actual local screenshot MCP dispatch-to-settlement
+interval; crossing samples are not counted. The review validated 104 Chrome
+samples overall. These are sampled state/geometry observations, not continuous
+compositor occlusion or direct internal CDP/focus-emulation timing.
+
+Native-tab correlation remains unknown because MSAA is incomplete. Reliable UIA
+observations select New Tab, with varying memory-use decoration and no reliable
+selected-tab difference between arms. Emulated JavaScript focus/visibility does
+not establish native selection. Optional accessibility cancellations after
+settlement are retained separately; required native sampling has no failure.
+
+### Exact acquisition order and results
+
+Local MCP intervals include ownership health and observer effects. Gateway CDP
+and upstream phases are bounded diagnostic durations, not packet capture or a
+renderer performance benchmark. No deadline was increased.
+
+| Cell | Native condition | Capture | Arm | First result | Local MCP seconds | Qualified during samples | Decoded PNG |
+| --- | --- | --- | --- | --- | ---: | ---: | --- |
+| 1 | foreground-normal | viewport | baseline | success | 8.712 | 2 | 1280x900 |
+| 2 | foreground-normal | viewport | candidate | success | 8.116 | 2 | 1280x900 |
+| 3 | background-normal | viewport | baseline | success | 8.518 | 2 | 1280x900 |
+| 4 | background-normal | viewport | candidate | success | 8.587 | 2 | 1280x900 |
+| 5 | minimized | viewport | baseline | timeout/quarantine | 66.883 | 17 | none |
+| 6 | minimized | viewport | candidate | success | 9.935 | 3 | 1280x900 |
+| 7 | foreground-normal | fullPage | candidate | success | 9.749 | 3 | 1264x2023 |
+| 8 | foreground-normal | fullPage | baseline | success | 9.028 | 2 | 1264x2023 |
+| 9 | background-normal | fullPage | candidate | success | 9.833 | 2 | 1264x2023 |
+| 10 | background-normal | fullPage | baseline | success | 9.371 | 2 | 1264x2023 |
+| 11 | minimized | fullPage | candidate | success | 10.441 | 3 | 1264x2023 |
+| 12 | minimized | fullPage | baseline | success | 10.963 | 3 | 1264x2023 |
+| 13 | minimized | viewport | candidate | success | 9.423 | 2 | 1280x900 |
+| 14 | minimized | viewport | baseline | timeout/quarantine | 66.732 | 17 | none |
+
+Cells 1–12 follow the accepted initial order. All six candidate condition/mode
+cells succeed with correct content. Both background pairs pass, so the planned
+reverse pair uses the only distinguishing initial contrast: minimized viewport.
+Baseline cell 5 fails before candidate cell 6 succeeds; fresh candidate cell 13
+succeeds before baseline cell 14 fails. The five other initial baseline modes
+also succeed. No general performance gain or background availability gain is
+established by these results.
+
+Cells 5/14 return `CONNECTION_RECOVERY_REQUIRED`, reason `upstream-timeout`,
+`upstreamStatus: quarantined` and `upstreamClosed: true`, with no PNG.
+Their interrupted CDP screenshot phases are 60.009/60.005 seconds and upstream
+phases 60.013/60.009 seconds, distinct from the larger complete MCP intervals.
+The first failure is retained; no later evaluation, screenshot, restart or replay
+runs on either failed connection. Both diagnostic probes exit 1 while preserving
+valid observations and successful normal cleanup.
+
+### Content and normal cleanup
+
+All twelve successful retained PNGs agree with their byte/hash records and
+independently decoded dimensions. Viewport images are 1280x900; fullPage images
+are 1264x2023, consistent within rounding with measured scrollWidth 1265,
+scrollHeight 2023 and DPR 1.0000000149011612. Visual review confirms the pinned
+README heading, four loaded badges and viewport sections; fullPage also contains
+examples, documentation and footer. The original sticky file toolbar and partial
+logo view remain visible without a candidate-specific content defect.
+
+Every retained 20000-character article outerHTML slice has digest
+`413dc8c26587eb7059d7d745f49f34848b87c9881df2942da3dd0298cf050689`;
+this is not a full-document hash. The complete second evaluation's badge/layout/
+heading/footer result matches in every cell. All viewport PNGs happen to share
+SHA-256 `862e778fc9254fbe5423fc40b03531efee18eafd500e8dec9c0c43c2f5309481`
+and 146894 bytes. Foreground fullPage cells 7/8 and minimized fullPage cells 11/12
+match within their pairs. Live GitHub decorations, including the Issues count,
+change between background fullPage captures. Those raw differences remain
+retained; whole-image equality was not an eligibility requirement.
+
+All fourteen explicit routed normal Close requests succeed and are followed by
+actual Chrome process exit. All four related anchors have identity-bound normal
+Close and actual exit, including exit 0. Eighteen expected process exits are
+retained. Each gateway ends with `connections: []` and stdio exit 0 before the
+next acquisition. There is no forced application kill, automatic restart/replay,
+uncertain cleanup or leaked live target in the accepted ledger.
+
+### Historical reproduction and delivery limits
+
+The earlier first trial with corrupted observer Unicode output remains excluded
+from the clean comparison, with its PNG and normal cleanup retained. Clean A
+then succeeded with the window untouched; fullPage B succeeded; repeat A timed
+out after the user deliberately clicked Codex to send Chrome behind it without
+minimizing. A later reversed fullPage B succeeded and normally Closed; reversed
+A was never launched after steering changed the investigation. These are prior
+observations, not the controlled matrix's promotion evidence. Normal user window
+manipulation is desired usage and is not blamed or restricted by this record.
+
+The controlled owned anchor is distinct from Codex and its native handoff differs
+from the user's click. Both background baselines succeeding neither reproduces
+nor identifies the historical background timeout. Static samples do not prove
+every arbitrary in-flight transition or continuous compositor occlusion. Actual
+CDP capture parameters/method traffic and focus-emulation timing are unavailable;
+additional native/accessibility/status observers perturb timing. Historical
+gateway cwd and raw original result are unavailable, test port 20222 differs
+from the original 9222, and the pinned commit-view URL differs from the original
+branch view after README changed. The retained source commit is the closest
+available historical content identity; the original browser-resolved commit
+was not recorded. Historical first Obsidian blockage remains unproven.
+
+All excluded/failed trials, failed native setup experiments, raw timeouts and
+normal cleanup receipts remain in the private retained evidence ledger. Public
+documentation needs no personal executable paths, PID dumps or absolute research
+directory links. Neither this matrix nor the source review extends empirical
+acceptance to other versions, generic applications or other operating systems.
+
+The repaired maintained-source contract was independently reviewed at
+`2fefff272c628ece6ff52761a7be6c14bbd441b8`: 147/147 focused injected-boundary
+tests, typecheck and applicable style/text/whitespace/commit checks passed.
+Those source results add no new native measurement. Complete regenerated
+payloads were committed, and the post-commit `pnpm check:build` passed at
+`1400d556e8438322bfc881acce5a15bd8814f430`. Actual preset acceptance with no
+caller-supplied feature passed separately as recorded below. Fresh full branch
+review, full local gates and exact PR/main CI remain pending delivery gates.
+The unchanged official release/locks, transparent routing, 60-second timeout,
+quarantine, normal Close/Keep and explicit recovery remain required. Future raw
+comparisons must use a genuine pre-change payload or the explicit experimental
+generic route; two preset-enabled Chrome arms cannot be labelled baseline/candidate.
+Version 0.1.0 remains unreleased.
+
+## Actual fixed Windows Chrome preset acceptance, 2026-10-07
+
+Two sequential acquisitions accepted the delivered Windows `targetKind: "chrome"`
+preset with no caller-supplied screenshot feature. Minimized viewport ran first,
+then background-normal viewport. Both first captures succeeded without replay,
+additional capture, recovery, product refocus or deadline increase. This acceptance
+completes the delivered-preset gate; the earlier fourteen-cell comparison remains
+separate promotion evidence with its original inputs, hashes and failed records.
+
+### Delivered input and actual argument evidence
+
+Clean commit `1400d556e8438322bfc881acce5a15bd8814f430` was held throughout both
+acquisitions. Node 24.21.0 and actual Chrome/154.0.8037.98 browser endpoints were
+observed on Windows. The probes used the actual Codex host gateway. The complete
+Codex 378-file and Claude Code 377-file payload inventories were sealed; both
+generated `dist/mcp-bootstrap.mjs` files had SHA-256
+`9333f1a1fc50d5cc7616cbe46c83b958781dda0763f198cb11eed11179283d21`.
+Inventory verification covers both hosts; these acquisitions are not separate
+live Claude Code host measurements. The complete official 1.10.1 release and
+its three screenshot-related source hashes above remained unchanged.
+
+The fresh acceptance provenance sealed 74 maintained files, six external
+acquisition/inspection tools and both complete payload trees. Its SHA-256 was
+`867effc76bf89c53f1ea9a95cdb7e43b8d81603185e9ff0a03ad7b8e15f0dbdc`.
+Read-only post-acquisition verification at 2026-10-06T18:17:21.172Z reconfirmed
+clean HEAD, every sealed source/helper hash, complete payload filenames and
+every payload byte hash. This is 2026-10-07 in Asia/Shanghai. The historical
+controlled seal was preserved and was not reused as the new runtime seal.
+
+Both fixtures retained original A's five launch arguments: the fresh
+`--user-data-dir={fixture}/profile`, `--no-first-run`,
+`--disable-background-networking`, `--disable-background-mode` and
+`--disable-features=ChromeAppInstaller`. The pinned README source remained
+`d2fc545e16bab75f932c8c27850067bf34e5cab8`. Exactly seven original official calls
+ran per acquisition: `list_pages`, `new_page(background:true)`, light
+1280x900x1 `emulate`, both original evaluations, the metadata evaluation and
+the first viewport `take_screenshot`. Original `waitForStableDom` presence/
+omission and `scrollIntoView` remained intact. No `select_page`, `bringToFront`,
+format/quality field or additional official preparation call was introduced.
+
+A separately owned read-only PowerShell waiter started before each probe and
+observed its early verified-target marker. The witness verified the owned native
+executable path and creation ticks before/after Win32_Process CIM and after
+Windows `CommandLineToArgvW` decoding. Each actual argv preserved all five
+caller arguments, then contained `--remote-debugging-port=20222`, one canonical
+`--enable-features=CDPScreenshotNewSurface`,
+`--remote-debugging-address=127.0.0.1`, `--no-default-browser-check` and
+`--disable-updater-scheduler`. No repeated feature switch, ineffective boundary
+or target disable was observed. This witnesses actual argv delivery; it does
+not directly query Chromium's effective feature state.
+
+The witness receipts were written 55,485.3254 ms and 61,772.5410 ms before their
+recorded screenshot requests, respectively, and both waiters exited 0. The
+read-only witness overlapped preparation MCP calls; polling and other native/
+accessibility/status observers may perturb setup and complete-call timing.
+No witness deadline abort occurred.
+
+### Capture, native state and normal cleanup
+
+| Acquisition | Native condition | First viewport result | Complete local MCP interval | Qualified during samples |
+| --- | --- | --- | ---: | ---: |
+| 1 | minimized | success | 10319.3639 ms | 2 |
+| 2 | background-normal | success | 9293.0498 ms | 2 |
+
+These intervals use the actual local MCP dispatch/settlement callbacks and
+include ownership-health/observer effects. Recorded official request/result
+intervals were 10330.1716 ms and 9308.4707 ms. Gateway diagnostic CDP screenshot
+phases were 3035.72 ms and 3041.18 ms; they are not method traffic or independent
+renderer benchmarks. Actual CDP capture parameters and method-level
+focus-emulation timing remain unavailable; official focus emulation was enabled.
+
+Each acquisition retained five valid observations of the same owned process,
+creation identity and HWND before, during and after capture. Both qualifying
+during samples started and completed strictly inside their local pending MCP
+interval. Chrome remained iconic in the minimized cell. In the background cell,
+Chrome remained non-iconic and the independently owned opaque anchor remained
+foreground with covering geometry at recorded observations. No unrelated window
+was manipulated. Native-tab correlation remains unknown: UIA identifies New Tab,
+MSAA is incomplete and emulated page focus does not establish native README tab
+selection. One background accessibility query aborted after screenshot
+settlement; it is retained and excluded from the qualified sample count. Required
+native evidence and the final observation outcome passed without errors.
+
+Both PNGs decoded to 1280x900, 146894 bytes, with identical SHA-256
+`862e778fc9254fbe5423fc40b03531efee18eafd500e8dec9c0c43c2f5309481`.
+The executor and root separately viewed both files. They show the correct pinned
+light GitHub README, readable heading/subtitle, all four badges, unreleased
+notice, Why use it, Requirements and the beginning of Quick start. The expected
+viewport scroll crop and partially cropped artwork match the controlled view;
+original evaluations independently confirm the four selected assets loaded.
+Both automated inspections returned valid evidence with empty error lists.
+
+Both Chrome applications and the one owned background anchor received normal
+Close and actually exited. The first process-exit check completed before the
+second waiter/probe launched. Each gateway finished with `connections: []` and
+actually exited with code 0. No forced application kill occurred and no owned
+target remained live. Raw calls, native samples, argv witnesses, inspection/visual
+records, provenance and cleanup receipts remain in the private evidence ledger.
+
+These two delivered-preset viewport results do not establish the historical
+Codex-click timeout's cause, every arbitrary mid-request transition, continuous
+compositor occlusion, other Chrome versions/platforms, generic-cdp, Electron or
+Tauri compatibility. The owned anchor handoff differs from clicking Codex.
+Normal user window switching/minimizing remains supported usage. Fresh full
+branch review, full local verification and successful checks on the final PR
+head and actual merged main commit remain pending; version 0.1.0 is unreleased.
+
+## Final verification fixture follow-up, 2026-10-07
+
+The first complete `pnpm verify:push` at
+`654746327ddab435a304c079515ba6eb66e500ea` passed 820 of 822 tests and failed
+two new private stdio screenshot-observer fixture cases, with no skips. The full
+failed log remains retained. Controlled copies reproduced both causes before
+repair: delaying responder startup by 650 ms consumed the unchanged 500 ms
+success-request deadline; delaying its reply by 650 ms allowed a second valid
+sample before settlement in the unchanged 1000 ms request interval.
+
+The regression fixtures now wait for the owned child's MCP readiness notification
+before dispatching the short experiment request and hold the intended sampling
+cycle until that request actually settles. They retain the real stdio dispatch/
+settlement callbacks, exact sample counts, crossing/cancellation/failure controls,
+primary screenshot results and normal owned-child EOF closure. The focused
+screenshot observer/probe suite passed 90/90 tests; strict typecheck also passed.
+
+Independent review also found that the opt-in profile validator could count an
+ineffective switch after `--`, accept a separate value or miss a later native
+Windows profile override. Its test-only acquisition guard now requires one
+unpadded canonical confined profile before an exact boundary and refuses aliases,
+case variants, duplicate profiles, padded switches/boundaries and dynamic argument
+names that could conceal a profile override. Its Windows outer whitespace set
+follows the pinned Chromium
+[command-line parser](https://raw.githubusercontent.com/chromium/chromium/154.0.8037.98/base/command_line.cc)
+and [whitespace constants](https://raw.githubusercontent.com/chromium/chromium/154.0.8037.98/base/strings/whitespace_constants.h):
+NEL is included and FEFF is excluded. Regression controls preserve genuine
+positionals after an exact boundary and ordinary unrelated value substitutions.
+
+Both accepted native fixtures already used the canonical effective confined
+profile and their original five arguments. Those accepted inputs and captures
+remain unchanged. This repair adds no native capture, product runtime change,
+capture-observer change or deadline increase. Historical acceptance seals and
+the failed verification record remain immutable; the changed fixture validator
+requires explicit provenance reconciliation rather than replacing that seal.
+Fresh independent review and complete local/final PR/main gates remain pending.
+
+## Native unit-fixture prerequisite follow-up, 2026-10-07
+
+The second complete `pnpm verify:push` at
+`6be34a12025c40066351d1395187848a27d2791b` passed 860 of 861 tests, with no
+skips. Its retained failure was the native Background/Unicode unit fixture:
+the unchanged helper correctly refused a window that was not already normal
+and background. The test checked normal placement but had not established a
+different owned foreground window. A controlled owned-target Foreground request
+reproduced that refusal before the fixture correction; it does not identify the
+historical intervening foreground event.
+
+The unit fixture now retains explicit Foreground-to-Background refusal coverage,
+then uses the existing independently owned opaque anchor and fixture helpers to
+verify identity, bounds and related foreground handoff before its original raw
+Background assertions. Unicode/8.3 identity, UTF-8/no-BOM, NOACTIVATE transition,
+passive/minimized state and actual normal Close/exit/marker checks remain.
+Cleanup attempts every owned fixture independently. No native guard, maintained
+helper/compiler, product runtime, actual probe/observer/client or deadline changed.
+
+The first repaired focused check passed 18 of 19 tests and correctly detected
+an owned-anchor foreground loss after preparation; both owned windows normally
+Closed with actual exit and marker evidence. That failed result remains retained.
+Separate user clarification about clicking Codex to move the first appearing
+window behind it has no recorded PID or exact interval and establishes no causal
+attribution. Ordinary window switching remains supported usage. Focused native
+acceptance passed 19/19 with no skips in one separately directed run on unchanged
+repair bytes; the first 18/19 result remains retained. Strict typecheck and
+applicable style checks passed. Fresh complete local verification and final
+PR/main checks remain pending. This unit-test repair adds no real-application
+capture and leaves the historical acceptance seals and their reconciliation unchanged.
