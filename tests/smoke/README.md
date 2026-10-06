@@ -137,6 +137,12 @@ then explicitly restarts and normally closes them. It retains test profiles.
   preselected for these newly created targets; all peers are attempted on failure,
   with final empty gateway status and actual stdio exit checked. Blocked native
   state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
+- `application-screenshot-fixture.ts` validates complete test-only Obsidian/Readest
+  launch pairs, known existing-page selectors, confined synthetic text and fresh
+  profiles. It verifies an explicit source SHA256 before preparation, verifies a
+  controlled Readest executable copy, expands `{fixture}` after pair comparison,
+  and supplies a Windows-alias-safe gateway environment without WebView2 carriers.
+  Real launch recipes belong in explicit external experiment inputs.
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
   strict canonical ASCII feature values and effective Windows parsing boundaries,
   fixture paths, decoded pixels, fresh session diagnostics and complete peer cleanup.

@@ -1,5 +1,10 @@
 # Tests
 
+- `application-screenshot-fixture.test.ts` checks test-only Obsidian/Readest
+  launch-pair validation before I/O, canonical browser carriers, fresh profile/file
+  confinement, source/copy hashes, literal Unicode host data and controlled
+  gateway environment inheritance using injected filesystem boundaries.
+
 - `screenshot-timeout-probe.test.ts` checks the opt-in one-shot probe's malformed
   fixture rejection, exact optional selection/evaluation arguments, fresh page ID
   routing, fail-fast preparation, capture without replay, blocked native identity,
