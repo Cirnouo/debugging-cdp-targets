@@ -16,14 +16,14 @@ leading zero.
 [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) uses Unreleased
 first, dated releases newest first, ISO dates, and
 Added/Changed/Deprecated/Removed/Fixed/Security groups containing meaningful
-user changes. Move entries to a dated version only when releasing. Package,
-both host Plugin/Skill metadata, and release tag must agree.
+user changes. Finalize a dated snapshot only when preparing an authorized
+publication. Package, both host Plugin/Skill metadata, and release tag must agree.
 
-Each version records meaningful net changes relative to the previous published
-version, not individual commits or the development process. Unreleased always
-uses the latest published version as its baseline. Before the first publication,
-the baseline is an absent product: describe the capabilities actually delivered
-in the initial version under Added and Security.
+Unreleased, each prerelease snapshot, and the final stable release record meaningful
+cumulative net changes relative to the latest published stable/full release, not
+individual commits, the development process, or the previous prerelease. Before
+the first stable publication, the baseline is an absent product: describe the
+capabilities actually delivered in the initial version under Added and Security.
 
 Consolidate repeated work on a capability into its final net change. If an
 unreleased capability is withdrawn, remove its entry rather than adding Removed.
@@ -31,7 +31,7 @@ Do not include abandoned designs, internal migrations, directory cleanup, or
 intermediate dependency repairs merely because they appear in Git history.
 Development history remains in commits and existing ADRs. For subsequent
 versions, use Changed, Removed, Fixed, and other applicable categories only when
-they describe a real difference from the previous published version.
+they describe a real difference from the latest published stable/full release.
 
 Before publishing, verify all gates, licenses, payload inventory, the exact
 official Server version, and installation from the actual distribution source.
@@ -43,9 +43,9 @@ Release. Do not publish an npm package; runtime is bundled with the Plugin.
 
 ## Tag-triggered GitHub publication
 
-Preparing and pushing an authorized, annotated `v<major>.<minor>.<patch>` tag
-triggers automatic publication. Before creating it, finalize matching Package,
-Plugin and Skill versions, move the intended Unreleased changes into exactly
+Preparing and pushing an explicitly authorized, annotated `v<semver>` tag without
+build metadata triggers automatic publication for stable versions and prereleases.
+Before creating it, finalize matching Package, Plugin and Skill versions and exactly
 one nonempty `## [<version>] - YYYY-MM-DD` Changelog entry with a valid ISO date,
 and complete installation acceptance from the actual distribution source.
 The tagged commit must already be merged into main. Enabling the workflow
@@ -55,22 +55,50 @@ The Release workflow calls the full CI at the tagged commit and publishes only
 after all security, governance, quality, Windows and portable checks succeed.
 It additionally verifies annotated-tag, checkout, event and remote tag identity,
 including the original pushed tag object, main ancestry and version/Changelog
-agreement. Stable three-component versions
-have no leading zeros; prereleases, build metadata, updated/deleted/forced tags
-and manual runs do not publish. Generic metadata audits accept agreeing SemVer
-versions rather than pinning all future development to 0.1.0.
+agreement. The workflow admits stable three-component tags and prerelease
+candidates; the publisher strictly validates SemVer before release API operations.
+Core and numeric prerelease identifiers have no leading zeros. Build metadata,
+updated/deleted/forced tags and manual runs do not publish. Generic metadata audits
+accept agreeing SemVer versions rather than pinning future development to 0.1.0.
 
 Release titles equal their tags. English notes display What's Changed using
 the corresponding Changelog entry's original categories and Markdown, followed
 by generated New Contributors when available and Full Changelog. Do not append
-the generated PR change list. Comparisons use the previous latest published
-full release; first publication links to the current tag's commit history.
+the generated PR change list. Comparisons use the latest published stable/full
+release; without that baseline, use the current tag's commit history.
 
 Publication creates a draft first, resumes a matching draft on rerun and skips
-an already-published matching release without rewriting its notes. API or
+an already-published matching release only after checking its expected prerelease
+classification and remote tag identity, without rewriting its notes. Draft updates
+set the intended classification, and returned draft and published records must
+match the tag, draft state and classification. Stable publication uses
+`prerelease: false` and `make_latest: legacy`; prereleases use `prerelease: true`
+and `make_latest: false`, preserving GitHub's latest stable release. API or
 validation failures stop publication and never trigger destructive cleanup.
 Same-tag publication runs queue. Provide only GitHub's source ZIP/TAR.GZ;
 there are no additional assets, checksums or npm publications.
+
+Prerelease labels may be any legal SemVer identifiers; there is no label whitelist
+or required stage sequence. Prefer familiar `alpha.N`, `beta.N`, and `rc.N` labels.
+Successive prerelease versions should increase SemVer precedence during preparation;
+this policy does not add automated version bumps or precedence comparisons.
+Promoting a prerelease requires a new stable version, annotated tag and release,
+with separate explicit authorization. Every release category has the same complete
+tag, metadata, CI, license and actual-source installation acceptance gates.
+Enabling prerelease support does not authorize any publication.
+
+Before prerelease publication, copy current cumulative Unreleased changes into an
+immutable dated snapshot while retaining those changes in Unreleased. Before stable
+publication, archive the final cumulative net changes and remove delivered entries
+from Unreleased. Retain historical prerelease entries. A capability withdrawn while
+still unreleased is removed from current cumulative notes, while historical snapshots
+remain unchanged. The publisher reads only the finalized dated entry and never edits
+the Changelog. Every release comparison uses the latest published stable/full release;
+when none exists, use the absent-product baseline and the current tag's commit history,
+even if prereleases already exist.
+
+A GitHub prerelease does not create an independent Marketplace channel. Existing
+repository-based Codex and Claude Code Marketplace installation remains unchanged.
 
 Enable repository release immutability once before the first publication.
 CI intentionally neither reads nor validates this setting and uses only its

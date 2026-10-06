@@ -8,7 +8,7 @@
 - `vendored-licenses.json` records original registry tarball provenance, reviewed
   SDK input/source-map hashes, and exact vendored package licenses.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
-  audit entry and its YAML license.
+  audit entry and its original YAML and semver licenses.
 - `repository-audit.ts` checks text, AST layer boundaries, versions, docs,
   symlink, and production safety.
 - `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
@@ -38,10 +38,13 @@
 - `official-server-release.json` records the reviewed official npm release, its
   source tag/commit, tarball integrity and every published file digest and length.
 - `governance.ts` owns commit type/scope and branch grammar.
-- `version-policy.ts` owns SemVer grammar and Package/Plugin/Skill agreement.
+- `version-policy.ts` owns strict input guards around node-semver and exact
+  Package/Plugin/Skill string agreement. It also supplies security identity validation.
 - `release.ts` reads both maintained packaging and generated host metadata,
   validates a new tag-push context, builds Changelog-based notes,
-  and creates/resumes a draft before publication after the reusable CI gate.
+  and creates/resumes a stable or prerelease draft before publication after the
+  reusable CI gate. It checks returned classification and preserves a stable-only
+  latest-release baseline for notes and comparisons.
 - `check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
@@ -65,6 +68,18 @@ or publish artifacts. The separate Release workflow runs `node tooling/release.t
 with its new tag-push event and built-in token; ordinary checks and tests never
 invoke its publishing CLI. It does not change repository settings or upload
 custom assets.
+
+Version validation uses the public `semver/functions/parse.js` entry from
+[node-semver 7.8.5](https://github.com/npm/node-semver/tree/v7.8.5) with loose parsing
+disabled. The wrapper owns string-only input, exact whitespace and prefix rejection;
+it never cleans or coerces versions. node-semver limits the full string to 256
+characters and each core component to `Number.MAX_SAFE_INTEGER` (9007199254740991).
+Numeric prerelease identifiers may exceed that integer limit within the total
+length limit. Stable classification requires empty prerelease and build arrays;
+release eligibility allows arbitrary legal prerelease identifiers but no build
+metadata. Metadata agreement compares original strings, including build identifiers.
+The parser is bundled only in the standalone audit tooling; its type package is
+development-only. Generic security identities accept any legal prerelease/build.
 
 Vendored notice evidence is build-only and adds no runtime dependency. For SDK
 2.2.0, every SDK input used by esbuild was independently compared with its original

@@ -51,17 +51,20 @@
   IPC readiness before their unchanged failure deadlines. Resistant coverage
   records the actual ready child, TERM/KILL requests and native close, including
   delayed startup before PID and signal-handler initialization.
-- `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
-- `release.test.ts` checks tag/event identity, dated Changelog extraction,
-  English notes, paginated draft recovery and fail-closed publication with
+- `version-policy.test.ts` checks shared SemVer grammar, stable/release predicates,
+  parser limits, arbitrary legal prerelease labels, and exact metadata agreement.
+- `release.test.ts` checks stable and prerelease tag/event identity, dated Changelog
+  extraction, English notes, paginated draft recovery, returned classification,
+  stable-only comparisons, and fail-closed publication with
   simulated GitHub I/O and disposable Git fixtures. It never changes this
   repository's tags or creates real GitHub Releases.
 - `supply-chain.test.ts` covers complete multi-document inventories, fail-closed
-  audit/signature reports, exact bounded exceptions, installed graphs and
-  lockfile preflight and upstream review-before-install with fake process
-  execution; it never downloads.
+  audit/signature reports, strict dependency/exception SemVer, exact bounded exceptions,
+  installed graphs, lockfile preflight and upstream review-before-install with fake
+  process execution; it never downloads.
 - `security-build.test.ts` checks the standalone auditor without node_modules,
-  its bundled license, CLI rejection and read-only generated-artifact comparison.
+  valid-YAML version rejection, original bundled licenses and metadata contracts,
+  CLI rejection and read-only generated-artifact comparison.
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.

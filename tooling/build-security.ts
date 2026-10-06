@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +7,39 @@ import { isRecord } from '../src/shared/errors.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const output = path.join(root, 'tooling/security/dist');
+
+export async function readSecurityNotices(dependencies: string) {
+    const notices: Buffer[] = [];
+    for (const dependency of [
+        {
+            name: 'yaml',
+            version: '2.9.1',
+            licenseSha256: '5bba27375d93e9119f76c1015f7672cf9ad5f70952296e0842fb2243d6376869',
+        },
+        {
+            name: 'semver',
+            version: '7.8.5',
+            licenseSha256: '4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b',
+        },
+    ]) {
+        const license = await readFile(path.join(dependencies, dependency.name, 'LICENSE'));
+        const metadata: unknown = JSON.parse(
+            await readFile(path.join(dependencies, dependency.name, 'package.json'), 'utf8'),
+        );
+        if (
+            !isRecord(metadata) ||
+            metadata.name !== dependency.name ||
+            metadata.version !== dependency.version ||
+            metadata.license !== 'ISC' ||
+            createHash('sha256').update(license).digest('hex') !== dependency.licenseSha256
+        )
+            throw new Error(`The bundled ${dependency.name} dependency license changed.`);
+        if (dependency.name !== 'yaml')
+            notices.push(Buffer.from(`\n--- ${dependency.name}@${dependency.version} (ISC) ---\n\n`));
+        notices.push(license);
+    }
+    return Buffer.concat(notices);
+}
 
 export async function generateSecurityFiles() {
     const result = await build({
@@ -25,11 +59,7 @@ export async function generateSecurityFiles() {
     const bundledFile = result.outputFiles[0];
     if (!bundledFile) throw new Error('The security build produced no output.');
     const files = new Map([['check-security.mjs', Buffer.from(bundledFile.contents)]]);
-    const license = await readFile(path.join(root, 'node_modules/yaml/LICENSE'));
-    const metadata: unknown = JSON.parse(await readFile(path.join(root, 'node_modules/yaml/package.json'), 'utf8'));
-    if (!isRecord(metadata) || metadata.license !== 'ISC' || !license.toString().includes('Copyright Eemeli Aro'))
-        throw new Error('The bundled YAML dependency license changed.');
-    files.set('THIRD-PARTY-NOTICES.txt', license);
+    files.set('THIRD-PARTY-NOTICES.txt', await readSecurityNotices(path.join(root, 'node_modules')));
     return files;
 }
 
