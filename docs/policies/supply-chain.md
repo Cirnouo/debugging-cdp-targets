@@ -2,6 +2,25 @@
 
 ## Installation and scan order
 
+Every local clone and linked worktree must complete this sequence from its root:
+
+1. Run `node tooling/security/dist/check-security.mjs --phase lockfile --root .`.
+2. Run `pnpm install --frozen-lockfile --ignore-scripts`.
+3. Run `pnpm check:security` against the installed tree.
+4. Only after those checks pass, run `pnpm install --frozen-lockfile` to permit
+    the reviewed installation scripts under the unchanged build allowlist,
+    then run `pnpm rebuild --pending` to complete scripts deferred by the
+    script-disabled installation.
+
+Stop on any failure. A script-disabled installation is an intermediate audit
+step, not completed contributor setup. Repeat the checks when audited inputs
+change. Complete the per-worktree
+[Git hook initialization](quality.md#local-git-hook-initialization) afterward;
+an installation's successful exit alone does not prove that hooks exist.
+With pinned pnpm 12.4.2, an unchanged frozen install can return through its fast
+path while deferred builds remain. The pending rebuild must succeed without
+enlarging the reviewed allowlist; do not assume that a second install ran scripts.
+
 Use pnpm 12.4.2 and the frozen lockfile. CI's Supply chain security job first
 validates and audits the repository lockfile using the committed standalone Node
 checker without project dependencies. It then installs with `--ignore-scripts`,

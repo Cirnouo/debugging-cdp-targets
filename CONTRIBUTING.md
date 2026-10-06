@@ -7,20 +7,30 @@ vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 ## Prepare a checkout
 
 Fork the repository and clone your fork. Install Node 24.21.0 and pnpm 12.4.2;
-the versions are also declared in mise.toml. From the repository root, validate
-the locked dependencies before installation:
+the versions are also declared in mise.toml. Complete the
+[trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order)
+in every clone and linked worktree. From its root, run:
 
 ```powershell
 node tooling/security/dist/check-security.mjs --phase lockfile --root .
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm check:security
 pnpm install --frozen-lockfile
+pnpm rebuild --pending
 ```
 
 The security checks require the public npm registry and network access. Review
 the [supply-chain policy](docs/policies/supply-chain.md) if a check fails. Do not
 repair the lock automatically or bypass installation trust. The ordinary
-installation enables the reviewed build script and prepares local Git hooks.
+installation permits the reviewed build script; the pending rebuild completes
+scripts deferred by the script-disabled install, including root `prepare`.
+Then follow the
+[per-worktree hook policy](docs/policies/quality.md#local-git-hook-initialization):
+check `git config --show-origin --get core.hooksPath` and confirm that
+`.husky/_/pre-push` exists in this worktree. If trusted setup did not generate
+it, run `pnpm prepare` and check again, preserving existing Git configuration.
+The ignored `.husky/_` directory is not copied from another checkout; a manual
+`pnpm verify:push` result alone does not prove that the push hook will run.
 
 ## Submit an Issue
 
