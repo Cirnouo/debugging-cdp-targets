@@ -143,6 +143,63 @@ then explicitly restarts and normally closes them. It retains test profiles.
   controlled Readest executable copy, expands `{fixture}` after pair comparison,
   and supplies a Windows-alias-safe gateway environment without WebView2 carriers.
   Real launch recipes belong in explicit external experiment inputs.
+- `application-screenshot-probe.ts` accepts one explicit reviewed application
+  experiment with absolute config/evidence paths, an arm, native condition and
+  qualification/viewport/fullPage mode. `application-screenshot-core.ts` verifies
+  the complete sealed payload receipt from source
+  `eef90b4d974600c3a6697d40dc76e99037466315` before fixture or gateway acquisition.
+  It selects a unique existing renderer by exact URL and declared title/identity,
+  selects a unique owned main HWND by declared class/title, and never creates pages.
+  Qualification takes zero screenshots. A formal cell installs opaque yellow,
+  establishes its native condition, reads back fresh green/nonce/geometry and
+  performs exactly one official capture. Fast captures retain PNG evidence with
+  an insufficient-condition result when no complete passive sample fits inside
+  the local MCP pending interval. This interval does not expose CDP method timing.
+- `application-screenshot-adapter.ts` reuses the stdio client, lifecycle Close,
+  screenshot observer, background anchor and native PNG decoder for those cells.
+  Its injectable boundaries also verify actual root/browser/listener/endpoint
+  identity, runtime version/hash and consumed profile/port/feature argv. Cleanup
+  attempts all owned resources and requires identity-bound actual process exits,
+  no owned listener, empty gateway status and actual stdio exit. Uncertain cleanup
+  retains gateway stdio and identities; the caller must stop subsequent acquisition.
+  Unexpected permission waiting, permission handshake or ERROR740 evidence blocks
+  the attempt, cancels its existing operation and performs only bounded cancellation
+  settlement and cleanup. It does not authorize elevation or continue CDP readiness.
+- `application-screenshot-native.ts` and `windows-application-evidence.ps1` are
+  test-only read-only native evidence boundaries. The script compares CIM argv
+  against an opened native process identity, uses Windows argv parsing and reads
+  executable version/hash and the actual same-handle token elevation. Its passive
+  exit witness arms process handles before Close and waits on those handles after
+  the lifecycle receipt, without issuing any target mutation or termination.
+
+The application config is an external JSON object with `fixture` (the complete
+application fixture pair), `payload: {root, receipt}` (the inline complete sealed
+receipt), `mainWindow: {className, titleIncludes}`, `identityFunction` and
+`preflight: {status, reason}`. The caller supplies a reviewed read-only identity
+function returning `{url, title, identity}`; configured title and identity fields
+must both match when supplied. Main-window criteria must come from prior static
+evidence, never a launch to discover a class. `preflight.status: "blocked"` records
+the block with zero fixture/gateway/app acquisition. The selected Readest binary
+is always blocked before acquisition because its unconditional protocol setup
+changes user configuration. Neither test-only input support nor the fake tests
+establish real Readest compatibility. Obsidian requires the caller's independently
+reviewed protocol/singleton guard before an approved preflight.
+
+For example, with fictional external paths:
+
+```powershell
+node tests/smoke/application-screenshot-probe.ts 'C:/Test/application.json' 'C:/Test/evidence' candidate foreground-normal qualification
+node tests/smoke/application-screenshot-probe.ts 'C:/Test/application.json' 'C:/Test/evidence' baseline minimized fullPage
+```
+
+Each invocation retains its new fixture, PNG and raw evidence outside the repository.
+The runner hashes its Node executable, configuration and helper sources into that
+private evidence. The archived payload SHA256 is receipt provenance; extracted
+inventory verification does not independently rehash the archive. Normal Close
+is preselected only for these newly acquired test targets and related anchors.
+Root owns experiment ordering/caps and publication redaction. Do not run another
+cell until the previous invocation has confirmed cleanup.
+
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
   strict canonical ASCII feature values and effective Windows parsing boundaries,
   fixture paths, decoded pixels, fresh session diagnostics and complete peer cleanup.

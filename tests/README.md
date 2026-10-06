@@ -1,5 +1,14 @@
 # Tests
 
+- `application-screenshot-probe.test.ts` validates complete sealed payload
+  receipts before acquisition, unique existing renderer/HWND selection, formal
+  yellow/condition/green ordering, one capture without replay, opaque geometry
+  evidence, qualification without capture, and retained cleanup through injected
+  I/O. Its Windows native helper compile check parses argv without inspecting an app.
+- `application-screenshot-adapter.test.ts` validates sealed gateway selection,
+  generic-cdp routing, unchanged receipt deadlines, partial-start identity recovery,
+  passive exit arming before normal Close and retained stdio after uncertain cleanup.
+
 - `application-screenshot-fixture.test.ts` checks test-only Obsidian/Readest
   launch-pair validation before I/O, canonical browser carriers, fresh profile/file
   confinement, source/copy hashes, literal Unicode host data and controlled
