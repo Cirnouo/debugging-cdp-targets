@@ -937,3 +937,34 @@ capture-observer change or deadline increase. Historical acceptance seals and
 the failed verification record remain immutable; the changed fixture validator
 requires explicit provenance reconciliation rather than replacing that seal.
 Fresh independent review and complete local/final PR/main gates remain pending.
+
+## Native unit-fixture prerequisite follow-up, 2026-10-07
+
+The second complete `pnpm verify:push` at
+`6be34a12025c40066351d1395187848a27d2791b` passed 860 of 861 tests, with no
+skips. Its retained failure was the native Background/Unicode unit fixture:
+the unchanged helper correctly refused a window that was not already normal
+and background. The test checked normal placement but had not established a
+different owned foreground window. A controlled owned-target Foreground request
+reproduced that refusal before the fixture correction; it does not identify the
+historical intervening foreground event.
+
+The unit fixture now retains explicit Foreground-to-Background refusal coverage,
+then uses the existing independently owned opaque anchor and fixture helpers to
+verify identity, bounds and related foreground handoff before its original raw
+Background assertions. Unicode/8.3 identity, UTF-8/no-BOM, NOACTIVATE transition,
+passive/minimized state and actual normal Close/exit/marker checks remain.
+Cleanup attempts every owned fixture independently. No native guard, maintained
+helper/compiler, product runtime, actual probe/observer/client or deadline changed.
+
+The first repaired focused check passed 18 of 19 tests and correctly detected
+an owned-anchor foreground loss after preparation; both owned windows normally
+Closed with actual exit and marker evidence. That failed result remains retained.
+Separate user clarification about clicking Codex to move the first appearing
+window behind it has no recorded PID or exact interval and establishes no causal
+attribution. Ordinary window switching remains supported usage. Focused native
+acceptance passed 19/19 with no skips in one separately directed run on unchanged
+repair bytes; the first 18/19 result remains retained. Strict typecheck and
+applicable style checks passed. Fresh complete local verification and final
+PR/main checks remain pending. This unit-test repair adds no real-application
+capture and leaves the historical acceptance seals and their reconciliation unchanged.
