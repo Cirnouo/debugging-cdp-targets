@@ -96,6 +96,28 @@ test('rejects unselected mandatory checks and incomplete conditional N/A reasons
     );
 });
 
+test('conditional N/A indentation uses actual source spaces rather than masked comments', async (context) => {
+    const reason = 'N/A: Dependencies and build inputs are unchanged.';
+    for (const [name, replacement] of [
+        ['unindented reason', reason],
+        ['unindented comment prefix', `<!-- hint -->${reason}`],
+        ['one actual space with comment prefix', ` <!-- hint -->${reason}`],
+    ]) {
+        await context.test(name ?? 'invalid indentation', () => {
+            assert.match(errors(compliantBody.replace(`    ${reason}`, replacement ?? '')), /selected|N\/A|checklist/i);
+        });
+    }
+    for (const [name, replacement] of [
+        ['two actual spaces with comment prefix', `  <!-- hint -->${reason}`],
+        ['four actual spaces with comment prefix', `    <!-- hint -->${reason}`],
+        ['four actual spaces without comment', `    ${reason}`],
+    ]) {
+        await context.test(name ?? 'valid indentation', () => {
+            assert.equal(errors(compliantBody.replace(`    ${reason}`, replacement ?? '')), '');
+        });
+    }
+});
+
 test('allows logical wrapped labels after whitespace normalization without erasing punctuation or markup', () => {
     assert.equal(
         errors(

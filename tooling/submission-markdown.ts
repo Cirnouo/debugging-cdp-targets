@@ -112,7 +112,7 @@ export function scanSubmissionMarkdown(source: string, { sectionLevel = 2 } = {}
             !/^\s*(?:=+|-+|\*(?:\s*\*){2,}|_(?:\s*_){2,})\s*$/u.test(line)
         ) {
             const continuation = line.trim();
-            if (/^ {2,}\S/u.test(line) && (/^N\/A:/u.test(continuation) || checklist.continuations.length > 0)) {
+            if (/^ {2,}\S/u.test(original) && (/^N\/A:/u.test(continuation) || checklist.continuations.length > 0)) {
                 checklist.continuations.push(continuation);
             } else {
                 checklist.label = normalizeSubmissionText(`${checklist.label} ${continuation}`);
