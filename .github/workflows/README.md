@@ -13,9 +13,12 @@ This directory owns GitHub Actions workflows.
   request open/reopen/synchronize/title-edit events without uploading runtime
   data or artifacts.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
-  created `v<major>.<minor>.<patch>` tag pushes. Only its downstream publish job
-  has `contents: write`; all checks remain read-only. Tag updates, deletion,
-  forced pushes, prereleases and build metadata do not publish.
+  created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
+  Only its downstream publish job has `contents: write`; all checks remain read-only.
+  Tag updates, deletion,
+  forced pushes and build metadata do not publish. The publisher strictly validates
+  SemVer candidates before release API operations; arbitrary legal prerelease labels
+  are accepted without a whitelist.
 
 Supply chain security validates and audits the complete repository lockfile
 before creating an installation tree, using a committed standalone Node checker.
@@ -56,15 +59,23 @@ main commits do not request an additional workflow-writing permission.
 The English body uses What's Changed with the Changelog's category headings,
 then generated New Contributors when present, then Full Changelog. Generated
 PR change lists are discarded. The previous tag comes from GitHub's latest
-published full release; the first release links to its tag's commit history.
+published stable/full release for both prereleases and stable publication. Without
+a stable baseline, notes link to the current tag's commit history, even when
+prereleases exist.
 GitHub renders its native Contributors footer from user mentions in the notes.
 
 The publisher creates a draft before publishing, resumes matching drafts found
 through paginated authenticated release listings, and skips published releases
-without editing them. Failures leave drafts for a rerun and never delete tags
-or releases. Same-tag runs queue instead of cancelling publication. Only
+only after checking the expected classification and remote tag, without editing them.
+Draft and published responses must match the requested tag, draft state and
+classification. Stable releases use `prerelease: false` and `make_latest: legacy`;
+prereleases use `prerelease: true` and `make_latest: false`. Failures leave drafts
+for a rerun and never delete tags or releases. Same-tag runs queue instead of
+cancelling publication. Only
 GitHub's automatic source ZIP/TAR.GZ links are provided; no custom assets are
 uploaded. The publish step receives only the built-in GitHub token, with no
 additional secrets or immutable-release setting checks. The repository setting
 must be enabled separately before publication. See the release policy for
-pre-tag installation acceptance and first-publication authorization.
+pre-tag installation acceptance, cumulative Changelog snapshots, and explicit
+authorization for every release. GitHub prereleases do not create a separate
+Marketplace channel; repository-based installation is unchanged.

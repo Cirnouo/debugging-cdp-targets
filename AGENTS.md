@@ -8,7 +8,7 @@ for the task's overall purpose. Standalone documentation, refactoring, tests,
 CI, and other maintenance use `chore/`; classify each commit independently.
 The [branch and commit policy](docs/policies/commits-and-scope.md) owns the
 complete grammar. Optional `release/<semver>` preparation branches follow that
-policy; publication requires separately authorized annotated stable tags under
+policy; publication requires separately authorized annotated stable or prerelease tags under
 the [release policy](docs/policies/releases.md).
 
 ## Boundaries

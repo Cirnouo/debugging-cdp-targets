@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isSemVer, isStableVersion, validateVersionAgreement } from '../tooling/version-policy.ts';
+import { isReleaseVersion, isSemVer, isStableVersion, validateVersionAgreement } from '../tooling/version-policy.ts';
 
 test('version policy accepts SemVer and rejects malformed or non-string versions', () => {
     for (const version of ['0.1.0', '12.34.56', '1.2.3-alpha.1+build.9', '1.2.3-any-Channel.42+Build.001']) {
@@ -73,5 +73,38 @@ test('version agreement supports future releases without accepting invalid or mi
         [null, null, null],
     ]) {
         assert.ok(validateVersionAgreement(versions[0], versions[1], versions[2]).length);
+    }
+});
+
+test('release predicate allows arbitrary legal prereleases without build metadata or normalized input', () => {
+    for (const value of [
+        '0.1.0',
+        '12.34.56',
+        '1.2.3-alpha.1',
+        '1.2.3-any-Channel.42',
+        '1.2.3-900719925474099200000000000000000000000',
+        '9007199254740991.2.3',
+        `1.2.3-${'a'.repeat(250)}`,
+    ]) {
+        assert.equal(isReleaseVersion(value), true, value);
+    }
+    for (const value of [
+        'v1.2.3',
+        'V1.2.3',
+        ' 1.2.3',
+        '1.2.3 ',
+        '01.2.3',
+        '1.2.3-01',
+        '1.2.3-alpha..1',
+        '1.2.3-alpha_',
+        '1.2.3+build.1',
+        '1.2.3-alpha.1+build.1',
+        '9007199254740992.2.3',
+        `1.2.3-${'a'.repeat(251)}`,
+        null,
+        1,
+        {},
+    ]) {
+        assert.equal(isReleaseVersion(value), false, String(value));
     }
 });

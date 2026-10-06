@@ -25,8 +25,8 @@ contain a `ci(tooling): add quality gates` commit.
 Optional release preparation branches use `release/<semver>` with strict
 SemVer syntax; only release branches may use SemVer dots and prerelease/build
 separators. A release branch does not authorize publication. Formal publication
-requires a separately authorized annotated stable `v<major>.<minor>.<patch>`
-tag under the [release policy](releases.md). Do not rewrite shared history.
+requires a separately authorized annotated `v<semver>` tag without build metadata
+under the [release policy](releases.md). Do not rewrite shared history.
 
 ## Commits
 
