@@ -47,6 +47,7 @@ function boundary(
         conditionResult?: unknown;
         duringWindow?: unknown;
         duringFailure?: boolean;
+        duringTiming?: 'before' | 'pending' | 'after' | 'crossing';
     } = {},
 ) {
     const calls: { name: string; args: Record<string, unknown> }[] = [];
@@ -58,6 +59,7 @@ function boundary(
     let closed = 0;
     let sampled = 0;
     let statusCalls = 0;
+    let finishCapture: (() => void) | undefined;
     const adapter: ScreenshotTimeoutAdapter = {
         async acquire(selectedFixture) {
             opened += 1;
@@ -68,9 +70,16 @@ function boundary(
                 });
             return {
                 identity,
-                async call(name, args) {
+                async call(name, args, interval) {
                     sequence.push(name);
                     calls.push({ name, args });
+                    if (name === 'take_screenshot') {
+                        interval?.dispatched();
+                        await new Promise<void>((resolve) => {
+                            finishCapture = resolve;
+                        });
+                        interval?.settled();
+                    }
                     if (options.fail === name) {
                         return { isError: true, content: [{ type: 'text', text: 'fixture handler failed' }] };
                     }
@@ -114,12 +123,31 @@ function boundary(
                     );
                 },
                 async capture(call, _handle, observe) {
-                    if (options.duringWindow !== undefined || options.duringFailure)
-                        await observe(async () => {
+                    const sample = () =>
+                        observe(async () => {
                             if (options.duringFailure) throw new Error('Passive native sampler unavailable');
+                            if (options.duringTiming === 'crossing') {
+                                finishCapture?.();
+                                await pending;
+                            }
                             return options.duringWindow;
                         });
-                    return call();
+                    if (options.duringTiming === 'before') await sample();
+                    const pending = call({ dispatched() {}, settled() {} });
+                    // Let the real call pass its request evidence write and enter the held request.
+                    while (!finishCapture) await new Promise<void>((resolve) => setImmediate(resolve));
+                    if (
+                        (options.duringWindow !== undefined || options.duringFailure) &&
+                        options.duringTiming !== 'before' &&
+                        options.duringTiming !== 'after'
+                    )
+                        await sample();
+                    finishCapture();
+                    if (options.duringTiming === 'after') {
+                        await pending;
+                        await sample();
+                    }
+                    return pending;
                 },
                 async png() {
                     return { width: 1280, height: 1800 };
@@ -155,6 +183,27 @@ test('omitted native condition preserves the original passive sequence without m
     ]);
     assert.deepEqual(io.transitions, []);
 });
+
+for (const duringTiming of ['before', 'after', 'crossing'] as const) {
+    test(`controlled capture excludes a successful native sample ${duringTiming} the request interval`, async () => {
+        const expected = { ...window, foregroundHwnd: 300 };
+        const io = boundary({
+            windows: [[window], [expected], [expected]],
+            duringWindow: [expected],
+            duringTiming,
+        });
+        const result = await runScreenshotTimeoutProbe(
+            { ...fixture, windowCondition: 'background-normal' },
+            'C:/Evidence/shot.png',
+            io.adapter,
+        );
+        assert.equal(result.outcome, 'blocked-evidence');
+        assert.equal(result.capture?.outcome, 'success');
+        assert.ok(result.capture?.result);
+        assert.match(result.observations.errors.at(-1)?.error ?? '', /during|in-flight/);
+        assert.equal(io.calls.filter((call) => call.name === 'take_screenshot').length, 1);
+    });
+}
 
 for (const condition of ['foreground-normal', 'background-normal', 'minimized'] as const) {
     test(`explicit ${condition} applies only to the verified HWND after metadata and before capture`, async () => {

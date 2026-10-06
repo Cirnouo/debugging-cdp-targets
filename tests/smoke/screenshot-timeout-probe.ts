@@ -11,8 +11,9 @@ import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-t
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
-import { createClient } from './mcp-client.ts';
+import { createClient, type McpRequestInterval } from './mcp-client.ts';
 import { createScreenshotBackgroundAnchor } from './screenshot-background-anchor.ts';
+import { createScreenshotCaptureObserver } from './screenshot-capture-observer.ts';
 import { closeEvery } from './screenshot-fixture.ts';
 import {
     correlateNativeTabs,
@@ -73,11 +74,11 @@ let identity: ProcessTarget | undefined;
 let pageTitle: string | undefined;
 let backgroundPrepared = false;
 const anchorMarkers = new Map<number, string>();
-const tool = async (name: string, args: Record<string, unknown> = {}) => {
+const tool = async (name: string, args: Record<string, unknown> = {}, interval?: McpRequestInterval) => {
     assert.ok(client);
     await record('mcp-request', { name, arguments: args, timeoutMs: 90_000 });
     try {
-        const result = await client.request('tools/call', { name, arguments: args }, 90_000);
+        const result = await client.request('tools/call', { name, arguments: args }, 90_000, interval);
         assert.ok(isRecord(result), 'Invalid MCP tool result.');
         await record('mcp-result', { name, result });
         return result;
@@ -347,7 +348,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         await record('routing', { entryId, ...routing });
         return {
             identity,
-            call: (name, args) => tool(name, { ...args, _dct: routing }),
+            call: (name, args, interval) => tool(name, { ...args, _dct: routing }, interval),
             status: () =>
                 lifecycleTool('dct_connection_status', {
                     entryId,
@@ -356,57 +357,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
                 }),
             sample: nativeSample,
             condition: nativeCondition,
-            async capture(call, handle, observe) {
-                const abort = new AbortController();
-                const startedAt = performance.now();
-                let samplingFailure: string | undefined;
-                const observer = (async () => {
-                    // Bounded passive samples only; no CDP/upstream call is made by this loop.
-                    for (
-                        let count = 0;
-                        count < 100 && performance.now() - startedAt < 95_000 && !abort.signal.aborted;
-                        count += 1
-                    ) {
-                        try {
-                            assert.ok(identity);
-                            const raw = await nativeSample(handle, abort.signal);
-                            await observe(async () => raw);
-                            await nativeTabs(handle, abort.signal);
-                        } catch (error) {
-                            if (!abort.signal.aborted) {
-                                samplingFailure = errorMessage(error);
-                                await observe(async () => {
-                                    throw error;
-                                });
-                            }
-                            await record('passive-native-error', {
-                                error: errorMessage(error),
-                                stopped: abort.signal.aborted,
-                            });
-                        }
-                        if (!abort.signal.aborted)
-                            await new Promise<void>((resolve) => {
-                                const finish = () => {
-                                    clearTimeout(timer);
-                                    abort.signal.removeEventListener('abort', finish);
-                                    resolve();
-                                };
-                                const timer = setTimeout(finish, 500);
-                                abort.signal.addEventListener('abort', finish, { once: true });
-                            });
-                    }
-                })();
-                try {
-                    return await call();
-                } finally {
-                    abort.abort();
-                    await observer;
-                    await record('passive-observer-stopped', {
-                        elapsedMs: performance.now() - startedAt,
-                        samplingFailure,
-                    });
-                }
-            },
+            capture: createScreenshotCaptureObserver({ sample: nativeSample, tabs: nativeTabs, record }),
             async png(filePath) {
                 const bytes = await readFile(filePath);
                 const decoded = await powershell('./windows-png-evidence.ps1', [

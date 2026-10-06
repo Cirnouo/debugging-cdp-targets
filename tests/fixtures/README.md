@@ -48,6 +48,11 @@ response after delivery. The smoke's identity/count/cleanup and subsequent
 empty-Hook assertions still validate that batch.
 
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
+`owned-native-fixtures.ts` retains private native identities before readiness
+observation. Cleanup normally Closes every retained fixture, including failed
+readiness acquisitions, and removes ownership only after actual exit evidence.
+Its Close wrapper coordinates the anchor controller and remaining target cleanup
+without duplicate successful requests; uncertain cleanup retains a retry identity.
 `target-exit-reference.ts` runs one self-exiting private Node child with detached,
 ignored stdio and an initially unreferenced handle. Its observing subprocess
 proves actual-exit waits retain the event loop, one cancellation preserves another

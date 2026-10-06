@@ -246,9 +246,21 @@ provider's ambiguity, incomplete traversal or disagreement makes it unknown.
 Passive sampling always uses `State None`. A sampling error or condition loss
 invalidates required observations while preserving the primary screenshot result
 and its recovery/client-error classification. Explicit controlled captures also
-require a completed during-capture sample; a capture that finishes too quickly for
+require a successful native sample that starts and finishes validation while the
+actual local MCP screenshot request is pending. `screenshot-capture-observer.ts`
+starts from the test stdio client's post-write dispatch hook and stops at its
+resolve-or-reject hook, including timeout or gateway exit. `capture-interval`
+records monotonic ordering/times and qualified counts. Pre-dispatch,
+post-settlement and crossing samples cannot qualify; official/MCP evidence writes
+are outside that interval. These are observed MCP client boundaries, not CDP
+method timing. Intentional AbortError while stopping native or tab observation
+does not invalidate a prior valid sample; genuine observer/write errors do.
+A capture that finishes too quickly for
 the native observer retains its actual result with an overall blocked-evidence
-outcome. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths.
+outcome. Omitted conditions require no minimum count, while any actual passive
+failure still invalidates overall evidence; preservation refers to the official
+call sequence, passive normal-state validation and primary capture/quarantine
+result. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths.
 
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 

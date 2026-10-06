@@ -15,6 +15,16 @@
   two disposable WinForms fixtures, proves opaque anchor bounds contain the target
   and normally Closes both with native actual-exit waits.
 
+- `screenshot-capture-observer.test.ts` exercises the actual test stdio client and
+  capture adapter's dispatch/settlement interval with a private Node responder.
+  It verifies in-flight sampling, exclusions before/after/crossing settlement,
+  rejection/timeout/exit, intentional sampling/tab cancellation and preservation
+  of capture results when native sampling or evidence writes fail.
+
+- `owned-native-fixtures.test.ts` injects readiness failures after each retained
+  target/anchor launch, requires normal Close with actual exit, avoids duplicate
+  successful controller cleanup and retains ownership for uncertain Close retry.
+
 - `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
   escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
   transparent pixels; cleanup failure still initiates every peer Close.

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domains/launch-command.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import type { McpRequestInterval } from './mcp-client.ts';
+import { cancelledPassiveSample } from './screenshot-capture-observer.ts';
 import { expandFixture } from './screenshot-fixture.ts';
 import { assertWindowState, readWindowSample, type WindowIdentity, type WindowSample } from './window-evidence.ts';
 
@@ -20,12 +22,12 @@ export interface ScreenshotTimeoutFixture {
 export type WindowCondition = 'foreground-normal' | 'background-normal' | 'minimized';
 export interface ScreenshotTimeoutRoute {
     identity: WindowIdentity;
-    call(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>>;
+    call(name: string, args: Record<string, unknown>, interval?: McpRequestInterval): Promise<Record<string, unknown>>;
     status(): Promise<unknown>;
     sample(handle?: number): Promise<unknown>;
     condition(condition: WindowCondition, handle: number): Promise<unknown>;
     capture(
-        call: () => Promise<Record<string, unknown>>,
+        call: (interval: McpRequestInterval) => Promise<Record<string, unknown>>,
         handle: number,
         observe: (action: () => Promise<unknown>) => Promise<void>,
     ): Promise<Record<string, unknown>>;
@@ -214,10 +216,10 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
     };
     let cleanup: { ok: boolean; result?: unknown; error?: string } = { ok: false };
     let route: ScreenshotTimeoutRoute | undefined;
-    const call = async (name: string, args: Record<string, unknown>) => {
+    const call = async (name: string, args: Record<string, unknown>, interval?: McpRequestInterval) => {
         assert.ok(route);
         await adapter.record('official-request', { name, arguments: args });
-        const result = await route.call(name, args);
+        const result = await route.call(name, args, interval);
         if (name === 'take_screenshot') captureResult = result;
         await adapter.record('official-result', { name, result });
         if (isRecord(result.structuredContent) && result.structuredContent.code === 'CONNECTION_RECOVERY_REQUIRED') {
@@ -323,24 +325,62 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
         const before = await sample(ownedHandle);
         await adapter.record('diagnostics-before', await route.status());
         const activeRoute = route;
-        let duringAttempts = 0;
+        let duringCompleted = 0;
+        let requestPending = false;
+        let ordering = 0;
+        const intervalEvidence: { phase: string; order: number; monotonicMs: number; qualified?: boolean }[] = [];
+        const mark = (phase: string, qualified?: boolean) => {
+            const event = {
+                phase,
+                order: ++ordering,
+                monotonicMs: performance.now(),
+                ...(qualified === undefined ? {} : { qualified }),
+            };
+            intervalEvidence.push(event);
+        };
         try {
             const result = await activeRoute.capture(
-                () => call('take_screenshot', { pageId, fullPage: fixture.fullPage, filePath }),
+                (interval) =>
+                    call(
+                        'take_screenshot',
+                        { pageId, fullPage: fixture.fullPage, filePath },
+                        {
+                            dispatched() {
+                                requestPending = true;
+                                mark('request-dispatched');
+                                interval.dispatched();
+                            },
+                            settled() {
+                                requestPending = false;
+                                mark('request-settled');
+                                interval.settled();
+                            },
+                        },
+                    ),
                 before.handle,
-                (action) => {
-                    duringAttempts += 1;
-                    return observe('native-during', async () =>
-                        validate(
-                            await action(),
-                            before.handle,
-                            before,
-                            fixture.windowCondition,
-                            true,
-                            'passive-native-validated',
-                        ),
-                    );
-                },
+                (action) =>
+                    observe('native-during', async () => {
+                        const startedPending = requestPending;
+                        mark('sample-started');
+                        let validated = false;
+                        try {
+                            const raw = await action();
+                            if (raw === cancelledPassiveSample) return;
+                            await validate(
+                                raw,
+                                before.handle,
+                                before,
+                                fixture.windowCondition,
+                                true,
+                                'passive-native-validated',
+                            );
+                            validated = true;
+                        } finally {
+                            const qualified = validated && startedPending && requestPending;
+                            mark('sample-completed', qualified);
+                            if (qualified) duringCompleted += 1;
+                        }
+                    }),
             );
             outcome = 'success';
             capture = { outcome, result };
@@ -349,7 +389,14 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
             capture = { outcome, error: failure, ...(captureResult === undefined ? {} : { result: captureResult }) };
         }
         await adapter.record('capture-outcome', capture);
-        if (fixture.windowCondition !== undefined && duringAttempts === 0)
+        await observe('capture-interval', () =>
+            adapter.record('capture-interval', {
+                basis: 'Local MCP request write and resolve-or-reject callbacks; CDP method phases unavailable.',
+                duringCompleted,
+                events: intervalEvidence,
+            }),
+        );
+        if (fixture.windowCondition !== undefined && duringCompleted === 0)
             await observe('native-during', async () => {
                 throw new Error('No passive during-capture window evidence was obtained.');
             });
