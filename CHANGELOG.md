@@ -1,9 +1,11 @@
 # Changelog
 
-Notable net changes from the previous published version are recorded here
-using [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and
+Notable cumulative net changes from the latest published stable/full release
+are recorded here using [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and
 [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html). The initial version uses an
-empty baseline.
+empty baseline. Prerelease publication preserves cumulative Unreleased changes
+and copies a dated snapshot; stable publication archives the final cumulative
+changes and removes delivered entries from Unreleased. Historical snapshots remain.
 Version 0.1.0 remains under development; no release has been published.
 
 ## [Unreleased]
@@ -13,8 +15,10 @@ Version 0.1.0 remains under development; no release has been published.
 - Independent Codex and Claude Code Plugins and Marketplace catalogs, each with
   a complete runtime and shared application-agnostic debugging instructions.
   Claude Code 2.1.283 is the first supported and accepted baseline.
-- Tag-triggered GitHub source releases with Changelog-based notes, new
-  contributor attribution, and required security and cross-platform CI gates.
+- Explicitly authorized tag-triggered stable and prerelease GitHub source releases
+  with cumulative Changelog-based notes, new contributor attribution, and required
+  security and cross-platform CI gates. Arbitrary legal SemVer prerelease labels
+  preserve the latest stable release as the comparison baseline and GitHub latest.
 - One reusable stdio gateway that creates independent official chrome-devtools-mcp
   1.10.1 connections for new targets, without a fixed connection limit.
 - MCP support for stdio, roots, form elicitation, progress and cancellation.

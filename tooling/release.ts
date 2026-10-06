@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
-import { isStableVersion, validateVersionAgreement } from './version-policy.ts';
+import { isReleaseVersion, isStableVersion, validateVersionAgreement } from './version-policy.ts';
 
 export interface ReleaseInput {
     repository: string;
@@ -49,8 +49,10 @@ function validateInput(input: ReleaseInput) {
 
 export function parseReleaseTag(tag: string) {
     const version = tag.startsWith('v') ? tag.slice(1) : '';
-    if (!isStableVersion(version))
-        throw new Error('Release tag must be v<major>.<minor>.<patch> without leading zeros.');
+    if (!isReleaseVersion(version))
+        throw new Error(
+            'Release tag must be exact v<SemVer>, optionally with prerelease identifiers, without build metadata.',
+        );
     return version;
 }
 
@@ -251,6 +253,7 @@ async function verifyRemoteTag(io: ReleaseIO, base: string, tag: string, object:
 export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
     validateInput(input);
     const version = parseReleaseTag(input.tag);
+    const prerelease = !isStableVersion(version);
     const object = verifyTagIdentity(input.tag, input.sha, input.tagObject, io.git);
     async function readMetadata(file: string): Promise<unknown> {
         const source = await io.readFile(file);
@@ -288,14 +291,22 @@ export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
     const existing = await findExistingRelease(io, base, input.tag);
     if (existing && existing.tag_name !== input.tag) throw new Error('Existing release tag identity does not match.');
     if (existing && !existing.draft) {
+        if (existing.prerelease !== prerelease)
+            throw new Error('Published release classification does not match the requested version.');
         await verifyRemoteTag(io, base, input.tag, object);
         return { status: 'skipped', url: existing.html_url };
     }
     const latest = await optionalRelease(io, `${base}/releases/latest`);
-    if (latest && (latest.draft || latest.prerelease || latest.tag_name === input.tag)) {
+    if (
+        latest &&
+        (latest.draft ||
+            latest.prerelease ||
+            latest.tag_name === input.tag ||
+            !latest.tag_name.startsWith('v') ||
+            !isStableVersion(latest.tag_name.slice(1)))
+    ) {
         throw new Error('Invalid previous published release identity.');
     }
-    if (latest) parseReleaseTag(latest.tag_name);
     const generated = await io.request('POST', `${base}/releases/generate-notes`, {
         tag_name: input.tag,
         ...(latest ? { previous_tag_name: latest.tag_name } : {}),
@@ -304,21 +315,25 @@ export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
         throw new Error('Malformed generated release notes.');
     const body = buildReleaseBody(changes, input.tag, generated.body, input.repository, latest?.tag_name);
     // The existing, verified tag owns the target. A historical target_commitish can require Workflows: write.
-    const fields = { tag_name: input.tag, name: input.tag, body, prerelease: false };
+    const fields = { tag_name: input.tag, name: input.tag, body, prerelease };
     await verifyRemoteTag(io, base, input.tag, object);
     const draft = releaseRecord(
         existing
             ? await io.request('PATCH', `${base}/releases/${existing.id}`, { ...fields, draft: true })
             : await io.request('POST', `${base}/releases`, { ...fields, draft: true }),
     );
-    if (!draft.draft || draft.tag_name !== input.tag)
+    if (!draft.draft || draft.tag_name !== input.tag || draft.prerelease !== prerelease)
         throw new Error('GitHub did not return the matching release draft.');
     await verifyRemoteTag(io, base, input.tag, object);
     const published = releaseRecord(
-        await io.request('PATCH', `${base}/releases/${draft.id}`, { ...fields, draft: false, make_latest: 'legacy' }),
+        await io.request('PATCH', `${base}/releases/${draft.id}`, {
+            ...fields,
+            draft: false,
+            make_latest: prerelease ? 'false' : 'legacy',
+        }),
     );
-    if (published.draft || published.tag_name !== input.tag || published.prerelease) {
-        throw new Error('GitHub did not confirm publication of the matching stable release.');
+    if (published.draft || published.tag_name !== input.tag || published.prerelease !== prerelease) {
+        throw new Error('GitHub did not confirm publication of the matching release classification.');
     }
     return { status: 'published', url: published.html_url };
 }

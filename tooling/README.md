@@ -27,7 +27,9 @@
   Package/Plugin/Skill string agreement. It also supplies security identity validation.
 - `release.ts` reads both maintained packaging and generated host metadata,
   validates a new tag-push context, builds Changelog-based notes,
-  and creates/resumes a draft before publication after the reusable CI gate.
+  and creates/resumes a stable or prerelease draft before publication after the
+  reusable CI gate. It checks returned classification and preserves a stable-only
+  latest-release baseline for notes and comparisons.
 - `check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
@@ -59,7 +61,8 @@ it never cleans or coerces versions. node-semver limits the full string to 256
 characters and each core component to `Number.MAX_SAFE_INTEGER` (9007199254740991).
 Numeric prerelease identifiers may exceed that integer limit within the total
 length limit. Stable classification requires empty prerelease and build arrays;
-metadata agreement compares original strings, including build identifiers.
+release eligibility allows arbitrary legal prerelease identifiers but no build
+metadata. Metadata agreement compares original strings, including build identifiers.
 The parser is bundled only in the standalone audit tooling; its type package is
 development-only. Generic security identities accept any legal prerelease/build.
 

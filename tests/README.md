@@ -48,9 +48,11 @@
   IPC readiness before their unchanged failure deadlines. Resistant coverage
   records the actual ready child, TERM/KILL requests and native close, including
   delayed startup before PID and signal-handler initialization.
-- `version-policy.test.ts` checks shared SemVer grammar and metadata agreement.
-- `release.test.ts` checks tag/event identity, dated Changelog extraction,
-  English notes, paginated draft recovery and fail-closed publication with
+- `version-policy.test.ts` checks shared SemVer grammar, stable/release predicates,
+  parser limits, arbitrary legal prerelease labels, and exact metadata agreement.
+- `release.test.ts` checks stable and prerelease tag/event identity, dated Changelog
+  extraction, English notes, paginated draft recovery, returned classification,
+  stable-only comparisons, and fail-closed publication with
   simulated GitHub I/O and disposable Git fixtures. It never changes this
   repository's tags or creates real GitHub Releases.
 - `supply-chain.test.ts` covers complete multi-document inventories, fail-closed

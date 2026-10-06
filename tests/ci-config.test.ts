@@ -106,11 +106,11 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
     assert.equal(workflow.jobs['windows-tests'].needs, 'quality');
 });
 
-test('release workflow publishes only new stable-version tags after the same-commit reusable CI', async () => {
+test('release workflow publishes new stable and prerelease candidate tags after the same-commit reusable CI', async () => {
     const releaseSource = await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
     const release: unknown = parse(releaseSource);
     assert.ok(isRecord(release) && isRecord(release.on) && isRecord(release.jobs));
-    assert.deepEqual(release.on, { push: { tags: ['v[0-9]+.[0-9]+.[0-9]+'] } });
+    assert.deepEqual(release.on, { push: { tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*'] } });
     assert.deepEqual(release.permissions, { contents: 'read' });
     assert.deepEqual(release.concurrency, { group: `release-\${{ github.ref }}`, 'cancel-in-progress': false });
     const verify: unknown = release.jobs.verify;
