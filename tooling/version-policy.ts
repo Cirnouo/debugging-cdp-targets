@@ -1,13 +1,18 @@
-const semverPattern =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/;
-const stablePattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+import parse from 'semver/functions/parse.js';
+
+function parseStrictVersion(value: unknown) {
+    if (typeof value !== 'string' || value !== value.trim() || value.startsWith('v') || value.startsWith('V'))
+        return null;
+    return parse(value, { loose: false });
+}
 
 export function isSemVer(value: unknown): value is string {
-    return typeof value === 'string' && value === value.trim() && semverPattern.test(value);
+    return parseStrictVersion(value) !== null;
 }
 
 export function isStableVersion(value: unknown): value is string {
-    return typeof value === 'string' && value === value.trim() && stablePattern.test(value);
+    const parsed = parseStrictVersion(value);
+    return parsed !== null && parsed.prerelease.length === 0 && parsed.build.length === 0;
 }
 
 export function validateVersionAgreement(packageVersion: unknown, pluginVersion: unknown, skillVersion: unknown) {

@@ -199,6 +199,9 @@ importers:
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
+      '@types/semver':
+        specifier: 7.8.0
+        version: 7.8.0
       '@types/ws':
         specifier: 8.18.2
         version: 8.18.2
@@ -214,6 +217,9 @@ importers:
       lint-staged:
         specifier: 17.5.1
         version: 17.5.1
+      semver:
+        specifier: 7.8.5
+        version: 7.8.5
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -567,6 +573,9 @@ packages:
 
   '@types/node@24.19.0':
     resolution: {integrity: sha512-zY+5tKxXdhGh1PYI0ac+7juvEu4OI6vWtVVoj5i2m42jxAY1U+zHGt6QCyOFwykdP62sM3MJ9stoYYUw5aCWew==}
+
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/ws@8.18.2':
     resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
@@ -1261,6 +1270,8 @@ snapshots:
   '@types/node@24.19.0':
     dependencies:
       undici-types: 7.24.6
+
+  '@types/semver@7.8.0': {}
 
   '@types/ws@8.18.2':
     dependencies:

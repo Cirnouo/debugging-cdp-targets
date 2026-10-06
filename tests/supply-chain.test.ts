@@ -448,6 +448,30 @@ test('scoped and nested peer annotations do not corrupt the dependency identity'
     assert.deepEqual(readLockInventory(source).packages, inventory);
 });
 
+for (const version of ['01.2.3', '1.2.3-01', '1.2.3-alpha..1', '1.2.3+build..1']) {
+    test(`lock inventory rejects malformed SemVer ${version}`, () => {
+        assert.throws(() => readLockInventory(lock.replaceAll('8.22.0', version)), /Non-registry or unpinned/);
+    });
+    test(`review exceptions reject malformed SemVer ${version}`, () => {
+        assert.throws(
+            () => validateExceptions({ schemaVersion: 1, exceptions: [{ ...waiver(), version }] }, now),
+            /exact GHSA, package, version and scope/,
+        );
+    });
+}
+
+test('security identities preserve arbitrary legal prerelease and build versions', () => {
+    for (const version of ['1.2.3-any-Channel.42+Build.001', '1.2.3+Build.001', '1.2.3-900719925474099200000']) {
+        assert.deepEqual(readLockInventory(lock.replaceAll('8.22.0', version)).packages, [
+            inventory[0],
+            inventory[1],
+            { name: 'ws', version, integrity: 'sha512-d3M=' },
+        ]);
+        const exceptions = validateExceptions({ schemaVersion: 1, exceptions: [{ ...waiver(), version }] }, now);
+        assert.equal(exceptions[0]?.version, version);
+    }
+});
+
 test('audit blocks high and critical dependencies but retains lower-severity reports', () => {
     for (const severity of ['high', 'critical', 'moderate', 'low', 'info']) {
         const result = evaluateFindings(findings(severity), [], { repository: fingerprints });

@@ -64,6 +64,8 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Security
 
+- Dependency and vulnerability-exception identities use shared strict SemVer
+  parsing, rejecting malformed prerelease/build identifiers and unsafe core numbers.
 - Integrity verification rejects observed file replacement or mutation in
   bundled release files and review evidence.
 - Target process, listener, and endpoint identity verification, loopback-only

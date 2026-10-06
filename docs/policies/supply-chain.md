@@ -139,7 +139,10 @@ file authentication. Frozen installation enforces pnpm tarball integrity, while
 the installed-tree comparison independently checks graph and inclusion evidence.
 
 `pnpm build:security` regenerates the committed standalone checker and original
-parser license; `pnpm check:security:build` verifies them without writing or
+YAML/semver parser licenses; the build binds exact package metadata and original
+license SHA-256 values. The complete YAML notice remains first, followed by the
+identified semver ISC notice; type declarations are not distributed.
+`pnpm check:security:build` verifies them without writing or
 network access. This offline check belongs in verify:push. Generated code is
 checked for reproducibility, not manually formatted; maintained audit source
 remains subject to normal tests and unchanged coverage floors.
