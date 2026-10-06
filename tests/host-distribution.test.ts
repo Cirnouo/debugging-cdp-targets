@@ -33,6 +33,12 @@ test('peer hosts own explicit independent inventories and reject cross-host and 
     );
     for (const host of PLUGIN_HOSTS) {
         const files = requiredPayloadFiles(host);
+        assert.deepEqual(
+            files.filter((file) => file.startsWith('assets/')).sort(),
+            host === CODEX_HOST
+                ? ['assets/README.md', 'assets/icon-dark.png', 'assets/icon.png']
+                : ['assets/README.md', 'assets/icon.png'],
+        );
         assert.deepEqual(validatePayloadFileInventory(files, host), []);
         for (const invalid of [
             files.slice(1),
@@ -48,6 +54,17 @@ test('peer hosts own explicit independent inventories and reject cross-host and 
             ).length,
         );
     }
+});
+
+test('Codex inventory rejects stale light artwork instead of replacing its universal base', () => {
+    const files = requiredPayloadFiles(CODEX_HOST);
+    assert.ok(validatePayloadFileInventory([...files, 'assets/icon-light.png'], CODEX_HOST).length);
+    assert.ok(
+        validatePayloadFileInventory(
+            files.map((file) => (file === 'assets/icon.png' ? 'assets/icon-light.png' : file)),
+            CODEX_HOST,
+        ).length,
+    );
 });
 
 test('host metadata rejects wrong argv, discovery fields, hooks and marketplace routing', async () => {

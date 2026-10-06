@@ -42,7 +42,7 @@ test('plugin payload has only manifests, artwork, one skill, license, and self-c
         'skills',
     ]);
     const artwork = await readdir(path.join(pluginRoot, 'assets'));
-    assert.deepEqual(artwork.sort(), ['README.md', 'icon-dark.png', 'icon-light.png']);
+    assert.deepEqual(artwork.sort(), ['README.md', 'icon-dark.png', 'icon.png']);
     const distribution = await readdir(path.join(pluginRoot, 'dist'));
     assert.deepEqual(distribution.sort(), [
         'README.md',

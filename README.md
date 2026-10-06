@@ -76,4 +76,8 @@ Explore the [user guide](docs/user-guide/README.md):
 
 [Installation](docs/user-guide/installation.md) · [Compatibility](docs/user-guide/compatibility.md) · [Workflow](docs/user-guide/workflow.md) · [Configuration](docs/user-guide/configuration.md) · [Privacy](docs/user-guide/privacy.md) · [Troubleshooting](docs/user-guide/troubleshooting.md)
 
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Contributor documentation](docs/README.md)
+---
+
+<p align="center">
+    <sub><a href="CONTRIBUTING.md">Contributing</a> · <a href="SECURITY.md">Security</a> · <a href="docs/README.md">Documentation index</a></sub>
+</p>
