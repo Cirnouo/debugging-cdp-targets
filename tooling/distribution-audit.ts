@@ -90,9 +90,9 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
             manifest.interface.shortDescription !== 'Inspect verified local CDP targets with Chrome DevTools' ||
             manifest.interface.developerName !== 'Cirnouo' ||
             manifest.interface.category !== 'Developer Tools' ||
-            manifest.interface.logo !== './assets/icon-light.png' ||
+            manifest.interface.logo !== './assets/icon.png' ||
             manifest.interface.logoDark !== './assets/icon-dark.png' ||
-            manifest.interface.composerIcon !== './assets/icon-light.png' ||
+            manifest.interface.composerIcon !== './assets/icon.png' ||
             manifest.interface.composerIconDark !== './assets/icon-dark.png'
         )
             return ['Invalid Codex Plugin interface.'];
