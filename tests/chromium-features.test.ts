@@ -156,3 +156,111 @@ test('non-Windows Chrome keeps existing feature choices outside the Windows comp
         Object.defineProperty(process, 'platform', original);
     }
 });
+
+const nativeWindowsWhitespace = [
+    0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x0020, 0x0085, 0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004,
+    0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+];
+
+for (const [label, token, error] of [
+    ['terminator', '--', /terminator/i],
+    ['feature switch', '--disable-features=CDPScreenshotNewSurface', /feature.*(?:canonical|ambiguous)/i],
+    ['single-argument key', '--single-argument', /single-argument/i],
+] as const) {
+    test(`native Windows whitespace cannot hide an effective ${label}`, () => {
+        for (const codePoint of nativeWindowsWhitespace) {
+            const whitespace = String.fromCharCode(codePoint);
+            for (const option of [`${whitespace}${token}`, `${token}${whitespace}`]) {
+                const args = [option];
+                Object.freeze(args);
+                assert.throws(() => withChromeScreenshotFeature(args), error, `U+${codePoint.toString(16)}`);
+                assert.deepEqual(args, [option]);
+            }
+        }
+    });
+}
+
+test('FEFF-prefixed positional tokens stay unchanged because Windows Chromium does not trim FEFF', () => {
+    const args = [
+        '\ufeff--',
+        '\ufeff--disable-features=CDPScreenshotNewSurface',
+        '\ufeff--single-argument=value',
+        '中文',
+    ];
+    Object.freeze(args);
+    const result = withChromeScreenshotFeature(args);
+    assert.deepEqual(result, [
+        '\ufeff--',
+        '\ufeff--disable-features=CDPScreenshotNewSurface',
+        '\ufeff--single-argument=value',
+        '中文',
+        '--enable-features=CDPScreenshotNewSurface',
+    ]);
+    assert.deepEqual(withChromeScreenshotFeature(result), result);
+    assert.deepEqual(args, [
+        '\ufeff--',
+        '\ufeff--disable-features=CDPScreenshotNewSurface',
+        '\ufeff--single-argument=value',
+        '中文',
+    ]);
+});
+
+for (const [label, entry] of [
+    ['repeated complete-entry colons', 'Other:one/two:three/four'],
+    ['empty dot-stage input', ':value'],
+    ['ASCII-trimmed empty dot-stage input', ' \t: value'],
+    ['repeated prefix dots', 'Other.Group.More:param/value'],
+    ['empty less-than-stage input', '.Group'],
+    ['ASCII-trimmed empty less-than-stage input', ' \t.Group:param/value'],
+    ['repeated prefix less-than separators', 'Other<Trial<Again.Group:param/value'],
+] as const) {
+    test(`an unrelated enable entry cannot invalidate the complete list through ${label}`, () => {
+        for (const existingTarget of ['', ',CDPScreenshotNewSurface']) {
+            const args = [`--enable-features=First,${entry},Last${existingTarget}`];
+            Object.freeze(args);
+            assert.throws(
+                () => withChromeScreenshotFeature(args),
+                /enable.*(?:list|entry).*(?:malformed|parse|invalid)/i,
+            );
+            assert.deepEqual(args, [`--enable-features=First,${entry},Last${existingTarget}`]);
+        }
+    });
+}
+
+test('ordered enable parsing preserves parameter delimiters, blank comma entries and later parameter association input', () => {
+    for (const value of [
+        ' Other<Trial.Group:key/value.with.dots<allowed<again',
+        'Other.Group<allowed<again:param/value',
+        'Other<,Another.,Last:param/one/unpaired',
+        ', \t ,Other:,\t,',
+        '',
+    ]) {
+        const args = [`--enable-features=${value}`, '--disable-features=Other:one/two:three/four'];
+        Object.freeze(args);
+        const result = withChromeScreenshotFeature(args);
+        assert.deepEqual(result, [
+            `--enable-features=${value}${value ? ',' : ''}CDPScreenshotNewSurface`,
+            '--disable-features=Other:one/two:three/four',
+        ]);
+        assert.deepEqual(withChromeScreenshotFeature(result), result);
+        assert.deepEqual(args, [`--enable-features=${value}`, '--disable-features=Other:one/two:three/four']);
+    }
+});
+
+test('native whitespace and malformed-looking feature tokens after exact -- stay positional', () => {
+    const tail = nativeWindowsWhitespace.flatMap((codePoint) => {
+        const whitespace = String.fromCharCode(codePoint);
+        return [
+            `${whitespace}--`,
+            `${whitespace}--disable-features=CDPScreenshotNewSurface`,
+            `${whitespace}--single-argument`,
+        ];
+    });
+    tail.push('--enable-features=:value', '--enable-features=Other:one/two:three/four', '\ufeff--');
+    const args = ['--', ...tail];
+    Object.freeze(args);
+    const result = withChromeScreenshotFeature(args);
+    assert.deepEqual(result, ['--enable-features=CDPScreenshotNewSurface', '--', ...tail]);
+    assert.deepEqual(withChromeScreenshotFeature(result), result);
+    assert.deepEqual(args, ['--', ...tail]);
+});

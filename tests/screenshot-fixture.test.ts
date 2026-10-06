@@ -144,6 +144,84 @@ test('raw screenshot comparison refuses special Windows parsing boundaries but p
     assert.deepEqual(parseScreenshotFixture(valid).candidateArgs, valid.candidateArgs);
 });
 
+for (const [label, token, error] of [
+    ['terminator', '--', /terminator/i],
+    ['feature switch', '--disable-features=CDPScreenshotNewSurface', /feature.*(?:canonical|ambiguous)/i],
+    ['single-argument key', '--single-argument', /single-argument/i],
+] as const) {
+    test(`raw screenshot comparison refuses every native Windows whitespace ${label} bypass`, async () => {
+        const { parseScreenshotFixture } = await import('./smoke/screenshot-fixture.ts');
+        for (const codePoint of [
+            0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x0020, 0x0085, 0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003,
+            0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+        ]) {
+            const whitespace = String.fromCharCode(codePoint);
+            for (const option of [`${whitespace}${token}`, `${token}${whitespace}`]) {
+                const args = ['--user-data-dir={fixture}/profile', option];
+                assert.throws(
+                    () =>
+                        parseScreenshotFixture({
+                            ...fixture(),
+                            launch: { ...fixture().launch, args },
+                            candidateArgs: [...args, '--enable-features=CDPScreenshotNewSurface'],
+                        }),
+                    error,
+                    `U+${codePoint.toString(16)}`,
+                );
+            }
+        }
+    });
+}
+
+for (const entry of [
+    'Other:one/two:three/four',
+    ':value',
+    ' \t: value',
+    'Other.Group.More:param/value',
+    '.Group',
+    ' \t.Group:param/value',
+    'Other<Trial<Again.Group:param/value',
+]) {
+    test(`raw screenshot comparison rejects transactional enable-entry failure ${JSON.stringify(entry)}`, async () => {
+        const { parseScreenshotFixture } = await import('./smoke/screenshot-fixture.ts');
+        const args = ['--user-data-dir={fixture}/profile', `--enable-features=First,${entry},Last`];
+        assert.throws(() =>
+            parseScreenshotFixture({
+                ...fixture(),
+                launch: { ...fixture().launch, args },
+                candidateArgs: [args[0], `--enable-features=First,${entry},Last,CDPScreenshotNewSurface`],
+            }),
+        );
+    });
+}
+
+test('raw screenshot comparison preserves FEFF positional args and valid parameter delimiters', async () => {
+    const { parseScreenshotFixture } = await import('./smoke/screenshot-fixture.ts');
+    const value = ', \t, Other<Trial.Group:key/value.with.dots<allowed<again,Last:param/one/unpaired,';
+    const tail = ['\u0085--', '\u0085--single-argument', '--enable-features=:value', '\ufeff--'];
+    const positional = [
+        '\ufeff--',
+        '\ufeff--disable-features=CDPScreenshotNewSurface',
+        '\ufeff--single-argument=value',
+    ];
+    const args = ['--user-data-dir={fixture}/profile', `--enable-features=${value}`, ...positional, '--', ...tail];
+    const candidateArgs = [
+        '--user-data-dir={fixture}/profile',
+        `--enable-features=${value},CDPScreenshotNewSurface`,
+        ...positional,
+        '--',
+        ...tail,
+    ];
+    assert.deepEqual(
+        parseScreenshotFixture({
+            ...fixture(),
+            launch: { ...fixture().launch, args },
+            candidateArgs,
+        }).candidateArgs,
+        candidateArgs,
+    );
+});
+
 test('screenshot diagnostics reject old, malformed, ambiguous and stale-session events', async () => {
     const { screenshotPhase } = await import('./smoke/screenshot-fixture.ts');
     const old = { sessionId: 'session', phase: 'cdp-screenshot', outcome: 'completed', elapsedMs: 50 };
