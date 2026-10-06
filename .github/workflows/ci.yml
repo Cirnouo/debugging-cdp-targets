@@ -72,7 +72,7 @@ jobs:
                     cache: pnpm
             -   name: Install dependencies
                 run: pnpm install --frozen-lockfile
-            -   name: Validate commits and source branch
+            -   name: Validate commits, source branch and current PR submission
                 run: pnpm check:commits
 
     quality:

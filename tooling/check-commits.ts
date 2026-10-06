@@ -5,6 +5,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../src/shared/errors.ts';
 import { validateBranchName, validateCommitMessage } from './governance.ts';
+import { validatePullRequestBody } from './pull-request-policy.ts';
 
 type EventRequest = { eventName?: string | undefined; event?: unknown; currentBranch?: string | undefined };
 interface CommitRecord {
@@ -232,6 +233,14 @@ function run() {
         throw new Error('Complete history is required to audit all commit ancestors.');
     }
     const errors = [];
+    if (eventName === 'pull_request' && isRecord(event) && isRecord(event.pull_request)) {
+        // The request builder has already checked event identity and preserved
+        // the complete raw description for ordinary squash-message validation.
+        const body = event.pull_request.body;
+        if (typeof body !== 'string' && body !== null) throw new Error('Invalid pull request body.');
+        const template = readFileSync(new URL('../.github/PULL_REQUEST_TEMPLATE.md', import.meta.url), 'utf8');
+        errors.push(...validatePullRequestBody(body, template));
+    }
     for (const branch of request.branches) {
         errors.push(...validateBranchName(branch).map((error) => `${branch}: ${error}`));
     }

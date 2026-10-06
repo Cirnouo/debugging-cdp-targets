@@ -35,6 +35,11 @@
   Complete original and GitHub-wrapped message fixtures exercise ordinary body
   labels, reserved footer boundaries and adjacent trailer groups. Disposable Git
   and PR entry points verify exact message and event bytes before and after audits.
+- `pull-request-policy.test.ts` checks template-derived sections, checklist order
+  and placement, selection and conditional N/A rules, placeholder paragraphs,
+  Unicode and fenced evidence. Structural examples in code, quotes, or comments
+  cannot satisfy missing sections/checks. Current PR CLI fixtures also verify
+  format rejection and full raw commitlint validation without altering history.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git

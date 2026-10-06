@@ -53,8 +53,16 @@
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
   PR checks predict the squash header with its PR number and validate the original
-  description. Every non-merge commit is validated directly without message
-  normalization or commit-specific exceptions.
+  description and current template only for PR events. Every non-merge commit is
+  validated directly without message normalization or commit-specific exceptions.
+- `pull-request-policy.ts` validates current PR section order, canonical checklist
+  labels/placement, selections, conditional N/A reasons, and evidence by reading
+  the supplied current template. The CLI loads `.github/PULL_REQUEST_TEMPLATE.md`;
+  the low-level Git range/message builder remains independent of that template.
+- `submission-markdown.ts` scans submission sections at a selected heading depth,
+  logical wrapped checkbox labels, adjacent continuations, and content paragraphs.
+  Fences, indented code, quotes, and comments cannot supply structural headings
+  or checklists; code and quoted content can supply evidence beyond starter prose.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
 - `check-text-style.ts` audits staged non-Biome text; original official release

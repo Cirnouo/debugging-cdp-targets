@@ -99,6 +99,31 @@ PR checks validate the raw title and the predicted header with its actual PR
 number plus the original PR description. Keep description lines within the same
 body/footer limit; editing a title or description reruns the existing gate.
 
+The current [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
+is the sole source of required PR headings, checklist labels, placement, order,
+and starter prose. Keep each H2 section exactly once in order without extra H2
+sections, and each template checklist once in its section and original order.
+Deeper headings, prose, lists, and code evidence are allowed. Wrapped checklist
+labels preserve their original text after whitespace normalization.
+
+Problem and Resulting behavior need content beyond starter prose, comments,
+headings, and checkboxes. An Issue link can explain the problem. Verification
+must record actual checks, results, and remaining limits beyond its checklist.
+Documentation can consist of satisfied checks and conditional reasons. Select
+mandatory checks with `x` or `X`. A check containing `when applicable` may remain
+unchecked only with an adjacent indented `N/A: <reason>` continuation. Do not
+delete unchecked required checks or claim results that have not been observed.
+
+The remote Commit messages check validates the current PR body against this
+template in addition to validating the complete original body with commitlint
+and the predicted squash suffix. A missing or empty body fails. A failed check
+blocks merge; edit the title or body to fix the reported errors and let the
+existing PR `edited` event rerun the check. Older PR numbers or historical prose
+provide no exception for a current submission. Local, push, and scheduled
+history checks continue to validate original commit messages without applying
+the current PR template to history. This remote body gate does not run before
+sending a PR description.
+
 Keep each commit coherent, stage only files owned by the task, and preserve
 unrelated worktree changes. Review the staged diff and run the applicable
 focused checks before committing.

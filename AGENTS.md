@@ -11,6 +11,18 @@ complete grammar. Optional `release/<semver>` preparation branches follow that
 policy; publication requires separately authorized annotated stable or prerelease tags under
 the [release policy](docs/policies/releases.md).
 
+## Pull request submissions
+
+Whenever creating or editing a PR, read the current
+[PR template](.github/PULL_REQUEST_TEMPLATE.md). Preserve every heading and
+checklist label, their order, and each checklist's section. Fill the problem,
+resulting behavior, and final verification with actual evidence, results, and
+remaining limits. Never fabricate results or delete an unchecked required check.
+Select satisfied checks; only checks containing `when applicable` may remain
+unchecked with an adjacent indented `N/A: <reason>` continuation. The
+[commit policy](docs/policies/commits-and-scope.md), including its 100-character
+body/footer limits and raw-title/generated-squash rules, remains authoritative.
+
 ## Boundaries
 
 - The reusable stdio gateway relays official MCP tools and results using

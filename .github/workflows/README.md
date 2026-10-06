@@ -8,10 +8,11 @@ This directory owns GitHub Actions workflows.
   security-events write permission. The C# job verifies that its extracted source
   archive contains the owned native helper before the job can succeed.
 
-- `ci.yml` validates commit governance, repository quality, Windows behavior,
-  portable simulated CDP, real Chrome and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
-  request open/reopen/synchronize/title-edit events without uploading runtime
-  data or artifacts.
+- `ci.yml` validates commit governance and current PR template submissions,
+  repository quality, Windows behavior, portable simulated CDP, real Chrome and
+  the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
+  request open/reopen/synchronize/title-or-body-edit events without uploading
+  runtime data or artifacts.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.

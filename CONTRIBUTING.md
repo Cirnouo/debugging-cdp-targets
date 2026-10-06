@@ -62,13 +62,18 @@ targets and agree to normal Close cleanup before running them.
 ## Submit a pull request
 
 Target main and use a PR title accepted by the commit policy, for example
-`fix(target): reject stale session identity`. Explain the problem, final behavior,
-and actual verification results in the PR template. Update relevant documentation
+`fix(target): reject stale session identity`. Read the current
+[PR template](.github/PULL_REQUEST_TEMPLATE.md) before creating or editing the
+description and follow the [Agent submission rules](AGENTS.md#pull-request-submissions).
+The [submission and commit policy](docs/policies/commits-and-scope.md) owns the
+required structure, evidence, conditional N/A reasons, 100-character limits,
+generated squash suffix, and optional Issue trailers. Update relevant documentation
 and meaningful user-facing changes in the Unreleased changelog.
-Wrap description paragraphs and list continuations within 100 characters; CI
-validates the title and predicted squash message with its generated PR number.
-Follow the [commit policy](docs/policies/commits-and-scope.md) for the final header
-limit and optional issue trailers at the end of the description.
+
+The remote Commit messages check rejects a current PR that omits required
+template content or fails commitlint. A failure blocks merge. Fix the reported
+errors in the PR title or body; editing reruns the existing check. The body format
+check runs after GitHub receives the submission.
 
 The main Ruleset requires an up-to-date PR and successful required GitHub checks.
 The maintainer reviews contributions and merges with squash, checking the actual
