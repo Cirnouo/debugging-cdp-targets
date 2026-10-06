@@ -1,5 +1,21 @@
 # Tests
 
+- `application-screenshot-probe.test.ts` validates complete sealed payload
+  receipts before acquisition, unique existing renderer/HWND selection, formal
+  yellow/condition/green ordering, one capture without replay, opaque geometry
+  evidence, qualification without capture, and retained cleanup through injected
+  I/O. Its Windows native helper compile check parses argv without inspecting an app.
+  Fractional geometry regressions execute the actual marker at the injected DOM
+  boundary and retain exact viewport/fullPage pixel acceptance.
+- `application-screenshot-adapter.test.ts` validates sealed gateway selection,
+  generic-cdp routing, unchanged receipt deadlines, partial-start identity recovery,
+  passive exit arming before normal Close and retained stdio after uncertain cleanup.
+
+- `application-screenshot-fixture.test.ts` checks test-only Obsidian/Readest
+  launch-pair validation before I/O, canonical browser carriers, fresh profile/file
+  confinement, source/copy hashes, literal Unicode host data and controlled
+  gateway environment inheritance using injected filesystem boundaries.
+
 - `screenshot-timeout-probe.test.ts` checks the opt-in one-shot probe's malformed
   fixture rejection, exact optional selection/evaluation arguments, fresh page ID
   routing, fail-fast preparation, capture without replay, blocked native identity,
@@ -186,6 +202,9 @@
 
 Run pnpm test or a focused Node test; real-browser integration is separate
 from regression tests and must not touch existing user targets.
+
+For the bounded application experiment and its actual results, see
+[application screenshot validation](../docs/application-screenshot-validation.md).
 
 Both package test commands use `--test-concurrency=1` to run files sequentially.
 The visible `window-evidence`, `screenshot-background-anchor` and `windows-native`

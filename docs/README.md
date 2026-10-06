@@ -7,6 +7,8 @@
   session lifetime, restart, resource disposal and automatic Hook output.
 - `mcp-native-validation.md` records the unreleased MCP/native delivery checklist,
   reproducible evidence, upstream attribution and remaining integration limits.
+- `application-screenshot-validation.md` records bounded Windows application
+    qualification, one-shot screenshot outcomes and privacy limits.
 - `policies/` contains repository-wide contribution requirements.
 - `adr/` records architecture decisions and superseded decisions.
 - `superpowers/` contains implementation plans linked to reviewed decisions.

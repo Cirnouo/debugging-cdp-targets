@@ -137,6 +137,93 @@ then explicitly restarts and normally closes them. It retains test profiles.
   preselected for these newly created targets; all peers are attempted on failure,
   with final empty gateway status and actual stdio exit checked. Blocked native
   state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
+- `application-screenshot-fixture.ts` validates complete test-only Obsidian/Readest
+  launch pairs, known existing-page selectors, confined synthetic text and fresh
+  profiles. It verifies an explicit source SHA256 before preparation, verifies a
+  controlled Readest executable copy, expands `{fixture}` after pair comparison,
+  and supplies a Windows-alias-safe gateway environment without WebView2 carriers.
+  Real launch recipes belong in explicit external experiment inputs.
+- `application-screenshot-probe.ts` accepts one explicit reviewed application
+  experiment with absolute config/evidence paths, an arm, native condition and
+  qualification/viewport/fullPage mode. `application-screenshot-core.ts` verifies
+  the complete sealed payload receipt from source
+  `eef90b4d974600c3a6697d40dc76e99037466315` before fixture or gateway acquisition.
+  It selects a unique existing renderer by exact URL, declared title/identity and
+  observed fresh userData/vault paths. It selects a unique owned main HWND by
+  declared class/title and never creates pages.
+  Qualification takes zero screenshots. A formal cell installs opaque yellow,
+  establishes its native condition, reads back fresh green/nonce/geometry and
+  performs exactly one official capture. Output is fixed to `screenshot.png`
+  inside the fresh fixture workspace; conflicting fixture files fail before
+  preparation. Geometry retains the fractional fixed `100vw`/`100vh` DOMRect and
+  the actual root DOMRect separately from integer inner/scroll measurements.
+  Fast captures retain PNG evidence with
+  an insufficient-condition result when no complete passive sample fits inside
+  the local MCP pending interval. This interval does not expose CDP method timing.
+  An observer completion failure preserves the primary capture receipt and saved
+  PNG evidence while recording a separate condition-evidence failure.
+- `application-screenshot-adapter.ts` reuses the stdio client, lifecycle Close,
+  screenshot observer, background anchor and native PNG decoder for those cells.
+  Its injectable boundaries also verify actual root/browser/listener/endpoint
+  identity, runtime version/hash, ordinary token level and consumed profile/port
+  argv. Observed feature argv must pass the existing strict effective grammar
+  without altering the receipt. Cleanup attempts all owned resources and requires
+  identity-bound actual process exits,
+  no owned listener, empty gateway status and actual stdio exit. Uncertain cleanup
+  retains gateway stdio and identities; the caller must stop subsequent acquisition.
+  Close and witness failures retain separate resource/phase reasons in the ledger.
+  Unexpected permission waiting, permission handshake or ERROR740 evidence blocks
+  the attempt, cancels its existing operation and performs only bounded cancellation
+  settlement and cleanup. It does not authorize elevation or continue CDP readiness.
+- `application-screenshot-native.ts` and `windows-application-evidence.ps1` are
+  test-only read-only native evidence boundaries. The script compares CIM argv
+  against an opened native process identity, uses Windows argv parsing and reads
+  executable version/hash and the actual same-handle token elevation. Its passive
+  exit witness arms process handles before Close and waits on those handles after
+  the lifecycle receipt, without issuing any target mutation or termination.
+  Finalization waits for child stdio closure and all output-record writes.
+
+The application config is an external JSON object with `fixture` (the complete
+application fixture pair), `payload: {root, receipt}` (the inline complete sealed
+receipt), `mainWindow: {className, titleIncludes}`, `identityFunction` and
+`preflight: {status, reason}`. The caller supplies a reviewed read-only identity
+function accepting the exact fresh directory as its `fixtureDirectory` parameter
+and returning `{url, title, userData, vaultPath, identity?}` plus any runtime facts.
+The core safely encodes the directory as a JSON string argument; it does not
+replace placeholders in the function source. For Obsidian, observed `userData`
+must match the expanded `--user-data-dir` carrier, and observed `vaultPath` must
+match the sole open vault in the synthetic `<profile>/obsidian.json`. Both paths
+must be fresh fixture descendants; the vault's synthetic `.obsidian/app.json`
+must also be present. Configured title and identity fields must both match when
+supplied, and an opaque identity does not replace actual consumer-path evidence.
+Main-window criteria must come from prior static evidence, never a launch to
+discover a class. `preflight.status: "blocked"` records
+the block with zero fixture/gateway/app acquisition. The selected Readest binary
+is always blocked before acquisition because its unconditional protocol setup
+changes user configuration. Neither test-only input support nor the fake tests
+establish real Readest compatibility. Obsidian requires the caller's independently
+reviewed protocol/singleton guard before an approved preflight.
+
+For example, with fictional external paths:
+
+```powershell
+node tests/smoke/application-screenshot-probe.ts 'C:/Test/application.json' 'C:/Test/evidence' candidate foreground-normal qualification
+node tests/smoke/application-screenshot-probe.ts 'C:/Test/application.json' 'C:/Test/evidence' baseline minimized fullPage
+```
+
+Each invocation retains its new fixture, PNG and raw evidence outside the repository.
+The runner hashes its Node executable, configuration and helper sources into that
+private evidence. The archived payload SHA256 is receipt provenance; extracted
+inventory verification does not independently rehash the archive. Normal Close
+is preselected only for these newly acquired test targets and related anchors.
+Root owns experiment ordering/caps and publication redaction. Do not run another
+cell until the previous invocation has confirmed cleanup.
+
+The bounded Windows results and qualification limits are recorded in
+[application screenshot validation](../../docs/application-screenshot-validation.md).
+Its original geometry failures remain failed; later fake regression verification
+does not establish a new accepted real-application matrix.
+
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
   strict canonical ASCII feature values and effective Windows parsing boundaries,
   fixture paths, decoded pixels, fresh session diagnostics and complete peer cleanup.
@@ -312,15 +399,20 @@ HWND checks remain mandatory for native mutations.
 
 Build the shared delivered payload once with `pnpm build:plugin` before running
 host Hook smokes so their copied manifests, Hooks and Skill match maintained
-sources. On the current Windows host, the discovered executable commands are:
+sources. Select the actual executable locally. These commands use fictional
+Windows paths:
 
 ```powershell
-node tests/smoke/codex-hooks.ts 'C:/Users/ciilyn/AppData/Local/Programs/OpenAI/Codex/bin/codex.exe'
-node tests/smoke/claude-hooks.ts 'C:/Users/ciilyn/.local/bin/claude.exe'
+node tests/smoke/codex-hooks.ts 'C:/Test/codex.exe'
+node tests/smoke/claude-hooks.ts 'C:/Test/claude.exe'
 ```
 
 Append `lifecycle` or `inactive` to run those isolated scenarios separately.
-These local discovery paths are host-specific. `entry-recovery.ts` is a separate
+Keep actual executable paths, usernames, hostnames, private addresses and local
+experiment receipts in untracked configuration or external evidence directories.
+Tracked tests and documentation must use explicitly synthetic identities and
+paths. Loopback protocol fixtures do not identify a particular host.
+`entry-recovery.ts` is a separate
 opt-in real-Chrome smoke; adapting its protocol assertions does not establish a
 new real-browser acceptance result.
 
