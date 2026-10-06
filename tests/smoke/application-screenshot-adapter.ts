@@ -471,7 +471,11 @@ export function createApplicationScreenshotAdapter(
                         ?.slice('--user-data-dir='.length);
                     assert.ok(profile, 'Reviewed expanded profile carrier is unavailable.');
                     const evidence = [];
-                    for (const browser of resource.browsers) {
+                    const processes = [
+                        selectedIdentity,
+                        ...resource.browsers.filter((browser) => browser.processId !== selectedIdentity.processId),
+                    ];
+                    for (const browser of processes) {
                         const output = await io.powershell('./windows-application-evidence.ps1', [
                             '-Mode',
                             'Inspect',

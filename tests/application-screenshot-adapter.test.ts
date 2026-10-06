@@ -72,6 +72,8 @@ function boundary(
         | 'permission'
         | 'permission-uncertain'
         | 'elevation-fallback'
+        | 'elevated-token'
+        | 'elevated-root'
         | 'malformed-status',
     profile = 'C:/Evidence/cell/profile',
 ) {
@@ -222,7 +224,7 @@ function boundary(
                 },
             };
         },
-        async snapshot() {
+        async snapshot(processId) {
             if (failure === 'snapshot' && !stopped) throw new Error('snapshot unavailable');
             return {
                 root: stopped
@@ -230,12 +232,14 @@ function boundary(
                     : {
                           exists: true,
                           executablePath: identity.executablePath,
-                          startedAtUtc: identity.startedAtUtc,
+                          startedAtUtc: processId === 4450 ? '2026-10-07T00:00:00.0000002Z' : identity.startedAtUtc,
                           sessionId: 1,
                       },
                 currentSessionId: 1,
-                processIds: stopped ? [] : [4400],
-                listeners: stopped ? [] : [{ localAddress: '127.0.0.1', owningProcess: 4400 }],
+                processIds: stopped ? [] : failure === 'elevated-root' ? [4400, 4450] : [4400],
+                listeners: stopped
+                    ? []
+                    : [{ localAddress: '127.0.0.1', owningProcess: failure === 'elevated-root' ? 4450 : 4400 }],
             };
         },
         async endpoint() {
@@ -246,9 +250,14 @@ function boundary(
         },
         async powershell(_script, args) {
             assert.ok(args.includes('-ApplicationPid'));
+            const processId = Number(args[args.indexOf('-ApplicationPid') + 1]);
             return {
                 raw: {
-                    identity,
+                    identity: {
+                        ...identity,
+                        processId,
+                        startedAtUtc: processId === 4450 ? '2026-10-07T00:00:00.0000002Z' : identity.startedAtUtc,
+                    },
                     commandLine: 'fixture',
                     argv: [
                         identity.executablePath,
@@ -257,7 +266,7 @@ function boundary(
                         '--enable-features=CDPScreenshotNewSurface',
                     ],
                     file: { sha256: 'a'.repeat(64), fileVersion: '1', productVersion: '1' },
-                    elevated: false,
+                    elevated: failure === 'elevated-token' || (failure === 'elevated-root' && processId === 4400),
                     identityVerifiedBefore: true,
                     identityVerifiedAfter: true,
                 },
@@ -384,6 +393,32 @@ test('permission waiting or prior elevation fallback cancels the attempt and nev
             assert.equal(io.closed(), false);
         }
     }
+});
+
+test('measured elevated Obsidian token blocks official qualification and still normally closes the target', async () => {
+    const io = boundary('elevated-token');
+    const route = await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });
+    await assert.rejects(route.qualify(), /ordinary privileges/);
+    assert.ok(io.records.some((event) => event.kind === 'browser-process-output'));
+    assert.ok(
+        !io.calls.some((call) =>
+            ['list_pages', 'evaluate_script', 'take_screenshot'].includes(String(call.params.name)),
+        ),
+    );
+    assert.equal((await io.adapter.cleanup()).ok, true);
+    assert.ok(io.sequence.includes('normal-close'));
+});
+
+test('ordinary browser listener evidence cannot substitute for a distinct elevated root token', async () => {
+    const io = boundary('elevated-root');
+    const route = await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });
+    await assert.rejects(route.qualify(), /ordinary privileges/);
+    assert.ok(
+        !io.calls.some((call) =>
+            ['list_pages', 'evaluate_script', 'take_screenshot'].includes(String(call.params.name)),
+        ),
+    );
+    assert.equal((await io.adapter.cleanup()).ok, true);
 });
 
 test('malformed ownership receipts are saved before boundary validation rejects them', async () => {

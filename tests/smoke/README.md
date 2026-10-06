@@ -148,20 +148,26 @@ then explicitly restarts and normally closes them. It retains test profiles.
   qualification/viewport/fullPage mode. `application-screenshot-core.ts` verifies
   the complete sealed payload receipt from source
   `eef90b4d974600c3a6697d40dc76e99037466315` before fixture or gateway acquisition.
-  It selects a unique existing renderer by exact URL and declared title/identity,
-  selects a unique owned main HWND by declared class/title, and never creates pages.
+  It selects a unique existing renderer by exact URL, declared title/identity and
+  observed fresh userData/vault paths. It selects a unique owned main HWND by
+  declared class/title and never creates pages.
   Qualification takes zero screenshots. A formal cell installs opaque yellow,
   establishes its native condition, reads back fresh green/nonce/geometry and
   performs exactly one official capture. Fast captures retain PNG evidence with
   an insufficient-condition result when no complete passive sample fits inside
   the local MCP pending interval. This interval does not expose CDP method timing.
+  An observer completion failure preserves the primary capture receipt and saved
+  PNG evidence while recording a separate condition-evidence failure.
 - `application-screenshot-adapter.ts` reuses the stdio client, lifecycle Close,
   screenshot observer, background anchor and native PNG decoder for those cells.
   Its injectable boundaries also verify actual root/browser/listener/endpoint
-  identity, runtime version/hash and consumed profile/port/feature argv. Cleanup
-  attempts all owned resources and requires identity-bound actual process exits,
+  identity, runtime version/hash, ordinary token level and consumed profile/port
+  argv. Observed feature argv must pass the existing strict effective grammar
+  without altering the receipt. Cleanup attempts all owned resources and requires
+  identity-bound actual process exits,
   no owned listener, empty gateway status and actual stdio exit. Uncertain cleanup
   retains gateway stdio and identities; the caller must stop subsequent acquisition.
+  Close and witness failures retain separate resource/phase reasons in the ledger.
   Unexpected permission waiting, permission handshake or ERROR740 evidence blocks
   the attempt, cancels its existing operation and performs only bounded cancellation
   settlement and cleanup. It does not authorize elevation or continue CDP readiness.
@@ -171,14 +177,23 @@ then explicitly restarts and normally closes them. It retains test profiles.
   executable version/hash and the actual same-handle token elevation. Its passive
   exit witness arms process handles before Close and waits on those handles after
   the lifecycle receipt, without issuing any target mutation or termination.
+  Finalization waits for child stdio closure and all output-record writes.
 
 The application config is an external JSON object with `fixture` (the complete
 application fixture pair), `payload: {root, receipt}` (the inline complete sealed
 receipt), `mainWindow: {className, titleIncludes}`, `identityFunction` and
 `preflight: {status, reason}`. The caller supplies a reviewed read-only identity
-function returning `{url, title, identity}`; configured title and identity fields
-must both match when supplied. Main-window criteria must come from prior static
-evidence, never a launch to discover a class. `preflight.status: "blocked"` records
+function accepting the exact fresh directory as its `fixtureDirectory` parameter
+and returning `{url, title, userData, vaultPath, identity?}` plus any runtime facts.
+The core safely encodes the directory as a JSON string argument; it does not
+replace placeholders in the function source. For Obsidian, observed `userData`
+must match the expanded `--user-data-dir` carrier, and observed `vaultPath` must
+match the sole open vault in the synthetic `<profile>/obsidian.json`. Both paths
+must be fresh fixture descendants; the vault's synthetic `.obsidian/app.json`
+must also be present. Configured title and identity fields must both match when
+supplied, and an opaque identity does not replace actual consumer-path evidence.
+Main-window criteria must come from prior static evidence, never a launch to
+discover a class. `preflight.status: "blocked"` records
 the block with zero fixture/gateway/app acquisition. The selected Readest binary
 is always blocked before acquisition because its unconditional protocol setup
 changes user configuration. Neither test-only input support nor the fake tests

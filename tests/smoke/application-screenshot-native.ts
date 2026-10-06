@@ -4,7 +4,8 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { isRecord } from '../../src/shared/errors.ts';
+import { withChromeScreenshotFeature } from '../../src/domains/chromium-features.ts';
+import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { readWindowSample, type WindowIdentity } from './window-evidence.ts';
 export interface ApplicationProcessEvidence {
     identity: WindowIdentity;
@@ -78,17 +79,17 @@ export function qualifyApplicationBrowserArguments(
         'Actual browser profile differs.',
     );
     assert.deepEqual(values('--remote-debugging-port'), [String(expected.port)], 'Actual browser port differs.');
+    // Validate the observed carrier with the reviewed effective grammar. Its composed
+    // return value is deliberately discarded; observed argv remains unchanged evidence.
+    withChromeScreenshotFeature(args);
     const entries = (name: string) => values(name).flatMap((value) => (value ?? '').split(','));
-    const target = (entry: string) => /^CDPScreenshotNewSurface(?:$|[<:*])/.test(entry);
-    assert.ok(!entries('--disable-features').some(target), 'Actual browser disables screenshot candidate.');
-    const enabled = entries('--enable-features').filter(target);
+    const enabled = entries('--enable-features').filter((entry) => entry === 'CDPScreenshotNewSurface');
     assert.deepEqual(
         enabled,
         expected.candidate ? ['CDPScreenshotNewSurface'] : [],
         'Actual bare feature carrier differs.',
     );
-    if (expected.application === 'readest')
-        assert.equal(evidence.elevated, false, 'Readest requires observed ordinary privileges.');
+    assert.equal(evidence.elevated, false, 'Application requires observed ordinary privileges.');
 }
 
 export async function runApplicationPowerShell(script: string, args: string[], signal?: AbortSignal) {
@@ -150,6 +151,8 @@ export function startApplicationExitWitness(
     let resultResolve: (value: unknown) => void;
     let resultReject: (error: Error) => void;
     let received: unknown;
+    let armedReceived = false;
+    const failures: string[] = [];
     const armed = new Promise<void>((resolve, reject) => {
         armedResolve = resolve;
         armedReject = reject;
@@ -164,7 +167,9 @@ export function startApplicationExitWitness(
     let writes = Promise.resolve();
     const watchdog = setTimeout(() => {
         child.stdin.end();
-        armedReject(new Error('Passive witness arm deadline expired.'));
+        const error = new Error('Passive witness arm deadline expired.');
+        failures.push(error.message);
+        armedReject(error);
     }, 10_000);
     lines.on('line', (line) => {
         writes = writes
@@ -173,28 +178,33 @@ export function startApplicationExitWitness(
                 await record('passive-exit-witness', raw);
                 assert.ok(isRecord(raw));
                 if (raw.event === 'armed') {
+                    armedReceived = true;
                     clearTimeout(watchdog);
                     armedResolve();
                 }
                 if (raw.event === 'observed') received = raw;
             })
             .catch((error: unknown) => {
-                armedReject(new Error(String(error)));
-                resultReject(new Error(String(error)));
+                failures.push(`record/output: ${errorMessage(error)}`);
+                armedReject(new Error(errorMessage(error)));
                 child.stdin.end();
             });
     });
     child.once('error', (error) => {
         clearTimeout(watchdog);
+        failures.push(`child: ${errorMessage(error)}`);
         armedReject(error);
-        resultReject(error);
     });
-    child.once('exit', (code) => {
+    child.once('close', (code, signal) => {
         clearTimeout(watchdog);
         lines.close();
         void writes.then(() => {
-            if (code !== 0 || received === undefined) {
-                const error = new Error(`Passive witness failed: ${stderr}`);
+            if (code !== 0 || signal !== null)
+                failures.push(`child exit: code=${code}, signal=${signal}, stderr=${stderr}`);
+            if (!armedReceived) failures.push('Missing armed receipt.');
+            if (received === undefined) failures.push('Missing final observed receipt.');
+            if (failures.length > 0) {
+                const error = new Error(`Passive witness failed: ${failures.join('; ')}`);
                 armedReject(error);
                 resultReject(error);
             } else resultResolve(received);

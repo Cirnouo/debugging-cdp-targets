@@ -76,6 +76,40 @@ const captureErrorOutcome = (error: unknown) =>
             ? 'session-ended'
             : 'client-error';
 
+function rendererDataPaths(prepared: PreparedApplicationScreenshotFixture) {
+    const profile = (prepared.launch.args ?? [])
+        .find((arg) => arg.startsWith('--user-data-dir='))
+        ?.slice('--user-data-dir='.length);
+    assert.ok(profile, 'Reviewed expanded profile carrier is unavailable.');
+    const confined = (file: string) => {
+        const relative = path.win32.relative(prepared.directory, file);
+        assert.ok(
+            absolute(file) && relative && relative !== '..' && !relative.startsWith('..\\') && !absolute(relative),
+            'Renderer data path must be a fresh fixture descendant.',
+        );
+        return file;
+    };
+    confined(profile);
+    const profileFile = `${path.win32.relative(prepared.directory, profile).replaceAll('\\', '/')}/obsidian.json`;
+    const text = prepared.fixture.fixtureFiles[profileFile];
+    assert.ok(typeof text === 'string', 'Synthetic Obsidian profile configuration is missing.');
+    const settings: unknown = JSON.parse(text.replaceAll('{fixture}', prepared.directory));
+    assert.ok(isRecord(settings) && isRecord(settings.vaults), 'Synthetic vault configuration is missing.');
+    const opened = Object.values(settings.vaults)
+        .filter(isRecord)
+        .filter((vault) => vault.open === true);
+    assert.equal(opened.length, 1, 'Exactly one synthetic open vault is required.');
+    const vaultPath = opened[0]?.path;
+    assert.ok(typeof vaultPath === 'string', 'Synthetic vault path is missing.');
+    confined(vaultPath);
+    const vaultFile = `${path.win32.relative(prepared.directory, vaultPath).replaceAll('\\', '/')}/.obsidian/app.json`;
+    assert.ok(
+        typeof prepared.fixture.fixtureFiles[vaultFile] === 'string',
+        'Synthetic vault initialization is missing.',
+    );
+    return { userData: profile, vaultPath };
+}
+
 export async function verifySealedApplicationPayload(
     payload: { root: string; receipt: unknown },
     io: PayloadIO,
@@ -251,6 +285,7 @@ export async function runApplicationScreenshotProbe(
     }
     let outcome = 'qualification-blocked';
     let capture: ApplicationProbeResult['capture'];
+    let captureRequestError: unknown;
     let cleanup: ApplicationProbeResult['cleanup'];
     let route: ApplicationProbeRoute | undefined;
     let quarantine = false;
@@ -275,6 +310,7 @@ export async function runApplicationScreenshotProbe(
             raw = await route.call(name, args, interval);
         } catch (error) {
             if (name === 'take_screenshot') {
+                captureRequestError = error;
                 capture = {
                     outcome: captureErrorOutcome(error),
                     error: errorMessage(error),
@@ -298,10 +334,17 @@ export async function runApplicationScreenshotProbe(
         } else await adapter.record('official-result', { name, result: raw });
         if (isRecord(raw.structuredContent) && raw.structuredContent.code === 'CONNECTION_RECOVERY_REQUIRED') {
             quarantine = true;
-            throw Object.assign(new Error('Gateway quarantined route.'), { captureOutcome: 'quarantine' });
+            const error = Object.assign(new Error('Gateway quarantined route.'), { captureOutcome: 'quarantine' });
+            if (name === 'take_screenshot') captureRequestError = error;
+            throw error;
         }
-        if (raw.isError === true)
-            throw Object.assign(new Error(`Official ${name} returned isError:true.`), { captureOutcome: 'tool-error' });
+        if (raw.isError === true) {
+            const error = Object.assign(new Error(`Official ${name} returned isError:true.`), {
+                captureOutcome: 'tool-error',
+            });
+            if (name === 'take_screenshot') captureRequestError = error;
+            throw error;
+        }
         return raw;
     };
     try {
@@ -313,6 +356,8 @@ export async function runApplicationScreenshotProbe(
                 : { inheritedEnvironment: adapter.inheritedEnvironment }),
         });
         await adapter.record('prepared-fixture', prepared);
+        const expectedData = rendererDataPaths(prepared);
+        await adapter.record('expected-renderer-data', expectedData);
         route = await adapter.acquire(prepared, payload);
         await adapter.record('runtime-qualification', await route.qualify());
         const listed = await call('list_pages', {});
@@ -334,7 +379,7 @@ export async function runApplicationScreenshotProbe(
                 const evaluated = readOfficialEvaluation(
                     await call('evaluate_script', {
                         pageId,
-                        function: config.identityFunction,
+                        function: `() => (${config.identityFunction})(${JSON.stringify(prepared.directory)})`,
                         waitForStableDom: false,
                     }),
                 );
@@ -344,7 +389,12 @@ export async function runApplicationScreenshotProbe(
                     evaluated.url === config.fixture.page.url &&
                     (config.fixture.page.title === undefined ||
                         (typeof evaluated.title === 'string' && evaluated.title.includes(config.fixture.page.title))) &&
-                    (config.fixture.page.identity === undefined || evaluated.identity === config.fixture.page.identity)
+                    (config.fixture.page.identity === undefined ||
+                        evaluated.identity === config.fixture.page.identity) &&
+                    typeof evaluated.userData === 'string' &&
+                    samePath(evaluated.userData, expectedData.userData) &&
+                    typeof evaluated.vaultPath === 'string' &&
+                    samePath(evaluated.vaultPath, expectedData.vaultPath)
                 )
                     pages.push({ pageId, value: evaluated });
             }
@@ -449,10 +499,11 @@ export async function runApplicationScreenshotProbe(
                 );
                 outcome = 'success';
             } catch (error) {
-                const captureOutcome = captureErrorOutcome(error);
-                capture = { ...capture, outcome: captureOutcome, error: errorMessage(error) };
-                await adapter.record('capture-raw', capture);
-                outcome = captureOutcome;
+                if (capture === undefined) {
+                    capture = { outcome: captureErrorOutcome(error), error: errorMessage(error) };
+                    await adapter.record('capture-raw', capture);
+                } else if (error !== captureRequestError) await fail('capture-observer', error);
+                outcome = capture.outcome;
             }
             await adapter.record('capture-interval', {
                 basis: 'Local MCP dispatch/settlement, not CDP method timing.',
@@ -514,28 +565,31 @@ export async function cleanupApplicationResources<T>(io: {
 }): Promise<{ ok: boolean; retained: boolean; failures: string[]; final?: unknown; exit?: unknown }> {
     const failures: string[] = [];
     const receipts = await closeEvery([
-        ...io.connections.map((connection) => async () => {
-            let closeError: unknown;
+        ...io.connections.map((connection, index) => async () => {
             try {
                 await io.close(connection);
             } catch (error) {
-                closeError = error;
+                failures.push(`connection[${index}] Close: ${errorMessage(error)}`);
             }
-            const witness = await io.witness(connection);
-            assert.ok(
-                isRecord(witness) &&
-                    witness.processExited === true &&
-                    witness.identityVerified === true &&
-                    witness.waitResult === 0 &&
-                    witness.waitError === 0 &&
-                    typeof witness.exitCode === 'number',
-                'Missing identity-bound actual exit proof.',
-            );
-            if (closeError !== undefined) throw closeError;
+            try {
+                const witness = await io.witness(connection);
+                assert.ok(
+                    isRecord(witness) &&
+                        witness.processExited === true &&
+                        witness.identityVerified === true &&
+                        witness.waitResult === 0 &&
+                        witness.waitError === 0 &&
+                        typeof witness.exitCode === 'number',
+                    'Missing identity-bound actual exit proof.',
+                );
+            } catch (error) {
+                failures.push(`connection[${index}] witness: ${errorMessage(error)}`);
+            }
         }),
         io.anchor,
     ]);
-    for (const result of receipts) if (result.status === 'rejected') failures.push(errorMessage(result.reason));
+    for (const result of receipts)
+        if (result.status === 'rejected') failures.push(`anchor: ${errorMessage(result.reason)}`);
     let final: unknown;
     try {
         final = await io.final();

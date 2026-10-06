@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import childProcess, { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import { syncBuiltinESMExports } from 'node:module';
+import { PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import {
     type ApplicationProbeAdapter,
     type ApplicationProbeConfig,
@@ -15,6 +19,7 @@ import {
 import {
     qualifyApplicationBrowserArguments,
     readApplicationProcessEvidence,
+    startApplicationExitWitness,
 } from './smoke/application-screenshot-native.ts';
 
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -47,12 +52,18 @@ const config: ApplicationProbeConfig = {
             cwd: '{fixture}/profile',
             env: {},
         },
-        fixtureFiles: { 'profile/obsidian.json': '{}' },
+        fixtureFiles: {
+            'profile/obsidian.json': JSON.stringify({
+                vaults: { 'synthetic-id': { path: '{fixture}/synthetic-vault', open: true } },
+            }),
+            'synthetic-vault/.obsidian/app.json': '{}',
+        },
         page: { url: 'app://obsidian.md/index.html', title: 'synthetic-vault', identity: 'synthetic-id' },
     },
     payload: { root: 'C:/Evidence/sealed', receipt },
     mainWindow: { className: 'Chrome_WidgetWin_1', titleIncludes: 'synthetic-vault' },
-    identityFunction: '() => ({url:location.href,title:document.title,identity:"synthetic-id"})',
+    identityFunction:
+        '(fixtureDirectory) => ({url:location.href,title:document.title,identity:"synthetic-id",userData:fixtureDirectory+"/profile",vaultPath:fixtureDirectory+"/synthetic-vault"})',
     preflight: { status: 'approved', reason: 'External static guards passed.' },
 };
 const identity = {
@@ -103,6 +114,9 @@ function boundary(
         badPixel?: boolean;
         badDimensions?: boolean;
         acquireError?: boolean;
+        rendererPaths?: Record<string, unknown>;
+        observerError?: boolean;
+        directory?: string;
     } = {},
 ) {
     const events: { kind: string; value: unknown }[] = [];
@@ -131,7 +145,7 @@ function boundary(
             },
             async createFreshDirectory() {
                 sequence.push('fixture');
-                return 'C:/Evidence/cell-1';
+                return options.directory ?? 'C:/Evidence/cell-1';
             },
             async writeFile() {},
         },
@@ -164,6 +178,7 @@ function boundary(
                         };
                     if (name === 'evaluate_script') {
                         const expression = String(args.function);
+                        events.push({ kind: 'evaluate-function', value: expression });
                         if (expression.includes('DCT_APPLICATION_MARKER')) {
                             if (expression.includes('255,255,0')) return jsonResult({ installed: true });
                             return jsonResult(geometry);
@@ -172,6 +187,10 @@ function boundary(
                             url: options.missing ? 'app://obsidian.md/help.html' : config.fixture.page.url,
                             title: 'synthetic-vault',
                             identity: 'synthetic-id',
+                            ...(options.rendererPaths ?? {
+                                userData: `${options.directory ?? 'C:/Evidence/cell-1'}/profile`,
+                                vaultPath: `${options.directory ?? 'C:/Evidence/cell-1'}/synthetic-vault`,
+                            }),
                         });
                     }
                     assert.equal(name, 'take_screenshot');
@@ -202,7 +221,17 @@ function boundary(
                 },
                 async capture(call, _handle, observe) {
                     pendingSample = options.fast ? undefined : () => observe(async () => [window]);
-                    return call({ dispatched() {}, settled() {} });
+                    let result: Record<string, unknown> | undefined;
+                    let primaryError: unknown;
+                    try {
+                        result = await call({ dispatched() {}, settled() {} });
+                    } catch (error) {
+                        primaryError = error;
+                    }
+                    if (options.observerError) throw new Error('observer completion failed after settlement');
+                    if (primaryError !== undefined) throw primaryError;
+                    assert.ok(result);
+                    return result;
                 },
                 async png(_file, points, size) {
                     sequence.push('png');
@@ -362,6 +391,40 @@ test('qualification selects only one existing main renderer and takes zero scree
     }
 });
 
+test('renderer identity receives the exact fresh directory as a safely encoded function argument', async () => {
+    const directory = "C:/Evidence/cell-1');globalThis.injected=true;('";
+    const io = boundary({ directory });
+    const result = await run(
+        io,
+        { ...config, identityFunction: 'fixtureDirectory => ({received:fixtureDirectory})' },
+        'qualification',
+    );
+    assert.equal(result.outcome, 'qualified');
+    const expression = io.events.find((event) => event.kind === 'evaluate-function')?.value;
+    assert.equal(typeof expression, 'string');
+    const context = { injected: false };
+    const evaluated: unknown = runInNewContext(`(${expression})()`, context);
+    assert.ok(typeof evaluated === 'object' && evaluated !== null && 'received' in evaluated);
+    assert.equal(evaluated.received, directory);
+    assert.equal(context.injected, false);
+});
+
+test('opaque renderer identity cannot substitute for actual fresh profile and synthetic vault adoption', async () => {
+    for (const rendererPaths of [
+        {},
+        { userData: '{fixture}/profile', vaultPath: '{fixture}/synthetic-vault' },
+        { userData: 'C:/Fixture/old-profile', vaultPath: 'C:/Evidence/cell-1/synthetic-vault' },
+        { userData: 'C:/Evidence/cell-1/profile', vaultPath: 'C:/Fixture/old-vault' },
+        { userData: 'C:/Evidence/cell-1/profile' },
+        { vaultPath: 'C:/Evidence/cell-1/synthetic-vault' },
+    ]) {
+        const io = boundary({ rendererPaths });
+        assert.equal((await run(io)).outcome, 'qualification-blocked');
+        assert.deepEqual(io.counts(), { capture: 0, opened: 1, closed: 1 });
+        assert.ok(!io.sequence.includes('marker-initial'));
+    }
+});
+
 test('Obsidian helper or starter URLs are refused before acquisition', async () => {
     const io = boundary();
     const result = await run(
@@ -394,6 +457,32 @@ test('fast capture preserves PNG with evidence-insufficient and raw result prece
         assert.ok(io.sequence.includes('png'));
         assert.ok(io.sequence.indexOf('capture-raw') < io.sequence.indexOf('png'));
         assert.equal(io.counts().capture, 1);
+    }
+});
+
+test('observer completion failure preserves the primary successful or failed capture without replay', async () => {
+    for (const captureError of [false, true]) {
+        const io = boundary({ observerError: true, captureError });
+        const result = await run(io);
+        assert.equal(result.capture?.outcome, captureError ? 'client-timeout' : 'success');
+        assert.equal(result.outcome, captureError ? 'client-timeout' : 'evidence-insufficient');
+        assert.equal(io.counts().capture, 1);
+        assert.equal(io.events.filter((event) => event.kind === 'capture-raw').length, 1);
+        assert.ok(
+            result.failures.some(
+                (failure) => failure.kind === 'capture-observer' && failure.error.includes('observer completion'),
+            ),
+        );
+        if (captureError) {
+            assert.match(result.capture?.error ?? '', /MCP timeout/);
+            assert.ok(!io.sequence.includes('png'));
+        } else {
+            assert.deepEqual(result.capture?.result, { content: [{ type: 'text', text: 'saved' }] });
+            const png = io.events.find((event) => event.kind === 'png')?.value;
+            assert.ok(typeof png === 'object' && png !== null && 'sha256' in png && 'bytes' in png);
+            assert.equal(png.sha256, 'b'.repeat(64));
+            assert.equal(png.bytes, 42);
+        }
     }
 });
 test('wrong opaque pixels and fullPage dimensions remain distinct screenshot evidence failures', async () => {
@@ -481,6 +570,56 @@ test('cleanup attempts every target and anchor and retains gateway on Close or e
     }
 });
 
+test('cleanup retains both Close and rejected or invalid witness reasons for the same resource', async () => {
+    for (const invalidWitness of [false, true]) {
+        const calls: string[] = [];
+        const result = await cleanupApplicationResources({
+            connections: ['one', 'two'],
+            async close(connection) {
+                calls.push(`close-${connection}`);
+                if (connection === 'one') throw new Error('normal Close denied');
+            },
+            async witness(connection) {
+                calls.push(`witness-${connection}`);
+                if (connection === 'one' && !invalidWitness) throw new Error('exit witness unavailable');
+                return {
+                    processExited: connection !== 'one',
+                    identityVerified: true,
+                    waitResult: 0,
+                    waitError: 0,
+                    exitCode: 0,
+                };
+            },
+            async anchor() {
+                calls.push('anchor');
+            },
+            async final() {
+                return { connections: [] };
+            },
+            async shutdown() {
+                calls.push('shutdown');
+                return { code: 0, signal: null };
+            },
+        });
+        assert.equal(result.retained, true);
+        assert.ok(
+            result.failures.some(
+                (failure) => failure.includes('connection[0] Close') && failure.includes('normal Close denied'),
+            ),
+        );
+        assert.ok(
+            result.failures.some(
+                (failure) =>
+                    failure.includes('connection[0] witness') &&
+                    failure.includes(invalidWitness ? 'actual exit proof' : 'exit witness unavailable'),
+            ),
+        );
+        assert.deepEqual([...calls].sort(), ['anchor', 'close-one', 'close-two', 'witness-one', 'witness-two']);
+        for (const resource of ['one', 'two'])
+            assert.ok(calls.indexOf(`close-${resource}`) < calls.indexOf(`witness-${resource}`));
+    }
+});
+
 test('read-only browser evidence rejects stale identity incomplete argv hashes version and privilege values', () => {
     const observed = {
         identity,
@@ -525,6 +664,230 @@ test('read-only browser evidence rejects stale identity incomplete argv hashes v
                 { application: 'obsidian', profile: 'C:/Evidence/cell-1/profile', port: 20222, candidate: true },
             ),
         );
+});
+
+test('observed Obsidian browser token must prove the approved ordinary route', () => {
+    const elevated = readApplicationProcessEvidence(
+        {
+            identity,
+            commandLine: 'fixture',
+            argv: [
+                identity.executablePath,
+                '--user-data-dir=C:/Evidence/cell-1/profile',
+                '--remote-debugging-port=20222',
+                '--enable-features=CDPScreenshotNewSurface',
+            ],
+            file: { sha256: sha('app'), fileVersion: '1', productVersion: '1' },
+            elevated: true,
+            identityVerifiedBefore: true,
+            identityVerifiedAfter: true,
+        },
+        identity,
+    );
+    assert.throws(
+        () =>
+            qualifyApplicationBrowserArguments(elevated, {
+                application: 'obsidian',
+                profile: 'C:/Evidence/cell-1/profile',
+                port: 20222,
+                candidate: true,
+            }),
+        /ordinary privileges/,
+    );
+});
+
+test('observed feature argv uses the strict effective grammar without mutating the receipt', () => {
+    const carrier = [
+        identity.executablePath,
+        '--user-data-dir=C:/Evidence/cell-1/profile',
+        '--remote-debugging-port=20222',
+    ];
+    const processEvidence = (argv: string[]) =>
+        readApplicationProcessEvidence(
+            {
+                identity,
+                commandLine: 'fixture',
+                argv,
+                file: { sha256: sha('app'), fileVersion: '1', productVersion: '1' },
+                elevated: false,
+                identityVerifiedBefore: true,
+                identityVerifiedAfter: true,
+            },
+            identity,
+        );
+    const target = 'CDPScreenshotNewSurface';
+    for (const candidate of [false, true]) {
+        const qualify = (observed: ReturnType<typeof readApplicationProcessEvidence>) =>
+            qualifyApplicationBrowserArguments(observed, {
+                application: 'obsidian',
+                profile: 'C:/Evidence/cell-1/profile',
+                port: 20222,
+                candidate,
+            });
+        for (const invalid of [
+            [`--enable-features=${target}`, `--disable-features= ${target}`],
+            [`--enable-features=${target}`, '--enable-features=Unrelated'],
+            [`--enable-features=${target}`, `--disable-features=${target}.Group`],
+            [`--enable-features=${target}`, '--disable-features=Unrelated', '--disable-features=Other'],
+            [`--enable-features= ${target}`],
+            [`--enable-features=*${target}`],
+            [`--enable-features=${target}<Trial`],
+            [`--enable-features=${target}.Group`],
+            [`--enable-features=${target}:key/value`],
+            [`--enable-features=${target},${target}`],
+            [`--enable-features=${target}`, '--Enable-Features=Other'],
+            [`--enable-features=${target}`, ' --disable-features=Other'],
+            ['--enable-features', target],
+            [`--enable-features=${target}`, '--single-argument'],
+            [`--enable-features=${target}`, ' -- '],
+            ['--enable-features=Other::bad'],
+            ['--enable-features=Other\u0085'],
+        ]) {
+            const argv = [...carrier, ...invalid];
+            const observed = processEvidence(argv);
+            const original = structuredClone(observed);
+            assert.throws(() => qualify(observed), `accepted ${JSON.stringify(invalid)}`);
+            assert.deepEqual(observed, original);
+        }
+        const valid = [
+            ...carrier,
+            `--enable-features=SharedArrayBuffer${candidate ? `,${target}` : ''}`,
+            '--',
+            `--disable-features=${target}`,
+        ];
+        const observed = processEvidence(valid);
+        const original = structuredClone(observed);
+        qualify(observed);
+        assert.deepEqual(observed, original);
+        assert.throws(() =>
+            qualify(processEvidence(candidate ? carrier : [...carrier, `--enable-features=${target}`])),
+        );
+    }
+});
+
+test('passive exit witness drains observed output delivered after child exit before close', async (t) => {
+    const child = new EventEmitter();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const stdin = new Writable({
+        write(_chunk, _encoding, callback) {
+            callback();
+        },
+    });
+    const fake = Object.assign(child, { stdout, stderr, stdin });
+    const observed = {
+        event: 'observed',
+        receipts: [
+            { ...identity, processExited: true, identityVerified: true, waitResult: 0, waitError: 0, exitCode: 0 },
+        ],
+    };
+    stdin.on('finish', () => {
+        child.emit('exit', 0, null);
+        setImmediate(() => {
+            stdout.end(`${JSON.stringify(observed)}\n`);
+            stderr.end();
+            child.emit('close', 0, null);
+        });
+    });
+    const replaced = t.mock.method(childProcess, 'spawn', () => {
+        queueMicrotask(() => stdout.write(`${JSON.stringify({ event: 'armed' })}\n`));
+        return fake;
+    });
+    syncBuiltinESMExports();
+    try {
+        const records: unknown[] = [];
+        const witness = startApplicationExitWitness([identity], async (_kind, value) => {
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            records.push(value);
+        });
+        await witness.armed;
+        assert.deepEqual(await witness.finish(), observed);
+        assert.deepEqual(records, [{ event: 'armed' }, observed]);
+    } finally {
+        replaced.mock.restore();
+        syncBuiltinESMExports();
+    }
+});
+
+test('passive exit witness preserves record writer failure and nonzero child exit evidence', async (t) => {
+    const child = new EventEmitter();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const stdin = new Writable({
+        write(_chunk, _encoding, callback) {
+            callback();
+        },
+    });
+    const fake = Object.assign(child, { stdout, stderr, stdin });
+    stdin.on('finish', () => {
+        child.emit('exit', 7, null);
+        setImmediate(() => {
+            stdout.end(`${JSON.stringify({ event: 'observed' })}\n`);
+            stderr.end('native witness error');
+            child.emit('close', 7, null);
+        });
+    });
+    const replaced = t.mock.method(childProcess, 'spawn', () => {
+        queueMicrotask(() => stdout.write(`${JSON.stringify({ event: 'armed' })}\n`));
+        return fake;
+    });
+    syncBuiltinESMExports();
+    try {
+        const witness = startApplicationExitWitness([identity], async (_kind, value) => {
+            if (typeof value === 'object' && value !== null && 'event' in value && value.event === 'observed')
+                throw new Error('evidence writer failed');
+        });
+        await witness.armed;
+        await assert.rejects(witness.finish(), (error) => {
+            assert.ok(error instanceof Error);
+            assert.match(error.message, /evidence writer failed/);
+            assert.match(error.message, /code=7/);
+            assert.match(error.message, /native witness error/);
+            return true;
+        });
+    } finally {
+        replaced.mock.restore();
+        syncBuiltinESMExports();
+    }
+});
+
+test('passive exit witness rejects absent arm or terminal output and malformed drained output', async (t) => {
+    for (const scenario of [
+        { armed: true, output: '', error: /Missing final observed receipt/ },
+        { armed: true, output: 'invalid JSON\n', error: /record\/output/ },
+        { armed: false, output: `${JSON.stringify({ event: 'observed' })}\n`, error: /Missing armed receipt/ },
+    ]) {
+        const child = new EventEmitter();
+        const stdout = new PassThrough();
+        const stderr = new PassThrough();
+        const stdin = new Writable({
+            write(_chunk, _encoding, callback) {
+                callback();
+            },
+        });
+        const fake = Object.assign(child, { stdout, stderr, stdin });
+        stdin.on('finish', () => {
+            child.emit('exit', 0, null);
+            setImmediate(() => {
+                stdout.end(scenario.output);
+                stderr.end();
+                child.emit('close', 0, null);
+            });
+        });
+        const replaced = t.mock.method(childProcess, 'spawn', () => {
+            if (scenario.armed) queueMicrotask(() => stdout.write(`${JSON.stringify({ event: 'armed' })}\n`));
+            return fake;
+        });
+        syncBuiltinESMExports();
+        try {
+            const witness = startApplicationExitWitness([identity], async () => {});
+            if (scenario.armed) await witness.armed;
+            await assert.rejects(witness.finish(), scenario.error);
+        } finally {
+            replaced.mock.restore();
+            syncBuiltinESMExports();
+        }
+    }
 });
 
 test('application native evidence parses and its read-only C# compiles without inspecting any application', {
