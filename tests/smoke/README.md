@@ -114,6 +114,13 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
   retries of explicitly selected normal Close when pending CDP traffic is busy.
   It keeps the entry/connection/session identity and does not retry other failures.
+- `screenshot-timeout-probe.ts` runs one explicitly supplied screenshot experiment
+  through the complete committed Codex gateway. `screenshot-timeout-fixture.ts`
+  validates its fixture and owns the fail-fast sequence; neither runs in default
+  tests. `windows-selected-tab-evidence.ps1` reads UIA/MSAA selection only within
+  the verified owned HWND and samples the foreground HWND separately. Unsupported,
+  incomplete or ambiguous selection remains unknown. It never changes selection,
+  focus or window state.
 - `screenshot-layers.ts` accepts an explicit Windows application fixture JSON and
   an absolute evidence parent directory. It creates independent baseline/candidate
   targets for direct official and complete generated gateway routes, with native
@@ -164,6 +171,41 @@ then explicitly restarts and normally closes them. It retains test profiles.
 These scripts are opt-in and may open dedicated test browser/application windows.
 They use the delivered official package without dependency download. The normal
 test suite never runs them. Codex tests create only disposable homes/configuration.
+
+For a one-shot screenshot timeout investigation, first verify the committed build
+with `pnpm check:build`, then supply an explicitly reviewed fixture and evidence
+parent outside the worktree:
+
+```powershell
+node tests/smoke/screenshot-timeout-probe.ts 'C:/Test/probe.json' 'C:/Test/evidence'
+```
+
+The JSON fields are `label`, `url`, structured `launch`, `background`, `fullPage`,
+`colorScheme` (`light` or `dark`), `viewport`, and `evaluations` (an ordered array
+of `{function, waitForStableDom?}`). Optional `bringToFront` requests select_page;
+omitting it skips selection entirely, while `false` is passed literally. Launch
+args must contain one confined `--user-data-dir={fixture}/profile` (or another
+confined child) in the fresh evidence directory; the runner expands only that
+test placeholder and passes the directory as the official `--workspace`.
+
+The first and only screenshot sends `pageId`, `fullPage` and `filePath`, with no
+explicit format/quality. Supplied evaluations retain their exact arguments.
+One marked, read-only metadata evaluation records title, URL, focus, viewport and
+scroll dimensions identically across runs. No restore, minimize, additional page
+preparation, screenshot replay, restart or alternate profile is performed.
+The runner uses a 90-second MCP client deadline to receive the unchanged gateway
+60-second timeout/quarantine result. Tool errors stop dependent preparation.
+
+Each printed evidence directory retains the fixture/profile, individual evaluation
+results, timed requests/results/routing, independent process/listener/endpoint
+identity, raw and validated native samples, passive tab observations, before/after
+bounded gateway diagnostics, PNG SHA-256/decoded dimensions, and Close receipts.
+Method-level focus-emulation timing and actual CDP capture params remain explicitly
+unavailable. Native visibility/minimized flags do not prove compositor visibility
+or occlusion; JS focus never establishes the selected native tab. A failed capture
+is a diagnostic outcome and still triggers every discovered owned connection's
+preselected normal Close, final empty-connection check and gateway exit check.
+Cleanup failure reports retained identities. Evidence/profile files are retained.
 
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 
