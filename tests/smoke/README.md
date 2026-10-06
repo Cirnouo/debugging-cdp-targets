@@ -1,15 +1,5 @@
 # Explicit integration smoke
 
-`linux-mcp-startup-preload.ts` and `linux-mcp-startup-support.ts` temporarily
-observe the unchanged real MCP Chrome acceptance scripts on two independent Linux
-runners. An explicit preload URL with an owned absolute `directory` query selects
-only the original smoke entrypoints and their exact Codex gateway. It captures
-Chrome output in unique files and bounded owned loopback fetch outcomes while
-preserving native child/Promise identity, original environment and normal cleanup.
-Diagnostics never use MCP stdout, consume response bodies or change readiness.
-JSON events and printed log tails are bounded; raw inherited Chrome file output
-remains at the owned path. This diagnostic cannot replace required acceptance.
-
 `timeout-isolation.ts` exercises an intentionally unfinished official handler on
 two isolated Chrome targets, validates timeout quarantine and peer availability,
 then explicitly restarts and normally closes them. It retains test profiles.
