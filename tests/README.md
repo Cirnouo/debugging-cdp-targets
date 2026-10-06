@@ -149,6 +149,8 @@
   ten seconds and confirms the same native process handle after observer loss.
 - `window-evidence.test.ts` verifies owned disposable window minimize/restore and
   rejects stale identities, replaced windows and accepted but unobserved transitions.
+  It also checks the actual passive observer's UTF-8 JSON preserves a Unicode
+  window title using an owned WinForms fixture with read-only state sampling.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible

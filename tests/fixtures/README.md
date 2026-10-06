@@ -55,8 +55,10 @@ waiter, and cancelling all waits leaves the fixture alive without retaining the 
 `native-window.cs` supplies a visible, self-closing disposable WinForms window.
 It can expose a loopback discovery fixture for ownership/readiness tests; this
 endpoint does not implement browser tools. Permission/PID markers are test-only.
-Its optional delayed normal close checks unlimited native handle waits. The
-explicit elevation smoke can optionally restrict only this fixture's own process
+Its optional delayed normal close checks unlimited native handle waits.
+Optional `DCT_TEST_WINDOW_TITLE` sets its synthetic title for Unicode observer
+stdout regression tests; ordinary fixtures keep the default title.
+The explicit elevation smoke can optionally restrict only this fixture's own process
 DACL to Administrators/SYSTEM, producing a real medium-integrity limited-query
 denial without changing files, user settings or other processes.
 `compile-native-window.ps1` compiles it with ordinary/elevated manifests and

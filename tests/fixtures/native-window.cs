@@ -70,7 +70,7 @@ public static class NativeWindowFixture
         using (Timer expiry = new Timer())
         using (Timer closeDelay = new Timer())
         {
-            window.Text = "DCT disposable native launch test";
+            window.Text = Environment.GetEnvironmentVariable("DCT_TEST_WINDOW_TITLE") ?? "DCT disposable native launch test";
             window.Width = 320;
             window.Height = 120;
             window.Shown += delegate {

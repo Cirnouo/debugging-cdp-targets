@@ -31,6 +31,94 @@ const expectedWindow = {
     startedAtUtc: '2026-10-05T00:00:00.000Z',
 };
 
+test('passive selected-tab observer preserves Unicode window title in actual PowerShell JSON stdout', {
+    skip: process.platform !== 'win32',
+    timeout: 60_000,
+}, async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-window-unicode-'));
+    const native = createWindowsLauncher();
+    let identity: ProcessTarget | undefined;
+    const title = '新建标签页 · résumé · Ελληνικά · 😀';
+    try {
+        const executable = path.join(directory, 'unicode-window.exe');
+        await promisify(execFile)(
+            'powershell.exe',
+            [
+                '-NoProfile',
+                '-NonInteractive',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                fileURLToPath(new URL('./fixtures/compile-native-window.ps1', import.meta.url)),
+                '-Output',
+                executable,
+            ],
+            { windowsHide: true, shell: false },
+        );
+        const marker = path.join(directory, 'shown');
+        const child = await native.launch({
+            executablePath: executable,
+            arguments: [marker],
+            cwd: directory,
+            env: {
+                SystemRoot: process.env.SystemRoot ?? 'C:/Windows',
+                DCT_TEST_WINDOW_TITLE: title,
+                DCT_TEST_WINDOW_LIFETIME_MS: '60000',
+            },
+        });
+        identity = {
+            processId: child.pid,
+            executablePath: executable,
+            startedAtUtc: child.startedAtUtc,
+            targetKind: 'generic-cdp',
+            port: 0,
+        };
+        const deadline = Date.now() + 8000;
+        for (;;) {
+            try {
+                await readFile(marker);
+                break;
+            } catch (error) {
+                if (Date.now() >= deadline) throw error;
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+        }
+        const before = await sampleWindow(identity, 'None');
+        assertWindowState(before, 'normal');
+        const output = await promisify(execFile)(
+            'powershell.exe',
+            [
+                '-NoProfile',
+                '-NonInteractive',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                fileURLToPath(new URL('./smoke/windows-selected-tab-evidence.ps1', import.meta.url)),
+                '-ApplicationPid',
+                String(identity.processId),
+                '-ExecutablePath',
+                identity.executablePath,
+                '-StartedAtUtc',
+                identity.startedAtUtc,
+                '-WindowHandle',
+                String(before.handle),
+            ],
+            { windowsHide: true, shell: false, encoding: 'buffer' },
+        );
+        const observed: unknown = JSON.parse(output.stdout.toString('utf8'));
+        assert.ok(isRecord(observed));
+        assert.equal(observed.windowTitle, title);
+        assert.equal(observed.ownedHwnd, before.handle);
+        const after = await sampleWindow(identity, 'None', before.handle);
+        assertWindowState(after, 'normal', before);
+    } finally {
+        if (identity) await native.close(identity);
+        assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(directory).startsWith('dct-window-unicode-'));
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('window assertions reject accepted requests without an observed transition and stale identity', async () => {
     const { readWindowSample, assertWindowState } = await import('./smoke/window-evidence.ts');
     const sample = readWindowSample([windowFixture()], expectedWindow);
