@@ -153,7 +153,11 @@ then explicitly restarts and normally closes them. It retains test profiles.
   declared class/title and never creates pages.
   Qualification takes zero screenshots. A formal cell installs opaque yellow,
   establishes its native condition, reads back fresh green/nonce/geometry and
-  performs exactly one official capture. Fast captures retain PNG evidence with
+  performs exactly one official capture. Output is fixed to `screenshot.png`
+  inside the fresh fixture workspace; conflicting fixture files fail before
+  preparation. Geometry retains the fractional fixed `100vw`/`100vh` DOMRect and
+  the actual root DOMRect separately from integer inner/scroll measurements.
+  Fast captures retain PNG evidence with
   an insufficient-condition result when no complete passive sample fits inside
   the local MCP pending interval. This interval does not expose CDP method timing.
   An observer completion failure preserves the primary capture receipt and saved
@@ -214,6 +218,11 @@ inventory verification does not independently rehash the archive. Normal Close
 is preselected only for these newly acquired test targets and related anchors.
 Root owns experiment ordering/caps and publication redaction. Do not run another
 cell until the previous invocation has confirmed cleanup.
+
+The bounded Windows results and qualification limits are recorded in
+[application screenshot validation](../../docs/application-screenshot-validation.md).
+Its original geometry failures remain failed; later fake regression verification
+does not establish a new accepted real-application matrix.
 
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
   strict canonical ASCII feature values and effective Windows parsing boundaries,
