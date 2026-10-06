@@ -13,10 +13,34 @@
 </p>
 
 <p align="center">
-    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b" alt="Status: 0.1.0 unreleased"></a>
-    <a href="docs/user-guide/compatibility.md"><img src="https://img.shields.io/badge/Node-24.21.0-07849e?style=flat&amp;labelColor=46545b" alt="Node: 24.21.0"></a>
-    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp"><img src="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b" alt="Official Server: 1.10.1"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b" alt="License: MIT"></a>
+    <a href="CHANGELOG.md">
+        <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/status-0.1.0%20unreleased-0e7490?style=flat&amp;labelColor=334155">
+            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b">
+            <img src="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b" alt="Status: 0.1.0 unreleased">
+        </picture>
+    </a>
+    <a href="docs/user-guide/compatibility.md">
+        <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/Node-24.21.0-0e7490?style=flat&amp;labelColor=334155">
+            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/Node-24.21.0-07849e?style=flat&amp;labelColor=46545b">
+            <img src="https://img.shields.io/badge/Node-24.21.0-07849e?style=flat&amp;labelColor=46545b" alt="Node: 24.21.0">
+        </picture>
+    </a>
+    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp">
+        <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/official%20Server-1.10.1-0e7490?style=flat&amp;labelColor=334155">
+            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b">
+            <img src="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b" alt="Official Server: 1.10.1">
+        </picture>
+    </a>
+    <a href="LICENSE">
+        <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/license-MIT-0e7490?style=flat&amp;labelColor=334155">
+            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b">
+            <img src="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b" alt="License: MIT">
+        </picture>
+    </a>
 </p>
 
 <p align="center">Version 0.1.0 is under development and has not been released.</p>
@@ -76,4 +100,8 @@ Explore the [user guide](docs/user-guide/README.md):
 
 [Installation](docs/user-guide/installation.md) · [Compatibility](docs/user-guide/compatibility.md) · [Workflow](docs/user-guide/workflow.md) · [Configuration](docs/user-guide/configuration.md) · [Privacy](docs/user-guide/privacy.md) · [Troubleshooting](docs/user-guide/troubleshooting.md)
 
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Contributor documentation](docs/README.md)
+---
+
+<p align="center">
+    <sub><a href="CONTRIBUTING.md">Contributing</a> · <a href="SECURITY.md">Security</a> · <a href="docs/README.md">Documentation index</a></sub>
+</p>
