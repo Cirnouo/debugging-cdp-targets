@@ -13,34 +13,10 @@
 </p>
 
 <p align="center">
-    <a href="CHANGELOG.md">
-        <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/status-0.1.0%20unreleased-0e7490?style=flat&amp;labelColor=334155">
-            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b">
-            <img src="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b" alt="Status: 0.1.0 unreleased">
-        </picture>
-    </a>
-    <a href="docs/user-guide/compatibility.md">
-        <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/Node-24.21.0-0e7490?style=flat&amp;labelColor=334155">
-            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/Node-24.21.0-07849e?style=flat&amp;labelColor=46545b">
-            <img src="https://img.shields.io/badge/Node-24.21.0-07849e?style=flat&amp;labelColor=46545b" alt="Node: 24.21.0">
-        </picture>
-    </a>
-    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp">
-        <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/official%20Server-1.10.1-0e7490?style=flat&amp;labelColor=334155">
-            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b">
-            <img src="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b" alt="Official Server: 1.10.1">
-        </picture>
-    </a>
-    <a href="LICENSE">
-        <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/license-MIT-0e7490?style=flat&amp;labelColor=334155">
-            <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b">
-            <img src="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b" alt="License: MIT">
-        </picture>
-    </a>
+    <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b" alt="Status: 0.1.0 unreleased"></a>
+    <a href="docs/user-guide/compatibility.md"><img src="https://img.shields.io/badge/Node-24.21.0-07849e?style=flat&amp;labelColor=46545b" alt="Node: 24.21.0"></a>
+    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp"><img src="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b" alt="Official Server: 1.10.1"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b" alt="License: MIT"></a>
 </p>
 
 <p align="center">Version 0.1.0 is under development and has not been released.</p>
