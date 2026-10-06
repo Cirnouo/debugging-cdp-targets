@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { withChromeScreenshotFeature } from '../../src/domains/chromium-features.ts';
 import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domains/launch-command.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { assertWindowState, type WindowSample } from './window-evidence.ts';
@@ -16,29 +17,16 @@ export interface ScreenshotFixture {
 const feature = 'CDPScreenshotNewSurface';
 
 function withoutCandidate(args: string[], candidate: boolean) {
+    withChromeScreenshotFeature(args);
     const separator = args.indexOf('--');
     const options = args.slice(0, separator < 0 ? args.length : separator);
-    for (const arg of options) {
-        if (/^[-/]+(?:enable|disable)-features(?:=|$)/i.test(arg.trim())) {
-            assert.equal(arg, arg.trim(), 'Outer feature-switch whitespace is ambiguous.');
-            assert.ok(/^--(?:enable|disable)-features=/.test(arg), 'Equivalent feature switch spelling is ambiguous.');
-        }
-    }
-    for (const name of ['enable', 'disable']) {
-        const switches = options.filter((arg) => new RegExp(`^--${name}-features(?:=|$)`, 'i').test(arg));
-        assert.ok(switches.length <= 1, 'Duplicate feature switches are ambiguous.');
-        assert.ok(
-            switches.every((arg) => arg.startsWith(`--${name}-features=`)),
-            'Use one canonical feature token.',
-        );
-    }
     let occurrences = 0;
     const cleaned = options.flatMap((arg) => {
         if (!/^--(?:enable|disable)-features=/.test(arg)) return [arg];
         const [switchName, ...value] = arg.split('=');
         const entries = value.join('=').split(',');
         const remaining = entries.filter((entry) => {
-            if (!/^\*?CDPScreenshotNewSurface(?:$|[<:.])/.test(entry.trim())) return true;
+            if (entry !== feature) return true;
             assert.equal(switchName, '--enable-features', 'Explicit disabled feature conflicts with the candidate.');
             assert.equal(entry, feature, 'Parameterized/default target feature is ambiguous.');
             occurrences += 1;
@@ -67,6 +55,11 @@ export function parseScreenshotFixture(value: unknown): ScreenshotFixture {
     );
     assert.ok(typeof value.label === 'string' && /^[a-z][a-z0-9-]*$/.test(value.label));
     assert.ok(value.targetKind === 'chrome' || value.targetKind === 'generic-cdp');
+    assert.equal(
+        value.targetKind,
+        'generic-cdp',
+        'Fixed Windows Chrome presets enable both arms; use an explicit experimental generic-cdp raw launch comparison.',
+    );
     const launch = parseApplicationLaunch(value.launch);
     const candidateArgs = parseApplicationLaunch({ executable: launch.executable, args: value.candidateArgs }).args;
     assert.ok(candidateArgs);

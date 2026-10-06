@@ -99,6 +99,51 @@ test('screenshot comparison rejects effective whitespace and field-trial target 
     assert.equal(parseScreenshotFixture(valid).candidateArgs[1], valid.candidateArgs[1]);
 });
 
+test('raw screenshot comparison rejects preset Chrome before acquisition', async () => {
+    const { parseScreenshotFixture } = await import('./smoke/screenshot-fixture.ts');
+    assert.throws(() => parseScreenshotFixture({ ...fixture(), targetKind: 'chrome' }), /fixed|preset|generic-cdp/i);
+    assert.equal(parseScreenshotFixture(fixture()).targetKind, 'generic-cdp');
+});
+
+test('raw screenshot comparison rejects spaced target decorations and non-ASCII feature values', async () => {
+    const { parseScreenshotFixture } = await import('./smoke/screenshot-fixture.ts');
+    for (const value of [
+        'Other,CDPScreenshotNewSurface :mode/value',
+        'Other,CDPScreenshotNewSurface <Trial',
+        'Other,CDPScreenshotNewSurface .Group',
+        'Other,*CDPScreenshotNewSurface :mode/value',
+        'Other:param/中文',
+    ]) {
+        const args = ['--user-data-dir={fixture}/profile', `--enable-features=${value}`];
+        assert.throws(() =>
+            parseScreenshotFixture({
+                ...fixture(),
+                launch: { ...fixture().launch, args },
+                candidateArgs: [args[0], `--enable-features=${value},CDPScreenshotNewSurface`],
+            }),
+        );
+    }
+});
+
+test('raw screenshot comparison refuses special Windows parsing boundaries but preserves the exact positional tail', async () => {
+    const { parseScreenshotFixture } = await import('./smoke/screenshot-fixture.ts');
+    for (const option of [' -- ', '--single-argument', '/single-argument=value', '--SINGLE-ARGUMENT']) {
+        const args = ['--user-data-dir={fixture}/profile', option];
+        assert.throws(() =>
+            parseScreenshotFixture({
+                ...fixture(),
+                launch: { ...fixture().launch, args },
+                candidateArgs: [...args, '--enable-features=CDPScreenshotNewSurface'],
+            }),
+        );
+    }
+    const positional = [' -- ', '--single-argument', '--enable-features=Other:param/中文', '文档.html'];
+    const valid = fixture();
+    valid.launch.args.push(...positional);
+    valid.candidateArgs.push(...positional);
+    assert.deepEqual(parseScreenshotFixture(valid).candidateArgs, valid.candidateArgs);
+});
+
 test('screenshot diagnostics reject old, malformed, ambiguous and stale-session events', async () => {
     const { screenshotPhase } = await import('./smoke/screenshot-fixture.ts');
     const old = { sessionId: 'session', phase: 'cdp-screenshot', outcome: 'completed', elapsedMs: 50 };

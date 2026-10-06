@@ -27,7 +27,11 @@
 
 - `screenshot-fixture.test.ts` rejects ambiguous/conflicting feature comparisons,
   escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
-  transparent pixels; cleanup failure still initiates every peer Close.
+  transparent pixels; fixed-preset Chrome cannot masquerade as a raw comparison,
+  and cleanup failure still initiates every peer Close.
+- `chromium-features.test.ts` checks immutable, idempotent screenshot feature
+  composition, ASCII list/parameter preservation, exact positional boundaries and
+  strict switch/target conflicts. Non-Windows Chrome keeps existing feature choices.
 
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, identity, and launch rollback using fake targets.
@@ -137,7 +141,9 @@
   deduplication and isolated cleanup with retained retry identity on failure.
 - `chrome-profile.test.ts` checks stable defaults, explicit directories, occupancy
   rejection, concurrent reservations, cancelled late acquisition and release
-  generation safety with fake targets.
+  generation safety with fake targets. Windows Chrome's fixed screenshot feature
+  reaches spawned argv and exact recovery; conflicts precede profile/spawn and
+  release the claimed port. Generic targets preserve their supplied feature choices.
 - `plugin-hooks.test.ts` checks the four automatic MCP Tool Hook declarations.
 - `hook-events.test.ts` parses actual Hook text through serialized model requests
   and nested host wrappers, preserves native string escaping, and rejects leaked

@@ -138,7 +138,9 @@ then explicitly restarts and normally closes them. It retains test profiles.
   with final empty gateway status and actual stdio exit checked. Blocked native
   state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
+  strict canonical ASCII feature values and effective Windows parsing boundaries,
   fixture paths, decoded pixels, fresh session diagnostics and complete peer cleanup.
+  It rejects fixed-preset Chrome comparisons before acquisition.
 - `windows-png-evidence.ps1` uses the existing Windows System.Drawing implementation
   to read PNG dimensions and selected RGBA pixels; no image dependency is added.
 - `readest-native.ts` accepts an explicitly selected Readest executable and creates
@@ -268,11 +270,18 @@ For the window screenshot acceptance, supply an explicitly reviewed fixture:
 node tests/smoke/screenshot-layers.ts 'C:/Test/fixture.json' 'C:/Test/evidence'
 ```
 
-The JSON has `label` (lowercase name), `targetKind`, `launch` (structured
+The JSON has `label` (lowercase name), `targetKind: "generic-cdp"`, `launch` (structured
 executable/args/cwd/env), `candidateArgs` (complete argv), and `pageTitle` (a
 literal substring matching exactly one managed main renderer). Baseline uses
 launch.args; candidateArgs may only add the bare CDPScreenshotNewSurface feature
-in one effective canonical enable token before `--`. Both explicitly reference
+in one effective canonical enable token before exact `--`. Fixed Windows Chrome
+presets would enable both arms, so `targetKind: "chrome"` fails before acquiring
+either target. An explicit experimental generic-cdp Chrome launch compares raw
+arguments and retains actual process/listener/endpoint identity evidence.
+Relevant feature values must be ASCII; duplicate or equivalent switches, padded
+terminators, single-argument parsing and target decoration/disable conflicts fail
+before acquisition. Unrelated Unicode args and the exact positional tail remain
+unchanged. Both explicitly reference
 the test-only `{fixture}` directory placeholder; `{port}` retains its runtime
 meaning. Optional `fixtureFiles` maps confined relative paths to synthetic UTF-8
 text; its contents also expand `{fixture}`. Optional `minimizeFunction` uses the

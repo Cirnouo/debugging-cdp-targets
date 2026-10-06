@@ -15,7 +15,10 @@
   through the SDK gateway on stdio.
 - `target-host.ts` launches and verifies a newly created target. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
-  the debugging process and preserves explicit switches during recovery.
+  the debugging process and fixes Windows screenshots with one bare
+  `CDPScreenshotNewSurface` feature before profile acquisition or spawn.
+  Conflicting feature choices fail and release the transient port claim; exact
+  recovery preserves the composed arguments.
 - `chrome-profile.ts` checks native profile locks and reserves canonical directories.
 - `port-reservation.ts` reserves CDP ports synchronously for one gateway and
   checks owner identity before releasing a live-run claim.
