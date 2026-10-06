@@ -256,6 +256,18 @@ The full related fixture/probe/adapter/shared-geometry selection passed
 checks passed. Final branch push verification and remote CI are recorded in the
 PR. Neither regression tests nor CI retroactively accept the old actual cells.
 
+The first main Windows CI after integration retained **933/934 passes, one
+failure, zero skipped**: the parse/C# compile-only regression reached its own
+ten-second child-process cutoff with empty stdout/stderr. That receipt cannot
+locate the slow stage or establish an environment cause. The separate test repair
+uses a finite **30-second compiler deadline inside a 45-second test budget** and
+fixed read/parse/compile/argv stage diagnostics. It preserves the parsing,
+compilation and exact synthetic-argv assertions, without a retry or application
+inspection. Subprocess diagnostics omit raw commands, paths, environment and source.
+The original CI failure remains retained. These test budgets are separate from
+the unchanged 60-second gateway and 90-second client screenshot deadlines, and
+the formal application matrix remains closed.
+
 ## Privacy audit and publication limits
 
 The baseline `654746327ddab435a304c079515ba6eb66e500ea` audit covered **146 tracked
