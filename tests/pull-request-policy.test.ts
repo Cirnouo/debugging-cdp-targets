@@ -252,6 +252,36 @@ test('formatting and copied template examples alone do not supply verification e
     );
 });
 
+test('rejects compact literal examples containing only canonical starter prose and checklist content', async (context) => {
+    const evidence = 'Focused policy tests and pnpm verify:push passed; real browser checks were not run.';
+    const compactTemplate = template
+        .split(/\r?\n/u)
+        .filter((line) => line.trim())
+        .join('\n');
+    for (const [name, copied] of [
+        [
+            'starter followed by a checklist',
+            'Describe the problem or link the relevant issue.\n- [x] Focused tests and `pnpm verify:push` pass.',
+        ],
+        ['canonical template with blank lines removed', compactTemplate],
+    ] as const) {
+        await context.test(name, () => {
+            assert.match(errors(compliantBody.replace(evidence, `\`\`\`md\n${copied}\n\`\`\``)), /content|evidence/i);
+        });
+    }
+});
+
+test('accepts literal template examples mixed with actual results without substring placeholder matching', () => {
+    const evidence = 'Focused policy tests and pnpm verify:push passed; real browser checks were not run.';
+    for (const content of [
+        'Describe the problem or link the relevant issue. Tests passed.\n- [x] Focused tests and `pnpm verify:push` pass.',
+        'Describe the problem or link the relevant issue.\nTests passed.\n- [x] Focused tests and `pnpm verify:push` pass.',
+        'Describe the problem or link the relevant issue.\n- [x] Focused tests and `pnpm verify:push` pass.\n# tests 586\n# pass 586\n# fail 0',
+    ]) {
+        assert.equal(errors(compliantBody.replace(evidence, `\`\`\`md\n${content}\n\`\`\``)), '');
+    }
+});
+
 test('derives sections, checklists and starter prose from the supplied template', () => {
     const currentTemplate =
         '## Context\n\nExplain the context.\n\n## Outcome\n\nDescribe the outcome.\n\n- [ ] Recorded the result.\n';

@@ -65,13 +65,29 @@ export function validatePullRequestBody(body: string | null, template: string): 
                 if (!normalized || placeholders.includes(normalized)) return false;
                 if (!literal) return true;
                 if (templateExamples.includes(normalized)) return false;
-                return block.split(/\r?\n/u).some((line) => {
-                    if (!line.trim()) return false;
+                const proseRuns: string[] = [];
+                let run: string[] = [];
+                const finishRun = () => {
+                    const value = normalizeSubmissionText(run.join('\n'));
+                    if (value) proseRuns.push(value);
+                    run = [];
+                };
+                for (const line of block.split(/\r?\n/u)) {
                     const heading = readSubmissionHeading(line);
-                    if (heading && templateHeadings.includes(heading.text)) return false;
                     const check = readSubmissionChecklist(line);
-                    return !check || !templateLabels.includes(check.label);
-                });
+                    if (
+                        (heading && templateHeadings.includes(heading.text)) ||
+                        (check && templateLabels.includes(check.label))
+                    ) {
+                        // Canonical copied structure ends a starter paragraph even
+                        // when the example removed the template's blank lines.
+                        finishRun();
+                    } else {
+                        run.push(line);
+                    }
+                }
+                finishRun();
+                return proseRuns.some((value) => !placeholders.includes(value) && !templateExamples.includes(value));
             }),
         );
         if (section.paragraphs.length > 0 && !hasContent) {
