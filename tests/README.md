@@ -187,5 +187,14 @@
 Run pnpm test or a focused Node test; real-browser integration is separate
 from regression tests and must not touch existing user targets.
 
+Both package test commands use `--test-concurrency=1` to run files sequentially.
+The visible `window-evidence`, `screenshot-background-anchor` and `windows-native`
+fixtures share the inherited Windows desktop and its single foreground window.
+Concurrent files can foreground one owned fixture while invalidating another
+file's required foreground observation. Process ownership does not isolate that
+desktop state. Sequential file execution preserves every test, coverage floor,
+native identity/handoff guard, assertion and deadline. Use the same option for
+focused commands that combine foreground-sensitive native test files.
+
 All maintained tests and fixtures execute as TypeScript directly in Node 24.
 They are covered by the same strict no-emit typecheck as runtime and tooling.
