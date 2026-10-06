@@ -12,6 +12,19 @@ This directory owns GitHub Actions workflows.
   portable simulated CDP, real Chrome and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-edit events without uploading runtime
   data or artifacts.
+- `linux-mcp-startup-probe.yml` temporarily observes actual MCP Chrome startup
+  only on diagnostic-path pushes to `chore/codex-icons-readme-polish`. Two fresh
+  Ubuntu 24.04 samples retain the existing supply-chain-first gates and run the
+  unchanged official-tools and connection-recovery smokes once each. A failed
+  first smoke skips recovery. A preload records bounded startup evidence in each
+  runner's owned temporary directory; EXIT handling prints at most 16 files,
+  32 KiB per file and 128 KiB total. It prints the latest gateway events and Chrome
+  stderr first, then other events and captures from newest to oldest, identifies
+  truncation, and preserves the
+  original exit status after normal smoke cleanup. Missing event or capture files
+  receive an explicit incomplete-evidence marker without changing the smoke result.
+  No artifacts are uploaded.
+  Remove this temporary workflow before final merge.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.

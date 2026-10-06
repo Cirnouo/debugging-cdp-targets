@@ -46,6 +46,10 @@
   bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser. External Close stimuli only request normal closure;
   they cannot await an inspect-only fixture, poll disappearance or invent exit evidence.
+- `linux-mcp-startup-preload.test.ts` temporarily checks exact diagnostic entry
+  guards, native spawn/FD cleanup, unique owned output files, unchanged fetch
+  identities and handled observers, bounded JSON, inactive preload isolation and
+  native Node preload propagation without starting a browser.
 - `claude-smoke-config.test.ts` checks allowlisted host environments, isolated user
   paths, loopback-only model endpoints, the Claude version baseline, unknown request
   validation, actual tool-result shapes, Hook context extraction, Anthropic SSE,
