@@ -82,6 +82,44 @@ The Chrome preset adds `--no-first-run`, `--no-default-browser-check` and
 `--disable-updater-scheduler` to this launched process only, preserving explicit
 switches. It does not modify updater services.
 
+## Windows Chrome screenshot feature
+
+On Windows, `targetKind: "chrome"` also requires the bare Chromium application
+feature `CDPScreenshotNewSurface`. Supply the ordinary structured Chrome launch;
+the Plugin adds the feature automatically. It inserts one canonical
+`--enable-features=CDPScreenshotNewSurface` before the first exact `--`, appends
+the bare name to one existing canonical enable list, or keeps one existing bare
+occurrence. It preserves other valid ASCII list entries and parameter bytes,
+unrelated Unicode arguments and positional arguments after that boundary.
+
+The fixed rule rejects an effective target disable, repeated or noncanonical
+feature switches, separate-value forms, a repeated/decorated target entry,
+non-ASCII feature values and malformed enable entries. For example,
+`Other:one/two:three/four` cannot receive an appended target because its repeated
+colon invalidates the complete enable list. Whitespace-padded effective `--`
+and Windows `single-argument` forms also fail. See
+[ADR 0014](../adr/0014-windows-chrome-screenshot-surface.md#feature-input-contract)
+for exact parsing boundaries and the deliberately strict conflict policy.
+
+A conflict fails before profile acquisition or application spawn and releases
+the transient port claim. Port selection/probing may already have occurred.
+Repair the reported list or conflicting choice explicitly; the Plugin does not
+delete a disable or rewrite ambiguous arguments. Only valid ASCII feature names
+and parameter values are accepted. Other launch-field environment expansion
+continues to apply as described above.
+
+Composition copies caller arguments and is idempotent. Explicit live restart
+reuses the exact composed argv, profile and port. To change application args,
+complete normal Close and issue a new start with a fresh requestId and the new
+connection/session identities. `generic-cdp` and Chrome on other platforms keep
+their existing launch semantics; this feature is not an MCP/CDP request option.
+
+Normal user window switching and minimizing require no screenshot foreground
+checklist or implicit window manipulation. The
+[dated Windows Chrome comparison](../mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
+records measured static states and their limits. Official screenshot arguments,
+routing, timeout quarantine and explicit recovery retain their existing behavior.
+
 ## Official Server settings
 
 Each connection has its own `mcpArgs: string[]`, separate from application

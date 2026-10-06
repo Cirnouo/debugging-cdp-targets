@@ -46,21 +46,39 @@ the Plugin does not force-kill applications.
 
 ## Minimized screenshots
 
-If an independently verified Chromium target stalls when its window is
-minimized, an isolated new launch can explicitly use
-`--enable-features=CDPScreenshotNewSurface` in `launch.args`. The
+Windows `targetKind: "chrome"` automatically receives the bare
+`CDPScreenshotNewSurface` application feature. Use the ordinary Chrome launch;
+users can switch windows or minimize Chrome without a screenshot foreground
+checklist. The Plugin does not focus or restore a window for capture. See
+[configuration](configuration.md#windows-chrome-screenshot-feature) for the fixed
+rule and [the dated controlled comparison](../mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
+for the measured static states and limits.
+
+If startup reports a feature conflict, preserve the supplied arguments and
+explicitly correct the reported input. An effective target disable, decorated
+or repeated target, ambiguous switch, non-ASCII feature value or malformed
+enable entry is rejected before profile acquisition/spawn. A repeated colon in
+`Other:one/two:three/four` invalidates the entire enable list; appending the target
+cannot repair it. The Plugin releases any transient port claim and supplies an
+actionable error instead of silently changing the conflicting choice.
+
+For `generic-cdp` or another platform, feature support and its launch-argument
+carrier must be independently verified for the application. A new isolated
+launch can then explicitly use `--enable-features=CDPScreenshotNewSurface` in
+`launch.args`, preserving valid unrelated entries and reporting conflicts. The
 [shared Skill](../../packaging/shared/skills/debugging-cdp-targets/SKILL.md#conditional-minimized-screenshot-compatibility)
-explains safe handling of an existing feature list, explicit disable choices,
-ambiguous switches and the first `--` boundary. The Plugin does not add this
-feature by default; support must be checked for the particular application.
-This guidance does not change WebView2 environment settings or personal profiles.
+keeps this conditional recipe separate from the fixed Windows Chrome rule.
+No framework name proves support; this recipe does not establish a WebView2
+environment setting or authorize changes to personal profiles.
 
 Restart keeps the exact original application arguments. To change them, choose
 normal Close, wait for it to complete, then start with the updated `launch.args`
 and a fresh requestId. Use the new returned connection/session and page IDs.
-Validate fresh image content while the same native window remains minimized.
-The 60-second timeout, quarantine and explicit recovery still apply. See
-[the dated screenshot research and acceptance limits](../mcp-native-validation.md#minimized-screenshot-follow-up-2026-10-05)
-for measured evidence and the scope of acceptance.
+For a conditional application recipe, verify fresh image content in the intended
+native window state; request acceptance or a PNG alone does not prove compatible
+capture. The [2026-10-05 application matrices](../mcp-native-validation.md#minimized-screenshot-follow-up-2026-10-05)
+remain dated evidence for their specific environments. The 60-second timeout,
+quarantine and explicit recovery still apply to every route; never focus,
+restart or replay implicitly after a failure.
 
 Return to the [user guide](README.md).

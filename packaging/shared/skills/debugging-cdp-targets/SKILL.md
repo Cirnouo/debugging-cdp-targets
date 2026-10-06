@@ -96,41 +96,38 @@ named official tools or configuration variants.
 
 ## Conditional minimized screenshot compatibility
 
-For a target independently confirmed to accept the Chromium feature switch,
-investigate a minimized-window screenshot stall in a new isolated instance with
-this explicit application argument, keeping its other required launch arguments:
+On Windows, `targetKind: "chrome"` automatically receives one bare
+`CDPScreenshotNewSurface` in application argv. Use the ordinary launch args;
+manual feature insertion and a screenshot foreground/minimize checklist are
+unnecessary. Normal user window switching/minimizing is supported usage.
+The Plugin adds no focus or window manipulation. This is a Chromium application
+feature, not an MCP/CDP option or `mcpArgs` setting.
 
-```json
-{ "launch": { "args": ["--enable-features=CDPScreenshotNewSurface"] } }
-```
+The fixed rule preserves valid unrelated ASCII feature/parameter bytes and the
+positional tail after exact `--`. Explicit target disable, repeated/decorated
+target, ambiguous/duplicate/separate-value switches, padded effective boundaries,
+single-argument forms, non-ASCII values and malformed enable entries fail before
+profile acquisition/spawn. For example, `Other:one/two:three/four` invalidates
+the whole enable list: report it and obtain an explicit correction; never append
+the target to that list or silently remove a disable. See
+[the feature input contract](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/adr/0014-windows-chrome-screenshot-surface.md#feature-input-contract)
+for exact syntax and preserved valid parameter forms.
 
-This is one `launch.args` element before the first exact `--`, not `mcpArgs`.
-Inspect only effective switches before that boundary. If no enable token exists,
-add one canonical `--enable-features=...` token. If one unambiguous token exists,
-add the bare feature to its comma-separated value while preserving every other
-entry and parameter. If the bare feature already appears once, keep it once.
+`generic-cdp` and other platforms receive no screenshot preset. Only for an
+independently confirmed application argv carrier, a new isolated launch may use
+`--enable-features=CDPScreenshotNewSurface` before exact `--`: add it to one valid
+canonical enable list, or keep one bare occurrence. Preserve valid unrelated
+entries and report the same conflicts. A framework name proves no support;
+do not apply this recipe to an unverified WebView2 environment contract or change
+personal profiles/config. Verify fresh image pixels in the intended native state.
 
-Report ambiguity and preserve the user's arguments when enable/disable switches
-repeat, the target feature repeats, its entry has surrounding whitespace or is
-decorated (such as `*CDPScreenshotNewSurface` or a `.Group`/trial/parameter suffix),
-or an effective disable list contains it. Equivalent spellings or separate-value
-switches are ambiguous; do not add a competing token. Disable takes precedence
-over enable in the reviewed Chromium implementation. Preserve all other entries
-and arguments after `--`.
-
-Do not infer support from a process/framework name or `generic-cdp`, apply this
-recipe to the WebView2 environment contract, or change personal profiles/config.
-`restart` reuses the exact original application argv. To change it, use the user's
-existing Close choice, or obtain it if absent. Wait for normal Close to complete,
-then start with updated args and a fresh requestId. Use the new returned
-connection/session, fresh page IDs and that connection's actual official schemas.
-
-Verify updated image pixels while the same owned native window remains minimized;
-request acceptance, focus/DOM visibility, a PNG or its changed hash alone is
-insufficient. Completely hidden or fully occluded windows remain unverified.
-The gateway adds no default feature. Official tools, transparent routing,
-the 60-second production timeout, quarantine and explicit recovery remain unchanged.
-Never focus, replay or restart implicitly for a screenshot.
+Restart keeps exact composed argv. To change it, use an existing Close choice or
+obtain it, wait for normal Close, then start with updated args/fresh requestId
+and use new connection/session/page IDs. Official tools, transparent routing,
+the 60-second timeout, quarantine and explicit recovery remain unchanged.
+Never focus, replay or restart implicitly. The
+[dated comparison](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
+records static-state evidence and its limits.
 
 ## Errors, native dialogs and task completion
 
