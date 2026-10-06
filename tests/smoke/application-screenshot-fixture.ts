@@ -63,6 +63,7 @@ function safeRelative(file: string) {
                 segment.length > 0 &&
                 segment !== '.' &&
                 segment !== '..' &&
+                !/[<>:"|?*\u0000-\u001f]/.test(segment) &&
                 !/[. ]$/.test(segment) &&
                 !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(segment),
         ),
@@ -118,6 +119,7 @@ function validateBrowserOptions(args: readonly string[], application: 'obsidian'
     const options = effective(args);
     let ports = 0;
     let profiles = 0;
+    let addresses = 0;
     for (const arg of options) {
         const features = arg.match(/^--(?:enable|disable)-features=([\s\S]*)$/)?.[1];
         assert.ok(
@@ -125,8 +127,15 @@ function validateBrowserOptions(args: readonly string[], application: 'obsidian'
             'Empty feature-list entries are malformed experiment inputs.',
         );
         const trimmed = arg.replace(/^[\s\u0085]+|[\s\u0085]+$/g, '');
+        if (/^[-/]+[\s\u0085]*remote-debugging-address(?:[=:\s\u0085]|$)/i.test(trimmed)) {
+            assert.ok(
+                /^--remote-debugging-address=(?:127\.0\.0\.1|::1)$/.test(arg),
+                'Explicit debugging address must be one canonical loopback carrier.',
+            );
+            addresses += 1;
+        }
         if (/^[-/]+\s*remote-debugging-(?:port|pipe)(?:[=:\s]|$)/i.test(trimmed)) {
-            assert.equal(arg, portArgument, 'One canonical explicit debugging port carrier is required.');
+            assert.ok(arg === portArgument, 'One canonical explicit debugging port carrier is required.');
             ports += 1;
         }
         if (/^[-/]+\s*user-data-dir(?:[=:\s]|$)/i.test(trimmed)) {
@@ -137,17 +146,15 @@ function validateBrowserOptions(args: readonly string[], application: 'obsidian'
         }
     }
     assert.equal(ports, 1, 'One canonical explicit debugging port carrier is required.');
+    assert.ok(addresses <= 1, 'Duplicate debugging address carriers conflict.');
     assert.equal(profiles, application === 'obsidian' ? 1 : 0, 'One confined fresh application profile is required.');
 }
 
 function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 'readest', source: string) {
     const env = launch.env ?? {};
     environmentKeys(env);
-    if (launch.executable.includes('{fixture}')) {
-        assert.ok(
-            application === 'readest' && launch.executable === controlledExecutable,
-            'Uncontrolled fixture executable.',
-        );
+    if (application === 'readest') {
+        assert.ok(launch.executable === controlledExecutable, 'Readest requires its controlled fresh executable copy.');
     } else assert.ok(launch.executable === source, 'Executable must be the explicitly hashed source.');
     for (const setting of [launch.executable, ...(launch.args ?? []), launch.cwd ?? '', ...Object.values(env)]) {
         safeLiteral(setting);
@@ -164,15 +171,18 @@ function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 're
         }
     }
     for (const [key, value] of Object.entries(env)) {
-        if (/^WEBVIEW2_/i.test(key)) {
+        const canonical = key.toUpperCase();
+        if (canonical.startsWith('WEBVIEW2_')) {
             assert.ok(
-                application === 'readest' && [browserArguments, profileEnvironment].includes(key),
+                application === 'readest' &&
+                    key === canonical &&
+                    [browserArguments, profileEnvironment].includes(canonical),
                 'Conflicting WebView2 environment carrier.',
             );
         }
-        if (key !== browserArguments) {
+        if (canonical !== browserArguments) {
             assert.ok(
-                !/--remote-debugging-(?:port|pipe)(?:[=:\s]|$)/i.test(value),
+                !/--remote-debugging-(?:port|pipe|address)(?:[=:\s]|$)/i.test(value),
                 'Uncontrolled environment debugging carrier.',
             );
         }
@@ -187,7 +197,7 @@ function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 're
         validateBrowserOptions(browserSwitches(options), application);
         for (const arg of effective(launch.args ?? [])) {
             assert.ok(
-                !/^[-/]+\s*(?:remote-debugging-(?:port|pipe)|user-data-dir|(?:enable|disable)-features|single-argument)(?:[=:\s]|$)/i.test(
+                !/^[-/]+[\s\u0085]*(?:remote-debugging-(?:port|pipe|address)|user-data-dir|(?:enable|disable)-features|single-argument)(?:[=:\s\u0085]|$)/i.test(
                     arg.trim(),
                 ),
                 'Readest browser switches require the canonical environment carrier.',
@@ -215,7 +225,7 @@ export function parseApplicationScreenshotFixture(
     if (value.application === 'readest') {
         assert.ok(
             !Object.entries(inheritedEnvironment).some(
-                ([name, setting]) => /^WEBVIEW2_/i.test(name) && setting !== undefined,
+                ([name, setting]) => name.toUpperCase().startsWith('WEBVIEW2_') && setting !== undefined,
             ),
             'Inherited WebView2 environment conflicts with the explicit fixture.',
         );
@@ -270,7 +280,7 @@ export function parseApplicationScreenshotFixture(
         value.page.title !== undefined || value.page.identity !== undefined,
         'Known page title or synthetic identity is required.',
     );
-    const fixtureFiles: Record<string, string> = {};
+    const fixtureFileEntries: [string, string][] = [];
     const fileNames = new Set<string>();
     assert.ok(isRecord(value.fixtureFiles), 'Synthetic fixture files are required.');
     for (const [file, contents] of Object.entries(value.fixtureFiles)) {
@@ -295,14 +305,14 @@ export function parseApplicationScreenshotFixture(
             value.application !== 'readest' || !/^native(?:\/|$)/.test(normalized),
             'Fixture text cannot overwrite the controlled native executable directory.',
         );
-        fixtureFiles[file] = contents;
+        fixtureFileEntries.push([file, contents]);
     }
     return {
         application: value.application,
         source: { executable: value.source.executable, sha256: value.source.sha256 },
         baseline,
         candidate,
-        fixtureFiles,
+        fixtureFiles: Object.fromEntries(fixtureFileEntries),
         page: {
             url: value.page.url,
             ...(value.page.title === undefined ? {} : { title: value.page.title }),
@@ -388,7 +398,7 @@ export async function prepareApplicationScreenshotFixture(
     );
     const launch = expandApplicationScreenshotLaunch(fixture, arm, directory);
     let copySha256: string | undefined;
-    if (fixture.application === 'readest' && fixture[arm].executable === controlledExecutable) {
+    if (fixture.application === 'readest') {
         const executable = confinedFile(directory, 'native/readest.exe');
         await io.writeFile(executable, sourceBytes);
         copySha256 = hash(await io.readFile(executable));
@@ -408,8 +418,9 @@ export function applicationScreenshotGatewayEnvironment(
 ): Record<string, string> {
     environmentKeys(environment);
     return Object.fromEntries(
-        Object.entries(environment).flatMap(([name, value]) =>
-            value === undefined || /^WEBVIEW2_/i.test(name) ? [] : [[name.toUpperCase(), value]],
-        ),
+        Object.entries(environment).flatMap(([name, value]) => {
+            const canonical = name.toUpperCase();
+            return value === undefined || canonical.startsWith('WEBVIEW2_') ? [] : [[canonical, value]];
+        }),
     );
 }

@@ -458,3 +458,143 @@ test('page selection requires a URL and nonblank known title or synthetic identi
         assert.throws(() => parseApplicationScreenshotFixture(input));
     }
 });
+
+test('Readest source-executable pairs cannot bypass fresh-copy preparation', async () => {
+    const input = fixture('readest');
+    input.baseline.executable = input.candidate.executable = input.source.executable;
+    input.baseline.cwd = input.candidate.cwd = 'C:/Test/Apps & tools/应用';
+    assert.throws(() => parseApplicationScreenshotFixture(input));
+    for (const arm of ['baseline', 'candidate'] as const) {
+        const { io, calls } = memoryIO();
+        await assert.rejects(
+            prepareApplicationScreenshotFixture(input, arm, { parentDirectory: 'C:/Test/Evidence', io }),
+        );
+        assert.deepEqual(calls, []);
+    }
+});
+
+function addBrowserOptions(input: ApplicationScreenshotFixture, options: string[]) {
+    for (const arm of ['baseline', 'candidate'] as const) {
+        if (input.application === 'obsidian') input[arm].args?.unshift(...options);
+        else {
+            const env = input[arm].env;
+            assert.ok(env);
+            env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `${options.join(' ')} ${env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS}`;
+        }
+    }
+}
+
+for (const application of ['obsidian', 'readest'] as const) {
+    test(`${application}: unsafe, duplicate or ambiguous addresses reject the full pair before I/O`, async () => {
+        // 192.0.2.10 is a fictional documentation address, never a host lookup.
+        for (const options of [
+            ['--remote-debugging-address=0.0.0.0'],
+            ['--remote-debugging-address=192.0.2.10'],
+            ['--remote-debugging-address=127.0.0.1', '--remote-debugging-address=::1'],
+            ['--remote-debugging-address=127.0.0.1', '--remote-debugging-address=127.0.0.1'],
+            ['--Remote-debugging-address=127.0.0.1'],
+            ['/remote-debugging-address=127.0.0.1'],
+            ['-remote-debugging-address=127.0.0.1'],
+            ['--remote-debugging-address:127.0.0.1'],
+            ['--remote-debugging-address', '127.0.0.1'],
+            [' --remote-debugging-address=127.0.0.1'],
+            ['\u0085--remote-debugging-address=127.0.0.1'],
+        ]) {
+            const input = fixture(application);
+            addBrowserOptions(input, options);
+            assert.throws(() => parseApplicationScreenshotFixture(input));
+            const { io, calls } = memoryIO();
+            await assert.rejects(
+                prepareApplicationScreenshotFixture(input, 'baseline', { parentDirectory: 'C:/Test/Evidence', io }),
+            );
+            assert.deepEqual(calls, []);
+        }
+    });
+
+    test(`${application}: optional canonical loopback address and omission preserve browser bytes`, () => {
+        const omitted = fixture(application);
+        assert.deepEqual(parseApplicationScreenshotFixture(omitted), omitted);
+        for (const address of ['127.0.0.1', '::1']) {
+            const input = fixture(application);
+            addBrowserOptions(input, [`--remote-debugging-address=${address}`]);
+            assert.deepEqual(parseApplicationScreenshotFixture(input), input);
+        }
+    });
+}
+
+test('Unicode uppercase aliases cannot reintroduce WebView2 inheritance', async () => {
+    for (const key of ['webvıew2_user_data_folder', 'webvıew2_additional_browser_arguments']) {
+        const inherited = { Path: 'C:/Test/Unicode & bin', [key]: 'synthetic-old' };
+        assert.deepEqual(applicationScreenshotGatewayEnvironment(inherited), { PATH: 'C:/Test/Unicode & bin' });
+        assert.equal(inherited[key], 'synthetic-old');
+        assert.throws(() => parseApplicationScreenshotFixture(fixture('readest'), inherited));
+        const { io, calls } = memoryIO();
+        await assert.rejects(
+            prepareApplicationScreenshotFixture(fixture('readest'), 'baseline', {
+                parentDirectory: 'C:/Test/Evidence',
+                inheritedEnvironment: inherited,
+                io,
+            }),
+        );
+        assert.deepEqual(calls, []);
+    }
+    const input = fixture('readest');
+    for (const arm of ['baseline', 'candidate'] as const) {
+        input[arm].env = { ...input[arm].env, webvıew2_browser_executable_folder: 'synthetic-old' };
+    }
+    assert.throws(() => parseApplicationScreenshotFixture(input));
+});
+
+test('JSON own __proto__ synthetic file is preserved and written exactly once inside the fixture', async () => {
+    const fixtureFiles: unknown = JSON.parse('{"__proto__":"synthetic"}');
+    const input = { ...fixture(), fixtureFiles };
+    const parsed = parseApplicationScreenshotFixture(input);
+    assert.ok(Object.hasOwn(parsed.fixtureFiles, '__proto__'));
+    assert.deepEqual(Object.entries(parsed.fixtureFiles), [['__proto__', 'synthetic']]);
+    const { io, calls, files } = memoryIO();
+    await prepareApplicationScreenshotFixture(input, 'baseline', { parentDirectory: 'C:/Test/Evidence', io });
+    assert.deepEqual(
+        calls.filter((call) => call.startsWith('write:')),
+        ['write:C:/Test/Evidence/fresh-1/__proto__'],
+    );
+    assert.equal(Buffer.from(files.get('C:/Test/Evidence/fresh-1/__proto__') ?? []).toString(), 'synthetic');
+});
+
+test('invalid Windows file components fail before source reads or any fixture writes', async () => {
+    for (const bad of [
+        'bad?.txt',
+        'bad\u0001.txt',
+        'bad\u001f.txt',
+        'bad*.txt',
+        'bad<.txt',
+        'bad>.txt',
+        'bad".txt',
+        'bad|.txt',
+        'nested/bad?.txt',
+    ]) {
+        const input = fixture('readest');
+        input.fixtureFiles = { 'synthetic/first.txt': 'valid first entry', [bad]: 'invalid later entry' };
+        assert.throws(() => parseApplicationScreenshotFixture(input));
+        const { io, calls } = memoryIO();
+        await assert.rejects(
+            prepareApplicationScreenshotFixture(input, 'candidate', { parentDirectory: 'C:/Test/Evidence', io }),
+        );
+        assert.deepEqual(calls, []);
+    }
+});
+
+test('invalid port refusal omits raw configured data from the diagnostic object before I/O', async () => {
+    const input = fixture();
+    assert.ok(input.baseline.args && input.candidate.args);
+    input.baseline.args[0] = input.candidate.args[0] = '--remote-debugging-port=private-port-sentinel';
+    assert.throws(
+        () => parseApplicationScreenshotFixture(input),
+        (error: unknown) => !inspect(error).includes('private-port-sentinel'),
+    );
+    const { io, calls } = memoryIO();
+    await assert.rejects(
+        prepareApplicationScreenshotFixture(input, 'baseline', { parentDirectory: 'C:/Test/Evidence', io }),
+        (error: unknown) => !inspect(error).includes('private-port-sentinel'),
+    );
+    assert.deepEqual(calls, []);
+});
