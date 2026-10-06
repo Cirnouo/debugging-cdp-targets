@@ -103,7 +103,6 @@ const result = await runApplicationScreenshotProbe(
         condition,
         mode,
         parentDirectory: folder,
-        filePath: path.join(folder, 'screenshot.png'),
         nonce: randomUUID(),
     },
     adapter,

@@ -3,6 +3,7 @@ import childProcess, { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
+import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -117,6 +118,7 @@ function boundary(
         rendererPaths?: Record<string, unknown>;
         observerError?: boolean;
         directory?: string;
+        workspaceConfinement?: boolean;
     } = {},
 ) {
     const events: { kind: string; value: unknown }[] = [];
@@ -195,11 +197,31 @@ function boundary(
                     }
                     assert.equal(name, 'take_screenshot');
                     capture += 1;
+                    events.push({ kind: 'capture-file-path', value: args.filePath });
                     assert.deepEqual(Object.keys(args).sort(), ['filePath', 'fullPage', 'pageId']);
                     interval?.dispatched();
                     await pendingSample?.();
                     interval?.settled();
                     after = true;
+                    if (options.workspaceConfinement) {
+                        assert.ok(typeof args.filePath === 'string');
+                        const relative = path.win32.relative(options.directory ?? 'C:/Evidence/cell-1', args.filePath);
+                        if (
+                            !relative ||
+                            relative === '..' ||
+                            relative.startsWith('..\\') ||
+                            path.win32.isAbsolute(relative)
+                        )
+                            return {
+                                isError: true,
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: 'Access denied: path is outside configured workspace roots.',
+                                    },
+                                ],
+                            };
+                    }
                     if (options.captureError) throw new Error('MCP timeout: tools/call');
                     if (options.sessionExit) throw new Error('The target session exited during the official call.');
                     if (options.quarantine)
@@ -233,8 +255,9 @@ function boundary(
                     assert.ok(result);
                     return result;
                 },
-                async png(_file, points, size) {
+                async png(file, points, size) {
                     sequence.push('png');
+                    events.push({ kind: 'decoded-file-path', value: file });
                     return {
                         sha256: 'b'.repeat(64),
                         bytes: 42,
@@ -274,7 +297,6 @@ const run = (
             condition: 'foreground-normal',
             mode,
             parentDirectory: 'C:/Evidence',
-            filePath: 'C:/Evidence/cell-1/screenshot.png',
             nonce: 'cell-1',
         },
         io.adapter,
@@ -447,6 +469,51 @@ test('formal capture installs yellow before condition and reads fresh green afte
     assert.ok(io.sequence.indexOf('condition') < io.sequence.indexOf('marker-green'));
     assert.ok(io.sequence.indexOf('marker-green') < io.sequence.indexOf('take_screenshot'));
     assert.ok(!io.sequence.some((name) => ['new_page', 'select_page', 'emulate'].includes(name)));
+});
+
+test('both formal arms capture and decode the same PNG inside the fresh declared workspace', async () => {
+    const directory = 'C:/Evidence/formal-cell/application-screenshot-fresh';
+    for (const arm of ['baseline', 'candidate'] as const) {
+        const io = boundary({ directory, workspaceConfinement: true });
+        const result = await runApplicationScreenshotProbe(
+            config,
+            {
+                arm,
+                condition: 'foreground-normal',
+                mode: 'viewport',
+                parentDirectory: 'C:/Evidence/formal-cell',
+                nonce: 'cell-1',
+            },
+            io.adapter,
+        );
+        assert.equal(result.outcome, 'success');
+        assert.deepEqual(io.counts(), { capture: 1, opened: 1, closed: 1 });
+        const file = path.join(directory, 'screenshot.png');
+        assert.equal(io.events.find((event) => event.kind === 'capture-file-path')?.value, file);
+        assert.equal(io.events.find((event) => event.kind === 'decoded-file-path')?.value, file);
+        assert.deepEqual(io.events.find((event) => event.kind === 'screenshot-output')?.value, {
+            workspace: directory,
+            filePath: file,
+        });
+        assert.ok(io.sequence.indexOf('screenshot-output') < io.sequence.indexOf('acquire'));
+    }
+});
+
+test('fixture collision with the fixed screenshot file or its directory blocks before acquisition', async () => {
+    for (const file of ['screenshot.png', 'SCREENSHOT.PNG', 'screenshot.png/child.txt', 'SCREENSHOT.PNG\\child.txt']) {
+        const io = boundary();
+        const result = await run(io, {
+            ...config,
+            fixture: { ...config.fixture, fixtureFiles: { ...config.fixture.fixtureFiles, [file]: 'fixture text' } },
+        });
+        assert.equal(result.outcome, 'qualification-blocked');
+        assert.ok(
+            result.failures.some((failure) => /Screenshot output collides with a fixture path/.test(failure.error)),
+        );
+        assert.deepEqual(io.counts(), { capture: 0, opened: 0, closed: 1 });
+        assert.ok(!io.sequence.includes('acquire'));
+        assert.ok(!io.sequence.includes('marker-initial'));
+    }
 });
 test('fast capture preserves PNG with evidence-insufficient and raw result precedes post observation crash', async () => {
     for (const options of [{ fast: true }, { postError: true }]) {

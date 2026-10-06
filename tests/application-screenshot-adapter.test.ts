@@ -329,6 +329,10 @@ test('application adapter uses sealed entry generic-cdp identities and unchanged
     const start = io.calls.find((call) => call.params.name === 'dct_connection_start');
     assert.ok(start?.params.arguments && typeof start.params.arguments === 'object');
     assert.equal('targetKind' in start.params.arguments && start.params.arguments.targetKind, 'generic-cdp');
+    assert.deepEqual('mcpArgs' in start.params.arguments && start.params.arguments.mcpArgs, [
+        '--workspace',
+        prepared.directory,
+    ]);
     assert.equal((await io.adapter.cleanup()).ok, true);
     assert.ok(io.sequence.indexOf('arm-witness') < io.sequence.indexOf('normal-close'));
     assert.ok(io.sequence.indexOf('exit-witness') < io.sequence.indexOf('gateway-close'));

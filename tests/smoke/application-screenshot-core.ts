@@ -54,7 +54,6 @@ export interface ApplicationProbeOptions {
     condition: WindowCondition;
     mode: 'qualification' | 'viewport' | 'fullPage';
     parentDirectory: string;
-    filePath: string;
     nonce: string;
 }
 export interface ApplicationProbeResult {
@@ -263,9 +262,7 @@ export async function runApplicationScreenshotProbe(
         assert.ok(['baseline', 'candidate'].includes(options.arm));
         assert.ok(['foreground-normal', 'background-normal', 'minimized'].includes(options.condition));
         assert.ok(['qualification', 'viewport', 'fullPage'].includes(options.mode));
-        assert.ok(
-            absolute(options.parentDirectory) && absolute(options.filePath) && /^[a-zA-Z0-9-]+$/.test(options.nonce),
-        );
+        assert.ok(absolute(options.parentDirectory) && /^[a-zA-Z0-9-]+$/.test(options.nonce));
         config = parseApplicationProbeConfig(value, adapter.inheritedEnvironment);
         await adapter.record('preflight', config.preflight);
         if (config.preflight.status === 'blocked') {
@@ -348,6 +345,13 @@ export async function runApplicationScreenshotProbe(
         return raw;
     };
     try {
+        const screenshotFile = 'screenshot.png';
+        assert.ok(
+            Object.keys(config.fixture.fixtureFiles).every(
+                (file) => file.split(/[\\/]/)[0]?.toLowerCase() !== screenshotFile,
+            ),
+            'Screenshot output collides with a fixture path.',
+        );
         const prepared = await prepareApplicationScreenshotFixture(config.fixture, options.arm, {
             parentDirectory: options.parentDirectory,
             ...(adapter.fixtureIO === undefined ? {} : { io: adapter.fixtureIO }),
@@ -356,6 +360,8 @@ export async function runApplicationScreenshotProbe(
                 : { inheritedEnvironment: adapter.inheritedEnvironment }),
         });
         await adapter.record('prepared-fixture', prepared);
+        const filePath = path.join(prepared.directory, screenshotFile);
+        await adapter.record('screenshot-output', { workspace: prepared.directory, filePath });
         const expectedData = rendererDataPaths(prepared);
         await adapter.record('expected-renderer-data', expectedData);
         route = await adapter.acquire(prepared, payload);
@@ -464,7 +470,7 @@ export async function runApplicationScreenshotProbe(
                     (interval) =>
                         call(
                             'take_screenshot',
-                            { pageId, fullPage: options.mode === 'fullPage', filePath: options.filePath },
+                            { pageId, fullPage: options.mode === 'fullPage', filePath },
                             {
                                 dispatched() {
                                     pending = true;
@@ -517,7 +523,7 @@ export async function runApplicationScreenshotProbe(
                 );
             if (capture?.outcome === 'success')
                 await observe('png', async () => {
-                    const png = await active.png(options.filePath, points, size);
+                    const png = await active.png(filePath, points, size);
                     await adapter.record('png', png);
                     assert.ok(
                         isRecord(png) &&
