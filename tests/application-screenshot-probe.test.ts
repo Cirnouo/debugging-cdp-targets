@@ -1147,27 +1147,68 @@ test('passive exit witness rejects absent arm or terminal output and malformed d
 
 test('application native evidence parses and its read-only C# compiles without inspecting any application', {
     skip: process.platform !== 'win32',
-}, async () => {
-    const output = await promisify(execFile)(
-        'powershell.exe',
-        [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            "$source = [IO.File]::ReadAllText($env:DCT_APPLICATION_EVIDENCE_SCRIPT); $tokens = $null; $errors = $null; [Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -ne 0) { throw 'PowerShell parse error.' }; $match = [regex]::Match($source, \"(?s)Add-Type @'\\r?\\n(.*?)\\r?\\n'@\"); if (!$match.Success) { throw 'Native evidence definition missing.' }; Add-Type -TypeDefinition $match.Groups[1].Value -ErrorAction Stop; [DctApplicationEvidence]::Arguments('fixture.exe --user-data-dir=\"C:/Fixture/data path\"') | ConvertTo-Json -Compress",
-        ],
-        {
-            windowsHide: true,
-            shell: false,
-            timeout: 10_000,
-            env: {
-                ...process.env,
-                DCT_APPLICATION_EVIDENCE_SCRIPT: fileURLToPath(
-                    new URL('./smoke/windows-application-evidence.ps1', import.meta.url),
-                ),
+    timeout: 45_000,
+}, async (t) => {
+    const stages = (stderr: string) =>
+        stderr
+            .split(/\r?\n/)
+            .filter((line) => /^application-evidence-compile:(read|parse|compile|argv):(start|complete)$/.test(line));
+    let stderr = '';
+    let phase: 'child' | 'json-result' | 'argv-assertion' = 'child';
+    try {
+        const output = await promisify(execFile)(
+            'powershell.exe',
+            [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                String.raw`
+                    $ErrorActionPreference = 'Stop';
+                    [Console]::Error.WriteLine('application-evidence-compile:read:start');
+                    $source = [IO.File]::ReadAllText($env:DCT_APPLICATION_EVIDENCE_SCRIPT);
+                    [Console]::Error.WriteLine('application-evidence-compile:read:complete');
+                    [Console]::Error.WriteLine('application-evidence-compile:parse:start');
+                    $tokens = $null; $errors = $null;
+                    [Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors) | Out-Null;
+                    if ($errors.Count -ne 0) { throw 'PowerShell parse error.' };
+                    $match = [regex]::Match($source, "(?s)Add-Type @'\r?\n(.*?)\r?\n'@");
+                    if (!$match.Success) { throw 'Native evidence definition missing.' };
+                    [Console]::Error.WriteLine('application-evidence-compile:parse:complete');
+                    [Console]::Error.WriteLine('application-evidence-compile:compile:start');
+                    Add-Type -TypeDefinition $match.Groups[1].Value -ErrorAction Stop;
+                    [Console]::Error.WriteLine('application-evidence-compile:compile:complete');
+                    [Console]::Error.WriteLine('application-evidence-compile:argv:start');
+                    [DctApplicationEvidence]::Arguments('fixture.exe --user-data-dir="C:/Fixture/data path"') | ConvertTo-Json -Compress;
+                    [Console]::Error.WriteLine('application-evidence-compile:argv:complete');
+                `,
+            ],
+            {
+                windowsHide: true,
+                shell: false,
+                timeout: 30_000,
+                env: {
+                    ...process.env,
+                    DCT_APPLICATION_EVIDENCE_SCRIPT: fileURLToPath(
+                        new URL('./smoke/windows-application-evidence.ps1', import.meta.url),
+                    ),
+                },
             },
-        },
-    );
-    const argv: unknown = JSON.parse(output.stdout);
-    assert.deepEqual(argv, ['fixture.exe', '--user-data-dir=C:/Fixture/data path']);
+        );
+        stderr = output.stderr;
+        phase = 'json-result';
+        const argv: unknown = JSON.parse(output.stdout);
+        phase = 'argv-assertion';
+        assert.deepEqual(argv, ['fixture.exe', '--user-data-dir=C:/Fixture/data path']);
+    } catch (error) {
+        if (isRecord(error) && typeof error.stderr === 'string') stderr = error.stderr;
+        const category =
+            phase === 'child' && isRecord(error) && error.killed === true ? 'child-terminated' : `${phase}-failure`;
+        const failure = new Error(
+            `Application evidence compile-only ${category}; last stage: ${stages(stderr).at(-1) ?? 'unobserved'}.`,
+        );
+        failure.stack = failure.message;
+        throw failure;
+    } finally {
+        for (const stage of stages(stderr)) t.diagnostic(stage);
+    }
 });
