@@ -72,16 +72,32 @@ export function validatePullRequestBody(body: string | null, template: string): 
                     if (value) proseRuns.push(value);
                     run = [];
                 };
-                for (const line of block.split(/\r?\n/u)) {
-                    const heading = readSubmissionHeading(line);
-                    const check = readSubmissionChecklist(line);
+                const lines = block.split(/\r?\n/u);
+                for (let index = 0; index < lines.length; index += 1) {
+                    const line = lines[index];
+                    if (line === undefined) continue;
+                    const heading = readSubmissionHeading(line.trimStart());
+                    const check = readSubmissionChecklist(line.trimStart());
+                    let copiedCheckEnd = index;
+                    let copiedLabel = check?.label ?? '';
+                    while (
+                        check &&
+                        !templateLabels.includes(copiedLabel) &&
+                        templateLabels.some((label) => !copiedLabel || label.startsWith(`${copiedLabel} `))
+                    ) {
+                        const continuation = lines[copiedCheckEnd + 1];
+                        if (continuation === undefined) break;
+                        copiedCheckEnd += 1;
+                        copiedLabel = normalizeSubmissionText(`${copiedLabel} ${continuation}`);
+                    }
                     if (
                         (heading && templateHeadings.includes(heading.text)) ||
-                        (check && templateLabels.includes(check.label))
+                        (check && templateLabels.includes(copiedLabel))
                     ) {
                         // Canonical copied structure ends a starter paragraph even
-                        // when the example removed the template's blank lines.
+                        // when blank lines are removed or its logical label wraps.
                         finishRun();
+                        index = copiedCheckEnd;
                     } else {
                         run.push(line);
                     }

@@ -263,7 +263,26 @@ test('rejects compact literal examples containing only canonical starter prose a
             'starter followed by a checklist',
             'Describe the problem or link the relevant issue.\n- [x] Focused tests and `pnpm verify:push` pass.',
         ],
+        [
+            'starter followed by an indented logical checkbox wrap',
+            'Describe the problem or link the relevant issue.\n- [x] Focused tests and\n    `pnpm verify:push` pass.',
+        ],
+        [
+            'starter followed by an unindented lazy checkbox wrap',
+            'Describe the problem or link the relevant issue.\n- [x] Focused tests and\n`pnpm verify:push` pass.',
+        ],
+        [
+            'starter followed by an indented copied checkbox and wrapped label',
+            'Describe the problem or link the relevant issue.\n    - [x] Focused tests and\n        `pnpm verify:push` pass.',
+        ],
         ['canonical template with blank lines removed', compactTemplate],
+        [
+            'indented canonical template with blank lines removed',
+            compactTemplate
+                .split('\n')
+                .map((line) => `    ${line}`)
+                .join('\n'),
+        ],
     ] as const) {
         await context.test(name, () => {
             assert.match(errors(compliantBody.replace(evidence, `\`\`\`md\n${copied}\n\`\`\``)), /content|evidence/i);
@@ -277,6 +296,8 @@ test('accepts literal template examples mixed with actual results without substr
         'Describe the problem or link the relevant issue. Tests passed.\n- [x] Focused tests and `pnpm verify:push` pass.',
         'Describe the problem or link the relevant issue.\nTests passed.\n- [x] Focused tests and `pnpm verify:push` pass.',
         'Describe the problem or link the relevant issue.\n- [x] Focused tests and `pnpm verify:push` pass.\n# tests 586\n# pass 586\n# fail 0',
+        'Describe the problem or link the relevant issue.\n- [x] Focused tests and\n    `pnpm verify:push` pass.\n# tests 586\n# pass 586\n# fail 0',
+        'Describe the problem or link the relevant issue.\n- [x] Focused tests and\n`pnpm verify:push` pass. Tests passed.',
     ]) {
         assert.equal(errors(compliantBody.replace(evidence, `\`\`\`md\n${content}\n\`\`\``)), '');
     }
