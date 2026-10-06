@@ -46,9 +46,6 @@
   bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser. External Close stimuli only request normal closure;
   they cannot await an inspect-only fixture, poll disappearance or invent exit evidence.
-- `linux-startup-probe.test.ts` temporarily checks bounded cyclic/aggregate fetch
-  diagnostics and normal cleanup of only the probe's created target, including
-  retained launch failures and already confirmed rollback exit.
 - `claude-smoke-config.test.ts` checks allowlisted host environments, isolated user
   paths, loopback-only model endpoints, the Claude version baseline, unknown request
   validation, actual tool-result shapes, Hook context extraction, Anthropic SSE,

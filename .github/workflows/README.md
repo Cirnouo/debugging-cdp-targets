@@ -12,10 +12,6 @@ This directory owns GitHub Actions workflows.
   portable simulated CDP, real Chrome and the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-edit events without uploading runtime
   data or artifacts.
-- `linux-startup-probe.yml` temporarily captures one isolated Linux Chrome launch
-  on pushes to `chore/codex-icons-readme-polish` that touch its diagnostic files.
-  It preserves required CI and the full supply-chain installation order, retains
-  Chrome/Xvfb logs on the runner and uploads no runtime artifacts.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.
