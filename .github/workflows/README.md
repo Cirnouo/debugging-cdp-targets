@@ -20,6 +20,17 @@ This directory owns GitHub Actions workflows.
   forced pushes and build metadata do not publish. The publisher strictly validates
   SemVer candidates before release API operations; arbitrary legal prerelease labels
   are accepted without a whitelist.
+- `issues.yml` checks the latest labeled Bug/Feature Issue on open, edit, reopen,
+  and classification-label changes. Diagnostic-label events are excluded. A
+  separate read-only supply-chain gate audits the same trusted default-branch
+  event SHA before the feedback job can execute. Both checkouts disable persisted
+  credentials. Only the feedback job receives `issues: write`, with the built-in
+  token bound only to its publisher step; dependency installation disables scripts
+  and pnpm hooks. Invalid content is diagnosed before the publisher fails its job.
+  Runs queue per Issue, skip closed Issues, preserve ordinary Issue exemption,
+  and re-read live state before writes. Repairs clear only owned diagnosis.
+  See the [typed Issue policy](../../docs/policies/commits-and-scope.md#typed-issue-submissions)
+  for required label provisioning, ownership and remaining REST race limits.
 
 Supply chain security validates and audits the complete repository lockfile
 before creating an installation tree, using a committed standalone Node checker.

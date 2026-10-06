@@ -168,6 +168,41 @@ Read the current form before creating or editing a typed Issue, redact sensitive
 examples, and follow [SECURITY.md](../../SECURITY.md) for private vulnerability
 reporting. Typed body validation has no local command or Agent tool hook.
 
+The remote [Issue forms workflow](../../.github/workflows/issues.yml) runs on
+open, body/title edit, reopen, and label changes using the trusted default-branch
+event commit. GitHub requires this workflow on the default branch for
+[Issue events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#issues).
+Classification changes use `labeled` and `unlabeled` events. Changes to the
+diagnostic `template: invalid` label are ignored to prevent feedback recursion.
+Maintainers must provision both current form labels and `template: invalid`
+before deployment; missing labels or malformed forms are automation failures.
+
+A structurally invalid typed Issue receives only the diagnostic label and one
+owned GitHub Actions bot comment with field-specific repair guidance, then its
+workflow reports failure. Edit the body or corresponding form label to repair
+the submission. A repaired Issue loses only the diagnostic label and its existing
+owned comment records resolution. Removing both form labels makes the Issue
+ordinary and exempt, clears stale diagnosis, and resolves any owned comment.
+Fresh valid or ordinary Issues receive no comment. Closed Issues are skipped.
+Other labels, comments and the original body remain intact; automation never
+closes, deletes, locks or reopens an Issue.
+
+Ownership requires the verified [GitHub Actions bot](https://api.github.com/users/github-actions%5Bbot%5D)
+numeric identity, `github-actions[bot]` login
+and Bot type plus the fixed feedback marker. Comment discovery is paginated;
+legacy duplicates select the lowest numeric comment ID for update and preserve
+the others. Marker text copied by a contributor cannot claim a comment.
+API, authentication, network, malformed response and configuration failures are
+automation failures, distinct from contributor content. Logs omit tokens and
+Issue bodies. The workflow queues runs per Issue and checks freshly fetched
+identity, body, title, labels, state and update time before writing. Confirmed
+own label mutations advance the expected update time only while source and label
+identities still match. GitHub REST offers no atomic compare-and-set here; an edit
+in the final request window is repaired by its later queued event.
+A confirmed label write can remain if a later comment request fails. The run
+reports automation failure; a rerun fetches current state and resumes recovery
+without creating duplicate owned comments or changing unrelated content.
+
 ## Optional Issue and PR references
 
 Issue association and other PR references are optional. When the change resolves

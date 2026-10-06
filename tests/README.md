@@ -47,6 +47,13 @@
   exact dropdown options, H3 order/duplicates, fake structural headings, and
   unsupported or malformed configuration. Mutated YAML fixtures prove that
   labels and field requirements remain derived from the supplied source.
+- `issue-feedback.test.ts` exercises the actual fixed-origin REST adapter and
+  CI publisher through fake HTTP: diagnosis, repair, ordinary exemption, trusted
+  bot ownership, paginated comments, stale source rejection, known own label
+  mutation, malformed responses and sanitized failures. No GitHub writes occur.
+- `issue-workflow.test.ts` parses actual workflow YAML to verify trusted same-SHA
+  checkout, reviewed Actions, pinned toolchain, read-only supply-chain gates,
+  minimal writer permissions, step-scoped token and diagnostic recursion exclusion.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,

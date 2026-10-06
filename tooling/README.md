@@ -64,6 +64,14 @@
   It returns skipped, valid, or invalid body diagnostics; malformed or unsupported
   forms throw a distinct configuration error. Ordinary unlabeled Issues are exempt.
   This pure policy has no CLI or local submission hook.
+- `issue-feedback.ts` is the CI-only Issue publisher: it validates trusted event
+  and live Issue identity, consumes current form YAML through the pure policy,
+  paginates owned bot comments, checks stale snapshots and publishes recoverable
+  diagnostic labels/comments. Invalid content fails only after feedback completes.
+  Closed Issues and diagnostic-label events are skipped; ordinary Issues are exempt
+  and stale owned diagnosis is cleared. It has no package command or local hook.
+- `issue-github.ts` owns the fixed public GitHub REST boundary for Issue feedback,
+  bounded requests, redirect refusal, token headers and sanitized transport errors.
 - `submission-markdown.ts` scans submission sections at a selected heading depth,
   logical wrapped checkbox labels, adjacent continuations, and content paragraphs.
   Paragraphs retain their text and whether it includes literal code or quoted
@@ -83,8 +91,11 @@
   fingerprints, and disposable official Server dependency scans.
 - `AGENTS.md` specifies validator safety and independent evidence.
 
-Use package scripts for supported checks. Validators never mutate user state
-or publish artifacts. The separate Release workflow runs `node tooling/release.ts`
+Use package scripts for supported checks. Pure validators never mutate user state
+or publish artifacts. The explicit Issue workflow runs `node tooling/issue-feedback.ts`
+with its trusted Issue event and step-scoped built-in token to update only owned
+diagnostic labels/comments. Ordinary checks and tests never invoke that CI entry
+against GitHub. The separate Release workflow runs `node tooling/release.ts`
 with its new tag-push event and built-in token; ordinary checks and tests never
 invoke its publishing CLI. It does not change repository settings or upload
 custom assets.

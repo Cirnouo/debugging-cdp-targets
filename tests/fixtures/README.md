@@ -1,5 +1,10 @@
 # Test fixtures
 
+`issue-feedback-http.ts` replaces only subprocess `fetch` with a private fake
+GitHub boundary for the actual CI entry test. It records request methods/routes
+in a disposable transcript and cannot send network traffic; the test confirms
+feedback publication precedes an invalid exit without printing body or token.
+
 `unwrapped-squash-message.json` preserves a malformed squash message as negative
 input for strict body-length validation, including a formerly exempt identity.
 
