@@ -59,6 +59,11 @@
   labels/placement, selections, conditional N/A reasons, and evidence by reading
   the supplied current template. The CLI loads `.github/PULL_REQUEST_TEMPLATE.md`;
   the low-level Git range/message builder remains independent of that template.
+- `issue-policy.ts` parses supplied current Issue form YAML and derives classification
+  labels, H3 field order, required responses, and exact single-choice dropdown options.
+  It returns skipped, valid, or invalid body diagnostics; malformed or unsupported
+  forms throw a distinct configuration error. Ordinary unlabeled Issues are exempt.
+  This pure policy has no CLI or local submission hook.
 - `submission-markdown.ts` scans submission sections at a selected heading depth,
   logical wrapped checkbox labels, adjacent continuations, and content paragraphs.
   Paragraphs retain their text and whether it includes literal code or quoted

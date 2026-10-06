@@ -22,6 +22,22 @@ the [supply-chain policy](docs/policies/supply-chain.md) if a check fails. Do no
 repair the lock automatically or bypass installation trust. The ordinary
 installation enables the reviewed build script and prepares local Git hooks.
 
+## Submit an Issue
+
+Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) for reproducible unexpected
+behavior or the [Feature form](.github/ISSUE_TEMPLATE/feature_request.yml) for a
+problem and proposed behavior. The current YAML forms own the field headings,
+order, required answers, dropdown choices, and corresponding `template:` labels.
+Keep the generated H3 fields when editing the body, including optional fields;
+optional answers may be empty or `_No response_`. Apply only the corresponding
+form label when submitting a typed Issue through another interface. See the
+[typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions)
+and [Agent submission rules](AGENTS.md#issue-submissions).
+
+Ordinary freeform Issues remain available and exempt from the typed form policy.
+Remove tokens, cookies, private page content, and personal paths from public
+examples. Report suspected vulnerabilities privately through [SECURITY.md](SECURITY.md).
+
 ## Make a focused change
 
 Start with [AGENTS.md](AGENTS.md), the nearest source AGENTS.md, and the policies

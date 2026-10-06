@@ -131,6 +131,43 @@ focused checks before committing.
 Do not push, tag, publish, modify a remote, open a pull request, or change
 repository settings without explicit authorization.
 
+## Typed Issue submissions
+
+The current [Bug form](../../.github/ISSUE_TEMPLATE/bug_report.yml) and
+[Feature form](../../.github/ISSUE_TEMPLATE/feature_request.yml) are the sole
+authority for their generated field labels, order, required answers, dropdown
+options, and classification labels. GitHub's
+[Issue form syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)
+applies the configured labels when those labels already exist in the repository.
+The current forms use `template: bug-report` and `template: feature-request`;
+Agents using another interface must apply the corresponding form label when
+creating or editing a typed Issue.
+
+Classification uses those form labels only. Ordinary freeform Issues without
+either label remain allowed and exempt, even if their text resembles a form.
+General labels such as `bug` are optional. Both form labels on one Issue are
+ambiguous and invalid; choose the corresponding form. `template: invalid` is
+reserved for validation diagnostics and cannot classify a form. Do not infer a
+type from the body or record persistent Issue identity.
+
+Preserve each generated H3 field heading exactly once and in the form's order,
+including optional fields. Extra field-like H3 headings break that structure;
+deeper headings, prose, lists, and code may appear in responses. Comments and
+headings alone do not answer a required field. Fenced or indented code and
+quotes may provide answer evidence but cannot substitute for generated headings.
+Required answers must be nonempty and cannot be `_No response_`. Optional
+answers may be empty or `_No response_`. A dropdown answer must match exactly
+one configured option. This structural policy does not judge semantic
+completeness, response length, version grammar, or numbered reproduction steps.
+
+Malformed or unsupported form configuration is a configuration failure,
+distinct from invalid contributor content. The supported form profile includes
+input, textarea, single-choice dropdown, and static Markdown. Changes to control
+types or required structure require explicit policy support before use.
+Read the current form before creating or editing a typed Issue, redact sensitive
+examples, and follow [SECURITY.md](../../SECURITY.md) for private vulnerability
+reporting. Typed body validation has no local command or Agent tool hook.
+
 ## Optional Issue and PR references
 
 Issue association and other PR references are optional. When the change resolves

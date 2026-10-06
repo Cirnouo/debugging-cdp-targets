@@ -23,6 +23,20 @@ unchecked with an adjacent indented `N/A: <reason>` continuation. The
 [commit policy](docs/policies/commits-and-scope.md), including its 100-character
 body/footer limits and raw-title/generated-squash rules, remains authoritative.
 
+## Issue submissions
+
+When creating or editing a typed Bug or Feature Issue, read the current
+[Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) or
+[Feature form](.github/ISSUE_TEMPLATE/feature_request.yml). Preserve generated H3
+field headings exactly once in their original order, including optional fields.
+Answer each required field and use the exact dropdown choice. Apply the form's
+corresponding `template:` label; the provisioned form applies it on creation.
+Follow the [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions).
+Ordinary freeform Issues are allowed and exempt. Do not infer a typed Issue from
+its body or require a general label. Redact tokens, cookies, private page content,
+and personal paths; report suspected vulnerabilities privately through
+[SECURITY.md](SECURITY.md).
+
 ## Boundaries
 
 - The reusable stdio gateway relays official MCP tools and results using

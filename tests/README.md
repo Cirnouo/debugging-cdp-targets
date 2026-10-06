@@ -42,6 +42,11 @@
   format rejection and full raw commitlint validation without altering history.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, and syntax plans.
+- `issue-policy.test.ts` validates literal GitHub form bodies against the current
+  YAML, including label-only classification, required and optional answers,
+  exact dropdown options, H3 order/duplicates, fake structural headings, and
+  unsupported or malformed configuration. Mutated YAML fixtures prove that
+  labels and field requirements remain derived from the supplied source.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
