@@ -3,7 +3,7 @@
 `.codex-plugin/` owns the maintained Codex manifest and its directory documentation.
 `mcp.json` declares the gateway; `hooks/` owns Codex automatic Hook definitions.
 `assets/` owns artwork directory documentation copied to the payload; the
-approved light and dark PNGs come from the explicit shared asset inventory.
+approved universal and dark PNGs come from the explicit shared asset inventory.
 The manifest's `interface.defaultPrompt` supplies three distinct single-line
 starter prompts for screenshots, console/network diagnostics and page-load
 performance. Each uses the shared Skill and is at most 128 characters, following

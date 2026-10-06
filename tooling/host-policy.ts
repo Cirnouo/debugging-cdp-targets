@@ -19,7 +19,7 @@ export const CODEX_HOST: HostDescriptor = Object.freeze({
     marketplace: '.agents/plugins/marketplace.json',
     mcp: 'mcp.json',
     hooks: 'hooks/hooks.json',
-    assets: Object.freeze(['icon-light.png', 'icon-dark.png']),
+    assets: Object.freeze(['icon.png', 'icon-dark.png']),
     files: Object.freeze({
         '.codex-plugin/README.md': '.codex-plugin/README.md',
         '.codex-plugin/plugin.json': '.codex-plugin/plugin.json',

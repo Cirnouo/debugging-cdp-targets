@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { assembleCodexPayload, generateRuntimeFiles } from '../tooling/build-plugin.ts';
+import { assembleCodexPayload, generateRuntimeFiles, syncPluginFiles } from '../tooling/build-plugin.ts';
 import { validateHostManifest } from '../tooling/distribution-audit.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST } from '../tooling/host-policy.ts';
 import { validateIconPng } from '../tooling/icon-policy.ts';
@@ -107,9 +107,9 @@ test('listing manifests require exact host icon paths and reject missing or comp
         const icons =
             host === CODEX_HOST
                 ? {
-                      logo: './assets/icon-light.png',
+                      logo: './assets/icon.png',
                       logoDark: './assets/icon-dark.png',
-                      composerIcon: './assets/icon-light.png',
+                      composerIcon: './assets/icon.png',
                       composerIconDark: './assets/icon-dark.png',
                   }
                 : { icon: './assets/icon.png' };
@@ -117,7 +117,9 @@ test('listing manifests require exact host icon paths and reject missing or comp
         assert.deepEqual(validateHostManifest(manifest, host), []);
         for (const key of Object.keys(icons)) {
             const original = fields[key];
-            for (const invalid of [undefined, '../icon.png', './assets/unknown.png', 1]) {
+            delete fields[key];
+            assert.ok(validateHostManifest(manifest, host).length, `missing ${key}`);
+            for (const invalid of [undefined, null, '', '../icon.png', './assets/unknown.png', 1, {}, []]) {
                 fields[key] = invalid;
                 assert.ok(validateHostManifest(manifest, host).length);
             }
@@ -126,6 +128,32 @@ test('listing manifests require exact host icon paths and reject missing or comp
         fields.unknownIcon = './assets/icon.png';
         assert.ok(validateHostManifest(manifest, host).length);
     }
+});
+
+test('Codex rejects obsolete transparent light paths for either base icon', async () => {
+    const manifest = JSON.parse(await readFile(path.join(root, CODEX_HOST.inputRoot, CODEX_HOST.manifest), 'utf8'));
+    for (const key of ['logo', 'composerIcon']) {
+        const fields = {
+            ...manifest.interface,
+            logo: './assets/icon.png',
+            composerIcon: './assets/icon.png',
+            [key]: './assets/icon-light.png',
+        };
+        assert.ok(validateHostManifest({ ...manifest, interface: fields }, CODEX_HOST).length, key);
+    }
+    assert.ok(
+        validateHostManifest(
+            {
+                ...manifest,
+                interface: {
+                    ...manifest.interface,
+                    logo: './assets/icon-light.png',
+                    composerIcon: './assets/icon-light.png',
+                },
+            },
+            CODEX_HOST,
+        ).length,
+    );
 });
 
 test('assembly copies only approved icons and rejects missing, unexpected and malformed PNG inputs', async () => {
@@ -138,26 +166,51 @@ test('assembly copies only approved icons and rejects missing, unexpected and ma
         assert.deepEqual([...payload.keys()].filter((file) => file.startsWith('assets/')).sort(), [
             'assets/README.md',
             'assets/icon-dark.png',
-            'assets/icon-light.png',
+            'assets/icon.png',
         ]);
-        const icon = path.join(fixture, 'packaging/shared/assets/icon-light.png');
-        const bytes = await readFile(icon);
-        assert.ok(payload.get('assets/icon-light.png')?.equals(bytes));
-        await rm(icon);
-        await assert.rejects(assembleCodexPayload(runtime, fixture), /Missing|ENOENT/);
-        await writeFile(icon, bytes);
+        for (const file of ['icon.png', 'icon-dark.png'])
+            assert.ok(
+                payload
+                    .get(`assets/${file}`)
+                    ?.equals(await readFile(path.join(fixture, 'packaging/shared/assets', file))),
+                file,
+            );
+        const bytes = await readFile(path.join(fixture, 'packaging/shared/assets/icon.png'));
         const extra = path.join(fixture, 'packaging/shared/assets/unknown.png');
         await writeFile(extra, bytes);
         await assert.rejects(assembleCodexPayload(runtime, fixture), /Unexpected/);
         await rm(extra);
-        for (const invalid of [bytes.subarray(0, 40), Buffer.alloc(5 * 1024 * 1024 + 1), Buffer.from('not a PNG')]) {
-            await writeFile(icon, invalid);
+        for (const file of ['icon.png', 'icon-dark.png', 'icon-light.png', 'icon-source.png']) {
+            const icon = path.join(fixture, 'packaging/shared/assets', file);
+            const original = await readFile(icon);
+            await rm(icon);
+            await assert.rejects(assembleCodexPayload(runtime, fixture), /Missing|ENOENT/, file);
+            for (const invalid of [
+                original.subarray(0, 40),
+                Buffer.alloc(5 * 1024 * 1024 + 1),
+                Buffer.from('not a PNG'),
+            ]) {
+                await writeFile(icon, invalid);
+                await assert.rejects(assembleCodexPayload(runtime, fixture), /PNG|icon/i, file);
+            }
+            const nonSquare = Buffer.from(original);
+            nonSquare.writeUInt32BE(1000, 20);
+            await writeFile(icon, nonSquare);
             await assert.rejects(assembleCodexPayload(runtime, fixture), /PNG|icon/i);
+            await writeFile(icon, original);
         }
-        const nonSquare = Buffer.from(bytes);
-        nonSquare.writeUInt32BE(1000, 20);
-        await writeFile(icon, nonSquare);
-        await assert.rejects(assembleCodexPayload(runtime, fixture), /PNG|icon/i);
+        const destination = path.join(fixture, 'output');
+        await mkdir(destination);
+        await syncPluginFiles(payload, destination);
+        const stale = path.join(destination, 'assets/icon-light.png');
+        await writeFile(stale, await readFile(path.join(fixture, 'packaging/shared/assets/icon-light.png')));
+        for (const options of [{ check: true }, {}])
+            await assert.rejects(syncPluginFiles(payload, destination, options), /Unexpected.*icon-light\.png/);
+        assert.ok(
+            (await readFile(stale)).equals(
+                await readFile(path.join(fixture, 'packaging/shared/assets/icon-light.png')),
+            ),
+        );
     } finally {
         await rm(fixture, { recursive: true, force: true });
     }

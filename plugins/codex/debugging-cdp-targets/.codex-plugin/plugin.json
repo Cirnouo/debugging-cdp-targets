@@ -20,9 +20,9 @@
             "Use $debugging-cdp-targets to check console errors and failed requests in a new Chrome window.",
             "Use $debugging-cdp-targets to profile page load performance in a new Chrome window."
         ],
-        "logo": "./assets/icon-light.png",
+        "logo": "./assets/icon.png",
         "logoDark": "./assets/icon-dark.png",
-        "composerIcon": "./assets/icon-light.png",
+        "composerIcon": "./assets/icon.png",
         "composerIconDark": "./assets/icon-dark.png"
     }
 }

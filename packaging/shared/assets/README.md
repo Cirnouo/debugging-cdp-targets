@@ -9,17 +9,20 @@ redrawing the mark.
 - `icon-light.png`: transparent 1024 × 1024 icon for light backgrounds.
 - `icon-dark.png`: transparent 1024 × 1024 icon for dark backgrounds. It shares
     exactly the same alpha channel as the light icon.
-- `icon.png`: opaque 1024 × 1024 fallback with a light background for surfaces
-    that accept only one icon.
+- `icon.png`: opaque 1024 × 1024 universal icon with a light background for
+    Codex base icon fields and the Claude directory listing.
 - `icon-source.png`: preserved 1254 × 1254 generated raster used for cleanup.
 - `generation.json`: refinement prompts, source hash, colors, dimensions and
     processing parameters. Image generation is not reproducible byte for byte.
 - `README.md`: asset inventory and maintenance guidance.
 
-Use the transparent variants in GitHub theme-aware images and Codex icon fields.
-Use the opaque fallback for the Claude directory listing. Only the selected
-delivery icons belong in generated host payloads; the source raster and this
-generation record remain repository assets.
+Use the transparent light and dark variants in GitHub theme-aware images.
+Codex uses the opaque universal icon for `logo` and `composerIcon`, retaining the
+dark variant for `logoDark` and `composerIconDark`. The universal base keeps
+small icons readable on both themes when a surface ignores the dark field.
+Claude uses the same universal icon for its directory listing. Only the selected
+delivery icons belong in generated host payloads; the transparent light icon,
+source raster and generation record remain repository assets.
 
 Preserve both faces, their separation and their relative proportions when
 updating an icon. Derive theme colors from the same raster masks. Check the
