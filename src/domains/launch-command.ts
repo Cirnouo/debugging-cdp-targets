@@ -15,6 +15,7 @@ export interface LaunchDefinition {
 }
 
 const PORT_PLACEHOLDER = '{port}';
+const DATA_DIRECTORY_PLACEHOLDER = '{dataDir}';
 const DEFAULT_DEBUGGING_SWITCH = '--remote-debugging-port';
 
 function expandEnvironment(argument: string, environment: Record<string, string | undefined>) {
@@ -57,7 +58,8 @@ export function parseApplicationLaunch(value: unknown): ApplicationLaunch {
     if (!isRecord(value) || Object.keys(value).some((key) => !['executable', 'args', 'cwd', 'env'].includes(key)))
         throw new Error('A structured application launch is required.');
     stringValue(value.executable, 'executable');
-    if (value.executable.includes(PORT_PLACEHOLDER)) throw new Error('The executable cannot contain {port}.');
+    if (value.executable.includes(PORT_PLACEHOLDER) || value.executable.includes(DATA_DIRECTORY_PLACEHOLDER))
+        throw new Error('The executable cannot contain launch placeholders.');
     if (value.args !== undefined && !Array.isArray(value.args)) throw new Error('Arguments must be an array.');
     const args: string[] | undefined = value.args?.map((argument: unknown) => {
         stringValue(argument, 'argument', true);
@@ -65,7 +67,8 @@ export function parseApplicationLaunch(value: unknown): ApplicationLaunch {
     });
     if (value.cwd !== undefined) {
         stringValue(value.cwd, 'working directory');
-        if (value.cwd.includes(PORT_PLACEHOLDER)) throw new Error('The working directory cannot contain {port}.');
+        if (value.cwd.includes(PORT_PLACEHOLDER) || value.cwd.includes(DATA_DIRECTORY_PLACEHOLDER))
+            throw new Error('The working directory cannot contain launch placeholders.');
     }
     let env: Record<string, string> | undefined;
     if (value.env !== undefined) {
@@ -73,6 +76,8 @@ export function parseApplicationLaunch(value: unknown): ApplicationLaunch {
         env = Object.fromEntries(
             Object.entries(value.env).map(([name, setting]) => {
                 if (!name || /[=\0]/.test(name)) throw new Error('Invalid environment variable name.');
+                if (name.includes(DATA_DIRECTORY_PLACEHOLDER))
+                    throw new Error('Environment variable names cannot contain {dataDir}.');
                 stringValue(setting, 'environment variable value', true);
                 return [name, setting];
             }),
@@ -90,11 +95,18 @@ export function resolveLaunchDefinition(
     value: unknown,
     port: number,
     environment: Record<string, string | undefined>,
+    dataDir?: string,
 ): LaunchDefinition {
     const launch = parseApplicationLaunch(value);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('The CDP port is invalid.');
+    if (dataDir !== undefined) stringValue(dataDir, 'data directory binding');
+    const substitutePort = (argument: string) => argument.replaceAll(PORT_PLACEHOLDER, String(port));
     const substitute = (argument: string) =>
-        expandEnvironment(argument, environment).replaceAll(PORT_PLACEHOLDER, String(port));
+        expandEnvironment(argument, environment).replace(/\{port\}|\{dataDir\}/g, (placeholder) => {
+            if (placeholder === PORT_PLACEHOLDER) return String(port);
+            if (dataDir === undefined) throw new Error('The launch command requires a data directory binding.');
+            return dataDir;
+        });
     const raw = [...(launch.args ?? []), ...Object.values(launch.env ?? {})].map((argument) =>
         expandEnvironment(argument, environment),
     );
@@ -104,9 +116,12 @@ export function resolveLaunchDefinition(
         launch.env === undefined
             ? undefined
             : Object.fromEntries(Object.entries(launch.env).map(([key, setting]) => [key, substitute(setting)]));
-    const argumentPort = explicitDebuggingPort(args);
+    const argumentPort = explicitDebuggingPort(
+        (launch.args ?? []).map((argument) => substitutePort(expandEnvironment(argument, environment))),
+    );
     const environmentPorts: string[] = [];
-    for (const setting of Object.values(env ?? {})) {
+    for (const template of Object.values(launch.env ?? {})) {
+        const setting = substitutePort(expandEnvironment(template, environment));
         if (/(?:^|\s)--remote-debugging-pipe(?:=|\s|$)/i.test(setting))
             throw new Error('Debugging pipe conflicts with a CDP port.');
         for (const match of setting.matchAll(/(?:^|\s)--remote-debugging-port(?:[=:]|\s+|$)([^\s]*)/gi)) {
@@ -120,8 +135,12 @@ export function resolveLaunchDefinition(
     if (!hasPlaceholder && ports.length === 0) args.push(`${DEFAULT_DEBUGGING_SWITCH}=${port}`);
     const executablePath = expandEnvironment(launch.executable, environment);
     const cwd = launch.cwd === undefined ? undefined : expandEnvironment(launch.cwd, environment);
-    if (executablePath.includes(PORT_PLACEHOLDER) || cwd?.includes(PORT_PLACEHOLDER))
-        throw new Error('Application paths cannot contain {port}.');
+    if (
+        [executablePath, cwd].some(
+            (value) => value?.includes(PORT_PLACEHOLDER) || value?.includes(DATA_DIRECTORY_PLACEHOLDER),
+        )
+    )
+        throw new Error('Application paths cannot contain launch placeholders.');
     return {
         executablePath,
         arguments: args,
