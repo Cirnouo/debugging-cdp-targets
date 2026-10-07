@@ -25,7 +25,7 @@ test('failed normal close preserves native diagnostics and exact retry identity'
         },
         server: { ensure: async () => {}, close: async () => {} },
     });
-    const active = await controller.start({ launch: { executable: '/fixture' } });
+    const active = await controller.start({ isolation: { mode: 'none' }, launch: { executable: '/fixture' } });
     assert.ok(active.sessionId);
     await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), (error: unknown) => {
         const detail = errorDetails(error);

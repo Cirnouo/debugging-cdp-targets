@@ -15,6 +15,8 @@ export interface DataDirectoryEvidence {
     readonly nonempty?: boolean;
 }
 
+export type DataIsolationEvidence = { mode: 'none' } | ({ mode: 'data-dir' } & DataDirectoryEvidence);
+
 function keys(value: Record<string, unknown>, allowed: string[]): boolean {
     return Object.keys(value).every((key) => allowed.includes(key));
 }

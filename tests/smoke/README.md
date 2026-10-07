@@ -42,8 +42,8 @@ then explicitly restarts and normally closes them. It retains test profiles.
   retirement observation, and Hook delivery. Connection retirement observation
   does not establish that upstream cleanup has completed or measure Agent context
   delivery. Cleanup uses
-  gateway stdin EOF and identity-verified normal target close; profiles remain in
-  the printed temporary directory for inspection.
+  gateway stdin EOF and identity-verified normal target close. Managed profiles
+  must be deleted by the gateway; the parent container remains for evidence.
 - `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
   they are never shipped.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
@@ -439,7 +439,13 @@ of the reusable release CI. Both platform checks passed on GitHub before becomin
 required main checks; see the [compatibility guide](../../docs/user-guide/compatibility.md)
 for tested systems and actual Chrome versions.
 
-Each target has its own temporary profile and synthetic local page. The tests
+Each target explicitly requests a new managed profile with delete-on-release
+and a synthetic local page. An official `chrome://version/` page/script probe
+requires the browser-reported Profile Path to resolve below the canonical lease,
+then closes its synthetic page and restores the prior selection. Recovery checks
+that restart keeps the same directory and a marker file, and that final Close,
+ordinary/kept exit and gateway cleanup actually delete managed roots. Tests do not
+externally remove these roots to hide a cleanup failure. The tests
 preselect normal Close for their newly launched fixtures; they never take over
-an existing browser or escalate to forced termination. Profiles remain at the
-printed temporary path for local inspection.
+an existing browser or escalate to forced termination. Parent containers may
+remain at the printed temporary path for evidence.

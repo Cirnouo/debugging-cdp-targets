@@ -132,6 +132,7 @@ async function scenario(mode: Mode) {
                               ? {
                                     entryId: state?.entryId,
                                     requestId: 'codex-start',
+                                    isolation: { mode: 'none' },
                                     launch: {
                                         executable: 'fake target',
                                         args: [],

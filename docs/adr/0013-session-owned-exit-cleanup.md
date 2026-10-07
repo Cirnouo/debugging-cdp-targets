@@ -4,7 +4,7 @@ Status: accepted for unreleased 0.1.0. Partially supersedes
 [0009](0009-process-exit-hooks.md) and [0011](0011-mcp-native-lifecycle.md).
 Partially superseded by the accepted design in
 [0015](0015-explicit-data-directory-isolation.md) for connection-level data
-directory leases across sessions; implementation is pending. The text below
+directory leases across sessions. The text below
 records the original session ownership decision for other resources.
 
 A target can exit while startup or an official request is blocked. Retaining a

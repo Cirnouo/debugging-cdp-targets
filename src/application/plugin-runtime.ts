@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createCdpRouter } from '../adapters/cdp-router.ts';
+import { profileAvailable as nativeProfileAvailable } from '../adapters/chrome-profile.ts';
+import { DataDirectoryRegistry } from '../adapters/data-directory.ts';
 import { createOfficialConnection, interruptedOfficialCall, type OfficialConnection } from '../adapters/mcp-bridge.ts';
 import { createMcpEntryServer, type HookEventName } from '../adapters/mcp-entry-server.ts';
 import { buildServerArguments, resolveServerBin } from '../adapters/official-server.ts';
@@ -18,8 +21,12 @@ import {
     parseConnectionRoute,
     validateIdentity,
 } from '../domains/control-contract.ts';
+import { parseDataIsolation } from '../domains/data-isolation.ts';
+import { resolveLaunchDefinition, validateDataIsolationBinding } from '../domains/launch-command.ts';
+import { DEFAULT_BASE_PORT } from '../shared/constants.ts';
 import { type Diagnose, type Diagnostic, measured } from '../shared/diagnostics.ts';
 import { DetailedError, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
+import { type ConnectionDirectory, createConnectionDirectory } from './connection-directory.ts';
 import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 import { createLifecycleService } from './mcp-lifecycle.ts';
 import {
@@ -35,6 +42,7 @@ type Controller = ReturnType<typeof createTargetController>;
 type ManagedConnection = {
     connectionId: string;
     owner: ConnectionOwner;
+    directory: ConnectionDirectory;
     controller: Controller;
     router: RuntimeRouter;
     upstream?: OfficialConnection;
@@ -46,6 +54,8 @@ type ManagedConnection = {
     quarantine?: Promise<boolean>;
 };
 type RuntimeDependencies = {
+    dataDirectories?: DataDirectoryRegistry;
+    profileAvailable?: typeof nativeProfileAvailable;
     createRouter?: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
     createHost?: () => ControllerHost;
     createConnection?: typeof createOfficialConnection;
@@ -57,7 +67,7 @@ type ExitNotice = TargetEvent & {
     entryId: string;
     connectionId: string;
     cleanupStatus: 'pending' | 'succeeded' | 'failed';
-    cleanupError?: string;
+    cleanupCode?: string;
 };
 type FailureNotice = {
     kind: 'connection-failure';
@@ -70,6 +80,8 @@ type FailureNotice = {
 };
 
 export async function startPluginRuntime({
+    dataDirectories = new DataDirectoryRegistry(),
+    profileAvailable = nativeProfileAvailable,
     createRouter = createCdpRouter,
     createHost,
     createConnection = createOfficialConnection,
@@ -79,6 +91,7 @@ export async function startPluginRuntime({
     const entryId = randomUUID();
     const connections = new Map<string, ManagedConnection>();
     const owners = new Set<ConnectionOwner>();
+    const directories = new Set<ConnectionDirectory>();
     const portReservations = createPortReservations();
     const makeHost = createHost ?? (() => createTargetHost({ portReservations }));
     const notices = new Map<string, ExitNotice>();
@@ -90,9 +103,24 @@ export async function startPluginRuntime({
     let fullCatalog: Awaited<ReturnType<typeof loadOfficialToolCatalog>> | undefined;
     let shuttingDown = false;
     let cleanupPromise: Promise<void> | undefined;
-    function newOwner(sessionId: string) {
-        const owner = createConnectionOwner(sessionId);
+    async function retryDirectory(directory: ConnectionDirectory) {
+        try {
+            await directory.retry();
+        } finally {
+            if (directory.released) directories.delete(directory);
+        }
+    }
+    function newOwner(sessionId: string, directory?: ConnectionDirectory) {
+        const owner = createConnectionOwner(
+            sessionId,
+            directory
+                ? () => {
+                      void retryDirectory(directory).catch(() => {});
+                  }
+                : undefined,
+        );
         owners.add(owner);
+        directory?.addOwner(owner);
         return owner;
     }
     function noticeKey(connectionId: string, sessionId: string) {
@@ -161,6 +189,7 @@ export async function startPluginRuntime({
     function observeExit(connection: ManagedConnection, event: TargetEvent) {
         const owner = connection.owner;
         if (owner.sessionId !== event.sessionId) return;
+        if (event.expected !== 'restart') connection.directory.requestRelease();
         // Target controller already revoked routing and the owner's dependent work.
         lifecycle.cancelRoute({ connectionId: connection.connectionId, sessionId: event.sessionId });
         const key = noticeKey(connection.connectionId, event.sessionId);
@@ -189,7 +218,7 @@ export async function startPluginRuntime({
                 notice.cleanupStatus = 'succeeded';
             } catch (error) {
                 notice.cleanupStatus = 'failed';
-                notice.cleanupError = errorMessage(error).slice(0, 512);
+                notice.cleanupCode = 'RESOURCE_CLEANUP_FAILED';
                 throw error;
             } finally {
                 if (
@@ -199,6 +228,7 @@ export async function startPluginRuntime({
                 )
                     connections.delete(connection.connectionId);
                 if (!owner.hasPendingResources()) owners.delete(owner);
+                await retryDirectory(connection.directory).catch(() => {});
             }
         })();
         trackRetirement(pending);
@@ -280,7 +310,26 @@ export async function startPluginRuntime({
                     (event) => event.operationId === operation.operationId && event.cleanupStatus === 'pending',
                 ),
         );
-        const observedExits = [...notices.values()].filter((event) => event.cleanupStatus !== 'pending');
+        const observedExits = [...notices.values()]
+            .filter((event) => event.cleanupStatus !== 'pending')
+            .map((event) => ({
+                kind: event.kind,
+                entryId: event.entryId,
+                connectionId: event.connectionId,
+                sessionId: event.sessionId,
+                reason: event.reason,
+                taskActive: event.taskActive,
+                processId: event.processId,
+                port: event.port,
+                targetKind: event.targetKind,
+                exitedAt: event.exitedAt,
+                cleanupStatus: event.cleanupStatus,
+                ...(event.expected === undefined ? {} : { expected: event.expected }),
+                ...(event.operationId === undefined ? {} : { operationId: event.operationId }),
+                ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
+                ...(event.signalCode === undefined ? {} : { signalCode: event.signalCode }),
+                ...(event.cleanupCode === undefined ? {} : { cleanupCode: event.cleanupCode }),
+            }));
         const operations = completed.map((operation) => {
             const exits = observedExits.filter(
                 (event) => event.expected && event.operationId === operation.operationId,
@@ -312,10 +361,31 @@ export async function startPluginRuntime({
     ): Promise<ConnectionStatus> {
         if (shuttingDown) throw new Error('The gateway is closing.');
         context.signal?.throwIfAborted();
+        const isolation = parseDataIsolation(options.isolation);
+        validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+        const host = makeHost();
+        host.validateLaunch?.(options);
+        if (isolation.mode === 'data-dir') {
+            const parsed = resolveLaunchDefinition(
+                options.launch,
+                options.basePort ?? DEFAULT_BASE_PORT,
+                process.env,
+                '{dataDir}',
+            );
+            if (!path.isAbsolute(parsed.executablePath) || (parsed.cwd !== undefined && !path.isAbsolute(parsed.cwd)))
+                throw new Error('Application executable and working directory must be absolute.');
+        }
         const connectionId = randomUUID();
         const sessionId = randomUUID();
         const initialArgs = buildServerArguments('http://127.0.0.1:1', process.env, options.mcpArgs).slice(1);
-        const owner = newOwner(sessionId);
+        const directory = createConnectionDirectory(
+            dataDirectories,
+            isolation,
+            context.onIsolation,
+            options.targetKind === 'chrome' ? profileAvailable : undefined,
+        );
+        directories.add(directory);
+        const owner = newOwner(sessionId, directory);
         owner.expectedOperationId = context.operationId;
         let connection: ManagedConnection | undefined;
         const diagnostics: (Diagnostic & { sessionId: string })[] = [];
@@ -332,6 +402,10 @@ export async function startPluginRuntime({
             if (createConnection === createOfficialConnection) await resolveServerBin();
             context.signal?.throwIfAborted();
             if (shuttingDown) throw new Error('The gateway is closing.');
+            context.onPhase?.('acquiring-data-directory');
+            await directory.acquire();
+            context.signal?.throwIfAborted();
+            if (shuttingDown) throw new Error('The gateway is closing.');
             const diagnose = diagnoseFor(owner);
             context.onPhase?.('creating-router');
             const router = await createRouter({ diagnose });
@@ -341,6 +415,7 @@ export async function startPluginRuntime({
             const managed: ManagedConnection = {
                 connectionId,
                 owner,
+                directory,
                 router,
                 diagnostics,
                 diagnose,
@@ -349,7 +424,7 @@ export async function startPluginRuntime({
                 quarantined: false,
                 controller: createTargetController({
                     entryId,
-                    host: makeHost(),
+                    host,
                     router: {
                         setTarget: (target) => managed.router.setTarget(target),
                         clearTarget: () => managed.router.clearTarget(),
@@ -359,7 +434,7 @@ export async function startPluginRuntime({
                     },
                     createOwner: async (id) => {
                         if (managed.owner.sessionId === id) return managed.owner;
-                        const replacement = newOwner(id);
+                        const replacement = newOwner(id, directory);
                         managed.owner = replacement;
                         delete managed.upstream;
                         delete managed.quarantine;
@@ -394,10 +469,14 @@ export async function startPluginRuntime({
             };
             connection = managed;
             connections.set(connectionId, managed);
-            await managed.controller.start(options, sessionId, context);
+            await managed.controller.start(options, sessionId, {
+                ...context,
+                ...(directory.path === undefined ? {} : { dataDirectory: directory.path }),
+            });
             managed.owner.assertOpen();
             return summary(managed);
         } catch (error) {
+            directory.requestRelease();
             const managed = connection;
             const failedOwner = managed?.owner ?? owner;
             if (!failedOwner.target || failedOwner.exited) {
@@ -435,6 +514,8 @@ export async function startPluginRuntime({
                 processExited: failedOwner.exited,
             };
             throw failure;
+        } finally {
+            await retryDirectory(directory).catch(() => {});
         }
     }
     const handler: ControlHandler = {
@@ -450,15 +531,20 @@ export async function startPluginRuntime({
                 const connection = routed(request);
                 connection.owner.expectedOperationId = context.operationId;
                 buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
+                const releaseSuccessor = connection.directory.holdSuccessor();
                 try {
                     const result = await connection.controller.restart(request, {
                         ...context,
+                        ...(connection.directory.path === undefined
+                            ? {}
+                            : { dataDirectory: connection.directory.path }),
                         onSession: (sessionId) =>
                             context.onIdentity?.({ connectionId: request.connectionId, sessionId }),
                     });
                     if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
                     return { ...summary(connection), ...result, connectionId: request.connectionId };
                 } catch (error) {
+                    connection.directory.requestRelease();
                     const owner = connection.owner;
                     if (!owner.target || owner.exited) {
                         owner.retire(error);
@@ -471,6 +557,9 @@ export async function startPluginRuntime({
                     if (connection.owner.retired || connection.controller.status().status === 'idle')
                         connections.delete(request.connectionId);
                     throw error;
+                } finally {
+                    releaseSuccessor();
+                    await retryDirectory(connection.directory).catch(() => {});
                 }
             })();
             replacements.add(job);
@@ -480,10 +569,12 @@ export async function startPluginRuntime({
         stop: async (request, context = {}) => {
             const connection = routed(request);
             connection.owner.expectedOperationId = context.operationId;
+            if (request.disposition === 'Close') connection.directory.requestRelease();
             const result = await connection.controller.stop(request, context);
             if (request.disposition === 'Close') {
                 if (connections.get(request.connectionId) === connection) connections.delete(request.connectionId);
                 if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
+                await retryDirectory(connection.directory);
             }
             return {
                 ...result,
@@ -519,6 +610,7 @@ export async function startPluginRuntime({
     async function cleanup() {
         if (cleanupPromise) return cleanupPromise;
         shuttingDown = true;
+        for (const directory of directories) directory.requestRelease();
         const closing: Promise<unknown>[] = [];
         const cleaning = new Map<ConnectionOwner, { version: number; joined: boolean }>();
         for (const connection of connections.values()) {
@@ -557,6 +649,7 @@ export async function startPluginRuntime({
                     .map((owner) => owner.retryResources()),
             );
             connections.clear();
+            await Promise.allSettled([...directories].map(retryDirectory));
             for (const result of results)
                 if (result.status === 'rejected')
                     process.stderr.write(`Gateway cleanup failed: ${errorMessage(result.reason)}\n`);
@@ -623,6 +716,7 @@ export async function startPluginRuntime({
                         ? {
                               mcpArgs: [...connection.mcpArgs],
                               workspace: workspaceSources(connection.mcpArgs, entry?.supportsRoots() ?? false),
+                              isolation: connection.directory.evidence(),
                           }
                         : {}),
                     ...(request.include?.includes('diagnostics') ? { diagnostics: [...connection.diagnostics] } : {}),

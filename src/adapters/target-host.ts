@@ -1,12 +1,13 @@
 import { spawn as nodeSpawn } from 'node:child_process';
+import { realpath } from 'node:fs/promises';
 import net from 'node:net';
-import os from 'node:os';
 import path from 'node:path';
 import type { ManagedTarget } from '../domains/cdp-target.ts';
 import { RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
 import { withChromeScreenshotFeature } from '../domains/chromium-features.ts';
 import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
-import { resolveLaunchDefinition } from '../domains/launch-command.ts';
+import { parseDataIsolation } from '../domains/data-isolation.ts';
+import { resolveLaunchDefinition, validateDataIsolationBinding } from '../domains/launch-command.ts';
 import {
     DEFAULT_BASE_PORT,
     LOOPBACK,
@@ -121,15 +122,46 @@ export function applyChromePreset(arguments_: string[]) {
     }
     if (addresses.length > 1) throw new Error('Duplicate Chrome debugging addresses are prohibited.');
     if (addresses.length && addresses[0] !== '127.0.0.1') throw new Error('Chrome debugging must use loopback.');
-    if (chromeProfileArgument(result) === undefined) {
-        const home = process.platform === 'win32' ? process.env.USERPROFILE : os.homedir();
-        if (!home || !path.isAbsolute(home)) throw new Error('The Chrome profile home directory is unavailable.');
-        result.push(`--user-data-dir=${path.join(home, '.cache', 'chrome-devtools-mcp', 'chrome-profile')}`);
-    }
+    chromeProfileArgument(result);
     if (!addresses.length) result.push('--remote-debugging-address=127.0.0.1');
     for (const flag of ['--no-first-run', '--no-default-browser-check', '--disable-updater-scheduler'])
         if (!result.includes(flag)) result.push(flag);
     return result;
+}
+
+function directoryKey(directory: string) {
+    const normalized = path.resolve(directory);
+    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+export function validateTargetLaunch(options: LaunchOptions) {
+    const isolation = parseDataIsolation(options.isolation);
+    const targetKind = options.targetKind ?? 'generic-cdp';
+    const basePort = options.basePort ?? DEFAULT_BASE_PORT;
+    if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
+    if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error('Invalid base port.');
+    if (options.launchDefinition) return;
+    validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+    const sample = process.platform === 'win32' ? 'C:/dct-preflight-data' : '/dct-preflight-data';
+    const parsed = resolveLaunchDefinition(
+        options.launch,
+        basePort,
+        process.env,
+        isolation.mode === 'data-dir' ? sample : undefined,
+    );
+    if (!path.isAbsolute(parsed.executablePath) || (parsed.cwd !== undefined && !path.isAbsolute(parsed.cwd)))
+        throw new Error('Application executable and working directory must be absolute.');
+    if (targetKind === 'chrome') {
+        const args = applyChromePreset(parsed.arguments);
+        const profile = chromeProfileArgument(args);
+        if (
+            isolation.mode === 'data-dir' &&
+            (profile === undefined ||
+                directoryKey(path.resolve(parsed.cwd ?? path.dirname(parsed.executablePath), profile)) !==
+                    directoryKey(sample))
+        )
+            throw new Error('Isolated Chrome profile must match the leased data directory.');
+    }
 }
 
 type LaunchProcess = NonNullable<ManagedTarget['child']> & {
@@ -244,17 +276,20 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         }
     }
     return {
-        async launch(
-            {
+        validateLaunch: validateTargetLaunch,
+        async launch(options: LaunchOptions, context: TargetLaunchContext = {}): Promise<ManagedTarget> {
+            validateTargetLaunch(options);
+            const {
                 launch,
+                isolation,
                 targetKind = 'generic-cdp',
                 basePort = DEFAULT_BASE_PORT,
                 exactPort,
                 launchDefinition,
-            }: LaunchOptions,
-            context: TargetLaunchContext = {},
-        ): Promise<ManagedTarget> {
+            } = options;
             context.signal?.throwIfAborted();
+            if (isolation.mode === 'data-dir' && context.dataDirectory === undefined)
+                throw new Error('A leased data directory binding is required.');
             if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
             if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error('Invalid base port.');
             const excluded = await waitForWork(() => platform.reservedRanges(), context.signal);
@@ -307,7 +342,8 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
             let readinessSignal = context.signal;
             try {
                 context.signal?.throwIfAborted();
-                const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env);
+                const parsed =
+                    launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory);
                 if (!path.isAbsolute(parsed.executablePath))
                     throw new Error('The application must use an absolute executable path.');
                 const executablePath = path.resolve(parsed.executablePath);
@@ -319,6 +355,18 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     environment.set(process.platform === 'win32' ? name.toLowerCase() : name, [name, value]);
                 const env = Object.fromEntries(environment.values());
                 const profile = targetKind === 'chrome' ? chromeProfileArgument(args) : undefined;
+                if (targetKind === 'chrome' && isolation.mode === 'data-dir') {
+                    if (profile === undefined || context.dataDirectory === undefined)
+                        throw new Error('Isolated Chrome profile must match the leased data directory.');
+                    let actual: string;
+                    try {
+                        actual = await realpath(path.resolve(cwd, profile));
+                    } catch {
+                        throw new Error('Isolated Chrome profile identity is unavailable.');
+                    }
+                    if (directoryKey(actual) !== directoryKey(context.dataDirectory))
+                        throw new Error('Isolated Chrome profile must match the leased data directory.');
+                }
                 release =
                     profile === undefined
                         ? undefined

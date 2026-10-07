@@ -146,7 +146,7 @@ function fixture(
     };
 }
 
-const launch = { launch: { executable: process.execPath }, basePort: 9222 };
+const launch = { isolation: { mode: 'none' as const }, launch: { executable: process.execPath }, basePort: 9222 };
 
 function deferred() {
     let resolve = () => {};

@@ -91,6 +91,20 @@ export function parseApplicationLaunch(value: unknown): ApplicationLaunch {
     };
 }
 
+export function validateDataIsolationBinding(
+    value: unknown,
+    mode: 'none' | 'data-dir',
+    environment: Record<string, string | undefined>,
+): void {
+    const launch = parseApplicationLaunch(value);
+    const references = [...(launch.args ?? []), ...Object.values(launch.env ?? {})].some((argument) =>
+        expandEnvironment(argument, environment).includes(DATA_DIRECTORY_PLACEHOLDER),
+    );
+    if (mode === 'data-dir' && !references)
+        throw new Error('Data directory isolation requires an explicit {dataDir} binding.');
+    if (mode === 'none' && references) throw new Error('No isolation forbids {dataDir} binding.');
+}
+
 export function resolveLaunchDefinition(
     value: unknown,
     port: number,

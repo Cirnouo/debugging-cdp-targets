@@ -49,7 +49,7 @@ remains informational and an active unexpected exit may suggest a new start.
 Empty Hooks return {}.
 
 Implement [ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) with
-a distinct connection-level directory lease; this implementation is pending.
+a distinct connection-level directory lease.
 Prevalidate before acquiring it and preserve it across session restart. Release
 only after no live/pending app, permission wait, late creation, successor or
 relevant read/write resource can use it. Intermediate restart exit never releases

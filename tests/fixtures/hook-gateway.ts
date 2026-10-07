@@ -121,7 +121,7 @@ const runtime = await startPluginRuntime({
         rootsChanged: async () => {},
     }),
 });
-const current = await runtime.controller.start({ launch: { executable: 'fake target' } });
+const current = await runtime.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fake target' } });
 await writeFile(
     `${statePath}.${current.connectionId}`,
     JSON.stringify({

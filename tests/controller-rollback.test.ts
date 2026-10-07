@@ -73,13 +73,19 @@ function fixture() {
 
 test('failed attachment and failed rollback retain a gated session until explicit Close succeeds', async () => {
     const f = fixture();
-    await assert.rejects(f.controller.start({ launch: { executable: 'fixture' } }), /normally/);
+    await assert.rejects(
+        f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
+        /normally/,
+    );
     const retained = f.controller.status();
     assert.equal(retained.status, 'close-failed');
     assert.equal(retained.processId, 42);
     assert.ok(retained.sessionId);
     assert.equal(f.controller.canInvoke(), false);
-    await assert.rejects(f.controller.start({ launch: { executable: 'another' } }), /existing target/i);
+    await assert.rejects(
+        f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'another' } }),
+        /existing target/i,
+    );
     await assert.rejects(f.controller.stop({ sessionId: retained.sessionId, disposition: 'Keep' }), /Close/);
     await assert.rejects(f.controller.restart({ sessionId: retained.sessionId }), /lost/);
     await assert.rejects(f.controller.endTask({ sessionId: retained.sessionId }), /Close/);
@@ -131,7 +137,7 @@ test('restart rollback retains the new failed target and never overwrites it wit
         },
         server: { ensure: async () => {}, close: async () => {} },
     });
-    const active = await controller.start({ launch: { executable: 'fixture' } });
+    const active = await controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     await assert.rejects(controller.restart({ sessionId: active.sessionId }), /normally/);
     const retained = controller.status();
@@ -195,7 +201,7 @@ test('unverified host startup with failed normal cleanup retains typed identity 
         server: { ensure: async () => {}, close: async () => {} },
     });
     await assert.rejects(
-        controller.start({ launch: { executable: process.execPath }, basePort: 9222 }),
+        controller.start({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
         (error: unknown) => {
             assert.ok(error instanceof DetailedError && error instanceof RetainedTargetError);
             assert.equal(error.target.processId, 90);
@@ -208,7 +214,10 @@ test('unverified host startup with failed normal cleanup retains typed identity 
     assert.equal(retained.status, 'close-failed');
     assert.equal(retained.processId, 90);
     assert.ok(retained.sessionId);
-    await assert.rejects(controller.start({ launch: { executable: process.execPath } }), /existing target/i);
+    await assert.rejects(
+        controller.start({ isolation: { mode: 'none' }, launch: { executable: process.execPath } }),
+        /existing target/i,
+    );
     assert.equal(launches, 1);
     closeSucceeds = true;
     await controller.stop({ sessionId: retained.sessionId, disposition: 'Close' });

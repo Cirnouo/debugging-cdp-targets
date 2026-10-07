@@ -66,7 +66,7 @@ and personal paths; report suspected vulnerabilities privately through
     profile fallback. Data directories have connection-level leases across restart;
     preauthorized whole-directory cleanup waits for all live/pending app and resource
     users. Keep path evidence in explicit operation metadata/selected configuration,
-    never automatic Hooks or default summaries. Runtime implementation is pending.
+    never automatic Hooks or default summaries.
 
 ## Navigation and commands
 

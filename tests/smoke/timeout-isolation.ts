@@ -32,6 +32,7 @@ try {
     const targets = await Promise.all(
         [0, 1].map((index) =>
             control({
+                isolation: { mode: 'none' },
                 action: 'start',
                 entryId,
                 requestId: randomUUID(),

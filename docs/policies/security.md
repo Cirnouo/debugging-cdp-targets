@@ -105,8 +105,7 @@ shutdown despite peer failures, without imposing a new target-close deadline.
 
 The accepted [ADR 0015](../adr/0015-explicit-data-directory-isolation.md) replaces
 the fixed Chrome profile and unconditional retention policy with the following
-required boundary. Runtime implementation is pending; these are contributor
-requirements for that implementation.
+required boundary.
 
 Require explicit start isolation: none or data-dir with existing/new directory
 selection and retain/delete-on-release. None neither creates nor deletes a data
@@ -126,6 +125,16 @@ retain/delete decision. Hidden entries count; inspect entries, not contents.
 Full Agent delegation includes selecting a parent but grants no implicit deletion.
 None skips isolation research and directory questions.
 
+Before every launch in either isolation mode, conservatively treat the target as
+a singleton and perform a read-only occupancy gate. Use verified application
+identity and effective-root attribution when available. A related running app
+whose independent scope cannot be established, known busy evidence or incomplete
+inspection leaves the target unlaunched. Do not research singleton capability or
+waive this gate for documented multi-instance support. A new directory alone does
+not prove the absence of a shared instance namespace. Known explicit Chrome roots
+also receive native runtime checks; omitted defaults and generic occupancy remain
+workflow-owned, without guessed roots, generic Chrome markers or a new public carrier.
+
 Delete-on-release must be authorized before launch and applies to the entire real
 directory, including pre-existing contents. Resolve a root link/junction to its
 actual target for binding and deletion; child links never widen deletion scope.
@@ -133,6 +142,8 @@ Validate launch/options before acquisition, reject concurrent canonical equal or
 ancestor/descendant claims, and reverify root identity before deletion. Missing
 existing directories and new-name collisions fail without switching operations.
 Changed or unverifiable identity retains ownership instead of deleting a replacement.
+Chrome deletion also rechecks native profile availability. External active use or
+unverifiable occupancy retains the claim even after a launch fails without our app.
 Preserve acquired path and ownership evidence after any post-creation verification
 failure; a failed result cannot discard an acquired directory or its claim.
 

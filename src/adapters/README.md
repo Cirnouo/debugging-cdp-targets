@@ -20,6 +20,8 @@
   Conflicting feature choices fail and release the transient port claim; exact
   recovery preserves the composed arguments.
 - `chrome-profile.ts` checks native profile locks and reserves canonical directories.
+- `data-directory.ts` acquires canonical directory leases, inspects entry presence,
+  rejects overlapping claims and retries authorized cleanup with identity checks.
 - `port-reservation.ts` reserves CDP ports synchronously for one gateway and
   checks owner identity before releasing a live-run claim.
 - `platform-process.ts` obtains OS identity/reservations and normal shutdown;
@@ -37,10 +39,12 @@
 - `AGENTS.md` defines I/O safety and platform contracts.
 
 The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)
-adds a planned filesystem acquisition/disposal boundary with real-root identity,
-overlap claims and authorized whole-directory cleanup. The target host will bind
-the acquired opaque path and remove its implicit fixed Chrome profile while
-preserving native profile ownership checks. Runtime implementation is pending.
+defines filesystem acquisition/disposal with real-root identity, overlap claims
+and authorized whole-directory cleanup. The target host binds the acquired opaque
+path without an implicit fixed Chrome profile and preserves native ownership checks.
+It checks explicit Chrome profiles in both isolation modes. Omitted default roots
+and generic application occupancy require the Agent's read-only prelaunch gate;
+the runtime does not guess their identity or a universal lock convention.
 
 The bundled gateway uses the public `@modelcontextprotocol/client`, `server` and
 `core` SDK packages pinned to 2.2.0. It retains legacy stdio initialization, roots,

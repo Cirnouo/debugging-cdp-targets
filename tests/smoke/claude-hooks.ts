@@ -116,6 +116,7 @@ async function scenario(mode: Mode) {
                               {
                                   entryId: state.entryId,
                                   requestId: 'claude-start',
+                                  isolation: { mode: 'none' },
                                   launch: {
                                       executable: 'fake target',
                                       args: [],

@@ -36,10 +36,9 @@
   feature at the existing launch boundary, strict effective feature composition,
   conflict rollback and idempotent exact restart; generic/platform scope stays separate;
   partially superseded by 0015 for its fixed-profile assumption.
-- `0015-explicit-data-directory-isolation.md`: accepted forward design for required
+- `0015-explicit-data-directory-isolation.md`: required
     isolation intent, researched application binding, explicit directory operations,
-    connection leases, preauthorized whole-directory cleanup and operation-only evidence;
-    runtime implementation is pending.
+    connection leases, preauthorized whole-directory cleanup and explicit evidence.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

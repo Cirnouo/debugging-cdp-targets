@@ -5,7 +5,7 @@ export interface OwnedResource {
 }
 
 /** One in-memory owner for a target run and its unfinished acquisitions. */
-export function createConnectionOwner(sessionId: string) {
+export function createConnectionOwner(sessionId: string, onSettled?: () => void) {
     const work = new AbortController();
     const resources = new Map<string, OwnedResource>();
     const closing = new Map<string, Promise<void>>();
@@ -49,11 +49,17 @@ export function createConnectionOwner(sessionId: string) {
             owner.exited = true;
             owner.retire(new Error('The target process exited.'));
             resolveExit();
+            onSettled?.();
             return true;
         },
         track<T>(job: Promise<T>): Promise<T> {
             pending.add(job);
-            void job.finally(() => pending.delete(job)).catch(() => {});
+            void job
+                .finally(() => {
+                    pending.delete(job);
+                    onSettled?.();
+                })
+                .catch(() => {});
             return job;
         },
         register(name: string, resource: OwnedResource) {
@@ -81,6 +87,7 @@ export function createConnectionOwner(sessionId: string) {
                     if (resources.get(name) === resource) resources.delete(name);
                 } finally {
                     unsettled.delete(name);
+                    onSettled?.();
                 }
             })();
             closing.set(name, result);

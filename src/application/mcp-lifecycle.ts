@@ -60,6 +60,7 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
                     operationId: operation.operationId,
                     signal: operation.signal,
                     onPhase: operation.phase,
+                    onIsolation: operation.isolation,
                     onIdentity: (route) => {
                         boundConnection = route.connectionId;
                         changing.add(route.connectionId);

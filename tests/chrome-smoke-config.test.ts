@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import type { ProcessTarget } from '../src/domains/cdp-target.ts';
 import type { ControlRequest, ControlResult } from '../src/domains/control-contract.ts';
@@ -131,17 +133,93 @@ test('Chrome smoke launch preserves literal paths and isolates its temporary pro
         'darwin',
     );
     assert.deepEqual(launch, {
-        executable: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        args: [
-            '--no-first-run',
-            '--disable-background-networking',
-            '--disable-background-mode',
-            '--user-data-dir=/tmp/test profile',
-            '--remote-debugging-port={port}',
-            'data:text/html,<title>LOCAL</title>',
-        ],
+        isolation: {
+            mode: 'data-dir',
+            directory: { kind: 'new', parent: '/tmp', name: 'test profile' },
+            cleanup: 'delete-on-release',
+        },
+        targetKind: 'chrome',
+        launch: {
+            executable: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            args: [
+                '--no-first-run',
+                '--disable-background-networking',
+                '--disable-background-mode',
+                '--user-data-dir={dataDir}',
+                '--remote-debugging-port={port}',
+                'data:text/html,<title>LOCAL</title>',
+            ],
+        },
     });
     assert.throws(() => createChromeSmokeLaunch('/chrome', 'relative-profile', 'data:text/html,', 'linux'), /absolute/);
+});
+
+test('Chrome smoke verifies browser-reported actual profile path through official tools and closes its probe', async (t) => {
+    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-smoke-proof-')));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    await mkdir(path.join(directory, 'Default'));
+    const nestedProfile = path.join(directory, 'nested', 'Default');
+    await mkdir(nestedProfile, { recursive: true });
+    const module = await host();
+    assert.ok('inspectChromeSmokeDirectory' in module && typeof module.inspectChromeSmokeDirectory === 'function');
+    const target = {
+        entryId: randomUUID(),
+        connectionId: randomUUID(),
+        sessionId: randomUUID(),
+        status: 'active' as const,
+    };
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    let reportedPath = path.join(directory, 'Default');
+    const tool = async (name: string, args: Record<string, unknown> = {}) => {
+        calls.push({ name, args });
+        if (name === 'dct_connection_status')
+            return {
+                structuredContent: {
+                    isolation: { mode: 'data-dir', path: directory, cleanup: 'delete-on-release', state: 'held' },
+                },
+            };
+        const text =
+            name === 'list_pages'
+                ? '12: data:text/html,fixture [selected]'
+                : name === 'new_page'
+                  ? '12: data:text/html,fixture\n13: chrome://version/ [selected]'
+                  : name === 'evaluate_script'
+                    ? `Script ran on page and returned:\n\`\`\`json\n${JSON.stringify({ profilePath: reportedPath })}\n\`\`\``
+                    : 'done';
+        return { content: [{ type: 'text', text }] };
+    };
+    assert.equal(await module.inspectChromeSmokeDirectory(tool, target), directory);
+    assert.deepEqual(
+        calls.map((call) => call.name),
+        [
+            'dct_connection_status',
+            'list_pages',
+            'new_page',
+            'select_page',
+            'evaluate_script',
+            'close_page',
+            'select_page',
+        ],
+    );
+    assert.equal(calls.find((call) => call.name === 'evaluate_script')?.args.pageId, 13);
+    assert.deepEqual(calls.at(-1)?.args, {
+        _dct: { connectionId: target.connectionId, sessionId: target.sessionId },
+        pageId: 12,
+    });
+    for (const rejectedPath of [path.dirname(directory), directory, nestedProfile]) {
+        reportedPath = rejectedPath;
+        await assert.rejects(module.inspectChromeSmokeDirectory(tool, target), /profile|directory/i);
+        assert.deepEqual(calls.slice(-2), [
+            {
+                name: 'close_page',
+                args: { _dct: { connectionId: target.connectionId, sessionId: target.sessionId }, pageId: 13 },
+            },
+            {
+                name: 'select_page',
+                args: { _dct: { connectionId: target.connectionId, sessionId: target.sessionId }, pageId: 12 },
+            },
+        ]);
+    }
 });
 
 test('Chrome smoke records the owned browser version and fails unsupported products or versions', async () => {

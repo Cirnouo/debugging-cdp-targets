@@ -198,6 +198,7 @@ test('target host launches and verifies a browser-level CDP endpoint', async (co
     const fixture = fileURLToPath(new URL('./fixtures/fake-cdp-target.ts', import.meta.url));
     const host = createTargetHost();
     const target = await host.launch({
+        isolation: { mode: 'none' },
         launch: { executable: process.execPath, args: [fixture, '--remote-debugging-port={port}'] },
         targetKind: 'generic-cdp',
         basePort: 19000,
@@ -257,26 +258,35 @@ function hostFixture({ endpointFailure = false, closeSucceeds = true, race = fal
 
 test('target startup failure normally closes only its newly launched process', async () => {
     const { host, closed } = hostFixture({ endpointFailure: true });
-    await assert.rejects(host.launch({ launch: { executable: process.execPath }, basePort: 9222 }), /CDP/);
+    await assert.rejects(
+        host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
+        /CDP/,
+    );
     assert.deepEqual(closed, [9222]);
 });
 
 test('a post-creation port race closes the new process without automatic relaunch', async () => {
     const { host, closed, launched } = hostFixture({ race: true });
-    await assert.rejects(host.launch({ launch: { executable: process.execPath }, basePort: 9222 }), /foreign process/);
+    await assert.rejects(
+        host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
+        /foreign process/,
+    );
     assert.deepEqual(launched, [9222]);
     assert.deepEqual(closed, [9222]);
 });
 
 test('startup cleanup failure reports the retained process and does not retry', async () => {
     const { host, launched } = hostFixture({ endpointFailure: true, closeSucceeds: false });
-    await assert.rejects(host.launch({ launch: { executable: process.execPath }, basePort: 9222 }), (error) => {
-        assert.ok(error instanceof DetailedError && isRecord(error.details));
-        assert.equal(error.details.processId, 42);
-        assert.equal(error.details.port, 9222);
-        assert.equal(error.details.closeConfirmed, false);
-        return true;
-    });
+    await assert.rejects(
+        host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
+        (error) => {
+            assert.ok(error instanceof DetailedError && isRecord(error.details));
+            assert.equal(error.details.processId, 42);
+            assert.equal(error.details.port, 9222);
+            assert.equal(error.details.closeConfirmed, false);
+            return true;
+        },
+    );
     assert.deepEqual(launched, [9222]);
 });
 
@@ -352,7 +362,7 @@ test('controller normal Close pauses routing and preserves identity on failure e
             },
         },
     });
-    const active = await controller.start({ launch: { executable: 'fixture' } });
+    const active = await controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     busy = true;
     await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), (error: unknown) => {
@@ -388,7 +398,10 @@ test('controller route attachment failure normally closes only the newly launche
         },
         server: { ensure: async () => {}, close: async () => {} },
     });
-    await assert.rejects(controller.start({ launch: { executable: 'fixture' } }), /route failed/);
+    await assert.rejects(
+        controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
+        /route failed/,
+    );
     assert.deepEqual(closed, [42]);
     assert.equal(controller.status().status, 'idle');
 });

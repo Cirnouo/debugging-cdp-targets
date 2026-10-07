@@ -23,6 +23,7 @@ export interface TargetLaunchContext extends LaunchContext {
     onRollback?: (target: ManagedTarget) => void;
 }
 export interface ControllerHost {
+    validateLaunch?(options: LaunchOptions): void;
     launch(options: LaunchOptions, context?: TargetLaunchContext): Promise<ManagedTarget>;
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
     requestNormalClose?(target: ManagedTarget, context?: LaunchContext): Promise<Record<string, unknown>>;
@@ -281,15 +282,17 @@ export function createTargetController({
         taskActive = true;
         const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
         try {
-            const target = await host.launch(options, {
-                ...context,
-                signal,
-                onCreated: (target) => acquire(selected, target),
-                onRollback: (target) => {
-                    acquire(selected, target);
-                    if (!owner.exited) owner.expectedExit = 'rollback';
-                },
-            });
+            const target = await owner.track(
+                host.launch(options, {
+                    ...context,
+                    signal,
+                    onCreated: (target) => acquire(selected, target),
+                    onRollback: (target) => {
+                        acquire(selected, target);
+                        if (!owner.exited) owner.expectedExit = 'rollback';
+                    },
+                }),
+            );
             acquire(selected, target);
             signal.throwIfAborted();
             owner.assertOpen();

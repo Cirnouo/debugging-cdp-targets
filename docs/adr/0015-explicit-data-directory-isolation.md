@@ -1,6 +1,6 @@
 # 0015 — Explicit data directory isolation and connection leases
 
-Status: accepted design for unreleased 0.1.0; runtime implementation is pending.
+Status: accepted and implemented for unreleased 0.1.0.
 Supersedes the fixed Chrome profile and unconditional profile retention policy in
 [0009](0009-process-exit-hooks.md), the fixed-profile assumption retained by
 [0014](0014-windows-chrome-screenshot-surface.md), and the session-only resource
@@ -8,12 +8,10 @@ scope in [0013](0013-session-owned-exit-cleanup.md) for data directories. Other
 session resources, native identity, screenshot composition, official forwarding
 and seven-tool lifecycle rules remain governed by those decisions.
 
-The gateway currently inserts a fixed Chrome profile when no directory argument
-is supplied. That fallback makes isolation implicit and ties unrelated starts to
-one directory. The approved replacement makes isolation intent, directory
-selection and retention explicit, with a connection lease that survives restart.
-This record defines the required design; it does not claim the runtime, installed
-Skill or user guides already implement it.
+The former implicit fixed Chrome profile tied unrelated starts to one directory.
+Explicit isolation intent, directory selection and cleanup now use a connection
+lease that survives restart. The old Chrome preset remains an explicit workflow
+directory option; none preserves the caller's normal startup arguments.
 
 ## Intent and research before launch
 
@@ -40,8 +38,24 @@ and debugging exploration happen after the verified connection is established.
 The shared Skill remains concise and application-agnostic rather than collecting
 application recipes.
 
+Before every launch in either mode, the Agent conservatively treats the target as
+a singleton and uses read-only native/profile/process evidence to inspect occupancy.
+No singleton-capability research or multi-instance exemption clears this gate.
+Verified same-root/shared-namespace ownership blocks launch. A related running app
+with uncertain independent scope or incomplete inspection also leaves it unlaunched.
+Complete bounded inspection with no related app clears only a point-in-time gate.
+New directory uniqueness alone cannot establish an independent instance namespace.
+The runtime preserves native checks for explicit Chrome roots in either mode;
+omitted defaults and generic occupancy remain workflow-owned. It adds no guessed
+root resolver, universal lock convention, public evidence carrier or global scan.
+
 Directory selection may reuse an existing empty or nonempty directory, create a
 named or random child under a selected parent, or be fully delegated to Agent.
+Chrome additionally offers the explicit `~/.cache/chrome-devtools-mcp/chrome-profile`
+preset. Resolve home first; select an existing leaf with existing, or a missing
+leaf with new parent/name. After explicit preset and cleanup selection, the Agent
+may prepare missing container ancestors only; runtime exclusively creates the leaf.
+This exception never prepares a path for none or relaxes new.parent existence.
 Full delegation authorizes Agent to choose the parent and directory operation;
 it does not imply deletion authorization. Hidden entries count when checking
 emptiness. Inspect directory entries without reading their contents.
@@ -90,6 +104,8 @@ or external production effect is isolated.
 Remove the implicit fixed Chrome profile. For isolated Chrome, the effective
 `--user-data-dir` must identify the acquired real directory. Preserve native
 Chrome ownership checks and fail closed on occupied or unverifiable profiles.
+Accept only the native canonical `--user-data-dir=path` switch before `--`, rejecting
+duplicates, separate-value forms and native aliases that could obscure the root.
 No isolation uses the caller's normal application startup contract and does not
 silently select an isolation directory. Never attach to an existing target or
 replace a failed selection with another profile.
@@ -116,6 +132,9 @@ before removal. Changed, replaced or unverifiable root identity fails closed and
 retains cleanup ownership; permission to delete one directory cannot transfer to
 another directory that later occupies the same path. These checks protect the
 selected object without imposing a location-based path denylist.
+Before Chrome delete-on-release, recheck native availability even if startup failed
+without an owned target. External use or unverifiable occupancy holds the lease for
+cleanup retry; no target owned by this gateway is not proof that a profile is unused.
 
 ## Connection lifetime and cancellation
 
@@ -179,5 +198,7 @@ Implement domain changes test-first. Verify missing/colliding operations, opaque
 binding, root links, overlap, changed identity, restart and late-acquisition races,
 cleanup retry and path-free Hooks. Real Chrome acceptance on Linux/macOS must
 verify effective binding, same-directory restart and final normal cleanup.
-Contributor rules can adopt this design now; installed instructions, user guides
-and completion claims must follow actual implementation and verification.
+Contributor rules follow this design; installed instructions, user guides and
+completion claims must follow actual implementation and verification. The
+native occupancy check is a point-in-time safeguard and cannot eliminate external
+launch races. Real acceptance evidence must identify its actual host and browser.

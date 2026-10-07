@@ -53,7 +53,10 @@ async function fixture() {
             health: async () => health,
         },
     });
-    const started = await controller.start({ launch: { executable: 'C:/Apps/app.exe' } }, sessionId);
+    const started = await controller.start(
+        { isolation: { mode: 'none' }, launch: { executable: 'C:/Apps/app.exe' } },
+        sessionId,
+    );
     assert.equal(started.status, 'active');
     return {
         controller,

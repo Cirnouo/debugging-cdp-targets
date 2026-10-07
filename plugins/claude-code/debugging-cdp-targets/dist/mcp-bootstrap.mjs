@@ -3780,6 +3780,7 @@ init_define_DCT_TOOL_CATALOG();
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { randomUUID as randomUUID3 } from "node:crypto";
+import path8 from "node:path";
 
 // src/adapters/cdp-router.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -4090,10 +4091,1119 @@ async function createCdpRouter({ diagnose } = {}) {
   };
 }
 
-// src/adapters/mcp-bridge.ts
+// src/adapters/chrome-profile.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { open, readlink as readlink2, realpath } from "node:fs/promises";
+import os from "node:os";
+import path3 from "node:path";
+
+// src/domains/chrome-profile.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function effectiveChromeProfileArgument(arguments_, platform) {
+  const windows = platform === "win32";
+  const whitespace = windows ? /^[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\t-\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g : /^[\t-\r ]+|[\t-\r ]+$/g;
+  let directory;
+  for (const argument of arguments_) {
+    if (argument === "--") break;
+    const native = argument.replace(whitespace, "");
+    if (native === "--") throw new Error("Ambiguous Chrome switch terminator.");
+    const prefix = native.startsWith("--") ? 2 : native.startsWith("-") || windows && native.startsWith("/") ? 1 : 0;
+    if (!prefix) continue;
+    const equals = native.indexOf("=");
+    const originalKey = native.slice(prefix, equals === -1 ? void 0 : equals);
+    const key = windows ? originalKey.toLowerCase() : originalKey;
+    if (windows && key === "single-argument") throw new Error("Ambiguous Chrome single-argument parsing.");
+    if (key !== "user-data-dir" && !/^user-data-dir[\s:]/.test(key)) continue;
+    if (directory !== void 0 || native !== argument || !argument.startsWith("--user-data-dir=") || key !== "user-data-dir" || equals === -1 || equals === native.length - 1)
+      throw new Error("Chrome requires one canonical --user-data-dir=value profile argument.");
+    directory = native.slice(equals + 1);
+  }
+  return directory;
+}
+
+// src/adapters/platform-process.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { spawn as spawn2 } from "node:child_process";
+import { readFile, readlink, stat } from "node:fs/promises";
+import path2 from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+
+// src/adapters/windows-launch.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+var NativeApplication = class extends EventEmitter {
+  pid;
+  startedAtUtc;
+  elevated;
+  exitCode = null;
+  signalCode = null;
+  monitoringFailure;
+  monitorDisposed = false;
+  releaseMonitor;
+  constructor(pid, startedAtUtc, elevated, releaseMonitor) {
+    super();
+    this.pid = pid;
+    this.startedAtUtc = startedAtUtc;
+    this.elevated = elevated;
+    this.releaseMonitor = releaseMonitor;
+  }
+  disposeMonitor() {
+    if (this.monitorDisposed) return;
+    this.monitorDisposed = true;
+    this.releaseMonitor();
+  }
+  onMonitorError(listener) {
+    this.once("monitor-error", listener);
+    if (this.monitoringFailure) listener();
+    return () => {
+      this.off("monitor-error", listener);
+    };
+  }
+  recordExit(code) {
+    if (this.exitCode !== null) return;
+    this.exitCode = code;
+    this.emit("exit");
+    this.disposeMonitor();
+  }
+};
+var phases = /* @__PURE__ */ new Set([
+  "inspecting-permission",
+  "launching",
+  "awaiting-permission",
+  "permission-handshake",
+  "native-operation",
+  "normal-close",
+  "wait-exit"
+]);
+function nativeFailure(value) {
+  const error2 = new DetailedError("Windows native application operation failed.");
+  error2.details = {
+    phase: typeof value.phase === "string" && phases.has(value.phase) ? value.phase : "native-helper",
+    ...typeof value.nativeError === "number" ? { nativeError: value.nativeError } : {},
+    ...typeof value.category === "string" && /^[a-z-]+$/.test(value.category) ? { category: value.category } : {},
+    ...typeof value.exceptionType === "string" && /^[A-Za-z]+$/.test(value.exceptionType) ? { exceptionType: value.exceptionType } : {},
+    ...typeof value.waitResult === "number" ? { waitResult: value.waitResult } : {},
+    ...typeof value.waitError === "number" ? { waitError: value.waitError } : {},
+    closeRequested: value.closeRequested === true,
+    processExited: false
+  };
+  return error2;
+}
+function createWindowsLauncher({
+  spawn: launchHelper = (executable, args) => spawn(executable, args, {
+    shell: false,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"]
+  })
+} = {}) {
+  const applications = /* @__PURE__ */ new Map();
+  const closeWaits = /* @__PURE__ */ new WeakMap();
+  const key = (target) => `${target.processId}:${target.startedAtUtc}:${path.win32.resolve(target.executablePath).toLowerCase()}`;
+  function helper(request, context, event, failure2, ended) {
+    const windows = process.env.SystemRoot ?? "C:/Windows";
+    const executable = path.join(windows, "System32/WindowsPowerShell/v1.0/powershell.exe");
+    const script = fileURLToPath(new URL("./windows-native-helper.ps1", import.meta.url));
+    const child = launchHelper(executable, [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      script
+    ]);
+    let buffer = "";
+    const cancel = () => {
+      if (!child.stdin.destroyed) child.stdin.write('{"cancel":true}\n');
+    };
+    context.signal?.addEventListener("abort", cancel, { once: true });
+    const detach = () => context.signal?.removeEventListener("abort", cancel);
+    child.stderr.resume();
+    child.stdin.on("error", () => {
+    });
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      if (buffer.length > 65536) {
+        buffer = "";
+        failure2(new Error("Native helper exceeded its evidence limit."));
+        child.stdin.end();
+        return;
+      }
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        try {
+          const value = JSON.parse(line);
+          if (!isRecord(value)) throw new Error("Invalid native process evidence.");
+          if (value.event === "phase") {
+            if (typeof value.phase !== "string" || !phases.has(value.phase))
+              throw new Error("Invalid native process phase.");
+            context.onPhase?.(value.phase);
+          } else if (value.event === "error") failure2(nativeFailure(value));
+          else event(value);
+        } catch {
+          failure2(new Error("Invalid native process evidence."));
+        }
+        newline = buffer.indexOf("\n");
+      }
+    });
+    child.once("error", (error2) => {
+      detach();
+      failure2(
+        nativeFailure({
+          category: "helper-start-failed",
+          nativeError: "errno" in error2 ? error2.errno : void 0
+        }),
+        true
+      );
+    });
+    child.once("close", () => {
+      detach();
+      ended();
+    });
+    child.stdout.once("end", () => failure2(new Error("Native helper evidence stream ended.")));
+    child.stdin.write(`${JSON.stringify(request)}
+`);
+    if (context.signal?.aborted) cancel();
+    return {
+      child,
+      detach,
+      dispose: () => {
+        detach();
+        child.stdin.end();
+      }
+    };
+  }
+  function requestNormalClose(target, context = {}) {
+    context.signal?.throwIfAborted();
+    let resolveWait = () => {
+    };
+    let rejectWait = () => {
+    };
+    const wait = new Promise((resolve, reject) => {
+      resolveWait = resolve;
+      rejectWait = reject;
+    });
+    void wait.catch(() => {
+    });
+    closeWaits.set(target, wait);
+    return new Promise((resolve, reject) => {
+      let requested = false;
+      let complete = false;
+      const failed = (error2) => {
+        if (complete) return;
+        complete = true;
+        transport.dispose();
+        if (!requested) reject(error2);
+        rejectWait(error2);
+      };
+      const transport = helper(
+        {
+          action: "close",
+          target: {
+            processId: target.processId,
+            executablePath: target.executablePath,
+            startedAtUtc: target.startedAtUtc,
+            targetKind: target.targetKind,
+            port: target.port
+          }
+        },
+        context,
+        (value) => {
+          if (value.event === "cancelled") {
+            failed(
+              context.signal?.reason instanceof Error ? context.signal.reason : new DOMException("Windows close authorization cancelled.", "AbortError")
+            );
+            return;
+          }
+          if (value.processId !== target.processId || value.startedAtUtc !== target.startedAtUtc || typeof value.closeRequested !== "boolean" || typeof value.processExited !== "boolean")
+            throw new Error("Invalid native close identity evidence.");
+          if (value.event === "close-requested" && !requested) {
+            requested = true;
+            resolve(value);
+            return;
+          }
+          if (value.event !== "closed" || value.closed !== true || value.processExited !== true || value.waitResult !== 0 || value.waitError !== 0 || typeof value.exitCode !== "number")
+            throw new Error("Native handle did not confirm actual application exit.");
+          complete = true;
+          applications.get(key(target))?.recordExit(value.exitCode);
+          if (!requested) resolve(value);
+          resolveWait(value);
+          transport.dispose();
+        },
+        failed,
+        () => failed(new Error("Native close observer exited without actual application exit evidence."))
+      );
+    });
+  }
+  function waitForExit(target, signal) {
+    const pending = closeWaits.get(target);
+    if (!pending) return Promise.reject(new Error("No native close handle observer is available."));
+    if (!signal) return pending;
+    signal.throwIfAborted();
+    return new Promise((resolve, reject) => {
+      const cancel = () => {
+        signal.removeEventListener("abort", cancel);
+        reject(signal.reason);
+      };
+      signal.addEventListener("abort", cancel, { once: true });
+      pending.then(
+        (value) => {
+          signal.removeEventListener("abort", cancel);
+          resolve(value);
+        },
+        (error2) => {
+          signal.removeEventListener("abort", cancel);
+          reject(error2);
+        }
+      );
+    });
+  }
+  return {
+    launch(launch, context = {}) {
+      context.signal?.throwIfAborted();
+      return new Promise((resolve, reject) => {
+        let application;
+        let launchFailure;
+        let cancellationReason;
+        let settledWithoutApplication = false;
+        const failed = (error2, terminal2 = false) => {
+          launchFailure ??= error2;
+          if (application?.monitorDisposed) return;
+          if (!application && terminal2) {
+            settledWithoutApplication = true;
+            reject(cancellationReason ?? launchFailure);
+          } else if (application && application.exitCode === null && !application.monitoringFailure) {
+            application.monitoringFailure = "native-helper-exited";
+            application.emit("monitor-error");
+          }
+          transport.dispose();
+        };
+        const transport = helper(
+          { action: "launch", launch },
+          context,
+          (value) => {
+            if (settledWithoutApplication) return;
+            if (value.event === "cancelled" && !application) {
+              cancellationReason ??= context.signal?.reason ?? new DOMException("Windows launch cancelled.", "AbortError");
+              transport.child.stdin.end();
+            } else if (value.event === "started" && !application) {
+              if (typeof value.processId !== "number" || !Number.isInteger(value.processId) || value.processId <= 0 || value.processId === transport.child.pid || typeof value.startedAtUtc !== "string" || !Number.isFinite(Date.parse(value.startedAtUtc)) || typeof value.executablePath !== "string" || path.win32.resolve(value.executablePath).toLowerCase() !== path.win32.resolve(launch.executablePath).toLowerCase() || typeof value.elevated !== "boolean")
+                throw new Error("Invalid actual application identity from native launch.");
+              application = new NativeApplication(
+                value.processId,
+                value.startedAtUtc,
+                value.elevated,
+                transport.dispose
+              );
+              if (launchFailure) application.monitoringFailure = "native-helper-exited";
+              applications.set(
+                key({
+                  processId: application.pid,
+                  startedAtUtc: application.startedAtUtc,
+                  executablePath: launch.executablePath,
+                  targetKind: "generic-cdp",
+                  port: 0
+                }),
+                application
+              );
+              const actual = application;
+              const identityKey = key({
+                processId: actual.pid,
+                startedAtUtc: actual.startedAtUtc,
+                executablePath: launch.executablePath,
+                targetKind: "generic-cdp",
+                port: 0
+              });
+              actual.once("exit", () => {
+                if (applications.get(identityKey) === actual) applications.delete(identityKey);
+              });
+              context.onCreated?.(application);
+              transport.detach();
+              resolve(application);
+            } else if (value.event === "exited" && application && value.processId === application.pid && typeof value.exitCode === "number") {
+              application.recordExit(value.exitCode);
+            } else throw new Error("Unexpected native process evidence.");
+          },
+          failed,
+          () => failed(new Error("The native launch helper exited before completion."), true)
+        );
+      });
+    },
+    requestNormalClose,
+    waitForExit,
+    async close(target) {
+      await requestNormalClose(target);
+      return waitForExit(target);
+    }
+  };
+}
+
+// src/adapters/platform-process.ts
+var exitObservations = /* @__PURE__ */ new WeakMap();
+var exitReferences = /* @__PURE__ */ new WeakMap();
+function retainExitReference(child) {
+  if (!child.ref || !child.unref) return () => {
+  };
+  let reference = exitReferences.get(child);
+  if (!reference) {
+    child.ref();
+    reference = { waiters: 0 };
+    exitReferences.set(child, reference);
+  }
+  reference.waiters += 1;
+  const ownedReference = reference;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (exitReferences.get(child) !== ownedReference) return;
+    ownedReference.waiters -= 1;
+    if (ownedReference.waiters > 0) return;
+    exitReferences.delete(child);
+    child.unref?.();
+  };
+}
+function observeTargetExit(target) {
+  const child = target.child;
+  if (!child || exitObservations.has(child)) return;
+  const state = { exited: typeof child.exitCode === "number" || typeof child.signalCode === "string" };
+  exitObservations.set(child, state);
+  child.once("exit", () => {
+    state.exited = true;
+  });
+}
+function targetExitObserved(target) {
+  observeTargetExit(target);
+  return target.child !== void 0 && exitObservations.get(target.child)?.exited === true;
+}
+function recordTargetExit(target) {
+  observeTargetExit(target);
+  if (target.child) {
+    const state = exitObservations.get(target.child);
+    if (state) state.exited = true;
+  }
+}
+function waitForTargetExit(target, signal) {
+  observeTargetExit(target);
+  if (targetExitObserved(target)) return Promise.resolve();
+  signal?.throwIfAborted();
+  const child = target.child;
+  if (!child) return Promise.reject(new Error("No actual application exit observer is available."));
+  return new Promise((resolve, reject) => {
+    const releaseReference = retainExitReference(child);
+    let releaseMonitoring;
+    let finished = false;
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      child.off?.("exit", exited);
+      releaseMonitoring?.();
+      signal?.removeEventListener("abort", aborted2);
+      releaseReference();
+    };
+    const exited = () => {
+      cleanup();
+      resolve();
+    };
+    const failed = () => {
+      cleanup();
+      reject(new Error("The actual application exit observer failed."));
+    };
+    const aborted2 = () => {
+      cleanup();
+      reject(signal?.reason);
+    };
+    child.once("exit", exited);
+    signal?.addEventListener("abort", aborted2, { once: true });
+    releaseMonitoring = child.onMonitorError?.(failed);
+    if (finished) releaseMonitoring?.();
+    else if (targetExitObserved(target)) exited();
+    else if (child.monitoringFailure) failed();
+  });
+}
+function validateNativeExitReceipt(result, target) {
+  if (result.processId === target.processId && result.startedAtUtc === target.startedAtUtc && result.closed === true && result.processExited === true && result.waitResult === 0 && result.waitError === 0)
+    return;
+  const error2 = new DetailedError("The native handle did not supply matching application exit evidence.");
+  error2.details = {
+    phase: result.waitResult === 4294967295 ? "wait-exit" : result.phase ?? "normal-close",
+    nativeError: result.nativeError ?? 0,
+    waitResult: result.waitResult,
+    waitError: result.waitError,
+    closeRequested: result.closeRequested === true,
+    processExited: false
+  };
+  throw error2;
+}
+function abortable(pending, signal) {
+  if (!signal) return pending;
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const cancel = () => {
+      signal.removeEventListener("abort", cancel);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", cancel, { once: true });
+    pending.then(
+      (value) => {
+        signal.removeEventListener("abort", cancel);
+        resolve(value);
+      },
+      (error2) => {
+        signal.removeEventListener("abort", cancel);
+        reject(error2);
+      }
+    );
+  });
+}
+async function run(executable, arguments_) {
+  return new Promise((resolve, reject) => {
+    const child = spawn2(executable, arguments_, {
+      windowsHide: true,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (data) => {
+      stdout += data;
+    });
+    child.stderr.on("data", (data) => {
+      stderr += data;
+    });
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+async function windowsHelper(action, fields3) {
+  const helper = fileURLToPath2(new URL("./windows-cdp-helper.ps1", import.meta.url));
+  const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helper, "-Action", action];
+  for (const [name, value] of Object.entries(fields3)) if (value !== void 0) args.push(`-${name}`, String(value));
+  const result = await run("powershell.exe", args);
+  let output;
+  try {
+    output = JSON.parse(result.stdout.trim());
+  } catch {
+    throw new Error("The Windows process helper did not return valid evidence.");
+  }
+  if (!isRecord(output) || result.code !== 0 || output.ok !== true)
+    throw new Error(
+      isRecord(output) && typeof output.message === "string" ? output.message : "Windows process inspection failed."
+    );
+  return output;
+}
+function parseSnapshot(value) {
+  const root = value.root;
+  if (!isRecord(root) || typeof root.exists !== "boolean" || typeof value.currentSessionId !== "number" || !Array.isArray(value.processIds) || !value.processIds.every((pid) => typeof pid === "number" && Number.isInteger(pid)) || !Array.isArray(value.listeners))
+    throw new Error("Invalid process snapshot evidence.");
+  let verifiedRoot = { exists: false };
+  if (root.exists) {
+    if (typeof root.executablePath !== "string" || typeof root.sessionId !== "number" || typeof root.startedAtUtc !== "string")
+      throw new Error("Invalid process root evidence.");
+    verifiedRoot = {
+      exists: true,
+      executablePath: root.executablePath,
+      sessionId: root.sessionId,
+      startedAtUtc: root.startedAtUtc,
+      ...typeof root.productName === "string" ? { productName: root.productName } : {},
+      ...typeof root.companyName === "string" ? { companyName: root.companyName } : {}
+    };
+  }
+  const listeners = value.listeners.map((listener) => {
+    if (!isRecord(listener) || typeof listener.localAddress !== "string" || typeof listener.owningProcess !== "number")
+      throw new Error("Invalid listener evidence.");
+    return { localAddress: listener.localAddress, owningProcess: listener.owningProcess };
+  });
+  return { root: verifiedRoot, currentSessionId: value.currentSessionId, processIds: value.processIds, listeners };
+}
+function normalizePath(value) {
+  const normalized = path2.resolve(value);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+function validateProcessIdentity(evidence, target, { newlyLaunched = false } = {}) {
+  const root = evidence.root;
+  if (!root?.exists) throw new Error("The target root process is absent.");
+  if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
+    throw new Error("The process executable identity changed.");
+  if (root.sessionId !== evidence.currentSessionId) throw new Error("The process user/session identity changed.");
+  const actual = Date.parse(root.startedAtUtc);
+  const recorded = Date.parse(target.startedAtUtc);
+  if (!Number.isFinite(actual) || !Number.isFinite(recorded))
+    throw new Error("The process creation time is unverifiable.");
+  if (newlyLaunched ? actual < recorded - 1e3 || actual > Date.now() + 1e3 : Math.abs(actual - recorded) > 1e3) {
+    throw new Error("The process creation time changed; the PID may have been reused.");
+  }
+  if (target.targetKind === "chrome" && process.platform === "win32" && (root.productName !== "Google Chrome" || root.companyName !== "Google LLC")) {
+    throw new Error("The target executable is not identified as Google Chrome.");
+  }
+}
+async function resolveUnixExecutable({
+  platform,
+  pid,
+  comm,
+  run: execute = run,
+  readlink: link = readlink,
+  fileIdentity = async (file) => {
+    const evidence = await stat(file, { bigint: true });
+    return { dev: evidence.dev, ino: evidence.ino, regularFile: evidence.isFile() };
+  }
+}) {
+  if (platform === "linux") return link(`/proc/${pid}/exe`);
+  const result = await execute("lsof", ["-a", "-p", String(pid), "-d", "txt", "-FfDin"]);
+  if (result.code !== 0 || result.stderr.trim()) throw new Error("The Darwin executable path is unverifiable.");
+  const candidates = [
+    ...new Set(
+      result.stdout.split(/\r?\n/).filter((line) => line.startsWith("n/")).map((line) => line.slice(1))
+    )
+  ];
+  const matches = candidates.filter(
+    (file) => path2.posix.isAbsolute(comm) ? file === comm : path2.posix.basename(file) === comm
+  );
+  const executable = matches[0];
+  if (matches.length === 0 && path2.posix.isAbsolute(comm)) {
+    const mappings = [];
+    let owner;
+    let mapping;
+    for (const field of result.stdout.split(/\r?\n/)) {
+      if (field.startsWith("p")) {
+        owner = /^p\d+$/.test(field) && Number.isSafeInteger(Number(field.slice(1))) ? Number(field.slice(1)) : void 0;
+        mapping = void 0;
+      } else if (field.startsWith("f")) {
+        mapping = field === "ftxt" ? { pid: owner, valid: true } : void 0;
+        if (mapping) mappings.push(mapping);
+      } else if (mapping) {
+        if (field.startsWith("n")) {
+          if (mapping.name !== void 0 || !field.startsWith("n/")) mapping.valid = false;
+          else mapping.name = field.slice(1);
+        } else if (field.startsWith("D")) {
+          if (mapping.dev !== void 0 || !/^D0x[\da-f]+$/i.test(field)) mapping.valid = false;
+          else mapping.dev = BigInt(field.slice(1));
+        } else if (field.startsWith("i")) {
+          if (mapping.ino !== void 0 || !/^i\d+$/.test(field)) mapping.valid = false;
+          else mapping.ino = BigInt(field.slice(1));
+        }
+      }
+    }
+    try {
+      const identity = await fileIdentity(comm);
+      const aliases = new Set(
+        mappings.filter(
+          (file) => identity.regularFile && identity.dev > 0n && identity.ino > 0n && file.valid && file.pid === pid && file.dev === identity.dev && file.ino === identity.ino && file.name !== void 0 && path2.posix.basename(file.name) === path2.posix.basename(comm)
+        ).map((file) => file.name)
+      );
+      if (aliases.size === 1) return comm;
+    } catch {
+    }
+  }
+  if (matches.length !== 1 || executable === void 0) {
+    const error2 = new DetailedError("The Darwin executable path is unverifiable or ambiguous.");
+    error2.details = {
+      phase: "executable-identity",
+      processId: pid,
+      executableClaim: comm.slice(0, 1024),
+      candidateCount: candidates.length,
+      matchCount: matches.length,
+      mappedExecutablePaths: candidates.filter((file) => path2.posix.basename(file) === path2.posix.basename(comm)).slice(0, 32).map((file) => file.slice(0, 1024))
+    };
+    throw error2;
+  }
+  return executable;
+}
+async function linuxCreationTime(pid, execute, readText) {
+  const [stat2, boot, clock] = await Promise.all([
+    readText(`/proc/${pid}/stat`),
+    readText("/proc/stat"),
+    execute("getconf", ["CLK_TCK"])
+  ]);
+  const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
+  const ticks = processStat?.[2]?.split(/\s+/)[19];
+  const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
+  const clockText = clock.stdout.trim();
+  const startTicks = Number(ticks);
+  const bootSeconds = Number(bootTimes[0]?.[1]);
+  const ticksPerSecond = Number(clockText);
+  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
+    throw new Error("The Linux process creation evidence is unverifiable.");
+  }
+  const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
+  if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
+  return started.toISOString();
+}
+async function unixSnapshot(pid, port, dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const execute = dependencies.run ?? run;
+  const processes = await execute("ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
+  if (processes.code !== 0) throw new Error("Cannot inspect target processes.");
+  const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
+    const started = match?.[4];
+    const executable = match?.[5];
+    return match && started !== void 0 && executable !== void 0 ? [
+      {
+        pid: Number(match[1]),
+        parent: Number(match[2]),
+        uid: Number(match[3]),
+        started: new Date(started).toISOString(),
+        executable
+      }
+    ] : [];
+  });
+  const root = rows.find((row) => row.pid === pid);
+  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile(file, "utf8"))) : root?.started;
+  const owned = new Set(root ? [pid] : []);
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const row of rows) {
+      const parent = rows.find((candidate) => candidate.pid === row.parent);
+      if (root && parent && !owned.has(row.pid) && owned.has(row.parent) && row.uid === root.uid && row.started >= parent.started) {
+        owned.add(row.pid);
+        changed = true;
+      }
+    }
+  }
+  const result = await execute("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpn"]);
+  if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
+    throw new Error("Cannot verify CDP listener ownership (lsof required).");
+  const listeners = [];
+  let owner;
+  for (const line of result.stdout.split(/\r?\n/)) {
+    if (line.startsWith("p")) owner = Number(line.slice(1));
+    const match = line.startsWith("n") ? line.slice(1).match(/^(\S+):\d+$/) : null;
+    const address = match?.[1];
+    if (address !== void 0 && owner !== void 0)
+      listeners.push({ localAddress: address.replace(/^\[|\]$/g, ""), owningProcess: owner });
+  }
+  return {
+    root: root ? {
+      exists: true,
+      executablePath: await resolveUnixExecutable({
+        platform,
+        pid,
+        comm: root.executable,
+        run: execute,
+        ...dependencies.readlink ? { readlink: dependencies.readlink } : {}
+      }),
+      sessionId: root.uid,
+      startedAtUtc: rootStartedAt ?? root.started
+    } : { exists: false },
+    currentSessionId: (dependencies.currentUser ?? process.getuid)?.() ?? (() => {
+      throw new Error("Unix user identity unavailable.");
+    })(),
+    processIds: [...owned],
+    listeners
+  };
+}
+function createPlatformAdapter(dependencies = {}) {
+  const platform = dependencies.platform ?? process.platform;
+  const windows = createWindowsLauncher();
+  const closeWindows = dependencies.closeWindows;
+  const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, "SIGTERM"));
+  if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
+  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
+  const nativeExit = /* @__PURE__ */ new WeakMap();
+  async function requestNormalClose(target, context = {}) {
+    observeTargetExit(target);
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    const evidence = await snapshot(target.processId, target.port);
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    context.signal?.throwIfAborted();
+    const owned = new Set(evidence.processIds);
+    const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess)) ? "foreign" : evidence.listeners.length ? "owned" : "absent";
+    if (!evidence.root.exists) {
+      const error2 = new DetailedError("The target root is absent without actual application exit evidence.");
+      error2.details = { phase: "process-identity", listenerState, closeRequested: false, processExited: false };
+      throw error2;
+    }
+    validateProcessIdentity(evidence, target);
+    if (platform !== "win32") {
+      requestUnixClose(target.processId);
+      return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
+    }
+    try {
+      if (closeWindows) {
+        const result2 = await closeWindows(target);
+        const completion2 = Promise.resolve(result2);
+        nativeExit.set(target, completion2);
+        validateNativeExitReceipt(result2, target);
+        recordTargetExit(target);
+        return { ...result2, listenerState };
+      }
+      const result = await (dependencies.requestWindowsClose ?? windows.requestNormalClose)(target, context);
+      const completion = (dependencies.waitWindowsExit ?? windows.waitForExit)(target);
+      void completion.catch(() => {
+      });
+      nativeExit.set(target, completion);
+      if (result.closeRequested !== true && result.processExited !== true) {
+        const error2 = new DetailedError("The application rejected normal close.");
+        error2.details = { ...result, listenerState, processExited: false };
+        throw error2;
+      }
+      return { ...result, listenerState };
+    } catch (cause) {
+      const error2 = new DetailedError(errorMessage(cause));
+      error2.details = { ...errorDetails(cause), listenerState, processExited: false };
+      throw error2;
+    }
+  }
+  async function waitForExit(target, signal) {
+    if (targetExitObserved(target)) return;
+    signal?.throwIfAborted();
+    const completion = nativeExit.get(target);
+    if (completion) {
+      const result = await abortable(completion, signal);
+      validateNativeExitReceipt(result, target);
+      recordTargetExit(target);
+      return;
+    }
+    await waitForTargetExit(target, signal);
+  }
+  return {
+    snapshot,
+    validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
+    async reservedRanges() {
+      if (process.platform === "linux") {
+        const value = await readFile("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
+        return value.trim().split(",").filter(Boolean).map((part) => {
+          const start = Number(part.split("-")[0]);
+          const end = Number(part.split("-")[1] ?? start);
+          return [start, end];
+        });
+      }
+      if (process.platform === "darwin") return [];
+      const ranges = [];
+      for (const family of ["ipv4", "ipv6"]) {
+        const result = await run("netsh.exe", ["int", family, "show", "excludedportrange", "protocol=tcp"]);
+        if (result.code !== 0) throw new Error("Windows excluded ports could not be read.");
+        for (const match of result.stdout.matchAll(/^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$/gm))
+          ranges.push([Number(match[1]), Number(match[2])]);
+      }
+      return ranges;
+    },
+    requestNormalClose,
+    waitForExit,
+    async close(target) {
+      await requestNormalClose(target);
+      await waitForExit(target);
+      return true;
+    }
+  };
+}
+function probeProcessExists(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error2) {
+    if (errorCode(error2) === "ESRCH") return false;
+    throw error2;
+  }
+}
+
+// src/adapters/chrome-profile.ts
+var claims = /* @__PURE__ */ new Set();
+async function profileAvailable(directory) {
+  if (process.platform === "win32") {
+    try {
+      const handle = await open(path3.join(directory, "lockfile"), "r+");
+      await handle.close();
+      return true;
+    } catch (error2) {
+      if (errorCode(error2) === "ENOENT") return true;
+      if (["EACCES", "EPERM", "EBUSY"].includes(errorCode(error2) ?? "")) return false;
+      throw error2;
+    }
+  }
+  let lock;
+  try {
+    lock = await readlink2(path3.join(directory, "SingletonLock"));
+  } catch (error2) {
+    if (errorCode(error2) === "ENOENT") return true;
+    throw error2;
+  }
+  const split = lock.lastIndexOf("-");
+  const host = lock.slice(0, split);
+  const pid = Number(lock.slice(split + 1));
+  if (host !== os.hostname() || !Number.isSafeInteger(pid) || pid < 1) return false;
+  return !probeProcessExists(pid);
+}
+async function canonicalDirectory(directory) {
+  try {
+    return await realpath(directory);
+  } catch (error2) {
+    if (errorCode(error2) !== "ENOENT") throw error2;
+    const parent = path3.dirname(directory);
+    if (parent === directory) throw error2;
+    return path3.join(await canonicalDirectory(parent), path3.basename(directory));
+  }
+}
+async function reserveProfile(directory, available = profileAvailable) {
+  const occupied = () => new Error("Chrome profile is occupied or unverifiable; explicitly choose another --user-data-dir.");
+  let canonical2;
+  try {
+    canonical2 = await canonicalDirectory(directory);
+  } catch {
+    throw occupied();
+  }
+  const identity = process.platform === "win32" ? canonical2.toLowerCase() : canonical2;
+  if (claims.has(identity)) throw occupied();
+  claims.add(identity);
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      claims.delete(identity);
+    }
+  };
+  try {
+    if (!await available(canonical2)) throw occupied();
+  } catch {
+    release();
+    throw occupied();
+  }
+  return release;
+}
+function chromeProfileArgument(arguments_) {
+  return effectiveChromeProfileArgument(arguments_, process.platform);
+}
+
+// src/adapters/data-directory.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { lstat, mkdir, mkdtemp, readdir, realpath as realpath2, rm } from "node:fs/promises";
+import path4 from "node:path";
+
+// src/domains/data-isolation.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function keys(value, allowed) {
+  return Object.keys(value).every((key) => allowed.includes(key));
+}
+function validString(value) {
+  return typeof value === "string" && value.trim().length > 0 && !value.includes("\0");
+}
+function parseDataIsolation(value) {
+  if (!isRecord(value)) throw new Error("An explicit isolation selection is required.");
+  if (value.mode === "none" && keys(value, ["mode"])) return { mode: "none" };
+  if (value.mode !== "data-dir" || !keys(value, ["mode", "directory", "cleanup"]) || !isRecord(value.directory) || value.cleanup !== "retain" && value.cleanup !== "delete-on-release")
+    throw new Error("Invalid data directory isolation selection.");
+  const directory = value.directory;
+  let selection;
+  if (directory.kind === "existing" && keys(directory, ["kind", "path"]) && validString(directory.path)) {
+    selection = { kind: "existing", path: directory.path };
+  } else if (directory.kind === "new" && keys(directory, ["kind", "parent", "name"]) && validString(directory.parent)) {
+    if ("name" in directory && (!validString(directory.name) || directory.name === "." || directory.name === ".." || /[/\\:]/.test(directory.name) || /[.\s]$/.test(directory.name)))
+      throw new Error("The new directory name must be a safe leaf name.");
+    selection = {
+      kind: "new",
+      parent: directory.parent,
+      ..."name" in directory ? { name: String(directory.name) } : {}
+    };
+  } else throw new Error("Invalid data directory operation.");
+  return { mode: "data-dir", directory: selection, cleanup: value.cleanup };
+}
+
+// src/adapters/data-directory.ts
+var DataDirectoryError = class extends Error {
+  code;
+  lease;
+  constructor(code, lease) {
+    super(code);
+    this.code = code;
+    this.lease = lease;
+  }
+};
+function isAbsoluteDataDirectory(directory, platform) {
+  if (!directory.trim() || directory.includes("\0")) return false;
+  if (platform !== "win32") return path4.posix.isAbsolute(directory);
+  const namespace = directory.replaceAll("/", "\\").match(/^\\\\[?.]\\(.*)$/)?.[1];
+  if (namespace !== void 0) {
+    if (/^[A-Za-z]:/.test(namespace)) return /^[A-Za-z]:\\/.test(namespace);
+    if (/^UNC(?:\\|$)/i.test(namespace)) return /^UNC\\[^\\]+\\[^\\]+(?:\\|$)/i.test(namespace);
+    if (/^Volume\{[^{}]+\}\\/i.test(namespace)) return true;
+    return /^[^\\]+\\[^\\]+/.test(namespace);
+  }
+  return /^[A-Za-z]:[/\\]/.test(directory) || /^[/\\]{2}[^/\\]+[/\\][^/\\]+(?:[/\\]|$)/.test(directory);
+}
+function filesystemFailure(error2, fallback) {
+  if (error2 instanceof DataDirectoryError) return error2;
+  const code = errorCode(error2);
+  return new DataDirectoryError(
+    code === "ENOENT" ? "directory-missing" : code === "EEXIST" ? "directory-exists" : code === "ENOTDIR" ? "directory-not-directory" : fallback
+  );
+}
+var DataDirectoryRegistry = class {
+  platform;
+  io;
+  claims = /* @__PURE__ */ new Map();
+  acquisition = Promise.resolve();
+  constructor(options = {}) {
+    this.platform = options.platform ?? process.platform;
+    this.io = {
+      canonical: realpath2,
+      inspect: (directory) => lstat(directory, { bigint: true }),
+      entries: readdir,
+      create: async (directory) => {
+        await mkdir(directory);
+      },
+      createRandom: mkdtemp,
+      remove: (directory) => rm(directory, { recursive: true, force: false }),
+      ...options.io
+    };
+  }
+  acquire(selection, cleanup, onAcquired) {
+    const acquisition = this.acquisition.then(() => this.acquireDirectory(selection, cleanup, onAcquired));
+    this.acquisition = acquisition.catch(() => void 0);
+    return acquisition;
+  }
+  key(directory) {
+    const native = this.platform === "win32" ? path4.win32 : path4.posix;
+    const normalized = native.normalize(directory);
+    const key = this.platform === "win32" ? normalized.toLowerCase() : normalized;
+    return key.length > native.parse(key).root.length ? key.replace(this.platform === "win32" ? /\\+$/ : /\/+$/, "") : key;
+  }
+  ancestor(ancestor, child) {
+    const separator = this.platform === "win32" ? "\\" : "/";
+    return child === ancestor || child.startsWith(ancestor.endsWith(separator) ? ancestor : `${ancestor}${separator}`);
+  }
+  available(directory, descendants = true) {
+    const key = this.key(directory);
+    for (const claimed of this.claims.values()) {
+      if (this.ancestor(claimed, key) || descendants && this.ancestor(key, claimed)) {
+        throw new DataDirectoryError("directory-overlap");
+      }
+    }
+  }
+  async acquireDirectory(selection, cleanup, onAcquired) {
+    let parsed;
+    try {
+      parsed = parseDataIsolation({ mode: "data-dir", directory: selection, cleanup });
+    } catch {
+      throw new DataDirectoryError("directory-invalid");
+    }
+    if (parsed.mode !== "data-dir") throw new DataDirectoryError("directory-invalid");
+    const selected = parsed.directory;
+    const requested = selected.kind === "existing" ? selected.path : selected.parent;
+    if (!isAbsoluteDataDirectory(requested, this.platform)) throw new DataDirectoryError("directory-invalid");
+    let actual;
+    try {
+      actual = await this.io.canonical(requested);
+      if (!isAbsoluteDataDirectory(actual, this.platform)) throw new DataDirectoryError("directory-invalid");
+      if (selected.kind === "new") {
+        const parent = await this.io.inspect(actual);
+        if (!parent.isDirectory() || parent.isSymbolicLink())
+          throw new DataDirectoryError("directory-not-directory");
+        const native = this.platform === "win32" ? path4.win32 : path4.posix;
+        if (selected.name !== void 0) {
+          actual = native.join(actual, selected.name);
+          this.available(actual);
+          await this.io.create(actual);
+        } else {
+          this.available(actual, false);
+          actual = await this.io.createRandom(native.join(actual, "dct-"));
+        }
+      } else this.available(actual);
+    } catch (error2) {
+      throw filesystemFailure(error2, "directory-acquisition-failed");
+    }
+    const key = this.key(actual);
+    const generation = /* @__PURE__ */ Symbol("directory-claim");
+    let overlap = false;
+    try {
+      this.available(actual);
+    } catch {
+      overlap = true;
+    }
+    this.claims.set(generation, key);
+    let identity;
+    let nonempty;
+    let state = "held";
+    let pendingRelease;
+    let finishInspection = () => {
+    };
+    const inspectionFinished = new Promise((resolve) => {
+      finishInspection = resolve;
+    });
+    const evidence = () => Object.freeze({ path: actual, cleanup, state, ...nonempty === void 0 ? {} : { nonempty } });
+    const removeClaim = () => {
+      if (this.claims.get(generation) === key) this.claims.delete(generation);
+    };
+    const dispose = async () => {
+      await inspectionFinished;
+      if (state === "retained" || state === "deleted") return evidence();
+      if (cleanup === "retain") {
+        state = "retained";
+        removeClaim();
+        return evidence();
+      }
+      try {
+        if (this.claims.get(generation) !== key || identity === void 0)
+          throw new DataDirectoryError("directory-identity-changed", lease);
+        const current = await this.io.inspect(actual);
+        if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) {
+          throw new DataDirectoryError("directory-identity-changed", lease);
+        }
+        await this.io.remove(actual);
+        state = "deleted";
+        removeClaim();
+        return evidence();
+      } catch (error2) {
+        state = "cleanup-failed";
+        throw error2 instanceof DataDirectoryError ? error2 : new DataDirectoryError("directory-cleanup-failed", lease);
+      }
+    };
+    const lease = {
+      get evidence() {
+        return evidence();
+      },
+      release: () => {
+        if (pendingRelease) return pendingRelease;
+        const release = dispose();
+        pendingRelease = release;
+        void release.then(
+          () => {
+            pendingRelease = void 0;
+          },
+          () => {
+            pendingRelease = void 0;
+          }
+        );
+        return release;
+      }
+    };
+    try {
+      onAcquired?.(lease);
+      if (overlap) throw new DataDirectoryError("directory-overlap", lease);
+      const root = await this.io.inspect(actual);
+      if (!root.isDirectory() || root.isSymbolicLink()) {
+        if (selected.kind === "existing") removeClaim();
+        throw new DataDirectoryError("directory-not-directory", selected.kind === "new" ? lease : void 0);
+      }
+      identity = root;
+      nonempty = (await this.io.entries(actual)).length > 0;
+      return lease;
+    } catch (error2) {
+      state = "cleanup-failed";
+      if (error2 instanceof DataDirectoryError && ["directory-not-directory", "directory-overlap"].includes(error2.code))
+        throw error2;
+      throw new DataDirectoryError("directory-inspection-failed", lease);
+    } finally {
+      finishInspection();
+    }
+  }
+};
+
+// src/adapters/mcp-bridge.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { spawn as spawn3 } from "node:child_process";
 
 // node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs
 init_define_DCT_OFFICIAL_RELEASE();
@@ -4128,8 +5238,8 @@ var __exportAll = (all, symbols) => {
 };
 var __copyProps2 = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
-    for (var keys = __getOwnPropNames2(from), i = 0, n = keys.length, key; i < n; i++) {
-      key = keys[i];
+    for (var keys2 = __getOwnPropNames2(from), i = 0, n = keys2.length, key; i < n; i++) {
+      key = keys2[i];
       if (!__hasOwnProp2.call(to, key) && key !== except) {
         __defProp2(to, key, {
           get: ((k) => from[k]).bind(null, key),
@@ -4385,9 +5495,9 @@ function putProp(target, key, value) {
   else
     target[key] = value;
 }
-function mirrorShape(target, source, keys, wrap) {
+function mirrorShape(target, source, keys2, wrap) {
   const raw = sourceShape(source);
-  for (const key of keys) {
+  for (const key of keys2) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
     if (!desc.enumerable)
       continue;
@@ -4422,18 +5532,18 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path7) {
-  if (!path7)
+function getElementAtPath(obj, path9) {
+  if (!path9)
     return obj;
-  return path7.reduce((acc, key) => acc?.[key], obj);
+  return path9.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
-  const keys = Object.keys(promisesObj);
-  const promises = keys.map((key) => promisesObj[key]);
+  const keys2 = Object.keys(promisesObj);
+  const promises = keys2.map((key) => promisesObj[key]);
   return Promise.all(promises).then((results) => {
     const resolvedObj = {};
-    for (let i = 0; i < keys.length; i++) {
-      resolvedObj[keys[i]] = results[i];
+    for (let i = 0; i < keys2.length; i++) {
+      resolvedObj[keys2[i]] = results[i];
     }
     return resolvedObj;
   });
@@ -4655,15 +5765,15 @@ function pick(schema, mask) {
 }
 function maskedKeys(schema, mask) {
   const raw = sourceShape(schema);
-  const keys = [];
+  const keys2 = [];
   for (const key of Reflect.ownKeys(mask)) {
     if (!Object.getOwnPropertyDescriptor(raw, key)?.enumerable) {
       throw new Error(`Unrecognized key: "${String(key)}"`);
     }
     if (mask[key])
-      keys.push(key);
+      keys2.push(key);
   }
-  return keys;
+  return keys2;
 }
 function omit(schema, mask) {
   const currDef = schema._zod.def;
@@ -4765,11 +5875,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path7, issues) {
+function prefixIssues(path9, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path7);
+    iss.path.unshift(path9);
     return iss;
   });
 }
@@ -5224,16 +6334,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path7 = []) => {
+  const processError = (error3, path9 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else {
-        const fullpath = [...path7, ...issue2.path];
+        const fullpath = [...path9, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -6557,10 +7667,10 @@ function handlePropertyResult(result, final, key, input, optin, optout) {
 }
 var NO_SYMBOL_KEYS = [];
 function normalizeDef(def) {
-  const keys = Object.keys(def.shape);
+  const keys2 = Object.keys(def.shape);
   const ownSymbols = Object.getOwnPropertySymbols(def.shape);
   const symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
-  const allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+  const allKeys = symbolKeys.length ? [...keys2, ...symbolKeys] : keys2;
   for (const k of allKeys) {
     if (!def.shape?.[k]?._zod?.traits?.has("$ZodType")) {
       throw new Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
@@ -6572,8 +7682,8 @@ function normalizeDef(def) {
     allKeys,
     symbolKeys,
     // string-only: handleCatchall matches it against `for...in`, which never yields a symbol
-    keySet: new Set(keys),
-    numKeys: keys.length,
+    keySet: new Set(keys2),
+    numKeys: keys2.length,
     optionalKeys: new Set(okeys)
   };
 }
@@ -7046,19 +8156,19 @@ function handleIntersectionResults(result, left, right) {
   let unrecIssue;
   const keyIssues = /* @__PURE__ */ new Map();
   const collect = (iss, side) => {
-    let keys;
+    let keys2;
     if (iss.code === "unrecognized_keys" && !iss.path?.length) {
       unrecIssue ?? (unrecIssue = iss);
-      keys = iss.keys;
+      keys2 = iss.keys;
     } else if (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1) {
       const k = String(iss.path[0]);
       if (!keyIssues.has(k))
         keyIssues.set(k, iss);
-      keys = [k];
+      keys2 = [k];
     } else {
       return false;
     }
-    for (const k of keys) {
+    for (const k of keys2) {
       if (!unrecKeys.has(k))
         unrecKeys.set(k, {});
       unrecKeys.get(k)[side] = true;
@@ -7736,7 +8846,7 @@ function bucketFor(state, inst) {
   return bucket;
 }
 var handoff;
-var open = [];
+var open2 = [];
 var memo = {
   alloc(_inst, payload, empty) {
     const bucket = handoff;
@@ -7745,7 +8855,7 @@ var memo = {
     handoff = void 0;
     const entry = { value: empty, issues: null };
     bucket.set(payload.value, entry);
-    open.push(entry);
+    open2.push(entry);
     return empty;
   },
   guard(inst) {
@@ -7816,10 +8926,10 @@ var memo = {
           return payload;
         }
         handoff = bucket;
-        const depth = open.length;
+        const depth = open2.length;
         const result = base(payload, ctx);
         handoff = void 0;
-        const entry = open.length > depth ? open.pop() : void 0;
+        const entry = open2.length > depth ? open2.pop() : void 0;
         if (result instanceof Promise) {
           return result.then((r) => {
             if (entry)
@@ -8785,8 +9895,8 @@ function compactTypeUnion(schema) {
     if (!option || typeof option !== "object")
       return;
     compactTypeUnion(option);
-    const keys = Object.keys(option);
-    if (keys.length !== 1 || keys[0] !== "type")
+    const keys2 = Object.keys(option);
+    if (keys2.length !== 1 || keys2[0] !== "type")
       return;
     const type = option.type;
     for (const member of Array.isArray(type) ? type : [type]) {
@@ -10709,11 +11819,11 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst._zod.processJSONSchema = (ctx, json, params) => enumProcessor(inst, ctx, json, params);
   inst.enum = def.entries;
   inst.options = [...inst._zod.values];
-  const keys = new Set(Object.keys(def.entries));
+  const keys2 = new Set(Object.keys(def.entries));
   inst.extract = (values, params) => {
     const newEntries = {};
     for (const value of values) {
-      if (keys.has(value)) {
+      if (keys2.has(value)) {
         newEntries[value] = def.entries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -10728,7 +11838,7 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst.exclude = (values, params) => {
     const newEntries = { ...def.entries };
     for (const value of values) {
-      if (keys.has(value)) {
+      if (keys2.has(value)) {
         delete newEntries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -14556,9 +15666,9 @@ var rev2026Codec = {
     });
     const parsed = buildSchemas2026().RequestMetaEnvelopeSchema.safeParse(meta2);
     if (!parsed.success) for (const issue2 of parsed.error.issues) {
-      const path7 = issue2.path.map(String);
-      const key = path7.length > 0 ? path7.join(".") : "_meta";
-      if (path7.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
+      const path9 = issue2.path.map(String);
+      const key = path9.length > 0 ? path9.join(".") : "_meta";
+      if (path9.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
       issues.push({
         key,
         problem: issue2.message
@@ -14858,29 +15968,29 @@ var PERMITTED_X_MCP_HEADER_TYPES = /* @__PURE__ */ new Set([
 function scanXMcpHeaderDeclarations(inputSchema) {
   const declarations = [];
   const seenLower = /* @__PURE__ */ new Map();
-  const visit = (node2, path7, reachable) => {
+  const visit = (node2, path9, reachable) => {
     if (node2 === null || typeof node2 !== "object") return void 0;
     const schema = node2;
     if (X_MCP_HEADER_KEY in schema) {
-      if (!reachable || path7.length === 0) return `${pathName(path7)}: x-mcp-header is only permitted on properties statically reachable via a chain of 'properties' keys (not under items, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, or $ref)`;
+      if (!reachable || path9.length === 0) return `${pathName(path9)}: x-mcp-header is only permitted on properties statically reachable via a chain of 'properties' keys (not under items, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, or $ref)`;
       const raw = schema[X_MCP_HEADER_KEY];
-      if (typeof raw !== "string" || raw.length === 0) return `${pathName(path7)}: x-mcp-header MUST be a non-empty string`;
-      if (!RFC9110_TOKEN.test(raw)) return `${pathName(path7)}: x-mcp-header '${raw}' is not a valid RFC 9110 token (no spaces, control characters or HTTP delimiters)`;
+      if (typeof raw !== "string" || raw.length === 0) return `${pathName(path9)}: x-mcp-header MUST be a non-empty string`;
+      if (!RFC9110_TOKEN.test(raw)) return `${pathName(path9)}: x-mcp-header '${raw}' is not a valid RFC 9110 token (no spaces, control characters or HTTP delimiters)`;
       const type = typeof schema.type === "string" ? schema.type : void 0;
-      if (type === void 0 || !PERMITTED_X_MCP_HEADER_TYPES.has(type)) return `${pathName(path7)}: x-mcp-header is only permitted on primitive-typed properties (string, integer, boolean); got ${type ?? "<none>"}`;
+      if (type === void 0 || !PERMITTED_X_MCP_HEADER_TYPES.has(type)) return `${pathName(path9)}: x-mcp-header is only permitted on primitive-typed properties (string, integer, boolean); got ${type ?? "<none>"}`;
       const lower = raw.toLowerCase();
       const prior = seenLower.get(lower);
       if (prior !== void 0) return `x-mcp-header '${raw}' is not case-insensitively unique (also declared as '${prior}')`;
       seenLower.set(lower, raw);
       declarations.push({
-        path: path7,
+        path: path9,
         headerName: raw,
         type
       });
     }
     const properties = schema.properties;
     if (properties !== null && typeof properties === "object") for (const [key, child] of Object.entries(properties)) {
-      const fault$1 = visit(child, [...path7, key], reachable);
+      const fault$1 = visit(child, [...path9, key], reachable);
       if (fault$1 !== void 0) return fault$1;
     }
     for (const k of NON_REACHABLE_SUBSCHEMA_KEYWORDS) {
@@ -14888,7 +15998,7 @@ function scanXMcpHeaderDeclarations(inputSchema) {
       if (sub === void 0) continue;
       const branches = Array.isArray(sub) ? sub : sub !== null && typeof sub === "object" && OBJECT_VALUED_SUBSCHEMA_KEYWORDS.has(k) ? Object.values(sub) : [sub];
       for (const branch of branches) {
-        const fault$1 = visit(branch, [...path7, `<${k}>`], false);
+        const fault$1 = visit(branch, [...path9, `<${k}>`], false);
         if (fault$1 !== void 0) return fault$1;
       }
     }
@@ -14928,8 +16038,8 @@ var OBJECT_VALUED_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set([
   "$defs",
   "definitions"
 ]);
-function pathName(path7) {
-  return path7.length === 0 ? "<root>" : path7.join(".");
+function pathName(path9) {
+  return path9.length === 0 ? "<root>" : path9.join(".");
 }
 var BASE64_SENTINEL_PREFIX = "=?base64?";
 var BASE64_SENTINEL_SUFFIX = "?=";
@@ -14962,9 +16072,9 @@ function utf8ToBase64(s) {
 function encodeMcpParamValue(value) {
   return needsBase64(value) ? `${BASE64_SENTINEL_PREFIX}${utf8ToBase64(value)}${BASE64_SENTINEL_SUFFIX}` : value;
 }
-function valueAtPath(root, path7) {
+function valueAtPath(root, path9) {
   let node2 = root;
-  for (const key of path7) {
+  for (const key of path9) {
     if (node2 === null || typeof node2 !== "object") return void 0;
     node2 = node2[key];
   }
@@ -15219,7 +16329,7 @@ var PROPERTY_KEYS_BY_TYPE = {
   array: shapeKeys([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema])
 };
 var SUPPORTED_STRING_FORMATS = new Set(StringSchemaSchema.shape.format.unwrap().options);
-function walkProperty(node2, path7, vendor, unsupported) {
+function walkProperty(node2, path9, vendor, unsupported) {
   if (!isJsonObject(node2)) return node2;
   const allowedKeys = typeof node2.type === "string" && Object.hasOwn(PROPERTY_KEYS_BY_TYPE, node2.type) ? PROPERTY_KEYS_BY_TYPE[node2.type] : void 0;
   if (allowedKeys === void 0) return node2;
@@ -15227,8 +16337,8 @@ function walkProperty(node2, path7, vendor, unsupported) {
   for (const [key, value] of Object.entries(node2)) if (allowedKeys.has(key) || isAnnotationOnlyJsonSchemaKeyword(key)) pruned[key] = value;
   else if (key === "pattern" && node2.type === "string" && typeof node2.format === "string") {
     if (!SUPPORTED_STRING_FORMATS.has(node2.format)) pruned[key] = value;
-    else if (typeof value !== "string" || !isLibraryFormatPattern(node2.format, value, vendor)) unsupported.push(`${path7}.${key}`);
-  } else unsupported.push(`${path7}.${key}`);
+    else if (typeof value !== "string" || !isLibraryFormatPattern(node2.format, value, vendor)) unsupported.push(`${path9}.${key}`);
+  } else unsupported.push(`${path9}.${key}`);
   return pruned;
 }
 function walkRequestedSchema(converted, vendor) {
@@ -15245,11 +16355,11 @@ function describeUnsupportedProperties(pruned, fallback) {
   const offenders = Object.entries(pruned.properties).filter(([, node2]) => !parseSchema(PrimitiveSchemaDefinitionSchema, node2).success).map(([name]) => `properties.${name}`);
   return offenders.length > 0 ? offenders.join(", ") : fallback;
 }
-function findDroppedConstraintPaths(original, parsed, path7 = "") {
-  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths(item, parsed[index], `${path7}[${index}]`));
+function findDroppedConstraintPaths(original, parsed, path9 = "") {
+  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths(item, parsed[index], `${path9}[${index}]`));
   if (!isJsonObject(original) || !isJsonObject(parsed)) return [];
   return Object.entries(original).flatMap(([key, value]) => {
-    const childPath = path7 ? `${path7}.${key}` : key;
+    const childPath = path9 ? `${path9}.${key}` : key;
     if (!Object.prototype.hasOwnProperty.call(parsed, key)) return isAnnotationOnlyJsonSchemaKeyword(key) ? [] : [childPath];
     return findDroppedConstraintPaths(value, parsed[key], childPath);
   });
@@ -18416,7 +19526,7 @@ var require_fast_deep_equal = /* @__PURE__ */ __commonJSMin(((exports, module) =
     if (a === b) return true;
     if (a && b && typeof a == "object" && typeof b == "object") {
       if (a.constructor !== b.constructor) return false;
-      var length, i, keys;
+      var length, i, keys2;
       if (Array.isArray(a)) {
         length = a.length;
         if (length != b.length) return false;
@@ -18426,12 +19536,12 @@ var require_fast_deep_equal = /* @__PURE__ */ __commonJSMin(((exports, module) =
       if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
       if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
       if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-      keys = Object.keys(a);
-      length = keys.length;
+      keys2 = Object.keys(a);
+      length = keys2.length;
       if (length !== Object.keys(b).length) return false;
-      for (i = length; i-- !== 0; ) if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+      for (i = length; i-- !== 0; ) if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
       for (i = length; i-- !== 0; ) {
-        var key = keys[i];
+        var key = keys2[i];
         if (!equal(a[key], b[key])) return false;
       }
       return true;
@@ -19408,8 +20518,8 @@ var require_utils = /* @__PURE__ */ __commonJSMin(((exports, module) => {
     for (let i = 0; i < str.length; i++) if (str[i] === token) ind++;
     return ind;
   }
-  function removeDotSegments(path7) {
-    let input = path7;
+  function removeDotSegments(path9) {
+    let input = path9;
     const output = [];
     let nextSlash = -1;
     let len = 0;
@@ -19562,8 +20672,8 @@ var require_schemes = /* @__PURE__ */ __commonJSMin(((exports, module) => {
       wsComponent.secure = void 0;
     }
     if (wsComponent.resourceName) {
-      const [path7, query] = wsComponent.resourceName.split("?");
-      wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
+      const [path9, query] = wsComponent.resourceName.split("?");
+      wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
       wsComponent.query = query;
       wsComponent.resourceName = void 0;
     }
@@ -26123,9 +27233,9 @@ init_define_DCT_TOOL_CATALOG();
 // src/adapters/official-server.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-import { readFile } from "node:fs/promises";
-import path2 from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFile as readFile2 } from "node:fs/promises";
+import path6 from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // src/domains/official-options.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -26328,14 +27438,14 @@ function validateOfficialManifest(input, evidence) {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { createHash } from "node:crypto";
-import { lstat as lstat2, readdir, realpath } from "node:fs/promises";
-import path from "node:path";
+import { lstat as lstat3, readdir as readdir2, realpath as realpath3 } from "node:fs/promises";
+import path5 from "node:path";
 
 // src/adapters/file-evidence.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { constants } from "node:fs";
-import { lstat, open as open2 } from "node:fs/promises";
+import { lstat as lstat2, open as open3 } from "node:fs/promises";
 function sameFile(expected, actual) {
   return actual.isFile() && !actual.isSymbolicLink() && expected.dev === actual.dev && expected.ino === actual.ino;
 }
@@ -26343,9 +27453,9 @@ function unchanged(expected, actual) {
   return sameFile(expected, actual) && expected.size === actual.size && expected.mtimeNs === actual.mtimeNs && expected.ctimeNs === actual.ctimeNs;
 }
 async function readRegularFile(file, io = {}) {
-  const inspect = io.lstat ?? ((name) => lstat(name, { bigint: true }));
+  const inspect = io.lstat ?? ((name) => lstat2(name, { bigint: true }));
   const acquire = io.open ?? (async (name, flags) => {
-    const handle2 = await open2(name, flags);
+    const handle2 = await open3(name, flags);
     return {
       stat: () => handle2.stat({ bigint: true }),
       readFile: () => handle2.readFile(),
@@ -26369,17 +27479,17 @@ async function readRegularFile(file, io = {}) {
 // src/adapters/official-package.ts
 async function verifyOfficialPackage(directory, input, options = {}) {
   const evidence = parseOfficialReleaseEvidence(input);
-  const root = path.resolve(directory);
-  const rootStat = await lstat2(root);
+  const root = path5.resolve(directory);
+  const rootStat = await lstat3(root);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory())
     throw new Error("Official package root must be a directory without links.");
-  const canonical2 = await realpath(root);
-  if (path.relative(root, canonical2) !== "") throw new Error("Official package root has a linked or aliased parent.");
+  const canonical2 = await realpath3(root);
+  if (path5.relative(root, canonical2) !== "") throw new Error("Official package root has a linked or aliased parent.");
   const expected = new Map(evidence.files.map((file) => [file.path, file]));
   const directories = new Set(
     evidence.files.flatMap((file) => {
       const parents = [];
-      for (let parent = path.posix.dirname(file.path); parent !== "."; parent = path.posix.dirname(parent))
+      for (let parent = path5.posix.dirname(file.path); parent !== "."; parent = path5.posix.dirname(parent))
         parents.push(parent);
       return parents;
     })
@@ -26391,12 +27501,12 @@ async function verifyOfficialPackage(directory, input, options = {}) {
     )
   );
   async function visit(current, prefix = "") {
-    for (const name of await readdir(current)) {
+    for (const name of await readdir2(current)) {
       const relative = `${prefix}${name}`;
-      const absolute = path.join(current, name);
-      const stat2 = await lstat2(absolute);
+      const absolute = path5.join(current, name);
+      const stat2 = await lstat3(absolute);
       if (stat2.isSymbolicLink()) throw new Error(`Official package contains a link: ${relative}`);
-      if (path.relative(canonical2, await realpath(absolute)).replaceAll("\\", "/") !== relative)
+      if (path5.relative(canonical2, await realpath3(absolute)).replaceAll("\\", "/") !== relative)
         throw new Error(`Official package path escaped or changed: ${relative}`);
       if (stat2.isDirectory()) {
         if (options.pnpmInstalled && ["node_modules", "node_modules/.bin"].includes(relative)) {
@@ -26458,17 +27568,17 @@ async function resolveServerBin() {
     const packaged = typeof define_DCT_OFFICIAL_RELEASE_default !== "undefined";
     const evidence = parseOfficialReleaseEvidence(
       packaged ? define_DCT_OFFICIAL_RELEASE_default : JSON.parse(
-        await readFile(new URL("../../tooling/official-server-release.json", import.meta.url), "utf8")
+        await readFile2(new URL("../../tooling/official-server-release.json", import.meta.url), "utf8")
       )
     );
-    const directory = fileURLToPath(
+    const directory = fileURLToPath3(
       new URL(
         packaged ? "./official-server/" : "../../plugins/codex/debugging-cdp-targets/dist/official-server/",
         import.meta.url
       )
     );
     await verifyOfficialPackage(directory, evidence);
-    return path2.join(directory, evidence.bin);
+    return path6.join(directory, evidence.bin);
   } catch (error2) {
     throw new Error(
       `Bundled official MCP package verification failed; reinstall the Plugin or run pnpm build:plugin. ${errorMessage(error2)}`
@@ -26489,7 +27599,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
   const arguments_ = options.args ?? buildServerArguments(browserUrl);
   const bin = options.bin ?? await resolveServerBin();
   options.signal?.throwIfAborted();
-  const child = spawn(process.execPath, [bin, ...arguments_], {
+  const child = spawn3(process.execPath, [bin, ...arguments_], {
     shell: false,
     windowsHide: true,
     stdio: ["pipe", "pipe", "pipe"],
@@ -26764,8 +27874,8 @@ var __exportAll2 = (all, symbols) => {
 };
 var __copyProps3 = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
-    for (var keys = __getOwnPropNames3(from), i = 0, n = keys.length, key; i < n; i++) {
-      key = keys[i];
+    for (var keys2 = __getOwnPropNames3(from), i = 0, n = keys2.length, key; i < n; i++) {
+      key = keys2[i];
       if (!__hasOwnProp3.call(to, key) && key !== except) {
         __defProp3(to, key, {
           get: ((k) => from[k]).bind(null, key),
@@ -29434,9 +30544,9 @@ var rev2026Codec2 = {
     });
     const parsed = buildSchemas20262().RequestMetaEnvelopeSchema.safeParse(meta2);
     if (!parsed.success) for (const issue2 of parsed.error.issues) {
-      const path7 = issue2.path.map(String);
-      const key = path7.length > 0 ? path7.join(".") : "_meta";
-      if (path7.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
+      const path9 = issue2.path.map(String);
+      const key = path9.length > 0 ? path9.join(".") : "_meta";
+      if (path9.length === 1 && issues.some((existing) => existing.key === key && existing.problem === "missing")) continue;
       issues.push({
         key,
         problem: issue2.message
@@ -29962,7 +31072,7 @@ var PROPERTY_KEYS_BY_TYPE2 = {
   array: shapeKeys2([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema])
 };
 var SUPPORTED_STRING_FORMATS2 = new Set(StringSchemaSchema.shape.format.unwrap().options);
-function walkProperty2(node2, path7, vendor, unsupported) {
+function walkProperty2(node2, path9, vendor, unsupported) {
   if (!isJsonObject2(node2)) return node2;
   const allowedKeys = typeof node2.type === "string" && Object.hasOwn(PROPERTY_KEYS_BY_TYPE2, node2.type) ? PROPERTY_KEYS_BY_TYPE2[node2.type] : void 0;
   if (allowedKeys === void 0) return node2;
@@ -29970,8 +31080,8 @@ function walkProperty2(node2, path7, vendor, unsupported) {
   for (const [key, value] of Object.entries(node2)) if (allowedKeys.has(key) || isAnnotationOnlyJsonSchemaKeyword2(key)) pruned[key] = value;
   else if (key === "pattern" && node2.type === "string" && typeof node2.format === "string") {
     if (!SUPPORTED_STRING_FORMATS2.has(node2.format)) pruned[key] = value;
-    else if (typeof value !== "string" || !isLibraryFormatPattern2(node2.format, value, vendor)) unsupported.push(`${path7}.${key}`);
-  } else unsupported.push(`${path7}.${key}`);
+    else if (typeof value !== "string" || !isLibraryFormatPattern2(node2.format, value, vendor)) unsupported.push(`${path9}.${key}`);
+  } else unsupported.push(`${path9}.${key}`);
   return pruned;
 }
 function walkRequestedSchema2(converted, vendor) {
@@ -29988,11 +31098,11 @@ function describeUnsupportedProperties2(pruned, fallback) {
   const offenders = Object.entries(pruned.properties).filter(([, node2]) => !parseSchema2(PrimitiveSchemaDefinitionSchema, node2).success).map(([name]) => `properties.${name}`);
   return offenders.length > 0 ? offenders.join(", ") : fallback;
 }
-function findDroppedConstraintPaths2(original, parsed, path7 = "") {
-  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths2(item, parsed[index], `${path7}[${index}]`));
+function findDroppedConstraintPaths2(original, parsed, path9 = "") {
+  if (Array.isArray(original) && Array.isArray(parsed)) return original.flatMap((item, index) => findDroppedConstraintPaths2(item, parsed[index], `${path9}[${index}]`));
   if (!isJsonObject2(original) || !isJsonObject2(parsed)) return [];
   return Object.entries(original).flatMap(([key, value]) => {
-    const childPath = path7 ? `${path7}.${key}` : key;
+    const childPath = path9 ? `${path9}.${key}` : key;
     if (!Object.prototype.hasOwnProperty.call(parsed, key)) return isAnnotationOnlyJsonSchemaKeyword2(key) ? [] : [childPath];
     return findDroppedConstraintPaths2(value, parsed[key], childPath);
   });
@@ -33021,7 +34131,7 @@ var require_fast_deep_equal2 = /* @__PURE__ */ __commonJSMin2(((exports, module)
     if (a === b) return true;
     if (a && b && typeof a == "object" && typeof b == "object") {
       if (a.constructor !== b.constructor) return false;
-      var length, i, keys;
+      var length, i, keys2;
       if (Array.isArray(a)) {
         length = a.length;
         if (length != b.length) return false;
@@ -33031,12 +34141,12 @@ var require_fast_deep_equal2 = /* @__PURE__ */ __commonJSMin2(((exports, module)
       if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
       if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
       if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-      keys = Object.keys(a);
-      length = keys.length;
+      keys2 = Object.keys(a);
+      length = keys2.length;
       if (length !== Object.keys(b).length) return false;
-      for (i = length; i-- !== 0; ) if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+      for (i = length; i-- !== 0; ) if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
       for (i = length; i-- !== 0; ) {
-        var key = keys[i];
+        var key = keys2[i];
         if (!equal(a[key], b[key])) return false;
       }
       return true;
@@ -34013,8 +35123,8 @@ var require_utils2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
     for (let i = 0; i < str.length; i++) if (str[i] === token) ind++;
     return ind;
   }
-  function removeDotSegments(path7) {
-    let input = path7;
+  function removeDotSegments(path9) {
+    let input = path9;
     const output = [];
     let nextSlash = -1;
     let len = 0;
@@ -34167,8 +35277,8 @@ var require_schemes2 = /* @__PURE__ */ __commonJSMin2(((exports, module) => {
       wsComponent.secure = void 0;
     }
     if (wsComponent.resourceName) {
-      const [path7, query] = wsComponent.resourceName.split("?");
-      wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
+      const [path9, query] = wsComponent.resourceName.split("?");
+      wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
       wsComponent.query = query;
       wsComponent.resourceName = void 0;
     }
@@ -39177,6 +40287,15 @@ function parseApplicationLaunch(value) {
     ...env === void 0 ? {} : { env }
   };
 }
+function validateDataIsolationBinding(value, mode, environment) {
+  const launch = parseApplicationLaunch(value);
+  const references = [...launch.args ?? [], ...Object.values(launch.env ?? {})].some(
+    (argument) => expandEnvironment(argument, environment).includes(DATA_DIRECTORY_PLACEHOLDER)
+  );
+  if (mode === "data-dir" && !references)
+    throw new Error("Data directory isolation requires an explicit {dataDir} binding.");
+  if (mode === "none" && references) throw new Error("No isolation forbids {dataDir} binding.");
+}
 function resolveLaunchDefinition(value, port, environment, dataDir) {
   const launch = parseApplicationLaunch(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("The CDP port is invalid.");
@@ -39353,7 +40472,7 @@ function parseControlRequest(value) {
     throw new Error("A nonempty requestId of at most 128 characters is required.");
   const requestId = value.requestId;
   if (action === "start") {
-    fields2(value, ["action", "entryId", "requestId", "launch", "targetKind", "basePort", "mcpArgs"]);
+    fields2(value, ["action", "entryId", "requestId", "launch", "isolation", "targetKind", "basePort", "mcpArgs"]);
     if (value.targetKind !== void 0 && value.targetKind !== "chrome" && value.targetKind !== "generic-cdp")
       throw new Error("Unknown target kind.");
     if (value.basePort !== void 0 && (typeof value.basePort !== "number" || !Number.isInteger(value.basePort) || value.basePort < 1 || value.basePort > 65535))
@@ -39363,6 +40482,7 @@ function parseControlRequest(value) {
       entryId,
       requestId,
       launch: parseApplicationLaunch(value.launch),
+      isolation: parseDataIsolation(value.isolation),
       ...value.targetKind === void 0 ? {} : { targetKind: value.targetKind },
       ...value.basePort === void 0 ? {} : { basePort: value.basePort },
       ...value.mcpArgs === void 0 ? {} : { mcpArgs: strings(value.mcpArgs) }
@@ -39439,7 +40559,7 @@ function lifecycleTools(hookEvents) {
     ),
     make(
       "dct_connection_start",
-      "Launch a new application natively and create an independent official MCP connection. Returns an operation immediately; use dct_operation_wait for completion. Reuse requestId only when retrying the same request. The plugin detects Windows elevation requirements. Port placeholders are supported in args and env. cwd is not file-access authorization; use the official --workspace argument in mcpArgs.",
+      "Launch a new application natively and create an independent official MCP connection. Required isolation selects none or an existing/new managed data directory and explicit cleanup. Data-dir requires researched {dataDir} binding in args/env; none forbids it. Returns an operation immediately; use dct_operation_wait for completion and explicit operation metadata for directory evidence. Reuse requestId only when retrying the same request. The plugin detects Windows elevation requirements. Port placeholders are supported in args and env. cwd is not file-access authorization; use the official --workspace argument in mcpArgs.",
       {
         entryId: uuid2,
         requestId: identity.requestId,
@@ -39455,10 +40575,49 @@ function lifecycleTools(hookEvents) {
           additionalProperties: false
         },
         mcpArgs: stringList,
+        isolation: {
+          oneOf: [
+            {
+              type: "object",
+              properties: { mode: { const: "none" } },
+              required: ["mode"],
+              additionalProperties: false
+            },
+            {
+              type: "object",
+              properties: {
+                mode: { const: "data-dir" },
+                cleanup: { type: "string", enum: ["retain", "delete-on-release"] },
+                directory: {
+                  oneOf: [
+                    {
+                      type: "object",
+                      properties: { kind: { const: "existing" }, path: { type: "string" } },
+                      required: ["kind", "path"],
+                      additionalProperties: false
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        kind: { const: "new" },
+                        parent: { type: "string" },
+                        name: { type: "string" }
+                      },
+                      required: ["kind", "parent"],
+                      additionalProperties: false
+                    }
+                  ]
+                }
+              },
+              required: ["mode", "directory", "cleanup"],
+              additionalProperties: false
+            }
+          ]
+        },
         targetKind: { type: "string", enum: ["chrome", "generic-cdp"] },
         basePort: { type: "integer", minimum: 1, maximum: 65535 }
       },
-      ["entryId", "requestId", "launch"]
+      ["entryId", "requestId", "launch", "isolation"]
     ),
     make(
       "dct_connection_restart",
@@ -39632,9 +40791,9 @@ function createPortReservations() {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { spawn as nodeSpawn } from "node:child_process";
+import { realpath as realpath4 } from "node:fs/promises";
 import net from "node:net";
-import os2 from "node:os";
-import path6 from "node:path";
+import path7 from "node:path";
 
 // src/domains/cdp-target.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -39770,872 +40929,6 @@ function withChromeScreenshotFeature(arguments_) {
   return result;
 }
 
-// src/adapters/chrome-profile.ts
-init_define_DCT_OFFICIAL_RELEASE();
-init_define_DCT_TOOL_CATALOG();
-import { open as open3, readlink as readlink2, realpath as realpath2 } from "node:fs/promises";
-import os from "node:os";
-import path5 from "node:path";
-
-// src/adapters/platform-process.ts
-init_define_DCT_OFFICIAL_RELEASE();
-init_define_DCT_TOOL_CATALOG();
-import { spawn as spawn3 } from "node:child_process";
-import { readFile as readFile2, readlink, stat } from "node:fs/promises";
-import path4 from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
-
-// src/adapters/windows-launch.ts
-init_define_DCT_OFFICIAL_RELEASE();
-init_define_DCT_TOOL_CATALOG();
-import { spawn as spawn2 } from "node:child_process";
-import { EventEmitter } from "node:events";
-import path3 from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
-var NativeApplication = class extends EventEmitter {
-  pid;
-  startedAtUtc;
-  elevated;
-  exitCode = null;
-  signalCode = null;
-  monitoringFailure;
-  monitorDisposed = false;
-  releaseMonitor;
-  constructor(pid, startedAtUtc, elevated, releaseMonitor) {
-    super();
-    this.pid = pid;
-    this.startedAtUtc = startedAtUtc;
-    this.elevated = elevated;
-    this.releaseMonitor = releaseMonitor;
-  }
-  disposeMonitor() {
-    if (this.monitorDisposed) return;
-    this.monitorDisposed = true;
-    this.releaseMonitor();
-  }
-  onMonitorError(listener) {
-    this.once("monitor-error", listener);
-    if (this.monitoringFailure) listener();
-    return () => {
-      this.off("monitor-error", listener);
-    };
-  }
-  recordExit(code) {
-    if (this.exitCode !== null) return;
-    this.exitCode = code;
-    this.emit("exit");
-    this.disposeMonitor();
-  }
-};
-var phases = /* @__PURE__ */ new Set([
-  "inspecting-permission",
-  "launching",
-  "awaiting-permission",
-  "permission-handshake",
-  "native-operation",
-  "normal-close",
-  "wait-exit"
-]);
-function nativeFailure(value) {
-  const error2 = new DetailedError("Windows native application operation failed.");
-  error2.details = {
-    phase: typeof value.phase === "string" && phases.has(value.phase) ? value.phase : "native-helper",
-    ...typeof value.nativeError === "number" ? { nativeError: value.nativeError } : {},
-    ...typeof value.category === "string" && /^[a-z-]+$/.test(value.category) ? { category: value.category } : {},
-    ...typeof value.exceptionType === "string" && /^[A-Za-z]+$/.test(value.exceptionType) ? { exceptionType: value.exceptionType } : {},
-    ...typeof value.waitResult === "number" ? { waitResult: value.waitResult } : {},
-    ...typeof value.waitError === "number" ? { waitError: value.waitError } : {},
-    closeRequested: value.closeRequested === true,
-    processExited: false
-  };
-  return error2;
-}
-function createWindowsLauncher({
-  spawn: launchHelper = (executable, args) => spawn2(executable, args, {
-    shell: false,
-    windowsHide: true,
-    stdio: ["pipe", "pipe", "pipe"]
-  })
-} = {}) {
-  const applications = /* @__PURE__ */ new Map();
-  const closeWaits = /* @__PURE__ */ new WeakMap();
-  const key = (target) => `${target.processId}:${target.startedAtUtc}:${path3.win32.resolve(target.executablePath).toLowerCase()}`;
-  function helper(request, context, event, failure2, ended) {
-    const windows = process.env.SystemRoot ?? "C:/Windows";
-    const executable = path3.join(windows, "System32/WindowsPowerShell/v1.0/powershell.exe");
-    const script = fileURLToPath2(new URL("./windows-native-helper.ps1", import.meta.url));
-    const child = launchHelper(executable, [
-      "-NoProfile",
-      "-NonInteractive",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      script
-    ]);
-    let buffer = "";
-    const cancel = () => {
-      if (!child.stdin.destroyed) child.stdin.write('{"cancel":true}\n');
-    };
-    context.signal?.addEventListener("abort", cancel, { once: true });
-    const detach = () => context.signal?.removeEventListener("abort", cancel);
-    child.stderr.resume();
-    child.stdin.on("error", () => {
-    });
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      buffer += chunk;
-      if (buffer.length > 65536) {
-        buffer = "";
-        failure2(new Error("Native helper exceeded its evidence limit."));
-        child.stdin.end();
-        return;
-      }
-      let newline = buffer.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim();
-        buffer = buffer.slice(newline + 1);
-        try {
-          const value = JSON.parse(line);
-          if (!isRecord(value)) throw new Error("Invalid native process evidence.");
-          if (value.event === "phase") {
-            if (typeof value.phase !== "string" || !phases.has(value.phase))
-              throw new Error("Invalid native process phase.");
-            context.onPhase?.(value.phase);
-          } else if (value.event === "error") failure2(nativeFailure(value), true);
-          else event(value);
-        } catch {
-          failure2(new Error("Invalid native process evidence."));
-        }
-        newline = buffer.indexOf("\n");
-      }
-    });
-    child.once("error", (error2) => {
-      detach();
-      failure2(
-        nativeFailure({
-          category: "helper-start-failed",
-          nativeError: "errno" in error2 ? error2.errno : void 0
-        }),
-        true
-      );
-    });
-    child.once("close", () => {
-      detach();
-      ended();
-    });
-    child.stdout.once("end", ended);
-    child.stdin.write(`${JSON.stringify(request)}
-`);
-    if (context.signal?.aborted) cancel();
-    return {
-      child,
-      detach,
-      dispose: () => {
-        detach();
-        child.stdin.end();
-      }
-    };
-  }
-  function requestNormalClose(target, context = {}) {
-    context.signal?.throwIfAborted();
-    let resolveWait = () => {
-    };
-    let rejectWait = () => {
-    };
-    const wait = new Promise((resolve, reject) => {
-      resolveWait = resolve;
-      rejectWait = reject;
-    });
-    void wait.catch(() => {
-    });
-    closeWaits.set(target, wait);
-    return new Promise((resolve, reject) => {
-      let requested = false;
-      let complete = false;
-      const failed = (error2) => {
-        if (complete) return;
-        complete = true;
-        transport.dispose();
-        if (!requested) reject(error2);
-        rejectWait(error2);
-      };
-      const transport = helper(
-        {
-          action: "close",
-          target: {
-            processId: target.processId,
-            executablePath: target.executablePath,
-            startedAtUtc: target.startedAtUtc,
-            targetKind: target.targetKind,
-            port: target.port
-          }
-        },
-        context,
-        (value) => {
-          if (value.event === "cancelled") {
-            failed(
-              context.signal?.reason instanceof Error ? context.signal.reason : new DOMException("Windows close authorization cancelled.", "AbortError")
-            );
-            return;
-          }
-          if (value.processId !== target.processId || value.startedAtUtc !== target.startedAtUtc || typeof value.closeRequested !== "boolean" || typeof value.processExited !== "boolean")
-            throw new Error("Invalid native close identity evidence.");
-          if (value.event === "close-requested" && !requested) {
-            requested = true;
-            resolve(value);
-            return;
-          }
-          if (value.event !== "closed" || value.closed !== true || value.processExited !== true || value.waitResult !== 0 || value.waitError !== 0 || typeof value.exitCode !== "number")
-            throw new Error("Native handle did not confirm actual application exit.");
-          complete = true;
-          applications.get(key(target))?.recordExit(value.exitCode);
-          if (!requested) resolve(value);
-          resolveWait(value);
-          transport.dispose();
-        },
-        failed,
-        () => failed(new Error("Native close observer exited without actual application exit evidence."))
-      );
-    });
-  }
-  function waitForExit(target, signal) {
-    const pending = closeWaits.get(target);
-    if (!pending) return Promise.reject(new Error("No native close handle observer is available."));
-    if (!signal) return pending;
-    signal.throwIfAborted();
-    return new Promise((resolve, reject) => {
-      const cancel = () => {
-        signal.removeEventListener("abort", cancel);
-        reject(signal.reason);
-      };
-      signal.addEventListener("abort", cancel, { once: true });
-      pending.then(
-        (value) => {
-          signal.removeEventListener("abort", cancel);
-          resolve(value);
-        },
-        (error2) => {
-          signal.removeEventListener("abort", cancel);
-          reject(error2);
-        }
-      );
-    });
-  }
-  return {
-    launch(launch, context = {}) {
-      context.signal?.throwIfAborted();
-      return new Promise((resolve, reject) => {
-        let application;
-        let launchFailure;
-        const failed = (error2, terminal2 = false) => {
-          launchFailure ??= error2;
-          if (application?.monitorDisposed) return;
-          if (!application && terminal2) reject(launchFailure);
-          else if (application && application.exitCode === null && !application.monitoringFailure) {
-            application.monitoringFailure = "native-helper-exited";
-            application.emit("monitor-error");
-          }
-          transport.dispose();
-        };
-        const transport = helper(
-          { action: "launch", launch },
-          context,
-          (value) => {
-            if (value.event === "cancelled" && !application) {
-              reject(
-                context.signal?.reason ?? new DOMException("Windows launch cancelled.", "AbortError")
-              );
-              transport.child.stdin.end();
-            } else if (value.event === "started" && !application) {
-              if (typeof value.processId !== "number" || !Number.isInteger(value.processId) || value.processId <= 0 || value.processId === transport.child.pid || typeof value.startedAtUtc !== "string" || !Number.isFinite(Date.parse(value.startedAtUtc)) || typeof value.executablePath !== "string" || path3.win32.resolve(value.executablePath).toLowerCase() !== path3.win32.resolve(launch.executablePath).toLowerCase() || typeof value.elevated !== "boolean")
-                throw new Error("Invalid actual application identity from native launch.");
-              application = new NativeApplication(
-                value.processId,
-                value.startedAtUtc,
-                value.elevated,
-                transport.dispose
-              );
-              if (launchFailure) application.monitoringFailure = "native-helper-exited";
-              applications.set(
-                key({
-                  processId: application.pid,
-                  startedAtUtc: application.startedAtUtc,
-                  executablePath: launch.executablePath,
-                  targetKind: "generic-cdp",
-                  port: 0
-                }),
-                application
-              );
-              const actual = application;
-              const identityKey = key({
-                processId: actual.pid,
-                startedAtUtc: actual.startedAtUtc,
-                executablePath: launch.executablePath,
-                targetKind: "generic-cdp",
-                port: 0
-              });
-              actual.once("exit", () => {
-                if (applications.get(identityKey) === actual) applications.delete(identityKey);
-              });
-              context.onCreated?.(application);
-              transport.detach();
-              resolve(application);
-            } else if (value.event === "exited" && application && value.processId === application.pid && typeof value.exitCode === "number") {
-              application.recordExit(value.exitCode);
-            } else throw new Error("Unexpected native process evidence.");
-          },
-          failed,
-          () => failed(new Error("The native launch helper exited before completion."), true)
-        );
-      });
-    },
-    requestNormalClose,
-    waitForExit,
-    async close(target) {
-      await requestNormalClose(target);
-      return waitForExit(target);
-    }
-  };
-}
-
-// src/adapters/platform-process.ts
-var exitObservations = /* @__PURE__ */ new WeakMap();
-var exitReferences = /* @__PURE__ */ new WeakMap();
-function retainExitReference(child) {
-  if (!child.ref || !child.unref) return () => {
-  };
-  let reference = exitReferences.get(child);
-  if (!reference) {
-    child.ref();
-    reference = { waiters: 0 };
-    exitReferences.set(child, reference);
-  }
-  reference.waiters += 1;
-  const ownedReference = reference;
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    if (exitReferences.get(child) !== ownedReference) return;
-    ownedReference.waiters -= 1;
-    if (ownedReference.waiters > 0) return;
-    exitReferences.delete(child);
-    child.unref?.();
-  };
-}
-function observeTargetExit(target) {
-  const child = target.child;
-  if (!child || exitObservations.has(child)) return;
-  const state = { exited: typeof child.exitCode === "number" || typeof child.signalCode === "string" };
-  exitObservations.set(child, state);
-  child.once("exit", () => {
-    state.exited = true;
-  });
-}
-function targetExitObserved(target) {
-  observeTargetExit(target);
-  return target.child !== void 0 && exitObservations.get(target.child)?.exited === true;
-}
-function recordTargetExit(target) {
-  observeTargetExit(target);
-  if (target.child) {
-    const state = exitObservations.get(target.child);
-    if (state) state.exited = true;
-  }
-}
-function waitForTargetExit(target, signal) {
-  observeTargetExit(target);
-  if (targetExitObserved(target)) return Promise.resolve();
-  signal?.throwIfAborted();
-  const child = target.child;
-  if (!child) return Promise.reject(new Error("No actual application exit observer is available."));
-  return new Promise((resolve, reject) => {
-    const releaseReference = retainExitReference(child);
-    let releaseMonitoring;
-    let finished = false;
-    const cleanup = () => {
-      if (finished) return;
-      finished = true;
-      child.off?.("exit", exited);
-      releaseMonitoring?.();
-      signal?.removeEventListener("abort", aborted2);
-      releaseReference();
-    };
-    const exited = () => {
-      cleanup();
-      resolve();
-    };
-    const failed = () => {
-      cleanup();
-      reject(new Error("The actual application exit observer failed."));
-    };
-    const aborted2 = () => {
-      cleanup();
-      reject(signal?.reason);
-    };
-    child.once("exit", exited);
-    signal?.addEventListener("abort", aborted2, { once: true });
-    releaseMonitoring = child.onMonitorError?.(failed);
-    if (finished) releaseMonitoring?.();
-    else if (targetExitObserved(target)) exited();
-    else if (child.monitoringFailure) failed();
-  });
-}
-function validateNativeExitReceipt(result, target) {
-  if (result.processId === target.processId && result.startedAtUtc === target.startedAtUtc && result.closed === true && result.processExited === true && result.waitResult === 0 && result.waitError === 0)
-    return;
-  const error2 = new DetailedError("The native handle did not supply matching application exit evidence.");
-  error2.details = {
-    phase: result.waitResult === 4294967295 ? "wait-exit" : result.phase ?? "normal-close",
-    nativeError: result.nativeError ?? 0,
-    waitResult: result.waitResult,
-    waitError: result.waitError,
-    closeRequested: result.closeRequested === true,
-    processExited: false
-  };
-  throw error2;
-}
-function abortable(pending, signal) {
-  if (!signal) return pending;
-  signal.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    const cancel = () => {
-      signal.removeEventListener("abort", cancel);
-      reject(signal.reason);
-    };
-    signal.addEventListener("abort", cancel, { once: true });
-    pending.then(
-      (value) => {
-        signal.removeEventListener("abort", cancel);
-        resolve(value);
-      },
-      (error2) => {
-        signal.removeEventListener("abort", cancel);
-        reject(error2);
-      }
-    );
-  });
-}
-async function run(executable, arguments_) {
-  return new Promise((resolve, reject) => {
-    const child = spawn3(executable, arguments_, {
-      windowsHide: true,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (data) => {
-      stdout += data;
-    });
-    child.stderr.on("data", (data) => {
-      stderr += data;
-    });
-    child.once("error", reject);
-    child.once("close", (code) => resolve({ code, stdout, stderr }));
-  });
-}
-async function windowsHelper(action, fields3) {
-  const helper = fileURLToPath3(new URL("./windows-cdp-helper.ps1", import.meta.url));
-  const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helper, "-Action", action];
-  for (const [name, value] of Object.entries(fields3)) if (value !== void 0) args.push(`-${name}`, String(value));
-  const result = await run("powershell.exe", args);
-  let output;
-  try {
-    output = JSON.parse(result.stdout.trim());
-  } catch {
-    throw new Error("The Windows process helper did not return valid evidence.");
-  }
-  if (!isRecord(output) || result.code !== 0 || output.ok !== true)
-    throw new Error(
-      isRecord(output) && typeof output.message === "string" ? output.message : "Windows process inspection failed."
-    );
-  return output;
-}
-function parseSnapshot(value) {
-  const root = value.root;
-  if (!isRecord(root) || typeof root.exists !== "boolean" || typeof value.currentSessionId !== "number" || !Array.isArray(value.processIds) || !value.processIds.every((pid) => typeof pid === "number" && Number.isInteger(pid)) || !Array.isArray(value.listeners))
-    throw new Error("Invalid process snapshot evidence.");
-  let verifiedRoot = { exists: false };
-  if (root.exists) {
-    if (typeof root.executablePath !== "string" || typeof root.sessionId !== "number" || typeof root.startedAtUtc !== "string")
-      throw new Error("Invalid process root evidence.");
-    verifiedRoot = {
-      exists: true,
-      executablePath: root.executablePath,
-      sessionId: root.sessionId,
-      startedAtUtc: root.startedAtUtc,
-      ...typeof root.productName === "string" ? { productName: root.productName } : {},
-      ...typeof root.companyName === "string" ? { companyName: root.companyName } : {}
-    };
-  }
-  const listeners = value.listeners.map((listener) => {
-    if (!isRecord(listener) || typeof listener.localAddress !== "string" || typeof listener.owningProcess !== "number")
-      throw new Error("Invalid listener evidence.");
-    return { localAddress: listener.localAddress, owningProcess: listener.owningProcess };
-  });
-  return { root: verifiedRoot, currentSessionId: value.currentSessionId, processIds: value.processIds, listeners };
-}
-function normalizePath(value) {
-  const normalized = path4.resolve(value);
-  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
-}
-function validateProcessIdentity(evidence, target, { newlyLaunched = false } = {}) {
-  const root = evidence.root;
-  if (!root?.exists) throw new Error("The target root process is absent.");
-  if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
-    throw new Error("The process executable identity changed.");
-  if (root.sessionId !== evidence.currentSessionId) throw new Error("The process user/session identity changed.");
-  const actual = Date.parse(root.startedAtUtc);
-  const recorded = Date.parse(target.startedAtUtc);
-  if (!Number.isFinite(actual) || !Number.isFinite(recorded))
-    throw new Error("The process creation time is unverifiable.");
-  if (newlyLaunched ? actual < recorded - 1e3 || actual > Date.now() + 1e3 : Math.abs(actual - recorded) > 1e3) {
-    throw new Error("The process creation time changed; the PID may have been reused.");
-  }
-  if (target.targetKind === "chrome" && process.platform === "win32" && (root.productName !== "Google Chrome" || root.companyName !== "Google LLC")) {
-    throw new Error("The target executable is not identified as Google Chrome.");
-  }
-}
-async function resolveUnixExecutable({
-  platform,
-  pid,
-  comm,
-  run: execute = run,
-  readlink: link = readlink,
-  fileIdentity = async (file) => {
-    const evidence = await stat(file, { bigint: true });
-    return { dev: evidence.dev, ino: evidence.ino, regularFile: evidence.isFile() };
-  }
-}) {
-  if (platform === "linux") return link(`/proc/${pid}/exe`);
-  const result = await execute("lsof", ["-a", "-p", String(pid), "-d", "txt", "-FfDin"]);
-  if (result.code !== 0 || result.stderr.trim()) throw new Error("The Darwin executable path is unverifiable.");
-  const candidates = [
-    ...new Set(
-      result.stdout.split(/\r?\n/).filter((line) => line.startsWith("n/")).map((line) => line.slice(1))
-    )
-  ];
-  const matches = candidates.filter(
-    (file) => path4.posix.isAbsolute(comm) ? file === comm : path4.posix.basename(file) === comm
-  );
-  const executable = matches[0];
-  if (matches.length === 0 && path4.posix.isAbsolute(comm)) {
-    const mappings = [];
-    let owner;
-    let mapping;
-    for (const field of result.stdout.split(/\r?\n/)) {
-      if (field.startsWith("p")) {
-        owner = /^p\d+$/.test(field) && Number.isSafeInteger(Number(field.slice(1))) ? Number(field.slice(1)) : void 0;
-        mapping = void 0;
-      } else if (field.startsWith("f")) {
-        mapping = field === "ftxt" ? { pid: owner, valid: true } : void 0;
-        if (mapping) mappings.push(mapping);
-      } else if (mapping) {
-        if (field.startsWith("n")) {
-          if (mapping.name !== void 0 || !field.startsWith("n/")) mapping.valid = false;
-          else mapping.name = field.slice(1);
-        } else if (field.startsWith("D")) {
-          if (mapping.dev !== void 0 || !/^D0x[\da-f]+$/i.test(field)) mapping.valid = false;
-          else mapping.dev = BigInt(field.slice(1));
-        } else if (field.startsWith("i")) {
-          if (mapping.ino !== void 0 || !/^i\d+$/.test(field)) mapping.valid = false;
-          else mapping.ino = BigInt(field.slice(1));
-        }
-      }
-    }
-    try {
-      const identity = await fileIdentity(comm);
-      const aliases = new Set(
-        mappings.filter(
-          (file) => identity.regularFile && identity.dev > 0n && identity.ino > 0n && file.valid && file.pid === pid && file.dev === identity.dev && file.ino === identity.ino && file.name !== void 0 && path4.posix.basename(file.name) === path4.posix.basename(comm)
-        ).map((file) => file.name)
-      );
-      if (aliases.size === 1) return comm;
-    } catch {
-    }
-  }
-  if (matches.length !== 1 || executable === void 0) {
-    const error2 = new DetailedError("The Darwin executable path is unverifiable or ambiguous.");
-    error2.details = {
-      phase: "executable-identity",
-      processId: pid,
-      executableClaim: comm.slice(0, 1024),
-      candidateCount: candidates.length,
-      matchCount: matches.length,
-      mappedExecutablePaths: candidates.filter((file) => path4.posix.basename(file) === path4.posix.basename(comm)).slice(0, 32).map((file) => file.slice(0, 1024))
-    };
-    throw error2;
-  }
-  return executable;
-}
-async function linuxCreationTime(pid, execute, readText) {
-  const [stat2, boot, clock] = await Promise.all([
-    readText(`/proc/${pid}/stat`),
-    readText("/proc/stat"),
-    execute("getconf", ["CLK_TCK"])
-  ]);
-  const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
-  const ticks = processStat?.[2]?.split(/\s+/)[19];
-  const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
-  const clockText = clock.stdout.trim();
-  const startTicks = Number(ticks);
-  const bootSeconds = Number(bootTimes[0]?.[1]);
-  const ticksPerSecond = Number(clockText);
-  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
-    throw new Error("The Linux process creation evidence is unverifiable.");
-  }
-  const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
-  if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
-  return started.toISOString();
-}
-async function unixSnapshot(pid, port, dependencies = {}) {
-  const platform = dependencies.platform ?? process.platform;
-  const execute = dependencies.run ?? run;
-  const processes = await execute("ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
-  if (processes.code !== 0) throw new Error("Cannot inspect target processes.");
-  const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
-    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
-    const started = match?.[4];
-    const executable = match?.[5];
-    return match && started !== void 0 && executable !== void 0 ? [
-      {
-        pid: Number(match[1]),
-        parent: Number(match[2]),
-        uid: Number(match[3]),
-        started: new Date(started).toISOString(),
-        executable
-      }
-    ] : [];
-  });
-  const root = rows.find((row) => row.pid === pid);
-  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile2(file, "utf8"))) : root?.started;
-  const owned = new Set(root ? [pid] : []);
-  for (let changed = true; changed; ) {
-    changed = false;
-    for (const row of rows) {
-      const parent = rows.find((candidate) => candidate.pid === row.parent);
-      if (root && parent && !owned.has(row.pid) && owned.has(row.parent) && row.uid === root.uid && row.started >= parent.started) {
-        owned.add(row.pid);
-        changed = true;
-      }
-    }
-  }
-  const result = await execute("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpn"]);
-  if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
-    throw new Error("Cannot verify CDP listener ownership (lsof required).");
-  const listeners = [];
-  let owner;
-  for (const line of result.stdout.split(/\r?\n/)) {
-    if (line.startsWith("p")) owner = Number(line.slice(1));
-    const match = line.startsWith("n") ? line.slice(1).match(/^(\S+):\d+$/) : null;
-    const address = match?.[1];
-    if (address !== void 0 && owner !== void 0)
-      listeners.push({ localAddress: address.replace(/^\[|\]$/g, ""), owningProcess: owner });
-  }
-  return {
-    root: root ? {
-      exists: true,
-      executablePath: await resolveUnixExecutable({
-        platform,
-        pid,
-        comm: root.executable,
-        run: execute,
-        ...dependencies.readlink ? { readlink: dependencies.readlink } : {}
-      }),
-      sessionId: root.uid,
-      startedAtUtc: rootStartedAt ?? root.started
-    } : { exists: false },
-    currentSessionId: (dependencies.currentUser ?? process.getuid)?.() ?? (() => {
-      throw new Error("Unix user identity unavailable.");
-    })(),
-    processIds: [...owned],
-    listeners
-  };
-}
-function createPlatformAdapter(dependencies = {}) {
-  const platform = dependencies.platform ?? process.platform;
-  const windows = createWindowsLauncher();
-  const closeWindows = dependencies.closeWindows;
-  const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, "SIGTERM"));
-  if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
-  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
-  const nativeExit = /* @__PURE__ */ new WeakMap();
-  async function requestNormalClose(target, context = {}) {
-    observeTargetExit(target);
-    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
-    const evidence = await snapshot(target.processId, target.port);
-    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
-    context.signal?.throwIfAborted();
-    const owned = new Set(evidence.processIds);
-    const listenerState = evidence.listeners.some((listener) => !owned.has(listener.owningProcess)) ? "foreign" : evidence.listeners.length ? "owned" : "absent";
-    if (!evidence.root.exists) {
-      const error2 = new DetailedError("The target root is absent without actual application exit evidence.");
-      error2.details = { phase: "process-identity", listenerState, closeRequested: false, processExited: false };
-      throw error2;
-    }
-    validateProcessIdentity(evidence, target);
-    if (platform !== "win32") {
-      requestUnixClose(target.processId);
-      return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
-    }
-    try {
-      if (closeWindows) {
-        const result2 = await closeWindows(target);
-        const completion2 = Promise.resolve(result2);
-        nativeExit.set(target, completion2);
-        validateNativeExitReceipt(result2, target);
-        recordTargetExit(target);
-        return { ...result2, listenerState };
-      }
-      const result = await (dependencies.requestWindowsClose ?? windows.requestNormalClose)(target, context);
-      const completion = (dependencies.waitWindowsExit ?? windows.waitForExit)(target);
-      void completion.catch(() => {
-      });
-      nativeExit.set(target, completion);
-      if (result.closeRequested !== true && result.processExited !== true) {
-        const error2 = new DetailedError("The application rejected normal close.");
-        error2.details = { ...result, listenerState, processExited: false };
-        throw error2;
-      }
-      return { ...result, listenerState };
-    } catch (cause) {
-      const error2 = new DetailedError(errorMessage(cause));
-      error2.details = { ...errorDetails(cause), listenerState, processExited: false };
-      throw error2;
-    }
-  }
-  async function waitForExit(target, signal) {
-    if (targetExitObserved(target)) return;
-    signal?.throwIfAborted();
-    const completion = nativeExit.get(target);
-    if (completion) {
-      const result = await abortable(completion, signal);
-      validateNativeExitReceipt(result, target);
-      recordTargetExit(target);
-      return;
-    }
-    await waitForTargetExit(target, signal);
-  }
-  return {
-    snapshot,
-    validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
-    async reservedRanges() {
-      if (process.platform === "linux") {
-        const value = await readFile2("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
-        return value.trim().split(",").filter(Boolean).map((part) => {
-          const start = Number(part.split("-")[0]);
-          const end = Number(part.split("-")[1] ?? start);
-          return [start, end];
-        });
-      }
-      if (process.platform === "darwin") return [];
-      const ranges = [];
-      for (const family of ["ipv4", "ipv6"]) {
-        const result = await run("netsh.exe", ["int", family, "show", "excludedportrange", "protocol=tcp"]);
-        if (result.code !== 0) throw new Error("Windows excluded ports could not be read.");
-        for (const match of result.stdout.matchAll(/^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$/gm))
-          ranges.push([Number(match[1]), Number(match[2])]);
-      }
-      return ranges;
-    },
-    requestNormalClose,
-    waitForExit,
-    async close(target) {
-      await requestNormalClose(target);
-      await waitForExit(target);
-      return true;
-    }
-  };
-}
-function probeProcessExists(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error2) {
-    if (errorCode(error2) === "ESRCH") return false;
-    throw error2;
-  }
-}
-
-// src/adapters/chrome-profile.ts
-var claims = /* @__PURE__ */ new Set();
-async function profileAvailable(directory) {
-  if (process.platform === "win32") {
-    try {
-      const handle = await open3(path5.join(directory, "lockfile"), "r+");
-      await handle.close();
-      return true;
-    } catch (error2) {
-      if (errorCode(error2) === "ENOENT") return true;
-      if (["EACCES", "EPERM", "EBUSY"].includes(errorCode(error2) ?? "")) return false;
-      throw error2;
-    }
-  }
-  let lock;
-  try {
-    lock = await readlink2(path5.join(directory, "SingletonLock"));
-  } catch (error2) {
-    if (errorCode(error2) === "ENOENT") return true;
-    throw error2;
-  }
-  const split = lock.lastIndexOf("-");
-  const host = lock.slice(0, split);
-  const pid = Number(lock.slice(split + 1));
-  if (host !== os.hostname() || !Number.isSafeInteger(pid) || pid < 1) return false;
-  return !probeProcessExists(pid);
-}
-async function canonicalDirectory(directory) {
-  try {
-    return await realpath2(directory);
-  } catch (error2) {
-    if (errorCode(error2) !== "ENOENT") throw error2;
-    const parent = path5.dirname(directory);
-    if (parent === directory) throw error2;
-    return path5.join(await canonicalDirectory(parent), path5.basename(directory));
-  }
-}
-async function reserveProfile(directory, available = profileAvailable) {
-  const occupied = () => new Error(
-    `Chrome profile is occupied or unverifiable; explicitly choose another --user-data-dir: ${directory}`
-  );
-  let canonical2;
-  try {
-    canonical2 = await canonicalDirectory(directory);
-  } catch {
-    throw occupied();
-  }
-  const identity = process.platform === "win32" ? canonical2.toLowerCase() : canonical2;
-  if (claims.has(identity)) throw occupied();
-  claims.add(identity);
-  let released = false;
-  const release = () => {
-    if (!released) {
-      released = true;
-      claims.delete(identity);
-    }
-  };
-  try {
-    if (!await available(canonical2)) throw occupied();
-  } catch {
-    release();
-    throw occupied();
-  }
-  return release;
-}
-function chromeProfileArgument(arguments_) {
-  let directory;
-  for (let index = 0; index < arguments_.length; index += 1) {
-    const argument = arguments_[index];
-    if (argument !== "--user-data-dir" && !argument?.startsWith("--user-data-dir=")) continue;
-    if (directory !== void 0) throw new Error("Duplicate Chrome --user-data-dir profile arguments.");
-    directory = argument === "--user-data-dir" ? arguments_[++index] : argument.slice("--user-data-dir=".length);
-    if (!directory || directory.startsWith("--"))
-      throw new Error("Chrome --user-data-dir requires a profile directory.");
-  }
-  return directory;
-}
-
 // src/adapters/target-host.ts
 function waitForWork(work, signal) {
   signal?.throwIfAborted();
@@ -40682,7 +40975,7 @@ async function probePort(port) {
   const ipv62 = await probeAddress(port, "::1");
   return ipv42 === true && ipv62 !== false;
 }
-async function spawnPortableApplication(executable, arguments_, _port, cwd = path6.dirname(executable), env, context = {}) {
+async function spawnPortableApplication(executable, arguments_, _port, cwd = path7.dirname(executable), env, context = {}) {
   context.signal?.throwIfAborted();
   const child = nodeSpawn(executable, arguments_, {
     cwd,
@@ -40719,15 +41012,39 @@ function applyChromePreset(arguments_) {
   }
   if (addresses.length > 1) throw new Error("Duplicate Chrome debugging addresses are prohibited.");
   if (addresses.length && addresses[0] !== "127.0.0.1") throw new Error("Chrome debugging must use loopback.");
-  if (chromeProfileArgument(result) === void 0) {
-    const home = process.platform === "win32" ? process.env.USERPROFILE : os2.homedir();
-    if (!home || !path6.isAbsolute(home)) throw new Error("The Chrome profile home directory is unavailable.");
-    result.push(`--user-data-dir=${path6.join(home, ".cache", "chrome-devtools-mcp", "chrome-profile")}`);
-  }
+  chromeProfileArgument(result);
   if (!addresses.length) result.push("--remote-debugging-address=127.0.0.1");
   for (const flag of ["--no-first-run", "--no-default-browser-check", "--disable-updater-scheduler"])
     if (!result.includes(flag)) result.push(flag);
   return result;
+}
+function directoryKey(directory) {
+  const normalized = path7.resolve(directory);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+function validateTargetLaunch(options) {
+  const isolation = parseDataIsolation(options.isolation);
+  const targetKind = options.targetKind ?? "generic-cdp";
+  const basePort = options.basePort ?? DEFAULT_BASE_PORT;
+  if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
+  if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error("Invalid base port.");
+  if (options.launchDefinition) return;
+  validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+  const sample = process.platform === "win32" ? "C:/dct-preflight-data" : "/dct-preflight-data";
+  const parsed = resolveLaunchDefinition(
+    options.launch,
+    basePort,
+    process.env,
+    isolation.mode === "data-dir" ? sample : void 0
+  );
+  if (!path7.isAbsolute(parsed.executablePath) || parsed.cwd !== void 0 && !path7.isAbsolute(parsed.cwd))
+    throw new Error("Application executable and working directory must be absolute.");
+  if (targetKind === "chrome") {
+    const args = applyChromePreset(parsed.arguments);
+    const profile = chromeProfileArgument(args);
+    if (isolation.mode === "data-dir" && (profile === void 0 || directoryKey(path7.resolve(parsed.cwd ?? path7.dirname(parsed.executablePath), profile)) !== directoryKey(sample)))
+      throw new Error("Isolated Chrome profile must match the leased data directory.");
+  }
 }
 function createTargetHost(dependencies = {}) {
   const launchWindows = createWindowsLauncher();
@@ -40797,14 +41114,20 @@ function createTargetHost(dependencies = {}) {
     }
   }
   return {
-    async launch({
-      launch,
-      targetKind = "generic-cdp",
-      basePort = DEFAULT_BASE_PORT,
-      exactPort,
-      launchDefinition
-    }, context = {}) {
+    validateLaunch: validateTargetLaunch,
+    async launch(options, context = {}) {
+      validateTargetLaunch(options);
+      const {
+        launch,
+        isolation,
+        targetKind = "generic-cdp",
+        basePort = DEFAULT_BASE_PORT,
+        exactPort,
+        launchDefinition
+      } = options;
       context.signal?.throwIfAborted();
+      if (isolation.mode === "data-dir" && context.dataDirectory === void 0)
+        throw new Error("A leased data directory binding is required.");
       if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
       if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error("Invalid base port.");
       const excluded = await waitForWork(() => platform.reservedRanges(), context.signal);
@@ -40847,20 +41170,32 @@ function createTargetHost(dependencies = {}) {
       let readinessSignal = context.signal;
       try {
         context.signal?.throwIfAborted();
-        const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env);
-        if (!path6.isAbsolute(parsed.executablePath))
+        const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory);
+        if (!path7.isAbsolute(parsed.executablePath))
           throw new Error("The application must use an absolute executable path.");
-        const executablePath = path6.resolve(parsed.executablePath);
+        const executablePath = path7.resolve(parsed.executablePath);
         const args = targetKind === "chrome" ? applyChromePreset(parsed.arguments) : parsed.arguments;
-        const cwd = parsed.cwd ?? path6.dirname(executablePath);
-        if (!path6.isAbsolute(cwd)) throw new Error("The application working directory must be absolute.");
+        const cwd = parsed.cwd ?? path7.dirname(executablePath);
+        if (!path7.isAbsolute(cwd)) throw new Error("The application working directory must be absolute.");
         const environment = /* @__PURE__ */ new Map();
         for (const [name, value] of [...Object.entries(process.env), ...Object.entries(parsed.env ?? {})])
           environment.set(process.platform === "win32" ? name.toLowerCase() : name, [name, value]);
         const env = Object.fromEntries(environment.values());
         const profile = targetKind === "chrome" ? chromeProfileArgument(args) : void 0;
+        if (targetKind === "chrome" && isolation.mode === "data-dir") {
+          if (profile === void 0 || context.dataDirectory === void 0)
+            throw new Error("Isolated Chrome profile must match the leased data directory.");
+          let actual;
+          try {
+            actual = await realpath4(path7.resolve(cwd, profile));
+          } catch {
+            throw new Error("Isolated Chrome profile identity is unavailable.");
+          }
+          if (directoryKey(actual) !== directoryKey(context.dataDirectory))
+            throw new Error("Isolated Chrome profile must match the leased data directory.");
+        }
         release = profile === void 0 ? void 0 : await reserveProfile(
-          path6.resolve(cwd, profile),
+          path7.resolve(cwd, profile),
           (directory) => waitForWork(() => io.profileAvailable(directory), context.signal)
         );
         context.signal?.throwIfAborted();
@@ -41082,7 +41417,7 @@ function createTargetHost(dependencies = {}) {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 import { readFile as readFile3 } from "node:fs/promises";
-import os3 from "node:os";
+import os2 from "node:os";
 var defaults = {
   categoryInput: true,
   categoryNavigation: true,
@@ -41139,9 +41474,9 @@ function createToolCatalog(value) {
     const first = entry.variants[0];
     if (!first) throw new Error("Missing official tool definition.");
     const schemas = distinct(entry.variants.map((tool) => tool.inputSchema));
-    const keys = new Set(schemas.flatMap((schema) => Object.keys(schema.properties ?? {})));
+    const keys2 = new Set(schemas.flatMap((schema) => Object.keys(schema.properties ?? {})));
     const properties = Object.fromEntries(
-      [...keys].map((key) => {
+      [...keys2].map((key) => {
         const definitions = distinct(
           schemas.flatMap(
             (schema) => schema.properties?.[key] === void 0 ? [] : [schema.properties[key]]
@@ -41198,7 +41533,7 @@ async function loadOfficialToolCatalog(_defaults) {
 function workspaceSources(mcpArgs, supportsRoots) {
   const args = parseMcpArgs(mcpArgs);
   return {
-    officialDirectories: args.get("filesystemRoot")?.values ?? [os3.tmpdir()],
+    officialDirectories: args.get("filesystemRoot")?.values ?? [os2.tmpdir()],
     officialSource: args.has("filesystemRoot") ? "explicit-workspace" : "system-temporary-directory",
     clientRoots: supportsRoots ? "negotiated-forwarding-on-demand" : "not-negotiated",
     unrestrictedPaths: args.get("allowUnrestrictedPaths")?.values[0] === true,
@@ -41206,10 +41541,101 @@ function workspaceSources(mcpArgs, supportsRoots) {
   };
 }
 
+// src/application/connection-directory.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function createConnectionDirectory(registry2, isolation, publish, canDelete) {
+  const owners = /* @__PURE__ */ new Set();
+  let lease;
+  let acquisitionPending = false;
+  let successors = 0;
+  let finalRelease = false;
+  let releasing;
+  let released = false;
+  let releaseFailed = false;
+  function evidence() {
+    return isolation.mode === "none" ? { mode: "none" } : lease ? { mode: "data-dir", ...lease.evidence, ...releaseFailed ? { state: "cleanup-failed" } : {} } : void 0;
+  }
+  function update() {
+    const current = evidence();
+    if (current) publish?.(current);
+  }
+  return {
+    evidence,
+    get path() {
+      return lease?.evidence.path;
+    },
+    get released() {
+      return released;
+    },
+    addOwner(owner) {
+      owners.add(owner);
+    },
+    holdSuccessor() {
+      successors++;
+      let holding = true;
+      return () => {
+        if (!holding) return;
+        holding = false;
+        successors--;
+      };
+    },
+    requestRelease() {
+      finalRelease = true;
+    },
+    async acquire() {
+      if (isolation.mode === "none") {
+        update();
+        return;
+      }
+      acquisitionPending = true;
+      const acquired = (value) => {
+        lease = value;
+        update();
+      };
+      try {
+        acquired(await registry2.acquire(isolation.directory, isolation.cleanup, acquired));
+      } catch (error2) {
+        if (error2 instanceof DataDirectoryError && error2.lease) acquired(error2.lease);
+        throw error2;
+      } finally {
+        acquisitionPending = false;
+        update();
+      }
+    },
+    retry() {
+      if (releasing) return releasing;
+      if (released || !finalRelease || acquisitionPending || successors > 0) return Promise.resolve();
+      for (const owner of owners)
+        if (owner.target && !owner.exited || owner.hasPendingResources()) return Promise.resolve();
+      const attempt = (async () => {
+        try {
+          if (lease?.evidence.cleanup === "delete-on-release" && canDelete && !await canDelete(lease.evidence.path))
+            throw new DataDirectoryError("directory-cleanup-failed", lease);
+          await lease?.release();
+          releaseFailed = false;
+          released = true;
+        } catch (error2) {
+          releaseFailed = true;
+          throw error2 instanceof DataDirectoryError ? error2 : new DataDirectoryError("directory-cleanup-failed", lease);
+        } finally {
+          update();
+        }
+      })();
+      releasing = attempt;
+      void attempt.finally(() => {
+        releasing = void 0;
+      }).catch(() => {
+      });
+      return attempt;
+    }
+  };
+}
+
 // src/application/connection-owner.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-function createConnectionOwner(sessionId) {
+function createConnectionOwner(sessionId, onSettled) {
   const work = new AbortController();
   const resources = /* @__PURE__ */ new Map();
   const closing = /* @__PURE__ */ new Map();
@@ -41254,11 +41680,15 @@ function createConnectionOwner(sessionId) {
       owner.exited = true;
       owner.retire(new Error("The target process exited."));
       resolveExit();
+      onSettled?.();
       return true;
     },
     track(job) {
       pending.add(job);
-      void job.finally(() => pending.delete(job)).catch(() => {
+      void job.finally(() => {
+        pending.delete(job);
+        onSettled?.();
+      }).catch(() => {
       });
       return job;
     },
@@ -41288,6 +41718,7 @@ function createConnectionOwner(sessionId) {
           if (resources.get(name) === resource) resources.delete(name);
         } finally {
           unsettled.delete(name);
+          onSettled?.();
         }
       })();
       closing.set(name, result);
@@ -41419,6 +41850,9 @@ function createOperationRegistry(entryId) {
             operation.snapshot.connectionId = route.connectionId;
             operation.snapshot.sessionId = route.sessionId;
             emit(operation);
+          },
+          isolation: (value) => {
+            operation.snapshot.isolation = structuredClone(value);
           }
         });
         operation.abort.signal.throwIfAborted();
@@ -41592,6 +42026,7 @@ function createLifecycleService({ entryId, handler }) {
           operationId: operation.operationId,
           signal: operation.signal,
           onPhase: operation.phase,
+          onIsolation: operation.isolation,
           onIdentity: (route) => {
             boundConnection = route.connectionId;
             changing.add(route.connectionId);
@@ -41862,15 +42297,17 @@ function createTargetController({
     taskActive = true;
     const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
     try {
-      const target = await host.launch(options, {
-        ...context,
-        signal,
-        onCreated: (target2) => acquire(selected, target2),
-        onRollback: (target2) => {
-          acquire(selected, target2);
-          if (!owner.exited) owner.expectedExit = "rollback";
-        }
-      });
+      const target = await owner.track(
+        host.launch(options, {
+          ...context,
+          signal,
+          onCreated: (target2) => acquire(selected, target2),
+          onRollback: (target2) => {
+            acquire(selected, target2);
+            if (!owner.exited) owner.expectedExit = "rollback";
+          }
+        })
+      );
       acquire(selected, target);
       signal.throwIfAborted();
       owner.assertOpen();
@@ -42068,6 +42505,8 @@ function createTargetController({
 
 // src/application/plugin-runtime.ts
 async function startPluginRuntime({
+  dataDirectories = new DataDirectoryRegistry(),
+  profileAvailable: profileAvailable2 = profileAvailable,
   createRouter = createCdpRouter,
   createHost,
   createConnection = createOfficialConnection,
@@ -42077,6 +42516,7 @@ async function startPluginRuntime({
   const entryId = randomUUID3();
   const connections = /* @__PURE__ */ new Map();
   const owners = /* @__PURE__ */ new Set();
+  const directories = /* @__PURE__ */ new Set();
   const portReservations = createPortReservations();
   const makeHost = createHost ?? (() => createTargetHost({ portReservations }));
   const notices = /* @__PURE__ */ new Map();
@@ -42088,9 +42528,23 @@ async function startPluginRuntime({
   let fullCatalog;
   let shuttingDown = false;
   let cleanupPromise;
-  function newOwner(sessionId) {
-    const owner = createConnectionOwner(sessionId);
+  async function retryDirectory(directory) {
+    try {
+      await directory.retry();
+    } finally {
+      if (directory.released) directories.delete(directory);
+    }
+  }
+  function newOwner(sessionId, directory) {
+    const owner = createConnectionOwner(
+      sessionId,
+      directory ? () => {
+        void retryDirectory(directory).catch(() => {
+        });
+      } : void 0
+    );
     owners.add(owner);
+    directory?.addOwner(owner);
     return owner;
   }
   function noticeKey(connectionId, sessionId) {
@@ -42151,6 +42605,7 @@ async function startPluginRuntime({
   function observeExit(connection, event) {
     const owner = connection.owner;
     if (owner.sessionId !== event.sessionId) return;
+    if (event.expected !== "restart") connection.directory.requestRelease();
     lifecycle.cancelRoute({ connectionId: connection.connectionId, sessionId: event.sessionId });
     const key = noticeKey(connection.connectionId, event.sessionId);
     failures.delete(key);
@@ -42178,12 +42633,14 @@ async function startPluginRuntime({
         notice.cleanupStatus = "succeeded";
       } catch (error2) {
         notice.cleanupStatus = "failed";
-        notice.cleanupError = errorMessage(error2).slice(0, 512);
+        notice.cleanupCode = "RESOURCE_CLEANUP_FAILED";
         throw error2;
       } finally {
         if (event.expected !== "restart" && connections.get(connection.connectionId) === connection && connection.owner === owner)
           connections.delete(connection.connectionId);
         if (!owner.hasPendingResources()) owners.delete(owner);
+        await retryDirectory(connection.directory).catch(() => {
+        });
       }
     })();
     trackRetirement(pending);
@@ -42256,7 +42713,24 @@ async function startPluginRuntime({
         (event) => event.operationId === operation.operationId && event.cleanupStatus === "pending"
       )
     );
-    const observedExits = [...notices.values()].filter((event) => event.cleanupStatus !== "pending");
+    const observedExits = [...notices.values()].filter((event) => event.cleanupStatus !== "pending").map((event) => ({
+      kind: event.kind,
+      entryId: event.entryId,
+      connectionId: event.connectionId,
+      sessionId: event.sessionId,
+      reason: event.reason,
+      taskActive: event.taskActive,
+      processId: event.processId,
+      port: event.port,
+      targetKind: event.targetKind,
+      exitedAt: event.exitedAt,
+      cleanupStatus: event.cleanupStatus,
+      ...event.expected === void 0 ? {} : { expected: event.expected },
+      ...event.operationId === void 0 ? {} : { operationId: event.operationId },
+      ...event.exitCode === void 0 ? {} : { exitCode: event.exitCode },
+      ...event.signalCode === void 0 ? {} : { signalCode: event.signalCode },
+      ...event.cleanupCode === void 0 ? {} : { cleanupCode: event.cleanupCode }
+    }));
     const operations = completed.map((operation) => {
       const exits2 = observedExits.filter(
         (event) => event.expected && event.operationId === operation.operationId
@@ -42275,10 +42749,31 @@ async function startPluginRuntime({
   async function start(options, context = {}) {
     if (shuttingDown) throw new Error("The gateway is closing.");
     context.signal?.throwIfAborted();
+    const isolation = parseDataIsolation(options.isolation);
+    validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+    const host = makeHost();
+    host.validateLaunch?.(options);
+    if (isolation.mode === "data-dir") {
+      const parsed = resolveLaunchDefinition(
+        options.launch,
+        options.basePort ?? DEFAULT_BASE_PORT,
+        process.env,
+        "{dataDir}"
+      );
+      if (!path8.isAbsolute(parsed.executablePath) || parsed.cwd !== void 0 && !path8.isAbsolute(parsed.cwd))
+        throw new Error("Application executable and working directory must be absolute.");
+    }
     const connectionId = randomUUID3();
     const sessionId = randomUUID3();
     const initialArgs = buildServerArguments("http://127.0.0.1:1", process.env, options.mcpArgs).slice(1);
-    const owner = newOwner(sessionId);
+    const directory = createConnectionDirectory(
+      dataDirectories,
+      isolation,
+      context.onIsolation,
+      options.targetKind === "chrome" ? profileAvailable2 : void 0
+    );
+    directories.add(directory);
+    const owner = newOwner(sessionId, directory);
     owner.expectedOperationId = context.operationId;
     let connection;
     const diagnostics = [];
@@ -42295,6 +42790,10 @@ async function startPluginRuntime({
       if (createConnection === createOfficialConnection) await resolveServerBin();
       context.signal?.throwIfAborted();
       if (shuttingDown) throw new Error("The gateway is closing.");
+      context.onPhase?.("acquiring-data-directory");
+      await directory.acquire();
+      context.signal?.throwIfAborted();
+      if (shuttingDown) throw new Error("The gateway is closing.");
       const diagnose = diagnoseFor(owner);
       context.onPhase?.("creating-router");
       const router = await createRouter({ diagnose });
@@ -42304,6 +42803,7 @@ async function startPluginRuntime({
       const managed = {
         connectionId,
         owner,
+        directory,
         router,
         diagnostics,
         diagnose,
@@ -42312,7 +42812,7 @@ async function startPluginRuntime({
         quarantined: false,
         controller: createTargetController({
           entryId,
-          host: makeHost(),
+          host,
           router: {
             setTarget: (target) => managed.router.setTarget(target),
             clearTarget: () => managed.router.clearTarget(),
@@ -42322,7 +42822,7 @@ async function startPluginRuntime({
           },
           createOwner: async (id) => {
             if (managed.owner.sessionId === id) return managed.owner;
-            const replacement = newOwner(id);
+            const replacement = newOwner(id, directory);
             managed.owner = replacement;
             delete managed.upstream;
             delete managed.quarantine;
@@ -42357,10 +42857,14 @@ async function startPluginRuntime({
       };
       connection = managed;
       connections.set(connectionId, managed);
-      await managed.controller.start(options, sessionId, context);
+      await managed.controller.start(options, sessionId, {
+        ...context,
+        ...directory.path === void 0 ? {} : { dataDirectory: directory.path }
+      });
       managed.owner.assertOpen();
       return summary(managed);
     } catch (error2) {
+      directory.requestRelease();
       const managed = connection;
       const failedOwner = managed?.owner ?? owner;
       if (!failedOwner.target || failedOwner.exited) {
@@ -42394,6 +42898,9 @@ async function startPluginRuntime({
         processExited: failedOwner.exited
       };
       throw failure2;
+    } finally {
+      await retryDirectory(directory).catch(() => {
+      });
     }
   }
   const handler = {
@@ -42410,14 +42917,17 @@ async function startPluginRuntime({
         const connection = routed(request);
         connection.owner.expectedOperationId = context.operationId;
         buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
+        const releaseSuccessor = connection.directory.holdSuccessor();
         try {
           const result = await connection.controller.restart(request, {
             ...context,
+            ...connection.directory.path === void 0 ? {} : { dataDirectory: connection.directory.path },
             onSession: (sessionId) => context.onIdentity?.({ connectionId: request.connectionId, sessionId })
           });
           if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
           return { ...summary(connection), ...result, connectionId: request.connectionId };
         } catch (error2) {
+          connection.directory.requestRelease();
           const owner = connection.owner;
           if (!owner.target || owner.exited) {
             owner.retire(error2);
@@ -42429,6 +42939,10 @@ async function startPluginRuntime({
           if (connection.owner.retired || connection.controller.status().status === "idle")
             connections.delete(request.connectionId);
           throw error2;
+        } finally {
+          releaseSuccessor();
+          await retryDirectory(connection.directory).catch(() => {
+          });
         }
       })();
       replacements.add(job);
@@ -42439,10 +42953,12 @@ async function startPluginRuntime({
     stop: async (request, context = {}) => {
       const connection = routed(request);
       connection.owner.expectedOperationId = context.operationId;
+      if (request.disposition === "Close") connection.directory.requestRelease();
       const result = await connection.controller.stop(request, context);
       if (request.disposition === "Close") {
         if (connections.get(request.connectionId) === connection) connections.delete(request.connectionId);
         if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
+        await retryDirectory(connection.directory);
       }
       return {
         ...result,
@@ -42475,6 +42991,7 @@ async function startPluginRuntime({
   async function cleanup() {
     if (cleanupPromise) return cleanupPromise;
     shuttingDown = true;
+    for (const directory of directories) directory.requestRelease();
     const closing = [];
     const cleaning = /* @__PURE__ */ new Map();
     for (const connection of connections.values()) {
@@ -42505,6 +43022,7 @@ async function startPluginRuntime({
         }).map((owner) => owner.retryResources())
       );
       connections.clear();
+      await Promise.allSettled([...directories].map(retryDirectory));
       for (const result of results)
         if (result.status === "rejected")
           process.stderr.write(`Gateway cleanup failed: ${errorMessage(result.reason)}
@@ -42566,7 +43084,8 @@ async function startPluginRuntime({
           } : {},
           ...request.include?.includes("configuration") ? {
             mcpArgs: [...connection.mcpArgs],
-            workspace: workspaceSources(connection.mcpArgs, entry?.supportsRoots() ?? false)
+            workspace: workspaceSources(connection.mcpArgs, entry?.supportsRoots() ?? false),
+            isolation: connection.directory.evidence()
           } : {},
           ...request.include?.includes("diagnostics") ? { diagnostics: [...connection.diagnostics] } : {}
         };

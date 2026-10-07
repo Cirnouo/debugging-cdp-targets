@@ -50,6 +50,7 @@ test('portable direct launch keeps its GUI visible and detached without a shell 
             }),
         });
         const target = await host.launch({
+            isolation: { mode: 'none' },
             launch: {
                 executable: process.execPath,
                 args: ['--remote-debugging-port={port}'],
@@ -123,14 +124,20 @@ test('permission waiting does not consume CDP startup time and pre-cancelled lau
             webSocketDebuggerUrl: 'ws://127.0.0.1:9222/devtools/browser/ready',
         }),
     });
-    const active = await host.launch({ launch: { executable: process.execPath } }, { signal: abort.signal });
+    const active = await host.launch(
+        { isolation: { mode: 'none' }, launch: { executable: process.execPath } },
+        { signal: abort.signal },
+    );
     assert.equal(active.processId, 101);
     assert.deepEqual(closed, []);
 
     const cancelled = new AbortController();
     cancelled.abort();
     await assert.rejects(
-        host.launch({ launch: { executable: process.execPath } }, { signal: cancelled.signal }),
+        host.launch(
+            { isolation: { mode: 'none' }, launch: { executable: process.execPath } },
+            { signal: cancelled.signal },
+        ),
         /abort/i,
     );
     assert.deepEqual(closed, []);
@@ -168,6 +175,12 @@ test('cancellation racing with endpoint readiness closes the newly created appli
             return { Browser: 'Chrome/154', webSocketDebuggerUrl: 'ws://127.0.0.1:9222/devtools/browser/ready' };
         },
     });
-    await assert.rejects(host.launch({ launch: { executable: process.execPath } }, { signal: abort.signal }), /abort/i);
+    await assert.rejects(
+        host.launch(
+            { isolation: { mode: 'none' }, launch: { executable: process.execPath } },
+            { signal: abort.signal },
+        ),
+        /abort/i,
+    );
     assert.deepEqual(closed, [102]);
 });

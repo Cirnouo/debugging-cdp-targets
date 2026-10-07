@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { type ConnectionRoute, lifecycleFailureEvidence } from '../domains/control-contract.ts';
+import type { DataIsolationEvidence } from '../domains/data-isolation.ts';
 import { errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 
 type State = 'accepted' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled';
@@ -15,6 +16,7 @@ export interface OperationSnapshot {
     connectionId?: string;
     sessionId?: string;
     result?: Record<string, unknown>;
+    isolation?: DataIsolationEvidence;
     error?: Record<string, unknown> & { message: string };
 }
 export interface OperationNotice {
@@ -41,6 +43,7 @@ export interface OperationContext {
     signal: AbortSignal;
     phase(value: string): void;
     identity(value: ConnectionRoute): void;
+    isolation(value: DataIsolationEvidence): void;
 }
 type Event = Pick<OperationSnapshot, 'cursor' | 'state' | 'phase' | 'elapsedMs' | 'connectionId' | 'sessionId'>;
 type Operation = {
@@ -150,6 +153,9 @@ export function createOperationRegistry(entryId: string) {
                         operation.snapshot.connectionId = route.connectionId;
                         operation.snapshot.sessionId = route.sessionId;
                         emit(operation);
+                    },
+                    isolation: (value) => {
+                        operation.snapshot.isolation = structuredClone(value);
                     },
                 });
                 operation.abort.signal.throwIfAborted();

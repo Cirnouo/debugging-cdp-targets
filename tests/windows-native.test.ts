@@ -188,6 +188,7 @@ test('native GUI discovery is verified against its real process, listener and en
             { windowsHide: true, shell: false },
         );
         target = await host.launch({
+            isolation: { mode: 'none' },
             launch: {
                 executable,
                 args: [path.join(directory, 'visible')],

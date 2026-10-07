@@ -1,7 +1,8 @@
 # MCP lifecycle protocol
 
 This is the current protocol for unreleased 0.1.0. [ADR 0013](adr/0013-session-owned-exit-cleanup.md)
-records the ownership and actual-exit decision; [domain language](domain-language.md)
+records session ownership and actual exit; [ADR 0015](adr/0015-explicit-data-directory-isolation.md)
+records connection directory leases. [Domain language](domain-language.md)
 defines its terms. Runtime state, requests, events and disposal retries are
 gateway-local memory. There is no target takeover, persistent session or plugin
 CLI/control channel.
@@ -16,7 +17,7 @@ automatic Hook requests are the only requests without entryId.
 | Tool | Required identity and behavior |
 | --- | --- |
 | `dct_connection_status` | Empty discovery, or entryId with optional connectionId, operationId or toolNames. |
-| `dct_connection_start` | entryId and requestId; structured launch creates a new connection/session. |
+| `dct_connection_start` | entryId, requestId, structured launch and required isolation; creates a new connection/session. |
 | `dct_connection_restart` | entryId, connectionId, sessionId and requestId; replace a still-live session on the original port. |
 | `dct_connection_stop` | entryId, connectionId, sessionId, requestId and explicit Close/Keep disposition. |
 | `dct_connection_end_task` | entryId, connectionId, sessionId and requestId; end dependent work while retaining live resources. |
@@ -38,7 +39,7 @@ session; stale or removed routes fail closed.
 | `{hookEventName}` | Automatic authorized Hook event delivery only. |
 
 include accepts unique `configuration` and `diagnostics` values and requires
-connectionId. Configuration contains mcpArgs and workspace sources. operationId
+connectionId. Configuration contains mcpArgs, workspace sources and isolation evidence. operationId
 cannot combine with connectionId, toolNames or include. hookEventName must be the
 sole argument and one of PreToolUse, PostToolUse, UserPromptSubmit or Stop.
 
@@ -55,6 +56,39 @@ explicit existing configuration. Unsupported tools return their reason without
 an activation recipe. The caller must authorize a start/restart to change
 configuration; the gateway never enables a tool or restarts silently.
 
+Every start requires the exact discriminated union below. Missing, unknown or
+mixed fields fail before acquisition; directory selection never falls back to
+another operation. Existing path and new parent must be native absolute paths.
+Existing requires a present directory. New requires an existing parent and creates
+one exclusive named leaf, or a random `dct-` child when name is omitted.
+
+```typescript
+type Isolation =
+    | { mode: 'none' }
+    | {
+        mode: 'data-dir';
+        directory:
+            | { kind: 'existing'; path: string }
+            | { kind: 'new'; parent: string; name?: string };
+        cleanup: 'retain' | 'delete-on-release';
+    };
+```
+
+Data-dir requires `{dataDir}` in structured launch args or env. The actual canonical
+path is inserted opaquely after ordinary expansion; inserted bytes never become
+new environment or port placeholders. Executable/cwd cannot carry this placeholder.
+None rejects it and performs no directory acquisition or cleanup. Chrome receives
+no implicit profile path; isolated Chrome requires the effective canonical
+`--user-data-dir={dataDir}` binding. Only the equals-form switch before `--` is
+accepted; duplicate, separate-value and native alias forms fail. Generic apps use
+the researched caller binding rather than a generated universal switch.
+
+The Agent performs the shared read-only occupancy gate before every launch in
+either mode, conservatively treating all targets as singletons. Known busy or
+incomplete evidence leaves the target unlaunched. The runtime preserves native
+known-root Chrome checks; omitted defaults and generic occupancy remain workflow
+prerequisites rather than a guessed runtime resolver.
+
 ## Operations and delivery
 
 Mutations return operationId immediately. requestId binds identical retries to
@@ -62,6 +96,16 @@ one operation through canonical input identity; conflicting reuse fails. Records
 retain requestId, action, route, phase, elapsed time and cursor independently of
 the connection registry. Removing an exited connection does not remove its
 operation history.
+
+After acquisition, the original start snapshot has isolation evidence:
+`{mode:'none'}` or `{mode:'data-dir', path, cleanup, state, nonempty?}`. Data-dir
+state is held, retained, deleted or cleanup-failed; nonempty records entry presence
+when inspection succeeded. Path is the actual absolute real directory, including
+when later startup fails or is cancelled. Explicit selected configuration exposes
+the same shape. Successful lifecycle results and default summaries omit it.
+Later release/retry updates this metadata even after operation completion, without
+changing state, result, error, event cursor or completion notice. Query explicit
+operation status for current cleanup evidence after its route has been removed.
 
 States are accepted, running, cancelling, succeeded, failed and cancelled.
 Events replay after the requested cursor from a bounded in-memory queue; callers
@@ -118,8 +162,28 @@ automatic restart, relaunch after a foreign-listener collision, or tool replay.
 
 Port reservation is gateway-local and synchronous before probing. It remains
 owned until actual exit or evidence that no app was created. Profile reservation
-likewise remains attached to application lifetime; profile data remains on disk.
+likewise remains attached to application lifetime.
 OS authorization waiting precedes the separate bounded CDP readiness phase.
+
+A separate connection directory lease covers every old/current session, pending
+native acquisition and replacement hold, independently of routable connections.
+Restart preserves the same real directory and cleanup policy. Expected old-session
+restart exit does not request final release. Actual successor exit and final failed
+or cancelled restart request release; successor/pending work must first settle.
+Keep/end-task holds it until actual exit. Failed Close, observation or rollback
+with an unconfirmed live app retains the lease. A settled native launch cannot
+later publish a newly created app; cancellation during helper authorization keeps
+reading evidence until actual app identity or physical helper completion.
+
+Final release requires no pending acquisition/successor, confirmed app exit or no
+created app for every associated owner, and successful dependent resource disposal.
+Retain then releases the claim while preserving contents. Delete-on-release removes
+the entire actual root, including pre-existing data, after rechecking root identity.
+Chrome deletion also rechecks native profile availability; external busy or
+unverifiable use holds the claim even after a failed launch with no owned target.
+Cleanup failures remain in memory after route removal and retry after relevant
+resource transitions or gateway cleanup. Retry never restores a route or relaunches.
+A hard crash or disconnect without verified exit cannot promise eventual deletion.
 
 Official Server disposal closes its public SDK transport immediately so pending
 requests reject, then proves actual exit of the plugin-owned child. Its shutdown
@@ -131,6 +195,8 @@ Gateway disconnect first gates/cancels all owners, then attempts every official
 Server, catalog and router disposal in parallel with normal target shutdown.
 Peer cleanup continues after individual failures. Target shutdown gains no
 additional deadline from gateway disconnect.
+Directory retry follows settlement of starts, replacements, retirements and late
+resources; gateway disposal cannot interpret cancellation alone as final release.
 
 ## Automatic Hooks
 
@@ -143,7 +209,7 @@ Expected Close/restart exit is grouped by operationId into its operation notice.
 The notice's optional exits array contains all related actual exits, including
 the old Target exit and any newly created Target rollback during one restart;
 each exit retains its own identity, native exit facts and cleanupStatus or bounded
-cleanupError. The operation's final route can differ from these exited routes.
+cleanupCode (`RESOURCE_CLEANUP_FAILED`). The operation's final route can differ from these exited routes.
 Delivery waits until cleanup for every related exit is ready. While any related
 cleanup is pending, neither its exit fact nor that operation notice is consumed.
 
@@ -154,6 +220,8 @@ time, optionally its connection/session identity, error code and compact exits.
 Optional native failure fields are category, nativeError, exceptionType,
 closeRequested, processExited, listenerState and closeConfirmed, each projected
 as a primitive value. Full message/cause error text is excluded from notices.
+Exit facts use an explicit field allowlist; raw disposal errors and directory
+path, policy, state and entry-presence metadata are excluded.
 It never embeds a complete result, error, configuration, diagnostics, tool schema,
 tool names/counts or recipe. Connection errors while an application lives do not
 announce process exit.

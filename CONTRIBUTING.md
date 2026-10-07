@@ -65,8 +65,7 @@ See [source ownership](src/README.md), [tests](tests/README.md), and
 [tooling](tooling/README.md) for navigation.
 
 The accepted [data directory isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
-is an implementation requirement for the current feature work, with runtime and
-installed guidance still pending. Review its intent-first research, existing/new
+governs the runtime boundary. Review its intent-first research, existing/new
 directory operations, connection leases across restart, deletion authorization,
 late-acquisition safety and explicit path evidence before changing those boundaries.
 Use the [domain glossary](docs/domain-language.md) for terminology and the

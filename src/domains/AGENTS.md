@@ -12,4 +12,4 @@ Require absolute selections, preserve operation choice and explicit cleanup poli
 and accept directory evidence as input. Bind {dataDir} only in args/env as opaque
 path bytes after ordinary expansion; never re-expand inserted path text. None
 rejects the placeholder. Do not encode a location denylist or infer application
-isolation support from a framework name. Implementation is pending.
+isolation support from a framework name.

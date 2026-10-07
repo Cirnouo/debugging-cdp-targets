@@ -172,13 +172,13 @@ test('Close ends upstream and later start reuses the entry without host reconnec
     const f = await fixture();
     try {
         assert.deepEqual(f.counts(), { connections: 1, closes: 1, calls: 0 });
-        const first = await f.controller.start({ launch: { executable: 'fixture' } });
+        const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(first.sessionId);
         await f.controller.stop({ connectionId: first.connectionId, sessionId: first.sessionId, disposition: 'Keep' });
         assert.equal(f.counts().closes, 1);
         await f.controller.stop({ connectionId: first.connectionId, sessionId: first.sessionId, disposition: 'Close' });
         assert.equal(f.counts().closes, 2);
-        const second = await f.controller.start({ launch: { executable: 'fixture2' } });
+        const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture2' } });
         assert.notEqual(first.sessionId, second.sessionId);
         assert.equal(f.counts().connections, 3);
     } finally {
@@ -190,9 +190,10 @@ test('Close ends upstream and later start reuses the entry without host reconnec
 
 test('gateway disconnect begins cleanup of other connections while one permission operation still waits', async () => {
     const f = await fixture();
-    await f.controller.start({ launch: { executable: 'ready' } });
+    await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'ready' } });
     assert.ok(f.callbacks.control);
     await f.callbacks.control({
+        isolation: { mode: 'none' },
         action: 'start',
         entryId: f.runtime.entryId,
         requestId: 'waiting',
@@ -214,6 +215,7 @@ test('native cancellation that completed cleanup remains cancelled through the r
     try {
         assert.ok(f.callbacks.control);
         const accepted = await f.callbacks.control({
+            isolation: { mode: 'none' },
             action: 'start',
             entryId: f.runtime.entryId,
             requestId: 'native-cancel',
@@ -239,8 +241,8 @@ test('native cancellation that completed cleanup remains cancelled through the r
 test('an unfinished official timeout isolates only its connection and retains application identity for explicit recovery', async () => {
     const f = await fixture({ timeoutCall: true });
     try {
-        const first = await f.controller.start({ launch: { executable: 'fixture' } });
-        const second = await f.controller.start({ launch: { executable: 'other' } });
+        const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
+        const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
         const signal = new AbortController().signal;
         const result = await f.callbacks.invoke(
             'list_pages',
@@ -275,14 +277,14 @@ test('an unfinished official timeout isolates only its connection and retains ap
 test('an official cleanup failure after actual target exit removes routing and retries through gateway cleanup', async () => {
     const f = await fixture({ failOfficialClose: true });
     try {
-        const active = await f.controller.start({ launch: { executable: 'fixture' } });
+        const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(active.sessionId);
         await assert.rejects(
             f.controller.stop({ connectionId: active.connectionId, sessionId: active.sessionId, disposition: 'Close' }),
             /timed out/,
         );
         assert.throws(() => f.controller.status(active.connectionId), /closed/);
-        const other = await f.controller.start({ launch: { executable: 'next' } });
+        const other = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'next' } });
         assert.notEqual(other.connectionId, active.connectionId);
         await assert.rejects(
             f.controller.stop({ connectionId: active.connectionId, sessionId: active.sessionId, disposition: 'Keep' }),
@@ -308,7 +310,7 @@ test('an official cleanup failure after actual target exit removes routing and r
 test('unexpected upstream exit gates calls without announcing process exit', async () => {
     const f = await fixture();
     try {
-        const active = await f.controller.start({ launch: { executable: 'fixture' } });
+        const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         f.exits[0]?.();
         assert.equal(connectionStatus(f.controller, active.connectionId).reason, 'official-disconnected');
         await f.callbacks.invoke(
@@ -369,7 +371,9 @@ test('one gateway allocates at least four independent connections', async () => 
     const f = await fixture();
     try {
         const started = await Promise.all(
-            Array.from({ length: 4 }, (_, index) => f.controller.start({ launch: { executable: `fixture${index}` } })),
+            Array.from({ length: 4 }, (_, index) =>
+                f.controller.start({ isolation: { mode: 'none' }, launch: { executable: `fixture${index}` } }),
+            ),
         );
         const status = f.controller.status();
         assert.ok('connections' in status);
@@ -384,7 +388,9 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
     const f = await fixture();
     try {
         const started = await Promise.all(
-            Array.from({ length: 4 }, (_, index) => f.controller.start({ launch: { executable: `fixture${index}` } })),
+            Array.from({ length: 4 }, (_, index) =>
+                f.controller.start({ isolation: { mode: 'none' }, launch: { executable: `fixture${index}` } }),
+            ),
         );
         const argumentsList = started.map((connection, index) => ({
             value: index,
@@ -417,7 +423,7 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
             f.callbacks.invoke('list_pages', firstArguments, new AbortController().signal, () => {}),
             /closed/,
         );
-        const next = await f.controller.start({ launch: { executable: 'next' } });
+        const next = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'next' } });
         assert.notEqual(next.connectionId, first.connectionId);
         await f.callbacks.invoke('list_pages', secondArguments, new AbortController().signal, () => {});
     } finally {
@@ -428,7 +434,7 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
 test('malformed and stale routes fail before official tool invocation', async () => {
     const f = await fixture();
     try {
-        const first = await f.controller.start({ launch: { executable: 'fixture' } });
+        const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         for (const routing of [
             undefined,
             {},
@@ -451,8 +457,11 @@ test('malformed and stale routes fail before official tool invocation', async ()
 test('failed startup rolls back one provisional connection while retained startup carries retry IDs', async () => {
     const f = await fixture({ failLaunch: 'bad' });
     try {
-        const active = await f.controller.start({ launch: { executable: 'good' } });
-        await assert.rejects(f.controller.start({ launch: { executable: 'bad' } }), /Launch failed/);
+        const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'good' } });
+        await assert.rejects(
+            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'bad' } }),
+            /Launch failed/,
+        );
         const aggregate = f.controller.status();
         assert.ok('connections' in aggregate);
         assert.equal(aggregate.connections.length, 1);
@@ -464,17 +473,20 @@ test('failed startup rolls back one provisional connection while retained startu
     }
     const retained = await fixture({ failLaunch: 'bad', retainLaunch: true, failTargetClose: true });
     try {
-        await retained.controller.start({ launch: { executable: 'good' } });
-        await assert.rejects(retained.controller.start({ launch: { executable: 'bad' } }), (error: unknown) => {
-            assert.ok(error instanceof Error && 'details' in error);
-            const details = error.details;
-            assert.ok(isRecord(details));
-            assert.equal(typeof details.connectionId, 'string');
-            assert.equal(typeof details.sessionId, 'string');
-            assert.equal(details.processId, 44);
-            assert.equal(details.port, 9222);
-            return true;
-        });
+        await retained.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'good' } });
+        await assert.rejects(
+            retained.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'bad' } }),
+            (error: unknown) => {
+                assert.ok(error instanceof Error && 'details' in error);
+                const details = error.details;
+                assert.ok(isRecord(details));
+                assert.equal(typeof details.connectionId, 'string');
+                assert.equal(typeof details.sessionId, 'string');
+                assert.equal(details.processId, 44);
+                assert.equal(details.port, 9222);
+                return true;
+            },
+        );
         const aggregate = retained.controller.status();
         assert.ok('connections' in aggregate);
         assert.equal(aggregate.connections.length, 2);
@@ -497,8 +509,8 @@ test('failed startup rolls back one provisional connection while retained startu
 test('live restart preserves the selected connection and original profile across independent target runs', async () => {
     const f = await fixture();
     try {
-        const first = await f.controller.start({ launch: { executable: 'fixture' } });
-        const second = await f.controller.start({ launch: { executable: 'other' } });
+        const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
+        const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
         assert.ok(first.sessionId);
         const restarted = await f.controller.restart({ connectionId: first.connectionId, sessionId: first.sessionId });
         assert.equal(restarted.connectionId, first.connectionId);
@@ -531,7 +543,11 @@ test('live restart preserves the selected connection and original profile across
 
 test('disconnect cleanup continues across a failed official Close', async () => {
     const f = await fixture({ failOfficialClose: true });
-    await Promise.all(Array.from({ length: 4 }, () => f.controller.start({ launch: { executable: 'fixture' } })));
+    await Promise.all(
+        Array.from({ length: 4 }, () =>
+            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
+        ),
+    );
     await f.runtime.close();
     assert.equal(f.counts().closes, 6, 'Gateway cleanup retries its failed official resource once.');
     assert.equal(f.routerCloses(), 5);
@@ -540,7 +556,10 @@ test('disconnect cleanup continues across a failed official Close', async () => 
 test('target launch failure never acquires an official child or retains a public connection', async () => {
     const f = await fixture({ failLaunch: 'bad', failOfficialClose: true });
     try {
-        await assert.rejects(f.controller.start({ launch: { executable: 'bad' } }), /Launch failed/);
+        await assert.rejects(
+            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'bad' } }),
+            /Launch failed/,
+        );
         const aggregate = f.controller.status();
         assert.ok('connections' in aggregate);
         assert.equal(aggregate.connections.length, 0);
@@ -555,7 +574,10 @@ test('target launch failure never acquires an official child or retains a public
 test('a catalog mismatch retires its actual target and keeps failed upstream disposal in the gateway ledger', async () => {
     const f = await fixture({ mismatchCatalog: true, failOfficialClose: true, failCloseUntil: 2 });
     try {
-        await assert.rejects(f.controller.start({ launch: { executable: 'fixture' } }), /timed out/);
+        await assert.rejects(
+            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
+            /timed out/,
+        );
         assert.equal(f.launches.length, 1);
         assert.equal(f.targets[0]?.listenerCount('exit'), 0);
         const aggregate = f.controller.status();

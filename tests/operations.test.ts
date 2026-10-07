@@ -6,6 +6,41 @@ import { DetailedError } from '../src/shared/errors.ts';
 const entryId = '11111111-1111-4111-8111-111111111111';
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+test('isolation evidence clones input and updates after terminal completion without new events or notices', async () => {
+    const registry = createOperationRegistry(entryId);
+    let update: (value: { mode: 'data-dir'; path: string; cleanup: 'retain'; state: 'held' | 'retained' }) => void =
+        () => {};
+    const initial = {
+        mode: 'data-dir' as const,
+        path: '/private/path',
+        cleanup: 'retain' as const,
+        state: 'held' as const,
+    };
+    const accepted = registry.submit('isolation-metadata', { action: 'start' }, async (context) => {
+        assert.ok('isolation' in context && typeof context.isolation === 'function');
+        update = context.isolation;
+        update(initial);
+        initial.path = '/mutated/input';
+        return { status: 'active' };
+    });
+    await tick();
+    const complete = registry.get(accepted.operationId);
+    assert.equal(complete.state, 'succeeded');
+    assert.ok('isolation' in complete && typeof complete.isolation === 'object' && complete.isolation !== null);
+    assert.equal('path' in complete.isolation && complete.isolation.path, '/private/path');
+    assert.equal(registry.takeNotices().length, 1);
+    update({ mode: 'data-dir', path: '/private/path', cleanup: 'retain', state: 'retained' });
+    const later = registry.get(accepted.operationId);
+    assert.equal(later.cursor, complete.cursor);
+    assert.equal(later.state, complete.state);
+    assert.deepEqual(later.result, complete.result);
+    assert.deepEqual(later.error, complete.error);
+    assert.deepEqual(registry.takeNotices(), []);
+    assert.deepEqual((await registry.wait(accepted.operationId, complete.cursor)).events, []);
+    assert.ok('isolation' in later && typeof later.isolation === 'object' && later.isolation !== null);
+    assert.equal('state' in later.isolation && later.isolation.state, 'retained');
+});
+
 test('acceptance is immediate, duplicate requests share a result and conflicting reuse fails', async () => {
     const registry = createOperationRegistry(entryId);
     let finish: () => void = () => {};
@@ -19,9 +54,17 @@ test('acceptance is immediate, duplicate requests share a result and conflicting
         });
         return { value: 'ready' };
     };
-    const first = registry.submit('request', { action: 'start', launch: { env: { SECRET: 'private' } } }, job);
+    const first = registry.submit(
+        'request',
+        { isolation: { mode: 'none' }, action: 'start', launch: { env: { SECRET: 'private' } } },
+        job,
+    );
     assert.equal(first.state, 'accepted');
-    const duplicate = registry.submit('request', { launch: { env: { SECRET: 'private' } }, action: 'start' }, job);
+    const duplicate = registry.submit(
+        'request',
+        { isolation: { mode: 'none' }, launch: { env: { SECRET: 'private' } }, action: 'start' },
+        job,
+    );
     assert.equal(duplicate.operationId, first.operationId);
     assert.throws(() => registry.submit('request', { action: 'stop' }, job), /different/);
     await tick();

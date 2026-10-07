@@ -37,11 +37,20 @@ test('the real MCP transport declares structured lifecycle tools and validates b
             uniqueItems: true,
         });
         const request = {
+            isolation: { mode: 'none' },
             entryId: '11111111-1111-4111-8111-111111111111',
             requestId: 'start-1',
             launch: { executable: 'C:/App/app.exe', args: ['literal & value'], env: { DEBUG_PORT: '{port}' } },
             mcpArgs: ['--workspace=C:/Output'],
         };
+        const startTool = tools.find((tool) => tool.name === 'dct_connection_start');
+        assert.ok(startTool?.inputSchema.required?.includes('isolation'));
+        await assert.rejects(
+            client.callTool({
+                name: 'dct_connection_start',
+                arguments: { entryId: request.entryId, requestId: 'missing-isolation', launch: request.launch },
+            }),
+        );
         await client.callTool({ name: 'dct_connection_start', arguments: request });
         assert.deepEqual(received, [{ action: 'start', ...request }]);
         await assert.rejects(

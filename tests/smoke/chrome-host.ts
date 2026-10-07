@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, constants, stat } from 'node:fs/promises';
+import { access, constants, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -8,7 +8,7 @@ import {
     validateProcessIdentity,
 } from '../../src/adapters/platform-process.ts';
 import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
-import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
+import type { ConnectionStatus, LaunchOptions } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 
 function absolutePath(value: string, platform: NodeJS.Platform) {
@@ -41,19 +41,94 @@ export function createChromeSmokeLaunch(
     profile: string,
     page: string,
     platform: NodeJS.Platform = process.platform,
-) {
+): LaunchOptions {
     if (!absolutePath(profile, platform)) throw new Error('The smoke profile must be an absolute path.');
+    const paths = platform === 'win32' ? path.win32 : path.posix;
     return {
-        executable,
-        args: [
-            '--no-first-run',
-            '--disable-background-networking',
-            '--disable-background-mode',
-            `--user-data-dir=${profile}`,
-            '--remote-debugging-port={port}',
-            page,
-        ],
+        isolation: {
+            mode: 'data-dir',
+            directory: { kind: 'new', parent: paths.dirname(profile), name: paths.basename(profile) },
+            cleanup: 'delete-on-release',
+        },
+        targetKind: 'chrome',
+        launch: {
+            executable,
+            args: [
+                '--no-first-run',
+                '--disable-background-networking',
+                '--disable-background-mode',
+                '--user-data-dir={dataDir}',
+                '--remote-debugging-port={port}',
+                page,
+            ],
+        },
     };
+}
+
+/** Verify the browser adopted the lease through unchanged official tools. */
+export async function inspectChromeSmokeDirectory(
+    tool: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>,
+    target: ConnectionStatus,
+): Promise<string> {
+    assert.ok(target.sessionId);
+    const configuration = await tool('dct_connection_status', {
+        entryId: target.entryId,
+        connectionId: target.connectionId,
+        include: ['configuration'],
+    });
+    assert.ok(isRecord(configuration.structuredContent));
+    const isolation = configuration.structuredContent.isolation;
+    assert.ok(isRecord(isolation) && isolation.mode === 'data-dir' && typeof isolation.path === 'string');
+    assert.equal(isolation.state, 'held');
+    assert.equal(isolation.cleanup, 'delete-on-release');
+    const directory = await realpath(isolation.path);
+    assert.equal(directory, isolation.path);
+    const route = { _dct: { connectionId: target.connectionId, sessionId: target.sessionId } };
+    const call = async (name: string, args: Record<string, unknown> = {}) => {
+        const result = await tool(name, { ...route, ...args });
+        assert.notEqual(result.isError, true, JSON.stringify(result));
+        assert.ok(Array.isArray(result.content));
+        return result.content
+            .filter((block: unknown) => isRecord(block) && block.type === 'text' && typeof block.text === 'string')
+            .map((block: { text: string }) => block.text)
+            .join('\n');
+    };
+    const selected = (await call('list_pages')).match(/^(\d+):.*\[selected\]/m)?.[1];
+    assert.ok(selected, 'The application page must remain selected after the profile probe.');
+    const probe = (await call('new_page', { url: 'chrome://version/' })).match(/^(\d+):\s*chrome:\/\/version\/?/m)?.[1];
+    assert.ok(probe, 'The official new_page result must identify the version probe.');
+    const pageId = Number(probe);
+    try {
+        await call('select_page', { pageId });
+        const result = await call('evaluate_script', {
+            pageId,
+            function: "() => ({profilePath: document.getElementById('profile_path')?.textContent?.trim()})",
+        });
+        const json = result.match(/```json\s*([\s\S]*?)```/)?.[1];
+        assert.ok(json, 'The official script result must contain browser profile evidence.');
+        const evidence: unknown = JSON.parse(json);
+        assert.ok(isRecord(evidence) && typeof evidence.profilePath === 'string');
+        const profilePath = await realpath(evidence.profilePath);
+        const relative = path.relative(directory, profilePath);
+        assert.ok(
+            relative && !path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`),
+            'The browser profile must lie inside the leased directory.',
+        );
+        // These fresh launches supply no --profile-directory override or nested data root.
+        assert.equal(
+            await realpath(path.dirname(profilePath)),
+            directory,
+            'The fresh Chrome profile must have the leased directory as its direct parent.',
+        );
+        console.log(JSON.stringify({ chromeDataDirectory: { directory, profilePath } }));
+    } finally {
+        try {
+            await call('close_page', { pageId });
+        } finally {
+            await call('select_page', { pageId: Number(selected) });
+        }
+    }
+    return directory;
 }
 
 export function chromeSmokeVersion(endpoint: unknown): string {

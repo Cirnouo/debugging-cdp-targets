@@ -48,7 +48,7 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
         ),
         make(
             'dct_connection_start',
-            'Launch a new application natively and create an independent official MCP connection. Returns an operation immediately; use dct_operation_wait for completion. Reuse requestId only when retrying the same request. The plugin detects Windows elevation requirements. Port placeholders are supported in args and env. cwd is not file-access authorization; use the official --workspace argument in mcpArgs.',
+            'Launch a new application natively and create an independent official MCP connection. Required isolation selects none or an existing/new managed data directory and explicit cleanup. Data-dir requires researched {dataDir} binding in args/env; none forbids it. Returns an operation immediately; use dct_operation_wait for completion and explicit operation metadata for directory evidence. Reuse requestId only when retrying the same request. The plugin detects Windows elevation requirements. Port placeholders are supported in args and env. cwd is not file-access authorization; use the official --workspace argument in mcpArgs.',
             {
                 entryId: uuid,
                 requestId: identity.requestId,
@@ -64,10 +64,49 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
                     additionalProperties: false,
                 },
                 mcpArgs: stringList,
+                isolation: {
+                    oneOf: [
+                        {
+                            type: 'object',
+                            properties: { mode: { const: 'none' } },
+                            required: ['mode'],
+                            additionalProperties: false,
+                        },
+                        {
+                            type: 'object',
+                            properties: {
+                                mode: { const: 'data-dir' },
+                                cleanup: { type: 'string', enum: ['retain', 'delete-on-release'] },
+                                directory: {
+                                    oneOf: [
+                                        {
+                                            type: 'object',
+                                            properties: { kind: { const: 'existing' }, path: { type: 'string' } },
+                                            required: ['kind', 'path'],
+                                            additionalProperties: false,
+                                        },
+                                        {
+                                            type: 'object',
+                                            properties: {
+                                                kind: { const: 'new' },
+                                                parent: { type: 'string' },
+                                                name: { type: 'string' },
+                                            },
+                                            required: ['kind', 'parent'],
+                                            additionalProperties: false,
+                                        },
+                                    ],
+                                },
+                            },
+                            required: ['mode', 'directory', 'cleanup'],
+                            additionalProperties: false,
+                        },
+                    ],
+                },
                 targetKind: { type: 'string', enum: ['chrome', 'generic-cdp'] },
                 basePort: { type: 'integer', minimum: 1, maximum: 65535 },
             },
-            ['entryId', 'requestId', 'launch'],
+            ['entryId', 'requestId', 'launch', 'isolation'],
         ),
         make(
             'dct_connection_restart',
