@@ -8,7 +8,7 @@ import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domain
 import { isRecord } from '../../src/shared/errors.ts';
 
 export interface ApplicationScreenshotFixture {
-    application: 'obsidian' | 'readest';
+    application: 'obsidian' | 'readest' | 'tauri-fixture';
     source: { executable: string; sha256: string };
     baseline: ApplicationLaunch;
     candidate: ApplicationLaunch;
@@ -33,7 +33,24 @@ export interface PreparedApplicationScreenshotFixture {
 const browserArguments = 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS';
 const profileEnvironment = 'WEBVIEW2_USER_DATA_FOLDER';
 const portArgument = '--remote-debugging-port={port}';
-const controlledExecutable = '{fixture}/native/readest.exe';
+const applicationContracts: Record<
+    ApplicationScreenshotFixture['application'],
+    {
+        browserCarrier: 'argv' | 'webview2-environment';
+        copiedExecutable?: string;
+        requiredCwd?: string;
+        requiredProfile?: string;
+    }
+> = {
+    obsidian: { browserCarrier: 'argv' },
+    readest: { browserCarrier: 'webview2-environment', copiedExecutable: 'native/readest.exe' },
+    'tauri-fixture': {
+        browserCarrier: 'webview2-environment',
+        copiedExecutable: 'native/dct-tauri-screenshot-fixture.exe',
+        requiredCwd: '{fixture}/native',
+        requiredProfile: '{fixture}/webview2-profile',
+    },
+};
 const environmentToken = /%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/;
 
 function text(value: unknown): asserts value is string {
@@ -114,7 +131,32 @@ function browserSwitches(value: string) {
     return value.split(' ');
 }
 
-function validateBrowserOptions(args: readonly string[], application: 'obsidian' | 'readest') {
+function browserArgumentsForLaunch(
+    application: ApplicationScreenshotFixture['application'],
+    launch: ApplicationLaunch,
+) {
+    assert.ok(Object.hasOwn(applicationContracts, application), 'Unknown application fixture.');
+    const contract = applicationContracts[application];
+    if (contract.browserCarrier === 'argv') return launch.args ?? [];
+    const env = launch.env ?? {};
+    environmentKeys(env);
+    const options = env[browserArguments];
+    text(options);
+    return browserSwitches(options);
+}
+
+export function applicationScreenshotBrowserConfiguration(
+    application: ApplicationScreenshotFixture['application'],
+    launch: ApplicationLaunch,
+): { browserArguments: string[]; screenshotFeatureEnabled: boolean } {
+    const arguments_ = browserArgumentsForLaunch(application, launch);
+    return {
+        browserArguments: effective(arguments_),
+        screenshotFeatureEnabled: isDeepStrictEqual(withChromeScreenshotFeature(arguments_), arguments_),
+    };
+}
+
+function validateBrowserOptions(args: readonly string[], application: ApplicationScreenshotFixture['application']) {
     withChromeScreenshotFeature(args);
     const options = effective(args);
     let ports = 0;
@@ -139,7 +181,7 @@ function validateBrowserOptions(args: readonly string[], application: 'obsidian'
             ports += 1;
         }
         if (/^[-/]+\s*user-data-dir(?:[=:\s]|$)/i.test(trimmed)) {
-            assert.equal(application, 'obsidian', 'Readest profile must use its canonical environment carrier.');
+            assert.equal(application, 'obsidian', 'WebView2 profile must use its canonical environment carrier.');
             assert.ok(arg.startsWith('--user-data-dir='), 'Ambiguous profile switch.');
             fixturePath(arg.slice('--user-data-dir='.length));
             profiles += 1;
@@ -150,12 +192,23 @@ function validateBrowserOptions(args: readonly string[], application: 'obsidian'
     assert.equal(profiles, application === 'obsidian' ? 1 : 0, 'One confined fresh application profile is required.');
 }
 
-function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 'readest', source: string) {
+function validateLaunch(
+    launch: ApplicationLaunch,
+    application: ApplicationScreenshotFixture['application'],
+    source: string,
+) {
     const env = launch.env ?? {};
     environmentKeys(env);
-    if (application === 'readest') {
-        assert.ok(launch.executable === controlledExecutable, 'Readest requires its controlled fresh executable copy.');
+    const contract = applicationContracts[application];
+    if (contract.copiedExecutable) {
+        assert.ok(
+            launch.executable === `{fixture}/${contract.copiedExecutable}`,
+            'Application requires its controlled fresh executable copy.',
+        );
     } else assert.ok(launch.executable === source, 'Executable must be the explicitly hashed source.');
+    if (contract.requiredCwd) {
+        assert.ok(launch.cwd === contract.requiredCwd, 'Application requires its controlled native working directory.');
+    }
     for (const setting of [launch.executable, ...(launch.args ?? []), launch.cwd ?? '', ...Object.values(env)]) {
         safeLiteral(setting);
         if (setting.includes('{fixture}')) {
@@ -165,7 +218,8 @@ function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 're
         }
         if (setting.includes('{port}')) {
             assert.ok(
-                setting === portArgument || (application === 'readest' && setting === env[browserArguments]),
+                setting === portArgument ||
+                    (contract.browserCarrier === 'webview2-environment' && setting === env[browserArguments]),
                 'Port placeholder requires its explicit carrier.',
             );
         }
@@ -174,7 +228,7 @@ function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 're
         const canonical = key.toUpperCase();
         if (canonical.startsWith('WEBVIEW2_')) {
             assert.ok(
-                application === 'readest' &&
+                contract.browserCarrier === 'webview2-environment' &&
                     key === canonical &&
                     [browserArguments, profileEnvironment].includes(canonical),
                 'Conflicting WebView2 environment carrier.',
@@ -187,20 +241,26 @@ function validateLaunch(launch: ApplicationLaunch, application: 'obsidian' | 're
             );
         }
     }
-    if (application === 'obsidian') validateBrowserOptions(launch.args ?? [], application);
+    if (contract.browserCarrier === 'argv') validateBrowserOptions(launch.args ?? [], application);
     else {
         const profile = env[profileEnvironment];
         const options = env[browserArguments];
         text(profile);
         text(options);
         fixturePath(profile);
+        if (contract.requiredProfile) {
+            assert.ok(
+                profile === contract.requiredProfile,
+                'Application requires its exact confined fresh WebView2 profile.',
+            );
+        }
         validateBrowserOptions(browserSwitches(options), application);
         for (const arg of effective(launch.args ?? [])) {
             assert.ok(
                 !/^[-/]+[\s\u0085]*(?:remote-debugging-(?:port|pipe|address)|user-data-dir|(?:enable|disable)-features|single-argument)(?:[=:\s\u0085]|$)/i.test(
                     arg.trim(),
                 ),
-                'Readest browser switches require the canonical environment carrier.',
+                'WebView2 browser switches require the canonical environment carrier.',
             );
         }
     }
@@ -211,7 +271,10 @@ export function parseApplicationScreenshotFixture(
     inheritedEnvironment: Record<string, string | undefined> = {},
 ): ApplicationScreenshotFixture {
     fields(value, ['application', 'source', 'baseline', 'candidate', 'fixtureFiles', 'page']);
-    assert.ok(value.application === 'obsidian' || value.application === 'readest', 'Unknown application fixture.');
+    assert.ok(
+        value.application === 'obsidian' || value.application === 'readest' || value.application === 'tauri-fixture',
+        'Unknown application fixture.',
+    );
     fields(value.source, ['executable', 'sha256']);
     text(value.source.executable);
     absolutePath(value.source.executable);
@@ -222,7 +285,8 @@ export function parseApplicationScreenshotFixture(
     const baseline = parseApplicationLaunch(value.baseline);
     const candidate = parseApplicationLaunch(value.candidate);
     environmentKeys(inheritedEnvironment);
-    if (value.application === 'readest') {
+    const contract = applicationContracts[value.application];
+    if (contract.browserCarrier === 'webview2-environment') {
         assert.ok(
             !Object.entries(inheritedEnvironment).some(
                 ([name, setting]) => name.toUpperCase().startsWith('WEBVIEW2_') && setting !== undefined,
@@ -232,14 +296,8 @@ export function parseApplicationScreenshotFixture(
     }
     validateLaunch(baseline, value.application, value.source.executable);
     validateLaunch(candidate, value.application, value.source.executable);
-    const baselineBrowser =
-        value.application === 'obsidian'
-            ? (baseline.args ?? [])
-            : browserSwitches(baseline.env?.[browserArguments] ?? '');
-    const candidateBrowser =
-        value.application === 'obsidian'
-            ? (candidate.args ?? [])
-            : browserSwitches(candidate.env?.[browserArguments] ?? '');
+    const baselineBrowser = browserArgumentsForLaunch(value.application, baseline);
+    const candidateBrowser = browserArgumentsForLaunch(value.application, candidate);
     const added = withChromeScreenshotFeature(baselineBrowser);
     assert.ok(!isDeepStrictEqual(added, baselineBrowser), 'Baseline must not enable the target feature.');
     assert.ok(
@@ -260,7 +318,7 @@ export function parseApplicationScreenshotFixture(
         'Candidate may only add one canonical bare screenshot feature.',
     );
     const comparableCandidate = structuredClone(candidate);
-    if (value.application === 'obsidian') {
+    if (contract.browserCarrier === 'argv') {
         if (baseline.args === undefined) delete comparableCandidate.args;
         else comparableCandidate.args = baseline.args;
     } else {
@@ -302,7 +360,7 @@ export function parseApplicationScreenshotFixture(
         );
         fileNames.add(normalized);
         assert.ok(
-            value.application !== 'readest' || !/^native(?:\/|$)/.test(normalized),
+            !contract.copiedExecutable || !/^native(?:\/|$)/.test(normalized),
             'Fixture text cannot overwrite the controlled native executable directory.',
         );
         fixtureFileEntries.push([file, contents]);
@@ -398,8 +456,9 @@ export async function prepareApplicationScreenshotFixture(
     );
     const launch = expandApplicationScreenshotLaunch(fixture, arm, directory);
     let copySha256: string | undefined;
-    if (fixture.application === 'readest') {
-        const executable = confinedFile(directory, 'native/readest.exe');
+    const copiedExecutable = applicationContracts[fixture.application].copiedExecutable;
+    if (copiedExecutable) {
+        const executable = confinedFile(directory, copiedExecutable);
         await io.writeFile(executable, sourceBytes);
         copySha256 = hash(await io.readFile(executable));
         assert.equal(copySha256, sourceSha256, 'Fresh executable copy hash mismatch.');

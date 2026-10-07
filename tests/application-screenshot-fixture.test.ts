@@ -6,6 +6,7 @@ import type { ApplicationLaunch } from '../src/domains/launch-command.ts';
 import {
     type ApplicationScreenshotFixture,
     type ApplicationScreenshotFixtureIO,
+    applicationScreenshotBrowserConfiguration,
     applicationScreenshotGatewayEnvironment,
     expandApplicationScreenshotLaunch,
     parseApplicationScreenshotFixture,
@@ -16,7 +17,7 @@ const bytes = Buffer.from('synthetic executable bytes');
 const sha256 = createHash('sha256').update(bytes).digest('hex');
 const source = 'C:/Test/Apps & tools/应用/readest.exe';
 
-function fixture(application: 'obsidian' | 'readest' = 'obsidian'): ApplicationScreenshotFixture {
+function fixture(application: 'obsidian' | 'readest' | 'tauri-fixture' = 'obsidian'): ApplicationScreenshotFixture {
     const baseline: ApplicationLaunch =
         application === 'obsidian'
             ? {
@@ -32,11 +33,15 @@ function fixture(application: 'obsidian' | 'readest' = 'obsidian'): ApplicationS
                   env: { HOST_DATA: '保留 & $literal "quotes"' },
               }
             : {
-                  executable: '{fixture}/native/readest.exe',
+                  executable:
+                      application === 'readest'
+                          ? '{fixture}/native/readest.exe'
+                          : '{fixture}/native/dct-tauri-screenshot-fixture.exe',
                   args: ['书籍 & $literal'],
                   cwd: '{fixture}/native',
                   env: {
-                      WEBVIEW2_USER_DATA_FOLDER: '{fixture}/webview',
+                      WEBVIEW2_USER_DATA_FOLDER:
+                          application === 'readest' ? '{fixture}/webview' : '{fixture}/webview2-profile',
                       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port={port} --enable-features=Other',
                       HOST_DATA: '保留 & $literal "quotes"',
                   },
@@ -84,14 +89,14 @@ function memoryIO(corruptCopy = false) {
             assert.ok(!files.has(file), 'Never overwrite source or old fixture files.');
             files.set(
                 file,
-                corruptCopy && file.endsWith('/native/readest.exe') ? Buffer.from('corrupted') : Buffer.from(contents),
+                corruptCopy && file.includes('/native/') ? Buffer.from('corrupted') : Buffer.from(contents),
             );
         },
     };
     return { io, files, calls };
 }
 
-for (const application of ['obsidian', 'readest'] as const) {
+for (const application of ['obsidian', 'readest', 'tauri-fixture'] as const) {
     test(`${application}: complete single-feature pair preserves literal host data`, () => {
         const input = fixture(application);
         const original = structuredClone(input);
@@ -104,7 +109,11 @@ for (const application of ['obsidian', 'readest'] as const) {
         );
         assert.equal(
             expanded.executable,
-            application === 'obsidian' ? source : 'C:/Test/Fresh & 数据/native/readest.exe',
+            application === 'obsidian'
+                ? source
+                : application === 'readest'
+                  ? 'C:/Test/Fresh & 数据/native/readest.exe'
+                  : 'C:/Test/Fresh & 数据/native/dct-tauri-screenshot-fixture.exe',
         );
         assert.deepEqual(input, original);
     });
@@ -597,4 +606,243 @@ test('invalid port refusal omits raw configured data from the diagnostic object 
         (error: unknown) => !inspect(error).includes('private-port-sentinel'),
     );
     assert.deepEqual(calls, []);
+});
+
+test('Tauri preparation hashes the controlled copy before synthetic writes and preserves the source', async () => {
+    const input = fixture('tauri-fixture');
+    const { io, calls, files } = memoryIO();
+    const prepared = await prepareApplicationScreenshotFixture(input, 'candidate', {
+        parentDirectory: 'C:/Test/Evidence & 数据',
+        io,
+    });
+    assert.equal(prepared.sourceSha256, sha256);
+    assert.equal(prepared.copySha256, sha256);
+    assert.equal(prepared.launch.executable, 'C:/Test/Evidence & 数据/fresh-1/native/dct-tauri-screenshot-fixture.exe');
+    assert.equal(prepared.launch.cwd, 'C:/Test/Evidence & 数据/fresh-1/native');
+    assert.equal(prepared.launch.env?.WEBVIEW2_USER_DATA_FOLDER, 'C:/Test/Evidence & 数据/fresh-1/webview2-profile');
+    assert.deepEqual(calls, [
+        `read:${source}`,
+        'fresh:C:/Test/Evidence & 数据',
+        'write:C:/Test/Evidence & 数据/fresh-1/native/dct-tauri-screenshot-fixture.exe',
+        'read:C:/Test/Evidence & 数据/fresh-1/native/dct-tauri-screenshot-fixture.exe',
+        'write:C:/Test/Evidence & 数据/fresh-1/synthetic/书籍 & file.txt',
+    ]);
+    assert.deepEqual(files.get(source), bytes);
+});
+
+test('Tauri source and copy mismatch stop at their respective acquisition boundaries', async () => {
+    const input = fixture('tauri-fixture');
+    input.source.sha256 = '0'.repeat(64);
+    const sourceMismatch = memoryIO();
+    await assert.rejects(
+        prepareApplicationScreenshotFixture(input, 'baseline', {
+            parentDirectory: 'C:/Test/Evidence',
+            io: sourceMismatch.io,
+        }),
+        /hash/i,
+    );
+    assert.deepEqual(sourceMismatch.calls, [`read:${source}`]);
+    const copyMismatch = memoryIO(true);
+    await assert.rejects(
+        prepareApplicationScreenshotFixture(fixture('tauri-fixture'), 'candidate', {
+            parentDirectory: 'C:/Test/Evidence',
+            io: copyMismatch.io,
+        }),
+        /hash/i,
+    );
+    assert.deepEqual(copyMismatch.calls, [
+        `read:${source}`,
+        'fresh:C:/Test/Evidence',
+        'write:C:/Test/Evidence/fresh-1/native/dct-tauri-screenshot-fixture.exe',
+        'read:C:/Test/Evidence/fresh-1/native/dct-tauri-screenshot-fixture.exe',
+    ]);
+});
+
+test('Tauri requires its exact fresh copied executable, native cwd and WebView2 profile before I/O', async () => {
+    const mutations: ((value: ApplicationScreenshotFixture) => void)[] = [
+        (value) => {
+            value.baseline.executable = value.candidate.executable = source;
+        },
+        (value) => {
+            value.baseline.executable = value.candidate.executable = '{fixture}/native/readest.exe';
+        },
+        (value) => {
+            value.baseline.cwd = value.candidate.cwd = 'C:/Test/Working';
+        },
+        (value) => {
+            delete value.baseline.cwd;
+            delete value.candidate.cwd;
+        },
+        ...['C:/Test/Old', '{fixture}/another', '{fixture}/webview2-profile/../old'].map(
+            (profile) => (value: ApplicationScreenshotFixture) => {
+                for (const arm of ['baseline', 'candidate'] as const) {
+                    assert.ok(value[arm].env);
+                    value[arm].env.WEBVIEW2_USER_DATA_FOLDER = profile;
+                }
+            },
+        ),
+        (value) => {
+            value.fixtureFiles = { 'Native/other.txt': 'overwrite native directory' };
+        },
+        (value) => {
+            value.fixtureFiles = { native: 'overwrite native directory' };
+        },
+    ];
+    for (const mutate of mutations) {
+        const input = fixture('tauri-fixture');
+        mutate(input);
+        for (const arm of ['baseline', 'candidate'] as const) {
+            const { io, calls } = memoryIO();
+            await assert.rejects(
+                prepareApplicationScreenshotFixture(input, arm, { parentDirectory: 'C:/Test/Evidence', io }),
+            );
+            assert.deepEqual(calls, []);
+        }
+    }
+});
+
+test('Tauri rejects malformed, alternate and inherited WebView2 carriers before I/O', async () => {
+    for (const carrier of [
+        '--remote-debugging-port={port} --remote-debugging-port=9222',
+        '--remote-debugging-port=9222',
+        '--remote-debugging-port={port} --remote-debugging-pipe',
+        '--remote-debugging-port={port} --remote-debugging-address=0.0.0.0',
+        '--remote-debugging-port={port} --remote-debugging-address=127.0.0.1 --remote-debugging-address=::1',
+        '--Remote-debugging-port={port}',
+        '--remote-debugging-port {port}',
+        '--remote-debugging-port={port} --user-data-dir={fixture}/webview2-profile',
+        '--remote-debugging-port={port} --single-argument',
+        '--remote-debugging-port={port};echo-bad',
+        '"--remote-debugging-port={port}"',
+        '--remote-debugging-port={port}  --enable-features=Other',
+        '--remote-debugging-port={port}\t--enable-features=Other',
+    ]) {
+        const input = fixture('tauri-fixture');
+        assert.ok(input.baseline.env);
+        input.baseline.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = carrier;
+        const { io, calls } = memoryIO();
+        await assert.rejects(
+            prepareApplicationScreenshotFixture(input, 'baseline', { parentDirectory: 'C:/Test/Evidence', io }),
+        );
+        assert.deepEqual(calls, []);
+    }
+    for (const key of [
+        'webview2_user_data_folder',
+        'webvıew2_user_data_folder',
+        'webview2_additional_browser_arguments',
+        'WEBVIEW2_BROWSER_EXECUTABLE_FOLDER',
+        'WEBVIEW2_PIPE_FOR_SCRIPT_DEBUGGER',
+    ]) {
+        const input = fixture('tauri-fixture');
+        for (const arm of ['baseline', 'candidate'] as const) {
+            input[arm].env = { ...input[arm].env, [key]: 'synthetic-old' };
+        }
+        for (const [value, inheritedEnvironment] of [
+            [input, {}],
+            [fixture('tauri-fixture'), { [key]: 'synthetic-old' }],
+        ] as const) {
+            const { io, calls } = memoryIO();
+            await assert.rejects(
+                prepareApplicationScreenshotFixture(value, 'candidate', {
+                    parentDirectory: 'C:/Test/Evidence',
+                    inheritedEnvironment,
+                    io,
+                }),
+            );
+            assert.deepEqual(calls, []);
+        }
+    }
+});
+
+test('Tauri permits only one bare enabled feature as the complete launch-pair difference', () => {
+    const input = fixture('tauri-fixture');
+    assert.ok(input.baseline.env && input.candidate.env);
+    input.baseline.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port={port}';
+    input.candidate.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS =
+        '--remote-debugging-port={port} --enable-features=CDPScreenshotNewSurface';
+    assert.deepEqual(parseApplicationScreenshotFixture(input), input);
+    for (const feature of [
+        'CDPScreenshotNewSurface,CDPScreenshotNewSurface',
+        '*CDPScreenshotNewSurface',
+        'CDPScreenshotNewSurface:parameter/value',
+        'CDPScreenshotNewSurface<trial',
+        'CDPScreenshotNewSurface.group',
+        'OtherCDPScreenshotNewSurface',
+        'CDPScreenshotNewSurface,Other',
+    ]) {
+        const malformed = structuredClone(input);
+        assert.ok(malformed.candidate.env);
+        malformed.candidate.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port={port} --enable-features=${feature}`;
+        assert.throws(() => parseApplicationScreenshotFixture(malformed));
+    }
+    for (const featureSwitch of [
+        '--enable-features=CDPScreenshotNewSurface',
+        '--disable-features=CDPScreenshotNewSurface',
+        '--disable-features=*CDPScreenshotNewSurface',
+    ]) {
+        const malformed = structuredClone(input);
+        assert.ok(malformed.baseline.env);
+        malformed.baseline.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS += ` ${featureSwitch}`;
+        assert.throws(() => parseApplicationScreenshotFixture(malformed));
+    }
+    const argvCarrier = structuredClone(input);
+    argvCarrier.candidate.args?.push('--enable-features=CDPScreenshotNewSurface');
+    assert.throws(() => parseApplicationScreenshotFixture(argvCarrier));
+});
+
+test('Tauri fresh directory refusal prevents controlled native copy and profile expansion outside the parent', async () => {
+    for (const directory of ['C:/Test/Evidence', 'C:/Test/Elsewhere/new', 'C:/Test/Evidence/../old']) {
+        const state = memoryIO();
+        state.io.createFreshDirectory = async () => directory;
+        await assert.rejects(
+            prepareApplicationScreenshotFixture(fixture('tauri-fixture'), 'baseline', {
+                parentDirectory: 'C:/Test/Evidence',
+                io: state.io,
+            }),
+        );
+        assert.deepEqual(state.calls, [`read:${source}`]);
+    }
+});
+
+test('explicit carrier helper reports only effective bare feature membership from the selected application', () => {
+    for (const application of ['obsidian', 'readest', 'tauri-fixture'] as const) {
+        const input = fixture(application);
+        for (const arm of ['baseline', 'candidate'] as const) {
+            if (application === 'obsidian') input[arm].args?.push('--enable-features=CDPScreenshotNewSurface');
+            else {
+                assert.ok(input[arm].env);
+                input[arm].env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS +=
+                    ' -- --disable-features=CDPScreenshotNewSurface';
+                input[arm].args = ['--', '--enable-features=CDPScreenshotNewSurface'];
+            }
+        }
+        assert.doesNotThrow(() => parseApplicationScreenshotFixture(input));
+        assert.deepEqual(applicationScreenshotBrowserConfiguration(application, input.baseline), {
+            browserArguments:
+                application === 'obsidian'
+                    ? ['--remote-debugging-port={port}', '--user-data-dir={fixture}/profile', '--enable-features=Other']
+                    : ['--remote-debugging-port={port}', '--enable-features=Other'],
+            screenshotFeatureEnabled: false,
+        });
+        assert.equal(
+            applicationScreenshotBrowserConfiguration(application, input.candidate).screenshotFeatureEnabled,
+            true,
+        );
+        const substring = structuredClone(input.baseline);
+        if (application === 'obsidian') {
+            assert.ok(substring.args);
+            substring.args[2] = '--enable-features=OtherCDPScreenshotNewSurface';
+        } else {
+            assert.ok(substring.env);
+            substring.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS =
+                '--remote-debugging-port={port} --enable-features=OtherCDPScreenshotNewSurface';
+        }
+        assert.equal(applicationScreenshotBrowserConfiguration(application, substring).screenshotFeatureEnabled, false);
+    }
+    assert.throws(() =>
+        applicationScreenshotBrowserConfiguration('tauri-fixture', {
+            executable: 'C:/Test/Fixture.exe',
+            args: ['--remote-debugging-port={port}', '--enable-features=CDPScreenshotNewSurface'],
+        }),
+    );
 });

@@ -6,6 +6,11 @@ startup because the selected source could change user protocol configuration.
 Every acquired resource exited normally. These results establish no accepted
 feature-benefit comparison.
 
+A separate [fixed Tauri fixture follow-up](tauri-screenshot-validation.md)
+records external source/build reviews and two failed qualification attempts.
+Readest's exclusion and every historical Obsidian observation below remain
+unchanged.
+
 This Windows experiment compares baseline and explicitly requested
 `CDPScreenshotNewSurface` behavior on a newly owned existing application renderer.
 It qualifies a known source/version-specific contract, rather than detecting

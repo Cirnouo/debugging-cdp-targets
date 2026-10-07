@@ -137,12 +137,14 @@ then explicitly restarts and normally closes them. It retains test profiles.
   preselected for these newly created targets; all peers are attempted on failure,
   with final empty gateway status and actual stdio exit checked. Blocked native
   state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
-- `application-screenshot-fixture.ts` validates complete test-only Obsidian/Readest
+- `application-screenshot-fixture.ts` validates complete test-only Obsidian/Readest/Tauri
   launch pairs, known existing-page selectors, confined synthetic text and fresh
   profiles. It verifies an explicit source SHA256 before preparation, verifies a
-  controlled Readest executable copy, expands `{fixture}` after pair comparison,
+  controlled Readest/Tauri executable copy, expands `{fixture}` after pair comparison,
   and supplies a Windows-alias-safe gateway environment without WebView2 carriers.
   Real launch recipes belong in explicit external experiment inputs.
+  The closed `tauri-fixture` kind requires the exact owned native copy/cwd and
+  sibling profile; its shared helper decodes the declared browser carrier.
 - `application-screenshot-probe.ts` accepts one explicit reviewed application
   experiment with absolute config/evidence paths, an arm, native condition and
   qualification/viewport/fullPage mode. `application-screenshot-core.ts` verifies
@@ -223,6 +225,10 @@ The bounded Windows results and qualification limits are recorded in
 [application screenshot validation](../../docs/application-screenshot-validation.md).
 Its original geometry failures remain failed; later fake regression verification
 does not establish a new accepted real-application matrix.
+The separate closed `tauri-fixture` follow-up requires a reviewed external fixed
+build and existing renderer; its actual builds, two failed qualifications and
+separate abnormal helper dispositions are recorded in
+[Tauri screenshot validation](../../docs/tauri-screenshot-validation.md).
 
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
   strict canonical ASCII feature values and effective Windows parsing boundaries,
