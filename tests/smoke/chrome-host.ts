@@ -10,6 +10,7 @@ import {
 import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, LaunchOptions } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { readChromeSmokeProfile } from './chrome-profile-probe.ts';
 
 function absolutePath(value: string, platform: NodeJS.Platform) {
     if (platform !== 'win32') return path.posix.isAbsolute(value);
@@ -65,12 +66,17 @@ export function createChromeSmokeLaunch(
     };
 }
 
-/** Verify the browser adopted the lease through unchanged official tools. */
+/** Verify the actual Chrome profile belongs directly to the connection lease. */
 export async function inspectChromeSmokeDirectory(
     tool: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>,
     target: ConnectionStatus,
+    fixture: ProcessTarget,
+    observe: (fixture: ProcessTarget) => Promise<string> = readChromeSmokeProfile,
 ): Promise<string> {
     assert.ok(target.sessionId);
+    assert.equal(fixture.processId, target.processId);
+    assert.equal(fixture.port, target.port);
+    assert.equal(fixture.targetKind, target.targetKind);
     const configuration = await tool('dct_connection_status', {
         entryId: target.entryId,
         connectionId: target.connectionId,
@@ -95,20 +101,9 @@ export async function inspectChromeSmokeDirectory(
     };
     const selected = (await call('list_pages')).match(/^(\d+):.*\[selected\]/m)?.[1];
     assert.ok(selected, 'The application page must remain selected after the profile probe.');
-    const probe = (await call('new_page', { url: 'chrome://version/' })).match(/^(\d+):\s*chrome:\/\/version\/?/m)?.[1];
-    assert.ok(probe, 'The official new_page result must identify the version probe.');
-    const pageId = Number(probe);
+    let failure: { error: unknown } | undefined;
     try {
-        await call('select_page', { pageId });
-        const result = await call('evaluate_script', {
-            pageId,
-            function: "() => ({profilePath: document.getElementById('profile_path')?.textContent?.trim()})",
-        });
-        const json = result.match(/```json\s*([\s\S]*?)```/)?.[1];
-        assert.ok(json, 'The official script result must contain browser profile evidence.');
-        const evidence: unknown = JSON.parse(json);
-        assert.ok(isRecord(evidence) && typeof evidence.profilePath === 'string');
-        const profilePath = await realpath(evidence.profilePath);
+        const profilePath = await realpath(await observe(fixture));
         const relative = path.relative(directory, profilePath);
         assert.ok(
             relative && !path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`),
@@ -121,13 +116,23 @@ export async function inspectChromeSmokeDirectory(
             'The fresh Chrome profile must have the leased directory as its direct parent.',
         );
         console.log(JSON.stringify({ chromeDataDirectory: { directory, profilePath } }));
+    } catch (error) {
+        failure = { error };
     } finally {
         try {
-            await call('close_page', { pageId });
-        } finally {
             await call('select_page', { pageId: Number(selected) });
+        } catch (error) {
+            failure = {
+                error: failure
+                    ? new AggregateError(
+                          [failure.error, error],
+                          'Profile inspection and page selection restoration failed.',
+                      )
+                    : error,
+            };
         }
     }
+    if (failure) throw failure.error;
     return directory;
 }
 

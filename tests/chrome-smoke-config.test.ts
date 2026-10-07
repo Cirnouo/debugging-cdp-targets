@@ -154,7 +154,7 @@ test('Chrome smoke launch preserves literal paths and isolates its temporary pro
     assert.throws(() => createChromeSmokeLaunch('/chrome', 'relative-profile', 'data:text/html,', 'linux'), /absolute/);
 });
 
-test('Chrome smoke verifies browser-reported actual profile path through official tools and closes its probe', async (t) => {
+test('Chrome smoke verifies actual native profile evidence despite the official chrome URL refusal and restores selection', async (t) => {
     const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-smoke-proof-')));
     t.after(() => rm(directory, { recursive: true, force: true }));
     await mkdir(path.join(directory, 'Default'));
@@ -167,9 +167,20 @@ test('Chrome smoke verifies browser-reported actual profile path through officia
         connectionId: randomUUID(),
         sessionId: randomUUID(),
         status: 'active' as const,
+        processId: 4100,
+        port: 19422,
+        targetKind: 'chrome' as const,
+    };
+    const fixture: ProcessTarget = {
+        processId: 4100,
+        port: 19422,
+        targetKind: 'chrome',
+        executablePath: '/synthetic/chrome',
+        startedAtUtc: '2026-10-07T00:00:00.000Z',
     };
     const calls: { name: string; args: Record<string, unknown> }[] = [];
     let reportedPath = path.join(directory, 'Default');
+    let restorationFailure: Error | undefined;
     const tool = async (name: string, args: Record<string, unknown> = {}) => {
         calls.push({ name, args });
         if (name === 'dct_connection_status')
@@ -178,48 +189,69 @@ test('Chrome smoke verifies browser-reported actual profile path through officia
                     isolation: { mode: 'data-dir', path: directory, cleanup: 'delete-on-release', state: 'held' },
                 },
             };
-        const text =
-            name === 'list_pages'
-                ? '12: data:text/html,fixture [selected]'
-                : name === 'new_page'
-                  ? '12: data:text/html,fixture\n13: chrome://version/ [selected]'
-                  : name === 'evaluate_script'
-                    ? `Script ran on page and returned:\n\`\`\`json\n${JSON.stringify({ profilePath: reportedPath })}\n\`\`\``
-                    : 'done';
-        return { content: [{ type: 'text', text }] };
+        if (name === 'new_page' || name === 'navigate_page')
+            return {
+                content: [{ type: 'text', text: 'Error: Navigating to chrome: URLs is not allowed.' }],
+                isError: true,
+            };
+        assert.ok(name === 'list_pages' || name === 'select_page');
+        if (name === 'select_page' && restorationFailure) throw restorationFailure;
+        return {
+            content: [{ type: 'text', text: name === 'list_pages' ? '12: data:text/html,fixture [selected]' : 'done' }],
+        };
     };
-    assert.equal(await module.inspectChromeSmokeDirectory(tool, target), directory);
+    const observe = async (observed: ProcessTarget) => {
+        assert.equal(observed, fixture);
+        return reportedPath;
+    };
+    assert.equal(await module.inspectChromeSmokeDirectory(tool, target, fixture, observe), directory);
     assert.deepEqual(
         calls.map((call) => call.name),
-        [
-            'dct_connection_status',
-            'list_pages',
-            'new_page',
-            'select_page',
-            'evaluate_script',
-            'close_page',
-            'select_page',
-        ],
+        ['dct_connection_status', 'list_pages', 'select_page'],
     );
-    assert.equal(calls.find((call) => call.name === 'evaluate_script')?.args.pageId, 13);
     assert.deepEqual(calls.at(-1)?.args, {
         _dct: { connectionId: target.connectionId, sessionId: target.sessionId },
         pageId: 12,
     });
     for (const rejectedPath of [path.dirname(directory), directory, nestedProfile]) {
         reportedPath = rejectedPath;
-        await assert.rejects(module.inspectChromeSmokeDirectory(tool, target), /profile|directory/i);
-        assert.deepEqual(calls.slice(-2), [
-            {
-                name: 'close_page',
-                args: { _dct: { connectionId: target.connectionId, sessionId: target.sessionId }, pageId: 13 },
-            },
-            {
-                name: 'select_page',
-                args: { _dct: { connectionId: target.connectionId, sessionId: target.sessionId }, pageId: 12 },
-            },
-        ]);
+        await assert.rejects(module.inspectChromeSmokeDirectory(tool, target, fixture, observe), /profile|directory/i);
+        assert.deepEqual(calls.at(-1), {
+            name: 'select_page',
+            args: { _dct: { connectionId: target.connectionId, sessionId: target.sessionId }, pageId: 12 },
+        });
     }
+    const failure = new Error('The owned profile observation failed.');
+    await assert.rejects(
+        module.inspectChromeSmokeDirectory(tool, target, fixture, async () => {
+            throw failure;
+        }),
+        (error: unknown) => error === failure,
+    );
+    assert.deepEqual(calls.at(-1), {
+        name: 'select_page',
+        args: { _dct: { connectionId: target.connectionId, sessionId: target.sessionId }, pageId: 12 },
+    });
+    const primary = new AggregateError(
+        [new Error('Native identity changed.'), new Error('Probe cleanup refused.')],
+        'The owned profile probe and cleanup failed.',
+    );
+    restorationFailure = new Error('The application page selection could not be restored.');
+    await assert.rejects(
+        module.inspectChromeSmokeDirectory(tool, target, fixture, async () => {
+            throw primary;
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.deepEqual(error.errors, [primary, restorationFailure]);
+            return true;
+        },
+    );
+    reportedPath = path.join(directory, 'Default');
+    await assert.rejects(
+        module.inspectChromeSmokeDirectory(tool, target, fixture, observe),
+        (error: unknown) => error === restorationFailure,
+    );
 });
 
 test('Chrome smoke records the owned browser version and fails unsupported products or versions', async () => {
@@ -302,4 +334,17 @@ test('connection recovery smoke separates external normal Close requests from ga
     assert.match(source, /reminderReceived - connectionRetirementObservedAt <= 5_000/);
     assert.match(source, /normalCloseRequestedAt/);
     assert.doesNotMatch(source, /closeCompleted|normallyClosed|millisecondsFromCloseCompletion/);
+});
+
+test('Windows console smoke observes monitor stream closure before startup can await and consume its exit', async () => {
+    const source = await readFile(new URL('./smoke/official-server.ts', import.meta.url), 'utf8');
+    const captured = source.indexOf('const monitoringEnded =');
+    const firstAwait = source.indexOf('await ', source.indexOf('const monitor ='));
+    assert.ok(
+        captured >= 0 && captured < firstAwait,
+        'Monitor closure observation must precede the first await after spawning the monitor.',
+    );
+    assert.match(source.slice(captured, firstAwait), /monitor\.once\('close'/);
+    assert.doesNotMatch(source.slice(source.indexOf('} finally {')), /monitor\.once\('(?:exit|close)'/);
+    assert.match(source.slice(source.indexOf('} finally {')), /await monitoringEnded/);
 });

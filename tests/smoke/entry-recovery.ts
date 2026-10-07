@@ -99,7 +99,8 @@ async function start(index: number) {
     });
     assert.ok(!('connections' in target));
     assert.equal(target.status, 'active');
-    const directory = await inspectChromeSmokeDirectory(tool, target);
+    const fixture = await recordOwned(target);
+    const directory = await inspectChromeSmokeDirectory(tool, target, fixture);
     managedDirectories.set(target.connectionId, directory);
     await writeFile(path.join(directory, 'restart-evidence'), target.connectionId);
     return target;
@@ -144,7 +145,6 @@ try {
     const [first, second, third] = await Promise.all([0, 1, 2].map(start));
     assert.ok(first && second && third);
     assert.equal(new Set([first.connectionId, second.connectionId, third.connectionId]).size, 3);
-    await Promise.all([first, second, third].map(recordOwned));
     const aggregate = await status();
     assert.ok('connections' in aggregate && aggregate.connections.length === 3);
     await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
@@ -158,7 +158,6 @@ try {
     await Promise.all([pages(first, 0), pages(third, 2)]);
     const fourth = await start(3);
     assert.notEqual(fourth.connectionId, second.connectionId);
-    await recordOwned(fourth);
     await Promise.all([pages(first, 0), pages(third, 2), pages(fourth, 3)]);
     console.log('Keep/reuse, scoped Close and later new connection passed.');
     assert.deepEqual(
@@ -211,7 +210,6 @@ try {
     const retried = await start(0);
     assert.notEqual(retried.connectionId, first.connectionId);
     assert.notEqual(retried.sessionId, first.sessionId);
-    await recordOwned(retried);
     await pages(retried, 0);
     const restarted = await mutate('restart', retried);
     assert.equal(restarted.connectionId, retried.connectionId);
@@ -219,8 +217,8 @@ try {
     assert.notEqual(restarted.processId, retried.processId);
     assert.notEqual(restarted.sessionId, retried.sessionId);
     assert.equal(restarted.pageIdsInvalidated, true);
-    await recordOwned(restarted);
-    const restartedDirectory = await inspectChromeSmokeDirectory(tool, restarted);
+    const restartedFixture = await recordOwned(restarted);
+    const restartedDirectory = await inspectChromeSmokeDirectory(tool, restarted, restartedFixture);
     assert.equal(restartedDirectory, managedDirectories.get(retried.connectionId));
     assert.equal(await readFile(path.join(restartedDirectory, 'restart-evidence'), 'utf8'), retried.connectionId);
     await rejectsRoute(retried);

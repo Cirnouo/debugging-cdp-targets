@@ -38,6 +38,7 @@ const monitor =
               { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
           )
         : undefined;
+const monitoringEnded = monitor ? new Promise<void>((resolve) => monitor.once('close', () => resolve())) : undefined;
 let monitorOutput = '';
 monitor?.stdout.on('data', (data) => {
     monitorOutput += data;
@@ -110,8 +111,8 @@ try {
     });
     assert.ok(!('connections' in first) && first.sessionId);
     active = first;
-    await inspectChromeSmokeTarget(first, chrome);
-    const firstDirectory = await inspectChromeSmokeDirectory(tool, first);
+    const firstFixture = await inspectChromeSmokeTarget(first, chrome);
+    const firstDirectory = await inspectChromeSmokeDirectory(tool, first, firstFixture);
     managedDirectories.add(firstDirectory);
     console.log(JSON.stringify({ first }));
     const pagesOne = await tool('list_pages', route(first));
@@ -153,8 +154,8 @@ try {
     assert.notEqual(second.connectionId, first.connectionId);
     assert.notEqual(second.sessionId, first.sessionId);
     active = second;
-    await inspectChromeSmokeTarget(second, chrome);
-    const secondDirectory = await inspectChromeSmokeDirectory(tool, second);
+    const secondFixture = await inspectChromeSmokeTarget(second, chrome);
+    const secondDirectory = await inspectChromeSmokeDirectory(tool, second, secondFixture);
     managedDirectories.add(secondDirectory);
     console.log(JSON.stringify({ second }));
     const pagesTwo = await tool('list_pages', route(second));
@@ -186,7 +187,6 @@ try {
     await client.close();
     for (const directory of managedDirectories) await assert.rejects(lstat(directory), { code: 'ENOENT' });
     if (monitor) {
-        const monitoringEnded = new Promise<void>((resolve) => monitor.once('exit', () => resolve()));
         await writeFile(stopFile, 'stop');
         await monitoringEnded;
         const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
