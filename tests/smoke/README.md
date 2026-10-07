@@ -226,8 +226,8 @@ The bounded Windows results and qualification limits are recorded in
 Its original geometry failures remain failed; later fake regression verification
 does not establish a new accepted real-application matrix.
 The separate closed `tauri-fixture` follow-up requires a reviewed external fixed
-build and existing renderer; its actual build, failed qualification and retained
-cleanup limits are recorded in
+build and existing renderer; its actual builds, two failed qualifications and
+separate abnormal helper dispositions are recorded in
 [Tauri screenshot validation](../../docs/tauri-screenshot-validation.md).
 
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,

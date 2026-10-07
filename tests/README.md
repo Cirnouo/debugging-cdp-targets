@@ -211,7 +211,7 @@ For the bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).
 The separate fixed-fixture follow-up is recorded in
 [Tauri screenshot validation](../docs/tauri-screenshot-validation.md), including
-its failed qualification and unconfirmed gateway cleanup.
+its two failed qualifications and separately authorized abnormal helper dispositions.
 
 Both package test commands use `--test-concurrency=1` to run files sequentially.
 The visible `window-evidence`, `screenshot-background-anchor` and `windows-native`

@@ -7,7 +7,7 @@ Every acquired resource exited normally. These results establish no accepted
 feature-benefit comparison.
 
 A separate [fixed Tauri fixture follow-up](tauri-screenshot-validation.md)
-records an external source/build review and a failed qualification attempt.
+records external source/build reviews and two failed qualification attempts.
 Readest's exclusion and every historical Obsidian observation below remain
 unchanged.
 

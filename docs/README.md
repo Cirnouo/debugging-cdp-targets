@@ -10,7 +10,7 @@
 - `application-screenshot-validation.md` records bounded Windows application
     qualification, one-shot screenshot outcomes and privacy limits.
 - `tauri-screenshot-validation.md` records the separate fixed Tauri fixture
-    build, failed qualification attempt and unconfirmed gateway cleanup.
+    builds, two failed qualifications and separately authorized helper dispositions.
 - `policies/` contains repository-wide contribution requirements.
 - `adr/` records architecture decisions and superseded decisions.
 - `superpowers/` contains implementation plans linked to reviewed decisions.
