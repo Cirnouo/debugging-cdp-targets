@@ -320,6 +320,18 @@ when inspecting workspace sources.
 Every official call needs `_dct: { connectionId, sessionId }`. The gateway
 removes only this routing field and preserves original arguments/results.
 After start/restart, obtain fresh page IDs with list_pages for that route.
+
+Chrome can open `chrome://version/` in its native window. The delivered official
+Server 1.10.1 rejects it in `new_page`/`navigate_page` and filters it from
+`list_pages`/`select_page`, including when opened at startup. Do not use official
+tools to probe it or assume they can read its profile path. For the managed
+lease path, read explicit operation isolation metadata or selected configuration;
+establish application startup/binding through applicable official documentation/
+source and read-only prelaunch evidence. Keep user browser inspection through
+routed official tools; do not bypass this restriction with raw HTTP/CDP or custom
+tools. Native profile probes are separately authorized instrumentation for
+controlled acceptance fixtures.
+
 For a default connection's page, evaluate_script uses:
 
 ```json
