@@ -5,6 +5,7 @@ import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import {
     type ApplicationScreenshotFixture,
     type ApplicationScreenshotFixtureIO,
+    applicationScreenshotBrowserConfiguration,
     type PreparedApplicationScreenshotFixture,
     parseApplicationScreenshotFixture,
     prepareApplicationScreenshotFixture,
@@ -66,6 +67,8 @@ const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).
 const absolute = (value: string) => path.isAbsolute(value) || path.win32.isAbsolute(value);
 const samePath = (left: string, right: string) =>
     path.win32.normalize(left).toLowerCase() === path.win32.normalize(right).toLowerCase();
+export const tauriFixtureIdentityFunction =
+    '() => ({url:location.href,title:document.title,identity:window.__DCT_TAURI_FIXTURE__?.identity,userData:window.__DCT_TAURI_FIXTURE__?.userData})';
 const captureErrorOutcome = (error: unknown) =>
     isRecord(error) && typeof error.captureOutcome === 'string'
         ? error.captureOutcome
@@ -76,9 +79,13 @@ const captureErrorOutcome = (error: unknown) =>
             : 'client-error';
 
 function rendererDataPaths(prepared: PreparedApplicationScreenshotFixture) {
-    const profile = (prepared.launch.args ?? [])
-        .find((arg) => arg.startsWith('--user-data-dir='))
-        ?.slice('--user-data-dir='.length);
+    const browser = applicationScreenshotBrowserConfiguration(prepared.fixture.application, prepared.launch);
+    const profile =
+        prepared.fixture.application === 'tauri-fixture'
+            ? prepared.launch.env?.WEBVIEW2_USER_DATA_FOLDER
+            : browser.browserArguments
+                  .find((arg) => arg.startsWith('--user-data-dir='))
+                  ?.slice('--user-data-dir='.length);
     assert.ok(profile, 'Reviewed expanded profile carrier is unavailable.');
     const confined = (file: string) => {
         const relative = path.win32.relative(prepared.directory, file);
@@ -89,6 +96,7 @@ function rendererDataPaths(prepared: PreparedApplicationScreenshotFixture) {
         return file;
     };
     confined(profile);
+    if (prepared.fixture.application === 'tauri-fixture') return { userData: profile };
     const profileFile = `${path.win32.relative(prepared.directory, profile).replaceAll('\\', '/')}/obsidian.json`;
     const text = prepared.fixture.fixtureFiles[profileFile];
     assert.ok(typeof text === 'string', 'Synthetic Obsidian profile configuration is missing.');
@@ -186,6 +194,30 @@ export function parseApplicationProbeConfig(
     assert.ok(typeof value.mainWindow.className === 'string' && value.mainWindow.className.trim().length > 0);
     assert.ok(typeof value.mainWindow.titleIncludes === 'string' && value.mainWindow.titleIncludes.trim().length > 0);
     assert.ok(typeof value.identityFunction === 'string' && value.identityFunction.trim().length > 0);
+    if (fixture.application === 'tauri-fixture') {
+        assert.deepEqual(
+            fixture.page,
+            {
+                url: 'http://tauri.localhost/fixture.html',
+                title: 'DCT Tauri Screenshot Fixture',
+                identity: 'dct-tauri-screenshot-fixture-v1',
+            },
+            'Only the fixed Tauri fixture main renderer can qualify.',
+        );
+        assert.deepEqual(
+            value.mainWindow,
+            {
+                className: 'DctTauriScreenshotFixture',
+                titleIncludes: 'DCT Tauri Screenshot Fixture',
+            },
+            'Only the fixed Tauri fixture main HWND can qualify.',
+        );
+        assert.equal(
+            value.identityFunction,
+            tauriFixtureIdentityFunction,
+            'Tauri metadata must use the fixed read-only identity function.',
+        );
+    }
     assert.ok(value.preflight.status === 'approved' || value.preflight.status === 'blocked');
     assert.ok(typeof value.preflight.reason === 'string' && value.preflight.reason.trim().length > 0);
     if (fixture.application === 'readest')
@@ -222,6 +254,7 @@ export function selectApplicationMainWindow(
     identity: WindowIdentity,
     selector: ApplicationProbeConfig['mainWindow'],
     handle?: number,
+    exactTitle = false,
 ): WindowSample {
     assert.ok(Array.isArray(raw));
     const roots = raw.filter(isRecord).filter((item) => item.child === false && item.visible === true);
@@ -237,7 +270,7 @@ export function selectApplicationMainWindow(
         (item) =>
             item.windowClass === selector.className &&
             typeof item.title === 'string' &&
-            item.title.includes(selector.titleIncludes),
+            (exactTitle ? item.title === selector.titleIncludes : item.title.includes(selector.titleIncludes)),
     );
     assert.equal(main.length, 1, 'Declared main HWND is missing or ambiguous.');
     const sample = readWindowSample(main, identity, handle);
@@ -403,7 +436,10 @@ export async function runApplicationScreenshotProbe(
                 const evaluated = readOfficialEvaluation(
                     await call('evaluate_script', {
                         pageId,
-                        function: `() => (${config.identityFunction})(${JSON.stringify(prepared.directory)})`,
+                        function:
+                            config.fixture.application === 'tauri-fixture'
+                                ? `() => (${config.identityFunction})()`
+                                : `() => (${config.identityFunction})(${JSON.stringify(prepared.directory)})`,
                         waitForStableDom: false,
                     }),
                 );
@@ -412,13 +448,18 @@ export async function runApplicationScreenshotProbe(
                     isRecord(evaluated) &&
                     evaluated.url === config.fixture.page.url &&
                     (config.fixture.page.title === undefined ||
-                        (typeof evaluated.title === 'string' && evaluated.title.includes(config.fixture.page.title))) &&
+                        (typeof evaluated.title === 'string' &&
+                            (config.fixture.application === 'tauri-fixture'
+                                ? evaluated.title === config.fixture.page.title
+                                : evaluated.title.includes(config.fixture.page.title)))) &&
                     (config.fixture.page.identity === undefined ||
                         evaluated.identity === config.fixture.page.identity) &&
                     typeof evaluated.userData === 'string' &&
                     samePath(evaluated.userData, expectedData.userData) &&
-                    typeof evaluated.vaultPath === 'string' &&
-                    samePath(evaluated.vaultPath, expectedData.vaultPath)
+                    (config.fixture.application === 'tauri-fixture' ||
+                        (typeof evaluated.vaultPath === 'string' &&
+                            expectedData.vaultPath !== undefined &&
+                            samePath(evaluated.vaultPath, expectedData.vaultPath)))
                 )
                     pages.push({ pageId, value: evaluated });
             }
@@ -428,7 +469,13 @@ export async function runApplicationScreenshotProbe(
         assert.equal(pages.length, 1, 'Existing main renderer is missing or ambiguous.');
         const pageId = pages[0]?.pageId;
         assert.ok(pageId !== undefined);
-        const selected = selectApplicationMainWindow(await route.sample(), route.identity, config.mainWindow);
+        const selected = selectApplicationMainWindow(
+            await route.sample(),
+            route.identity,
+            config.mainWindow,
+            undefined,
+            config.fixture.application === 'tauri-fixture',
+        );
         await adapter.record('main-renderer-qualified', { page: pages[0], window: selected });
         if (options.mode === 'qualification') outcome = 'qualified';
         else {
@@ -440,7 +487,13 @@ export async function runApplicationScreenshotProbe(
             await adapter.record('marker-initial', { color: 'yellow', nonce: options.nonce });
             const validate = (raw: unknown) => {
                 assert.ok(route);
-                const observed = selectApplicationMainWindow(raw, route.identity, config.mainWindow, selected.handle);
+                const observed = selectApplicationMainWindow(
+                    raw,
+                    route.identity,
+                    config.mainWindow,
+                    selected.handle,
+                    config.fixture.application === 'tauri-fixture',
+                );
                 assertWindowState(observed, options.condition === 'minimized' ? 'minimized' : 'normal', selected);
                 assert.ok(observed.foregroundHwnd !== undefined);
                 if (options.condition === 'foreground-normal') assert.equal(observed.foregroundHwnd, observed.handle);

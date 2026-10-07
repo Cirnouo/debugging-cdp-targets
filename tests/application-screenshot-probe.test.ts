@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
 import { isRecord } from '../src/shared/errors.ts';
+import * as applicationCore from './smoke/application-screenshot-core.ts';
 import {
     type ApplicationProbeAdapter,
     type ApplicationProbeConfig,
@@ -73,6 +74,42 @@ const identity = {
     processId: 4400,
     executablePath: 'C:/Fixture/obsidian.exe',
     startedAtUtc: '2026-10-07T00:00:00.0000001Z',
+};
+const tauriMetadata =
+    '() => ({url:location.href,title:document.title,identity:window.__DCT_TAURI_FIXTURE__?.identity,userData:window.__DCT_TAURI_FIXTURE__?.userData})';
+const tauriConfig: ApplicationProbeConfig = {
+    ...config,
+    fixture: {
+        application: 'tauri-fixture',
+        source: { executable: 'C:/Fixture/dct-tauri-screenshot-fixture.exe', sha256: sha('app') },
+        baseline: {
+            executable: '{fixture}/native/dct-tauri-screenshot-fixture.exe',
+            args: [],
+            cwd: '{fixture}/native',
+            env: {
+                WEBVIEW2_USER_DATA_FOLDER: '{fixture}/webview2-profile',
+                WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port={port}',
+            },
+        },
+        candidate: {
+            executable: '{fixture}/native/dct-tauri-screenshot-fixture.exe',
+            args: [],
+            cwd: '{fixture}/native',
+            env: {
+                WEBVIEW2_USER_DATA_FOLDER: '{fixture}/webview2-profile',
+                WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+                    '--remote-debugging-port={port} --enable-features=CDPScreenshotNewSurface',
+            },
+        },
+        fixtureFiles: {},
+        page: {
+            url: 'http://tauri.localhost/fixture.html',
+            title: 'DCT Tauri Screenshot Fixture',
+            identity: 'dct-tauri-screenshot-fixture-v1',
+        },
+    },
+    mainWindow: { className: 'DctTauriScreenshotFixture', titleIncludes: 'DCT Tauri Screenshot Fixture' },
+    identityFunction: tauriMetadata,
 };
 const window = {
     ...identity,
@@ -215,6 +252,9 @@ function boundary(
         markerEvaluation?: (expression: string) => unknown;
         pngDimensions?: { width: number; height: number };
         badBelowFold?: boolean;
+        tauri?: boolean;
+        rendererMetadata?: Record<string, unknown>;
+        nativeWindows?: Record<string, unknown>[];
     } = {},
 ) {
     const events: { kind: string; value: unknown }[] = [];
@@ -224,6 +264,11 @@ function boundary(
     let closed = 0;
     let after = false;
     let now = 0;
+    const selectedConfig = options.tauri ? tauriConfig : config;
+    const selectedWindow = options.tauri
+        ? { ...window, windowClass: 'DctTauriScreenshotFixture', title: 'DCT Tauri Screenshot Fixture' }
+        : window;
+    const windows = options.nativeWindows ?? [selectedWindow];
     const adapter: ApplicationProbeAdapter = {
         now: () => now,
         async sleep(ms) {
@@ -283,13 +328,16 @@ function boundary(
                             return jsonResult(geometry);
                         }
                         return jsonResult({
-                            url: options.missing ? 'app://obsidian.md/help.html' : config.fixture.page.url,
-                            title: 'synthetic-vault',
-                            identity: 'synthetic-id',
+                            url: options.missing ? 'app://obsidian.md/help.html' : selectedConfig.fixture.page.url,
+                            title: selectedConfig.fixture.page.title,
+                            identity: selectedConfig.fixture.page.identity,
                             ...(options.rendererPaths ?? {
-                                userData: `${options.directory ?? 'C:/Evidence/cell-1'}/profile`,
-                                vaultPath: `${options.directory ?? 'C:/Evidence/cell-1'}/synthetic-vault`,
+                                userData: `${options.directory ?? 'C:/Evidence/cell-1'}/${options.tauri ? 'webview2-profile' : 'profile'}`,
+                                ...(options.tauri
+                                    ? {}
+                                    : { vaultPath: `${options.directory ?? 'C:/Evidence/cell-1'}/synthetic-vault` }),
                             }),
+                            ...options.rendererMetadata,
                         });
                     }
                     assert.equal(name, 'take_screenshot');
@@ -332,14 +380,14 @@ function boundary(
                 },
                 async sample() {
                     sequence.push('sample');
-                    return [window];
+                    return windows;
                 },
                 async condition() {
                     sequence.push('condition');
-                    return [window];
+                    return windows;
                 },
                 async capture(call, _handle, observe) {
-                    pendingSample = options.fast ? undefined : () => observe(async () => [window]);
+                    pendingSample = options.fast ? undefined : () => observe(async () => windows);
                     let result: Record<string, unknown> | undefined;
                     let primaryError: unknown;
                     try {
@@ -509,6 +557,125 @@ test('qualification selects only one existing main renderer and takes zero scree
         const failing = boundary(options);
         assert.equal((await run(failing, config, 'qualification')).outcome, 'qualification-blocked');
         assert.equal(failing.counts().capture, 0);
+    }
+});
+
+test('fixed Tauri metadata reads consumed application state and cannot echo a harness directory', () => {
+    const expression = applicationCore.tauriFixtureIdentityFunction;
+    assert.equal(typeof expression, 'string');
+    const context = {
+        location: { href: 'http://tauri.localhost/fixture.html' },
+        document: { title: 'DCT Tauri Screenshot Fixture' },
+        window: {
+            __DCT_TAURI_FIXTURE__: { identity: 'dct-tauri-screenshot-fixture-v1', userData: 'C:/Actual/profile' },
+        },
+    };
+    const raw: unknown = runInNewContext(`(${expression})('C:/Fabricated/profile')`, context);
+    assert.ok(isRecord(raw));
+    assert.equal(raw.userData, 'C:/Actual/profile');
+    assert.equal(raw.identity, 'dct-tauri-screenshot-fixture-v1');
+    context.window.__DCT_TAURI_FIXTURE__.userData = 'C:/Changed/profile';
+    const changed: unknown = runInNewContext(`(${expression})()`, context);
+    assert.ok(isRecord(changed));
+    assert.equal(changed.userData, 'C:/Changed/profile');
+});
+
+test('Tauri qualification binds fixed metadata profile and one existing page and HWND with zero captures', async () => {
+    const io = boundary({ tauri: true });
+    assert.equal((await run(io, tauriConfig, 'qualification')).outcome, 'qualified');
+    assert.deepEqual(io.counts(), { capture: 0, opened: 1, closed: 1 });
+    const expression = io.events.find((event) => event.kind === 'evaluate-function')?.value;
+    assert.equal(expression, `() => (${tauriMetadata})()`);
+    assert.ok(!io.sequence.includes('condition'));
+    assert.ok(!io.sequence.includes('new_page'));
+});
+
+test('Tauri source metadata and main-window contract reject altered inputs before acquisition', async () => {
+    for (const selected of [
+        { ...tauriConfig, identityFunction: '(directory) => ({userData:directory+"/webview2-profile"})' },
+        ...[
+            { ...tauriConfig.fixture.page, url: 'http://tauri.localhost/other.html' },
+            { ...tauriConfig.fixture.page, title: undefined },
+            { ...tauriConfig.fixture.page, title: 'other' },
+            { ...tauriConfig.fixture.page, identity: undefined },
+            { ...tauriConfig.fixture.page, identity: 'other' },
+        ].map((page) => ({ ...tauriConfig, fixture: { ...tauriConfig.fixture, page } })),
+        { ...tauriConfig, mainWindow: { ...tauriConfig.mainWindow, className: 'Other' } },
+        { ...tauriConfig, mainWindow: { ...tauriConfig.mainWindow, titleIncludes: 'Fixture' } },
+    ]) {
+        const io = boundary({ tauri: true });
+        assert.equal((await run(io, selected, 'qualification')).outcome, 'preflight-blocked');
+        assert.deepEqual(io.counts(), { capture: 0, opened: 0, closed: 0 });
+        assert.ok(!io.sequence.includes('fixture'));
+    }
+});
+
+test('Tauri rejects duplicate page IDs renderer ambiguity and wrong actual metadata before markers', async () => {
+    for (const options of [
+        { pages: [7, 7] },
+        { pages: [7, 8] },
+        { missing: true },
+        { rendererMetadata: { title: 'DCT Tauri Screenshot Fixture other' } },
+        { rendererMetadata: { identity: 'other' } },
+        { rendererMetadata: { userData: 'C:/Old/profile' } },
+        { rendererMetadata: { userData: undefined } },
+    ]) {
+        const io = boundary({ tauri: true, ...options });
+        assert.equal((await run(io, tauriConfig)).outcome, 'qualification-blocked');
+        assert.deepEqual(io.counts(), { capture: 0, opened: 1, closed: 1 });
+        assert.ok(!io.sequence.includes('marker-initial'));
+    }
+});
+
+test('Tauri refuses ambiguous foreign and stale native windows before markers', async () => {
+    const main = { ...window, windowClass: 'DctTauriScreenshotFixture', title: 'DCT Tauri Screenshot Fixture' };
+    for (const nativeWindows of [
+        [main, { ...main, handle: 124 }],
+        [{ ...main, title: 'DCT Tauri Screenshot Fixture other' }],
+        [{ ...main, processId: 4401 }],
+        [{ ...main, startedAtUtc: '2026-10-06T00:00:00Z' }],
+        [{ ...main, actualExecutablePath: 'C:/Foreign/app.exe' }],
+    ]) {
+        const io = boundary({ tauri: true, nativeWindows });
+        assert.equal((await run(io, tauriConfig)).outcome, 'qualification-blocked');
+        assert.equal(io.counts().capture, 0);
+    }
+});
+
+test('Tauri viewport and fullPage retain marker condition screenshot and evidence ordering', async () => {
+    for (const mode of ['viewport', 'fullPage'] as const) {
+        const io = boundary({ tauri: true });
+        const result = await run(io, tauriConfig, mode);
+        assert.equal(result.outcome, 'success');
+        assert.deepEqual(io.counts(), { capture: 1, opened: 1, closed: 1 });
+        for (const [before, after] of [
+            ['marker-initial', 'condition'],
+            ['condition', 'marker-green'],
+            ['marker-green', 'native-before'],
+            ['native-before', 'take_screenshot'],
+            ['capture-raw', 'png'],
+            ['png', 'native-after'],
+        ] as const)
+            assert.ok(io.sequence.indexOf(before) < io.sequence.indexOf(after));
+        const request = io.events.find(
+            (event) =>
+                event.kind === 'official-request' && isRecord(event.value) && event.value.name === 'take_screenshot',
+        );
+        assert.ok(request && isRecord(request.value) && isRecord(request.value.arguments));
+        assert.equal(request.value.arguments.fullPage, mode === 'fullPage');
+    }
+});
+
+test('Tauri retains capture on pixel or observer failure and never replays a quarantined screenshot', async () => {
+    for (const options of [{ observerError: true }, { badPixel: true }, { quarantine: true }, { fast: true }]) {
+        const io = boundary({ tauri: true, ...options });
+        const result = await run(io, tauriConfig);
+        assert.equal(io.counts().capture, 1);
+        assert.ok(io.events.some((event) => event.kind === 'capture-raw'));
+        if (options.quarantine) {
+            assert.equal(result.outcome, 'quarantine');
+            assert.ok(!io.events.some((event) => event.kind === 'status-after'));
+        } else assert.equal(result.outcome, 'evidence-insufficient');
     }
 });
 

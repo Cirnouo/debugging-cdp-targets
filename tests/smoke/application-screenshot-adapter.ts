@@ -13,7 +13,10 @@ import {
     cleanupApplicationResources,
     type PayloadIO,
 } from './application-screenshot-core.ts';
-import { applicationScreenshotGatewayEnvironment } from './application-screenshot-fixture.ts';
+import {
+    applicationScreenshotBrowserConfiguration,
+    applicationScreenshotGatewayEnvironment,
+} from './application-screenshot-fixture.ts';
 import {
     applicationIdentityArguments,
     qualifyApplicationBrowserArguments,
@@ -130,6 +133,8 @@ export function createApplicationScreenshotAdapter(
     let identity: ProcessTarget | undefined;
     let launchedAt = 0;
     let startAttempted = false;
+    let launchedExecutable: string | undefined;
+    let distinctBrowser = false;
     let backgroundPrepared = false;
     let anchorIdentity: WindowIdentity | undefined;
     const cancelledPermissionOperations = new Set<string>();
@@ -383,6 +388,12 @@ export function createApplicationScreenshotAdapter(
         await record('verified-target', { identity: selected, endpoint });
         const owners = [...new Set(snapshot.listeners.map((listener) => listener.owningProcess))];
         assert.equal(owners.length, 1, 'Owned browser listener identity is ambiguous.');
+        if (distinctBrowser)
+            assert.notEqual(
+                owners[0],
+                selected.processId,
+                'Tauri browser listener must be a distinct owned descendant.',
+            );
         for (const processId of owners) {
             assert.ok(snapshot.processIds.includes(processId));
             const owner = processId === selected.processId ? snapshot : await io.snapshot(processId, selected.port);
@@ -392,6 +403,12 @@ export function createApplicationScreenshotAdapter(
                 executablePath: owner.root.executablePath,
                 startedAtUtc: owner.root.startedAtUtc,
             };
+            validateProcessIdentity(owner, { ...browser, targetKind: 'generic-cdp' });
+            assert.ok(
+                Date.parse(browser.startedAtUtc) >= Date.parse(selected.startedAtUtc) &&
+                    Date.parse(browser.startedAtUtc) <= io.now(),
+                'Browser listener does not belong to this acquisition.',
+            );
             resource.browsers.push(browser);
         }
         return selected;
@@ -426,6 +443,8 @@ export function createApplicationScreenshotAdapter(
                 'Fresh gateway has existing connections.',
             );
             launchedAt = io.now();
+            launchedExecutable = prepared.launch.executable;
+            distinctBrowser = prepared.fixture.application === 'tauri-fixture';
             startAttempted = true;
             const connection = await control({
                 action: 'start',
@@ -466,9 +485,16 @@ export function createApplicationScreenshotAdapter(
             return {
                 identity,
                 async qualify() {
-                    const profile = (prepared.launch.args ?? [])
-                        .find((arg) => arg.startsWith('--user-data-dir='))
-                        ?.slice('--user-data-dir='.length);
+                    const browserConfiguration = applicationScreenshotBrowserConfiguration(
+                        prepared.fixture.application,
+                        prepared.launch,
+                    );
+                    const profile =
+                        prepared.fixture.application === 'tauri-fixture'
+                            ? prepared.launch.env?.WEBVIEW2_USER_DATA_FOLDER
+                            : browserConfiguration.browserArguments
+                                  .find((arg) => arg.startsWith('--user-data-dir='))
+                                  ?.slice('--user-data-dir='.length);
                     assert.ok(profile, 'Reviewed expanded profile carrier is unavailable.');
                     const evidence = [];
                     const processes = [
@@ -483,20 +509,29 @@ export function createApplicationScreenshotAdapter(
                         ]);
                         await record('browser-process-output', output);
                         const actual = readApplicationProcessEvidence(output.raw, browser);
-                        if (browser.processId === selectedIdentity.processId)
+                        assert.equal(actual.elevated, false, 'Application requires observed ordinary privileges.');
+                        if (browser.processId === selectedIdentity.processId) {
                             assert.equal(
                                 actual.file.sha256,
                                 prepared.sourceSha256,
                                 'Actual executable bytes differ from reviewed source.',
                             );
-                        qualifyApplicationBrowserArguments(actual, {
-                            application: prepared.fixture.application,
-                            profile,
-                            port: selectedIdentity.port,
-                            candidate: (prepared.launch.args ?? []).some((arg) =>
-                                arg.includes('CDPScreenshotNewSurface'),
-                            ),
-                        });
+                            assert.equal(
+                                actual.file.sha256,
+                                prepared.fixture.source.sha256,
+                                'Actual copied executable differs from fixture source.',
+                            );
+                        }
+                        if (
+                            prepared.fixture.application !== 'tauri-fixture' ||
+                            browser.processId !== selectedIdentity.processId
+                        )
+                            qualifyApplicationBrowserArguments(actual, {
+                                application: prepared.fixture.application,
+                                profile,
+                                port: selectedIdentity.port,
+                                candidate: browserConfiguration.screenshotFeatureEnabled,
+                            });
                         evidence.push(actual);
                     }
                     const snapshot = await io.snapshot(selectedIdentity.processId, selectedIdentity.port);
@@ -543,6 +578,12 @@ export function createApplicationScreenshotAdapter(
                 capture: createScreenshotCaptureObserver({ sample: nativeSample, tabs: async () => {}, record }),
                 async png(file, points) {
                     const bytes = await readFile(file);
+                    const primary = {
+                        filePath: file,
+                        sha256: createHash('sha256').update(bytes).digest('hex'),
+                        bytes: bytes.length,
+                    };
+                    await record('png-file', primary);
                     const output = await io.powershell('./windows-png-evidence.ps1', [
                         '-ImagePath',
                         file,
@@ -551,9 +592,7 @@ export function createApplicationScreenshotAdapter(
                     ]);
                     await record('png-decoder-output', output);
                     return {
-                        filePath: file,
-                        sha256: createHash('sha256').update(bytes).digest('hex'),
-                        bytes: bytes.length,
+                        ...primary,
                         decoded: output.raw,
                     };
                 },
@@ -582,13 +621,10 @@ export function createApplicationScreenshotAdapter(
                 connections: resources,
                 async close(resource) {
                     try {
-                        if (!resource.identity)
-                            await establishIdentity(
-                                resource,
-                                config.fixture.application === 'readest'
-                                    ? path.join(folder, 'native/readest.exe')
-                                    : config.fixture.source.executable,
-                            );
+                        if (!resource.identity) {
+                            assert.ok(launchedExecutable, 'Exact attempted launch executable is unavailable.');
+                            await establishIdentity(resource, launchedExecutable);
+                        }
                         assert.ok(resource.identity);
                         const identities = [
                             resource.identity,

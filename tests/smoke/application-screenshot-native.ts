@@ -42,6 +42,11 @@ export function readApplicationProcessEvidence(raw: unknown, identity: WindowIde
             raw.argv.length > 0 &&
             raw.argv.every((arg: unknown) => typeof arg === 'string' && !arg.includes('\0')),
     );
+    assert.equal(
+        path.win32.normalize(raw.argv[0]).toLowerCase(),
+        path.win32.normalize(identity.executablePath).toLowerCase(),
+        'Observed executable argv differs from the owned process.',
+    );
     assert.ok(typeof raw.file.sha256 === 'string' && /^[a-f0-9]{64}$/.test(raw.file.sha256));
     assert.ok(typeof raw.file.fileVersion === 'string' && raw.file.fileVersion.trim().length > 0);
     assert.ok(typeof raw.file.productVersion === 'string' && raw.file.productVersion.trim().length > 0);

@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
+import { isRecord } from '../src/shared/errors.ts';
 import {
     type ApplicationAdapterIO,
     createApplicationScreenshotAdapter,
@@ -62,6 +66,24 @@ const prepared: PreparedApplicationScreenshotFixture = {
         ],
     },
 };
+const tauriPrepared: PreparedApplicationScreenshotFixture = {
+    ...prepared,
+    fixture: {
+        ...config.fixture,
+        application: 'tauri-fixture',
+        source: { executable: 'C:/Source/dct-tauri-screenshot-fixture.exe', sha256: 'a'.repeat(64) },
+    },
+    launch: {
+        executable: 'C:/Evidence/cell/native/dct-tauri-screenshot-fixture.exe',
+        args: [],
+        cwd: 'C:/Evidence/cell/native',
+        env: {
+            WEBVIEW2_USER_DATA_FOLDER: 'C:/Evidence/cell/webview2-profile',
+            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+                '--remote-debugging-port={port} --enable-features=CDPScreenshotNewSurface',
+        },
+    },
+};
 function boundary(
     failure?:
         | 'start'
@@ -76,7 +98,35 @@ function boundary(
         | 'elevated-root'
         | 'malformed-status',
     profile = 'C:/Evidence/cell/profile',
+    options: {
+        tauri?: boolean;
+        actualArgs?: string[];
+        rootElevated?: boolean;
+        browserElevated?: boolean;
+        rootHash?: string;
+        browserStartedAt?: string;
+        listener?: number;
+        rootArgv?: string[];
+        executable?: string;
+        pngFailure?: boolean;
+        browserSession?: number;
+        ownerStartedAt?: string;
+        browserExecutable?: string;
+    } = {},
 ) {
+    const rootIdentity = {
+        ...identity,
+        executablePath:
+            options.executable ??
+            (options.tauri ? 'C:/Evidence/cell/native/dct-tauri-screenshot-fixture.exe' : identity.executablePath),
+    };
+    const browserIdentity = options.tauri
+        ? {
+              processId: 4450,
+              executablePath: 'C:/WebView2/msedgewebview2.exe',
+              startedAtUtc: '2026-10-07T00:00:00.0000002Z',
+          }
+        : { ...rootIdentity, processId: 4450, startedAtUtc: '2026-10-07T00:00:00.0000002Z' };
     const calls: { method: string; params: Record<string, unknown>; timeout?: number }[] = [];
     const sequence: string[] = [];
     const records: { kind: string; value: unknown }[] = [];
@@ -231,15 +281,27 @@ function boundary(
                     ? { exists: false }
                     : {
                           exists: true,
-                          executablePath: identity.executablePath,
-                          startedAtUtc: processId === 4450 ? '2026-10-07T00:00:00.0000002Z' : identity.startedAtUtc,
-                          sessionId: 1,
+                          executablePath:
+                              processId === 4450
+                                  ? (options.browserExecutable ?? browserIdentity.executablePath)
+                                  : rootIdentity.executablePath,
+                          startedAtUtc:
+                              processId === 4450
+                                  ? (options.ownerStartedAt ?? browserIdentity.startedAtUtc)
+                                  : rootIdentity.startedAtUtc,
+                          sessionId: processId === 4450 ? (options.browserSession ?? 1) : 1,
                       },
                 currentSessionId: 1,
-                processIds: stopped ? [] : failure === 'elevated-root' ? [4400, 4450] : [4400],
+                processIds: stopped ? [] : failure === 'elevated-root' || options.tauri ? [4400, 4450] : [4400],
                 listeners: stopped
                     ? []
-                    : [{ localAddress: '127.0.0.1', owningProcess: failure === 'elevated-root' ? 4450 : 4400 }],
+                    : [
+                          {
+                              localAddress: '127.0.0.1',
+                              owningProcess:
+                                  options.listener ?? (failure === 'elevated-root' || options.tauri ? 4450 : 4400),
+                          },
+                      ],
             };
         },
         async endpoint() {
@@ -249,24 +311,43 @@ function boundary(
             };
         },
         async powershell(_script, args) {
+            if (_script === './windows-png-evidence.ps1') {
+                if (options.pngFailure) throw new Error('PNG decoder failed');
+                return { raw: {}, stdout: '{}', stderr: '' };
+            }
             assert.ok(args.includes('-ApplicationPid'));
             const processId = Number(args[args.indexOf('-ApplicationPid') + 1]);
             return {
                 raw: {
                     identity: {
-                        ...identity,
+                        ...(processId === 4450 ? browserIdentity : rootIdentity),
                         processId,
-                        startedAtUtc: processId === 4450 ? '2026-10-07T00:00:00.0000002Z' : identity.startedAtUtc,
+                        startedAtUtc:
+                            processId === 4450
+                                ? (options.browserStartedAt ?? browserIdentity.startedAtUtc)
+                                : rootIdentity.startedAtUtc,
                     },
                     commandLine: 'fixture',
-                    argv: [
-                        identity.executablePath,
-                        `--user-data-dir=${profile}`,
-                        '--remote-debugging-port=20222',
-                        '--enable-features=CDPScreenshotNewSurface',
-                    ],
-                    file: { sha256: 'a'.repeat(64), fileVersion: '1', productVersion: '1' },
-                    elevated: failure === 'elevated-token' || (failure === 'elevated-root' && processId === 4400),
+                    argv:
+                        options.tauri && processId === 4400
+                            ? (options.rootArgv ?? [rootIdentity.executablePath])
+                            : [
+                                  processId === 4450 ? browserIdentity.executablePath : rootIdentity.executablePath,
+                                  ...(options.actualArgs ?? [
+                                      `--user-data-dir=${profile}`,
+                                      '--remote-debugging-port=20222',
+                                      '--enable-features=CDPScreenshotNewSurface',
+                                  ]),
+                              ],
+                    file: {
+                        sha256: processId === 4400 ? (options.rootHash ?? 'a'.repeat(64)) : 'b'.repeat(64),
+                        fileVersion: '1',
+                        productVersion: '1',
+                    },
+                    elevated:
+                        failure === 'elevated-token' ||
+                        (failure === 'elevated-root' && processId === 4400) ||
+                        (processId === 4400 ? (options.rootElevated ?? false) : (options.browserElevated ?? false)),
                     identityVerifiedBefore: true,
                     identityVerifiedAfter: true,
                 },
@@ -440,4 +521,162 @@ test('malformed ownership receipts are saved before boundary validation rejects 
     );
     assert.equal((await io.adapter.cleanup()).ok, false);
     assert.equal(io.closed(), false);
+});
+
+test('Tauri Rust host without Chromium argv qualifies independently from its browser descendant', async () => {
+    const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true });
+    const route = await io.adapter.acquire(tauriPrepared, {
+        root: config.payload.root,
+        inventoryDigest: 'b'.repeat(64),
+    });
+    const evidence = await route.qualify();
+    assert.ok(
+        typeof evidence === 'object' && evidence !== null && 'evidence' in evidence && Array.isArray(evidence.evidence),
+    );
+    const processes = evidence.evidence.map((item: unknown) => {
+        assert.ok(isRecord(item) && isRecord(item.identity));
+        return { identity: item.identity, argv: item.argv };
+    });
+    assert.deepEqual(
+        processes.map((item) => item.identity.processId),
+        [4400, 4450],
+    );
+    assert.deepEqual(processes[0]?.argv, ['C:/Evidence/cell/native/dct-tauri-screenshot-fixture.exe']);
+    assert.equal(processes[1]?.identity.executablePath, 'C:/WebView2/msedgewebview2.exe');
+    assert.equal((await io.adapter.cleanup()).ok, true);
+});
+
+test('Tauri observed browser must adopt the exact env candidate and baseline feature membership', async () => {
+    for (const candidate of [false, true]) {
+        for (const actualCandidate of [false, true]) {
+            const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', {
+                tauri: true,
+                actualArgs: [
+                    '--user-data-dir=C:/Evidence/cell/webview2-profile',
+                    '--remote-debugging-port=20222',
+                    `--enable-features=SharedArrayBuffer${actualCandidate ? ',CDPScreenshotNewSurface' : ''}`,
+                ],
+            });
+            const selected = structuredClone(tauriPrepared);
+            assert.ok(selected.launch.env);
+            selected.launch.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port={port}${candidate ? ' --enable-features=CDPScreenshotNewSurface' : ''}`;
+            const route = await io.adapter.acquire(selected, {
+                root: config.payload.root,
+                inventoryDigest: 'b'.repeat(64),
+            });
+            if (candidate === actualCandidate) await route.qualify();
+            else await assert.rejects(route.qualify(), /feature carrier/);
+            assert.equal((await io.adapter.cleanup()).ok, true);
+        }
+    }
+});
+
+test('Tauri actual host and browser hashes tokens tuples profile argv and listener ownership fail closed', async () => {
+    for (const options of [
+        { rootHash: 'c'.repeat(64) },
+        { rootElevated: true },
+        { browserElevated: true },
+        { browserStartedAt: '2026-10-06T00:00:00Z' },
+        { rootArgv: ['C:/Foreign/host.exe'] },
+        {
+            actualArgs: [
+                '--user-data-dir=C:/Old/profile',
+                '--remote-debugging-port=20222',
+                '--enable-features=CDPScreenshotNewSurface',
+            ],
+        },
+        {
+            actualArgs: [
+                '--user-data-dir=C:/Evidence/cell/webview2-profile',
+                '--remote-debugging-port=20222',
+                '--enable-features=CDPScreenshotNewSurface',
+                '--disable-features=CDPScreenshotNewSurface',
+            ],
+        },
+    ]) {
+        const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, ...options });
+        const route = await io.adapter.acquire(tauriPrepared, {
+            root: config.payload.root,
+            inventoryDigest: 'b'.repeat(64),
+        });
+        await assert.rejects(route.qualify());
+        assert.equal((await io.adapter.cleanup()).ok, true);
+    }
+    for (const listener of [4400, 4499]) {
+        const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, listener });
+        await assert.rejects(
+            io.adapter.acquire(tauriPrepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }),
+        );
+        const cleanup = await io.adapter.cleanup();
+        assert.ok(io.sequence.includes('normal-close'));
+        assert.equal(cleanup.ok, true);
+    }
+});
+
+test('partial Tauri start recovers the exact expanded copy path outside the runner evidence folder', async () => {
+    const executable = 'C:/Fresh/cell-17/native/dct-tauri-screenshot-fixture.exe';
+    const io = boundary('start', 'C:/Fresh/cell-17/webview2-profile', { tauri: true, executable });
+    await assert.rejects(
+        io.adapter.acquire(
+            { ...tauriPrepared, launch: { ...tauriPrepared.launch, executable } },
+            { root: config.payload.root, inventoryDigest: 'b'.repeat(64) },
+        ),
+    );
+    assert.equal((await io.adapter.cleanup()).ok, true);
+    const receipt = io.records.find((item) => item.kind === 'verified-target');
+    assert.ok(receipt && typeof receipt.value === 'object' && receipt.value !== null && 'identity' in receipt.value);
+    assert.ok(
+        typeof receipt.value.identity === 'object' &&
+            receipt.value.identity !== null &&
+            'executablePath' in receipt.value.identity,
+    );
+    assert.equal(receipt.value.identity.executablePath, executable);
+    assert.ok(io.sequence.indexOf('arm-witness') < io.sequence.indexOf('normal-close'));
+});
+
+test('saved primary PNG receipt survives decoder failure before any pixel validation', async (t) => {
+    const bytes = Buffer.from('primary saved PNG bytes');
+    const replacement = t.mock.method(fs, 'readFile', async () => bytes);
+    syncBuiltinESMExports();
+    try {
+        const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, pngFailure: true });
+        const route = await io.adapter.acquire(tauriPrepared, {
+            root: config.payload.root,
+            inventoryDigest: 'b'.repeat(64),
+        });
+        await assert.rejects(
+            route.png('C:/Evidence/cell/screenshot.png', [], { width: 125, height: 125 }),
+            /PNG decoder failed/,
+        );
+        assert.deepEqual(io.records.find((item) => item.kind === 'png-file')?.value, {
+            filePath: 'C:/Evidence/cell/screenshot.png',
+            bytes: bytes.length,
+            sha256: createHash('sha256').update(bytes).digest('hex'),
+        });
+        assert.equal((await io.adapter.cleanup()).ok, true);
+    } finally {
+        replacement.mock.restore();
+        syncBuiltinESMExports();
+    }
+});
+
+test('Tauri listener descendant must have a current fresh same-session native tuple', async () => {
+    for (const options of [{ browserSession: 2 }, { ownerStartedAt: '2026-10-06T00:00:00.0000002Z' }]) {
+        const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, ...options });
+        await assert.rejects(
+            io.adapter.acquire(tauriPrepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }),
+        );
+        assert.ok((await io.adapter.cleanup()).ok);
+        assert.ok(io.sequence.includes('normal-close'));
+    }
+    const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', {
+        tauri: true,
+        browserExecutable: 'C:/Foreign/browser.exe',
+    });
+    const route = await io.adapter.acquire(tauriPrepared, {
+        root: config.payload.root,
+        inventoryDigest: 'b'.repeat(64),
+    });
+    await assert.rejects(route.qualify(), /executable/);
+    assert.equal((await io.adapter.cleanup()).ok, true);
 });
