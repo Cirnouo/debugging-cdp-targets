@@ -31,6 +31,21 @@ Reject routing collisions and missing, unknown, closed or stale IDs.
 Track lifecycle and busy state without logging tool contents. Confirm target
 exit through child events and retained exit state from startup. Runtime verification
 occurs before official calls, with no periodic health scans. Live process connection
-errors never announce process exit. Chrome defaults to the fixed chrome-profile;
-check native ownership and reserve canonical directories before launch, refusing
-occupied or unverifiable profiles without attaching to existing targets.
+errors never announce process exit. The accepted
+[isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)
+removes the implicit fixed Chrome fallback. Preserve native
+ownership checks, reject occupied or unverifiable profiles, and verify isolated
+Chrome's effective --user-data-dir against the acquired real directory.
+Apply known-root Chrome checks in either isolation mode and recheck availability
+before authorized data-directory deletion; external use or unverifiable evidence
+retains the directory claim. Omitted defaults and generic occupancy belong to the
+shared Agent prelaunch gate; do not add guessed roots or generic Chrome markers.
+
+Acquire existing directories only if present; create a named exclusive leaf or
+random dct- child only under an existing absolute parent. Resolve root links and
+junctions, record/reverify real directory identity, and reserve equal or overlapping
+ancestor/descendant claims. Preserve children-link boundaries during authorized
+whole-directory cleanup. Identity/disposal failure retains the claim and evidence.
+The acquired path is opaque during launch binding. Expose bounded filesystem
+failure categories to summaries/Hooks; paths belong in explicit directory evidence.
+No directory-location denylist, fallback operation or scan of old state is allowed.

@@ -24,6 +24,35 @@ target debugging endpoint must listen on loopback only. See
 [configuration](configuration.md) for launch settings and
 [privacy](privacy.md) for the security boundary.
 
+## Launch and isolation compatibility
+
+The Agent checks application/version, documented CDP startup and read-only
+occupancy before every new launch in both modes. All targets are conservatively
+treated as same-effective-data-directory singletons, without researching a
+singleton API or exempting multi-instance applications. Known same-root/shared
+use, uncertain attribution of a related running app and incomplete inspection
+leave the request unlaunched. Complete related-app absence can clear a generic
+point-in-time gate subject to applicable locks; directory uniqueness alone cannot.
+Generic occupancy is an Agent workflow requirement. Runtime retains native
+known-root Chrome checks rather than a universal generic/default-root resolver.
+
+Requested isolation needs application/version-specific official docs/source,
+read-only installation facts and applicable evidence for covered state and
+remaining production effects. Full support proceeds; partial asks acceptance or
+none; unsupported informs and remains unlaunched; unknown continues research.
+A framework or one directory switch alone does not establish isolation.
+The verified application binding must be expressible in args/env with `{dataDir}`;
+cwd-only application isolation is a Plugin expression limitation.
+
+Regular Chrome 136+ rejects remote-debugging port/pipe for its default production
+directory even when free. None must stay unlaunched for that documented combination
+rather than silently selecting isolation. Chrome for Testing retains earlier
+behavior; other brands and versions need applicable evidence. See
+[Chrome's remote-debugging change](https://developer.chrome.com/blog/remote-debugging-port).
+See [workflow](workflow.md) for the explicit Chrome preset and ordered directory
+choices, and [configuration](configuration.md#ports-and-data-directories) for
+effective-root/policy/environment and runtime enforcement limits.
+
 ## Plugin host acceptance
 
 Actual Plugin installation, tool discovery and model-context Hooks were accepted
@@ -49,7 +78,8 @@ runners. The acceptance checks cover official page/CSS tools, concurrent
 independent connections, Keep/reuse, scoped Close, same-port recovery, stale
 sessions and exit cleanup. These dated results precede the actual-exit lifecycle
 revision in [ADR 0013](../adr/0013-session-owned-exit-cleanup.md); they do not
-establish acceptance of that later revision. See
+establish acceptance of that later revision or the explicit isolation/connection
+lease change in [ADR 0015](../adr/0015-explicit-data-directory-isolation.md). See
 [the smoke instructions](../../tests/smoke/README.md) for the test boundaries.
 Other application/OS/browser combinations remain best effort.
 

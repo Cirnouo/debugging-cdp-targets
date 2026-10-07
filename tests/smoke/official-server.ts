@@ -1,19 +1,25 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
-import { createChromeSmokeLaunch, inspectChromeSmokeTarget, requireChromeSmokeExecutable } from './chrome-host.ts';
+import {
+    createChromeSmokeLaunch,
+    inspectChromeSmokeDirectory,
+    inspectChromeSmokeTarget,
+    requireChromeSmokeExecutable,
+} from './chrome-host.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, readMcpTools } from './mcp-client.ts';
 
 const chrome = await requireChromeSmokeExecutable();
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-smoke-'));
+const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-smoke-')));
+const managedDirectories = new Set<string>();
 const stopFile = path.join(folder, 'monitor-stop');
 const monitor =
     process.platform === 'win32'
@@ -32,6 +38,7 @@ const monitor =
               { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
           )
         : undefined;
+const monitoringEnded = monitor ? new Promise<void>((resolve) => monitor.once('close', () => resolve())) : undefined;
 let monitorOutput = '';
 monitor?.stdout.on('data', (data) => {
     monitorOutput += data;
@@ -99,13 +106,14 @@ try {
         action: 'start',
         requestId: randomUUID(),
         entryId,
-        targetKind: 'chrome',
         basePort: 19222,
-        launch: launch('profile-one', 'FIRST'),
+        ...launch('profile-one', 'FIRST'),
     });
     assert.ok(!('connections' in first) && first.sessionId);
     active = first;
-    await inspectChromeSmokeTarget(first, chrome);
+    const firstFixture = await inspectChromeSmokeTarget(first, chrome);
+    const firstDirectory = await inspectChromeSmokeDirectory(tool, first, firstFixture);
+    managedDirectories.add(firstDirectory);
     console.log(JSON.stringify({ first }));
     const pagesOne = await tool('list_pages', route(first));
     assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
@@ -133,20 +141,22 @@ try {
         disposition: 'Close',
     });
     active = undefined;
+    await assert.rejects(lstat(firstDirectory), { code: 'ENOENT' });
     await emptyGateway(entryId);
     const second = await control({
         action: 'start',
         requestId: randomUUID(),
         entryId,
-        targetKind: 'chrome',
         basePort: 19222,
-        launch: launch('profile-two', 'SECOND'),
+        ...launch('profile-two', 'SECOND'),
     });
     assert.ok(!('connections' in second) && second.sessionId);
     assert.notEqual(second.connectionId, first.connectionId);
     assert.notEqual(second.sessionId, first.sessionId);
     active = second;
-    await inspectChromeSmokeTarget(second, chrome);
+    const secondFixture = await inspectChromeSmokeTarget(second, chrome);
+    const secondDirectory = await inspectChromeSmokeDirectory(tool, second, secondFixture);
+    managedDirectories.add(secondDirectory);
     console.log(JSON.stringify({ second }));
     const pagesTwo = await tool('list_pages', route(second));
     assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
@@ -161,6 +171,7 @@ try {
         disposition: 'Close',
     });
     active = undefined;
+    await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
     await emptyGateway(entryId);
     console.log('Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.');
 } finally {
@@ -174,8 +185,8 @@ try {
             disposition: 'Close',
         }).catch((error: unknown) => console.error(errorMessage(error)));
     await client.close();
+    for (const directory of managedDirectories) await assert.rejects(lstat(directory), { code: 'ENOENT' });
     if (monitor) {
-        const monitoringEnded = new Promise<void>((resolve) => monitor.once('exit', () => resolve()));
         await writeFile(stopFile, 'stop');
         await monitoringEnded;
         const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');

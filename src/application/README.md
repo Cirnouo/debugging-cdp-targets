@@ -8,6 +8,15 @@
   explicit cancellation, delivered-result acknowledgement and compact terminal Hook notices.
 - `connection-owner.ts` owns one session's acquired resources, pending work,
   cancellation and disposal attempts.
+- `connection-directory.ts` holds one directory lease across all connection sessions,
+  native acquisitions, successor holds and resource cleanup retries.
 - `target-controller.ts` sequences launch, actual exit, live restart, disposition,
   and session-owned cleanup without blocking exit behind lifecycle admission.
 - `AGENTS.md` defines transaction and rollback rules.
+
+[ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) adds
+connection-level directory ownership alongside session owners: the lease spans
+restart, tracks late acquisition and releases only after all app/resource users
+are gone. Explicit start metadata retains directory evidence through failed
+startup and cleanup retries. Metadata updates preserve terminal operation state,
+result and completion delivery; explicit configuration also exposes that evidence.

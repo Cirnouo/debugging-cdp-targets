@@ -167,7 +167,11 @@ async function fixture(
     const status = (value: Record<string, unknown> = {}) =>
         control(parseControlRequest({ action: 'status', ...value }));
     const start = () =>
-        runtime.controller.start({ launch: { executable: process.execPath }, mcpArgs: ['--workspace', process.cwd()] });
+        runtime.controller.start({
+            isolation: { mode: 'none' },
+            launch: { executable: process.execPath },
+            mcpArgs: ['--workspace', process.cwd()],
+        });
     const invoke = (current: ConnectionStatus) =>
         selectedCallbacks.invoke(
             'list_pages',
@@ -736,6 +740,7 @@ test('operation and quarantine Hooks contain compact evidence without status con
     const f = await fixture();
     try {
         const accepted = await f.control({
+            isolation: { mode: 'none' },
             action: 'start',
             entryId: f.runtime.entryId,
             requestId: 'compact-result',

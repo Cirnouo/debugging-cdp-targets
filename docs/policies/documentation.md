@@ -44,7 +44,16 @@ conditions; do not present them as universal industry standards. Repository
 policies continue to define the enforceable local requirements.
 
 Plugin instructions must be concise and application-agnostic. Do not collect
-application-specific debugging recipes; Agents explore after connecting.
+application-specific debugging recipes. Agents verify the application/version's
+startup contract and research requested isolation before connecting, then explore
+pages and debugging behavior after connecting. No isolation skips isolation
+research and directory questions. For isolation, document full, partial,
+unsupported and unknown evidence separately; a framework label is not proof.
+
+Accepted forward designs may establish contributor and source requirements before
+runtime implementation. Mark that gap explicitly in ADRs and contributor docs.
+Installed Skills and user guides change with the verified implementation rather
+than presenting accepted designs as current supported behavior.
 
 User-facing documentation, prompts, and installed Skills describe current
 supported behavior. Mention rejected or superseded exploratory features only

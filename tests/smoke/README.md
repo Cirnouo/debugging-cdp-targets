@@ -42,14 +42,17 @@ then explicitly restarts and normally closes them. It retains test profiles.
   retirement observation, and Hook delivery. Connection retirement observation
   does not establish that upstream cleanup has completed or measure Agent context
   delivery. Cleanup uses
-  gateway stdin EOF and identity-verified normal target close; profiles remain in
-  the printed temporary directory for inspection.
+  gateway stdin EOF and identity-verified normal target close. Managed profiles
+  must be deleted by the gateway; the parent container remains for evidence.
 - `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
   they are never shipped.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
   Close helper reports request acceptance without claiming application exit.
+- `chrome-profile-probe.ts` observes the actual Profile Path of those newly
+  launched, independently verified fixtures through Chrome's native debugging
+  HTTP endpoint and one temporary page WebSocket. It is test-only and never shipped.
 - `windows-monitor.ps1` samples visible console windows every 20 ms and reports
   newly visible console/terminal windows, without reading application data.
 - `marketplace.ts` installs the local Plugin with an isolated Codex home, compares
@@ -439,7 +442,22 @@ of the reusable release CI. Both platform checks passed on GitHub before becomin
 required main checks; see the [compatibility guide](../../docs/user-guide/compatibility.md)
 for tested systems and actual Chrome versions.
 
-Each target has its own temporary profile and synthetic local page. The tests
+Each target explicitly requests a new managed profile with delete-on-release
+and a synthetic local page. The official Server rejects and filters
+`chrome://version/`, so a test-only native HTTP/CDP probe creates that temporary
+page through `PUT /json/new`, validates its exact page WebSocket on the owned
+IPv4 loopback listener, and reads the version document's actual `#profile_path`.
+It waits at most 45 seconds for the exact document and a nonempty path, including
+native process/listener/browser identity checks around the probe. Cleanup closes
+the transient socket and fresh target with a separate 20-second budget; changed
+ownership refuses target mutation and fails the smoke. A missing creation
+response cannot supply a safe cleanup ID; gateway normal Close still owns the
+fixture. The canonical Profile Path must have the canonical lease as its direct
+parent for these fresh default-profile launches. The official application page
+selection is restored after success or failure. Recovery checks
+that restart keeps the same directory and a marker file, and that final Close,
+ordinary/kept exit and gateway cleanup actually delete managed roots. Tests do not
+externally remove these roots to hide a cleanup failure. The tests
 preselect normal Close for their newly launched fixtures; they never take over
-an existing browser or escalate to forced termination. Profiles remain at the
-printed temporary path for local inspection.
+an existing browser or escalate to forced termination. Parent containers may
+remain at the printed temporary path for evidence.

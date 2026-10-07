@@ -1,5 +1,6 @@
 import type { Diagnostic } from '../shared/diagnostics.ts';
 import { isRecord } from '../shared/errors.ts';
+import { type DataIsolation, type DataIsolationEvidence, parseDataIsolation } from './data-isolation.ts';
 import { type ApplicationLaunch, type LaunchDefinition, parseApplicationLaunch } from './launch-command.ts';
 
 export type TargetKind = 'chrome' | 'generic-cdp';
@@ -8,6 +9,7 @@ export type StatusInclude = 'configuration' | 'diagnostics';
 export type UpstreamStatus = 'connected' | 'disconnected' | 'quarantined';
 export interface LaunchOptions {
     launch: ApplicationLaunch;
+    isolation: DataIsolation;
     targetKind?: TargetKind;
     basePort?: number;
     exactPort?: number;
@@ -17,10 +19,12 @@ export interface LaunchOptions {
 export interface LaunchContext {
     signal?: AbortSignal;
     onPhase?: (phase: string) => void;
+    dataDirectory?: string;
 }
 export interface ControlContext extends LaunchContext {
     operationId?: string;
     onIdentity?: (identity: ConnectionRoute) => void;
+    onIsolation?: (isolation: DataIsolationEvidence) => void;
 }
 export type ControlRequest =
     | {
@@ -33,7 +37,7 @@ export type ControlRequest =
       }
     | ({ action: 'start'; entryId: string; requestId: string } & Pick<
           LaunchOptions,
-          'launch' | 'targetKind' | 'basePort' | 'mcpArgs'
+          'launch' | 'isolation' | 'targetKind' | 'basePort' | 'mcpArgs'
       >)
     | ({ action: 'restart'; entryId: string; requestId: string; mcpArgs?: string[] } & ConnectionRoute)
     | ({ action: 'end-task'; entryId: string; requestId: string } & ConnectionRoute)
@@ -58,6 +62,7 @@ export interface ConnectionSummary extends TargetStatus {
     upstreamStatus?: UpstreamStatus;
 }
 export interface ConnectionStatus extends ConnectionSummary {
+    isolation?: DataIsolationEvidence;
     mcpArgs?: string[];
     enabledTools?: string[];
     workspace?: Record<string, unknown>;
@@ -232,7 +237,7 @@ export function parseControlRequest(value: unknown): ControlRequest {
         throw new Error('A nonempty requestId of at most 128 characters is required.');
     const requestId = value.requestId;
     if (action === 'start') {
-        fields(value, ['action', 'entryId', 'requestId', 'launch', 'targetKind', 'basePort', 'mcpArgs']);
+        fields(value, ['action', 'entryId', 'requestId', 'launch', 'isolation', 'targetKind', 'basePort', 'mcpArgs']);
         if (value.targetKind !== undefined && value.targetKind !== 'chrome' && value.targetKind !== 'generic-cdp')
             throw new Error('Unknown target kind.');
         if (
@@ -248,6 +253,7 @@ export function parseControlRequest(value: unknown): ControlRequest {
             entryId,
             requestId,
             launch: parseApplicationLaunch(value.launch),
+            isolation: parseDataIsolation(value.isolation),
             ...(value.targetKind === undefined ? {} : { targetKind: value.targetKind }),
             ...(value.basePort === undefined ? {} : { basePort: value.basePort }),
             ...(value.mcpArgs === undefined ? {} : { mcpArgs: strings(value.mcpArgs) }),

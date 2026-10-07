@@ -61,6 +61,12 @@ and personal paths; report suspected vulnerabilities privately through
   plugin; manage the actual app PID/time/handle. Never force-kill applications.
   Keep authorization waiting separate from CDP readiness. Quarantine timed-out
   upstreams and clear pending transport state; never restart/replay automatically.
+- Implement the accepted [isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
+    with required start intent, researched application binding and no fixed Chrome
+    profile fallback. Data directories have connection-level leases across restart;
+    preauthorized whole-directory cleanup waits for all live/pending app and resource
+    users. Keep path evidence in explicit operation metadata/selected configuration,
+    never automatic Hooks or default summaries.
 
 ## Navigation and commands
 

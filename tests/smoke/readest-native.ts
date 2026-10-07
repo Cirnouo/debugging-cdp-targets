@@ -40,6 +40,7 @@ for (const mode of ['native', 'native-cdp'] as const) {
     if (mode === 'native-cdp') {
         const host = createTargetHost();
         const target = await host.launch({
+            isolation: { mode: 'none' },
             launch: {
                 executable,
                 cwd: directory,

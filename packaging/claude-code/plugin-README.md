@@ -30,6 +30,11 @@ identify the gateway with `entryId`. Ask Close or Keep before ending the target
 task. Keep retains the target and upstream; Close
 normally ends only that connection.
 
+The Skill asks isolation intent and checks occupancy before every launch in
+both modes. Chrome's old profile location remains an explicit preset choice;
+there is no automatic profile fallback. Directory cleanup follows its already
+chosen retention/deletion policy, independently of Close/Keep.
+
 - `.claude-plugin/` identifies the Plugin.
 - `.mcp.json` starts `dist/mcp-bootstrap.mjs` using CLAUDE_PLUGIN_ROOT.
 - `hooks/` handles pending operation results, connection errors and active-task reminders.

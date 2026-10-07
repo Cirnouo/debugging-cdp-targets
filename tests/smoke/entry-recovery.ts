@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ import { isRecord } from '../../src/shared/errors.ts';
 import { assertSummary, waitForSmokeHookEvents } from '../fixtures/hook-gateway-events.ts';
 import {
     createChromeSmokeLaunch,
+    inspectChromeSmokeDirectory,
     inspectChromeSmokeTarget,
     requestChromeSmokeClose,
     requireChromeSmokeExecutable,
@@ -20,7 +21,8 @@ import { createClient, readMcpTools } from './mcp-client.ts';
 
 const chrome = await requireChromeSmokeExecutable();
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-'));
+const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-')));
+const managedDirectories = new Map<string, string>();
 const platform = createPlatformAdapter();
 const owned: ProcessTarget[] = [];
 let entryId = '';
@@ -28,7 +30,7 @@ const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets
 async function tool(name: string, arguments_: Record<string, unknown> = {}) {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
-    if (name === 'dct_connection_status' && !arguments_.hookEventName)
+    if (name === 'dct_connection_status' && !arguments_.hookEventName && !arguments_.include)
         assertSummary(result.structuredContent, typeof arguments_.connectionId === 'string');
     if (
         name === 'dct_operation_wait' &&
@@ -88,9 +90,8 @@ async function start(index: number) {
         action: 'start',
         entryId,
         requestId: randomUUID(),
-        targetKind: 'chrome',
         basePort: 19422 + index * 10,
-        launch: createChromeSmokeLaunch(
+        ...createChromeSmokeLaunch(
             chrome,
             path.join(folder, `profile-${index}`),
             `data:text/html,<title>CONNECTION-${index}</title>`,
@@ -98,7 +99,24 @@ async function start(index: number) {
     });
     assert.ok(!('connections' in target));
     assert.equal(target.status, 'active');
+    const fixture = await recordOwned(target);
+    const directory = await inspectChromeSmokeDirectory(tool, target, fixture);
+    managedDirectories.set(target.connectionId, directory);
+    await writeFile(path.join(directory, 'restart-evidence'), target.connectionId);
     return target;
+}
+async function directoryDeleted(target: ConnectionStatus) {
+    const directory = managedDirectories.get(target.connectionId);
+    assert.ok(directory);
+    await until(async () => {
+        try {
+            await lstat(directory);
+            return false;
+        } catch (error) {
+            if (isRecord(error) && error.code === 'ENOENT') return true;
+            throw error;
+        }
+    });
 }
 async function pages(target: ConnectionStatus, index: number) {
     const result = await tool('list_pages', { _dct: route(target) });
@@ -127,7 +145,6 @@ try {
     const [first, second, third] = await Promise.all([0, 1, 2].map(start));
     assert.ok(first && second && third);
     assert.equal(new Set([first.connectionId, second.connectionId, third.connectionId]).size, 3);
-    await Promise.all([first, second, third].map(recordOwned));
     const aggregate = await status();
     assert.ok('connections' in aggregate && aggregate.connections.length === 3);
     await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
@@ -136,11 +153,11 @@ try {
     await mutate('stop', first, 'Keep');
     await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
     await mutate('stop', second, 'Close');
+    await directoryDeleted(second);
     await rejectsRoute(second);
     await Promise.all([pages(first, 0), pages(third, 2)]);
     const fourth = await start(3);
     assert.notEqual(fourth.connectionId, second.connectionId);
-    await recordOwned(fourth);
     await Promise.all([pages(first, 0), pages(third, 2), pages(fourth, 3)]);
     console.log('Keep/reuse, scoped Close and later new connection passed.');
     assert.deepEqual(
@@ -181,17 +198,18 @@ try {
     assert.equal(exited.taskActive, true);
     assert.equal(exited.expected, undefined);
     assert.equal(exited.cleanupError, undefined);
+    assert.equal(exited.cleanupCode, undefined);
     assert.deepEqual(events[0]?.operations, []);
     assert.deepEqual(events[0]?.connections, []);
     const reminderReceived = Date.now();
     assert.ok(reminderReceived - connectionRetirementObservedAt <= 5_000);
     assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
     await rejectsRoute(first);
+    await directoryDeleted(first);
     await assert.rejects(() => mutate('restart', first), /absent|closed|session|connection/i);
     const retried = await start(0);
     assert.notEqual(retried.connectionId, first.connectionId);
     assert.notEqual(retried.sessionId, first.sessionId);
-    await recordOwned(retried);
     await pages(retried, 0);
     const restarted = await mutate('restart', retried);
     assert.equal(restarted.connectionId, retried.connectionId);
@@ -199,7 +217,10 @@ try {
     assert.notEqual(restarted.processId, retried.processId);
     assert.notEqual(restarted.sessionId, retried.sessionId);
     assert.equal(restarted.pageIdsInvalidated, true);
-    await recordOwned(restarted);
+    const restartedFixture = await recordOwned(restarted);
+    const restartedDirectory = await inspectChromeSmokeDirectory(tool, restarted, restartedFixture);
+    assert.equal(restartedDirectory, managedDirectories.get(retried.connectionId));
+    assert.equal(await readFile(path.join(restartedDirectory, 'restart-evidence'), 'utf8'), retried.connectionId);
     await rejectsRoute(retried);
     await Promise.all([pages(restarted, 0), pages(third, 2), pages(fourth, 3)]);
     assert.deepEqual(
@@ -227,10 +248,12 @@ try {
     assert.equal(keptExit[0]?.exits[0]?.sessionId, fourth.sessionId);
     assert.equal(keptExit[0]?.exits[0]?.taskActive, false);
     assert.equal(keptExit[0]?.exits[0]?.cleanupError, undefined);
+    assert.equal(keptExit[0]?.exits[0]?.cleanupCode, undefined);
     assert.deepEqual(keptExit[0]?.operations, []);
     assert.deepEqual(keptExit[0]?.connections, []);
     assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
     await rejectsRoute(fourth);
+    await directoryDeleted(fourth);
     await Promise.all([pages(restarted, 0), pages(third, 2)]);
     const remaining = await status();
     assert.ok('connections' in remaining && remaining.connections.length === 2);
@@ -255,7 +278,7 @@ try {
                 millisecondsFromConnectionRetirementObservation: reminderReceived - connectionRetirementObservedAt,
                 measuresUiRendering: false,
             },
-            profilesRetainedAt: folder,
+            managedProfileParent: folder,
         }),
     );
 } catch (error) {
@@ -285,5 +308,7 @@ try {
     );
     assert.equal(client.child.exitCode, 0, 'Gateway did not exit normally.');
     assert.equal(retainedAfterGatewayCleanup, false, 'Gateway EOF cleanup retained an application.');
-    console.log(JSON.stringify({ gatewayExitCode: client.child.exitCode, profilesRetainedAt: folder }));
+    for (const directory of new Set(managedDirectories.values()))
+        await assert.rejects(lstat(directory), { code: 'ENOENT' });
+    console.log(JSON.stringify({ gatewayExitCode: client.child.exitCode, deletedManagedProfilesUnder: folder }));
 }

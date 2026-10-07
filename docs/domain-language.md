@@ -9,6 +9,15 @@
 - **Connection identity**: random UUID for one independent target task and its official MCP connection.
 - **Session identity**: fresh UUID for one target lifetime, assigned before its launch begins.
 - **Session owner**: in-memory owner of one target lifetime and every resource acquired for it.
+- **Isolation intent**: the user's choice between no data directory isolation and an explicitly selected isolation directory.
+- **Data directory**: the real filesystem directory selected for application state under the isolation contract.
+- **Directory selection**: Agent chooses a suitable location, the user selects the Chrome-only preset, an existing directory, or a new named/random child under a selected parent; the preset maps to an existing/new operation.
+- **Application binding**: the researched argument or environment carrier directing a particular application/version to its data directory.
+- **Isolation support**: verified full, partial or unsupported coverage of application state and production effects; unknown means unresolved evidence.
+- **Directory lease**: connection-level ownership of a selected real data directory across target sessions.
+- **Directory cleanup policy**: retain or delete-on-release authorization applying to the whole selected real directory, including pre-existing contents.
+- **Directory release**: the end of directory ownership after no live or pending application or relevant resource can use it.
+- **Directory evidence**: explicit operation metadata or selected configuration describing the real path, cleanup policy and state.
 - **Current target**: verified newly launched process belonging to one session.
 - **CDP endpoint**: verified loopback discovery and browser WebSocket address.
 - **Official Server**: unmodified upstream chrome-devtools-mcp child for one connection.
@@ -36,7 +45,8 @@
 - **Cleanup ledger**: in-memory record of plugin-owned resources awaiting disposal retries after their session is removed.
 - **Retired connection**: connection removed after actual target exit and attempted exit cleanup.
 - **Port reservation**: gateway-local ownership of a selected target port for one session lifetime.
-- **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory.
+- **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory, distinct from native profile ownership.
+- **Directory claim**: gateway-local ownership preventing concurrent equal or ancestor/descendant real data directory selections.
 - **Closed connection**: removed target connection after actual exit; the gateway remains reusable.
 - **Live restart**: user-authorized replacement of a still-live target with the same connection and port and a fresh session.
 - **Recovery**: explicit live restart of a quarantined or disconnected connection whose application has not exited.

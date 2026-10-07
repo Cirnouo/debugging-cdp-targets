@@ -64,6 +64,7 @@ try {
     const entryId = readStatus((await tool('dct_connection_status')).structuredContent).entryId;
     const marker = path.join(folder, 'visible');
     const target = await control({
+        isolation: { mode: 'none' },
         action: 'start',
         entryId,
         requestId: randomUUID(),

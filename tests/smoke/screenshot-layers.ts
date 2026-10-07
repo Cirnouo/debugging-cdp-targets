@@ -169,7 +169,7 @@ async function direct(
 ): Promise<Route> {
     const host = createTargetHost();
     const target = await host.launch(
-        { launch, targetKind: fixture.targetKind, basePort: 20222 },
+        { isolation: { mode: 'none' }, launch, targetKind: fixture.targetKind, basePort: 20222 },
         {
             onCreated: (created) => {
                 evidence.push({
@@ -249,6 +249,7 @@ function gateway() {
         async start(launch: ApplicationLaunch, directory: string): Promise<Route> {
             const started = Date.now();
             const summary = await control({
+                isolation: { mode: 'none' },
                 action: 'start',
                 entryId,
                 requestId: randomUUID(),

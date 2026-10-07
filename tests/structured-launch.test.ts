@@ -75,3 +75,40 @@ test('environment expansion validates path placeholders and malformed port sourc
     ])
         assert.throws(() => launch.resolveLaunchDefinition(value, 9333, { APP: '/{port}/app' }));
 });
+
+test('data directory references require an explicit binding and cannot select executable or cwd', () => {
+    for (const value of [
+        { executable: '/app', args: ['{dataDir}'] },
+        { executable: '/app', env: { DATA: '{dataDir}' } },
+        { executable: '/app', env: { '{dataDir}': 'literal' } },
+        { executable: '/{dataDir}/app' },
+        { executable: '/app', cwd: '{dataDir}' },
+        { executable: '%APP%' },
+    ]) {
+        assert.throws(() => launch.resolveLaunchDefinition(value, 9333, { APP: '/{dataDir}/app' }));
+    }
+});
+
+test('data directory bytes stay opaque after environment and port expansion', () => {
+    const directory = `/data/中文 %NAME% \${NAME} {port} {dataDir} $& $' $\` "quoted"`;
+    const result = launch.resolveLaunchDefinition(
+        { executable: '/app', args: ['%BIND%', '--port={port}'], env: { DATA: `\${BIND}` } },
+        9333,
+        { BIND: '{dataDir}' },
+        directory,
+    );
+    assert.deepEqual(result.arguments, [directory, '--port=9333']);
+    assert.equal(result.env?.DATA, directory);
+});
+
+test('directory contents do not become debugging switches during binding', () => {
+    const directory = '/data/ --remote-debugging-pipe --remote-debugging-port=9999';
+    const result = launch.resolveLaunchDefinition(
+        { executable: '/app', args: ['{dataDir}'], env: { DATA: '{dataDir}' } },
+        9333,
+        {},
+        directory,
+    );
+    assert.deepEqual(result.arguments, [directory, '--remote-debugging-port=9333']);
+    assert.equal(result.env?.DATA, directory);
+});

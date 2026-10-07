@@ -277,6 +277,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         const launch = selectedFixture.launch;
         const started = Date.now();
         const connection = await control({
+            isolation: { mode: 'none' },
             action: 'start',
             entryId,
             requestId: randomUUID(),

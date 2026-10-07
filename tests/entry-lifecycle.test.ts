@@ -100,7 +100,11 @@ function fixture() {
 
 test('Keep preserves both sides across tasks; Close retires the session and reuses its entry', async () => {
     const f = fixture();
-    const first = await f.controller.start({ launch: { executable: 'fixture' }, targetKind: 'chrome' });
+    const first = await f.controller.start({
+        isolation: { mode: 'none' },
+        launch: { executable: 'fixture' },
+        targetKind: 'chrome',
+    });
     assert.equal(first.entryId, entryId);
     assert.ok(first.sessionId);
     assert.equal((await f.controller.stop({ sessionId: first.sessionId, disposition: 'Keep' })).status, 'active');
@@ -109,7 +113,7 @@ test('Keep preserves both sides across tasks; Close retires the session and reus
     assert.equal(f.controller.status().status, 'active');
     assert.equal((await f.controller.stop({ sessionId: first.sessionId, disposition: 'Close' })).status, 'idle');
     assert.equal(f.counts().serverCloses, 1);
-    const second = await f.controller.start({ launch: { executable: 'new-fixture' } });
+    const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'new-fixture' } });
     assert.notEqual(second.sessionId, first.sessionId);
     await assert.rejects(f.controller.stop({ sessionId: first.sessionId, disposition: 'Close' }), /session/i);
     assert.equal(f.controller.status().status, 'active');
@@ -118,7 +122,7 @@ test('Keep preserves both sides across tasks; Close retires the session and reus
 
 test('manual exit invalidates routes once, retires the dead session and permits a fresh start', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launch: { executable: 'fixture' } });
+    const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     assert.equal(f.controller.status().taskActive, true);
     f.exit();
@@ -134,7 +138,7 @@ test('manual exit invalidates routes once, retires the dead session and permits 
     await assert.rejects(f.controller.restart({ sessionId: active.sessionId }), /session/i);
     assert.equal(f.launches.length, 1);
     assert.equal((await f.controller.retireExited({ sessionId: active.sessionId })).status, 'idle');
-    const next = await f.controller.start({ launch: { executable: 'fresh-fixture' } });
+    const next = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fresh-fixture' } });
     assert.notEqual(next.sessionId, active.sessionId);
     assert.notEqual(f.children[0], f.children[1]);
     assert.equal(f.launches[1]?.exactPort, undefined);
@@ -146,7 +150,7 @@ test('manual exit invalidates routes once, retires the dead session and permits 
 
 test('live lost session restarts using its exact port and launch evidence after confirmed close', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launch: { executable: 'fixture' } });
+    const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     f.setHealth('gone');
     await f.controller.checkHealth();
@@ -169,7 +173,7 @@ test('live lost session restarts using its exact port and launch evidence after 
 
 test('connection unavailability gates tools while process monitoring stays active', async () => {
     const f = fixture();
-    await f.controller.start({ launch: { executable: 'fixture' } });
+    await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     f.setHealth('unavailable');
     await f.controller.checkHealth();
     assert.equal(f.controller.status().status, 'lost');
@@ -182,7 +186,7 @@ test('connection unavailability gates tools while process monitoring stays activ
 
 test('failed normal close keeps evidence and official connection for retry', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launch: { executable: 'fixture' } });
+    const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     f.failClose();
     await assert.rejects(f.controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), /normally/i);
@@ -200,7 +204,7 @@ test('failed normal close keeps evidence and official connection for retry', asy
 
 test('disconnect retains the live owned identity when normal close is rejected', async () => {
     const f = fixture();
-    await f.controller.start({ launch: { executable: 'fixture' } });
+    await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     f.failClose();
     assert.deepEqual(await f.controller.cleanupOnDisconnect(), { processId: 42, port: 9227 });
     assert.equal(f.children[0]?.exitCode, null);
@@ -209,7 +213,7 @@ test('disconnect retains the live owned identity when normal close is rejected',
 
 test('retirement forgets an exited owned process without closing the replacement at its old port', async () => {
     const f = fixture();
-    const active = await f.controller.start({ launch: { executable: 'fixture' } });
+    const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
     f.exit();
     f.setHealth('gone');

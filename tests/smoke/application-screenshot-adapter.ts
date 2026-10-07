@@ -447,6 +447,7 @@ export function createApplicationScreenshotAdapter(
             distinctBrowser = prepared.fixture.application === 'tauri-fixture';
             startAttempted = true;
             const connection = await control({
+                isolation: { mode: 'none' },
                 action: 'start',
                 entryId,
                 requestId: randomUUID(),

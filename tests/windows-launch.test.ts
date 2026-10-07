@@ -34,6 +34,64 @@ const identity = {
     elevated: true,
 };
 
+for (const event of ['cancelled', 'error'] as const) {
+    test(`native ${event} before late started keeps acquisition pending until actual identity arrives`, async () => {
+        const f = fixture();
+        const abort = new AbortController();
+        const created: number[] = [];
+        let settled = false;
+        const pending = f.launcher.launch(launch, {
+            signal: abort.signal,
+            onCreated: (application) => created.push(application.pid),
+        });
+        void pending.then(
+            () => {
+                settled = true;
+            },
+            () => {
+                settled = true;
+            },
+        );
+        if (event === 'cancelled') abort.abort(new Error('cancelled by caller'));
+        f.emit({ event, nativeError: 1223, category: 'authorization-cancelled' });
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(settled, false, 'Helper evidence cannot finish an acquisition before helper close.');
+        assert.equal(f.helper.stdin.writableEnded, true);
+        f.emit(identity);
+        assert.deepEqual(created, [identity.processId]);
+        const application = await pending;
+        assert.equal(application.pid, identity.processId);
+        if (event === 'cancelled') assert.equal(application.monitoringFailure, undefined);
+        f.emit({ event: 'exited', processId: identity.processId, exitCode: 0 });
+    });
+}
+
+test('native no-app cancellation waits for physical helper close and prevents later creation', async () => {
+    const f = fixture();
+    const reason = new Error('cancelled by caller');
+    const abort = new AbortController();
+    const created: number[] = [];
+    let settled = false;
+    const pending = f.launcher.launch(launch, { signal: abort.signal, onCreated: (app) => created.push(app.pid) });
+    void pending.then(
+        () => {
+            settled = true;
+        },
+        () => {
+            settled = true;
+        },
+    );
+    abort.abort(reason);
+    f.emit({ event: 'cancelled' });
+    f.helper.stdout.emit('end');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    f.helper.emit('close', 0);
+    await assert.rejects(pending, (error: unknown) => error === reason);
+    f.emit(identity);
+    assert.deepEqual(created, []);
+});
+
 test('native launcher passes structured environment privately and tracks the real application rather than its helper', async () => {
     const f = fixture();
     const phases: string[] = [];
@@ -66,6 +124,7 @@ test('only a native process-exit event proves application exit; authorization ca
     const denied = fixture();
     const attempt = denied.launcher.launch(launch);
     denied.emit({ event: 'error', phase: 'permission', nativeError: 1223, category: 'authorization-cancelled' });
+    denied.helper.emit('close', 0);
     await assert.rejects(attempt, (error: unknown) => {
         assert.equal(errorDetails(error)?.nativeError, 1223);
         assert.equal(errorDetails(error)?.category, 'authorization-cancelled');
@@ -85,6 +144,7 @@ test('cancel during native authorization is delivered and a raced creation still
     const denied = fixture();
     const failure = denied.launcher.launch(launch);
     denied.emit({ event: 'error', phase: 'launch', nativeError: 5, category: 'access-denied' });
+    denied.helper.emit('close', 0);
     await assert.rejects(failure, (error: unknown) => errorDetails(error)?.nativeError === 5);
     assert.equal(denied.input().split('\n').filter(Boolean).length, 1);
 });

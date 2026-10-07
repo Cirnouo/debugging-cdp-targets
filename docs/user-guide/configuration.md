@@ -12,7 +12,7 @@ The Plugin manages targets directly through MCP:
 | Tool | Behavior |
 | --- | --- |
 | `dct_connection_status` | Discovery, connection/operation status, tool requirements and automatic Hooks. |
-| `dct_connection_start` | Accept a structured new launch and return an operation immediately. |
+| `dct_connection_start` | Accept a structured new launch with explicit isolation and return an operation immediately. |
 | `dct_connection_restart` | Explicitly replace a live session, optionally with new mcpArgs. |
 | `dct_connection_stop` | Apply the user's Close/Keep choice to one session. |
 | `dct_connection_end_task` | End work and retain a live target/upstream. |
@@ -27,23 +27,62 @@ defines the allowed status combinations and exact identity requirements.
 
 ## Structured application launch
 
-Call `dct_connection_start` with structured application settings, adapting the
-executable and working directory to the actual installation:
+Every start requires structured application settings and an explicit isolation
+object. Resolve the actual executable and any required cwd/env from applicable
+supplied authorization or read-only installation/startup evidence for this request;
+an independent request or example does not establish those values.
+Do not submit a concrete start while a required value remains unresolved.
+
+```typescript
+type Isolation =
+    | { mode: 'none' }
+    | {
+        mode: 'data-dir';
+        directory:
+            | { kind: 'existing'; path: string }
+            | { kind: 'new'; parent: string; name?: string };
+        cleanup: 'retain' | 'delete-on-release';
+    };
+```
+
+Existing path and new parent are absolute. Existing must already be a directory;
+new requires an existing parent and exclusively creates one named leaf, or a
+random `dct-` child when name is omitted. Missing existing paths, missing parents,
+named collisions and equal/ancestor/descendant real-directory claims fail without
+fallback. The program owns acquisition and cleanup; do not precreate the leaf.
+
+After verifying the application's isolation/CDP contract and selecting this
+parent and retain policy, a Chrome start can use:
 
 ```json
 {
     "entryId": "<entry-uuid>",
     "requestId": "chrome-start-1",
     "targetKind": "chrome",
+    "isolation": {
+        "mode": "data-dir",
+        "directory": { "kind": "new", "parent": "C:/Work" },
+        "cleanup": "retain"
+    },
     "launch": {
         "executable": "C:/Program Files/Google/Chrome/Application/chrome.exe",
-        "args": ["--remote-debugging-port={port}"],
+        "args": ["--remote-debugging-port={port}", "--user-data-dir={dataDir}"],
         "cwd": "C:/Work",
         "env": {}
     },
     "mcpArgs": ["--workspace", "C:/Work"]
 }
 ```
+
+Data-dir requires researched `{dataDir}` binding in args or env values; none
+forbids the placeholder and acquires/deletes no isolation directory. Executable,
+cwd and environment keys cannot bind `{dataDir}`. The acquired real path is
+inserted opaquely after ordinary expansion; its bytes are not expanded again as
+environment variables, `{port}` or another `{dataDir}`. A binding proves the
+passed directory, not complete isolation of state or production effects.
+For isolated Chrome, the effective canonical `--user-data-dir={dataDir}` must
+match the acquired real directory. Only the equals-form switch before exact `--`
+is accepted; duplicate, separate-value and native alias forms fail.
 
 `{port}` works in application args/env. `%NAME%` and `${NAME}` expand within
 structured fields. No shell parsing or command-string interface is involved.
@@ -62,7 +101,7 @@ wrapper or privilege script.
 See [operations and waiting](workflow.md#operations-and-waiting) for the returned
 operation and cancellation behavior.
 
-## Ports and Chrome profiles
+## Ports and data directories
 
 Port selection starts at 9222; start's optional basePort selects another range.
 Each session reserves a candidate port before probing, preventing concurrent
@@ -71,14 +110,53 @@ OS-reserved ports are skipped. A collision after app creation fails clearly and
 does not trigger automatic relaunch. Explicit live restart refuses an occupied
 original port.
 
-Chrome uses a fixed dedicated profile unless args specifies an unused
-`--user-data-dir`. Occupied or unverifiable profiles fail clearly. Concurrent
-Chrome targets require distinct profile directories; profiles remain after
-Close. Starts and live restarts reuse the selected directory. See
-[profile storage](privacy.md#chrome-profile-storage) for default paths and
-retained data.
+Chrome receives no implicit profile directory. Directory choices are presented
+as Agent chooses a suitable location, Chrome preset (Chrome only), user existing,
+then user new parent plus optional name. The explicit preset is
+`%USERPROFILE%/.cache/chrome-devtools-mcp/chrome-profile` on Windows and
+`~/.cache/chrome-devtools-mcp/chrome-profile` on Linux/macOS, resolved to the actual
+absolute home location. None never selects or prepares it.
 
-The Chrome preset adds `--no-first-run`, `--no-default-browser-check` and
+A present preset leaf maps to existing/path; an absent leaf maps to new with
+its absolute `chrome-devtools-mcp` parent and name `chrome-profile`.
+After explicit preset and cleanup selection, Agent may create only absent
+`.cache` and `chrome-devtools-mcp` container ancestors, then verify the parent.
+The program alone creates the exclusive leaf. Ancestor files/access or identity
+failures/leaf races stop the selection without overwrite or fallback.
+Containers remain after leaf cleanup. Generic selections still require an
+existing parent and receive no automatic parent preparation.
+
+A user-selected existing nonempty directory, including the preset, retains by
+default only when no cleanup choice exists; inform its actual absolute path
+without another cleanup question. All other isolated cases need an explicit
+retain/delete choice before launch. An existing choice is reused; deletion
+covers the entire actual directory, including pre-existing contents.
+Root links/junctions resolve to the actual directory; child links do not widen
+the deletion scope. The connection lease spans restart and release waits for
+actual-exit/native-acquisition/successor/resource settlement.
+See [storage and cleanup](privacy.md#data-directory-storage-and-cleanup).
+
+The common read-only occupancy gate applies before every start in both modes.
+Known same-directory/shared-namespace use, uncertain attribution of a related
+running app and incomplete inspection leave the application unlaunched.
+Complete related-app absence can clear a generic point-in-time occupancy gate,
+subject to applicable known locks, without a guessed normal root.
+New-directory uniqueness or multi-instance capability does not clear the gate.
+Generic occupancy is performed by Agent workflow; runtime Chrome checks enforce
+known explicit roots and native occupancy. Runtime does not independently resolve
+omitted Chrome defaults across branding/channel, policy and launch environment.
+Where verified equivalent, none can explicitly bind the SAME normal Chrome root
+through existing args without an isolation lease; exact omitted-default argv
+remains as requested and needs Agent's known-root occupancy check.
+An argv match alone does not prove the effective root against policy overrides.
+
+Regular Chrome 136+ ignores remote-debugging port/pipe for its default production
+directory, even when free; that combination remains unlaunched rather than
+silently selecting isolation. Chrome for Testing retains the earlier behavior;
+other brands/application versions need applicable evidence. See
+[Chrome's remote-debugging change](https://developer.chrome.com/blog/remote-debugging-port).
+
+The Chrome launch rules add `--no-first-run`, `--no-default-browser-check` and
 `--disable-updater-scheduler` to this launched process only, preserving explicit
 switches. It does not modify updater services.
 
@@ -101,8 +179,8 @@ and Windows `single-argument` forms also fail. See
 [ADR 0014](../adr/0014-windows-chrome-screenshot-surface.md#feature-input-contract)
 for exact parsing boundaries and the deliberately strict conflict policy.
 
-A conflict fails before profile acquisition or application spawn and releases
-the transient port claim. Port selection/probing may already have occurred.
+A conflict fails before data directory acquisition or application spawn and
+releases the transient port claim. Port selection/probing may already have occurred.
 Repair the reported list or conflicting choice explicitly; the Plugin does not
 delete a disable or rewrite ambiguous arguments. Only valid ASCII feature names
 and parameter values are accepted. Other launch-field environment expansion
@@ -163,10 +241,20 @@ but creates a new session. Obtain fresh page IDs with `list_pages`.
 ## Workspace access and diagnostics
 
 Use official `--workspace` for file access. Selected status with
-`include: ["configuration"]` exposes mcpArgs and workspace sources: explicit
-directories, the system temporary-directory default and negotiated roots
+`include: ["configuration"]` exposes mcpArgs, isolation evidence and workspace
+sources: explicit directories, the system temporary-directory default and negotiated roots
 forwarding. cwd does not grant file access. Negotiation alone does not prove
 which roots a host supplied.
+
+Explicit operation status for the original start and selected configuration
+carry flat isolation evidence: `{mode:'none'}` or
+`{mode:'data-dir', path, cleanup, state, nonempty?}`. Path is the actual real
+absolute directory; state is held, retained, deleted or cleanup-failed.
+Original start evidence remains available after failed/cancelled startup and
+route removal; selected configuration is available while its connection exists.
+Later cleanup updates original start metadata, not its terminal
+state/result/error/cursor or completion notice. Defaults/Hooks omit this evidence
+and raw filesystem errors; read it explicitly before claiming cleanup.
 
 Request `include: ["diagnostics"]` only when bounded phase/outcome evidence is
 needed. Includes require connectionId and can combine with toolNames;

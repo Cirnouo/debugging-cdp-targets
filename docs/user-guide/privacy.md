@@ -12,23 +12,66 @@ Debugging tools and the pages you open can still make network requests; these
 defaults are not a guarantee that all upstream tools work offline. See
 [configuration](configuration.md#official-server-settings) for explicit overrides.
 
-## Chrome profile storage
+## Data directory storage and cleanup
 
-Chrome retains its debugging profile separately from your usual browsing profile:
+Data directory isolation is explicit and depends on the researched application/
+version contract. A selected directory does not by itself guarantee that every
+production effect, credential store or external service is isolated.
+None uses the application's normal startup contract and creates/deletes no
+isolation directory. It never selects the Chrome preset.
+
+Chrome's old location remains available only as an explicit isolation choice:
 
 | Storage | Windows | Linux/macOS |
 | --- | --- | --- |
-| Default Chrome debugging profile | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
+| Explicit Chrome preset isolation directory | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
 
-The Chrome profile retains browser data, including cookies and browsing state.
-Starts and live restarts reuse this fixed default directory unless you explicitly
-select another `--user-data-dir`. Occupied or unverifiable profiles fail clearly;
-concurrent Chrome targets need distinct profile directories. Profiles are
-retained after Close for inspection.
+The Agent resolves the actual absolute home and directory. Other choices may
+delegate a suitable location, reuse an existing empty/nonempty directory or create
+a named/random child under an existing parent. When listing the complete Chrome
+menu, the order is Agent choice, Chrome preset, existing directory, new child.
+See [directory choices](workflow.md#select-a-directory-and-cleanup-policy).
 
-Older npm/package caches are no longer used; upgrades leave them and existing
-profiles, user configuration and global Skills in place. See
-[ports and profiles](configuration.md#ports-and-chrome-profiles) for launch behavior.
+A user-selected existing nonempty directory, including the preset, is retained
+in full when no explicit cleanup choice exists. The Agent informs its actual
+absolute path without a cleanup question or deletion offer. Other isolated
+cases need retain/delete before launch without a default; prior choices are reused.
+Delete-on-release authorizes removal of the entire selected actual directory,
+including all pre-existing contents. Retain preserves the entire directory.
+Close/Keep is an application decision and does not change that selected policy.
+
+The program acquires the existing real directory or creates one exclusive leaf.
+A selected root link/junction resolves to its real object; deletion removes that
+actual directory, while child links do not extend deletion to external targets.
+Changed or unverifiable root identity prevents removal and retains cleanup
+ownership. Concurrent equal or ancestor/descendant real claims are rejected.
+For an explicitly selected missing Chrome preset, Agent may prepare only absent
+`.cache` and `chrome-devtools-mcp` containers after cleanup selection.
+The program creates/cleans `chrome-profile`; those containers remain afterward.
+Generic new selections still require an existing parent.
+
+The connection directory lease spans session restart and Keep/end-task through
+actual application exit. Deletion waits until no live/unconfirmed app, pending
+native acquisition/permission wait/late creation, successor launch or relevant
+resource remains. Failed Close/observation/resource disposal retains ownership.
+External Chrome occupancy detected during failed startup or before cleanup also
+prevents deletion. Failed cleanup remains in an in-memory retry ledger without
+restoring a dead route. Hard gateway crash or disconnect without verified exit
+cannot promise later deletion; there is no daemon, persistence or old-state scan.
+
+Actual path, policy and state appear only in explicit original start operation
+metadata and selected configuration. State is held, retained, deleted or
+cleanup-failed; entry presence appears when inspection succeeded.
+Original start evidence survives failed/cancelled startup and route removal.
+Later release/retry updates that metadata without another completion notice or
+changing the original terminal result/state/error/cursor. The Agent discloses
+retained actual absolute paths, including delegated/random/resolved-link paths.
+Default summaries and automatic Hooks omit paths and raw filesystem errors.
+Reading entries/metadata for directory decisions does not require reading contents.
+
+Upgrades leave older caches, unselected existing profiles, user configuration and
+global Skills in place. See [configuration](configuration.md#ports-and-data-directories)
+for binding and occupancy enforcement limits.
 
 ## Local debugging boundary
 

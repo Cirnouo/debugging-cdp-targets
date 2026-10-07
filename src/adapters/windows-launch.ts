@@ -135,7 +135,7 @@ export function createWindowsLauncher({
                         if (typeof value.phase !== 'string' || !phases.has(value.phase))
                             throw new Error('Invalid native process phase.');
                         context.onPhase?.(value.phase);
-                    } else if (value.event === 'error') failure(nativeFailure(value), true);
+                    } else if (value.event === 'error') failure(nativeFailure(value));
                     else event(value);
                 } catch {
                     failure(new Error('Invalid native process evidence.'));
@@ -157,7 +157,7 @@ export function createWindowsLauncher({
             detach();
             ended();
         });
-        child.stdout.once('end', ended);
+        child.stdout.once('end', () => failure(new Error('Native helper evidence stream ended.')));
         child.stdin.write(`${JSON.stringify(request)}\n`);
         if (context.signal?.aborted) cancel();
         return {
@@ -271,11 +271,15 @@ export function createWindowsLauncher({
             return new Promise((resolve, reject) => {
                 let application: NativeApplication | undefined;
                 let launchFailure: Error | undefined;
+                let cancellationReason: unknown;
+                let settledWithoutApplication = false;
                 const failed = (error: Error, terminal = false) => {
                     launchFailure ??= error;
                     if (application?.monitorDisposed) return;
-                    if (!application && terminal) reject(launchFailure);
-                    else if (application && application.exitCode === null && !application.monitoringFailure) {
+                    if (!application && terminal) {
+                        settledWithoutApplication = true;
+                        reject(cancellationReason ?? launchFailure);
+                    } else if (application && application.exitCode === null && !application.monitoringFailure) {
                         application.monitoringFailure = 'native-helper-exited';
                         application.emit('monitor-error');
                     }
@@ -287,10 +291,10 @@ export function createWindowsLauncher({
                     { action: 'launch', launch },
                     context,
                     (value) => {
+                        if (settledWithoutApplication) return;
                         if (value.event === 'cancelled' && !application) {
-                            reject(
-                                context.signal?.reason ?? new DOMException('Windows launch cancelled.', 'AbortError'),
-                            );
+                            cancellationReason ??=
+                                context.signal?.reason ?? new DOMException('Windows launch cancelled.', 'AbortError');
                             transport.child.stdin.end();
                         } else if (value.event === 'started' && !application) {
                             if (

@@ -7,14 +7,18 @@ These pages explain installation and operation in detail:
     entries, automatic Hook controls, updates, scopes and uninstallation.
 - [compatibility.md](compatibility.md): host and application requirements, platform
     prerequisites, extension support and dated acceptance results.
-- [workflow.md](workflow.md): launch and inspection, independent connections,
-    Close/Keep, actual exit, live restart, operations and automatic notifications.
+- [workflow.md](workflow.md): isolation intent/research, common occupancy checks,
+    ordered directory/cleanup choices, inspection, independent connections,
+    Close/Keep, actual exit/restart, operation evidence and notifications.
 - [configuration.md](configuration.md): MCP lifecycle tools, structured application
-    settings, ports, Chrome profiles, official tool enablement and workspace access.
-- [privacy.md](privacy.md): in-memory state, retained browser data, network access,
-    bundled package integrity and dependency audit limits.
+    settings, explicit isolation/binding, ports, Chrome preset directory,
+    evidence/enforcement limits, official tool enablement and workspace access.
+- [privacy.md](privacy.md): selected data-directory retention/deletion, resolved
+    roots, cleanup lifetime/metadata privacy, network access, bundled package
+    integrity and dependency audit limits.
 - [troubleshooting.md](troubleshooting.md): common failures, explicit recovery,
-    normal manual close, Windows Chrome screenshot compatibility and scoped
+    directory/occupancy and cleanup failures, normal manual close,
+    Windows Chrome screenshot compatibility and scoped
     conditional application guidance.
 
 The [lifecycle protocol](../lifecycle-protocol.md) defines exact MCP selectors and

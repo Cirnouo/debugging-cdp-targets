@@ -18,7 +18,8 @@ const exit = {
     targetKind: 'generic-cdp',
     exitedAt: '2026-10-05T00:00:00Z',
     cleanupStatus: 'failed',
-    cleanupError: 'native "Close" at C:\\fixture\\target\n观察失败 { evidence }',
+    cleanupCode: 'RESOURCE_CLEANUP_FAILED',
+    signalCode: 'signal "quoted"\n观察 { evidence }',
 };
 const operation = {
     kind: 'operation',
@@ -87,7 +88,7 @@ test('smoke Hook wait returns a valid wrong-identity first batch for the caller 
                 expected: undefined,
                 operationId: undefined,
                 cleanupStatus: 'succeeded',
-                cleanupError: undefined,
+                cleanupCode: undefined,
             },
         ],
         operations: [],
@@ -147,6 +148,12 @@ test('serialized wrappers still reject leaked fields and malformed nested exit e
         'enabledToolCount',
         'message',
         'cause',
+        'isolation',
+        'directory',
+        'path',
+        'cleanup',
+        'nonempty',
+        'cleanupError',
     ]) {
         const leaked = { ...events, operations: [{ ...operation, [field]: 'private' }] };
         assert.throws(() => hookEvents(JSON.stringify({ output: context(leaked) })), { code: 'ERR_ASSERTION' });
@@ -157,4 +164,18 @@ test('serialized wrappers still reject leaked fields and malformed nested exit e
     assert.throws(() => hookEvents(JSON.stringify({ output: context(mismatch) })), { code: 'ERR_ASSERTION' });
     const pending = { ...events, operations: [{ ...operation, exits: [{ ...exit, cleanupStatus: 'pending' }] }] };
     assert.throws(() => hookEvents(JSON.stringify({ output: context(pending) })), { code: 'ERR_ASSERTION' });
+});
+
+test('serialized Hooks reject raw filesystem errors in standalone and grouped exits', () => {
+    const leaked = { ...exit, cleanupError: 'EACCES private path C:\\fixture\\target' };
+    assert.throws(() => hookEvents(context({ exits: [leaked], operations: [], connections: [] })), {
+        code: 'ERR_ASSERTION',
+    });
+    assert.throws(
+        () =>
+            hookEvents(
+                JSON.stringify({ output: context({ ...events, operations: [{ ...operation, exits: [leaked] }] }) }),
+            ),
+        { code: 'ERR_ASSERTION' },
+    );
 });

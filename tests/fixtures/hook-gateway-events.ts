@@ -23,6 +23,12 @@ const blocked = new Set([
     'cwd',
     'message',
     'cause',
+    'isolation',
+    'directory',
+    'path',
+    'cleanup',
+    'nonempty',
+    'cleanupError',
 ]);
 const hookBlocked = new Set(['toolNames', 'enabledTools', 'enabledToolCount']);
 function assertCompact(value: unknown, hook = false) {
@@ -125,7 +131,7 @@ function eventList(value: unknown, kind: string): Record<string, unknown>[] {
                             'exitCode',
                             'signalCode',
                             'cleanupStatus',
-                            'cleanupError',
+                            'cleanupCode',
                         ].includes(key),
                     ),
                 );
@@ -140,7 +146,7 @@ function eventList(value: unknown, kind: string): Record<string, unknown>[] {
                 if (event.exitCode !== undefined) assert.equal(typeof event.exitCode, 'number');
                 if (event.signalCode !== undefined) assert.equal(typeof event.signalCode, 'string');
                 assert.ok(['succeeded', 'failed'].includes(String(event.cleanupStatus)));
-                if (event.cleanupError !== undefined) assert.equal(typeof event.cleanupError, 'string');
+                if (event.cleanupCode !== undefined) assert.equal(event.cleanupCode, 'RESOURCE_CLEANUP_FAILED');
             } else assert.ok(typeof event.code === 'string' && typeof event.reason === 'string');
         }
         assertCompact(event, true);

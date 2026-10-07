@@ -1,6 +1,7 @@
 import { open, readlink, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { effectiveChromeProfileArgument } from '../domains/chrome-profile.ts';
 import { errorCode } from '../shared/errors.ts';
 import { probeProcessExists } from './platform-process.ts';
 
@@ -46,9 +47,7 @@ async function canonicalDirectory(directory: string): Promise<string> {
 
 export async function reserveProfile(directory: string, available = profileAvailable): Promise<() => void> {
     const occupied = () =>
-        new Error(
-            `Chrome profile is occupied or unverifiable; explicitly choose another --user-data-dir: ${directory}`,
-        );
+        new Error('Chrome profile is occupied or unverifiable; explicitly choose another --user-data-dir.');
     let canonical: string;
     try {
         canonical = await canonicalDirectory(directory);
@@ -75,14 +74,5 @@ export async function reserveProfile(directory: string, available = profileAvail
 }
 
 export function chromeProfileArgument(arguments_: string[]): string | undefined {
-    let directory: string | undefined;
-    for (let index = 0; index < arguments_.length; index += 1) {
-        const argument = arguments_[index];
-        if (argument !== '--user-data-dir' && !argument?.startsWith('--user-data-dir=')) continue;
-        if (directory !== undefined) throw new Error('Duplicate Chrome --user-data-dir profile arguments.');
-        directory = argument === '--user-data-dir' ? arguments_[++index] : argument.slice('--user-data-dir='.length);
-        if (!directory || directory.startsWith('--'))
-            throw new Error('Chrome --user-data-dir requires a profile directory.');
-    }
-    return directory;
+    return effectiveChromeProfileArgument(arguments_, process.platform);
 }

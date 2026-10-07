@@ -6,11 +6,29 @@ const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const connectionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const sessionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
+test('start requires strict isolation intent and preserves directory selection', () => {
+    const start = { action: 'start', entryId, requestId: 'isolation', launch: { executable: '/app' } };
+    assert.throws(() => parseControlRequest(start), /isolation/i);
+    for (const isolation of [
+        { mode: 'none' },
+        { mode: 'data-dir', directory: { kind: 'existing', path: '/data' }, cleanup: 'retain' },
+        { mode: 'data-dir', directory: { kind: 'new', parent: '/data' }, cleanup: 'delete-on-release' },
+    ])
+        assert.deepEqual(parseControlRequest({ ...start, isolation }), { ...start, isolation });
+    for (const isolation of [
+        { mode: 'none', directory: { kind: 'existing', path: '/data' } },
+        { mode: 'data-dir', directory: { kind: 'existing', path: '/data' } },
+        { mode: 'data-dir', directory: { kind: 'new', parent: '/data', path: '/data' }, cleanup: 'retain' },
+    ])
+        assert.throws(() => parseControlRequest({ ...start, isolation }));
+});
+
 test('MCP control accepts structured launch and explicit official arguments without a command string', () => {
     const request = {
         action: 'start',
         entryId,
         requestId: 'launch-1',
+        isolation: { mode: 'none' },
         launch: { executable: '/opt/app', args: ['a b'], env: { PORT: '{port}' } },
         mcpArgs: ['--workspace=/work'],
     };

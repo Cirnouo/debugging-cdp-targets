@@ -15,7 +15,7 @@ internal retry ledger, not a routable dead session. Preserve ownership and
 observation when an application is still alive and normal Close fails or is
 cancelled. Never force-kill applications.
 
-Store entry/connection/session identities and original launch argv/cwd/profile only in
+Store entry/connection/session identities and original launch argv/cwd/directory only in
 memory. Observe the actual application from startup and latch confirmed exit;
 Windows helper exit or native observation failure never proves app exit. Use
 native application handle waits/events without process polling. A normal target
@@ -47,3 +47,19 @@ restart. Keep those exits and the notice unread while any related cleanup is
 pending; their routes can differ from the operation's final route. Inactive exit
 remains informational and an active unexpected exit may suggest a new start.
 Empty Hooks return {}.
+
+Implement [ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) with
+a distinct connection-level directory lease.
+Prevalidate before acquiring it and preserve it across session restart. Release
+only after no live/pending app, permission wait, late creation, successor or
+relevant read/write resource can use it. Intermediate restart exit never releases
+it. Cancellation must own late-created apps through normal Close and actual exit.
+Failed Close/observation/rollback retains live ownership; disposal failures keep
+the directory claim in the in-memory ledger without restoring dead routes.
+
+Honor preauthorized retain or whole-directory delete-on-release, including existing
+contents. Preserve acquired path/policy/state in explicit original start operation
+metadata after failure/cancellation and later cleanup; do not rewrite terminal
+state/results or create another completion notice. Selected configuration may
+include that evidence. Hooks/default summaries omit paths and raw filesystem
+errors. Hard crash/unverified disconnect cannot promise eventual deletion.

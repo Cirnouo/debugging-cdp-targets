@@ -112,6 +112,13 @@
   bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser. External Close stimuli only request normal closure;
   they cannot await an inspect-only fixture, poll disappearance or invent exit evidence.
+  Actual profile evidence requires canonical direct-parent equality and preserves
+  the application selection despite the official Server's internal-URL refusal.
+- `chrome-profile-probe.test.ts` exercises the test-only native profile observer
+  through a synthetic loopback HTTP/WebSocket peer and injected native identity
+  evidence. It checks asynchronous version-page readiness, exact owned endpoints,
+  malformed/reused target IDs, response failures, bounded timeouts, changed ownership,
+  socket/target cleanup and preservation of primary failure evidence.
 - `claude-smoke-config.test.ts` checks allowlisted host environments, isolated user
   paths, loopback-only model endpoints, the Claude version baseline, unknown request
   validation, actual tool-result shapes, Hook context extraction, Anthropic SSE,
@@ -148,6 +155,9 @@
 - `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
   pending health/request cancellation, busy Close, immutable compact Hook facts,
   replacement rollback, deleted routes and peer shutdown isolation.
+- `connection-isolation.test.ts` checks connection leases across restart, pending
+  native/directory acquisition, late cancellation, actual exit and failed cleanup;
+  terminal metadata preserves paths while summaries and Hooks omit them.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks explicit same-port recovery, literal launch
   evidence and rejection of port races after an application is created.
@@ -159,7 +169,7 @@
   gateway registries and owner-checked release without opening sockets.
 - `target-events.test.ts` checks silent exit monitoring, task resumption, Hook
   deduplication and isolated cleanup with retained retry identity on failure.
-- `chrome-profile.test.ts` checks stable defaults, explicit directories, occupancy
+- `chrome-profile.test.ts` checks explicit directories without a fallback, occupancy
   rejection, concurrent reservations, cancelled late acquisition and release
   generation safety with fake targets. Windows Chrome's fixed screenshot feature
   reaches spawned argv and exact recovery; conflicts precede profile/spawn and

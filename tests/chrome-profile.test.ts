@@ -1,9 +1,50 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { applyChromePreset, createTargetHost } from '../src/adapters/target-host.ts';
+
+test('Chrome none never inserts an implicit data directory', () => {
+    assert.ok(!applyChromePreset([]).some((argument) => argument.startsWith('--user-data-dir')));
+});
+
+test('Chrome managed binding uses the actual canonical directory and rejects an override before spawn', async (t) => {
+    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-binding-')));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const f = fixture();
+    t.after(() => f.finish());
+    const isolation = {
+        mode: 'data-dir' as const,
+        directory: { kind: 'existing' as const, path: directory },
+        cleanup: 'retain' as const,
+    };
+    const target = await f.host.launch(
+        {
+            isolation,
+            targetKind: 'chrome',
+            launch: { executable: process.execPath, args: ['--user-data-dir={dataDir}'] },
+        },
+        { dataDirectory: directory },
+    );
+    assert.ok(f.launchedArguments[0]?.includes(`--user-data-dir=${directory}`));
+    await f.host.close(target);
+    for (const args of [
+        ['--user-data-dir=/other', '--data={dataDir}'],
+        ['--user-data-dir', '{dataDir}'],
+        ['--', '--user-data-dir={dataDir}'],
+        ['--user-data-dir={dataDir}', '--user-data-dir=/other'],
+    ])
+        await assert.rejects(
+            f.host.launch(
+                { isolation, targetKind: 'chrome', launch: { executable: process.execPath, args } },
+                { dataDirectory: directory },
+            ),
+            /profile|directory|user-data-dir/,
+        );
+    assert.equal(f.launchedArguments.length, 1);
+});
 
 function fixture(available: boolean | (() => Promise<boolean>) = true) {
     const children: EventEmitter[] = [];
@@ -51,6 +92,7 @@ function fixture(available: boolean | (() => Promise<boolean>) = true) {
     const launch = (directory?: string, signal?: AbortSignal) =>
         host.launch(
             {
+                isolation: { mode: 'none' },
                 targetKind: 'chrome',
                 launch: {
                     executable: process.execPath,
@@ -71,16 +113,9 @@ function fixture(available: boolean | (() => Promise<boolean>) = true) {
     };
 }
 
-test('Chrome defaults to stable chrome-profile and preserves an explicit separate directory argument', () => {
-    const home = process.platform === 'win32' ? process.env.USERPROFILE : os.homedir();
-    assert.ok(home);
-    assert.ok(
-        applyChromePreset([]).includes(
-            `--user-data-dir=${path.join(home, '.cache', 'chrome-devtools-mcp', 'chrome-profile')}`,
-        ),
-    );
-    const args = ['--user-data-dir', 'chosen profile'];
-    assert.deepEqual(applyChromePreset(args).slice(0, 2), args);
+test('Chrome preserves an explicit canonical directory argument without mutating the input', () => {
+    const args = ['--user-data-dir=chosen profile'];
+    assert.deepEqual(applyChromePreset(args).slice(0, 1), args);
     for (const invalid of [['--user-data-dir'], ['--user-data-dir='], ['--user-data-dir=a', '--user-data-dir=b']])
         assert.throws(() => applyChromePreset(invalid), /profile|user-data-dir/i);
 });
@@ -94,6 +129,7 @@ test('Chrome launch disables updater scheduling and preserves the switch during 
         assert.ok(target.launchDefinition);
         assert.equal(await f.host.close(target), true);
         await f.host.launch({
+            isolation: { mode: 'none' },
             targetKind: 'chrome',
             launch: { executable: '' },
             exactPort: target.port,
@@ -106,10 +142,10 @@ test('Chrome launch disables updater scheduling and preserves the switch during 
 });
 
 test('Chrome preset preserves an explicit updater scheduler switch without mutating caller arguments', () => {
-    const arguments_ = ['--user-data-dir', 'chosen profile', '--disable-updater-scheduler'];
+    const arguments_ = ['--user-data-dir=chosen profile', '--disable-updater-scheduler'];
     const result = applyChromePreset(arguments_);
     assert.equal(result.filter((value) => value === '--disable-updater-scheduler').length, 1);
-    assert.deepEqual(arguments_, ['--user-data-dir', 'chosen profile', '--disable-updater-scheduler']);
+    assert.deepEqual(arguments_, ['--user-data-dir=chosen profile', '--disable-updater-scheduler']);
     assert.deepEqual(applyChromePreset(result), result);
 });
 
@@ -129,7 +165,7 @@ test('Windows Chrome spawns the fixed screenshot feature and preserves exact rec
         ],
     };
     try {
-        const target = await f.host.launch({ targetKind: 'chrome', launch });
+        const target = await f.host.launch({ isolation: { mode: 'none' }, targetKind: 'chrome', launch });
         assert.ok(f.launchedArguments[0]?.includes('--enable-features=Other:param/value,CDPScreenshotNewSurface'));
         assert.ok(f.launchedArguments[0]?.includes('--disable-features=Unrelated'));
         assert.ok(f.launchedArguments[0]?.includes('--label=中文'));
@@ -137,6 +173,7 @@ test('Windows Chrome spawns the fixed screenshot feature and preserves exact rec
         assert.ok(target.launchDefinition);
         await f.host.close(target);
         await f.host.launch({
+            isolation: { mode: 'none' },
             targetKind: 'chrome',
             launch: { executable: '' },
             exactPort: target.port,
@@ -156,6 +193,7 @@ test('Windows Chrome feature conflicts fail before profile acquisition and spawn
     try {
         await assert.rejects(
             f.host.launch({
+                isolation: { mode: 'none' },
                 targetKind: 'chrome',
                 basePort: 20222,
                 launch: {
@@ -168,6 +206,7 @@ test('Windows Chrome feature conflicts fail before profile acquisition and spawn
         assert.deepEqual(f.inspected, []);
         assert.deepEqual(f.launchedArguments, []);
         const target = await f.host.launch({
+            isolation: { mode: 'none' },
             targetKind: 'chrome',
             basePort: 20222,
             launch: { executable: process.execPath, args: [`--user-data-dir=${directory}`] },
@@ -185,6 +224,7 @@ test('generic CDP launch preserves caller feature choices without applying the C
     const args = ['--remote-debugging-port={port}', '--disable-features=CDPScreenshotNewSurface', '--label=中文'];
     try {
         const target = await f.host.launch({
+            isolation: { mode: 'none' },
             targetKind: 'generic-cdp',
             basePort: 20222,
             launch: { executable: process.execPath, args },
@@ -219,6 +259,7 @@ for (const [label, option] of [
         try {
             await assert.rejects(
                 f.host.launch({
+                    isolation: { mode: 'none' },
                     targetKind: 'chrome',
                     basePort: 20222,
                     launch: { executable: process.execPath, args: [`--user-data-dir=${directory}`, option] },
@@ -228,6 +269,7 @@ for (const [label, option] of [
             assert.equal(f.inspected.length, 0);
             assert.equal(f.launchedArguments.length, 0);
             const target = await f.host.launch({
+                isolation: { mode: 'none' },
                 targetKind: 'chrome',
                 basePort: 20222,
                 launch: { executable: process.execPath, args: [`--user-data-dir=${directory}`] },
@@ -260,6 +302,7 @@ test('Windows Chrome preserves FEFF positional args and legal parameter delimite
     ];
     try {
         const target = await f.host.launch({
+            isolation: { mode: 'none' },
             targetKind: 'chrome',
             basePort: 20222,
             launch: { executable: process.execPath, args },
@@ -278,6 +321,7 @@ test('Windows Chrome preserves FEFF positional args and legal parameter delimite
         assert.ok(target.launchDefinition);
         await f.host.close(target);
         await f.host.launch({
+            isolation: { mode: 'none' },
             targetKind: 'chrome',
             launch: { executable: '' },
             exactPort: target.port,
@@ -289,12 +333,20 @@ test('Windows Chrome preserves FEFF positional args and legal parameter delimite
     }
 });
 
-test('occupied profile is rejected before spawn, without substituting a temporary directory', async () => {
+test('occupied profile is rejected before spawn, without substituting a temporary directory', async (t) => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-occupied-profile-')));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const actual = path.join(root, 'actual');
+    const alias = path.join(root, 'alias');
+    await mkdir(actual);
+    await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
     const f = fixture(false);
     try {
-        await assert.rejects(f.launch(), /profile.*(occupied|unverifiable)/i);
+        const directory = path.join(alias, 'profile');
+        await assert.rejects(f.launch(directory), /profile.*(occupied|unverifiable)/i);
         assert.equal(f.children.length, 0);
-        assert.match(f.inspected[0] ?? '', /chrome-profile$/);
+        assert.deepEqual(f.inspected, [path.join(actual, 'profile')]);
+        assert.deepEqual(f.launchedArguments, []);
     } finally {
         f.finish();
     }

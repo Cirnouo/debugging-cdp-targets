@@ -100,8 +100,15 @@ test('connections keep independent actual catalogs and explicit restart invalida
         const preflight = await control({ action: 'status', entryId: runtime.entryId, toolNames: ['evaluate'] });
         assert.match(JSON.stringify(preflight), /slim=true/);
         assert.equal(JSON.stringify(preflight).includes('suggestedMcpArgs'), false);
-        const first = await runtime.controller.start({ launch: { executable: 'fixture' } });
-        const second = await runtime.controller.start({ launch: { executable: 'fixture' }, mcpArgs: ['--slim'] });
+        const first = await runtime.controller.start({
+            isolation: { mode: 'none' },
+            launch: { executable: 'fixture' },
+        });
+        const second = await runtime.controller.start({
+            isolation: { mode: 'none' },
+            launch: { executable: 'fixture' },
+            mcpArgs: ['--slim'],
+        });
         const firstStatus = await control({
             action: 'status',
             entryId: runtime.entryId,

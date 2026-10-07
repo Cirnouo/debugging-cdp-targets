@@ -63,6 +63,7 @@ async function terminalFixture(state: 'succeeded' | 'failed' | 'cancelled') {
     };
     const service = createLifecycleService({ entryId, handler });
     const request = {
+        isolation: { mode: 'none' as const },
         action: 'start' as const,
         entryId,
         requestId: `terminal-${state}`,
@@ -92,6 +93,7 @@ test('MCP dispatch rejects wrong entry, stale new requests and accepts retries o
 test('cancellation after application creation normally closes it before reporting cancelled', async () => {
     const f = fixture();
     const accepted = await f.service.control({
+        isolation: { mode: 'none' as const },
         action: 'start',
         entryId,
         requestId: 'start',
@@ -194,6 +196,7 @@ test('successfully delivered terminal operation status and wait acknowledge noti
 test('terminal wait acknowledges once while cancelled and incomplete waits leave future completion notices intact', async () => {
     const f = fixture();
     const accepted = await f.service.control({
+        isolation: { mode: 'none' as const },
         action: 'start',
         entryId,
         requestId: 'read-wait',
@@ -214,6 +217,7 @@ test('terminal wait acknowledges once while cancelled and incomplete waits leave
     assert.equal(f.service.takeNotices().length, 1);
     const again = fixture();
     const next = await again.service.control({
+        isolation: { mode: 'none' as const },
         action: 'start',
         entryId,
         requestId: 'complete-wait',
@@ -319,6 +323,7 @@ test('running retries and cancelling snapshots never acknowledge future completi
     for (const path of ['cancel', 'retry'] as const) {
         const f = fixture();
         const request = {
+            isolation: { mode: 'none' as const },
             action: 'start' as const,
             entryId,
             requestId: `pending-${path}`,

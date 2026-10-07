@@ -5,6 +5,8 @@ and 0008; keeps their connection isolation, routing and explicit recovery rules.
 Partially superseded by [0013](0013-session-owned-exit-cleanup.md): exited active
 sessions are removed, cleanup failures use an internal ledger, and expected exits
 belong to their operation notices. The text below records the original decision.
+The fixed profile and retention policy is also superseded by the accepted design
+in [0015](0015-explicit-data-directory-isolation.md).
 
 ## Context
 
