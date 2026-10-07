@@ -62,13 +62,13 @@ test('random creation cannot replace an outstanding claim even after its origina
     const registry = new DataDirectoryRegistry({
         io: {
             createRandom: async () => {
+                await rm(selected, { recursive: true });
                 await mkdir(selected);
                 return selected;
             },
         },
     });
     const original = await registry.acquire({ kind: 'existing', path: selected }, 'retain');
-    await rm(selected, { recursive: true });
     let recovered: DataDirectoryLease | undefined;
     await assert.rejects(registry.acquire({ kind: 'new', parent: root }, 'retain'), (error: unknown) => {
         assert.ok(error instanceof DataDirectoryError && error.code === 'directory-overlap' && error.lease);
@@ -341,18 +341,75 @@ test('canonical claims respect case semantics, equal root links and separator-de
     const registry = new DataDirectoryRegistry();
     const lease = await registry.acquire({ kind: 'existing', path: a }, 'retain');
     await assert.rejects(registry.acquire({ kind: 'existing', path: alias }, 'retain'), { code: 'directory-overlap' });
-    if (process.platform === 'win32') {
-        await assert.rejects(registry.acquire({ kind: 'existing', path: a.toUpperCase() }, 'retain'), {
+    const upperPath = path.join(root, 'A');
+    await mkdir(upperPath, { recursive: true });
+    const lowerIdentity = await lstat(a, { bigint: true });
+    const upperIdentity = await lstat(upperPath, { bigint: true });
+    if (lowerIdentity.dev === upperIdentity.dev && lowerIdentity.ino === upperIdentity.ino) {
+        await assert.rejects(registry.acquire({ kind: 'existing', path: upperPath }, 'retain'), {
             code: 'directory-overlap',
         });
     } else {
-        await mkdir(path.join(root, 'A'));
-        const uppercase = await registry.acquire({ kind: 'existing', path: path.join(root, 'A') }, 'retain');
+        const uppercase = await registry.acquire({ kind: 'existing', path: upperPath }, 'retain');
         await uppercase.release();
     }
     const sibling = await registry.acquire({ kind: 'existing', path: path.join(root, 'ab') }, 'retain');
     await Promise.all([lease.release(), sibling.release()]);
 });
+
+for (const [label, upperCanonical] of [
+    ['case-sensitive', '/fixture/A'],
+    ['case-insensitive', '/fixture/a'],
+] as const) {
+    test(`POSIX ${label} canonical evidence controls overlap without platform case folding`, async (t) => {
+        const root = await fixture(t);
+        const lower = path.join(root, 'lower');
+        const upper = path.join(root, 'upper');
+        await mkdir(lower);
+        await mkdir(upper);
+        const canonicalPaths = new Map([
+            ['/fixture/a', '/fixture/a'],
+            ['/fixture/A', upperCanonical],
+        ]);
+        const actualPaths = new Map([
+            ['/', path.parse(root).root],
+            ['/fixture', root],
+            ['/fixture/a', lower],
+            ['/fixture/A', upper],
+        ]);
+        const actualPath = (directory: string) => {
+            const actual = actualPaths.get(directory);
+            assert.ok(actual, 'Only known canonical directories may reach inspection.');
+            return actual;
+        };
+        const registry = new DataDirectoryRegistry({
+            platform: 'darwin',
+            io: {
+                canonical: async (directory) => {
+                    const canonical = canonicalPaths.get(directory);
+                    assert.ok(canonical, 'Only known requested directories may reach canonicalization.');
+                    return canonical;
+                },
+                inspect: (directory) => lstat(actualPath(directory), { bigint: true }),
+                entries: (directory) => readdir(actualPath(directory)),
+            },
+        });
+        const lease = await registry.acquire({ kind: 'existing', path: '/fixture/a' }, 'retain');
+        if (upperCanonical === '/fixture/a') {
+            await assert.rejects(registry.acquire({ kind: 'existing', path: '/fixture/A' }, 'retain'), {
+                code: 'directory-overlap',
+            });
+        } else {
+            const uppercase = await registry.acquire({ kind: 'existing', path: '/fixture/A' }, 'retain');
+            assert.equal(uppercase.evidence.path, '/fixture/A');
+            await uppercase.release();
+        }
+        await lease.release();
+        const successor = await registry.acquire({ kind: 'existing', path: '/fixture/A' }, 'retain');
+        assert.equal(successor.evidence.path, upperCanonical);
+        await successor.release();
+    });
+}
 
 test('invalid selection fails before creating any directory', async (t) => {
     const root = await fixture(t);

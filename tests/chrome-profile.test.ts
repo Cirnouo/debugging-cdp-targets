@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -333,13 +333,20 @@ test('Windows Chrome preserves FEFF positional args and legal parameter delimite
     }
 });
 
-test('occupied profile is rejected before spawn, without substituting a temporary directory', async () => {
+test('occupied profile is rejected before spawn, without substituting a temporary directory', async (t) => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-occupied-profile-')));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const actual = path.join(root, 'actual');
+    const alias = path.join(root, 'alias');
+    await mkdir(actual);
+    await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
     const f = fixture(false);
     try {
-        const directory = path.join(os.tmpdir(), 'dct-occupied-profile');
+        const directory = path.join(alias, 'profile');
         await assert.rejects(f.launch(directory), /profile.*(occupied|unverifiable)/i);
         assert.equal(f.children.length, 0);
-        assert.equal(f.inspected[0], directory);
+        assert.deepEqual(f.inspected, [path.join(actual, 'profile')]);
+        assert.deepEqual(f.launchedArguments, []);
     } finally {
         f.finish();
     }
