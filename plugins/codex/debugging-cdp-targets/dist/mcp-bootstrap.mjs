@@ -5020,6 +5020,9 @@ var DataDirectoryError = class extends Error {
     this.lease = lease;
   }
 };
+function sameDirectory(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
 function isAbsoluteDataDirectory(directory, platform) {
   if (!directory.trim() || directory.includes("\0")) return false;
   if (platform !== "win32") return path4.posix.isAbsolute(directory);
@@ -5076,7 +5079,52 @@ var DataDirectoryRegistry = class {
   available(directory, descendants = true) {
     const key = this.key(directory);
     for (const claimed of this.claims.values()) {
-      if (this.ancestor(claimed, key) || descendants && this.ancestor(key, claimed)) {
+      if (this.ancestor(claimed.key, key) || descendants && this.ancestor(key, claimed.key)) {
+        throw new DataDirectoryError("directory-overlap");
+      }
+    }
+  }
+  async locations(directory, root) {
+    const native = this.platform === "win32" ? path4.win32 : path4.posix;
+    const locations = [];
+    let current = directory;
+    try {
+      for (; ; ) {
+        const identity = current === directory && root !== void 0 ? root : await this.io.inspect(current);
+        if (!identity.isDirectory() || identity.isSymbolicLink())
+          throw new DataDirectoryError("directory-inspection-failed");
+        locations.push({ path: current, identity: { dev: identity.dev, ino: identity.ino } });
+        const parent = native.dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+      const captured = locations[0];
+      const confirmed = await this.io.inspect(directory);
+      if (!captured || !confirmed.isDirectory() || confirmed.isSymbolicLink() || !sameDirectory(confirmed, captured.identity))
+        throw new DataDirectoryError("directory-inspection-failed");
+      return locations;
+    } catch {
+      throw new DataDirectoryError("directory-inspection-failed");
+    }
+  }
+  async availableObjects(locations, descendants = true, excluded) {
+    const root = locations[0];
+    if (!root) throw new DataDirectoryError("directory-inspection-failed");
+    for (const claimed of this.claims.values()) {
+      if (claimed === excluded) continue;
+      const held = claimed.locations;
+      const heldRoot = held?.[0];
+      if (!held || !heldRoot) throw new DataDirectoryError("directory-inspection-failed");
+      try {
+        for (const location of [...held].reverse()) {
+          const current = await this.io.inspect(location.path);
+          if (!current.isDirectory() || current.isSymbolicLink() || !sameDirectory(current, location.identity))
+            throw new DataDirectoryError("directory-inspection-failed");
+        }
+      } catch {
+        throw new DataDirectoryError("directory-inspection-failed");
+      }
+      if (sameDirectory(root.identity, heldRoot.identity) || locations.slice(1).some((location) => sameDirectory(location.identity, heldRoot.identity)) || descendants && held.slice(1).some((location) => sameDirectory(location.identity, root.identity))) {
         throw new DataDirectoryError("directory-overlap");
       }
     }
@@ -5100,6 +5148,7 @@ var DataDirectoryRegistry = class {
         const parent = await this.io.inspect(actual);
         if (!parent.isDirectory() || parent.isSymbolicLink())
           throw new DataDirectoryError("directory-not-directory");
+        if (this.claims.size > 0) await this.availableObjects(await this.locations(actual, parent), false);
         const native = this.platform === "win32" ? path4.win32 : path4.posix;
         if (selected.name !== void 0) {
           actual = native.join(actual, selected.name);
@@ -5109,7 +5158,10 @@ var DataDirectoryRegistry = class {
           this.available(actual, false);
           actual = await this.io.createRandom(native.join(actual, "dct-"));
         }
-      } else this.available(actual);
+      } else {
+        this.available(actual);
+        if (this.claims.size > 0) await this.availableObjects(await this.locations(actual));
+      }
     } catch (error2) {
       throw filesystemFailure(error2, "directory-acquisition-failed");
     }
@@ -5121,7 +5173,8 @@ var DataDirectoryRegistry = class {
     } catch {
       overlap = true;
     }
-    this.claims.set(generation, key);
+    const claim2 = { key };
+    this.claims.set(generation, claim2);
     let identity;
     let nonempty;
     let state = "held";
@@ -5133,7 +5186,7 @@ var DataDirectoryRegistry = class {
     });
     const evidence = () => Object.freeze({ path: actual, cleanup, state, ...nonempty === void 0 ? {} : { nonempty } });
     const removeClaim = () => {
-      if (this.claims.get(generation) === key) this.claims.delete(generation);
+      if (this.claims.get(generation) === claim2) this.claims.delete(generation);
     };
     const dispose = async () => {
       await inspectionFinished;
@@ -5144,12 +5197,14 @@ var DataDirectoryRegistry = class {
         return evidence();
       }
       try {
-        if (this.claims.get(generation) !== key || identity === void 0)
+        if (this.claims.get(generation) !== claim2 || identity === void 0)
           throw new DataDirectoryError("directory-identity-changed", lease);
         const current = await this.io.inspect(actual);
         if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) {
           throw new DataDirectoryError("directory-identity-changed", lease);
         }
+        if (this.claims.size > 1)
+          await this.availableObjects(await this.locations(actual, current), true, claim2);
         await this.io.remove(actual);
         state = "deleted";
         removeClaim();
@@ -5187,12 +5242,15 @@ var DataDirectoryRegistry = class {
         throw new DataDirectoryError("directory-not-directory", selected.kind === "new" ? lease : void 0);
       }
       identity = root;
+      claim2.locations = await this.locations(actual, root);
+      await this.availableObjects(claim2.locations, true, claim2);
       nonempty = (await this.io.entries(actual)).length > 0;
       return lease;
     } catch (error2) {
       state = "cleanup-failed";
-      if (error2 instanceof DataDirectoryError && ["directory-not-directory", "directory-overlap"].includes(error2.code))
-        throw error2;
+      if (error2 instanceof DataDirectoryError && error2.code === "directory-overlap")
+        throw new DataDirectoryError("directory-overlap", lease);
+      if (error2 instanceof DataDirectoryError && error2.code === "directory-not-directory") throw error2;
       throw new DataDirectoryError("directory-inspection-failed", lease);
     } finally {
       finishInspection();
