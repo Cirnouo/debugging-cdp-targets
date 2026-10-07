@@ -11,7 +11,7 @@
 - **Session owner**: in-memory owner of one target lifetime and every resource acquired for it.
 - **Isolation intent**: the user's choice between no data directory isolation and an explicitly selected isolation directory.
 - **Data directory**: the real filesystem directory selected for application state under the isolation contract.
-- **Directory selection**: an existing directory or a new named or random child under a selected parent.
+- **Directory selection**: Agent chooses a suitable location, the user selects the Chrome-only preset, an existing directory, or a new named/random child under a selected parent; the preset maps to an existing/new operation.
 - **Application binding**: the researched argument or environment carrier directing a particular application/version to its data directory.
 - **Isolation support**: verified full, partial or unsupported coverage of application state and production effects; unknown means unresolved evidence.
 - **Directory lease**: connection-level ownership of a selected real data directory across target sessions.

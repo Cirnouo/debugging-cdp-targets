@@ -61,15 +61,27 @@ Version 0.1.0 remains under development; no release has been published.
   launch arguments; changed arguments use normal Close followed by a fresh start.
 - Timeout quarantine, pending transport cleanup and phase-only diagnostics;
   normal close without a listener and explicit retries after native failures.
-- Chrome presets for a fixed dedicated browser profile, occupancy checks and
-  launch reservations, explicit alternative directories, and preserved profiles
-  during live restart. Gateway-local port ownership is reserved before probing
-  and retained until actual exit or evidence that no app was created.
-  Automatic updater scheduling is disabled in the new process. Windows Chrome
-  automatically receives one bare CDPScreenshotNewSurface feature for screenshot
-  compatibility, preserving valid unrelated feature parameters and exact restart
-  arguments. Conflicting or ineffective feature input fails before profile
-  acquisition/spawn and releases its transient port claim.
+- Required explicit no-isolation or data-directory start intent, with researched
+    application bindings and Agent guidance for full/partial/unsupported/unknown
+    isolation support. Every launch in both modes uses a conservative read-only
+    occupancy gate, without singleton-capability exemptions or guessed generic roots.
+- Ordered directory choices: Agent selection, explicit Chrome-only preset at the
+    former home-relative location, existing directory, or new parent/optional name.
+    Program-owned exclusive named/random allocation, existing-nonempty retention,
+    explicit cleanup for other cases and reuse of prior whole-directory choices.
+    Only selected-preset container ancestors may be prepared; none uses no preset.
+- Connection-level data-directory leases across session restart and Keep/end-task,
+    with preauthorized retain or whole-directory delete-on-release after all
+    actual-app/native-acquisition/successor/resource users settle. Explicit original
+    start metadata retains actual real path/policy/state after failed/cancelled
+    startup and later cleanup; default summaries/Hooks omit directory evidence.
+- Chrome native occupancy checks and launch reservations, with no implicit profile
+    fallback. Gateway-local port ownership is reserved before probing and retained
+    until actual exit or evidence that no app was created. Automatic updater
+    scheduling is disabled only in the new process. Windows Chrome automatically
+    receives one bare CDPScreenshotNewSurface feature, preserving valid unrelated
+    parameters and exact restart arguments. Conflicting or ineffective input fails
+    before directory acquisition/spawn and releases its transient port claim.
 - Chrome extension debugging, with usage statistics and CrUX disabled by default
   and explicit overrides.
 - Chrome support on Windows, Ubuntu 24.04 and macOS 15, with normal shutdown
@@ -102,6 +114,11 @@ Version 0.1.0 remains under development; no release has been published.
 - Private vulnerability reporting, dependency alerts and weekly supply-chain audits.
 - Protected source changes require pull requests, CodeQL analysis and security checks.
 - Actual application exit revokes routes and cancels pending work before cleanup.
+- Real-directory identity and overlap protection, opaque application binding and
+    whole-directory cleanup scoped to the selected actual object. External Chrome
+    occupancy prevents deletion after failed launch or before cleanup; failed
+    disposal retains in-memory claim/evidence without route revival or replay.
+    Hard crash or unverified exit cannot promise eventual deletion.
 - Native application handle waits/events on Windows provide actual-exit evidence
   without process polling; helper exit and observer faults cannot establish app exit.
 - Normal application Close is independent of unrelated CDP listeners and official

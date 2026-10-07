@@ -70,6 +70,13 @@ Launch a separate Chrome debugging window and open https://example.com.
 Inspect the page's network requests and console errors, and summarize what you find.
 ```
 
+The Agent asks isolation intent before preparing a launch and checks occupancy
+before every new target in either mode. Chrome directory choices are Agent
+selection, the explicit Chrome preset, an existing directory, then a new child
+under a selected parent. Cleanup follows a preselected retain/delete policy;
+Close/Keep separately decides application lifetime. See the
+[detailed workflow](docs/user-guide/workflow.md).
+
 ## Documentation
 
 Explore the [user guide](docs/user-guide/README.md):

@@ -53,9 +53,7 @@ unsupported and unknown evidence separately; a framework label is not proof.
 Accepted forward designs may establish contributor and source requirements before
 runtime implementation. Mark that gap explicitly in ADRs and contributor docs.
 Installed Skills and user guides change with the verified implementation rather
-than presenting accepted designs as current supported behavior. The accepted
-[data directory isolation decision](../adr/0015-explicit-data-directory-isolation.md)
-currently has this implementation gap.
+than presenting accepted designs as current supported behavior.
 
 User-facing documentation, prompts, and installed Skills describe current
 supported behavior. Mention rejected or superseded exploratory features only

@@ -49,10 +49,11 @@ The runtime preserves native checks for explicit Chrome roots in either mode;
 omitted defaults and generic occupancy remain workflow-owned. It adds no guessed
 root resolver, universal lock convention, public evidence carrier or global scan.
 
-Directory selection may reuse an existing empty or nonempty directory, create a
-named or random child under a selected parent, or be fully delegated to Agent.
-Chrome additionally offers the explicit `~/.cache/chrome-devtools-mcp/chrome-profile`
-preset. Resolve home first; select an existing leaf with existing, or a missing
+Present directory choices as Agent freely chooses a suitable location, the
+explicit Chrome-only `~/.cache/chrome-devtools-mcp/chrome-profile` preset, an
+existing empty/nonempty directory, then a new named/random child under a selected
+parent. Other applications omit the Chrome-only option and keep the remaining order.
+Resolve home first; select an existing preset leaf with existing, or a missing
 leaf with new parent/name. After explicit preset and cleanup selection, the Agent
 may prepare missing container ancestors only; runtime exclusively creates the leaf.
 This exception never prepares a path for none or relaxes new.parent existence.

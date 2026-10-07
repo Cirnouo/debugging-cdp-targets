@@ -22,11 +22,59 @@ never automatically restarts an application or replays a tool call.
     or cancellation, transport pending state is cleared, and app identity remains
     available for explicit live restart or normal Close. After actual app exit its
     session is removed. Other connections remain usable.
-- **Chrome reports a locked profile**: close that Chrome instance normally and
-    manually, or explicitly select another dedicated `--user-data-dir`.
+- **A directory is occupied or occupancy is unverifiable**: leave the requested
+    application unlaunched. Known same-directory/shared-namespace use, uncertain
+    attribution of a related running app and incomplete inspection block start.
+    Do not remove locks, notify/take over an existing instance or silently select
+    another directory. An occupied-or-unverifiable marker is not proof of a
+    positively identified running Chrome process.
+- **Required launch values are unresolved**: obtain the actual executable and any
+    required cwd/env from applicable authorization or read-only installation/startup
+    facts. Keep missing values pending; another request or example path is not evidence.
+- **Isolation support is partial, unsupported or unknown**: partial explains remaining
+    production effects and asks accepted partial scope or none; unsupported only
+    informs and stays unlaunched; unknown continues applicable research and stays
+    unlaunched. App support through cwd alone is a separate Plugin expression
+    limitation because `{dataDir}` binds only through args/env.
+- **Regular Chrome 136+ cannot debug its default production directory**: report the
+    documented CDP limitation and leave unlaunched even when the profile is free.
+    A none choice never silently selects the preset or another isolation directory.
+    Chrome for Testing has the documented exception; see
+    [the Chrome change](https://developer.chrome.com/blog/remote-debugging-port).
 
 See [actual exit and live restart](workflow.md#actual-exit-and-live-restart) before
 choosing recovery and [configuration](configuration.md) for launch settings.
+
+## Directory selection and cleanup
+
+A missing existing directory, missing new parent or named-leaf collision fails
+without operation switching or fallback. The program creates the managed leaf;
+do not repair a failed selection by precreating it. Only an explicitly selected
+Chrome preset permits Agent preparation of absent `.cache` and
+`chrome-devtools-mcp` container ancestors after the cleanup choice.
+Ancestor files/access or identity failures/leaf races stop that selection;
+containers remain after selected-leaf cleanup.
+
+The common occupancy gate applies in none and data-dir, including existing,
+preset, named/random new and fully delegated choices. New-directory uniqueness
+or multi-instance documentation alone is insufficient. Generic checks use
+bounded related-process/native-identity evidence rather than guessed Chrome locks
+or application-name matches. Complete related-app absence can clear a point-in-time
+gate subject to applicable known locks, without requiring an otherwise unavailable
+normal root. It does not establish isolation capability/binding.
+Generic occupancy remains Agent workflow; Chrome's known explicit-root native
+guard does not independently resolve omitted default roots across installation,
+policy and environment variations.
+
+For retained or cleanup-failed directories, read the original start operation's
+explicit isolation metadata, including after failed/cancelled startup or route
+removal. Selected configuration also exposes evidence while the connection exists.
+Tell the actual real absolute path, selected policy and current state. Do not
+infer deletion from Close/cancelled startup or manually delete a leased directory.
+Failed Close/observation/live acquisition/resources hold the lease; changed root
+identity or external Chrome occupancy prevents deletion. In-memory cleanup retry
+does not restore a route or start/replay work. A hard crash cannot promise future cleanup.
+See [storage and cleanup](privacy.md#data-directory-storage-and-cleanup).
 
 ## Normal manual close
 
@@ -57,7 +105,7 @@ for the measured static states and limits.
 If startup reports a feature conflict, preserve the supplied arguments and
 explicitly correct the reported input. An effective target disable, decorated
 or repeated target, ambiguous switch, non-ASCII feature value or malformed
-enable entry is rejected before profile acquisition/spawn. A repeated colon in
+enable entry is rejected before data directory acquisition/spawn. A repeated colon in
 `Other:one/two:three/four` invalidates the entire enable list; appending the target
 cannot repair it. The Plugin releases any transient port claim and supplies an
 actionable error instead of silently changing the conflicting choice.

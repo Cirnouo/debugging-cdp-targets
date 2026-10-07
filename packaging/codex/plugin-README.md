@@ -17,6 +17,11 @@ starts with no target. Review/trust the four Hook definitions through Codex's
 standard flow; installation does not grant Hook trust. Hooks deliver pending
 exit/operation context at tool/turn boundaries, including one Stop continuation.
 
+The Skill asks isolation intent, checks occupancy before every launch in either
+mode, and obtains the directory's retention/deletion policy before start when
+required. Chrome's old profile location is an explicit preset choice, never an
+automatic fallback. Close/Keep separately decides application lifetime.
+
 Refresh the Marketplace with `codex plugin marketplace upgrade debugging-cdp-targets`.
 To uninstall, run `codex plugin remove debugging-cdp-targets@debugging-cdp-targets`,
 then `codex plugin marketplace remove debugging-cdp-targets`.
