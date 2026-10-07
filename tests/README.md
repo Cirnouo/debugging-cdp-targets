@@ -4,17 +4,21 @@
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry
   evidence, qualification without capture, and retained cleanup through injected
-  I/O. Its Windows native helper compile check parses argv without inspecting an app.
+  I/O. Closed Tauri fixture tests enforce its fixed metadata and native window
+  contract. Its Windows native helper compile check parses argv without inspecting an app.
   Fractional geometry regressions execute the actual marker at the injected DOM
   boundary and retain exact viewport/fullPage pixel acceptance.
 - `application-screenshot-adapter.test.ts` validates sealed gateway selection,
   generic-cdp routing, unchanged receipt deadlines, partial-start identity recovery,
   passive exit arming before normal Close and retained stdio after uncertain cleanup.
+  Tauri tests distinguish host/browser roles, actual carrier adoption and fresh
+  listener/session ownership, and preserve saved PNG receipts before decoding.
 
-- `application-screenshot-fixture.test.ts` checks test-only Obsidian/Readest
+- `application-screenshot-fixture.test.ts` checks test-only Obsidian/Readest/Tauri
   launch-pair validation before I/O, canonical browser carriers, fresh profile/file
   confinement, source/copy hashes, literal Unicode host data and controlled
-  gateway environment inheritance using injected filesystem boundaries.
+  gateway environment inheritance using injected filesystem boundaries. The
+  closed Tauri fixture requires its exact copied executable, cwd and fresh profile.
 
 - `screenshot-timeout-probe.test.ts` checks the opt-in one-shot probe's malformed
   fixture rejection, exact optional selection/evaluation arguments, fresh page ID
@@ -205,6 +209,9 @@ from regression tests and must not touch existing user targets.
 
 For the bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).
+The separate fixed-fixture follow-up is recorded in
+[Tauri screenshot validation](../docs/tauri-screenshot-validation.md), including
+its failed qualification and unconfirmed gateway cleanup.
 
 Both package test commands use `--test-concurrency=1` to run files sequentially.
 The visible `window-evidence`, `screenshot-background-anchor` and `windows-native`
