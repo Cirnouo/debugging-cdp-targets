@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { withChromeScreenshotFeature } from '../../src/domains/chromium-features.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import type { ApplicationScreenshotFixture } from './application-screenshot-fixture.ts';
 import { readWindowSample, type WindowIdentity } from './window-evidence.ts';
 export interface ApplicationProcessEvidence {
     identity: WindowIdentity;
@@ -63,7 +64,12 @@ export function readApplicationProcessEvidence(raw: unknown, identity: WindowIde
 
 export function qualifyApplicationBrowserArguments(
     evidence: ApplicationProcessEvidence,
-    expected: { application: 'obsidian' | 'readest'; profile: string; port: number; candidate: boolean },
+    expected: {
+        application: ApplicationScreenshotFixture['application'];
+        profile: string;
+        port: number;
+        candidate: boolean;
+    },
 ): void {
     const end = evidence.argv.indexOf('--');
     const args = evidence.argv.slice(1, end < 0 ? undefined : end);
