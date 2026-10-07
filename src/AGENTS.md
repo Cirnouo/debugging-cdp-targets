@@ -15,6 +15,13 @@ independent entry identity and manages any number of independent connections.
 Tests inject adapters at I/O boundaries. Use shared/constants.ts
 for cross-layer invariants. Never add persisted session state, plugin CLI or control IPC.
 
+The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolation.md)
+is pending runtime implementation. Keep pure isolation/launch validation in domains,
+directory filesystem evidence and claims in adapters, and connection-level leases,
+release barriers and explicit operation evidence in application. Session resources
+remain session-owned. Start requires explicit isolation; no fixed profile fallback
+or automatic path disclosure through Hooks/default summaries is permitted by the design.
+
 Use strict, Node-erasable TypeScript with explicit `.ts` imports and owned types.
 Do not use enums, parameter properties, runtime namespaces, path aliases, broad
 `any`, suppression comments, double assertions, or typecheck exclusions. Treat

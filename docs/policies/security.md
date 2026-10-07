@@ -88,7 +88,7 @@ Plugin before enabling its code and Hooks. CDP/upstream or observation failure
 while an app lives reports a connection error, not process exit.
 
 Retry after ordinary exit requires start with new connection/session IDs.
-Explicit restart of a live connection retains argv/cwd/profile/exact port and
+Explicit restart of a live connection retains argv/cwd/data directory/exact port and
 connection identity, waits for old exit and disposes old resources before creating
 a fresh owner/router/upstream and session. Require fresh list_pages evidence and
 page IDs. Never automatically restart or replay tools.
@@ -101,12 +101,59 @@ gateway cleanup retries. Handled gateway disconnect gates/cancels all owners and
 attempts every Server/catalog/router disposal in parallel with normal target
 shutdown despite peer failures, without imposing a new target-close deadline.
 
-Chrome uses the fixed user-home .cache/chrome-devtools-mcp/chrome-profile unless
-an explicit --user-data-dir overrides it. Check native profile ownership and
-reserve canonical directories across gateway launches. Occupied or unverifiable
-profiles fail closed and require an explicit alternative; never attach to their
-owner or silently generate another profile. Release a reservation on actual exit
-or confirmed normal close. Profiles remain on disk after Close.
+## Data directory isolation boundary
+
+The accepted [ADR 0015](../adr/0015-explicit-data-directory-isolation.md) replaces
+the fixed Chrome profile and unconditional retention policy with the following
+required boundary. Runtime implementation is pending; these are contributor
+requirements for that implementation.
+
+Require explicit start isolation: none or data-dir with existing/new directory
+selection and retain/delete-on-release. None neither creates nor deletes a data
+directory and forbids its placeholder. Remove the implicit Chrome profile fallback
+while preserving native ownership checks. Isolated Chrome's effective --user-data-dir
+must match the acquired real directory. Generic args/env binding uses opaque
+{dataDir} substitution and cannot itself prove complete application isolation.
+
+Ask isolation intent first. Research exact application/version startup support
+before acquiring directories or connecting. Full support proceeds; partial
+support discloses production effects and asks isolation or none; unsupported and
+unknown support leave the app unlaunched, with unknown kept distinct. Do not ask
+for the user's reasons or impose a directory location denylist. User-selected
+existing nonempty directories default to retain and disclosure without a cleanup
+question when no cleanup instruction exists. Other choices need an authorized
+retain/delete decision. Hidden entries count; inspect entries, not contents.
+Full Agent delegation includes selecting a parent but grants no implicit deletion.
+None skips isolation research and directory questions.
+
+Delete-on-release must be authorized before launch and applies to the entire real
+directory, including pre-existing contents. Resolve a root link/junction to its
+actual target for binding and deletion; child links never widen deletion scope.
+Validate launch/options before acquisition, reject concurrent canonical equal or
+ancestor/descendant claims, and reverify root identity before deletion. Missing
+existing directories and new-name collisions fail without switching operations.
+Changed or unverifiable identity retains ownership instead of deleting a replacement.
+Preserve acquired path and ownership evidence after any post-creation verification
+failure; a failed result cannot discard an acquired directory or its claim.
+
+Hold a connection-level lease across restart and release only after no live app,
+pending native acquisition/permission wait/late creation, successor or relevant
+read/write resource remains. Keep/end-task retains it until actual exit. An
+intermediate restart exit cannot release it; final failed/cancelled restart can
+only release when the barrier is satisfied. Failed observation/Close/rollback
+with live or pending app retains ownership. Failed disposal remains in the
+in-memory ledger; retry completes cleanup without restoring the removed route.
+Hard crash or disconnect without verified actual exit cannot guarantee subsequent
+deletion. No persistence, daemon or scan of old state is permitted.
+
+Real paths, policy and cleanup state appear only in explicit operation metadata
+and selected configuration, including failed/cancelled startups. Later cleanup
+updates original start metadata without changing its terminal result/state or
+issuing a new completion notice. Default summaries and Hooks omit paths and raw
+filesystem errors. Agent reads explicit evidence and reports every retained
+actual absolute path, even after failed or cancelled launch.
+
+## Native launch and transport
 
 Windows launch preserves env/argv/cwd across elevation, distinguishes native
 manifest/AppCompat/elevation errors from unrelated access denial, and observes

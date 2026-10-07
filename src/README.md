@@ -7,6 +7,12 @@
 - `shared/`: cross-layer constants.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
+[ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the
+planned isolation boundary: domains validate directory intent and opaque binding;
+adapters acquire/reverify/remove real directories; application holds connection
+leases across restart and exposes directory evidence only through explicit
+operation metadata or selected configuration. Runtime implementation is pending.
+
 `packaging/` owns maintained host inputs and shared Skill/documentation. The
 complete generated payloads live in `plugins/codex/debugging-cdp-targets/` and
 `plugins/claude-code/debugging-cdp-targets/`; each `dist/` contains the same bundled

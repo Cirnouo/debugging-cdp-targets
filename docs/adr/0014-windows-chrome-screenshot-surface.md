@@ -3,6 +3,9 @@
 Status: accepted for unreleased 0.1.0. Extends the Chrome launch preset while
 retaining [0011](0011-mcp-native-lifecycle.md) official routing/quarantine and
 [0013](0013-session-owned-exit-cleanup.md) ownership, port and restart rules.
+Its fixed-profile assumption is superseded by the accepted design in
+[0015](0015-explicit-data-directory-isolation.md); implementation is pending.
+The screenshot decision below retains its original evidence and scope.
 
 ## Context and evidence
 

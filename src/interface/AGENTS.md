@@ -14,3 +14,11 @@ The gateway adds required _dct connection/session routing to official input
 schemas, rejects collisions, and strips it before forwarding original arguments.
 Results are unchanged; lifecycle/operation tools belong to this Plugin. Optional
 hookEventName accepts exactly the four packaged host events; empty status is read-only.
+
+The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)
+requires a start isolation union: none or data-dir with existing/new directory
+operation and retain/delete-on-release. This runtime/schema change is pending.
+Keep directory path/policy/state in explicit operation metadata and selected
+configuration, preserving failed/cancelled start evidence. Default summaries and
+automatic Hook projections contain no paths or raw filesystem errors. Later
+cleanup updates original start metadata without replacing its terminal result/state.

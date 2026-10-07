@@ -64,6 +64,15 @@ relevant to your change. These files remain the authoritative contributor rules.
 See [source ownership](src/README.md), [tests](tests/README.md), and
 [tooling](tooling/README.md) for navigation.
 
+The accepted [data directory isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
+is an implementation requirement for the current feature work, with runtime and
+installed guidance still pending. Review its intent-first research, existing/new
+directory operations, connection leases across restart, deletion authorization,
+late-acquisition safety and explicit path evidence before changing those boundaries.
+Use the [domain glossary](docs/domain-language.md) for terminology and the
+[security policy](docs/policies/security.md#data-directory-isolation-boundary)
+for the required ownership and disclosure constraints.
+
 Create a topic branch allowed by the [branch and commit policy](docs/policies/commits-and-scope.md),
 using `feat/` for new functionality, `fix/` for defects, `hotfix/` for urgent
 fixes, or `chore/` for standalone documentation, refactoring, tests, CI, and

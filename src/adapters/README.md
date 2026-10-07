@@ -36,6 +36,12 @@
   environment-preserving process creation, pipe authentication and WM_CLOSE.
 - `AGENTS.md` defines I/O safety and platform contracts.
 
+The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)
+adds a planned filesystem acquisition/disposal boundary with real-root identity,
+overlap claims and authorized whole-directory cleanup. The target host will bind
+the acquired opaque path and remove its implicit fixed Chrome profile while
+preserving native profile ownership checks. Runtime implementation is pending.
+
 The bundled gateway uses the public `@modelcontextprotocol/client`, `server` and
 `core` SDK packages pinned to 2.2.0. It retains legacy stdio initialization, roots,
 form elicitation, progress and cancellation. Catalog pages are walked without the

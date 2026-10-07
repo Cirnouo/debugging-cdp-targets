@@ -11,3 +11,9 @@
 - `target-controller.ts` sequences launch, actual exit, live restart, disposition,
   and session-owned cleanup without blocking exit behind lifecycle admission.
 - `AGENTS.md` defines transaction and rollback rules.
+
+[ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) adds planned
+connection-level directory ownership alongside session owners: the lease spans
+restart, tracks late acquisition and releases only after all app/resource users
+are gone. Explicit start metadata retains directory evidence through failed
+startup and cleanup retries. Runtime implementation is pending.
