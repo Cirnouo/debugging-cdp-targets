@@ -31,9 +31,7 @@
 
 - `screenshot-background-anchor.test.ts` verifies the opt-in probe's owned anchor
   handoff, geometric containment, stale identity/HWND refusal, denied foreground,
-  passive condition loss and retained cleanup identity. On Windows it also launches
-  two disposable WinForms fixtures, proves opaque anchor bounds contain the target
-  and normally Closes both with native actual-exit waits.
+  passive condition loss and retained cleanup identity through injected I/O.
 
 - `screenshot-capture-observer.test.ts` exercises the actual test stdio client and
   capture adapter's dispatch/settlement interval with a private Node responder.
@@ -95,7 +93,10 @@
   cannot satisfy missing sections/checks. Current PR CLI fixtures also verify
   format rejection and full raw commitlint validation without altering history.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
-  check automation, package gates, and syntax plans.
+  check automation, package gates, exact lane commands and syntax plans.
+- `test-lanes.test.ts` recursively classifies every maintained test file into a
+  runnable root or interactive lane and retains the three-file, eight-case
+  interactive inventory without launching fixtures.
 - `issue-policy.test.ts` validates literal GitHub form bodies against the current
   YAML, including label-only classification, required and optional answers,
   exact dropdown options, H3 order/duplicates, fake structural headings, and
@@ -200,27 +201,24 @@
   separate close request and exit wait, helper monitoring failures and matching
   native handle receipts that supplement a lost original observer.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
-- `windows-native.test.ts` runs disposable ordinary Node/WinForms fixtures on Windows;
-  it checks argv/cwd/env/PID/NUL stdio, limited-query identity, visible close, owned
-  discovery readiness and manifest detection without UAC prompts. A real 8.3
-  executable alias exercises normal close while mismatched path/time identities
-  must leave the fixture running. A delayed normal close remains pending past
-  ten seconds and confirms the same native process handle after observer loss.
-- `window-evidence.test.ts` verifies owned disposable window minimize/restore and
-  rejects stale identities, replaced windows and accepted but unobserved transitions.
-  It also checks the actual passive observer's UTF-8 JSON preserves a Unicode
-  window title using an owned WinForms fixture with read-only state sampling.
-  Actual guarded NOACTIVATE background transitions, exact Unicode executable and
-  compiler 8.3 alias output receive native verification; passive State None leaves
-  normal/minimized state unchanged and never refocuses the fixture.
+- `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
+  it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
+- `window-evidence.test.ts` rejects stale identities, replaced windows and
+  accepted but unobserved transitions using literal native evidence fixtures.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
+- `interactive/` owns eight explicit Windows GUI cases across the three migrated
+  native/window/anchor test files; see its [inventory and prerequisites](interactive/README.md).
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
 - `AGENTS.md` sets test safety and evidence rules.
 
-Run pnpm test or a focused Node test; real-browser integration is separate
-from regression tests and must not touch existing user targets.
+Run `pnpm test` or a focused Node test for default regressions. The default
+command and `pnpm test:coverage` select only `tests/*.test.ts`; they do not launch
+the interactive WinForms fixtures. Run `pnpm test:windows:interactive` explicitly
+from an interactive Windows desktop to select `tests/interactive/*.test.ts`.
+The Windows CI job requires both lanes after typecheck. Real-browser integration
+remains separate and must not touch existing user targets.
 
 For the bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).
@@ -228,8 +226,8 @@ The separate fixed-fixture follow-up is recorded in
 [Tauri screenshot validation](../docs/tauri-screenshot-validation.md), including
 its two failed qualifications and separately authorized abnormal helper dispositions.
 
-Both package test commands use `--test-concurrency=1` to run files sequentially.
-The visible `window-evidence`, `screenshot-background-anchor` and `windows-native`
+All three package test commands use `--test-concurrency=1` to run files sequentially.
+The interactive `window-evidence`, `screenshot-background-anchor` and `windows-native`
 fixtures share the inherited Windows desktop and its single foreground window.
 Concurrent files can foreground one owned fixture while invalidating another
 file's required foreground observation. Process ownership does not isolate that

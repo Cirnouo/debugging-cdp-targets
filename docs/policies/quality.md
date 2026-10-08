@@ -10,11 +10,26 @@ still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's fo
 
 Develop changed behavior test-first. Regression tests use isolated fake CDP
 targets; never download packages or launch user browsers in the default suite.
-Explicit integration smoke commands are separate. Keep coverage floors at
-52% lines, 71% branches, and 61% functions across production modules.
+`pnpm test` and `pnpm test:coverage` select only `tests/*.test.ts` and run files
+sequentially with `--test-concurrency=1`. This default local lane does not launch
+GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
+across production modules.
+
+Run `pnpm test:windows:interactive` explicitly from an interactive Windows
+desktop for `tests/interactive/*.test.ts`. It also uses `--test-concurrency=1`
+because the eight native GUI cases share the desktop foreground window. The
+command fails on non-Windows; only the existing 8.3-alias prerequisites permit
+conditional case skips. Preserve native assertions, deadlines and normal Close
+with actual-exit evidence. See the [interactive test inventory](../../tests/interactive/README.md).
+Explicit integration smoke commands remain separate.
 
 Run focused Node tests, then pnpm verify:push: formatting, lint, strict typecheck, syntax,
 coverage, repository audit, deterministic build, distribution, and Git rules.
+Local `verify:push` and the pre-push hook use the default coverage lane, so they
+do not require an interactive desktop. They do not run the interactive Windows
+lane or establish its acceptance. Record local commands and results separately
+from any explicit interactive run and the remote Windows tests result; include
+the tested commit and any prerequisite skips or remaining limits in that evidence.
 pnpm build:plugin regenerates committed bundles; check:build is read-only.
 pnpm build:security regenerates the standalone audit entry;
 check:security:build is an offline, read-only comparison in verify:push.
@@ -86,9 +101,13 @@ Required sections, checklists, actual verification evidence, and conditional N/A
 reasons follow the [submission policy](commits-and-scope.md). Format failure
 blocks merge; editing the PR body reruns Commit messages through the existing
 `edited` trigger. Local/push/scheduled history audits do not apply this template.
-Quality checks policy and coverage; Windows tests
-parses the helper with PS 5.1/7 and tests arbitrary cwd; Portable tests exercises
-fake CDP on Linux/macOS. No account data or profiles are uploaded.
+Quality checks policy and default-lane coverage. The required Windows tests job
+waits for Quality, then runs `pnpm test` and `pnpm test:windows:interactive` as
+separate mandatory steps after `pnpm typecheck`, without job/step conditions or
+`continue-on-error`. It also parses the helper with PS 5.1/7 and tests arbitrary
+cwd. Portable tests exercises fake CDP on Linux/macOS. Local default-lane success
+does not substitute for the remote interactive result. No account data or
+profiles are uploaded.
 
 Separate real Chrome jobs run official tools and connection recovery on
 ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles

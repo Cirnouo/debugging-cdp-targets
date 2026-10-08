@@ -130,8 +130,10 @@ jobs:
                 run: pnpm install --frozen-lockfile
             -   name: Check TypeScript types
                 run: pnpm typecheck
-            -   name: Run full Node test suite
+            -   name: Run default Node test suite
                 run: pnpm test
+            -   name: Run interactive Windows test suite
+                run: pnpm test:windows:interactive
             -   name: Parse TypeScript, generated JavaScript and both PowerShell parsers
                 run: pnpm check:scripts
             -   name: Test from an arbitrary working directory
