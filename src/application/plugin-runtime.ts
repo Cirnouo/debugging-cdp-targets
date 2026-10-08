@@ -4,6 +4,7 @@ import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createCdpRouter } from '../adapters/cdp-router.ts';
 import { profileAvailable as nativeProfileAvailable } from '../adapters/chrome-profile.ts';
 import { DataDirectoryRegistry } from '../adapters/data-directory.ts';
+import { beginFixtureStage, emitFixtureEvent, runFixtureCleanup } from '../adapters/fixture-diagnostics.ts';
 import { createOfficialConnection, interruptedOfficialCall, type OfficialConnection } from '../adapters/mcp-bridge.ts';
 import { createMcpEntryServer, type HookEventName } from '../adapters/mcp-entry-server.ts';
 import { buildServerArguments, resolveServerBin } from '../adapters/official-server.ts';
@@ -25,7 +26,7 @@ import { parseDataIsolation } from '../domains/data-isolation.ts';
 import { resolveLaunchDefinition, validateDataIsolationBinding } from '../domains/launch-command.ts';
 import { DEFAULT_BASE_PORT } from '../shared/constants.ts';
 import { type Diagnose, type Diagnostic, measured } from '../shared/diagnostics.ts';
-import { DetailedError, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
+import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import { type ConnectionDirectory, createConnectionDirectory } from './connection-directory.ts';
 import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 import { createLifecycleService } from './mcp-lifecycle.ts';
@@ -476,6 +477,10 @@ export async function startPluginRuntime({
             managed.owner.assertOpen();
             return summary(managed);
         } catch (error) {
+            const primaryEvidence = {
+                ...lifecycleFailureEvidence(errorDetails(error) ?? {}),
+                ...(errorCode(error) === undefined ? {} : { code: errorCode(error) }),
+            };
             directory.requestRelease();
             const managed = connection;
             const failedOwner = managed?.owner ?? owner;
@@ -484,13 +489,13 @@ export async function startPluginRuntime({
                 try {
                     await disposeResources(failedOwner);
                 } catch (cleanupError) {
-                    const failure = new DetailedError(errorMessage(error));
+                    emitFixtureEvent('resource-disposal', 'decision', { outcome: 'failed' }, cleanupError);
+                    const failure = new DetailedError(errorMessage(error), { cause: error });
                     failure.details = {
-                        ...lifecycleFailureEvidence(errorDetails(error) ?? {}),
+                        ...primaryEvidence,
                         entryId,
                         connectionId,
                         sessionId: failedOwner.sessionId,
-                        phase: 'resource-cleanup',
                         cleanupError: errorMessage(cleanupError),
                     };
                     connections.delete(connectionId);
@@ -504,9 +509,9 @@ export async function startPluginRuntime({
                 (!failedOwner.target || failedOwner.exited)
             )
                 throw context.signal.reason;
-            const failure = new DetailedError(errorMessage(error));
+            const failure = new DetailedError(errorMessage(error), { cause: error });
             failure.details = {
-                ...lifecycleFailureEvidence(errorDetails(error) ?? {}),
+                ...primaryEvidence,
                 entryId,
                 connectionId,
                 sessionId: failedOwner.sessionId,
@@ -607,8 +612,12 @@ export async function startPluginRuntime({
     const catalogOwner = newOwner(randomUUID());
     const catalogRouter = await createRouter();
     catalogOwner.register('router', catalogRouter);
-    async function cleanup() {
+    function cleanup() {
+        return runFixtureCleanup({ entryId }, performCleanup);
+    }
+    async function performCleanup() {
         if (cleanupPromise) return cleanupPromise;
+        const finishObservation = beginFixtureStage('gateway-cleanup');
         shuttingDown = true;
         for (const directory of directories) directory.requestRelease();
         const closing: Promise<unknown>[] = [];
@@ -653,6 +662,7 @@ export async function startPluginRuntime({
             for (const result of results)
                 if (result.status === 'rejected')
                     process.stderr.write(`Gateway cleanup failed: ${errorMessage(result.reason)}\n`);
+            finishObservation(results.some((result) => result.status === 'rejected') ? 'failed' : 'succeeded');
         })();
         return cleanupPromise;
     }

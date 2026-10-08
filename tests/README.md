@@ -1,5 +1,11 @@
 # Tests
 
+- `fixture-diagnostics.test.ts` exercises opt-in observation without real targets,
+  operation routes, direct I/O origins, primary startup errors, independent EOF
+  cleanup, closed metadata and safe receiver failure containment.
+- `fixture-boundaries.test.ts` checks native-command, endpoint, profile and
+  data-directory observation, original I/O effects and deadlines, and hostile
+  metadata/error privacy through controlled external I/O boundaries.
 - `application-screenshot-probe.test.ts` validates complete sealed payload
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry
@@ -94,6 +100,13 @@
   format rejection and full raw commitlint validation without altering history.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, exact lane commands and syntax plans.
+- `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
+  validation, bounded/truncated evidence, safe writer failures, primary versus
+  cleanup failures, prerequisite/not-run indexing and the original delivered
+  gateway with the source subscriber preload. The complete Codex payload is
+  copied outside the repository and its gateway entry bytes are checked before
+  launch, keeping delivered code outside maintained-source coverage. No browser
+  is launched.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
   runnable root or interactive lane and retains the three-file, eight-case
   interactive inventory without launching fixtures.

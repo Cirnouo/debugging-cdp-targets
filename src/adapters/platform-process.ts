@@ -12,6 +12,7 @@ import type {
 } from '../domains/cdp-target.ts';
 import type { LaunchContext } from '../domains/control-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
+import { beginFixtureStage, emitFixtureEvent, type FixtureFields } from './fixture-diagnostics.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
@@ -157,6 +158,35 @@ function abortable<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
     });
 }
 
+async function observeNativeCommand(
+    command: NonNullable<FixtureFields['command']>,
+    execute: ProcessExecutor,
+    executable: string,
+    args: string[],
+): Promise<ProcessResult> {
+    const finish = beginFixtureStage('native-command', { command });
+    try {
+        const result = await execute(executable, args);
+        finish('succeeded', { exitCode: result.code, stderrPresent: result.stderr.length > 0 });
+        return result;
+    } catch (error) {
+        finish('failed', {}, error);
+        throw error;
+    }
+}
+
+async function observeNativeFile<T>(command: NonNullable<FixtureFields['command']>, job: () => Promise<T>): Promise<T> {
+    const finish = beginFixtureStage('native-file', { command });
+    try {
+        const result = await job();
+        finish('succeeded');
+        return result;
+    } catch (error) {
+        finish('failed', {}, error);
+        throw error;
+    }
+}
+
 async function run(executable: string, arguments_: string[]): Promise<ProcessResult> {
     return new Promise((resolve, reject) => {
         const child = spawn(executable, arguments_, {
@@ -181,7 +211,7 @@ async function windowsHelper(action: string, fields: Record<string, string | num
     const helper = fileURLToPath(new URL('./windows-cdp-helper.ps1', import.meta.url));
     const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', action];
     for (const [name, value] of Object.entries(fields)) if (value !== undefined) args.push(`-${name}`, String(value));
-    const result = await run('powershell.exe', args);
+    const result = await observeNativeCommand('powershell', run, 'powershell.exe', args);
     let output: unknown;
     try {
         output = JSON.parse(result.stdout.trim());
@@ -288,8 +318,15 @@ export async function resolveUnixExecutable({
     readlink?: (path: string) => Promise<string>;
     fileIdentity?: (file: string) => Promise<UnixFileIdentity>;
 }) {
-    if (platform === 'linux') return link(`/proc/${pid}/exe`);
-    const result = await execute('lsof', ['-a', '-p', String(pid), '-d', 'txt', '-FfDin']);
+    if (platform === 'linux') return observeNativeFile('proc-exe', () => link(`/proc/${pid}/exe`));
+    const result = await observeNativeCommand('lsof', execute, 'lsof', [
+        '-a',
+        '-p',
+        String(pid),
+        '-d',
+        'txt',
+        '-FfDin',
+    ]);
     if (result.code !== 0 || result.stderr.trim()) throw new Error('The Darwin executable path is unverifiable.');
     const candidates = [
         ...new Set(
@@ -331,7 +368,7 @@ export async function resolveUnixExecutable({
             }
         }
         try {
-            const identity = await fileIdentity(comm);
+            const identity = await observeNativeFile('executable-stat', () => fileIdentity(comm));
             // Chrome's code-sign clone hard-links the main executable. Compare the
             // installed file with the kernel mapping's device/inode, never its name alone.
             const aliases = new Set(
@@ -350,11 +387,18 @@ export async function resolveUnixExecutable({
                     )
                     .map((file) => file.name),
             );
+            emitFixtureEvent('native-file', 'decision', { command: 'executable-stat', valid: aliases.size === 1, pid });
             if (aliases.size === 1) return comm;
         } catch {
             // Missing filesystem identity cannot authorize a mapped alias.
         }
     }
+    emitFixtureEvent('native-file', 'decision', {
+        command: 'lsof',
+        valid: matches.length === 1 && executable !== undefined,
+        pid,
+        count: matches.length,
+    });
     if (matches.length !== 1 || executable === undefined) {
         const error = new DetailedError('The Darwin executable path is unverifiable or ambiguous.');
         error.details = {
@@ -379,9 +423,9 @@ async function linuxCreationTime(
     readText: (file: string) => Promise<string>,
 ): Promise<string> {
     const [stat, boot, clock] = await Promise.all([
-        readText(`/proc/${pid}/stat`),
-        readText('/proc/stat'),
-        execute('getconf', ['CLK_TCK']),
+        observeNativeFile('proc-stat', () => readText(`/proc/${pid}/stat`)),
+        observeNativeFile('proc-boot', () => readText('/proc/stat')),
+        observeNativeCommand('getconf', execute, 'getconf', ['CLK_TCK']),
     ]);
     // comm may contain spaces and closing parentheses; fields resume after its last ') '.
     const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
@@ -404,11 +448,13 @@ async function linuxCreationTime(
         !Number.isSafeInteger(ticksPerSecond) ||
         ticksPerSecond <= 0
     ) {
+        emitFixtureEvent('native-file', 'decision', { command: 'proc-stat', pid, valid: false });
         throw new Error('The Linux process creation evidence is unverifiable.');
     }
     // ps lstart truncates startTicks / CLK_TCK; retain the kernel's fractional seconds.
     const started = new Date(bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000);
     if (!Number.isFinite(started.getTime())) throw new Error('The Linux process creation evidence is unverifiable.');
+    emitFixtureEvent('native-file', 'decision', { command: 'proc-stat', pid, valid: true });
     return started.toISOString();
 }
 
@@ -425,7 +471,7 @@ export async function unixSnapshot(
 ): Promise<ProcessEvidence> {
     const platform = dependencies.platform ?? process.platform;
     const execute = dependencies.run ?? run;
-    const processes = await execute('ps', ['-ww', '-axo', 'pid=,ppid=,uid=,lstart=,comm=']);
+    const processes = await observeNativeCommand('ps', execute, 'ps', ['-ww', '-axo', 'pid=,ppid=,uid=,lstart=,comm=']);
     if (processes.code !== 0) throw new Error('Cannot inspect target processes.');
     const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
         const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
@@ -466,7 +512,12 @@ export async function unixSnapshot(
             }
         }
     }
-    const result = await execute('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fpn']);
+    const result = await observeNativeCommand('lsof', execute, 'lsof', [
+        '-nP',
+        `-iTCP:${port}`,
+        '-sTCP:LISTEN',
+        '-Fpn',
+    ]);
     if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
         throw new Error('Cannot verify CDP listener ownership (lsof required).');
     const listeners: ListenerEvidence[] = [];
@@ -570,6 +621,12 @@ export function createPlatformAdapter(
             }
             return { ...result, listenerState };
         } catch (cause) {
+            emitFixtureEvent(
+                'native-close',
+                'decision',
+                { phase: 'normal-close', outcome: 'failed', pid: target.processId, port: target.port },
+                cause,
+            );
             const error = new DetailedError(errorMessage(cause));
             error.details = { ...errorDetails(cause), listenerState, processExited: false };
             throw error;
@@ -606,7 +663,13 @@ export function createPlatformAdapter(
             if (process.platform === 'darwin') return [];
             const ranges: PortRange[] = [];
             for (const family of ['ipv4', 'ipv6']) {
-                const result = await run('netsh.exe', ['int', family, 'show', 'excludedportrange', 'protocol=tcp']);
+                const result = await observeNativeCommand('netsh', run, 'netsh.exe', [
+                    'int',
+                    family,
+                    'show',
+                    'excludedportrange',
+                    'protocol=tcp',
+                ]);
                 if (result.code !== 0) throw new Error('Windows excluded ports could not be read.');
                 for (const match of result.stdout.matchAll(/^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$/gm))
                     ranges.push([Number(match[1]), Number(match[2])]);

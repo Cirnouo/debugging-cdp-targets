@@ -209,25 +209,64 @@ jobs:
                 run: pnpm install --frozen-lockfile
             -   name: Check TypeScript types
                 run: pnpm typecheck
+            -   name: Initialize current controlled Chrome collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId=""
+                    if collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"; then
+                        printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    else
+                        printf 'initialized=false\n' >> "$GITHUB_OUTPUT"
+                    fi
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
             -   name: Verify Linux desktop Chrome prerequisites and run real acceptance
                 if: runner.os == 'Linux'
                 shell: bash
                 run: |
                     set -euo pipefail
+                    collectionId="${{ steps.fixture-initialization.outputs.collection-id }}"
                     test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
                     command -v lsof
                     command -v getconf
                     command -v Xvfb
                     command -v xvfb-run
                     command -v xauth
-                    xvfb-run -a node tests/smoke/official-server.ts
-                    xvfb-run -a node tests/smoke/entry-recovery.ts
+                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
+                    xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
+                    xvfb-run -a node tests/smoke/entry-recovery.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
             -   name: Verify macOS desktop Chrome prerequisites and run real acceptance
                 if: runner.os == 'macOS'
                 shell: bash
                 run: |
                     set -euo pipefail
+                    collectionId="${{ steps.fixture-initialization.outputs.collection-id }}"
                     test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
                     command -v lsof
-                    node tests/smoke/official-server.ts
-                    node tests/smoke/entry-recovery.ts
+                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
+                    node tests/smoke/official-server.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
+                    node tests/smoke/entry-recovery.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+            -   name: Upload controlled Chrome failure diagnostics
+                id: fixture-artifact
+                if: failure() && steps.fixture-initialization.outputs.initialized == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: controlled-chrome-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: warn
+            -   name: Index controlled Chrome failure diagnostics
+                if: failure()
+                env:
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "${{ steps.fixture-initialization.outputs.collection-id }}"

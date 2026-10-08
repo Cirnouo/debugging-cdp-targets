@@ -115,6 +115,36 @@ and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
 browser or inspection prerequisites fail. The scripts preserve identity checks,
 normal Close and Windows visible-console monitoring. These jobs also run in
 same-commit release CI; simulated tests do not substitute for real acceptance.
+Only failed controlled real Chrome fixture jobs may upload diagnostic artifacts,
+using the reviewed
+[official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
+The exact five collector/index filenames, failure condition, seven-day retention
+and separate directory are enforced by CI regressions; other jobs remain
+artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
+numbers and bounded allowlisted error cause codes. They exclude raw errors,
+messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
+environment, argv, process tables, lock content, hostnames and private paths.
+The original delivered gateway remains the smoke entry with a test-only safe
+subscriber preload. Streaming begins before work completes, has fixed record,
+event and byte caps, and exposes truncation, rejection or write limitations.
+Both owned smoke children omit inherited `NODE_OPTIONS`. Dependency-free
+initialization creates all five fixed files, with both smoke envelopes explicitly
+not-run before prerequisites. Fresh collection ownership preserves and refuses
+prior evidence.
+Stage, smoke and summary CLI commands carry the UUID returned by successful
+current initialization. Refusal is visibly reported without changing actual
+prerequisite/smoke exits; failure upload also requires that successful current
+initialization. Earlier refused evidence cannot be uploaded or presented as the
+current collection. The parent owns failure summaries; final and interrupted CI
+presentation derive safe child progress from the bounded stream. Diagnostic
+durations and readiness remaining budgets use monotonic elapsed time without
+changing the production readiness predicate or wall-clock deadline.
+Primary smoke failures remain primary while the existing cleanup and assertions
+run in order; diagnostic failure cannot replace runtime outcomes. Artifacts
+establish only the recorded direct checks, not complete lifecycle attribution
+or a root cause for historical failures. Synchronous instrumentation overhead
+on real Linux/macOS Chrome fixtures has not been measured. Reproduction and interpretation belong in the
+[smoke inventory](../../tests/smoke/README.md#controlled-failure-diagnostics).
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at

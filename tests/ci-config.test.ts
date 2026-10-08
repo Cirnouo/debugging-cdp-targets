@@ -6,6 +6,9 @@ import { parse } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
 
 interface WorkflowStep {
+    name?: string;
+    id?: string;
+    with?: Record<string, unknown>;
     uses?: string;
     run?: string;
     if?: string;
@@ -176,19 +179,44 @@ test('release workflow publishes new stable and prerelease candidate tags after 
     assert.match(releaseSource, /PNPM_CONFIG_CONFIG_DEPENDENCIES: "\{\}"/);
 });
 
-test('CI workflow uses only the approved action pins and uploads no artifacts', () => {
+test('CI workflow uses reviewed pins and limits failure artifacts to controlled real Chrome files', () => {
     const approved = new Set([
         'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
         'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
         'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
+        'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 18);
+    assert.equal(uses.length, 19);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
     assert.match(source, /# v6\.0\.10/);
-    assert.doesNotMatch(source, /upload-artifact/i);
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+        const uploads = job.steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
+        if (name !== 'real-chrome-tests') {
+            assert.deepEqual(uploads, []);
+            continue;
+        }
+        assert.equal(uploads.length, 1);
+        const upload = uploads[0];
+        assert.equal(upload?.if, "failure() && steps.fixture-initialization.outputs.initialized == 'true'");
+        assert.deepEqual(upload?.with, {
+            name: `controlled-chrome-\${{ matrix.os }}-\${{ github.run_id }}-\${{ github.run_attempt }}`,
+            path: `${[
+                `\${{ runner.temp }}/dct-fixture-diagnostics/job-index.json`,
+                `\${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson`,
+                `\${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json`,
+                `\${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson`,
+                `\${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json`,
+            ].join('\n')}\n`,
+            'retention-days': 7,
+            'include-hidden-files': false,
+            overwrite: false,
+            'if-no-files-found': 'warn',
+        });
+    }
+    assert.match(source, /# v7\.0\.2/);
 });
 
 test('security gate audits before any reviewed dependency builds and cannot ignore failures', () => {
@@ -275,6 +303,29 @@ test('real Chrome CI requires both actual desktop browsers and preserves the aud
         assert.match(mac.run, new RegExp(`node tests/smoke/${script}\\.ts`));
     }
     assert.doesNotMatch(mac.run, /xvfb/);
+    for (const step of [linux, mac]) {
+        assert.ok(step?.run);
+        assert.ok(step.run.includes('fixture-ci.ts stage'));
+        assert.ok(step.run.indexOf('fixture-ci.ts stage') < step.run.indexOf('node tests/smoke/official-server.ts'));
+        assert.match(step.run, /official-server\.ts --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/);
+        assert.match(step.run, /entry-recovery\.ts --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/);
+        assert.match(step.run, /--collection-id "\$collectionId"/);
+        assert.match(step.run, /fixture-ci\.ts stage[^\n]+"\$collectionId"; then :; fi/);
+    }
+    const init = job.steps.find((step) => step.id === 'fixture-initialization');
+    assert.ok(init);
+    assert.ok(init.run);
+    assert.ok(init.run.includes('fixture-ci.ts init'));
+    assert.match(init.run, /if collectionId=/);
+    assert.match(init.run, /initialized=true/);
+    assert.match(init.run, /initialized=false/);
+    assert.ok(job.steps.indexOf(init) < job.steps.indexOf(linux));
+    assert.ok(job.steps.indexOf(init) < job.steps.indexOf(mac));
+    const summary = job.steps.find((step) => step.name === 'Index controlled Chrome failure diagnostics');
+    assert.equal(summary?.if, 'failure()');
+    assert.equal(summary?.env?.DCT_FIXTURE_ARTIFACT_URL, `\${{ steps.fixture-artifact.outputs.artifact-url }}`);
+    assert.match(summary?.run ?? '', /fixture-ci\.ts summary/);
+    assert.match(summary?.run ?? '', /steps\.fixture-initialization\.outputs\.collection-id/);
     assert.ok(job.steps.every((step) => step['continue-on-error'] !== true));
     assert.doesNotMatch(commands, /--no-sandbox|--headless|kill -9|pkill|download|apt-get|brew install/);
 });

@@ -11,8 +11,8 @@ This directory owns GitHub Actions workflows.
 - `ci.yml` validates commit governance and current PR template submissions,
   repository quality, Windows behavior, portable simulated CDP, real Chrome and
   the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
-  request open/reopen/synchronize/title-or-body-edit events without uploading
-  runtime data or artifacts.
+  request open/reopen/synchronize/title-or-body-edit events. Only failed controlled
+  real Chrome jobs upload the fixed safe fixture diagnostic files described below.
 - `release.yml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.
@@ -76,6 +76,28 @@ must be an existing actual Chrome binary. Each launch uses an independent
 temporary profile and synthetic local page, validates process/listener/endpoint
 identity and logs the actual OS and Chrome versions. Missing prerequisites fail;
 no browser/profile/content artifacts are uploaded and cleanup uses normal Close.
+Failure diagnostics use the reviewed
+[official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
+The failure-only upload names each artifact by OS, run ID and attempt and
+requires successful current initialization before upload.
+Initialization returns the existing collection UUID, which later stage, smoke
+and summary commands must carry. Refusal cannot mutate or present earlier
+collector files as current evidence, and those files are not eligible for upload.
+It retains artifacts for seven days, disables hidden files and overwrite, and selects exactly
+`job-index.json`, `official-server.events.ndjson`, `official-server.summary.json`,
+`entry-recovery.events.ndjson` and `entry-recovery.summary.json` from the separate
+`RUNNER_TEMP/dct-fixture-diagnostics` directory. There are no profile, workspace
+or temporary-directory wildcards. Other CI jobs remain artifact-free, and the
+release publisher uploads no custom assets. The failure job summary indexes
+relative filenames, safe primary stage/operation identity and the artifact link
+when upload succeeds. The index, both independent not-run summaries and empty
+streams start before prerequisites; collection ownership refuses prior evidence.
+Interrupted summary presentation derives the last safe runtime boundary/operation
+and count from the stream without requiring successful cleanup. If the first smoke
+fails, the second remains not-run under the existing fail-fast shell behavior.
+Evidence covers recorded direct checks; historical failure causes remain unknown,
+and synchronous instrumentation overhead on real Linux/macOS Chrome is unmeasured.
+See [smoke diagnostics and reproduction](../../tests/smoke/README.md#controlled-failure-diagnostics).
 New scan and browser checks become required only after their first successful
 GitHub runs and review of the CodeQL findings.
 

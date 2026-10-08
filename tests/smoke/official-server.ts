@@ -6,17 +6,34 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
-import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { isRecord } from '../../src/shared/errors.ts';
 import {
     createChromeSmokeLaunch,
     inspectChromeSmokeDirectory,
     inspectChromeSmokeTarget,
     requireChromeSmokeExecutable,
 } from './chrome-host.ts';
+import {
+    createFixtureArtifacts,
+    createFixtureGatewayClient,
+    createSmokeFailures,
+    fixtureOutputCollectionId,
+    fixtureOutputDirectory,
+} from './fixture-artifacts.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
-import { createClient, readMcpTools } from './mcp-client.ts';
+import { readMcpTools } from './mcp-client.ts';
 
-const chrome = await requireChromeSmokeExecutable();
+const outputDirectory = fixtureOutputDirectory();
+const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
+    collectionId: fixtureOutputCollectionId(),
+});
+const failures = createSmokeFailures(artifacts);
+artifacts.begin('prerequisites');
+const chrome = await requireChromeSmokeExecutable().catch((error: unknown) => {
+    failures.primary(error, 'prerequisites');
+    failures.finish();
+    throw error;
+});
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-smoke-')));
 const managedDirectories = new Set<string>();
@@ -48,7 +65,12 @@ if (monitor)
         monitor.stdout.once('data', () => resolve());
         monitor.once('error', reject);
     });
-const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+const client = createFixtureGatewayClient(
+    path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
+    outputDirectory,
+    'official-server',
+    artifacts,
+);
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
@@ -83,6 +105,7 @@ async function emptyGateway(id: string) {
     assert.deepEqual(result.connections, []);
 }
 try {
+    artifacts.begin('acceptance');
     const initialized = await client.request('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
@@ -174,26 +197,37 @@ try {
     await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
     await emptyGateway(entryId);
     console.log('Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.');
+} catch (error) {
+    failures.primary(error);
 } finally {
-    if (entryId && active?.sessionId)
-        await closeSmokeConnection(control, {
-            action: 'stop',
-            requestId: randomUUID(),
-            entryId,
-            connectionId: active.connectionId,
-            sessionId: active.sessionId,
-            disposition: 'Close',
-        }).catch((error: unknown) => console.error(errorMessage(error)));
-    await client.close();
-    for (const directory of managedDirectories) await assert.rejects(lstat(directory), { code: 'ENOENT' });
+    if (entryId && active?.sessionId) {
+        const cleanupEntryId = entryId;
+        const { connectionId, sessionId } = active;
+        await failures.cleanup('target-cleanup', () =>
+            closeSmokeConnection(control, {
+                action: 'stop',
+                requestId: randomUUID(),
+                entryId: cleanupEntryId,
+                connectionId,
+                sessionId,
+                disposition: 'Close',
+            }),
+        );
+    }
+    await failures.cleanup('gateway-close', () => client.close());
+    for (const directory of managedDirectories)
+        await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
     if (monitor) {
-        await writeFile(stopFile, 'stop');
-        await monitoringEnded;
-        const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
-        assert.ok(isRecord(report));
-        console.log(JSON.stringify({ windowMonitor: report, testProfileFolder: folder }));
-        assert.deepEqual(report.newlyVisibleConsoles, []);
+        await failures.cleanup('window-monitor', async () => {
+            await writeFile(stopFile, 'stop');
+            await monitoringEnded;
+            const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
+            assert.ok(isRecord(report));
+            console.log(JSON.stringify({ windowMonitor: report, testProfileFolder: folder }));
+            assert.deepEqual(report.newlyVisibleConsoles, []);
+        });
     } else {
         console.log(JSON.stringify({ testProfileFolder: folder }));
     }
+    failures.finish();
 }

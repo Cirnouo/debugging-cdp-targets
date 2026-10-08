@@ -68,6 +68,8 @@ Version 0.1.0 remains under development; no release has been published.
   identical mutation retry delivery acknowledge operation notices; aborted
   requests and nonterminal responses leave them unread. Failure notices retain
   the active failure phase and compact native evidence without error payloads.
+  Failed startup retains its primary phase and error code when rollback also
+  fails, with the owned target identity available for explicit recovery.
 - Structured executable/args/cwd/env launches with native Windows privilege
   detection, private one-shot elevation, actual app handles and separate
   authorization and CDP readiness waits. Independently verified generic

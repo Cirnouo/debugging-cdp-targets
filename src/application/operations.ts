@@ -1,4 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {
+    beginFixtureStage,
+    emitFixtureEvent,
+    emitFixturePhase,
+    type FixtureIdentity,
+    runFixtureObservation,
+} from '../adapters/fixture-diagnostics.ts';
 import { type ConnectionRoute, lifecycleFailureEvidence } from '../domains/control-contract.ts';
 import type { DataIsolationEvidence } from '../domains/data-isolation.ts';
 import { errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
@@ -135,52 +142,83 @@ export function createOperationRegistry(entryId: string) {
         requests.set(requestId, { fingerprint, operationId });
         emit(operation);
         const accepted = get(operationId);
-        operation.finished = Promise.resolve().then(async () => {
-            try {
-                operation.abort.signal.throwIfAborted();
-                operation.snapshot.state = 'running';
-                emit(operation);
-                const result = await job({
-                    operationId,
-                    signal: operation.abort.signal,
-                    phase: (phase) => {
-                        if (terminal(operation.snapshot.state)) return;
-                        operation.snapshot.phase = phase;
-                        emit(operation);
-                    },
-                    identity: (route) => {
-                        if (terminal(operation.snapshot.state)) return;
-                        operation.snapshot.connectionId = route.connectionId;
-                        operation.snapshot.sessionId = route.sessionId;
-                        emit(operation);
-                    },
-                    isolation: (value) => {
-                        operation.snapshot.isolation = structuredClone(value);
-                    },
-                });
-                operation.abort.signal.throwIfAborted();
-                operation.snapshot.result = result;
-                operation.snapshot.state = 'succeeded';
-            } catch (error) {
-                const cancelled = operation.abort.signal.aborted && error === operation.abort.signal.reason;
-                operation.snapshot.state = cancelled ? 'cancelled' : 'failed';
-                if (!cancelled) {
-                    const code = errorCode(error);
-                    const evidence = lifecycleFailureEvidence(errorDetails(error) ?? {});
-                    operation.snapshot.error = {
-                        ...evidence,
-                        phase: typeof evidence.phase === 'string' ? evidence.phase : operation.snapshot.phase,
-                        ...(code === undefined ? {} : { code }),
-                        message: errorMessage(error),
-                    };
-                }
-            } finally {
-                onSettled?.();
-                operation.snapshot.phase = operation.snapshot.state;
-                notices.add(operationId);
-                emit(operation);
-            }
+        const observationIdentity = (): FixtureIdentity => ({
+            entryId,
+            operationId,
+            requestId,
+            ...(operation.snapshot.action === 'start' ||
+            operation.snapshot.action === 'restart' ||
+            operation.snapshot.action === 'stop' ||
+            operation.snapshot.action === 'end-task'
+                ? { action: operation.snapshot.action }
+                : {}),
+            connectionId: operation.snapshot.connectionId,
+            sessionId: operation.snapshot.sessionId,
         });
+        operation.finished = Promise.resolve().then(() =>
+            runFixtureObservation(observationIdentity, async () => {
+                const finishObservation = beginFixtureStage('operation');
+                try {
+                    operation.abort.signal.throwIfAborted();
+                    operation.snapshot.state = 'running';
+                    emit(operation);
+                    const result = await job({
+                        operationId,
+                        signal: operation.abort.signal,
+                        phase: (phase) => {
+                            if (terminal(operation.snapshot.state)) return;
+                            operation.snapshot.phase = phase;
+                            emit(operation);
+                            emitFixturePhase(phase);
+                        },
+                        identity: (route) => {
+                            if (terminal(operation.snapshot.state)) return;
+                            operation.snapshot.connectionId = route.connectionId;
+                            operation.snapshot.sessionId = route.sessionId;
+                            emit(operation);
+                            emitFixtureEvent('operation-route', 'decision');
+                        },
+                        isolation: (value) => {
+                            operation.snapshot.isolation = structuredClone(value);
+                        },
+                    });
+                    operation.abort.signal.throwIfAborted();
+                    operation.snapshot.result = result;
+                    operation.snapshot.state = 'succeeded';
+                } catch (error) {
+                    const cancelled = operation.abort.signal.aborted && error === operation.abort.signal.reason;
+                    emitFixtureEvent(
+                        'operation-error',
+                        'decision',
+                        { outcome: cancelled ? 'cancelled' : 'failed' },
+                        error,
+                    );
+                    operation.snapshot.state = cancelled ? 'cancelled' : 'failed';
+                    if (!cancelled) {
+                        const code = errorCode(error);
+                        const evidence = lifecycleFailureEvidence(errorDetails(error) ?? {});
+                        operation.snapshot.error = {
+                            ...evidence,
+                            phase: typeof evidence.phase === 'string' ? evidence.phase : operation.snapshot.phase,
+                            ...(code === undefined ? {} : { code }),
+                            message: errorMessage(error),
+                        };
+                    }
+                } finally {
+                    onSettled?.();
+                    operation.snapshot.phase = operation.snapshot.state;
+                    notices.add(operationId);
+                    emit(operation);
+                    finishObservation(
+                        operation.snapshot.state === 'succeeded'
+                            ? 'succeeded'
+                            : operation.snapshot.state === 'cancelled'
+                              ? 'cancelled'
+                              : 'failed',
+                    );
+                }
+            }),
+        );
         return accepted;
     }
     async function wait(operationId: string, cursor = 0, signal?: AbortSignal) {

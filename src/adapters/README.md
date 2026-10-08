@@ -1,5 +1,7 @@
 # I/O adapters
 
+- `fixture-diagnostics.ts` owns opt-in fixture observation, direct I/O scopes,
+  closed safe event/error metadata and receiver-side exception containment.
 - `cdp-router.ts` forwards loopback HTTP/WebSocket CDP and tracks requests.
 - `lifecycle-tools.ts` declares the seven MCP lifecycle/operation interfaces.
 - `tool-catalog.ts` exposes the fixed official catalog, parameter variants,
