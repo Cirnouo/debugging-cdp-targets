@@ -6,6 +6,7 @@ import {
     serializeFixtureError,
     validateFixtureEvent,
 } from '../../src/adapters/fixture-diagnostics.ts';
+import { type BrowserStartupRecord, validateBrowserStartupRecord } from './chrome-startup.ts';
 import { newFixtureEnvelope, readFixtureIndex } from './fixture-ci.ts';
 import { createStdioClient } from './mcp-client.ts';
 
@@ -46,6 +47,7 @@ interface Summary {
     diagnosticAbsent: boolean;
     lastOperationId: string | null;
     incomplete: boolean;
+    browserStartup: Readonly<BrowserStartupRecord>[];
 }
 const maxBytes = 1_048_576;
 const maxRecordBytes = 4096;
@@ -67,6 +69,7 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
         lastStage: null as string | null,
         lastOperationId: null as string | null,
         incomplete: false,
+        browserStartup: [] as Readonly<BrowserStartupRecord>[],
     };
     const file = path.join(directory, `${fixture}.events.ndjson`);
     let cleanupEnded = false;
@@ -107,6 +110,18 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
                 progress.lastStage = event.stage;
                 progress.lastOperationId = event.operationId ?? null;
                 if (event.stage === 'gateway-cleanup' && event.event === 'end') cleanupEnded = true;
+            } else if (value.kind === 'browser-startup') {
+                const startup = validateBrowserStartupRecord(value);
+                if (!startup) progress.invalidEvents++;
+                else {
+                    progress.browserStartup = progress.browserStartup.filter(
+                        (prior) =>
+                            prior.phase !== startup.phase ||
+                            (prior.phase === 'log' && startup.phase === 'log' && prior.launch !== startup.launch),
+                    );
+                    progress.browserStartup.push(startup);
+                    progress.browserStartup = progress.browserStartup.slice(-66);
+                }
             } else if (value.kind === 'truncated') progress.truncated = true;
             else if (value.kind === 'limitation') {
                 if (value.reason === 'validation-rejected') progress.invalidEvents++;
@@ -284,6 +299,23 @@ export function createFixtureArtifacts(
             append({ kind: 'gateway', ...event });
             persist();
         },
+        startup(value: unknown) {
+            if (summary.collectionRejected || io.streamOnly) return;
+            const safe = validateBrowserStartupRecord(value);
+            if (!safe) {
+                collector.rejected();
+                return;
+            }
+            summary.browserStartup = summary.browserStartup.filter(
+                (prior) =>
+                    prior.phase !== safe.phase ||
+                    (prior.phase === 'log' && safe.phase === 'log' && prior.launch !== safe.launch),
+            );
+            summary.browserStartup.push(safe);
+            summary.browserStartup = summary.browserStartup.slice(-66);
+            append(safe);
+            persist();
+        },
         rejected() {
             summary.invalidEvents++;
             append({ kind: 'limitation', reason: 'validation-rejected' });
@@ -319,6 +351,7 @@ export function createFixtureArtifacts(
                 summary.writeFailed ||= progress.writeFailed;
                 summary.truncated ||= progress.truncated;
                 summary.incomplete ||= progress.incomplete;
+                summary.browserStartup = progress.browserStartup;
             }
             summary.diagnosticAbsent = !!directory && summary.gatewayEvents === 0;
             persist();
@@ -338,6 +371,9 @@ export function createSmokeFailures(artifacts: FixtureArtifacts) {
     let first: unknown;
     let failed = false;
     return {
+        hasFailure() {
+            return failed;
+        },
         primary(error: unknown, stage: SmokeStage = 'acceptance') {
             artifacts.failure(stage, error, !failed);
             if (!failed) {

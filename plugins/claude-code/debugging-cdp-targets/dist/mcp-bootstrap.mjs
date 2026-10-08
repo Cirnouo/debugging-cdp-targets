@@ -4370,6 +4370,57 @@ var syscalls = [
   "bind",
   "scandir"
 ];
+var rootProcessStates = [
+  "running",
+  "sleeping",
+  "disk-sleep",
+  "stopped",
+  "tracing-stop",
+  "dead",
+  "zombie",
+  "parked",
+  "idle",
+  "unknown"
+];
+var signals = [
+  "SIGABRT",
+  "SIGALRM",
+  "SIGBUS",
+  "SIGCHLD",
+  "SIGCONT",
+  "SIGFPE",
+  "SIGHUP",
+  "SIGILL",
+  "SIGINT",
+  "SIGIO",
+  "SIGIOT",
+  "SIGKILL",
+  "SIGPIPE",
+  "SIGPOLL",
+  "SIGPROF",
+  "SIGPWR",
+  "SIGQUIT",
+  "SIGSEGV",
+  "SIGSTKFLT",
+  "SIGSTOP",
+  "SIGSYS",
+  "SIGTERM",
+  "SIGTRAP",
+  "SIGTSTP",
+  "SIGTTIN",
+  "SIGTTOU",
+  "SIGUNUSED",
+  "SIGURG",
+  "SIGUSR1",
+  "SIGUSR2",
+  "SIGVTALRM",
+  "SIGWINCH",
+  "SIGXCPU",
+  "SIGXFSZ",
+  "SIGBREAK",
+  "SIGLOST",
+  "SIGINFO"
+];
 var scopes = new AsyncLocalStorage();
 var identityKeys = [
   "entryId",
@@ -4390,11 +4441,16 @@ var fieldKeys = [
   "elapsedMs",
   "attempt",
   "count",
+  "ownedDescendantCount",
   "pendingCount",
   "resourceCount",
   "budgetMs",
   "remainingMs",
   "exitCode",
+  "signalCode",
+  "exitObserved",
+  "monitoringFailed",
+  "rootProcessState",
   "httpStatus",
   "nativeError",
   "stderrPresent",
@@ -4418,16 +4474,20 @@ function safeField(key, value) {
   if (key === "command") return member(commands, value);
   if (key === "status") return member(statuses, value);
   if (key === "phase") return member(phases, value);
+  if (key === "rootProcessState") return member(rootProcessStates, value);
+  if (key === "signalCode") return value === null || member(signals, value);
   if (key === "trigger") return value === "gateway-disconnect";
-  if (["stderrPresent", "valid", "available"].includes(key)) return typeof value === "boolean";
-  if (key === "exitCode") return value === null || typeof value === "number" && Number.isSafeInteger(value);
+  if (["stderrPresent", "valid", "available", "exitObserved", "monitoringFailed"].includes(key))
+    return typeof value === "boolean";
+  if (key === "exitCode")
+    return value === null || typeof value === "number" && Number.isInteger(value) && value >= -2147483648 && value <= 4294967295;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return false;
   if (["durationMs", "timestampMs", "elapsedMs", "budgetMs", "remainingMs"].includes(key)) return true;
   if (!Number.isSafeInteger(value)) return false;
   if (key === "pid") return value > 0;
   if (key === "port") return value > 0 && value <= 65535;
   if (key === "httpStatus") return value >= 100 && value <= 599;
-  return ["attempt", "count", "pendingCount", "resourceCount", "nativeError"].includes(key);
+  return ["attempt", "count", "ownedDescendantCount", "pendingCount", "resourceCount", "nativeError"].includes(key);
 }
 function copyFields(value) {
   const result = {};
@@ -5190,7 +5250,8 @@ async function linuxCreationTime(pid, execute, readText) {
     observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"])
   ]);
   const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
-  const ticks = processStat?.[2]?.split(/\s+/)[19];
+  const processFields = processStat?.[2]?.split(/\s+/);
+  const ticks = processFields?.[19];
   const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
   const clockText = clock.stdout.trim();
   const startTicks = Number(ticks);
@@ -5202,7 +5263,26 @@ async function linuxCreationTime(pid, execute, readText) {
   }
   const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
   if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
-  emitFixtureEvent("native-file", "decision", { command: "proc-stat", pid, valid: true });
+  if (fixtureHasSubscribers()) {
+    const states = {
+      R: "running",
+      S: "sleeping",
+      D: "disk-sleep",
+      T: "stopped",
+      t: "tracing-stop",
+      X: "dead",
+      Z: "zombie",
+      P: "parked",
+      I: "idle"
+    };
+    const state = processFields?.[0];
+    emitFixtureEvent("native-file", "decision", {
+      command: "proc-stat",
+      pid,
+      valid: true,
+      rootProcessState: state !== void 0 && Object.hasOwn(states, state) ? states[state] ?? "unknown" : "unknown"
+    });
+  }
   return started.toISOString();
 }
 async function unixSnapshot(pid, port, dependencies = {}) {
@@ -41731,7 +41811,22 @@ function createTargetHost(dependencies = {}) {
     const finish = beginFixtureStage("native-snapshot", { pid, port });
     try {
       const evidence = await waitForWork(() => platform.snapshot(pid, port), signal);
-      finish("succeeded", { valid: evidence.root.exists, count: evidence.listeners.length });
+      let ownedDescendantCount;
+      if (fixtureHasSubscribers()) {
+        try {
+          if (Array.isArray(evidence.processIds) && evidence.processIds.every((id) => Number.isSafeInteger(id) && id > 0)) {
+            const owned = new Set(evidence.processIds);
+            owned.delete(pid);
+            ownedDescendantCount = owned.size;
+          }
+        } catch {
+        }
+      }
+      finish("succeeded", {
+        valid: evidence.root.exists,
+        count: evidence.listeners.length,
+        ...ownedDescendantCount === void 0 ? {} : { ownedDescendantCount }
+      });
       return evidence;
     } catch (error2) {
       finish("failed", {}, error2);
@@ -42155,6 +42250,27 @@ function createTargetHost(dependencies = {}) {
               break;
             }
           }
+        }
+        if (fixtureHasSubscribers()) {
+          const fields3 = { phase: "rollback-request", pid: processId, port };
+          try {
+            fields3.exitObserved = targetExitObserved(target);
+          } catch {
+          }
+          try {
+            fields3.exitCode = child.exitCode;
+          } catch {
+          }
+          try {
+            const signalCode = child.signalCode;
+            if (signalCode !== void 0) fields3.signalCode = signalCode;
+          } catch {
+          }
+          try {
+            fields3.monitoringFailed = Boolean(child.monitoringFailure);
+          } catch {
+          }
+          emitFixtureEvent("readiness", "decision", fields3);
         }
         finishReadiness("failed", {}, lastError);
         const cancellationBeforeRollback = context.signal?.aborted ? { reason: context.signal.reason } : void 0;

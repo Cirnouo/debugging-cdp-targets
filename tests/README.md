@@ -6,6 +6,12 @@
 - `fixture-boundaries.test.ts` checks native-command, endpoint, profile and
   data-directory observation, original I/O effects and deadlines, and hostile
   metadata/error privacy through controlled external I/O boundaries.
+- `readiness-evidence.test.ts` checks Linux state from existing native reads,
+  owned descendant counts, and retained child exit evidence before rollback,
+  including closed fields, malformed observations and disabled-mode behavior.
+- `chrome-startup.test.ts` checks bounded private Chrome log projections,
+  source-specific reason categories, display responsiveness and safe diagnostic
+  limitations without launching a browser or exposing raw log contents.
 - `application-screenshot-probe.test.ts` validates complete sealed payload
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry

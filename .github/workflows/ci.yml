@@ -233,6 +233,7 @@ jobs:
                     command -v Xvfb
                     command -v xvfb-run
                     command -v xauth
+                    command -v xdpyinfo
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
                     xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi

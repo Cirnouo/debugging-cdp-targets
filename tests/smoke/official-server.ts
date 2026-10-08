@@ -14,6 +14,12 @@ import {
     requireChromeSmokeExecutable,
 } from './chrome-host.ts';
 import {
+    type BrowserStartupRecord,
+    checkChromeSmokeDisplay,
+    createChromeStartupCapture,
+    validateBrowserStartupRecord,
+} from './chrome-startup.ts';
+import {
     createFixtureArtifacts,
     createFixtureGatewayClient,
     createSmokeFailures,
@@ -28,14 +34,37 @@ const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
     collectionId: fixtureOutputCollectionId(),
 });
 const failures = createSmokeFailures(artifacts);
+const currentCollection = artifacts.snapshot();
+const controlledDiagnostics =
+    !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
+    const safe = validateBrowserStartupRecord(record);
+    if (!safe) return;
+    try {
+        artifacts.startup(safe);
+        if (firstSample) console.log(JSON.stringify(safe));
+    } catch {}
+}
 artifacts.begin('prerequisites');
 const chrome = await requireChromeSmokeExecutable().catch((error: unknown) => {
     failures.primary(error, 'prerequisites');
     failures.finish();
     throw error;
 });
+const display = await checkChromeSmokeDisplay(controlledDiagnostics);
+if (display) {
+    startupEvidence(display);
+    try {
+        assert.ok(display.responsive, 'Controlled Chrome X display is not responsive.');
+    } catch (error) {
+        failures.primary(error, 'prerequisites');
+        failures.finish();
+        throw error;
+    }
+}
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-smoke-')));
+const startup = await createChromeStartupCapture(controlledDiagnostics, folder, startupEvidence);
 const managedDirectories = new Set<string>();
 const stopFile = path.join(folder, 'monitor-stop');
 const monitor =
@@ -76,7 +105,17 @@ const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     assert.ok(isRecord(result));
     return result;
 };
-const control = lifecycleClient(tool);
+const executeControl = lifecycleClient(tool);
+const control: typeof executeControl = (request) =>
+    startup && (request.action === 'start' || request.action === 'restart')
+        ? startup.settled(
+              () => executeControl(request),
+              request.action === 'restart',
+              request.action === 'start'
+                  ? request.launch.args?.find((arg) => arg.startsWith('--log-file='))?.slice('--log-file='.length)
+                  : undefined,
+          )
+        : executeControl(request);
 function textContent(result: Record<string, unknown>) {
     assert.ok(Array.isArray(result.content));
     return result.content
@@ -91,6 +130,8 @@ function launch(profile: string, title: string) {
         chrome,
         path.join(folder, profile),
         `data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>`,
+        process.platform,
+        startup?.newLog(),
     );
 }
 let entryId: string | undefined;
@@ -229,5 +270,6 @@ try {
     } else {
         console.log(JSON.stringify({ testProfileFolder: folder }));
     }
+    await startup?.close(!failures.hasFailure() && client.child.exitCode === 0);
     failures.finish();
 }

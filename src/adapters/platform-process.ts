@@ -12,7 +12,12 @@ import type {
 } from '../domains/cdp-target.ts';
 import type { LaunchContext } from '../domains/control-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
-import { beginFixtureStage, emitFixtureEvent, type FixtureFields } from './fixture-diagnostics.ts';
+import {
+    beginFixtureStage,
+    emitFixtureEvent,
+    type FixtureFields,
+    fixtureHasSubscribers,
+} from './fixture-diagnostics.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
@@ -429,7 +434,8 @@ async function linuxCreationTime(
     ]);
     // comm may contain spaces and closing parentheses; fields resume after its last ') '.
     const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
-    const ticks = processStat?.[2]?.split(/\s+/)[19];
+    const processFields = processStat?.[2]?.split(/\s+/);
+    const ticks = processFields?.[19];
     const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
     const clockText = clock.stdout.trim();
     const startTicks = Number(ticks);
@@ -454,7 +460,29 @@ async function linuxCreationTime(
     // ps lstart truncates startTicks / CLK_TCK; retain the kernel's fractional seconds.
     const started = new Date(bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000);
     if (!Number.isFinite(started.getTime())) throw new Error('The Linux process creation evidence is unverifiable.');
-    emitFixtureEvent('native-file', 'decision', { command: 'proc-stat', pid, valid: true });
+    if (fixtureHasSubscribers()) {
+        // The kernel's /proc stat field 3 reports a fixed task state:
+        // https://docs.kernel.org/filesystems/proc.html#process-specific-subdirectories
+        const states: Record<string, NonNullable<FixtureFields['rootProcessState']>> = {
+            R: 'running',
+            S: 'sleeping',
+            D: 'disk-sleep',
+            T: 'stopped',
+            t: 'tracing-stop',
+            X: 'dead',
+            Z: 'zombie',
+            P: 'parked',
+            I: 'idle',
+        };
+        const state = processFields?.[0];
+        emitFixtureEvent('native-file', 'decision', {
+            command: 'proc-stat',
+            pid,
+            valid: true,
+            rootProcessState:
+                state !== undefined && Object.hasOwn(states, state) ? (states[state] ?? 'unknown') : 'unknown',
+        });
+    }
     return started.toISOString();
 }
 

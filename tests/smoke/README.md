@@ -547,6 +547,7 @@ command -v getconf
 command -v Xvfb
 command -v xvfb-run
 command -v xauth
+command -v xdpyinfo
 if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
 xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
 if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" entry-recovery "$collectionId"; then :; fi
@@ -607,6 +608,62 @@ Diagnostic durations and readiness `remainingMs` use monotonic elapsed time;
 the production readiness predicate and its existing wall-clock deadline remain
 unchanged. Opt-in synchronous observation can perturb timing; its overhead on
 real Linux/macOS Chrome fixtures has not been measured.
+
+An accepted current diagnostics collection also enables `chrome-startup.ts`.
+On Linux, `xdpyinfo` queries the inherited `DISPLAY` inside the smoke's
+`xvfb-run` session with ignored output and a separate five-second bound.
+An unresponsive display fails the prerequisite check before Chrome starts.
+Refused or unconfigured collections add no browser logging flags or files.
+Controlled launches add plain `--enable-logging` and an absolute `--log-file`
+in a canonical private scratch sibling outside profiles and the upload directory.
+Chrome stdio stays ignored, and the original delivered gateway remains the entry.
+Each startup settlement reads its own log; restart samples before reuse and
+after settlement because Chrome may overwrite the same file on restart.
+
+The reader requires an initially matching regular file identity with one hard link;
+unsafe links, aliases and replacements before opening are rejected. Later identity
+or content changes retain only a limited projection marked incomplete; disappearance
+after observation begins is read-failed/incomplete, rather than initial absence.
+It reads at most the first and last
+64 KiB, without double counting overlapping ranges. Partial, oversized or excess
+lines and changing files expose incomplete evidence. Only closed categories for
+X display, sandbox, helper, zygote, singleton and DevTools bind errors, severity
+counts, and absent/read-failed/truncated/incomplete flags enter the existing
+bounded stream and summary. One validated JSON projection per initially configured log slot,
+plus display and scratch cleanup booleans, is printed in controlled job logs so
+successful CI can establish that the browser actually wrote the chosen file.
+Raw text, log paths, URLs and interpolated values never enter these records.
+Restart reuses its slot. The summary keeps the latest sample per slot; the bounded
+event stream retains earlier and pre-restart observations until its existing caps.
+
+Native records also expose the fixed Linux `rootProcessState` from existing
+proc-stat reads and a unique `ownedDescendantCount`, separate from listener counts.
+Retained `exitObserved`, exit code, signal and `monitoringFailed` evidence is sampled
+before rollback Close. These fields add no process scan, watcher or readiness deadline.
+
+These matchers use [Chromium logging setup](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/common/logging_chrome.cc),
+the [current LOG formatter](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/logging.cc)
+and its [older parentheses formatter](https://raw.githubusercontent.com/chromium/chromium/120.0.6099.0/base/logging.cc),
+and the direct source messages in
+[X11 initialization](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/ui/ozone/platform/x11/ozone_platform_x11.cc),
+[zygote initialization](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/content/browser/zygote_host/zygote_host_impl_linux.cc),
+[CHECK message prefix](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/check.cc),
+[sandbox helper validation](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/sandbox/linux/suid/client/setuid_sandbox_host.cc),
+[profile singleton](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/process_singleton_posix.cc)
+and [DevTools HTTP startup](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/content/browser/devtools/devtools_http_handler.cc).
+Source main can differ from the installed release; unmatched errors stay unknown.
+Nonfatal DBus errors establish no cause. File logging can miss early initialization,
+sandboxed children, crashes without a matching LOG message, and policy/default-data
+directory refusals written directly to ignored stderr. Absence establishes no cause.
+Official non-DCHECK builds can omit CHECK message streaming entirely through
+[CHECK build guards](https://raw.githubusercontent.com/chromium/chromium/main/base/check.h);
+a missing file message cannot exclude a CHECK startup failure.
+The read cap does not cap Chrome's private on-disk writes; verbose logging is not
+enabled. Instrumentation timing and storage overhead have not been measured.
+Private scratch is deleted only after successful acceptance, normal gateway exit
+and all existing profile deletion checks; failures or uncertain cleanup retain it.
+Optional logging or scratch removal errors remain nonfatal safe limitations.
+The raw file is excluded from the exact five uploaded files, including when retained.
 
 Records exclude raw messages/stacks, browser/gateway stderr, full environment,
 argv/process tables, lock content, hostnames/private paths, HTTP headers/bodies

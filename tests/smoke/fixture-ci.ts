@@ -70,6 +70,7 @@ export function newFixtureEnvelope(fixture: 'official-server' | 'entry-recovery'
         lastOperationId: null,
         incomplete: false,
         collectionRejected: false,
+        browserStartup: [],
     };
 }
 export function fixtureJobIndex(command: string, directory: string, label?: string) {
@@ -155,6 +156,15 @@ async function writeFixtureJobSummary(directory: string, file: string) {
                 text += `Runtime boundary: ${progress.lastStage ?? 'unavailable'}; operation: ${progress.lastOperationId ?? 'unavailable'}; gateway events: ${progress.gatewayEvents}.\n\n`;
                 if (progress.incomplete || progress.writeFailed || progress.truncated || progress.invalidEvents > 0)
                     text += 'Stream evidence is incomplete or limited.\n\n';
+                for (const startup of progress.browserStartup) {
+                    if (startup.phase === 'log') {
+                        text += `Chrome startup slot ${startup.launch}: categories=${startup.reasons.join(',') || 'unknown'}; INFO=${startup.info}; WARNING=${startup.warning}; ERROR=${startup.error}; FATAL=${startup.fatal}; absent=${startup.absent}; readFailed=${startup.readFailed}; truncated=${startup.truncated}; incomplete=${startup.incomplete}.\n\n`;
+                    } else if (startup.phase === 'display') {
+                        text += `X display preflight: available=${startup.available}; responsive=${startup.responsive}; timedOut=${startup.timedOut}.\n\n`;
+                    } else {
+                        text += `Private startup scratch: retained=${startup.retained}; cleanupFailed=${startup.cleanupFailed}.\n\n`;
+                    }
+                }
             }
             if (object(value) && object(value.primary)) {
                 const stage =

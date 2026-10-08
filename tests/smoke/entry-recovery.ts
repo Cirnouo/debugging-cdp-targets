@@ -17,6 +17,12 @@ import {
     requireChromeSmokeExecutable,
 } from './chrome-host.ts';
 import {
+    type BrowserStartupRecord,
+    checkChromeSmokeDisplay,
+    createChromeStartupCapture,
+    validateBrowserStartupRecord,
+} from './chrome-startup.ts';
+import {
     createFixtureArtifacts,
     createFixtureGatewayClient,
     createSmokeFailures,
@@ -31,14 +37,37 @@ const artifacts = createFixtureArtifacts(outputDirectory, 'entry-recovery', {
     collectionId: fixtureOutputCollectionId(),
 });
 const failures = createSmokeFailures(artifacts);
+const currentCollection = artifacts.snapshot();
+const controlledDiagnostics =
+    !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
+    const safe = validateBrowserStartupRecord(record);
+    if (!safe) return;
+    try {
+        artifacts.startup(safe);
+        if (firstSample) console.log(JSON.stringify(safe));
+    } catch {}
+}
 artifacts.begin('prerequisites');
 const chrome = await requireChromeSmokeExecutable().catch((error: unknown) => {
     failures.primary(error, 'prerequisites');
     failures.finish();
     throw error;
 });
+const display = await checkChromeSmokeDisplay(controlledDiagnostics);
+if (display) {
+    startupEvidence(display);
+    try {
+        assert.ok(display.responsive, 'Controlled Chrome X display is not responsive.');
+    } catch (error) {
+        failures.primary(error, 'prerequisites');
+        failures.finish();
+        throw error;
+    }
+}
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-')));
+const startup = await createChromeStartupCapture(controlledDiagnostics, folder, startupEvidence);
 const managedDirectories = new Map<string, string>();
 const platform = createPlatformAdapter();
 const owned: ProcessTarget[] = [];
@@ -63,7 +92,17 @@ async function tool(name: string, arguments_: Record<string, unknown> = {}) {
         assertSummary(result.structuredContent.operation.result);
     return result;
 }
-const control = lifecycleClient(tool);
+const executeControl = lifecycleClient(tool);
+const control: typeof executeControl = (request) =>
+    startup && (request.action === 'start' || request.action === 'restart')
+        ? startup.settled(
+              () => executeControl(request),
+              request.action === 'restart',
+              request.action === 'start'
+                  ? request.launch.args?.find((arg) => arg.startsWith('--log-file='))?.slice('--log-file='.length)
+                  : undefined,
+          )
+        : executeControl(request);
 async function status(connectionId?: string): Promise<ControlResult> {
     return control({ action: 'status', entryId, ...(connectionId ? { connectionId } : {}) });
 }
@@ -117,6 +156,8 @@ async function start(index: number) {
             chrome,
             path.join(folder, `profile-${index}`),
             `data:text/html,<title>CONNECTION-${index}</title>`,
+            process.platform,
+            startup?.newLog(),
         ),
     });
     assert.ok(!('connections' in target));
@@ -350,5 +391,6 @@ try {
     for (const directory of new Set(managedDirectories.values()))
         await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
     console.log(JSON.stringify({ gatewayExitCode: client.child.exitCode, deletedManagedProfilesUnder: folder }));
+    await startup?.close(!failures.hasFailure() && client.child.exitCode === 0);
     failures.finish();
 }

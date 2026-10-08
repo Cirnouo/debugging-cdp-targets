@@ -22,6 +22,7 @@ import {
     beginFixtureStage,
     captureFixtureOrigin,
     emitFixtureEvent,
+    type FixtureFields,
     type FixtureOrigin,
     fixtureHasSubscribers,
     runFixtureResource,
@@ -265,7 +266,26 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         const finish = beginFixtureStage('native-snapshot', { pid, port });
         try {
             const evidence = await waitForWork(() => platform.snapshot(pid, port), signal);
-            finish('succeeded', { valid: evidence.root.exists, count: evidence.listeners.length });
+            let ownedDescendantCount: number | undefined;
+            if (fixtureHasSubscribers()) {
+                try {
+                    if (
+                        Array.isArray(evidence.processIds) &&
+                        evidence.processIds.every((id) => Number.isSafeInteger(id) && id > 0)
+                    ) {
+                        const owned = new Set(evidence.processIds);
+                        owned.delete(pid);
+                        ownedDescendantCount = owned.size;
+                    }
+                } catch {
+                    // Diagnostic-only enumeration cannot change native evidence or readiness.
+                }
+            }
+            finish('succeeded', {
+                valid: evidence.root.exists,
+                count: evidence.listeners.length,
+                ...(ownedDescendantCount === undefined ? {} : { ownedDescendantCount }),
+            });
             return evidence;
         } catch (error) {
             finish('failed', {}, error);
@@ -735,6 +755,31 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             break;
                         }
                     }
+                }
+                if (fixtureHasSubscribers()) {
+                    const fields: FixtureFields = { phase: 'rollback-request', pid: processId, port };
+                    try {
+                        fields.exitObserved = targetExitObserved(target);
+                    } catch {
+                        // Missing observation is distinct from an observed false value.
+                    }
+                    try {
+                        fields.exitCode = child.exitCode;
+                    } catch {
+                        // A failed getter omits only its own diagnostic field.
+                    }
+                    try {
+                        const signalCode = child.signalCode;
+                        if (signalCode !== undefined) fields.signalCode = signalCode;
+                    } catch {
+                        // A failed getter omits only its own diagnostic field.
+                    }
+                    try {
+                        fields.monitoringFailed = Boolean(child.monitoringFailure);
+                    } catch {
+                        // Never expose the observer's private error text.
+                    }
+                    emitFixtureEvent('readiness', 'decision', fields);
                 }
                 finishReadiness('failed', {}, lastError);
                 const cancellationBeforeRollback = context.signal?.aborted

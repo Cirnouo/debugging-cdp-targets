@@ -244,6 +244,57 @@ const syscalls = [
     'bind',
     'scandir',
 ] as const;
+const rootProcessStates = [
+    'running',
+    'sleeping',
+    'disk-sleep',
+    'stopped',
+    'tracing-stop',
+    'dead',
+    'zombie',
+    'parked',
+    'idle',
+    'unknown',
+] as const;
+const signals = [
+    'SIGABRT',
+    'SIGALRM',
+    'SIGBUS',
+    'SIGCHLD',
+    'SIGCONT',
+    'SIGFPE',
+    'SIGHUP',
+    'SIGILL',
+    'SIGINT',
+    'SIGIO',
+    'SIGIOT',
+    'SIGKILL',
+    'SIGPIPE',
+    'SIGPOLL',
+    'SIGPROF',
+    'SIGPWR',
+    'SIGQUIT',
+    'SIGSEGV',
+    'SIGSTKFLT',
+    'SIGSTOP',
+    'SIGSYS',
+    'SIGTERM',
+    'SIGTRAP',
+    'SIGTSTP',
+    'SIGTTIN',
+    'SIGTTOU',
+    'SIGUNUSED',
+    'SIGURG',
+    'SIGUSR1',
+    'SIGUSR2',
+    'SIGVTALRM',
+    'SIGWINCH',
+    'SIGXCPU',
+    'SIGXFSZ',
+    'SIGBREAK',
+    'SIGLOST',
+    'SIGINFO',
+] as const;
 
 export type FixtureStage = (typeof stages)[number];
 export type FixtureOutcome = (typeof outcomes)[number];
@@ -265,11 +316,16 @@ export interface FixtureFields extends FixtureIdentity {
     elapsedMs?: number;
     attempt?: number | undefined;
     count?: number | undefined;
+    ownedDescendantCount?: number;
     pendingCount?: number | undefined;
     resourceCount?: number | undefined;
     budgetMs?: number | undefined;
     remainingMs?: number | undefined;
     exitCode?: number | null;
+    signalCode?: string | null;
+    exitObserved?: boolean;
+    monitoringFailed?: boolean;
+    rootProcessState?: (typeof rootProcessStates)[number];
     httpStatus?: number;
     nativeError?: number;
     stderrPresent?: boolean;
@@ -318,11 +374,16 @@ const fieldKeys = [
     'elapsedMs',
     'attempt',
     'count',
+    'ownedDescendantCount',
     'pendingCount',
     'resourceCount',
     'budgetMs',
     'remainingMs',
     'exitCode',
+    'signalCode',
+    'exitObserved',
+    'monitoringFailed',
+    'rootProcessState',
     'httpStatus',
     'nativeError',
     'stderrPresent',
@@ -366,16 +427,23 @@ function safeField(key: string, value: unknown): boolean {
     if (key === 'command') return member(commands, value);
     if (key === 'status') return member(statuses, value);
     if (key === 'phase') return member(phases, value);
+    if (key === 'rootProcessState') return member(rootProcessStates, value);
+    if (key === 'signalCode') return value === null || member(signals, value);
     if (key === 'trigger') return value === 'gateway-disconnect';
-    if (['stderrPresent', 'valid', 'available'].includes(key)) return typeof value === 'boolean';
-    if (key === 'exitCode') return value === null || (typeof value === 'number' && Number.isSafeInteger(value));
+    if (['stderrPresent', 'valid', 'available', 'exitObserved', 'monitoringFailed'].includes(key))
+        return typeof value === 'boolean';
+    if (key === 'exitCode')
+        return (
+            value === null ||
+            (typeof value === 'number' && Number.isInteger(value) && value >= -2_147_483_648 && value <= 4_294_967_295)
+        );
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return false;
     if (['durationMs', 'timestampMs', 'elapsedMs', 'budgetMs', 'remainingMs'].includes(key)) return true;
     if (!Number.isSafeInteger(value)) return false;
     if (key === 'pid') return value > 0;
     if (key === 'port') return value > 0 && value <= 65535;
     if (key === 'httpStatus') return value >= 100 && value <= 599;
-    return ['attempt', 'count', 'pendingCount', 'resourceCount', 'nativeError'].includes(key);
+    return ['attempt', 'count', 'ownedDescendantCount', 'pendingCount', 'resourceCount', 'nativeError'].includes(key);
 }
 function copyFields(value: FixtureFields): FixtureFields {
     const result: Record<string, unknown> = {};

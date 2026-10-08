@@ -160,7 +160,15 @@ Separate real Chrome jobs run official tools and connection recovery on
 ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles
 and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
 browser or inspection prerequisites fail. The scripts preserve identity checks,
-normal Close and Windows visible-console monitoring. These jobs also run in
+normal Close and Windows visible-console monitoring.
+Linux diagnostics query the active X display within `xvfb-run` before startup.
+Accepted current collections additionally project bounded private Chrome logs
+to closed startup categories, severity counts and read/cleanup limitation flags.
+Raw files remain outside profiles and the exact upload list; plain file logging
+has no inherent write cap. Successful acceptance and existing cleanup proofs are
+required before private scratch deletion. Unmatched messages and absent logs do
+not establish causes, and optional capture failures do not change acceptance.
+These jobs also run in
 same-commit release CI; simulated tests do not substitute for real acceptance.
 Only failed controlled real Chrome fixture jobs may upload diagnostic artifacts,
 using the reviewed
