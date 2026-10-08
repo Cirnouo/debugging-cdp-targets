@@ -70,6 +70,9 @@ and personal paths; report suspected vulnerabilities privately through
 
 ## Navigation and commands
 
+Before changing the root README, read and follow the
+[README content boundary](docs/policies/documentation.md#root-readme-content-boundary).
+
 Before implementing a new host or changing a host metadata contract, follow the
 [independent host research policy](docs/policies/documentation.md#host-metadata-research)
 and update the [host metadata evidence](docs/host-metadata.md).
