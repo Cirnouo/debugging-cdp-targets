@@ -54,7 +54,9 @@ test('plugin payload has only manifests, artwork, one skill, license, and self-c
         'windows-native-process.cs',
     ]);
     const skill = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets'));
-    assert.deepEqual(skill.sort(), ['README.md', 'SKILL.md']);
+    assert.deepEqual(skill.sort(), ['README.md', 'SKILL.md', 'agents']);
+    const presentation = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets', 'agents'));
+    assert.deepEqual(presentation.sort(), ['README.md', 'openai.yaml']);
 });
 
 test('bundled WebSocket code includes its original license', async () => {

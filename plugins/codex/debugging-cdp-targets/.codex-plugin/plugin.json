@@ -6,14 +6,18 @@
         "name": "Cirnouo"
     },
     "repository": "https://github.com/Cirnouo/debugging-cdp-targets",
+    "homepage": "https://github.com/Cirnouo/debugging-cdp-targets",
     "license": "MIT",
     "keywords": ["cdp", "devtools", "debugging"],
     "mcpServers": "./mcp.json",
     "hooks": "./hooks/hooks.json",
+    "skills": "./skills/",
     "interface": {
         "displayName": "Debugging CDP Targets",
         "shortDescription": "Inspect verified local CDP targets with Chrome DevTools",
+        "longDescription": "Launch a new local Chrome browser or another verified CDP-capable application with the isolation option you choose. Use the official Chrome DevTools tools to capture screenshots, diagnose console and network issues, and inspect performance. Choose Close or Keep when the task ends.",
         "developerName": "Cirnouo",
+        "websiteURL": "https://github.com/Cirnouo/debugging-cdp-targets",
         "category": "Developer Tools",
         "defaultPrompt": [
             "Open https://example.com in a new Chrome window and capture a screenshot.",

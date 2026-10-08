@@ -30,6 +30,19 @@ Skill, runtime helpers/notices and all unchanged official release bytes must mat
 in both outputs. Maintained `plugin-README.md` maps to each installed `README.md`;
 the source directory's `README.md` retains contributor ownership.
 
+The shared Skill set is every file derived from maintained
+`packaging/shared/skills/` inputs, compared in both directions against each
+payload. Matching peer bytes alone cannot establish agreement with maintained
+source, and a deleted shared source cannot leave a stale delivered file.
+Codex-only `agents/openai.yaml` and its directory README are declared host.files
+overlays from flat Codex inputs. Only those exact overlay destinations are
+excluded from the reverse shared-set comparison; each host independently
+enforces its complete inventory, and Claude excludes the Codex overlays.
+The shared SKILL.md remains byte-identical. See the
+[host metadata record](../host-metadata.md) and
+[research policy](../policies/documentation.md#host-metadata-research) for the
+independently researched consumer contract and evidence boundaries.
+
 Pure host descriptors centralize paths without reading files or release evidence.
 This preserves standalone lockfile preflight before dependency installation.
 Builds verify existing official release evidence and both locks before assembly.
@@ -45,6 +58,11 @@ enabled/disabled Plugin Hooks are tested according to each host's actual control
 Actual Marketplace discovery and model context are tested with temporary homes,
 loopback models and the production gateway's I/O fixture; real host smokes remain
 opt-in. Claude Code 2.1.283 is the first accepted baseline.
+The 2026-10-08 metadata follow-up accepted Codex CLI 0.161.0 and Claude Code
+2.1.294 marketplace and eight-scenario Hook/Skill smokes on Windows. This does
+not rerun the historical baselines or prove Desktop presentation. Temporary
+configuration and loopback model context do not establish Windows OS-home
+isolation or complete suppression of public catalog HTTP traffic.
 
 This extends the distribution and host assumptions of ADRs 0005 and 0009–0011.
 Their runtime, immutable official release, connection isolation and normal-close

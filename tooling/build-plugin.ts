@@ -12,6 +12,7 @@ import { isOfficialRelativePath } from '../src/shared/official-package.ts';
 import {
     parsePluginMetadata,
     readDistributionTree,
+    validateCodexSkillPresentation,
     validateHooks,
     validateHostManifest,
     validateMcpEntries,
@@ -339,6 +340,11 @@ async function assemblePayload(runtime: ReadonlyMap<string, Buffer>, host: HostD
         ...validateMcpEntries(parsePluginMetadata(files.get(host.mcp)?.toString() ?? 'null'), host),
         ...validateHooks(parsePluginMetadata(files.get(host.hooks)?.toString() ?? 'null'), host),
     ];
+    if (host.id === 'codex') {
+        const approvedIcon = assets.get('icon.png');
+        if (!approvedIcon) throw new Error('Missing approved shared Skill icon.');
+        errors.push(...validateCodexSkillPresentation(files, approvedIcon));
+    }
     if (errors.length) throw new Error(errors.join('\n'));
     return files;
 }

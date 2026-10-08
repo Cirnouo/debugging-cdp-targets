@@ -20,6 +20,14 @@ Enable the Plugin's MCP connection in a new conversation, then invoke
 `$debugging-cdp-targets` with the application and task you want to inspect.
 Enabling the connection does not launch a browser automatically.
 
+The installed Plugin declares a project website and separate Skill title,
+description and icons. Actual Codex CLI 0.161.0 inspection accepted those values
+and formal explicit Skill invocation loaded the complete instructions. Selecting
+a Desktop starter prompt has not been proved to load the same body; invoke the
+Skill explicitly. The project website, Skill title/description/icons and full
+long description passed manual acceptance on Codex Desktop 26.1002.52244. See
+[host metadata evidence](../host-metadata.md) for consumers and limitations.
+
 ### Codex Hooks
 
 Enable Hooks and review the installed definitions through Codex's standard trust
@@ -31,11 +39,19 @@ timing and the events they provide.
 
 ### Update or uninstall in Codex
 
-Refresh the GitHub Marketplace source with:
+Refresh the GitHub Marketplace source, then reinstall the Plugin to refresh its
+installed copy, including updates that retain version 0.1.0:
 
 ```powershell
 codex plugin marketplace upgrade debugging-cdp-targets
+codex plugin add debugging-cdp-targets@debugging-cdp-targets
 ```
+
+The first command refreshes the catalog source; the second installs the current
+payload into Codex's Plugin cache. A catalog refresh alone does not establish
+that the installed files changed. Start a new conversation to use the updated
+bundled Skills and tools. The same-version refresh was verified with Codex CLI
+0.161.0; see [host metadata evidence](../host-metadata.md#codex-cache-refresh).
 
 To uninstall, remove the Plugin before removing its Marketplace source:
 

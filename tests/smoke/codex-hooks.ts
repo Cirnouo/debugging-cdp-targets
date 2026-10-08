@@ -1,17 +1,23 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
 import { assertSummary, hookEvents, hookMarker } from '../fixtures/hook-gateway-events.ts';
+import {
+    assertSuppressedSkillContext,
+    isolateCodexSkills,
+    isolatedCodexEnvironment,
+    scopedCodexSkills,
+} from './codex-host.ts';
 import { createStdioClient } from './mcp-client.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable = process.argv[2] ?? 'codex';
-const scenarios = ['untrusted', 'pre', 'post', 'stop', 'idle', 'inactive', 'lifecycle'] as const;
+const scenarios = ['untrusted', 'pre', 'post', 'stop', 'idle', 'inactive', 'lifecycle', 'skill'] as const;
 type Mode = (typeof scenarios)[number];
 
 function texts(request: Record<string, unknown>): string[] {
@@ -75,7 +81,14 @@ async function scenario(mode: Mode) {
             assert.ok(requests.length <= 6, 'Hook must not create an infinite continuation.');
             const index = requests.length;
             let item: Record<string, unknown>;
-            if (index === 1) {
+            if (mode === 'skill') {
+                item = {
+                    type: 'message',
+                    role: 'assistant',
+                    id: `message-${index}`,
+                    content: [{ type: 'output_text', text: 'Fixture completed.' }],
+                };
+            } else if (index === 1) {
                 calls.push('tool_search');
                 item = {
                     type: 'tool_search_call',
@@ -210,7 +223,7 @@ async function scenario(mode: Mode) {
     await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve));
     const address = model.address();
     assert.ok(address && typeof address !== 'string');
-    const environment = { ...process.env, CODEX_HOME: home };
+    const environment = await isolatedCodexEnvironment(home);
     function codex(args: string[]) {
         const result = spawnSync(executable, args, {
             cwd: workspace,
@@ -222,6 +235,9 @@ async function scenario(mode: Mode) {
         });
         if (result.error) throw result.error;
         assert.equal(result.status, 0, result.stderr);
+        const value: unknown = JSON.parse(result.stdout);
+        assert.ok(isRecord(value));
+        return value;
     }
     let app: ReturnType<typeof createStdioClient> | undefined;
     try {
@@ -237,6 +253,14 @@ async function scenario(mode: Mode) {
             path.join(pluginRoot, 'hooks/hooks.json'),
             await readFile(path.join(root, 'plugins/codex/debugging-cdp-targets/hooks/hooks.json')),
         );
+        for (const directory of ['skills', 'assets'])
+            await cp(
+                path.join(root, 'plugins/codex/debugging-cdp-targets', directory),
+                path.join(pluginRoot, directory),
+                {
+                    recursive: true,
+                },
+            );
         await writeFile(
             path.join(pluginRoot, 'mcp.json'),
             JSON.stringify({
@@ -249,7 +273,7 @@ async function scenario(mode: Mode) {
                         cwd: root,
                         env: {
                             DCT_HOOK_FIXTURE_STATE: statePath,
-                            DCT_HOOK_FIXTURE_EXIT: mode === 'untrusted' ? 'post' : mode,
+                            DCT_HOOK_FIXTURE_EXIT: mode === 'untrusted' ? 'post' : mode === 'skill' ? 'idle' : mode,
                         },
                     },
                 },
@@ -268,11 +292,17 @@ async function scenario(mode: Mode) {
             }),
         );
         codex(['plugin', 'marketplace', 'add', path.join(temporary, 'marketplace'), '--json']);
-        codex(['plugin', 'add', 'debugging-cdp-targets@dct-hook-test', '--json']);
+        const installation = codex(['plugin', 'add', 'debugging-cdp-targets@dct-hook-test', '--json']);
+        assert.equal(typeof installation.installedPath, 'string');
+        const installedSkillPath = path.join(
+            String(installation.installedPath),
+            'skills/debugging-cdp-targets/SKILL.md',
+        );
         const completed: Record<string, unknown>[] = [];
         const hookNotifications: unknown[] = [];
         const toolCompletions: Record<string, unknown>[] = [];
         let wake: (() => void) | undefined;
+        let waitingThreadId: string | undefined;
         app = createStdioClient(
             executable,
             ['app-server', '--listen', 'stdio://'],
@@ -284,7 +314,7 @@ async function scenario(mode: Mode) {
                     toolCompletions.push(params.item);
                 if (method === 'turn/completed') {
                     completed.push(params);
-                    wake?.();
+                    if (params.threadId === waitingThreadId) wake?.();
                 }
             },
         );
@@ -323,6 +353,33 @@ async function scenario(mode: Mode) {
                 JSON.stringify(verified),
             );
         }
+        const isolated = await isolateCodexSkills(
+            app,
+            workspace,
+            'debugging-cdp-targets@dct-hook-test',
+            installedSkillPath,
+        );
+        async function installedSkill() {
+            assert.ok(app);
+            const skills = await scopedCodexSkills(app, workspace);
+            assert.ok(
+                skills.every(
+                    (skill) => skill.enabled === false || skill.pluginId === 'debugging-cdp-targets@dct-hook-test',
+                ),
+            );
+            const skill = skills.find(
+                (value: unknown) =>
+                    isRecord(value) &&
+                    value.name === 'debugging-cdp-targets:debugging-cdp-targets' &&
+                    value.pluginId === 'debugging-cdp-targets@dct-hook-test',
+            );
+            assert.ok(isRecord(skill), 'Codex must discover the production Skill installed by the fixture.');
+            assert.ok(typeof skill.path === 'string' && path.isAbsolute(skill.path));
+            assert.equal(path.resolve(skill.path), path.resolve(installedSkillPath));
+            assert.equal(skill.scope, 'user');
+            return skill;
+        }
+        const skill = mode === 'skill' ? await installedSkill() : undefined;
         const started = await app.request('thread/start', {
             cwd: workspace,
             model: 'gpt-5.5',
@@ -352,9 +409,14 @@ async function scenario(mode: Mode) {
                 isRecord(fixtureServer.tools) && fixtureServer.tools[name],
                 `Missing lifecycle declaration: ${name}`,
             );
-        async function turn(prompt: string) {
+        async function turn(
+            prompt: string,
+            selectedThreadId = threadId,
+            input: Record<string, unknown>[] = [{ type: 'text', text: prompt, text_elements: [] }],
+        ) {
             assert.ok(app);
             const before = completed.length;
+            waitingThreadId = selectedThreadId;
             const finished = new Promise<void>((resolve, reject) => {
                 const timer = setTimeout(
                     () => reject(new Error(`Isolated Codex turn timed out: ${String(failure)}`)),
@@ -365,14 +427,91 @@ async function scenario(mode: Mode) {
                     resolve();
                 };
             });
-            await app.request('turn/start', { threadId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
-            if (completed.length > before) wake?.();
+            await app.request('turn/start', { threadId: selectedThreadId, input });
+            if (completed.slice(before).some((result) => result.threadId === selectedThreadId)) wake?.();
             await finished;
             wake = undefined;
+            waitingThreadId = undefined;
             if (failure) throw failure;
-            const result = completed.at(-1);
+            assertSuppressedSkillContext(requests.flatMap(texts), isolated.suppressed, isolated.approved);
+            const result = completed.slice(before).find((result) => result.threadId === selectedThreadId);
             assert.ok(isRecord(result?.turn));
             assert.equal(result.turn.status, 'completed', JSON.stringify(result));
+        }
+        if (mode === 'skill') {
+            assert.ok(skill && typeof skill.path === 'string' && typeof skill.name === 'string');
+            assert.equal(skill.enabled, true);
+            const installed = await readFile(skill.path, 'utf8');
+            assert.equal(
+                installed,
+                await readFile(path.join(root, 'packaging/shared/skills/debugging-cdp-targets/SKILL.md'), 'utf8'),
+            );
+            const body = installed.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim();
+            const positiveStart = requests.length;
+            const prompt = `$${skill.name} Reply with the fixture result.`;
+            await turn(prompt, threadId, [
+                { type: 'text', text: prompt, text_elements: [] },
+                { type: 'skill', name: skill.name, path: skill.path },
+            ]);
+            const positive = requests.slice(positiveStart);
+            assert.equal(positive.length, 1, 'Explicit Skill proof must use the first actual model request.');
+            const context = positive.flatMap(texts);
+            assert.ok(
+                context.some((text) => text.includes(body)),
+                'Formal Skill invocation must put complete installed instructions in actual outbound model context.',
+            );
+            for (const anchor of [
+                '## Isolation intent before launch',
+                'If the choice is **none**, skip isolation research, isolation-directory selection,',
+                '- **Full support:** continue to directory selection.',
+                '- **Partial support:** explain the remaining production effects',
+                '## Effective directory and occupancy',
+                'Before every start, inspect bounded related-process/native-identity evidence',
+                "Before ending a target's work, obtain **Close** or **Keep** with no default,",
+            ])
+                assert.ok(
+                    context.some((text) => text.includes(anchor)),
+                    `Actual Skill context missing: ${anchor}`,
+                );
+            const disabled = await app.request('skills/config/write', { path: skill.path, enabled: false });
+            assert.ok(isRecord(disabled) && disabled.effectiveEnabled === false);
+            const refreshed = await installedSkill();
+            assert.equal(refreshed.path, skill.path);
+            assert.equal(refreshed.enabled, false);
+            assert.ok((await scopedCodexSkills(app, workspace)).every((skill) => skill.enabled === false));
+            const fresh = await app.request('thread/start', {
+                cwd: workspace,
+                model: 'gpt-5.5',
+                modelProvider: 'dct-local',
+                approvalPolicy: 'never',
+                sandbox: 'read-only',
+                ephemeral: true,
+            });
+            assert.ok(isRecord(fresh) && isRecord(fresh.thread) && typeof fresh.thread.id === 'string');
+            assert.notEqual(fresh.thread.id, threadId, 'Disabled Skill negative must start a distinct new thread.');
+            const negativeStart = requests.length;
+            await turn('Reply with the fixture result.', fresh.thread.id);
+            const negative = requests.slice(negativeStart);
+            assert.equal(negative.length, 1);
+            assert.ok(
+                negative
+                    .flatMap(texts)
+                    .every((text) => !text.includes(body) && !text.includes('## Isolation intent before launch')),
+                'A fresh thread without explicit invocation must not receive the disabled Skill instructions.',
+            );
+            assert.deepEqual(calls, []);
+            console.log(
+                JSON.stringify({
+                    mode,
+                    modelRequests: requests.length,
+                    completeInstalledSkillContext: true,
+                    disabledSkillAbsent: true,
+                    positiveThreadId: threadId,
+                    negativeThreadId: fresh.thread.id,
+                    agentCalls: calls,
+                }),
+            );
+            return;
         }
         await turn('Use the CDP fixture once, then finish.');
         assert.ok(state, 'The model must receive the started fixture identity from its actual status call.');

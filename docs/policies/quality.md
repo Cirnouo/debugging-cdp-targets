@@ -25,12 +25,24 @@ PATH, invokes no browser tools, and shuts the child down normally through stdin.
 
 Actual host Marketplace and Hook smokes remain explicit commands in `tests/smoke/`.
 They use disposable configuration and synthetic loopback models to prove host
-discovery, full Skill context, all four Hook boundaries, one Stop continuation,
-idle-next-turn delivery and each host's disabled/untrusted negative. Preserve user
-configuration, global Skills and old state. The baseline accepted on Windows is
-Codex CLI 0.160.0 and Claude Code 2.1.283; these executables are not installed by CI.
+discovery, explicitly invoked full Skill context, all four Hook boundaries, one
+Stop continuation, idle-next-turn delivery and each host's disabled/untrusted
+negative. Preserve user configuration, global Skills and old state. Historical
+Windows baselines are Codex CLI 0.160.0 and Claude Code 2.1.283; the metadata
+follow-up ran 0.161.0 and 2.1.294, not the older versions. These executables are
+not installed by CI. See [host metadata](../host-metadata.md) for the dated
+primary sources, exact temporary Skill guards, Windows read-only global discovery
+and public catalog HTTP limits, and separate manual Desktop acceptance. CLI
+metadata and explicit model context cannot substitute for that UI evidence.
 Existing CI check names and real Chrome acceptance remain unchanged. Static audits,
 generated comparisons and shared runtime regressions validate both host payloads.
+
+Host metadata changes follow the
+[research policy](documentation.md#host-metadata-research) before implementation.
+Check each host's exact inventory independently and compare all maintained shared
+Skill files in both directions; only exact declared host overlays are excluded.
+The approved PNG profile and asset integrity checks are repository quality
+requirements, independent of public directory submission rules.
 
 Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection and

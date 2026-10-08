@@ -5,7 +5,9 @@ official Chrome DevTools MCP Server. It shares runtime and full Skill instructio
 with the independent Claude Code distribution. Version 0.1.0 is unreleased.
 Node 24.21.0 must be available as `node`; installed runtime needs no repository
 dependencies or sibling Plugin. Actual installation and Hooks were accepted with
-Codex CLI 0.160.0 on Windows.
+Codex CLI 0.160.0 on Windows. The 2026-10-08 metadata follow-up passed with
+Codex CLI 0.161.0, including installed metadata/icon bytes and full formal
+explicit Skill context; the older baseline was not rerun.
 
 ```powershell
 codex plugin marketplace add Cirnouo/debugging-cdp-targets
@@ -17,12 +19,31 @@ starts with no target. Review/trust the four Hook definitions through Codex's
 standard flow; installation does not grant Hook trust. Hooks deliver pending
 exit/operation context at tool/turn boundaries, including one Stop continuation.
 
+Explicit Skill invocation is the verified path to the full instructions. The
+Plugin supplies a project website and separate Skill title/description/icons.
+Manual Codex Desktop 26.1002.52244 acceptance confirmed the project website,
+Skill title/short description/icons and full long description. Automatic starter
+prompt injection remains unverified. See the
+[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md)
+for dated source/cache evidence and remaining limits. Disposable CLI checks
+preserve personal configuration/global Skills but do not establish Windows OS-profile or no-read
+isolation or complete public catalog network suppression.
+
 The Skill asks isolation intent, checks occupancy before every launch in either
 mode, and obtains the directory's retention/deletion policy before start when
 required. Chrome's old profile location is an explicit preset choice, never an
 automatic fallback. Close/Keep separately decides application lifetime.
 
-Refresh the Marketplace with `codex plugin marketplace upgrade debugging-cdp-targets`.
+Refresh the Marketplace, then reinstall the current payload, even when its
+version remains 0.1.0:
+
+```powershell
+codex plugin marketplace upgrade debugging-cdp-targets
+codex plugin add debugging-cdp-targets@debugging-cdp-targets
+```
+
+Marketplace upgrade refreshes the catalog source; Plugin add refreshes the
+installed cache. Start a new conversation to use the updated Skills and tools.
 To uninstall, run `codex plugin remove debugging-cdp-targets@debugging-cdp-targets`,
 then `codex plugin marketplace remove debugging-cdp-targets`.
 

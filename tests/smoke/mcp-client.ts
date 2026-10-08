@@ -36,6 +36,7 @@ export function createStdioClient(
         shell: false,
         ...options,
     });
+    const closed = new Promise<void>((resolve) => child.once('close', () => resolve()));
     const pending = new Map<
         number,
         { resolve(value: unknown): void; reject(reason: Error): void; timeout: NodeJS.Timeout }
@@ -135,12 +136,7 @@ export function createStdioClient(
             child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method })}\n`);
         },
         async close() {
-            if (child.exitCode !== null || child.signalCode !== null) {
-                lines.close();
-                return;
-            }
-            const closed = new Promise<void>((resolve) => child.once('exit', resolve));
-            child.stdin.end();
+            if (child.exitCode === null && child.signalCode === null) child.stdin.end();
             await closed;
             lines.close();
         },

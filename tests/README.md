@@ -62,6 +62,11 @@
 - `host-distribution.test.ts` covers both complete host inventories, manifest/MCP/Hook
   and Marketplace routing, shared bytes, independent version/license/resource drift,
   duplicate metadata, linked inputs/roots and read-only build checks.
+- `skill-presentation.test.ts` rejects malformed or duplicate YAML, unknown and
+  mistyped Skill fields, invalid icon references and missing/changed/linked PNGs.
+  It checks assembly before copying and every shared Skill input against both
+  hosts, including matching peer drift that cannot prove maintained identity and
+  stale delivered files after maintained shared inputs are deleted or renamed.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
   path/link rejection, complete file verification and source/packaged resolution.
 - `file-evidence.test.ts` reproduces path replacement and in-place mutation during

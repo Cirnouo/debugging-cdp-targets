@@ -1,0 +1,5 @@
+interface:
+    display_name: "Debugging CDP Targets"
+    short_description: "Debug verified local CDP targets"
+    icon_small: "../../assets/icon.png"
+    icon_large: "../../assets/icon.png"

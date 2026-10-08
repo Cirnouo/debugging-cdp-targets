@@ -3,6 +3,8 @@
 - `user-guide/` explains installation, operation, compatibility, configuration,
     privacy and troubleshooting for Plugin users.
 - `domain-language.md` defines the shared vocabulary.
+- `host-metadata.md` owns independent host metadata research, field decisions,
+    dated CLI/Desktop acceptance and remaining evidence limits.
 - `lifecycle-protocol.md` defines current MCP selectors, operation delivery,
   session lifetime, restart, resource disposal and automatic Hook output.
 - `mcp-native-validation.md` records the unreleased MCP/native delivery checklist,

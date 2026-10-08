@@ -7,7 +7,7 @@ import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import type { HostDescriptor } from './host-policy.ts';
-import { CODEX_HOST, PLUGIN_HOSTS, PLUGIN_NAME } from './host-policy.ts';
+import { CODEX_HOST, PLUGIN_HOSTS, PLUGIN_NAME, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { validateIconPng } from './icon-policy.ts';
 import { OFFICIAL_RELEASE, requiredPayloadFiles, validatePayloadFileInventory } from './payload-policy.ts';
 import { isSemVer } from './version-policy.ts';
@@ -61,16 +61,18 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
         !exactKeys(manifest.author, ['name']) ||
         manifest.author.name !== 'Cirnouo' ||
         manifest.repository !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
+        manifest.homepage !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
         !Array.isArray(manifest.keywords) ||
         !manifest.keywords.every((keyword) => typeof keyword === 'string')
     )
         return ['Malformed Plugin metadata.'];
-    const common = ['name', 'version', 'description', 'author', 'repository', 'license', 'keywords'];
+    const common = ['name', 'version', 'description', 'author', 'repository', 'homepage', 'license', 'keywords'];
     if (host.id === 'codex') {
         if (
-            !exactKeys(manifest, [...common, 'mcpServers', 'hooks', 'interface']) ||
+            !exactKeys(manifest, [...common, 'mcpServers', 'hooks', 'skills', 'interface']) ||
             manifest.mcpServers !== './mcp.json' ||
             manifest.hooks !== './hooks/hooks.json' ||
+            manifest.skills !== './skills/' ||
             !isRecord(manifest.interface)
         )
             return ['Invalid Codex Plugin manifest paths/interface.'];
@@ -78,7 +80,9 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
             !exactKeys(manifest.interface, [
                 'displayName',
                 'shortDescription',
+                'longDescription',
                 'developerName',
+                'websiteURL',
                 'category',
                 'defaultPrompt',
                 'logo',
@@ -88,7 +92,10 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
             ]) ||
             manifest.interface.displayName !== 'Debugging CDP Targets' ||
             manifest.interface.shortDescription !== 'Inspect verified local CDP targets with Chrome DevTools' ||
+            manifest.interface.longDescription !==
+                'Launch a new local Chrome browser or another verified CDP-capable application with the isolation option you choose. Use the official Chrome DevTools tools to capture screenshots, diagnose console and network issues, and inspect performance. Choose Close or Keep when the task ends.' ||
             manifest.interface.developerName !== 'Cirnouo' ||
+            manifest.interface.websiteURL !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
             manifest.interface.category !== 'Developer Tools' ||
             manifest.interface.logo !== './assets/icon.png' ||
             manifest.interface.logoDark !== './assets/icon-dark.png' ||
@@ -104,13 +111,17 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
                 (prompt: unknown) =>
                     typeof prompt === 'string' &&
                     prompt.trim().length > 0 &&
-                    prompt.length <= 128 &&
+                    Array.from(prompt).length <= 128 &&
                     !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(prompt),
             ) ||
             new Set(prompts.map((prompt: string) => prompt.trim())).size !== 3
         )
-            return ['Codex Plugin requires three distinct single-line starter prompts of at most 128 characters.'];
-    } else if (!exactKeys(manifest, [...common, 'icon']) || manifest.icon !== './assets/icon.png')
+            return ['Codex Plugin requires three distinct single-line starter prompts of at most 128 code points.'];
+    } else if (
+        !exactKeys(manifest, [...common, 'displayName', 'icon']) ||
+        manifest.displayName !== 'Debugging CDP Targets' ||
+        manifest.icon !== './assets/icon.png'
+    )
         return ['Claude Code uses default discovery without Codex manifest fields.'];
     return [];
 }
@@ -189,6 +200,39 @@ export function parsePluginMetadata(source: string) {
     return value;
 }
 
+export function validateCodexSkillPresentation(files: ReadonlyMap<string, Buffer>, approvedIcon: Buffer) {
+    try {
+        const source = files.get('skills/debugging-cdp-targets/agents/openai.yaml');
+        if (!source) return ['Missing Skill presentation YAML.'];
+        const metadata: unknown = parseYaml(source.toString('utf8'), { uniqueKeys: true });
+        if (
+            !isRecord(metadata) ||
+            !exactKeys(metadata, ['interface']) ||
+            !isRecord(metadata.interface) ||
+            !exactKeys(metadata.interface, ['display_name', 'short_description', 'icon_small', 'icon_large']) ||
+            metadata.interface.display_name !== 'Debugging CDP Targets' ||
+            metadata.interface.short_description !== 'Debug verified local CDP targets'
+        )
+            return ['Invalid Skill presentation interface.'];
+        // Codex PluginShared resolves from the Skill directory, not agents/.
+        // This exact reference is not a general Plugin path traversal allowance.
+        for (const key of ['icon_small', 'icon_large']) {
+            const reference = metadata.interface[key];
+            if (reference !== '../../assets/icon.png') return ['Invalid Skill presentation icon reference.'];
+            const resolved = path.posix.normalize(path.posix.join('skills/debugging-cdp-targets', reference));
+            if (resolved !== 'assets/icon.png') return ['Skill presentation icon escaped its Plugin assets.'];
+            const bytes = files.get(resolved);
+            if (!bytes) return ['Missing Skill presentation icon.'];
+            const errors = validateIconPng(resolved, bytes);
+            if (errors.length) return errors.map((error) => `Skill presentation: ${error}`);
+            if (!bytes.equals(approvedIcon)) return ['Skill presentation icon differs from approved shared source.'];
+        }
+        return [];
+    } catch (error) {
+        return [`Invalid Skill presentation YAML: ${errorMessage(error)}`];
+    }
+}
+
 async function readMetadataFile(file: string) {
     if (path.relative(path.resolve(file), await realpath(file)) !== '')
         throw new Error('Plugin metadata must not contain linked paths.');
@@ -218,10 +262,26 @@ export async function auditDistribution(root: string) {
     const payloads = new Map<string, Map<string, Buffer>>();
     const packageData = parsePluginMetadata((await readMetadataFile(path.join(root, 'package.json'))).toString());
     const license = await readMetadataFile(path.join(root, 'LICENSE'));
+    const sharedSkills = await readDistributionTree(path.join(root, SHARED_PACKAGING_ROOT, 'skills'));
+    const approvedIcon = await readMetadataFile(path.join(root, SHARED_PACKAGING_ROOT, 'assets/icon.png'));
     for (const host of PLUGIN_HOSTS) {
         try {
             const source = await readDistributionTree(path.join(root, host.payloadRoot));
             payloads.set(host.id, source);
+            for (const [file, bytes] of sharedSkills) {
+                const delivered = source.get(`skills/${file}`);
+                if (!delivered) errors.push(`${host.id}: Missing shared Skill file: ${file}`);
+                else if (!delivered.equals(bytes)) errors.push(`${host.id}: Changed shared Skill file: ${file}`);
+            }
+            const hostOnlySkills = new Set(Object.values(host.files).filter((file) => file.startsWith('skills/')));
+            for (const file of source.keys()) {
+                if (
+                    file.startsWith('skills/') &&
+                    !hostOnlySkills.has(file) &&
+                    !sharedSkills.has(file.slice('skills/'.length))
+                )
+                    errors.push(`${host.id}: Unexpected shared Skill file: ${file.slice('skills/'.length)}`);
+            }
             errors.push(
                 ...validatePayloadFileInventory([...source.keys()], host).map((error) => `${host.id}: ${error}`),
             );
@@ -230,6 +290,7 @@ export async function auditDistribution(root: string) {
                 const bytes = source.get(file);
                 if (bytes) errors.push(...validateIconPng(file, bytes));
             }
+            if (host.id === 'codex') errors.push(...validateCodexSkillPresentation(source, approvedIcon));
             const official = await verifyOfficialPackage(
                 path.join(root, host.payloadRoot, 'dist/official-server'),
                 OFFICIAL_RELEASE,
@@ -275,10 +336,7 @@ export async function auditDistribution(root: string) {
     const claude = payloads.get('claude-code');
     if (codex && claude) {
         for (const [file, bytes] of codex)
-            if (
-                (file === 'LICENSE' || file.startsWith('dist/') || file.startsWith('skills/')) &&
-                !claude.get(file)?.equals(bytes)
-            )
+            if ((file === 'LICENSE' || file.startsWith('dist/')) && !claude.get(file)?.equals(bytes))
                 errors.push(`Shared payload bytes differ: ${file}`);
     }
     return errors;

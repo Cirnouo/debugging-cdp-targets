@@ -35,6 +35,35 @@ to those rules. SECURITY.md owns vulnerability reporting; CODE_OF_CONDUCT.md
 owns community behavior and private incident reporting.
 Maintain progressive disclosure rather than copying all policies everywhere.
 
+## Host metadata research
+
+Before the first implementation for a new host, or a change to an existing
+host's metadata contract, independently research that host's current official
+documentation and applicable versioned implementation. Do not derive its
+requirements from another host, a publication portal, or a prior conversation.
+Record the result in [host metadata](../host-metadata.md), the single owner of
+primary host research. For each manifest, Marketplace, Skill and MCP metadata
+surface, name the consumer, supported interface, defaults, precedence and path
+base, adopted value or deliberate omission, necessity, research date, host
+version and direct primary sources. Distinguish documented support, inspected
+implementation, repository checks, executed host smokes and manual UI evidence.
+State unsupported fields and unverified presentation explicitly. Self-install
+contracts must not inherit public-submission requirements without an applicable
+local consumer or a separately adopted repository quality requirement.
+
+Update that record when evidence or the adopted contract changes. Keep source
+references and evidence ownership there; packaging guides, quality rules and
+ADRs link to it instead of maintaining competing research inventories. Changes
+must preserve the exact maintained shared Skill file set in each host payload;
+host-only presentation belongs in declared overlays with independent inventories.
+
+Repository documentation must stand on its own: explain the goal, decision,
+current supported behavior, evidence and remaining limits without requiring a
+chat transcript or ignored scratch artifacts. Plans may retain decision history,
+but user guides and installed instructions must describe the verified result.
+
+## Evidence and supported behavior
+
 When introducing an external convention or standard, cite its direct primary
 official source at the first relevant policy statement. Name and link the
 version when a suitable versioned source is available. State the adopted basis
