@@ -45,7 +45,8 @@ then explicitly restarts and normally closes them. It retains test profiles.
   gateway stdin EOF and identity-verified normal target close. Managed profiles
   must be deleted by the gateway; the parent container remains for evidence.
 - `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
-  they are never shipped.
+  they are never shipped. Normal close waits for the owned child process and all
+  stdio to close before temporary-file cleanup; process exit alone is insufficient.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
@@ -55,16 +56,23 @@ then explicitly restarts and normally closes them. It retains test profiles.
   HTTP endpoint and one temporary page WebSocket. It is test-only and never shipped.
 - `windows-monitor.ps1` samples visible console windows every 20 ms and reports
   newly visible console/terminal windows, without reading application data.
-- `marketplace.ts` installs the local Plugin with an isolated Codex home, compares
-  installed bytes and asks Codex's app server for the installed MCP server and
-  tool catalog before directly testing the bundled gateway. Missing discovery
-  fails even if directly launching the gateway would work. Run
+- `marketplace.ts` installs the local Plugin with a disposable Codex configuration,
+  compares the complete installed tree, discovers the marketplace path and Plugin
+  identity, and checks `plugin/read` project/display metadata and component inventory.
+  Scoped, reloaded `skills/list` must have no errors and expose the installed
+  namespaced Skill with the correct Plugin ID, enabled state, user scope, exact
+  presentation and absolute installed PNG paths. The PNG bytes must match the
+  approved shared asset. Homepage/repository are checked in the installed manifest;
+  the API exposes `interface.websiteUrl`. It also asks Codex's app server for the
+  installed MCP server and tool catalog before directly testing the bundled gateway.
+  Missing discovery fails even if directly launching the gateway would work. Run
   `node tests/smoke/marketplace.ts` after `pnpm build:plugin`; an optional first
   argument selects a Codex executable, including the Desktop app's binary.
 
-- `codex-hooks.ts` installs byte-identical Codex manifest/Hook definitions in
-  temporary homes and runs the actual Codex app-server against a local SSE model
-  substitute and production gateway with fake process/CDP/upstream I/O. It checks
+- `codex-hooks.ts` installs byte-identical Codex manifest, Hook, production Skill
+  and asset files in temporary configuration and runs the actual Codex app-server
+  against a local SSE model substitute and production gateway with fake
+  process/CDP/upstream I/O. It checks
   actual outbound model requests for PreToolUse, PostToolUse, one Stop continuation,
   idle-next-turn delivery, inactive-task exit and operation completion. Every event
   is parsed at that model-request boundary and checked for exact identity, event
@@ -78,8 +86,42 @@ then explicitly restarts and normally closes them. It retains test profiles.
   run. Only temporary config is trusted; no real browser or account API is used.
   Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects a Codex
   executable and an optional second selects one of `untrusted`, `pre`, `post`,
-  `stop`, `idle`, `inactive` or `lifecycle`. The default runs all seven scenarios.
+  `stop`, `idle`, `inactive`, `lifecycle` or `skill`. The default runs all eight
+  scenarios.
   Hooks are enabled only in the isolated test config.
+  The `skill` case sends a formal Skill input using its discovered name/path and
+  requires the complete installed body in the first actual outbound model request,
+  including the current isolation intent, none-mode, support classification,
+  occupancy and Close/Keep instructions. It then disables that Skill through
+  `skills/config/write`, reloads discovery, requires zero enabled Skills, and
+  creates a distinct new thread for a neutral text-only turn. That request must
+  omit the complete instructions and the distinctive isolation section. Captures
+  from the positive thread remain intact.
+- `codex-host.ts` supplies an allowlisted child environment and disposable
+  `CODEX_HOME` for both Codex smokes. Child-only `GIT_ALLOW_PROTOCOL=file` and
+  `GIT_TERMINAL_PROMPT=0` keep Git local-only without editing any Git config.
+  Codex's unrelated default remote marketplace Git probe therefore fails promptly;
+  the selected real local marketplace must still load without errors. The
+  marketplace smoke records the unrelated load-error count separately. This
+  prevents remote Git helpers from retaining fixture streams after app-server
+  exit. The supported protocol whitelist is documented in
+  [Git's environment reference](https://git-scm.com/docs/git#Documentation/git.txt-GITALLOWPROTOCOL).
+  Codex may still fetch public marketplace metadata through its own HTTP fallback.
+  The Git policy does not disable all host networking; model requests use only
+  the explicit loopback substitute.
+  Windows known-folder resolution can still
+  discover and internally read user-global `.agents` Skill files despite temporary
+  `HOME`/`USERPROFILE`. The smokes use supported `skills/config/write` operations
+  only in the temporary Codex config to disable every unrelated discovered Skill,
+  require `effectiveEnabled: false`, and reload discovery before any thread starts.
+  Only the exact installed Plugin Skill may remain enabled; model captures must
+  omit off-fixture Skill paths and distinct unrelated summaries/descriptions.
+  Metadata identical to the approved Skill is allowed because the exact enabled
+  catalog and installed path establish its identity. This proves configuration
+  and model-context isolation; it does not establish operating-system home isolation
+  or absence of read-only global discovery. No real config or Skill file is modified.
+  Explicit CLI invocation does not prove automatic Desktop starter-prompt injection
+  or Desktop rendering, which retain a separate manual acceptance gate.
 
 - `claude-marketplace.ts` validates, adds and installs the actual Claude Marketplace
   into an isolated home outside the repository. It compares the complete installed
@@ -113,6 +155,14 @@ then explicitly restarts and normally closes them. It retains test profiles.
   stderr and debug output. Claude 2.1.283 is the first supported host. Claude smokes
   retain their printed temporary evidence directories, call no account model API,
   install no global Skill and launch no real target.
+
+On 2026-10-08, these Marketplace checks and all eight scenarios per host passed
+on Windows with Codex CLI 0.161.0 and Claude Code 2.1.294. Codex's dedicated Skill
+case captured two actual model requests: complete instructions after formal
+invocation, then no instructions in a distinct new thread after disable/reload.
+Claude's existing namespaced Skill case captured the complete installed body.
+These results do not establish Desktop rendering, automatic starter-prompt Skill
+injection, or acceptance on the earlier historical host baselines.
 
 - `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
   retries of explicitly selected normal Close when pending CDP traffic is busy.

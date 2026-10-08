@@ -12,9 +12,11 @@ the narrowly audited PluginShared path rule documented in `skill-agents-README.m
 approved universal and dark PNGs come from the explicit shared asset inventory.
 The manifest's `interface.defaultPrompt` supplies three distinct single-line
 starter prompts for screenshots, console/network diagnostics and page-load
-performance. Codex automatically supplies the shared Skill context when a starter
-prompt is selected, so these prompts do not repeat the Skill name. Local Plugin
-validation requires three distinct nonempty single-line strings of at most 128
+performance. These prompts do not repeat the Skill name. The CLI smoke proves
+that formal explicit Skill invocation supplies the complete installed instructions;
+automatic Skill injection when selecting a Desktop starter prompt and Desktop
+rendering remain pending manual acceptance. Local Plugin validation requires
+three distinct nonempty single-line strings of at most 128
 Unicode code points, matching the
 [Codex 0.161.0 runtime loader](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/manifest.rs#L533-L551).
 This limit applies when Codex loads the manifest.
