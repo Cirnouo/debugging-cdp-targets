@@ -97,7 +97,79 @@ test('host metadata rejects wrong argv, discovery fields, hooks and marketplace 
     }
 });
 
-test('Codex accepts three distinct single-line starter prompts and the 128-character boundary', async () => {
+test('host manifests accept explicit project links and host display metadata', async () => {
+    for (const host of PLUGIN_HOSTS) {
+        const manifest: unknown = JSON.parse(await readFile(path.join(root, host.inputRoot, host.manifest), 'utf8'));
+        assert.ok(isRecord(manifest));
+        const metadata = { ...manifest, homepage: 'https://github.com/Cirnouo/debugging-cdp-targets' };
+        if (host === CODEX_HOST) {
+            assert.ok(isRecord(manifest.interface));
+            assert.deepEqual(
+                validateHostManifest({
+                    ...metadata,
+                    interface: {
+                        ...manifest.interface,
+                        websiteURL: 'https://github.com/Cirnouo/debugging-cdp-targets',
+                        longDescription:
+                            'Launch a new local Chrome browser or another verified CDP-capable application with the isolation option you choose. Use the official Chrome DevTools tools to capture screenshots, diagnose console and network issues, and inspect performance. Choose Close or Keep when the task ends.',
+                    },
+                }),
+                [],
+            );
+        } else {
+            assert.deepEqual(validateHostManifest({ ...metadata, displayName: 'Debugging CDP Targets' }, host), []);
+        }
+    }
+});
+
+test('host manifests reject missing, malformed or wrong project homepages', async () => {
+    for (const host of PLUGIN_HOSTS) {
+        const manifest: unknown = JSON.parse(await readFile(path.join(root, host.inputRoot, host.manifest), 'utf8'));
+        assert.ok(isRecord(manifest));
+        const missing = { ...manifest };
+        delete missing.homepage;
+        assert.ok(validateHostManifest(missing, host).length, `${host.id}: missing homepage`);
+        for (const homepage of [undefined, null, 1, {}, [], '', 'https://example.com'])
+            assert.ok(validateHostManifest({ ...manifest, homepage }, host).length, `${host.id}: ${homepage}`);
+    }
+});
+
+test('Codex rejects missing, malformed or wrong website and long description metadata', async () => {
+    const manifest: unknown = JSON.parse(
+        await readFile(path.join(root, CODEX_HOST.inputRoot, CODEX_HOST.manifest), 'utf8'),
+    );
+    assert.ok(isRecord(manifest) && isRecord(manifest.interface));
+    for (const key of ['websiteURL', 'longDescription']) {
+        const missing = { ...manifest.interface };
+        delete missing[key];
+        assert.ok(validateHostManifest({ ...manifest, interface: missing }).length, `missing ${key}`);
+        for (const value of [undefined, null, 1, {}, [], '', 'https://example.com', 'Other description'])
+            assert.ok(
+                validateHostManifest({ ...manifest, interface: { ...manifest.interface, [key]: value } }).length,
+                key,
+            );
+    }
+});
+
+test('Claude rejects missing, malformed or wrong display names and Codex website fields', async () => {
+    const manifest: unknown = JSON.parse(
+        await readFile(path.join(root, CLAUDE_CODE_HOST.inputRoot, CLAUDE_CODE_HOST.manifest), 'utf8'),
+    );
+    assert.ok(isRecord(manifest));
+    const missing = { ...manifest };
+    delete missing.displayName;
+    assert.ok(validateHostManifest(missing, CLAUDE_CODE_HOST).length, 'missing displayName');
+    for (const displayName of [undefined, null, 1, {}, [], '', 'Other display name'])
+        assert.ok(validateHostManifest({ ...manifest, displayName }, CLAUDE_CODE_HOST).length);
+    assert.ok(
+        validateHostManifest(
+            { ...manifest, websiteURL: 'https://github.com/Cirnouo/debugging-cdp-targets' },
+            CLAUDE_CODE_HOST,
+        ).length,
+    );
+});
+
+test('Codex accepts three distinct single-line starter prompts within the runtime code point boundary', async () => {
     const manifest: unknown = JSON.parse(
         await readFile(path.join(root, CODEX_HOST.inputRoot, CODEX_HOST.manifest), 'utf8'),
     );
@@ -105,6 +177,7 @@ test('Codex accepts three distinct single-line starter prompts and the 128-chara
     for (const prompts of [
         ['Capture a screenshot.', 'Inspect failed requests.', 'Profile a page load.'],
         ['x'.repeat(128), 'Inspect failed requests.', 'Profile a page load.'],
+        ['😀'.repeat(128), 'Inspect failed requests.', 'Profile a page load.'],
     ]) {
         assert.deepEqual(
             validateHostManifest({ ...manifest, interface: { ...manifest.interface, defaultPrompt: prompts } }),
@@ -145,7 +218,8 @@ test('Codex rejects missing or malformed starter prompts while Claude rejects Co
         ['next-line control', ['One', 'Two', 'Three\u0085Four']],
         ['line separator', ['One', 'Two', 'Three\u2028Four']],
         ['paragraph separator', ['One', 'Two', 'Three\u2029Four']],
-        ['oversize', ['One', 'Two', 'x'.repeat(129)]],
+        ['129 ASCII code points', ['One', 'Two', 'x'.repeat(129)]],
+        ['129 non-BMP code points', ['One', 'Two', '😀'.repeat(129)]],
     ];
     for (const [name, prompts] of invalid)
         assert.ok(

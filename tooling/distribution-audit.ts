@@ -61,11 +61,12 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
         !exactKeys(manifest.author, ['name']) ||
         manifest.author.name !== 'Cirnouo' ||
         manifest.repository !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
+        manifest.homepage !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
         !Array.isArray(manifest.keywords) ||
         !manifest.keywords.every((keyword) => typeof keyword === 'string')
     )
         return ['Malformed Plugin metadata.'];
-    const common = ['name', 'version', 'description', 'author', 'repository', 'license', 'keywords'];
+    const common = ['name', 'version', 'description', 'author', 'repository', 'homepage', 'license', 'keywords'];
     if (host.id === 'codex') {
         if (
             !exactKeys(manifest, [...common, 'mcpServers', 'hooks', 'interface']) ||
@@ -78,7 +79,9 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
             !exactKeys(manifest.interface, [
                 'displayName',
                 'shortDescription',
+                'longDescription',
                 'developerName',
+                'websiteURL',
                 'category',
                 'defaultPrompt',
                 'logo',
@@ -88,7 +91,10 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
             ]) ||
             manifest.interface.displayName !== 'Debugging CDP Targets' ||
             manifest.interface.shortDescription !== 'Inspect verified local CDP targets with Chrome DevTools' ||
+            manifest.interface.longDescription !==
+                'Launch a new local Chrome browser or another verified CDP-capable application with the isolation option you choose. Use the official Chrome DevTools tools to capture screenshots, diagnose console and network issues, and inspect performance. Choose Close or Keep when the task ends.' ||
             manifest.interface.developerName !== 'Cirnouo' ||
+            manifest.interface.websiteURL !== 'https://github.com/Cirnouo/debugging-cdp-targets' ||
             manifest.interface.category !== 'Developer Tools' ||
             manifest.interface.logo !== './assets/icon.png' ||
             manifest.interface.logoDark !== './assets/icon-dark.png' ||
@@ -104,13 +110,17 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
                 (prompt: unknown) =>
                     typeof prompt === 'string' &&
                     prompt.trim().length > 0 &&
-                    prompt.length <= 128 &&
+                    Array.from(prompt).length <= 128 &&
                     !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(prompt),
             ) ||
             new Set(prompts.map((prompt: string) => prompt.trim())).size !== 3
         )
-            return ['Codex Plugin requires three distinct single-line starter prompts of at most 128 characters.'];
-    } else if (!exactKeys(manifest, [...common, 'icon']) || manifest.icon !== './assets/icon.png')
+            return ['Codex Plugin requires three distinct single-line starter prompts of at most 128 code points.'];
+    } else if (
+        !exactKeys(manifest, [...common, 'displayName', 'icon']) ||
+        manifest.displayName !== 'Debugging CDP Targets' ||
+        manifest.icon !== './assets/icon.png'
+    )
         return ['Claude Code uses default discovery without Codex manifest fields.'];
     return [];
 }
