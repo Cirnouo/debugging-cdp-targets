@@ -547,7 +547,6 @@ command -v getconf
 command -v Xvfb
 command -v xvfb-run
 command -v xauth
-command -v xdpyinfo
 if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
 xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
 if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" entry-recovery "$collectionId"; then :; fi
@@ -612,7 +611,10 @@ real Linux/macOS Chrome fixtures has not been measured.
 An accepted current diagnostics collection also enables `chrome-startup.ts`.
 On Linux, `xdpyinfo` queries the inherited `DISPLAY` inside the smoke's
 `xvfb-run` session with ignored output and a separate five-second bound.
-An unresponsive display fails the prerequisite check before Chrome starts.
+The utility is optional: missing query support records `available=false` and
+`responsive=false`, leaving display responsiveness unknown. The original Xvfb,
+Chrome and actual CDP acceptance checks remain mandatory. An available utility's
+failed or timed-out query fails the prerequisite check before Chrome starts.
 Refused or unconfigured collections add no browser logging flags or files.
 Controlled launches add plain `--enable-logging` and an absolute `--log-file`
 in a canonical private scratch sibling outside profiles and the upload directory.

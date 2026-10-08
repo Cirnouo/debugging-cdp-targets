@@ -161,7 +161,11 @@ ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles
 and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
 browser or inspection prerequisites fail. The scripts preserve identity checks,
 normal Close and Windows visible-console monitoring.
-Linux diagnostics query the active X display within `xvfb-run` before startup.
+Linux diagnostics query the active X display within `xvfb-run` before startup
+when `xdpyinfo` is available. Missing query support is explicit unknown evidence;
+an available utility's failed or timed-out query fails before Chrome starts.
+The original Xvfb and actual Chrome/CDP gates remain mandatory; CI installs no
+additional operating-system package for this diagnostic query.
 Accepted current collections additionally project bounded private Chrome logs
 to closed startup categories, severity counts and read/cleanup limitation flags.
 Raw files remain outside profiles and the exact upload list; plain file logging

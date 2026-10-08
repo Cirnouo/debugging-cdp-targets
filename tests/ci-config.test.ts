@@ -298,7 +298,7 @@ test('real Chrome CI requires both actual desktop browsers and preserves the aud
     const linux = job.steps.find((step) => step.if === "runner.os == 'Linux'");
     const mac = job.steps.find((step) => step.if === "runner.os == 'macOS'");
     assert.ok(linux?.run && mac?.run);
-    assert.match(linux.run, /command -v xdpyinfo/);
+    assert.doesNotMatch(linux.run, /command -v xdpyinfo/);
     for (const script of ['official-server', 'entry-recovery']) {
         assert.match(linux.run, new RegExp(`xvfb-run -a node tests/smoke/${script}\\.ts`));
         assert.match(mac.run, new RegExp(`node tests/smoke/${script}\\.ts`));

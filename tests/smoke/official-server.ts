@@ -55,7 +55,7 @@ const display = await checkChromeSmokeDisplay(controlledDiagnostics);
 if (display) {
     startupEvidence(display);
     try {
-        assert.ok(display.responsive, 'Controlled Chrome X display is not responsive.');
+        assert.ok(!display.available || display.responsive, 'Controlled Chrome X display is not responsive.');
     } catch (error) {
         failures.primary(error, 'prerequisites');
         failures.finish();
