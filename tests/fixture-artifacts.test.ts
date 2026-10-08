@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { channel } from 'node:diagnostics_channel';
-import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, rm, rmdir, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -202,7 +202,7 @@ test('safe subscriber contains hostile payloads and writer failures with visible
 });
 
 test('standalone dependency-free initialization leaves both envelopes explicitly not-run after prerequisite failure', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-test-'));
+    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-test-')));
     try {
         const entry = path.join(directory, 'fixture-ci.mts');
         await copyFile(new URL('./smoke/fixture-ci.ts', import.meta.url), entry);
@@ -347,7 +347,7 @@ test('original delivered gateway remains the child entry with source subscriber 
         './smoke/fixture-artifacts.ts'
     );
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-test-'));
-    const plugin = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-delivery-'));
+    const plugin = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-delivery-')));
     try {
         const delivered = new URL('../plugins/codex/debugging-cdp-targets/', import.meta.url);
         await cp(fileURLToPath(delivered), plugin, { recursive: true });
@@ -453,7 +453,7 @@ test('both original gateway smoke launches omit hostile inherited NODE_OPTIONS w
     assert.deepEqual(mixedCase, { Node_Options: 'injected', NODE_OPTIONS: 'injected-again', PATH: 'preserved' });
     for (const fixture of ['official-server', 'entry-recovery'] as const) {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-test-'));
-        const plugin = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-delivery-'));
+        const plugin = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-delivery-')));
         const inherited = process.env.NODE_OPTIONS;
         try {
             const sentinel = path.join(directory, 'injected');
