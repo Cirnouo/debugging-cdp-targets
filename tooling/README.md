@@ -14,6 +14,11 @@
 - `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
   MCP/Hook format, Marketplace pointer and byte-identical packaging into a disposable directory;
   this is not a host install claim.
+  It parses Codex Skill presentation YAML with duplicate-key rejection and
+  validates its exact interface and PluginShared icon reference against regular
+  approved PNG bytes. Shared Skill identity derives from every maintained shared
+  input in both directions, excluding only exact host-declared overlay files;
+  host inventories independently enforce Codex-only additions.
 - `host-policy.ts` owns filesystem-free host descriptors and canonical input/output paths.
 - `payload-policy.ts` owns the release-backed exact Plugin file allowlist.
 - `icon-policy.ts` owns approved artwork paths and PNG evidence validation.

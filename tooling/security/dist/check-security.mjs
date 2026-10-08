@@ -7888,7 +7888,9 @@ var CODEX_HOST = Object.freeze({
     "hooks/README.md": "hooks/README.md",
     "hooks/hooks.json": "hooks/hooks.json",
     "plugin-README.md": "README.md",
-    "assets/README.md": "assets/README.md"
+    "assets/README.md": "assets/README.md",
+    "skill-openai.yaml": "skills/debugging-cdp-targets/agents/openai.yaml",
+    "skill-agents-README.md": "skills/debugging-cdp-targets/agents/README.md"
   })
 });
 var CLAUDE_CODE_HOST = Object.freeze({

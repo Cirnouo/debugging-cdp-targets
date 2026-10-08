@@ -26,6 +26,43 @@ import { createClient, createStdioClient, readMcpTools } from './smoke/mcp-clien
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
+test('Codex requires explicit Skill discovery while Claude retains default discovery', async () => {
+    for (const host of PLUGIN_HOSTS) {
+        const manifest: unknown = JSON.parse(await readFile(path.join(root, host.inputRoot, host.manifest), 'utf8'));
+        assert.ok(isRecord(manifest));
+        if (host === CODEX_HOST) {
+            assert.deepEqual(validateHostManifest({ ...manifest, skills: './skills/' }, host), []);
+            const missing = { ...manifest };
+            delete missing.skills;
+            assert.ok(validateHostManifest(missing, host).length);
+            for (const skills of [null, [], {}, 1, '', './skills', '../skills/', './other/'])
+                assert.ok(validateHostManifest({ ...manifest, skills }, host).length);
+        } else {
+            assert.ok(validateHostManifest({ ...manifest, skills: './skills/' }, host).length);
+        }
+    }
+});
+
+test('Codex independently inventories its presentation overlay and Claude rejects it', () => {
+    const overlay = [
+        'skills/debugging-cdp-targets/agents/README.md',
+        'skills/debugging-cdp-targets/agents/openai.yaml',
+    ];
+    const codex = requiredPayloadFiles(CODEX_HOST);
+    assert.deepEqual(codex.filter((file) => file.includes('/agents/')).sort(), overlay);
+    for (const file of overlay) {
+        assert.ok(
+            validatePayloadFileInventory(
+                codex.filter((entry) => entry !== file),
+                CODEX_HOST,
+            ).length,
+        );
+        assert.ok(
+            validatePayloadFileInventory([...requiredPayloadFiles(CLAUDE_CODE_HOST), file], CLAUDE_CODE_HOST).length,
+        );
+    }
+});
+
 test('peer hosts own explicit independent inventories and reject cross-host and malformed entries', () => {
     assert.deepEqual(
         PLUGIN_HOSTS.map((host) => host.id),
@@ -240,8 +277,12 @@ test('one runtime produces complete peer payloads with identical shared bytes', 
     const claude = outputs.get('claude-code');
     assert.ok(codex && claude);
     for (const [file, bytes] of codex) {
-        if (file === 'LICENSE' || file.startsWith('skills/') || file.startsWith('dist/'))
-            assert.ok(claude.get(file)?.equals(bytes), file);
+        if (file === 'LICENSE' || file.startsWith('dist/')) assert.ok(claude.get(file)?.equals(bytes), file);
+    }
+    const sharedSkills = await readDistributionTree(path.join(root, 'packaging/shared/skills'));
+    for (const [file, bytes] of sharedSkills) {
+        assert.ok(codex.get(`skills/${file}`)?.equals(bytes), `codex: ${file}`);
+        assert.ok(claude.get(`skills/${file}`)?.equals(bytes), `claude-code: ${file}`);
     }
     assert.equal(
         claude.get('README.md')?.toString(),
@@ -321,7 +362,7 @@ test('Claude assembly rejects competing, missing, linked and escaped inputs with
 test('distribution audit rejects either peer metadata, license or official resource drift', async () => {
     const fixture = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-peer-audit-')));
     try {
-        for (const file of ['plugins', '.agents', '.claude-plugin', 'package.json', 'LICENSE'])
+        for (const file of ['plugins', 'packaging', '.agents', '.claude-plugin', 'package.json', 'LICENSE'])
             await cp(path.join(root, file), path.join(fixture, file), { recursive: true });
         assert.deepEqual(await auditDistribution(fixture), []);
         for (const host of PLUGIN_HOSTS) {

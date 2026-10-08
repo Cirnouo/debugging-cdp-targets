@@ -28,6 +28,8 @@ export const CODEX_HOST: HostDescriptor = Object.freeze({
         'hooks/hooks.json': 'hooks/hooks.json',
         'plugin-README.md': 'README.md',
         'assets/README.md': 'assets/README.md',
+        'skill-openai.yaml': 'skills/debugging-cdp-targets/agents/openai.yaml',
+        'skill-agents-README.md': 'skills/debugging-cdp-targets/agents/README.md',
     }),
 });
 export const CLAUDE_CODE_HOST: HostDescriptor = Object.freeze({

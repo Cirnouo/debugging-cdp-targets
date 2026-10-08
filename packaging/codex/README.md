@@ -2,6 +2,12 @@
 
 `.codex-plugin/` owns the maintained Codex manifest and its directory documentation.
 `mcp.json` declares the gateway; `hooks/` owns Codex automatic Hook definitions.
+The manifest explicitly discovers `./skills/`. Flat `skill-openai.yaml` and
+`skill-agents-README.md` inputs map through the host file inventory to the Skill's
+`agents/openai.yaml` and `agents/README.md`. They add Codex-only presentation;
+all shared Skill files remain byte-identical to their maintained inputs in both
+hosts. Icon references use the existing approved Plugin-root universal PNG under
+the narrowly audited PluginShared path rule documented in `skill-agents-README.md`.
 `assets/` owns artwork directory documentation copied to the payload; the
 approved universal and dark PNGs come from the explicit shared asset inventory.
 The manifest's `interface.defaultPrompt` supplies three distinct single-line

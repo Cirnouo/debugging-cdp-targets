@@ -11,6 +11,7 @@
     "keywords": ["cdp", "devtools", "debugging"],
     "mcpServers": "./mcp.json",
     "hooks": "./hooks/hooks.json",
+    "skills": "./skills/",
     "interface": {
         "displayName": "Debugging CDP Targets",
         "shortDescription": "Inspect verified local CDP targets with Chrome DevTools",
