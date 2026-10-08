@@ -5,7 +5,7 @@ This directory owns enforceable repository-wide contributor policy.
 - `commits-and-scope.md` owns branch, commit, authorization, and scope-evolution
   rules.
 - `documentation.md` owns README, local `AGENTS.md`, glossary, and audience
-  boundaries.
+    boundaries, standalone documentation and independent host metadata research.
 - `quality.md` owns formatting, tests, coverage, hooks, CI, and verification.
 - `releases.md` owns versioning, changelog, tagging, and release authorization.
 - `security.md` owns CDP, session, cache, privacy, and shutdown constraints.

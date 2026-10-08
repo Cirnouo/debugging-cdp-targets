@@ -58,10 +58,25 @@ effective-root/policy/environment and runtime enforcement limits.
 Actual Plugin installation, tool discovery and model-context Hooks were accepted
 on Windows on 2026-10-05 with Codex CLI 0.160.0 and Claude Code 2.1.283. Claude
 Code 2.1.283 is the first supported and accepted baseline. These explicit host
-smokes use isolated configuration and loopback model fixtures; see
+smokes use disposable configuration and loopback model fixtures; see
 [the smoke instructions](../../tests/smoke/README.md) for commands and boundaries.
 Each host receives a complete independent payload from the same maintained
 runtime, Skill and verified official Server release.
+
+The metadata follow-up on 2026-10-08 passed both Marketplace smokes and all eight
+Hook/Skill scenarios per host with actual Codex CLI 0.161.0 and Claude Code
+2.1.294. It verifies installed metadata/bytes and full explicitly invoked Skill
+instructions at the loopback model boundary; the older versions were not rerun.
+Codex resolves the installed Skill as `debugging-cdp-targets:debugging-cdp-targets`
+with user scope and separate Plugin provenance. Windows may read global Skills
+during discovery before temporary path disables, while model threads are guarded
+to the fixture enabled set. Child Git transport restrictions still permit
+in-process public catalog HTTP fallback. No personal config/global Skill is
+modified. This is not OS-profile, no-read or complete network isolation.
+Desktop website navigation, Skill presentation, candidate long description and
+automatic starter prompt injection remain unverified. See the
+[host metadata record](../host-metadata.md) for primary sources and the pending
+manual pre-merge gate.
 
 ## Desktop Chrome acceptance
 

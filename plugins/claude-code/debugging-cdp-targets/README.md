@@ -6,6 +6,15 @@ Claude Code 2.1.283 is the first supported and accepted host baseline. Node 24.2
 must be available as `node`. No repository dependencies or sibling Plugin are
 needed after installation.
 
+The 2026-10-08 metadata follow-up passed Marketplace installation and all eight
+Hook/Skill scenarios on Windows with Claude Code 2.1.294, including the complete
+explicitly invoked Skill body at the loopback model boundary. The historical
+2.1.283 baseline was not rerun. The manifest supplies the project homepage and
+display title; its retained listing icon has no established local loader display
+effect. See the
+[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md)
+for consumer support and evidence limits.
+
 ```powershell
 claude plugin marketplace add Cirnouo/debugging-cdp-targets
 claude plugin install debugging-cdp-targets@debugging-cdp-targets

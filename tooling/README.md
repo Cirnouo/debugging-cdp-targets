@@ -22,20 +22,17 @@
 - `host-policy.ts` owns filesystem-free host descriptors and canonical input/output paths.
 - `payload-policy.ts` owns the release-backed exact Plugin file allowlist.
 - `icon-policy.ts` owns approved artwork paths and PNG evidence validation.
-  [Codex artwork requirements](https://developers.openai.com/plugins/deploy/submission#icons-and-screenshots)
-  accept PNG, JPEG, WebP and SVG, with square artwork at least 48 pixels and
-  files at most 5 MiB. Raster dimensions are at most 4096 pixels; SVG uses square
-  dimensions or a square `viewBox` at least 48 pixels.
-  The repository selects static PNG with noninterlaced 8-bit RGBA as its
-  artwork profile; this is narrower than the
-  [PNG specification](https://www.w3.org/TR/png-3/). Validation checks chunk CRCs,
-  a complete bounded pixel stream, and valid row filters. Build assembly checks
-  the exact shared asset inventory and copies only each host's delivery icons.
-  Delivery PNGs use only IHDR, consecutive IDAT and IEND chunks. Source artwork
-  may additionally retain its original `caBX` Content Credentials before IDAT.
-  [Claude directory listing metadata](https://code.claude.com/docs/en/plugins-reference#directory-listing-fields)
-  documents a single `icon` field, ignored by Claude Code during loading, with
-  no documented dark theme counterpart.
+    The repository's approved artwork profile is static square PNG, at least
+    48 and at most 4096 pixels, at most 5 MiB, with noninterlaced 8-bit RGBA.
+    These selected quality bounds remain project requirements; public-submission
+    artwork rules are not a local runtime contract. The profile is narrower than the
+    [PNG specification](https://www.w3.org/TR/png-3/). Validation checks chunk CRCs,
+    a complete bounded pixel stream, and valid row filters. Build assembly checks
+    the exact shared asset inventory and copies only each host's delivery icons.
+    Delivery PNGs use only IHDR, consecutive IDAT and IEND chunks. Source artwork
+    may additionally retain its original `caBX` Content Credentials before IDAT.
+    [Host metadata](../docs/host-metadata.md) owns researched consumer support and
+    limits for Claude's listing icon and Codex's retained dark composer key.
 - `official-tool-catalog.ts` verifies the fixed public tools/list configuration
   matrix; `--write` deliberately regenerates tool metadata for the verified release.
 - `official-tool-catalog.json` records complete names, schema variants, activation
@@ -96,6 +93,9 @@
   fingerprints, and disposable official Server dependency scans.
 - `AGENTS.md` specifies validator safety and independent evidence.
 
+Before changing host metadata validation, follow the
+[independent research policy](../docs/policies/documentation.md#host-metadata-research)
+and update the central [host metadata record](../docs/host-metadata.md).
 Use package scripts for supported checks. Pure validators never mutate user state
 or publish artifacts. The explicit Issue workflow runs `node tooling/issue-feedback.ts`
 with its trusted Issue event and step-scoped built-in token to update only owned

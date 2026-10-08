@@ -5,7 +5,9 @@ official Chrome DevTools MCP Server. It shares runtime and full Skill instructio
 with the independent Claude Code distribution. Version 0.1.0 is unreleased.
 Node 24.21.0 must be available as `node`; installed runtime needs no repository
 dependencies or sibling Plugin. Actual installation and Hooks were accepted with
-Codex CLI 0.160.0 on Windows.
+Codex CLI 0.160.0 on Windows. The 2026-10-08 metadata follow-up passed with
+Codex CLI 0.161.0, including installed metadata/icon bytes and full formal
+explicit Skill context; the older baseline was not rerun.
 
 ```powershell
 codex plugin marketplace add Cirnouo/debugging-cdp-targets
@@ -16,6 +18,15 @@ Enable the Plugin MCP connection and invoke `$debugging-cdp-targets`. The gatewa
 starts with no target. Review/trust the four Hook definitions through Codex's
 standard flow; installation does not grant Hook trust. Hooks deliver pending
 exit/operation context at tool/turn boundaries, including one Stop continuation.
+
+Explicit Skill invocation is the verified path to the full instructions. The
+Plugin supplies a project website and separate Skill title/description/icons;
+Desktop rendering and automatic starter prompt injection remain pending manual
+acceptance. See the
+[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md)
+for dated evidence and the Desktop gate. Disposable CLI checks preserve personal
+configuration/global Skills but do not establish Windows OS-profile or no-read
+isolation or complete public catalog network suppression.
 
 The Skill asks isolation intent, checks occupancy before every launch in either
 mode, and obtains the directory's retention/deletion policy before start when

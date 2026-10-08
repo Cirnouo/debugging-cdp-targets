@@ -70,7 +70,12 @@ and personal paths; report suspected vulnerabilities privately through
 
 ## Navigation and commands
 
+Before implementing a new host or changing a host metadata contract, follow the
+[independent host research policy](docs/policies/documentation.md#host-metadata-research)
+and update the [host metadata evidence](docs/host-metadata.md).
+
 - [Domain language](docs/domain-language.md)
+- [Host metadata](docs/host-metadata.md)
 - [Policies](docs/policies/README.md)
 - [Decisions](docs/adr/README.md)
 - [Source](src/README.md)

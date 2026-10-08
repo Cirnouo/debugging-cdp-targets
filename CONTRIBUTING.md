@@ -64,6 +64,11 @@ relevant to your change. These files remain the authoritative contributor rules.
 See [source ownership](src/README.md), [tests](tests/README.md), and
 [tooling](tooling/README.md) for navigation.
 
+Before implementing a new host or changing a metadata contract, follow the
+[host research policy](docs/policies/documentation.md#host-metadata-research).
+The [host metadata record](docs/host-metadata.md) owns primary sources, adopted
+fields and the distinction between CLI proof and pending Desktop acceptance.
+
 The accepted [data directory isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
 governs the runtime boundary. Review its intent-first research, existing/new
 directory operations, connection leases across restart, deletion authorization,
@@ -138,6 +143,8 @@ The host-specific manifest and default component paths follow their respective
 host interfaces. The separate input/output trees are this repository's maintenance
 convention, recorded in [ADR 0012](docs/adr/0012-peer-host-distributions.md).
 Both hosts share one runtime build, complete Skill and official release evidence.
+Declared host-only presentation overlays supplement the exact shared maintained
+Skill set; they do not replace shared instructions.
 Each delivered payload must work independently outside repository dependencies.
 Run the explicit Codex and Claude Marketplace/Hook smokes after changing host
 configuration; ordinary tests and CI keep real host invocations opt-in.

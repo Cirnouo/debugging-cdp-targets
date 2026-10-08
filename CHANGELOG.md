@@ -12,6 +12,16 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
+- Explicit project homepages in both manifests, a consumed Codex website field
+    and Claude display title for GitHub self-installation.
+- Explicit Codex Skill discovery and host-only title, description and shared
+    Plugin icon metadata, with exact shared instruction and overlay inventories.
+- A dated independent host metadata record and contributor research requirement
+    before implementing new hosts or changing their metadata contracts.
+- Installed metadata and complete explicit Skill context acceptance on Windows
+    with Codex CLI 0.161.0 and Claude Code 2.1.294. Desktop presentation and
+    automatic starter prompt injection remain pending manual acceptance.
+
 - A project README with a themed icon, a short host-specific quick start and a
     topic-based user guide for installation, operation, compatibility and privacy.
 - Three Codex starter prompts for screenshot capture, console/network diagnosis
