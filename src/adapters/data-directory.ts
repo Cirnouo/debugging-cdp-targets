@@ -9,6 +9,13 @@ import {
     parseDataIsolation,
 } from '../domains/data-isolation.ts';
 import { errorCode } from '../shared/errors.ts';
+import {
+    beginFixtureStage,
+    captureFixtureOrigin,
+    type FixtureFields,
+    type FixtureStage,
+    runFixtureResource,
+} from './fixture-diagnostics.ts';
 
 export interface DataDirectoryLease {
     readonly evidence: DataDirectoryEvidence;
@@ -17,8 +24,8 @@ export interface DataDirectoryLease {
 export class DataDirectoryError extends Error {
     readonly code: DataDirectoryErrorCode;
     readonly lease: DataDirectoryLease | undefined;
-    constructor(code: DataDirectoryErrorCode, lease?: DataDirectoryLease) {
-        super(code);
+    constructor(code: DataDirectoryErrorCode, lease?: DataDirectoryLease, cause?: unknown) {
+        super(code, cause === undefined ? undefined : { cause });
         this.code = code;
         this.lease = lease;
     }
@@ -86,7 +93,25 @@ function filesystemFailure(error: unknown, fallback: DataDirectoryErrorCode): Da
               : code === 'ENOTDIR'
                 ? 'directory-not-directory'
                 : fallback,
+        undefined,
+        error,
     );
+}
+
+async function observeDirectory<T>(
+    stage: FixtureStage,
+    phase: NonNullable<FixtureFields['phase']>,
+    job: () => Promise<T>,
+): Promise<T> {
+    const finish = beginFixtureStage(stage, { phase });
+    try {
+        const result = await job();
+        finish('succeeded');
+        return result;
+    } catch (error) {
+        finish('failed', {}, error);
+        throw error;
+    }
 }
 
 /** Gateway-local claims. The application owns all release barriers and late-acquisition tracking. */
@@ -116,7 +141,14 @@ export class DataDirectoryRegistry {
         cleanup: DataDirectoryCleanup,
         onAcquired?: (lease: DataDirectoryLease) => void,
     ): Promise<DataDirectoryLease> {
-        const acquisition = this.acquisition.then(() => this.acquireDirectory(selection, cleanup, onAcquired));
+        const origin = captureFixtureOrigin({ sessionId: undefined });
+        const acquisition = this.acquisition.then(() =>
+            runFixtureResource(origin, () =>
+                observeDirectory('data-directory-acquire', 'acquiring-data-directory', () =>
+                    this.acquireDirectory(selection, cleanup, onAcquired),
+                ),
+            ),
+        );
         this.acquisition = acquisition.catch(() => undefined);
         return acquisition;
     }
@@ -138,21 +170,35 @@ export class DataDirectoryRegistry {
     }
 
     private available(directory: string, descendants = true): void {
-        const key = this.key(directory);
-        for (const claimed of this.claims.values()) {
-            if (this.ancestor(claimed.key, key) || (descendants && this.ancestor(key, claimed.key))) {
-                throw new DataDirectoryError('directory-overlap');
+        const finish = beginFixtureStage('data-directory-acquire', { phase: 'overlap' });
+        try {
+            const key = this.key(directory);
+            for (const claimed of this.claims.values()) {
+                if (this.ancestor(claimed.key, key) || (descendants && this.ancestor(key, claimed.key))) {
+                    throw new DataDirectoryError('directory-overlap');
+                }
             }
+            finish('succeeded');
+        } catch (error) {
+            finish('rejected', {}, error);
+            throw error;
         }
     }
 
-    private async locations(directory: string, root?: BigIntStats): Promise<DirectoryLocation[]> {
+    private async locations(
+        directory: string,
+        root?: BigIntStats,
+        stage: FixtureStage = 'data-directory-acquire',
+    ): Promise<DirectoryLocation[]> {
         const native = this.platform === 'win32' ? path.win32 : path.posix;
         const locations: DirectoryLocation[] = [];
         let current = directory;
         try {
             for (;;) {
-                const identity = current === directory && root !== undefined ? root : await this.io.inspect(current);
+                const identity =
+                    current === directory && root !== undefined
+                        ? root
+                        : await observeDirectory(stage, 'inspect', () => this.io.inspect(current));
                 if (!identity.isDirectory() || identity.isSymbolicLink())
                     throw new DataDirectoryError('directory-inspection-failed');
                 locations.push({ path: current, identity: { dev: identity.dev, ino: identity.ino } });
@@ -161,7 +207,7 @@ export class DataDirectoryRegistry {
                 current = parent;
             }
             const captured = locations[0];
-            const confirmed = await this.io.inspect(directory);
+            const confirmed = await observeDirectory(stage, 'inspect', () => this.io.inspect(directory));
             if (
                 !captured ||
                 !confirmed.isDirectory() ||
@@ -170,15 +216,27 @@ export class DataDirectoryRegistry {
             )
                 throw new DataDirectoryError('directory-inspection-failed');
             return locations;
-        } catch {
-            throw new DataDirectoryError('directory-inspection-failed');
+        } catch (error) {
+            throw new DataDirectoryError('directory-inspection-failed', undefined, error);
         }
     }
 
-    private async availableObjects(
+    private availableObjects(
         locations: DirectoryLocation[],
         descendants = true,
         excluded?: DirectoryClaim,
+        stage: FixtureStage = 'data-directory-acquire',
+    ): Promise<void> {
+        return observeDirectory(stage, 'overlap', () =>
+            this.verifyAvailableObjects(locations, descendants, excluded, stage),
+        );
+    }
+
+    private async verifyAvailableObjects(
+        locations: DirectoryLocation[],
+        descendants: boolean,
+        excluded: DirectoryClaim | undefined,
+        stage: FixtureStage,
     ): Promise<void> {
         const root = locations[0];
         if (!root) throw new DataDirectoryError('directory-inspection-failed');
@@ -189,7 +247,7 @@ export class DataDirectoryRegistry {
             if (!held || !heldRoot) throw new DataDirectoryError('directory-inspection-failed');
             try {
                 for (const location of [...held].reverse()) {
-                    const current = await this.io.inspect(location.path);
+                    const current = await observeDirectory(stage, 'inspect', () => this.io.inspect(location.path));
                     if (
                         !current.isDirectory() ||
                         current.isSymbolicLink() ||
@@ -197,8 +255,8 @@ export class DataDirectoryRegistry {
                     )
                         throw new DataDirectoryError('directory-inspection-failed');
                 }
-            } catch {
-                throw new DataDirectoryError('directory-inspection-failed');
+            } catch (error) {
+                throw new DataDirectoryError('directory-inspection-failed', undefined, error);
             }
             // Roots may have several canonical names; shared ancestors alone do not make siblings overlap.
             if (
@@ -228,10 +286,12 @@ export class DataDirectoryRegistry {
         if (!isAbsoluteDataDirectory(requested, this.platform)) throw new DataDirectoryError('directory-invalid');
         let actual: string;
         try {
-            actual = await this.io.canonical(requested);
+            actual = await observeDirectory('data-directory-acquire', 'canonical', () => this.io.canonical(requested));
             if (!isAbsoluteDataDirectory(actual, this.platform)) throw new DataDirectoryError('directory-invalid');
             if (selected.kind === 'new') {
-                const parent = await this.io.inspect(actual);
+                const parent = await observeDirectory('data-directory-acquire', 'inspect', () =>
+                    this.io.inspect(actual),
+                );
                 if (!parent.isDirectory() || parent.isSymbolicLink())
                     throw new DataDirectoryError('directory-not-directory');
                 if (this.claims.size > 0) await this.availableObjects(await this.locations(actual, parent), false);
@@ -239,10 +299,12 @@ export class DataDirectoryRegistry {
                 if (selected.name !== undefined) {
                     actual = native.join(actual, selected.name);
                     this.available(actual);
-                    await this.io.create(actual);
+                    await observeDirectory('data-directory-acquire', 'create', () => this.io.create(actual));
                 } else {
                     this.available(actual, false);
-                    actual = await this.io.createRandom(native.join(actual, 'dct-'));
+                    actual = await observeDirectory('data-directory-acquire', 'create', () =>
+                        this.io.createRandom(native.join(actual, 'dct-')),
+                    );
                 }
             } else {
                 this.available(actual);
@@ -275,6 +337,7 @@ export class DataDirectoryRegistry {
         const removeClaim = () => {
             if (this.claims.get(generation) === claim) this.claims.delete(generation);
         };
+        const origin = captureFixtureOrigin({ sessionId: undefined });
         const dispose = async (): Promise<DataDirectoryEvidence> => {
             await inspectionFinished;
             if (state === 'retained' || state === 'deleted') return evidence();
@@ -284,20 +347,29 @@ export class DataDirectoryRegistry {
                 return evidence();
             }
             try {
-                if (this.claims.get(generation) !== claim || identity === undefined)
-                    throw new DataDirectoryError('directory-identity-changed', lease);
-                const current = await this.io.inspect(actual);
-                if (
-                    !current.isDirectory() ||
-                    current.isSymbolicLink() ||
-                    current.dev !== identity.dev ||
-                    current.ino !== identity.ino
-                ) {
-                    throw new DataDirectoryError('directory-identity-changed', lease);
-                }
+                const current = await observeDirectory('data-directory-cleanup', 'identity', async () => {
+                    if (this.claims.get(generation) !== claim || identity === undefined)
+                        throw new DataDirectoryError('directory-identity-changed', lease);
+                    const current = await observeDirectory('data-directory-cleanup', 'inspect', () =>
+                        this.io.inspect(actual),
+                    );
+                    if (
+                        !current.isDirectory() ||
+                        current.isSymbolicLink() ||
+                        current.dev !== identity.dev ||
+                        current.ino !== identity.ino
+                    )
+                        throw new DataDirectoryError('directory-identity-changed', lease);
+                    return current;
+                });
                 if (this.claims.size > 1)
-                    await this.availableObjects(await this.locations(actual, current), true, claim);
-                await this.io.remove(actual);
+                    await this.availableObjects(
+                        await this.locations(actual, current, 'data-directory-cleanup'),
+                        true,
+                        claim,
+                        'data-directory-cleanup',
+                    );
+                await observeDirectory('data-directory-cleanup', 'remove', () => this.io.remove(actual));
                 state = 'deleted';
                 removeClaim();
                 return evidence();
@@ -305,7 +377,7 @@ export class DataDirectoryRegistry {
                 state = 'cleanup-failed';
                 throw error instanceof DataDirectoryError
                     ? error
-                    : new DataDirectoryError('directory-cleanup-failed', lease);
+                    : new DataDirectoryError('directory-cleanup-failed', lease, error);
             }
         };
         const lease: DataDirectoryLease = {
@@ -314,7 +386,9 @@ export class DataDirectoryRegistry {
             },
             release: () => {
                 if (pendingRelease) return pendingRelease;
-                const release = dispose();
+                const release = runFixtureResource(origin, () =>
+                    observeDirectory('data-directory-release', 'resource-cleanup', dispose),
+                );
                 pendingRelease = release;
                 void release.then(
                     () => {
@@ -330,7 +404,7 @@ export class DataDirectoryRegistry {
         try {
             onAcquired?.(lease);
             if (overlap) throw new DataDirectoryError('directory-overlap', lease);
-            const root = await this.io.inspect(actual);
+            const root = await observeDirectory('data-directory-acquire', 'inspect', () => this.io.inspect(actual));
             if (!root.isDirectory() || root.isSymbolicLink()) {
                 if (selected.kind === 'existing') removeClaim();
                 throw new DataDirectoryError('directory-not-directory', selected.kind === 'new' ? lease : undefined);
@@ -338,14 +412,15 @@ export class DataDirectoryRegistry {
             identity = root;
             claim.locations = await this.locations(actual, root);
             await this.availableObjects(claim.locations, true, claim);
-            nonempty = (await this.io.entries(actual)).length > 0;
+            nonempty =
+                (await observeDirectory('data-directory-acquire', 'entries', () => this.io.entries(actual))).length > 0;
             return lease;
         } catch (error) {
             state = 'cleanup-failed';
             if (error instanceof DataDirectoryError && error.code === 'directory-overlap')
-                throw new DataDirectoryError('directory-overlap', lease);
+                throw new DataDirectoryError('directory-overlap', lease, error);
             if (error instanceof DataDirectoryError && error.code === 'directory-not-directory') throw error;
-            throw new DataDirectoryError('directory-inspection-failed', lease);
+            throw new DataDirectoryError('directory-inspection-failed', lease, error);
         } finally {
             finishInspection();
         }

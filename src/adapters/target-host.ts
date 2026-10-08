@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type { ManagedTarget } from '../domains/cdp-target.ts';
 import { RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
 import { withChromeScreenshotFeature } from '../domains/chromium-features.ts';
@@ -17,6 +18,15 @@ import {
 } from '../shared/constants.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 import { chromeProfileArgument, profileAvailable, reserveProfile } from './chrome-profile.ts';
+import {
+    beginFixtureStage,
+    captureFixtureOrigin,
+    emitFixtureEvent,
+    type FixtureFields,
+    type FixtureOrigin,
+    fixtureHasSubscribers,
+    runFixtureResource,
+} from './fixture-diagnostics.ts';
 import type { PlatformAdapter } from './platform-process.ts';
 import {
     createPlatformAdapter,
@@ -105,12 +115,29 @@ export async function spawnPortableApplication(
 }
 
 async function getVersion(port: number): Promise<unknown> {
-    const response = await fetch(`http://${LOOPBACK}:${port}/json/version`, {
-        signal: AbortSignal.timeout(1_000),
-        redirect: 'error',
-    });
+    const finishRequest = beginFixtureStage('endpoint', { phase: 'request-start', port, budgetMs: 1_000 });
+    let response: Response;
+    try {
+        response = await fetch(`http://${LOOPBACK}:${port}/json/version`, {
+            signal: AbortSignal.timeout(1_000),
+            redirect: 'error',
+        });
+        finishRequest('succeeded', { httpStatus: response.status });
+    } catch (error) {
+        finishRequest('failed', {}, error);
+        throw error;
+    }
+    emitFixtureEvent('endpoint', 'decision', { phase: 'headers', port, httpStatus: response.status });
     if (!response.ok) throw new Error(`CDP returned HTTP ${response.status}.`);
-    return response.json();
+    const finishBody = beginFixtureStage('endpoint', { phase: 'body-start', port });
+    try {
+        const endpoint: unknown = await response.json();
+        finishBody('succeeded', { phase: 'body-complete' });
+        return endpoint;
+    } catch (error) {
+        finishBody('failed', { phase: 'body-failed' }, error);
+        throw error;
+    }
 }
 
 export function applyChromePreset(arguments_: string[]) {
@@ -201,6 +228,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
             requestWindowsClose: launchWindows.requestNormalClose,
             waitWindowsExit: launchWindows.waitForExit,
         });
+    const origins = new WeakMap<ManagedTarget, FixtureOrigin | undefined>();
     const reservations = dependencies.portReservations ?? createPortReservations();
     const io = {
         probe: probePort,
@@ -234,22 +262,97 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         profileAvailable,
         ...dependencies,
     };
+    async function observeSnapshot(pid: number, port: number, signal?: AbortSignal) {
+        const finish = beginFixtureStage('native-snapshot', { pid, port });
+        try {
+            const evidence = await waitForWork(() => platform.snapshot(pid, port), signal);
+            let ownedDescendantCount: number | undefined;
+            if (fixtureHasSubscribers()) {
+                try {
+                    if (
+                        Array.isArray(evidence.processIds) &&
+                        evidence.processIds.every((id) => Number.isSafeInteger(id) && id > 0)
+                    ) {
+                        const owned = new Set(evidence.processIds);
+                        owned.delete(pid);
+                        ownedDescendantCount = owned.size;
+                    }
+                } catch {
+                    // Diagnostic-only enumeration cannot change native evidence or readiness.
+                }
+            }
+            finish('succeeded', {
+                valid: evidence.root.exists,
+                count: evidence.listeners.length,
+                ...(ownedDescendantCount === undefined ? {} : { ownedDescendantCount }),
+            });
+            return evidence;
+        } catch (error) {
+            finish('failed', {}, error);
+            throw error;
+        }
+    }
     async function requestNormalClose(
         target: ManagedTarget,
         context?: LaunchContext,
     ): Promise<Record<string, unknown>> {
-        if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
-        if (platform.requestNormalClose) return platform.requestNormalClose(target, context);
-        const accepted = await platform.close(target);
-        if (!accepted) throw new Error('The application rejected normal close.');
-        return { closeRequested: true, processExited: targetExitObserved(target) };
+        return runFixtureResource(origins.get(target), async () => {
+            const finish = beginFixtureStage('native-close', { pid: target.processId, port: target.port });
+            try {
+                let result: Record<string, unknown>;
+                if (targetExitObserved(target)) result = { closeRequested: false, processExited: true };
+                else if (platform.requestNormalClose) result = await platform.requestNormalClose(target, context);
+                else {
+                    const accepted = await platform.close(target);
+                    if (!accepted) throw new Error('The application rejected normal close.');
+                    result = { closeRequested: true, processExited: targetExitObserved(target) };
+                }
+                finish('succeeded');
+                return result;
+            } catch (error) {
+                let nativeError: number | undefined;
+                if (fixtureHasSubscribers()) {
+                    try {
+                        if (error !== null && typeof error === 'object') {
+                            const details = Object.getOwnPropertyDescriptor(error, 'details');
+                            const value: unknown = details && 'value' in details ? details.value : undefined;
+                            if (value !== null && typeof value === 'object') {
+                                const descriptor = Object.getOwnPropertyDescriptor(value, 'nativeError');
+                                const selected: unknown =
+                                    descriptor && 'value' in descriptor ? descriptor.value : undefined;
+                                if (typeof selected === 'number' && Number.isSafeInteger(selected))
+                                    nativeError = selected;
+                            }
+                        }
+                    } catch {
+                        // Diagnostic metadata cannot invoke accessors or replace the normal Close error.
+                    }
+                }
+                finish(
+                    'failed',
+                    { phase: 'normal-close', ...(typeof nativeError === 'number' ? { nativeError } : {}) },
+                    error,
+                );
+                throw error;
+            }
+        });
     }
     async function waitForExit(target: ManagedTarget, signal?: AbortSignal) {
-        if (platform.waitForExit) await platform.waitForExit(target, signal);
-        else await waitForTargetExit(target, signal);
-        target.releaseProfile?.();
-        target.child?.disposeMonitor?.();
+        return runFixtureResource(origins.get(target), async () => {
+            const finish = beginFixtureStage('target-exit-wait', { pid: target.processId, port: target.port });
+            try {
+                if (platform.waitForExit) await platform.waitForExit(target, signal);
+                else await waitForTargetExit(target, signal);
+                target.releaseProfile?.();
+                target.child?.disposeMonitor?.();
+                finish('succeeded');
+            } catch (error) {
+                finish('failed', {}, error);
+                throw error;
+            }
+        });
     }
+
     async function rollbackCreatedTarget(target: ManagedTarget, context: TargetLaunchContext) {
         if (!targetExitObserved(target)) context.onRollback?.(target);
         const requestAbort = new AbortController();
@@ -264,13 +367,33 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         target.child?.once('exit', exited);
         if (targetExitObserved(target)) exited();
         try {
+            const finishRequest = beginFixtureStage('target-close', {
+                phase: 'rollback-request',
+                reason: 'rollback',
+                pid: target.processId,
+                port: target.port,
+            });
             const request = requestNormalClose(target, { signal: requestAbort.signal });
             try {
                 await Promise.race([request, actualExit]);
+                finishRequest('succeeded');
             } catch (error) {
+                finishRequest(targetExitObserved(target) ? 'succeeded' : 'failed', {}, error);
                 if (!targetExitObserved(target)) throw error;
             }
-            await waitForExit(target);
+            const finishExit = beginFixtureStage('target-exit-wait', {
+                phase: 'rollback-exit',
+                reason: 'rollback',
+                pid: target.processId,
+                port: target.port,
+            });
+            try {
+                await waitForExit(target);
+                finishExit('succeeded');
+            } catch (error) {
+                finishExit('failed', {}, error);
+                throw error;
+            }
         } finally {
             target.child?.off?.('exit', exited);
         }
@@ -317,7 +440,14 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 }
                 let available: boolean;
                 try {
-                    available = await waitForWork(() => io.probe(probeCandidate), context.signal);
+                    const finishProbe = beginFixtureStage('port-probe', { port: probeCandidate });
+                    try {
+                        available = await waitForWork(() => io.probe(probeCandidate), context.signal);
+                        finishProbe('succeeded', { available });
+                    } catch (error) {
+                        finishProbe('failed', {}, error);
+                        throw error;
+                    }
                 } catch (error) {
                     claimed();
                     throw error;
@@ -377,6 +507,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 const requestedAt = io.now();
                 context.onPhase?.('launching');
                 let child: LaunchProcess;
+                const finishSpawn = beginFixtureStage('spawn', { port });
                 try {
                     context.signal?.throwIfAborted();
                     const onCreated = (application: LaunchProcess) => {
@@ -397,6 +528,8 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             },
                         };
                         created = target;
+                        origins.set(target, captureFixtureOrigin({ pid: application.pid, port }));
+                        emitFixtureEvent('spawn', 'decision', { pid: application.pid, port, reason: 'acquired' });
                         observeTargetExit(target);
                         const observation = new AbortController();
                         readinessSignal = context.signal
@@ -438,17 +571,31 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     });
                     onCreated(child);
                     if (child.pid === undefined) throw new Error('The target process has no PID.');
+                    finishSpawn('succeeded', { pid: child.pid });
                 } catch (error) {
+                    finishSpawn('failed', {}, error);
                     if (created) {
                         try {
                             await rollbackCreatedTarget(created, context);
                         } catch (cleanupError) {
+                            emitFixtureEvent(
+                                'target-close',
+                                'decision',
+                                { reason: 'target-rollback-failed', outcome: 'failed', pid: created.processId, port },
+                                cleanupError,
+                            );
                             const retained = new RetainedTargetError(errorMessage(error), created);
+                            Object.defineProperty(retained, 'cause', {
+                                value: error,
+                                configurable: true,
+                                writable: true,
+                            });
                             retained.details = {
+                                ...errorDetails(error),
+                                ...(errorCode(error) ? { code: errorCode(error) } : {}),
                                 processId: created.processId,
                                 port,
                                 closeConfirmed: false,
-                                ...errorDetails(cleanupError),
                             };
                             throw retained;
                         }
@@ -463,7 +610,34 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 let foreignRace = false;
                 const launchedAt = io.now();
                 context.onPhase?.('waiting-cdp');
-                while (io.now() - launchedAt < STARTUP_TIMEOUT_MS) {
+                const finishReadiness = beginFixtureStage('readiness', {
+                    phase: 'waiting-cdp',
+                    pid: processId,
+                    port,
+                    budgetMs: STARTUP_TIMEOUT_MS,
+                });
+                const observedAt = fixtureHasSubscribers() ? performance.now() : undefined;
+                let attempt = 0;
+                for (
+                    let readinessElapsed = io.now() - launchedAt;
+                    readinessElapsed < STARTUP_TIMEOUT_MS;
+                    readinessElapsed = io.now() - launchedAt
+                ) {
+                    attempt += 1;
+                    const elapsedMs =
+                        observedAt !== undefined && fixtureHasSubscribers()
+                            ? Math.max(0, performance.now() - observedAt)
+                            : undefined;
+                    const attemptFields = {
+                        phase: 'attempt' as const,
+                        pid: processId,
+                        port,
+                        attempt,
+                        ...(elapsedMs === undefined
+                            ? {}
+                            : { elapsedMs, remainingMs: Math.max(0, STARTUP_TIMEOUT_MS - elapsedMs) }),
+                    };
+                    const finishAttempt = beginFixtureStage('readiness', attemptFields);
                     try {
                         context.signal?.throwIfAborted();
                         if (targetExitObserved(target))
@@ -472,23 +646,64 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             throw new Error(
                                 'The native process observer failed; retaining application identity for cleanup.',
                             );
-                        const evidence = await waitForWork(() => platform.snapshot(processId, port), readinessSignal);
-                        platform.validateNewRoot(evidence, target);
+                        const evidence = await runFixtureResource(origins.get(target), () =>
+                            observeSnapshot(processId, port, readinessSignal),
+                        );
+                        try {
+                            platform.validateNewRoot(evidence, target);
+                            emitFixtureEvent('native-snapshot', 'decision', {
+                                pid: processId,
+                                port,
+                                valid: evidence.root.exists,
+                            });
+                        } catch (error) {
+                            emitFixtureEvent(
+                                'native-snapshot',
+                                'decision',
+                                {
+                                    pid: processId,
+                                    port,
+                                    valid: false,
+                                    reason: evidence.root.exists ? 'identity-mismatch' : 'identity-missing',
+                                    outcome: 'rejected',
+                                },
+                                error,
+                            );
+                            throw error;
+                        }
                         if (!evidence.root.exists) throw new Error('The target root process is absent.');
                         target.startedAtUtc = evidence.root.startedAtUtc;
                         if (
                             evidence.listeners.some(({ localAddress }) => !['127.0.0.1', '::1'].includes(localAddress))
                         ) {
+                            emitFixtureEvent('listener-ownership', 'decision', {
+                                pid: processId,
+                                port,
+                                reason: 'listener-non-loopback',
+                                outcome: 'rejected',
+                            });
                             throw new Error('The CDP listener is exposed outside loopback.');
                         }
                         foreignRace = evidence.listeners.some(
                             ({ owningProcess }) => !evidence.processIds.includes(Number(owningProcess)),
                         );
+                        emitFixtureEvent('listener-ownership', 'decision', {
+                            pid: processId,
+                            port,
+                            reason: foreignRace
+                                ? 'listener-foreign'
+                                : evidence.listeners.length
+                                  ? 'listener-owned'
+                                  : 'listener-absent',
+                        });
                         if (foreignRace) {
+                            finishAttempt('rejected', {}, new Error('A foreign process won the CDP port race.'));
                             lastError = new Error('A foreign process won the CDP port race.');
                             break;
                         }
-                        const endpoint = await waitForWork(() => io.getVersion(port), readinessSignal);
+                        const endpoint = await runFixtureResource(origins.get(target), () =>
+                            waitForWork(() => io.getVersion(port), readinessSignal),
+                        );
                         context.signal?.throwIfAborted();
                         if (targetExitObserved(target))
                             throw new Error('The target application exited before CDP readiness.');
@@ -500,28 +715,29 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             targetKind,
                         });
                         Object.assign(target, identity);
-                        target.verify = async () => {
-                            const current = await waitForWork(
-                                () => platform.snapshot(processId, port),
-                                readinessSignal,
-                            );
-                            validateProcessIdentity(current, target);
-                            const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
-                            const checked = validateCdpIdentity({
-                                endpoint: endpointNow,
-                                port,
-                                listeners: current.listeners,
-                                processIds: current.processIds,
-                                targetKind,
+                        target.verify = () =>
+                            runFixtureResource(origins.get(target), async () => {
+                                const current = await observeSnapshot(processId, port, readinessSignal);
+                                validateProcessIdentity(current, target);
+                                const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
+                                const checked = validateCdpIdentity({
+                                    endpoint: endpointNow,
+                                    port,
+                                    listeners: current.listeners,
+                                    processIds: current.processIds,
+                                    targetKind,
+                                });
+                                if (
+                                    checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl ||
+                                    checked.browserProduct !== identity.browserProduct
+                                )
+                                    throw new Error('The target CDP endpoint identity changed.');
                             });
-                            if (
-                                checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl ||
-                                checked.browserProduct !== identity.browserProduct
-                            )
-                                throw new Error('The target CDP endpoint identity changed.');
-                        };
+                        finishAttempt('succeeded');
+                        finishReadiness('succeeded');
                         return target;
                     } catch (error) {
+                        finishAttempt('failed', {}, error);
                         lastError = error;
                         if (
                             readinessSignal?.aborted ||
@@ -540,16 +756,46 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         }
                     }
                 }
+                if (fixtureHasSubscribers()) {
+                    const fields: FixtureFields = { phase: 'rollback-request', pid: processId, port };
+                    try {
+                        fields.exitObserved = targetExitObserved(target);
+                    } catch {
+                        // Missing observation is distinct from an observed false value.
+                    }
+                    try {
+                        fields.exitCode = child.exitCode;
+                    } catch {
+                        // A failed getter omits only its own diagnostic field.
+                    }
+                    try {
+                        const signalCode = child.signalCode;
+                        if (signalCode !== undefined) fields.signalCode = signalCode;
+                    } catch {
+                        // A failed getter omits only its own diagnostic field.
+                    }
+                    try {
+                        fields.monitoringFailed = Boolean(child.monitoringFailure);
+                    } catch {
+                        // Never expose the observer's private error text.
+                    }
+                    emitFixtureEvent('readiness', 'decision', fields);
+                }
+                finishReadiness('failed', {}, lastError);
                 const cancellationBeforeRollback = context.signal?.aborted
                     ? { reason: context.signal.reason }
                     : undefined;
                 let closeConfirmed = false;
-                let cleanupError: unknown;
                 try {
                     await rollbackCreatedTarget(target, context);
                     closeConfirmed = true;
                 } catch (error) {
-                    cleanupError = error;
+                    emitFixtureEvent(
+                        'target-close',
+                        'decision',
+                        { reason: 'target-rollback-failed', outcome: 'failed', pid: processId, port },
+                        error,
+                    );
                 }
                 if (closeConfirmed) {
                     target.releaseProfile?.();
@@ -558,11 +804,10 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
                 const message = `The new target did not expose a verified CDP endpoint: ${lastError === undefined ? undefined : errorMessage(lastError)}`;
                 const error = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, target);
+                Object.defineProperty(error, 'cause', { value: lastError, configurable: true, writable: true });
                 error.details = {
                     ...errorDetails(lastError),
                     ...(errorCode(lastError) ? { code: errorCode(lastError) } : {}),
-                    ...errorDetails(cleanupError),
-                    ...(errorCode(cleanupError) ? { code: errorCode(cleanupError) } : {}),
                     processId: child.pid,
                     port,
                     closeConfirmed,
@@ -585,23 +830,25 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         requestNormalClose,
         waitForExit,
         async health(target: ManagedTarget): Promise<'healthy' | 'gone' | 'unavailable' | 'identity-changed'> {
-            if (targetExitObserved(target)) return 'gone';
-            const evidence = await platform.snapshot(target.processId, target.port);
-            if (!evidence.root.exists) return targetExitObserved(target) ? 'gone' : 'unavailable';
-            try {
-                validateProcessIdentity(evidence, target);
-            } catch {
-                return 'identity-changed';
-            }
-            if (evidence.listeners.some(({ owningProcess }) => !evidence.processIds.includes(owningProcess)))
-                return 'identity-changed';
-            if (!evidence.listeners.length) return 'unavailable';
-            try {
-                await target.verify?.();
-                return 'healthy';
-            } catch {
-                return 'unavailable';
-            }
+            return runFixtureResource(origins.get(target), async () => {
+                if (targetExitObserved(target)) return 'gone';
+                const evidence = await observeSnapshot(target.processId, target.port);
+                if (!evidence.root.exists) return targetExitObserved(target) ? 'gone' : 'unavailable';
+                try {
+                    validateProcessIdentity(evidence, target);
+                } catch {
+                    return 'identity-changed';
+                }
+                if (evidence.listeners.some(({ owningProcess }) => !evidence.processIds.includes(owningProcess)))
+                    return 'identity-changed';
+                if (!evidence.listeners.length) return 'unavailable';
+                try {
+                    await target.verify?.();
+                    return 'healthy';
+                } catch {
+                    return 'unavailable';
+                }
+            });
         },
     };
 }

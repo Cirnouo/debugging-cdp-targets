@@ -42,6 +42,7 @@ export function createChromeSmokeLaunch(
     profile: string,
     page: string,
     platform: NodeJS.Platform = process.platform,
+    startupLog?: string,
 ): LaunchOptions {
     if (!absolutePath(profile, platform)) throw new Error('The smoke profile must be an absolute path.');
     const paths = platform === 'win32' ? path.win32 : path.posix;
@@ -60,6 +61,7 @@ export function createChromeSmokeLaunch(
                 '--disable-background-mode',
                 '--user-data-dir={dataDir}',
                 '--remote-debugging-port={port}',
+                ...(startupLog ? ['--enable-logging', `--log-file=${startupLog}`] : []),
                 page,
             ],
         },

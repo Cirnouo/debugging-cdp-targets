@@ -6,19 +6,65 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
-import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { isRecord } from '../../src/shared/errors.ts';
 import {
     createChromeSmokeLaunch,
     inspectChromeSmokeDirectory,
     inspectChromeSmokeTarget,
     requireChromeSmokeExecutable,
 } from './chrome-host.ts';
+import {
+    type BrowserStartupRecord,
+    checkChromeSmokeDisplay,
+    createChromeStartupCapture,
+    validateBrowserStartupRecord,
+} from './chrome-startup.ts';
+import {
+    createFixtureArtifacts,
+    createFixtureGatewayClient,
+    createSmokeFailures,
+    fixtureOutputCollectionId,
+    fixtureOutputDirectory,
+} from './fixture-artifacts.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
-import { createClient, readMcpTools } from './mcp-client.ts';
+import { readMcpTools } from './mcp-client.ts';
 
-const chrome = await requireChromeSmokeExecutable();
+const outputDirectory = fixtureOutputDirectory();
+const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
+    collectionId: fixtureOutputCollectionId(),
+});
+const failures = createSmokeFailures(artifacts);
+const currentCollection = artifacts.snapshot();
+const controlledDiagnostics =
+    !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
+    const safe = validateBrowserStartupRecord(record);
+    if (!safe) return;
+    try {
+        artifacts.startup(safe);
+        if (firstSample) console.log(JSON.stringify(safe));
+    } catch {}
+}
+artifacts.begin('prerequisites');
+const chrome = await requireChromeSmokeExecutable().catch((error: unknown) => {
+    failures.primary(error, 'prerequisites');
+    failures.finish();
+    throw error;
+});
+const display = await checkChromeSmokeDisplay(controlledDiagnostics);
+if (display) {
+    startupEvidence(display);
+    try {
+        assert.ok(!display.available || display.responsive, 'Controlled Chrome X display is not responsive.');
+    } catch (error) {
+        failures.primary(error, 'prerequisites');
+        failures.finish();
+        throw error;
+    }
+}
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-smoke-')));
+const startup = await createChromeStartupCapture(controlledDiagnostics, folder, startupEvidence);
 const managedDirectories = new Set<string>();
 const stopFile = path.join(folder, 'monitor-stop');
 const monitor =
@@ -48,13 +94,28 @@ if (monitor)
         monitor.stdout.once('data', () => resolve());
         monitor.once('error', reject);
     });
-const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+const client = createFixtureGatewayClient(
+    path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
+    outputDirectory,
+    'official-server',
+    artifacts,
+);
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
     return result;
 };
-const control = lifecycleClient(tool);
+const executeControl = lifecycleClient(tool);
+const control: typeof executeControl = (request) =>
+    startup && (request.action === 'start' || request.action === 'restart')
+        ? startup.settled(
+              () => executeControl(request),
+              request.action === 'restart',
+              request.action === 'start'
+                  ? request.launch.args?.find((arg) => arg.startsWith('--log-file='))?.slice('--log-file='.length)
+                  : undefined,
+          )
+        : executeControl(request);
 function textContent(result: Record<string, unknown>) {
     assert.ok(Array.isArray(result.content));
     return result.content
@@ -69,6 +130,8 @@ function launch(profile: string, title: string) {
         chrome,
         path.join(folder, profile),
         `data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>`,
+        process.platform,
+        startup?.newLog(),
     );
 }
 let entryId: string | undefined;
@@ -83,6 +146,7 @@ async function emptyGateway(id: string) {
     assert.deepEqual(result.connections, []);
 }
 try {
+    artifacts.begin('acceptance');
     const initialized = await client.request('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
@@ -174,26 +238,38 @@ try {
     await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
     await emptyGateway(entryId);
     console.log('Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.');
+} catch (error) {
+    failures.primary(error);
 } finally {
-    if (entryId && active?.sessionId)
-        await closeSmokeConnection(control, {
-            action: 'stop',
-            requestId: randomUUID(),
-            entryId,
-            connectionId: active.connectionId,
-            sessionId: active.sessionId,
-            disposition: 'Close',
-        }).catch((error: unknown) => console.error(errorMessage(error)));
-    await client.close();
-    for (const directory of managedDirectories) await assert.rejects(lstat(directory), { code: 'ENOENT' });
+    if (entryId && active?.sessionId) {
+        const cleanupEntryId = entryId;
+        const { connectionId, sessionId } = active;
+        await failures.cleanup('target-cleanup', () =>
+            closeSmokeConnection(control, {
+                action: 'stop',
+                requestId: randomUUID(),
+                entryId: cleanupEntryId,
+                connectionId,
+                sessionId,
+                disposition: 'Close',
+            }),
+        );
+    }
+    await failures.cleanup('gateway-close', () => client.close());
+    for (const directory of managedDirectories)
+        await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
     if (monitor) {
-        await writeFile(stopFile, 'stop');
-        await monitoringEnded;
-        const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
-        assert.ok(isRecord(report));
-        console.log(JSON.stringify({ windowMonitor: report, testProfileFolder: folder }));
-        assert.deepEqual(report.newlyVisibleConsoles, []);
+        await failures.cleanup('window-monitor', async () => {
+            await writeFile(stopFile, 'stop');
+            await monitoringEnded;
+            const report: unknown = JSON.parse(monitorOutput.trim().split(/\r?\n/).at(-1) ?? 'null');
+            assert.ok(isRecord(report));
+            console.log(JSON.stringify({ windowMonitor: report, testProfileFolder: folder }));
+            assert.deepEqual(report.newlyVisibleConsoles, []);
+        });
     } else {
         console.log(JSON.stringify({ testProfileFolder: folder }));
     }
+    await startup?.close(!failures.hasFailure() && client.child.exitCode === 0);
+    failures.finish();
 }

@@ -47,6 +47,14 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
   they are never shipped. Normal close waits for the owned child process and all
   stdio to close before temporary-file cleanup; process exit alone is insufficient.
+- `fixture-artifacts.ts` supplies the opt-in bounded streaming collector and
+  first-failure-preserving cleanup recorder for the two controlled Chrome smokes.
+  `fixture-preload.ts` subscribes safely to the internal fixture channel through
+  `--import`; the original delivered `dist/mcp-bootstrap.mjs` remains the child
+  entry. Query parameters configure only that Node subscriber, without
+  `NODE_OPTIONS`, gateway environment switches or inherited browser configuration.
+  `fixture-ci.ts` initializes the dependency-free job index before prerequisite
+  checks and writes the failure job summary using only fixed labels and safe IDs.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
@@ -511,3 +519,157 @@ externally remove these roots to hide a cleanup failure. The tests
 preselect normal Close for their newly launched fixtures; they never take over
 an existing browser or escalate to forced termination. Parent containers may
 remain at the printed temporary path for evidence.
+
+## Controlled failure diagnostics
+
+Diagnostics are opt-in for `official-server.ts` and `entry-recovery.ts`. The
+artifact directory must be absolute and outside their managed profile roots.
+The two fixture labels and five output filenames are fixed. The dependency-free
+initializer creates the index, both independent `not-run` envelopes and both
+empty streams before executable/native inspection checks. The index records
+`prerequisites`. It
+marks each smoke as running immediately before execution, so an earlier failure
+leaves the later smoke not-run. The existing acceptance scripts run once, with
+their original prerequisites, assertions and deadlines.
+
+After verifying the committed Plugin build and actual Chrome prerequisites,
+reproduce on Linux from the repository root with the explicit installed browser:
+
+```sh
+export DCT_SMOKE_CHROME_EXECUTABLE=/opt/google/chrome/chrome
+set -euo pipefail
+fixtureDiagnosticsDirectory="$(mktemp -d "${TMPDIR:-/tmp}/dct-fixture-diagnostics.XXXXXX")"
+collectionId=""
+if collectionId="$(node tests/smoke/fixture-ci.ts init "$fixtureDiagnosticsDirectory")"; then :; fi
+test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+command -v lsof
+command -v getconf
+command -v Xvfb
+command -v xvfb-run
+command -v xauth
+if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
+xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" entry-recovery "$collectionId"; then :; fi
+xvfb-run -a node tests/smoke/entry-recovery.ts --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+```
+
+The command creates a fresh invocation directory and preserves earlier runs.
+If set, `TMPDIR` must name an existing absolute temporary parent; otherwise it
+uses `/tmp`. Initialization refuses existing fixed collector files.
+The successful initializer prints its collection UUID; refusal exits 1 and
+prints no UUID. Stage, smoke and summary commands carry that successful
+initialization identity. Invalid or absent identity leaves earlier files intact;
+summary prints only an explicit current-collection limitation. The shell guards
+only diagnostic setup/stage commands so the actual prerequisite and smoke exits
+retain their existing behavior. A collector
+adopts only its current initialized not-run envelope with an empty stream; the
+preload must present the parent's current collection UUID. Reused or unowned
+collections are disabled with a safe diagnostic limitation, preserving previous
+evidence and the actual smoke outcome. Do not interpret previous files as a new
+run. On macOS use
+`DCT_SMOKE_CHROME_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'`,
+retain `test -x` and `command -v lsof`, and run the two `node` smoke commands
+without `xvfb-run`; Linux-only prerequisites do not apply. CI uses the identical
+sequence with each job's fresh `RUNNER_TEMP/dct-fixture-diagnostics` directory.
+To index a failed run afterward, run
+`node tests/smoke/fixture-ci.ts summary "<absolute-artifact-directory>" "$collectionId"`.
+Without `--diagnostics`, the original child runs without a subscriber or files.
+Both smoke launch sites use a copied child environment that omits inherited
+`NODE_OPTIONS`; the shared stdio client's general environment contract is unchanged.
+
+Each NDJSON record is at most 4,096 bytes; each fixture stream is limited to
+2,000 records plus one truncation marker and 1,048,576 total bytes. A test-only
+nonblocking directory lock serializes the parent/preload bound check and append;
+there is one immediate attempt, no waiting or queue. Lock/write failure is a
+diagnostic limitation, never a runtime failure. The parent owns the small summary
+envelope, with run/attempt/commit/platform, primary and up to 32 secondary failures,
+safe operation identity, last stage, counts, absence/incomplete/write/truncation
+flags. `smokeStage` names the parent's acceptance/cleanup stage. Final `lastStage`,
+operation and gateway counts are reconstructed from the bounded child stream.
+For an interrupted run, the stored parent envelope can predate child progress;
+the CI summary reconstructs and labels the last runtime boundary, operation and
+count from that stream, rather than treating stored zero counts as runtime facts.
+The child appends only its validated closed events and never writes the parent's
+failure envelope. BEGIN records persist
+before settlement, so a hung child can leave a running summary and unfinished
+stage evidence. A failed final write cannot erase already streamed progress.
+
+Use the job index to distinguish prerequisite failure from either smoke stage.
+The stream records direct native startup, readiness, listener/endpoint,
+profile and data-directory checks for the controlled target. These boundaries
+help locate the failed check; they do not establish complete lifecycle attribution.
+The primary record keeps the original smoke
+failure; subsequent cleanup failures remain secondary, and every existing cleanup
+check still runs in order. Safe cause codes can narrow a failing boundary but do
+not establish an unrecorded cause. Absence, truncation, validation rejection and
+incomplete cleanup are evidence limitations.
+Diagnostic durations and readiness `remainingMs` use monotonic elapsed time;
+the production readiness predicate and its existing wall-clock deadline remain
+unchanged. Opt-in synchronous observation can perturb timing; its overhead on
+real Linux/macOS Chrome fixtures has not been measured.
+
+An accepted current diagnostics collection also enables `chrome-startup.ts`.
+On Linux, `xdpyinfo` queries the inherited `DISPLAY` inside the smoke's
+`xvfb-run` session with ignored output and a separate five-second bound.
+The utility is optional: missing query support records `available=false` and
+`responsive=false`, leaving display responsiveness unknown. The original Xvfb,
+Chrome and actual CDP acceptance checks remain mandatory. An available utility's
+failed or timed-out query fails the prerequisite check before Chrome starts.
+Refused or unconfigured collections add no browser logging flags or files.
+Controlled launches add plain `--enable-logging` and an absolute `--log-file`
+in a canonical private scratch sibling outside profiles and the upload directory.
+Chrome stdio stays ignored, and the original delivered gateway remains the entry.
+Each startup settlement reads its own log; restart samples before reuse and
+after settlement because Chrome may overwrite the same file on restart.
+
+The reader requires an initially matching regular file identity with one hard link;
+unsafe links, aliases and replacements before opening are rejected. Later identity
+or content changes retain only a limited projection marked incomplete; disappearance
+after observation begins is read-failed/incomplete, rather than initial absence.
+It reads at most the first and last
+64 KiB, without double counting overlapping ranges. Partial, oversized or excess
+lines and changing files expose incomplete evidence. Only closed categories for
+X display, sandbox, helper, zygote, singleton and DevTools bind errors, severity
+counts, and absent/read-failed/truncated/incomplete flags enter the existing
+bounded stream and summary. One validated JSON projection per initially configured log slot,
+plus display and scratch cleanup booleans, is printed in controlled job logs so
+successful CI can establish that the browser actually wrote the chosen file.
+Raw text, log paths, URLs and interpolated values never enter these records.
+Restart reuses its slot. The summary keeps the latest sample per slot; the bounded
+event stream retains earlier and pre-restart observations until its existing caps.
+
+Native records also expose the fixed Linux `rootProcessState` from existing
+proc-stat reads and a unique `ownedDescendantCount`, separate from listener counts.
+Retained `exitObserved`, exit code, signal and `monitoringFailed` evidence is sampled
+before rollback Close. These fields add no process scan, watcher or readiness deadline.
+
+These matchers use [Chromium logging setup](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/common/logging_chrome.cc),
+the [current LOG formatter](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/logging.cc)
+and its [older parentheses formatter](https://raw.githubusercontent.com/chromium/chromium/120.0.6099.0/base/logging.cc),
+and the direct source messages in
+[X11 initialization](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/ui/ozone/platform/x11/ozone_platform_x11.cc),
+[zygote initialization](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/content/browser/zygote_host/zygote_host_impl_linux.cc),
+[CHECK message prefix](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/check.cc),
+[sandbox helper validation](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/sandbox/linux/suid/client/setuid_sandbox_host.cc),
+[profile singleton](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/process_singleton_posix.cc)
+and [DevTools HTTP startup](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/content/browser/devtools/devtools_http_handler.cc).
+Source main can differ from the installed release; unmatched errors stay unknown.
+Nonfatal DBus errors establish no cause. File logging can miss early initialization,
+sandboxed children, crashes without a matching LOG message, and policy/default-data
+directory refusals written directly to ignored stderr. Absence establishes no cause.
+Official non-DCHECK builds can omit CHECK message streaming entirely through
+[CHECK build guards](https://raw.githubusercontent.com/chromium/chromium/main/base/check.h);
+a missing file message cannot exclude a CHECK startup failure.
+The read cap does not cap Chrome's private on-disk writes; verbose logging is not
+enabled. Instrumentation timing and storage overhead have not been measured.
+Private scratch is deleted only after successful acceptance, normal gateway exit
+and all existing profile deletion checks; failures or uncertain cleanup retain it.
+Optional logging or scratch removal errors remain nonfatal safe limitations.
+The raw file is excluded from the exact five uploaded files, including when retained.
+
+Records exclude raw messages/stacks, browser/gateway stderr, full environment,
+argv/process tables, lock content, hostnames/private paths, HTTP headers/bodies
+and page/tool content. Only the newly owned controlled fixture is observed.
+These new records cannot explain old runs retrospectively: the underlying roots
+of historical portable CI failures remain **UNKNOWN** until supported by new
+evidence. Static or synthetic tests also do not establish real Chrome acceptance.

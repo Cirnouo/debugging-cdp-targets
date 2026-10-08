@@ -32,6 +32,11 @@ it, run `pnpm prepare` and check again, preserving existing Git configuration.
 The ignored `.husky/_` directory is not copied from another checkout; a manual
 `pnpm verify:push` result alone does not prove that the push hook will run.
 
+Before an SSH push, follow the
+[SSH push initialization policy](docs/policies/quality.md#ssh-push-initialization)
+to configure and verify the fixed keepalive settings in this clone. Preserve
+existing SSH commands and identity/proxy options when adding them.
+
 ## Submit an Issue
 
 Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) for reproducible unexpected

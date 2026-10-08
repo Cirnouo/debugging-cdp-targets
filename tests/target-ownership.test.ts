@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { type FixtureEvent, subscribeFixtureDiagnostics } from '../src/adapters/fixture-diagnostics.ts';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createPortReservations } from '../src/adapters/port-reservation.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
@@ -29,6 +30,7 @@ function fixture(
     let clock: number | undefined;
     let failSpawn = false;
     let failAfterCreation = false;
+    let launchFailure: Error = new Error('Launch transport failed after creation.');
     let failClose = false;
     let closeFailure: Error | undefined;
     let holdExit = false;
@@ -51,7 +53,7 @@ function fixture(
             });
             children.push(child);
             context?.onCreated?.(child);
-            if (failAfterCreation) throw new Error('Launch transport failed after creation.');
+            if (failAfterCreation) throw launchFailure;
             return child;
         },
         getVersion: async (port) => {
@@ -136,8 +138,9 @@ function fixture(
         failSpawn: () => {
             failSpawn = true;
         },
-        failAfterCreation: () => {
+        failAfterCreation: (error?: Error) => {
             failAfterCreation = true;
+            if (error) launchFailure = error;
         },
         failClose: (error?: Error) => {
             failClose = true;
@@ -337,7 +340,9 @@ for (const failureAt of ['host-readiness', 'controller-routing'] as const) {
     });
 }
 
-test('failed rollback prioritizes native close evidence while preserving the original readiness cause', async () => {
+test('failed rollback preserves primary readiness metadata while retaining live ownership', async (t) => {
+    const records: FixtureEvent[] = [];
+    t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
     const f = fixture();
     const failure = readinessFailure();
     failure.details = { phase: 'waiting-cdp', nativeError: 77, category: 'cdp-readiness' };
@@ -352,15 +357,22 @@ test('failed rollback prioritizes native close evidence while preserving the ori
     );
     assert.ok(result instanceof Error);
     assert.match(result.message, /Controlled CDP readiness probe failure/);
+    assert.equal(result.cause, failure);
     assert.deepEqual(errorDetails(result), {
-        phase: 'normal-close',
-        nativeError: 5,
-        category: 'close-request-denied',
-        code: 'EACCES',
+        phase: 'waiting-cdp',
+        nativeError: 77,
+        category: 'cdp-readiness',
+        code: 'ECONNREFUSED',
         processId: 601,
         port: 9222,
         closeConfirmed: false,
     });
+    const secondary = records.find(
+        (record) => record.stage === 'native-close' && record.event === 'end' && record.outcome === 'failed',
+    );
+    assert.equal(secondary?.phase, 'normal-close');
+    assert.equal(secondary?.error?.code, 'EACCES');
+    assert.equal(secondary?.nativeError, 5);
     assert.equal(controller.status().status, 'close-failed');
     confirmExit(f);
     assert.equal(events[0]?.expected, undefined);
@@ -630,4 +642,34 @@ test('a successful legacy close request preserves ownership until actual exit is
     const release = reservations.claim(9222);
     assert.ok(release);
     release();
+});
+
+test('failed spawn transport retains its primary typed cause when rollback also fails', async (t) => {
+    const records: FixtureEvent[] = [];
+    t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+    const f = fixture();
+    const failure = Object.assign(new DetailedError('Launch transport failed after creation.'), { code: 'EIO' });
+    failure.details = { phase: 'launching', nativeError: 77 };
+    f.failAfterCreation(failure);
+    const cleanup = Object.assign(new DetailedError('Normal Close was denied.'), { code: 'EACCES' });
+    cleanup.details = { phase: 'normal-close', nativeError: 5 };
+    f.failClose(cleanup);
+    const result = await f.host.launch(launch).catch((error: unknown) => error);
+    assert.ok(result instanceof Error);
+    assert.equal(result.cause, failure);
+    assert.deepEqual(errorDetails(result), {
+        phase: 'launching',
+        nativeError: 77,
+        code: 'EIO',
+        processId: 601,
+        port: 9222,
+        closeConfirmed: false,
+    });
+    assert.ok(!Object.keys(result).includes('cause'));
+    assert.ok(
+        records.some(
+            (record) => record.stage === 'native-close' && record.error?.code === 'EACCES' && record.nativeError === 5,
+        ),
+    );
+    confirmExit(f);
 });

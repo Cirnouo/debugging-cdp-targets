@@ -90,6 +90,53 @@ is useful validation but does not establish that Git will invoke `pre-push`.
 Retain the actual push output and distinguish a hook verification failure from
 a remote transfer failure; never report an absent hook as a successful hook run.
 
+## SSH push initialization
+
+For this repository's SSH pushes using OpenSSH, require `ServerAliveInterval=30` and
+`ServerAliveCountMax=3` before starting Git. These are repository choices using
+the [OpenSSH server-alive options](https://man.openbsd.org/ssh_config.5#ServerAliveInterval):
+send encrypted keepalive requests after 30 seconds without received data and
+disconnect after three unanswered requests. This protects idle transport during
+the lengthy pre-push verification; it does not remedy initial connection timeouts.
+
+Git's [core.sshCommand](https://git-scm.com/docs/git-config#Documentation/git-config.txt-coresshCommand)
+can persist these options locally. This setting is not cloned, so complete this
+initialization in every clone and verify the effective command in each worktree.
+Inspect `git config --show-scope --show-origin --get core.sshCommand`,
+`ssh.variant`, and the current process's `GIT_SSH_COMMAND`, `GIT_SSH` and
+`GIT_SSH_VARIANT` before changing configuration. Git documents its
+[SSH environment precedence](https://git-scm.com/docs/git#Documentation/git.txt-GITSSHCOMMAND);
+the command order is `GIT_SSH_COMMAND`, effective `core.sshCommand`, `GIT_SSH`,
+then `ssh`. A new local command must not hide an existing `GIT_SSH` wrapper.
+
+When the effective client is ordinary OpenSSH with no custom command or wrapper,
+run this from the clone root:
+
+```powershell
+git config --local core.sshCommand "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
+git config --show-scope --show-origin --get core.sshCommand
+```
+
+If an existing command selects an executable, configuration, identity, proxy or
+wrapper, preserve it and add the two options to its actual OpenSSH invocation.
+Replace conflicting occurrences rather than appending duplicates: OpenSSH uses
+the first obtained value. Ensure any higher-priority environment or worktree
+override also has these settings. Other SSH clients require their own supported
+equivalent; do not pass OpenSSH options to them or replace them silently. Do not
+change global Git or SSH configuration for this repository setup.
+
+Verify the effective OpenSSH executable and all existing options with `-G`, using
+the actual push remote's user, host alias and port. For the ordinary GitHub case:
+
+```powershell
+ssh -G -o ServerAliveInterval=30 -o ServerAliveCountMax=3 git@github.com
+```
+
+Inspect the local output for `serveraliveinterval 30` and `serveralivecountmax 3`.
+Keep initialization outside `pre-push`: Git has already opened its transport
+before that hook runs, so a configuration change there cannot affect that push.
+Retain the actual push and hook results under the preceding hook policy.
+
 ## Remote enforcement
 
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
@@ -113,8 +160,50 @@ Separate real Chrome jobs run official tools and connection recovery on
 ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles
 and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
 browser or inspection prerequisites fail. The scripts preserve identity checks,
-normal Close and Windows visible-console monitoring. These jobs also run in
+normal Close and Windows visible-console monitoring.
+Linux diagnostics query the active X display within `xvfb-run` before startup
+when `xdpyinfo` is available. Missing query support is explicit unknown evidence;
+an available utility's failed or timed-out query fails before Chrome starts.
+The original Xvfb and actual Chrome/CDP gates remain mandatory; CI installs no
+additional operating-system package for this diagnostic query.
+Accepted current collections additionally project bounded private Chrome logs
+to closed startup categories, severity counts and read/cleanup limitation flags.
+Raw files remain outside profiles and the exact upload list; plain file logging
+has no inherent write cap. Successful acceptance and existing cleanup proofs are
+required before private scratch deletion. Unmatched messages and absent logs do
+not establish causes, and optional capture failures do not change acceptance.
+These jobs also run in
 same-commit release CI; simulated tests do not substitute for real acceptance.
+Only failed controlled real Chrome fixture jobs may upload diagnostic artifacts,
+using the reviewed
+[official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
+The exact five collector/index filenames, failure condition, seven-day retention
+and separate directory are enforced by CI regressions; other jobs remain
+artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
+numbers and bounded allowlisted error cause codes. They exclude raw errors,
+messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
+environment, argv, process tables, lock content, hostnames and private paths.
+The original delivered gateway remains the smoke entry with a test-only safe
+subscriber preload. Streaming begins before work completes, has fixed record,
+event and byte caps, and exposes truncation, rejection or write limitations.
+Both owned smoke children omit inherited `NODE_OPTIONS`. Dependency-free
+initialization creates all five fixed files, with both smoke envelopes explicitly
+not-run before prerequisites. Fresh collection ownership preserves and refuses
+prior evidence.
+Stage, smoke and summary CLI commands carry the UUID returned by successful
+current initialization. Refusal is visibly reported without changing actual
+prerequisite/smoke exits; failure upload also requires that successful current
+initialization. Earlier refused evidence cannot be uploaded or presented as the
+current collection. The parent owns failure summaries; final and interrupted CI
+presentation derive safe child progress from the bounded stream. Diagnostic
+durations and readiness remaining budgets use monotonic elapsed time without
+changing the production readiness predicate or wall-clock deadline.
+Primary smoke failures remain primary while the existing cleanup and assertions
+run in order; diagnostic failure cannot replace runtime outcomes. Artifacts
+establish only the recorded direct checks, not complete lifecycle attribution
+or a root cause for historical failures. Synchronous instrumentation overhead
+on real Linux/macOS Chrome fixtures has not been measured. Reproduction and interpretation belong in the
+[smoke inventory](../../tests/smoke/README.md#controlled-failure-diagnostics).
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at

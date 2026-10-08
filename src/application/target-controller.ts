@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { emitFixtureEvent } from '../adapters/fixture-diagnostics.ts';
 import { type ManagedTarget, RetainedTargetError } from '../domains/cdp-target.ts';
 import type {
     ControlContext,
@@ -7,7 +8,7 @@ import type {
     LaunchOptions,
     TargetStatus,
 } from '../domains/control-contract.ts';
-import { DetailedError, errorDetails, errorMessage } from '../shared/errors.ts';
+import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 
 export interface ControllerRouter {
@@ -305,6 +306,7 @@ export function createTargetController({
             state = 'active';
             return status();
         } catch (error) {
+            emitFixtureEvent('target-acquisition', 'decision', { outcome: 'failed' }, error);
             if (error instanceof RetainedTargetError) {
                 acquire(selected, error.target);
                 if (!owner.exited) {
@@ -321,15 +323,39 @@ export function createTargetController({
                 try {
                     await normalClose(selected);
                 } catch (closeError) {
+                    emitFixtureEvent('target-close', 'decision', { outcome: 'failed' }, closeError);
                     owner.expectedExit = undefined;
                     state = 'close-failed';
                     taskActive = false;
                     reason = 'target-rollback-failed';
                     gate();
-                    throw failedClose(selected, closeError);
+                    const failure = failedClose(selected, closeError);
+                    failure.details = {
+                        ...errorDetails(error),
+                        ...(errorCode(error) === undefined ? {} : { code: errorCode(error) }),
+                        entryId,
+                        sessionId: owner.sessionId,
+                        processId: owner.target.processId,
+                        port: owner.target.port,
+                        retainedTargets: [{ processId: owner.target.processId, port: owner.target.port }],
+                        cleanupError: errorMessage(closeError),
+                    };
+                    Object.defineProperty(failure, 'cause', { value: error, configurable: true, writable: true });
+                    throw failure;
                 }
             }
-            await dispose(selected);
+            try {
+                await dispose(selected);
+            } catch (cleanupError) {
+                emitFixtureEvent('resource-disposal', 'decision', { outcome: 'failed' }, cleanupError);
+                const failure = new DetailedError(errorMessage(error), { cause: error });
+                failure.details = {
+                    ...errorDetails(error),
+                    ...(errorCode(error) === undefined ? {} : { code: errorCode(error) }),
+                    cleanupError: errorMessage(cleanupError),
+                };
+                throw failure;
+            }
             throw error;
         }
     }

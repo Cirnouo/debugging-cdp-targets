@@ -4123,6 +4123,495 @@ function effectiveChromeProfileArgument(arguments_, platform) {
   return directory;
 }
 
+// src/adapters/fixture-diagnostics.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { AsyncLocalStorage } from "node:async_hooks";
+import { channel } from "node:diagnostics_channel";
+import { performance as performance2 } from "node:perf_hooks";
+var FIXTURE_DIAGNOSTICS_CHANNEL = "debugging-cdp-targets.fixture";
+var observation = channel(FIXTURE_DIAGNOSTICS_CHANNEL);
+var stages = [
+  "operation",
+  "operation-phase",
+  "operation-route",
+  "operation-error",
+  "target-acquisition",
+  "target-close",
+  "target-exit-wait",
+  "resource-disposal",
+  "gateway-cleanup",
+  "port-probe",
+  "spawn",
+  "readiness",
+  "listener-ownership",
+  "endpoint",
+  "profile-check",
+  "native-close",
+  "native-command",
+  "native-file",
+  "native-snapshot",
+  "data-directory-acquire",
+  "data-directory-release",
+  "data-directory-cleanup",
+  "directory-lease"
+];
+var outcomes = [
+  "started",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "retained",
+  "released",
+  "skipped",
+  "observed",
+  "rejected",
+  "requested"
+];
+var actions = ["start", "restart", "stop", "end-task", "status"];
+var phases = [
+  "accepted",
+  "running",
+  "cancelling",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "launching",
+  "waiting-cdp",
+  "validating-official-server",
+  "acquiring-data-directory",
+  "creating-router",
+  "starting-official-server",
+  "requesting-normal-close",
+  "awaiting-target-exit",
+  "closing-resources",
+  "cancelling-created-target",
+  "resource-cleanup",
+  "normal-close",
+  "process-identity",
+  "executable-identity",
+  "request-start",
+  "headers",
+  "body-start",
+  "body-complete",
+  "body-failed",
+  "canonical",
+  "inspect",
+  "identity",
+  "overlap",
+  "remove",
+  "create",
+  "entries",
+  "availability",
+  "release-barrier",
+  "attempt",
+  "rollback-request",
+  "rollback-exit"
+];
+var reasons = [
+  "process-exited",
+  "process-monitor-lost",
+  "official-disconnected",
+  "close",
+  "restart",
+  "rollback",
+  "disconnect",
+  "retired",
+  "cancelled",
+  "acquired",
+  "settled",
+  "cleanup-failed",
+  "target-rollback-failed",
+  "missing-lock",
+  "invalid-lock",
+  "foreign-host",
+  "live-lock-owner",
+  "process-absent",
+  "lock-access-failed",
+  "process-probe-failed",
+  "identity-missing",
+  "identity-mismatch",
+  "listener-owned",
+  "listener-foreign",
+  "listener-absent",
+  "listener-non-loopback",
+  "lock-accessible",
+  "lock-refused",
+  "profile-claimed",
+  "availability-denied",
+  "release-not-requested",
+  "acquisition-pending",
+  "successor-pending",
+  "target-live",
+  "resources-pending",
+  "already-released",
+  "release-pending"
+];
+var commands = [
+  "ps",
+  "getconf",
+  "lsof",
+  "proc-stat",
+  "proc-exe",
+  "router",
+  "upstream",
+  "proc-boot",
+  "executable-stat",
+  "powershell",
+  "netsh"
+];
+var statuses = [
+  "accepted",
+  "running",
+  "cancelling",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "pending",
+  "held",
+  "retained",
+  "released",
+  "active",
+  "idle",
+  "lost",
+  "starting",
+  "closing",
+  "close-failed",
+  "healthy",
+  "unavailable",
+  "identity-changed",
+  "gone",
+  "owned",
+  "foreign",
+  "absent"
+];
+var names = [
+  "Error",
+  "TypeError",
+  "RangeError",
+  "SyntaxError",
+  "AggregateError",
+  "AbortError",
+  "TimeoutError",
+  "AssertionError",
+  "DOMException",
+  "DetailedError",
+  "RetainedTargetError",
+  "UnknownError"
+];
+var codes = [
+  "EACCES",
+  "EPERM",
+  "ENOENT",
+  "ESRCH",
+  "EEXIST",
+  "ENOTDIR",
+  "EISDIR",
+  "ENOTEMPTY",
+  "EBUSY",
+  "ELOOP",
+  "EINVAL",
+  "EIO",
+  "EMFILE",
+  "ENFILE",
+  "ENOSPC",
+  "EPIPE",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "EADDRINUSE",
+  "EADDRNOTAVAIL",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "ABORT_ERR",
+  "ERR_ABORTED",
+  "ERR_INVALID_ARG_TYPE",
+  "ERR_INVALID_ARG_VALUE",
+  "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+  "RESOURCE_CLEANUP_FAILED",
+  "PROCESS_OBSERVATION_UNAVAILABLE",
+  "CONNECTION_RECOVERY_REQUIRED",
+  "ERR_ASSERTION",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "directory-invalid",
+  "directory-missing",
+  "directory-exists",
+  "directory-not-directory",
+  "directory-overlap",
+  "directory-acquisition-failed",
+  "directory-inspection-failed",
+  "directory-identity-changed",
+  "directory-cleanup-failed"
+];
+var syscalls = [
+  "spawn",
+  "connect",
+  "listen",
+  "kill",
+  "stat",
+  "lstat",
+  "realpath",
+  "readlink",
+  "opendir",
+  "readdir",
+  "open",
+  "mkdir",
+  "unlink",
+  "rmdir",
+  "write",
+  "read",
+  "close",
+  "access",
+  "socket",
+  "bind",
+  "scandir"
+];
+var rootProcessStates = [
+  "running",
+  "sleeping",
+  "disk-sleep",
+  "stopped",
+  "tracing-stop",
+  "dead",
+  "zombie",
+  "parked",
+  "idle",
+  "unknown"
+];
+var signals = [
+  "SIGABRT",
+  "SIGALRM",
+  "SIGBUS",
+  "SIGCHLD",
+  "SIGCONT",
+  "SIGFPE",
+  "SIGHUP",
+  "SIGILL",
+  "SIGINT",
+  "SIGIO",
+  "SIGIOT",
+  "SIGKILL",
+  "SIGPIPE",
+  "SIGPOLL",
+  "SIGPROF",
+  "SIGPWR",
+  "SIGQUIT",
+  "SIGSEGV",
+  "SIGSTKFLT",
+  "SIGSTOP",
+  "SIGSYS",
+  "SIGTERM",
+  "SIGTRAP",
+  "SIGTSTP",
+  "SIGTTIN",
+  "SIGTTOU",
+  "SIGUNUSED",
+  "SIGURG",
+  "SIGUSR1",
+  "SIGUSR2",
+  "SIGVTALRM",
+  "SIGWINCH",
+  "SIGXCPU",
+  "SIGXFSZ",
+  "SIGBREAK",
+  "SIGLOST",
+  "SIGINFO"
+];
+var scopes = new AsyncLocalStorage();
+var identityKeys = [
+  "entryId",
+  "operationId",
+  "originOperationId",
+  "requestId",
+  "action",
+  "connectionId",
+  "sessionId",
+  "pid",
+  "port",
+  "trigger"
+];
+var fieldKeys = [
+  ...identityKeys,
+  "outcome",
+  "durationMs",
+  "elapsedMs",
+  "attempt",
+  "count",
+  "ownedDescendantCount",
+  "pendingCount",
+  "resourceCount",
+  "budgetMs",
+  "remainingMs",
+  "exitCode",
+  "signalCode",
+  "exitObserved",
+  "monitoringFailed",
+  "rootProcessState",
+  "httpStatus",
+  "nativeError",
+  "stderrPresent",
+  "valid",
+  "available",
+  "reason",
+  "command",
+  "status",
+  "phase"
+];
+var eventKeys = [...fieldKeys, "stage", "event", "timestampMs", "error"];
+function member(values, value) {
+  return typeof value === "string" && values.some((selected) => selected === value);
+}
+function safeField(key, value) {
+  if (["entryId", "operationId", "originOperationId", "requestId", "connectionId", "sessionId"].includes(key))
+    return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  if (key === "action") return member(actions, value);
+  if (key === "outcome") return member(outcomes, value);
+  if (key === "reason") return member(reasons, value);
+  if (key === "command") return member(commands, value);
+  if (key === "status") return member(statuses, value);
+  if (key === "phase") return member(phases, value);
+  if (key === "rootProcessState") return member(rootProcessStates, value);
+  if (key === "signalCode") return value === null || member(signals, value);
+  if (key === "trigger") return value === "gateway-disconnect";
+  if (["stderrPresent", "valid", "available", "exitObserved", "monitoringFailed"].includes(key))
+    return typeof value === "boolean";
+  if (key === "exitCode")
+    return value === null || typeof value === "number" && Number.isInteger(value) && value >= -2147483648 && value <= 4294967295;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return false;
+  if (["durationMs", "timestampMs", "elapsedMs", "budgetMs", "remainingMs"].includes(key)) return true;
+  if (!Number.isSafeInteger(value)) return false;
+  if (key === "pid") return value > 0;
+  if (key === "port") return value > 0 && value <= 65535;
+  if (key === "httpStatus") return value >= 100 && value <= 599;
+  return ["attempt", "count", "ownedDescendantCount", "pendingCount", "resourceCount", "nativeError"].includes(key);
+}
+function copyFields(value) {
+  const result = {};
+  for (const key of fieldKeys) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor && "value" in descriptor && safeField(key, descriptor.value)) result[key] = descriptor.value;
+  }
+  return result;
+}
+function current() {
+  const scope = scopes.getStore();
+  return scope ? copyFields(typeof scope === "function" ? scope() : scope) : {};
+}
+function errorMetadata(value, seen = /* @__PURE__ */ new Set(), depth = 0) {
+  const result = { name: "UnknownError" };
+  if (!value || typeof value !== "object") return Object.freeze(result);
+  if (seen.has(value) || depth >= 4) return Object.freeze({ name: "UnknownError", truncated: true });
+  seen.add(value);
+  try {
+    const name = Reflect.get(value, "name");
+    const code = Reflect.get(value, "code");
+    const syscall = Reflect.get(value, "syscall");
+    const errno = Reflect.get(value, "errno");
+    const cause = Reflect.get(value, "cause");
+    if (member(names, name)) result.name = name;
+    if (member(codes, code)) result.code = code;
+    if (member(syscalls, syscall)) result.syscall = syscall;
+    if (typeof errno === "number" && Number.isSafeInteger(errno)) result.errno = errno;
+    if (cause !== void 0) result.cause = errorMetadata(cause, seen, depth + 1);
+  } catch {
+  }
+  return Object.freeze(result);
+}
+function fixtureHasSubscribers() {
+  return observation.hasSubscribers;
+}
+function emitFixturePhase(phase) {
+  if (!observation.hasSubscribers || !member(phases, phase)) return;
+  emitFixtureEvent("operation-phase", "decision", { phase });
+}
+function runFixtureObservation(identity, job) {
+  if (!observation.hasSubscribers) return job();
+  return scopes.run(identity, job);
+}
+function captureFixtureOrigin(overrides = {}) {
+  if (!observation.hasSubscribers) return;
+  try {
+    const selected = { ...current(), ...overrides };
+    const { operationId, requestId: _requestId, action: _action, trigger: _trigger, ...identity } = selected;
+    return Object.freeze(copyFields({ ...identity, ...operationId ? { originOperationId: operationId } : {} }));
+  } catch {
+    return;
+  }
+}
+function runFixtureResource(origin, job) {
+  if (!observation.hasSubscribers || !origin) return job();
+  let identity;
+  try {
+    const { operationId, requestId, action, trigger } = current();
+    identity = { ...origin, operationId, requestId, action, trigger };
+  } catch {
+    return job();
+  }
+  return scopes.run(identity, job);
+}
+function runFixtureCleanup(identity, job) {
+  if (!observation.hasSubscribers) return job();
+  let selected;
+  try {
+    selected = copyFields(identity);
+  } catch {
+    selected = {};
+  }
+  return scopes.run({ ...selected, trigger: "gateway-disconnect" }, job);
+}
+function emitFixtureEvent(stage, event, fields3 = {}, error2) {
+  if (!observation.hasSubscribers) return;
+  let payload;
+  try {
+    if (!member(stages, stage) || !member(["begin", "end", "decision"], event)) return;
+    const metadata = copyFields({ ...current(), ...fields3 });
+    payload = Object.freeze({
+      ...metadata,
+      stage,
+      event,
+      outcome: metadata.outcome ?? (event === "begin" ? "started" : event === "end" ? "succeeded" : "observed"),
+      timestampMs: performance2.now(),
+      durationMs: metadata.durationMs ?? 0,
+      ...error2 === void 0 ? {} : { error: errorMetadata(error2) }
+    });
+  } catch {
+    return;
+  }
+  observation.publish(payload);
+}
+var unobservedFinish = () => {
+};
+function beginFixtureStage(stage, fields3 = {}) {
+  if (!observation.hasSubscribers) return unobservedFinish;
+  let metadata;
+  try {
+    metadata = Object.freeze(copyFields(fields3));
+  } catch {
+    return unobservedFinish;
+  }
+  const started = performance2.now();
+  emitFixtureEvent(stage, "begin", metadata);
+  return (outcome, result = {}, error2) => {
+    if (!observation.hasSubscribers) return;
+    let copied;
+    try {
+      copied = copyFields(result);
+    } catch {
+      return;
+    }
+    emitFixtureEvent(
+      stage,
+      "end",
+      { ...metadata, ...copied, outcome, durationMs: Math.max(0, performance2.now() - started) },
+      error2
+    );
+  };
+}
+
 // src/adapters/platform-process.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
@@ -4173,7 +4662,7 @@ var NativeApplication = class extends EventEmitter {
     this.disposeMonitor();
   }
 };
-var phases = /* @__PURE__ */ new Set([
+var phases2 = /* @__PURE__ */ new Set([
   "inspecting-permission",
   "launching",
   "awaiting-permission",
@@ -4185,7 +4674,7 @@ var phases = /* @__PURE__ */ new Set([
 function nativeFailure(value) {
   const error2 = new DetailedError("Windows native application operation failed.");
   error2.details = {
-    phase: typeof value.phase === "string" && phases.has(value.phase) ? value.phase : "native-helper",
+    phase: typeof value.phase === "string" && phases2.has(value.phase) ? value.phase : "native-helper",
     ...typeof value.nativeError === "number" ? { nativeError: value.nativeError } : {},
     ...typeof value.category === "string" && /^[a-z-]+$/.test(value.category) ? { category: value.category } : {},
     ...typeof value.exceptionType === "string" && /^[A-Za-z]+$/.test(value.exceptionType) ? { exceptionType: value.exceptionType } : {},
@@ -4244,7 +4733,7 @@ function createWindowsLauncher({
           const value = JSON.parse(line);
           if (!isRecord(value)) throw new Error("Invalid native process evidence.");
           if (value.event === "phase") {
-            if (typeof value.phase !== "string" || !phases.has(value.phase))
+            if (typeof value.phase !== "string" || !phases2.has(value.phase))
               throw new Error("Invalid native process phase.");
             context.onPhase?.(value.phase);
           } else if (value.event === "error") failure2(nativeFailure(value));
@@ -4565,6 +5054,28 @@ function abortable(pending, signal) {
     );
   });
 }
+async function observeNativeCommand(command, execute, executable, args) {
+  const finish = beginFixtureStage("native-command", { command });
+  try {
+    const result = await execute(executable, args);
+    finish("succeeded", { exitCode: result.code, stderrPresent: result.stderr.length > 0 });
+    return result;
+  } catch (error2) {
+    finish("failed", {}, error2);
+    throw error2;
+  }
+}
+async function observeNativeFile(command, job) {
+  const finish = beginFixtureStage("native-file", { command });
+  try {
+    const result = await job();
+    finish("succeeded");
+    return result;
+  } catch (error2) {
+    finish("failed", {}, error2);
+    throw error2;
+  }
+}
 async function run(executable, arguments_) {
   return new Promise((resolve, reject) => {
     const child = spawn2(executable, arguments_, {
@@ -4588,7 +5099,7 @@ async function windowsHelper(action, fields3) {
   const helper = fileURLToPath2(new URL("./windows-cdp-helper.ps1", import.meta.url));
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helper, "-Action", action];
   for (const [name, value] of Object.entries(fields3)) if (value !== void 0) args.push(`-${name}`, String(value));
-  const result = await run("powershell.exe", args);
+  const result = await observeNativeCommand("powershell", run, "powershell.exe", args);
   let output;
   try {
     output = JSON.parse(result.stdout.trim());
@@ -4657,8 +5168,15 @@ async function resolveUnixExecutable({
     return { dev: evidence.dev, ino: evidence.ino, regularFile: evidence.isFile() };
   }
 }) {
-  if (platform === "linux") return link(`/proc/${pid}/exe`);
-  const result = await execute("lsof", ["-a", "-p", String(pid), "-d", "txt", "-FfDin"]);
+  if (platform === "linux") return observeNativeFile("proc-exe", () => link(`/proc/${pid}/exe`));
+  const result = await observeNativeCommand("lsof", execute, "lsof", [
+    "-a",
+    "-p",
+    String(pid),
+    "-d",
+    "txt",
+    "-FfDin"
+  ]);
   if (result.code !== 0 || result.stderr.trim()) throw new Error("The Darwin executable path is unverifiable.");
   const candidates = [
     ...new Set(
@@ -4694,16 +5212,23 @@ async function resolveUnixExecutable({
       }
     }
     try {
-      const identity = await fileIdentity(comm);
+      const identity = await observeNativeFile("executable-stat", () => fileIdentity(comm));
       const aliases = new Set(
         mappings.filter(
           (file) => identity.regularFile && identity.dev > 0n && identity.ino > 0n && file.valid && file.pid === pid && file.dev === identity.dev && file.ino === identity.ino && file.name !== void 0 && path2.posix.basename(file.name) === path2.posix.basename(comm)
         ).map((file) => file.name)
       );
+      emitFixtureEvent("native-file", "decision", { command: "executable-stat", valid: aliases.size === 1, pid });
       if (aliases.size === 1) return comm;
     } catch {
     }
   }
+  emitFixtureEvent("native-file", "decision", {
+    command: "lsof",
+    valid: matches.length === 1 && executable !== void 0,
+    pid,
+    count: matches.length
+  });
   if (matches.length !== 1 || executable === void 0) {
     const error2 = new DetailedError("The Darwin executable path is unverifiable or ambiguous.");
     error2.details = {
@@ -4720,28 +5245,50 @@ async function resolveUnixExecutable({
 }
 async function linuxCreationTime(pid, execute, readText) {
   const [stat2, boot, clock] = await Promise.all([
-    readText(`/proc/${pid}/stat`),
-    readText("/proc/stat"),
-    execute("getconf", ["CLK_TCK"])
+    observeNativeFile("proc-stat", () => readText(`/proc/${pid}/stat`)),
+    observeNativeFile("proc-boot", () => readText("/proc/stat")),
+    observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"])
   ]);
   const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
-  const ticks = processStat?.[2]?.split(/\s+/)[19];
+  const processFields = processStat?.[2]?.split(/\s+/);
+  const ticks = processFields?.[19];
   const bootTimes = [...boot.matchAll(/^btime (\d+)$/gm)];
   const clockText = clock.stdout.trim();
   const startTicks = Number(ticks);
   const bootSeconds = Number(bootTimes[0]?.[1]);
   const ticksPerSecond = Number(clockText);
   if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
+    emitFixtureEvent("native-file", "decision", { command: "proc-stat", pid, valid: false });
     throw new Error("The Linux process creation evidence is unverifiable.");
   }
   const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
   if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
+  if (fixtureHasSubscribers()) {
+    const states = {
+      R: "running",
+      S: "sleeping",
+      D: "disk-sleep",
+      T: "stopped",
+      t: "tracing-stop",
+      X: "dead",
+      Z: "zombie",
+      P: "parked",
+      I: "idle"
+    };
+    const state = processFields?.[0];
+    emitFixtureEvent("native-file", "decision", {
+      command: "proc-stat",
+      pid,
+      valid: true,
+      rootProcessState: state !== void 0 && Object.hasOwn(states, state) ? states[state] ?? "unknown" : "unknown"
+    });
+  }
   return started.toISOString();
 }
 async function unixSnapshot(pid, port, dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
   const execute = dependencies.run ?? run;
-  const processes = await execute("ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
+  const processes = await observeNativeCommand("ps", execute, "ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
   if (processes.code !== 0) throw new Error("Cannot inspect target processes.");
   const rows = processes.stdout.split(/\r?\n/).flatMap((line) => {
     const match = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.{24})\s+(.+)$/);
@@ -4770,7 +5317,12 @@ async function unixSnapshot(pid, port, dependencies = {}) {
       }
     }
   }
-  const result = await execute("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fpn"]);
+  const result = await observeNativeCommand("lsof", execute, "lsof", [
+    "-nP",
+    `-iTCP:${port}`,
+    "-sTCP:LISTEN",
+    "-Fpn"
+  ]);
   if (result.code === null || ![0, 1].includes(result.code) || result.stderr.trim())
     throw new Error("Cannot verify CDP listener ownership (lsof required).");
   const listeners = [];
@@ -4849,6 +5401,12 @@ function createPlatformAdapter(dependencies = {}) {
       }
       return { ...result, listenerState };
     } catch (cause) {
+      emitFixtureEvent(
+        "native-close",
+        "decision",
+        { phase: "normal-close", outcome: "failed", pid: target.processId, port: target.port },
+        cause
+      );
       const error2 = new DetailedError(errorMessage(cause));
       error2.details = { ...errorDetails(cause), listenerState, processExited: false };
       throw error2;
@@ -4881,7 +5439,13 @@ function createPlatformAdapter(dependencies = {}) {
       if (process.platform === "darwin") return [];
       const ranges = [];
       for (const family of ["ipv4", "ipv6"]) {
-        const result = await run("netsh.exe", ["int", family, "show", "excludedportrange", "protocol=tcp"]);
+        const result = await observeNativeCommand("netsh", run, "netsh.exe", [
+          "int",
+          family,
+          "show",
+          "excludedportrange",
+          "protocol=tcp"
+        ]);
         if (result.code !== 0) throw new Error("Windows excluded ports could not be read.");
         for (const match of result.stdout.matchAll(/^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$/gm))
           ranges.push([Number(match[1]), Number(match[2])]);
@@ -4909,30 +5473,58 @@ function probeProcessExists(pid) {
 
 // src/adapters/chrome-profile.ts
 var claims = /* @__PURE__ */ new Set();
-async function profileAvailable(directory) {
-  if (process.platform === "win32") {
+async function profileAvailable(directory, dependencies = {}) {
+  const decision = (available, reason, pid2) => {
+    emitFixtureEvent("profile-check", "decision", {
+      available,
+      reason,
+      ...pid2 === void 0 ? {} : { pid: pid2 }
+    });
+    return available;
+  };
+  if ((dependencies.platform ?? process.platform) === "win32") {
+    const finish = beginFixtureStage("profile-check");
     try {
-      const handle = await open(path3.join(directory, "lockfile"), "r+");
+      const handle = await (dependencies.openLock ?? ((file) => open(file, "r+")))(
+        path3.join(directory, "lockfile")
+      );
       await handle.close();
-      return true;
+      finish("succeeded");
+      return decision(true, "lock-accessible");
     } catch (error2) {
-      if (errorCode(error2) === "ENOENT") return true;
-      if (["EACCES", "EPERM", "EBUSY"].includes(errorCode(error2) ?? "")) return false;
+      finish("failed", {}, error2);
+      if (errorCode(error2) === "ENOENT") return decision(true, "missing-lock");
+      if (["EACCES", "EPERM", "EBUSY"].includes(errorCode(error2) ?? "")) return decision(false, "lock-refused");
+      emitFixtureEvent("profile-check", "decision", { reason: "lock-access-failed", outcome: "failed" }, error2);
       throw error2;
     }
   }
   let lock;
+  const finishLock = beginFixtureStage("profile-check");
   try {
-    lock = await readlink2(path3.join(directory, "SingletonLock"));
+    lock = await (dependencies.readlink ?? readlink2)(path3.join(directory, "SingletonLock"));
+    finishLock("succeeded");
   } catch (error2) {
-    if (errorCode(error2) === "ENOENT") return true;
+    finishLock("failed", {}, error2);
+    if (errorCode(error2) === "ENOENT") return decision(true, "missing-lock");
+    emitFixtureEvent("profile-check", "decision", { reason: "lock-access-failed", outcome: "failed" }, error2);
     throw error2;
   }
   const split = lock.lastIndexOf("-");
+  if (split < 1) return decision(false, "invalid-lock");
   const host = lock.slice(0, split);
   const pid = Number(lock.slice(split + 1));
-  if (host !== os.hostname() || !Number.isSafeInteger(pid) || pid < 1) return false;
-  return !probeProcessExists(pid);
+  if (!Number.isSafeInteger(pid) || pid < 1) return decision(false, "invalid-lock");
+  if (host !== (dependencies.hostname ?? os.hostname)()) return decision(false, "foreign-host", pid);
+  const finishProbe = beginFixtureStage("profile-check", { pid });
+  try {
+    const exists = (dependencies.probeProcessExists ?? probeProcessExists)(pid);
+    finishProbe("succeeded");
+    return decision(!exists, exists ? "live-lock-owner" : "process-absent", pid);
+  } catch (error2) {
+    finishProbe("failed", { reason: "process-probe-failed" }, error2);
+    throw error2;
+  }
 }
 async function canonicalDirectory(directory) {
   try {
@@ -4953,7 +5545,10 @@ async function reserveProfile(directory, available = profileAvailable) {
     throw occupied();
   }
   const identity = process.platform === "win32" ? canonical2.toLowerCase() : canonical2;
-  if (claims.has(identity)) throw occupied();
+  if (claims.has(identity)) {
+    emitFixtureEvent("profile-check", "decision", { reason: "profile-claimed", available: false });
+    throw occupied();
+  }
   claims.add(identity);
   let released = false;
   const release = () => {
@@ -4964,7 +5559,8 @@ async function reserveProfile(directory, available = profileAvailable) {
   };
   try {
     if (!await available(canonical2)) throw occupied();
-  } catch {
+  } catch (error2) {
+    emitFixtureEvent("profile-check", "decision", { outcome: "failed" }, error2);
     release();
     throw occupied();
   }
@@ -5014,8 +5610,8 @@ function parseDataIsolation(value) {
 var DataDirectoryError = class extends Error {
   code;
   lease;
-  constructor(code, lease) {
-    super(code);
+  constructor(code, lease, cause) {
+    super(code, cause === void 0 ? void 0 : { cause });
     this.code = code;
     this.lease = lease;
   }
@@ -5039,8 +5635,21 @@ function filesystemFailure(error2, fallback) {
   if (error2 instanceof DataDirectoryError) return error2;
   const code = errorCode(error2);
   return new DataDirectoryError(
-    code === "ENOENT" ? "directory-missing" : code === "EEXIST" ? "directory-exists" : code === "ENOTDIR" ? "directory-not-directory" : fallback
+    code === "ENOENT" ? "directory-missing" : code === "EEXIST" ? "directory-exists" : code === "ENOTDIR" ? "directory-not-directory" : fallback,
+    void 0,
+    error2
   );
+}
+async function observeDirectory(stage, phase, job) {
+  const finish = beginFixtureStage(stage, { phase });
+  try {
+    const result = await job();
+    finish("succeeded");
+    return result;
+  } catch (error2) {
+    finish("failed", {}, error2);
+    throw error2;
+  }
 }
 var DataDirectoryRegistry = class {
   platform;
@@ -5062,7 +5671,17 @@ var DataDirectoryRegistry = class {
     };
   }
   acquire(selection, cleanup, onAcquired) {
-    const acquisition = this.acquisition.then(() => this.acquireDirectory(selection, cleanup, onAcquired));
+    const origin = captureFixtureOrigin({ sessionId: void 0 });
+    const acquisition = this.acquisition.then(
+      () => runFixtureResource(
+        origin,
+        () => observeDirectory(
+          "data-directory-acquire",
+          "acquiring-data-directory",
+          () => this.acquireDirectory(selection, cleanup, onAcquired)
+        )
+      )
+    );
     this.acquisition = acquisition.catch(() => void 0);
     return acquisition;
   }
@@ -5077,37 +5696,51 @@ var DataDirectoryRegistry = class {
     return child === ancestor || child.startsWith(ancestor.endsWith(separator) ? ancestor : `${ancestor}${separator}`);
   }
   available(directory, descendants = true) {
-    const key = this.key(directory);
-    for (const claimed of this.claims.values()) {
-      if (this.ancestor(claimed.key, key) || descendants && this.ancestor(key, claimed.key)) {
-        throw new DataDirectoryError("directory-overlap");
+    const finish = beginFixtureStage("data-directory-acquire", { phase: "overlap" });
+    try {
+      const key = this.key(directory);
+      for (const claimed of this.claims.values()) {
+        if (this.ancestor(claimed.key, key) || descendants && this.ancestor(key, claimed.key)) {
+          throw new DataDirectoryError("directory-overlap");
+        }
       }
+      finish("succeeded");
+    } catch (error2) {
+      finish("rejected", {}, error2);
+      throw error2;
     }
   }
-  async locations(directory, root) {
+  async locations(directory, root, stage = "data-directory-acquire") {
     const native = this.platform === "win32" ? path4.win32 : path4.posix;
     const locations = [];
-    let current = directory;
+    let current2 = directory;
     try {
       for (; ; ) {
-        const identity = current === directory && root !== void 0 ? root : await this.io.inspect(current);
+        const identity = current2 === directory && root !== void 0 ? root : await observeDirectory(stage, "inspect", () => this.io.inspect(current2));
         if (!identity.isDirectory() || identity.isSymbolicLink())
           throw new DataDirectoryError("directory-inspection-failed");
-        locations.push({ path: current, identity: { dev: identity.dev, ino: identity.ino } });
-        const parent = native.dirname(current);
-        if (parent === current) break;
-        current = parent;
+        locations.push({ path: current2, identity: { dev: identity.dev, ino: identity.ino } });
+        const parent = native.dirname(current2);
+        if (parent === current2) break;
+        current2 = parent;
       }
       const captured = locations[0];
-      const confirmed = await this.io.inspect(directory);
+      const confirmed = await observeDirectory(stage, "inspect", () => this.io.inspect(directory));
       if (!captured || !confirmed.isDirectory() || confirmed.isSymbolicLink() || !sameDirectory(confirmed, captured.identity))
         throw new DataDirectoryError("directory-inspection-failed");
       return locations;
-    } catch {
-      throw new DataDirectoryError("directory-inspection-failed");
+    } catch (error2) {
+      throw new DataDirectoryError("directory-inspection-failed", void 0, error2);
     }
   }
-  async availableObjects(locations, descendants = true, excluded) {
+  availableObjects(locations, descendants = true, excluded, stage = "data-directory-acquire") {
+    return observeDirectory(
+      stage,
+      "overlap",
+      () => this.verifyAvailableObjects(locations, descendants, excluded, stage)
+    );
+  }
+  async verifyAvailableObjects(locations, descendants, excluded, stage) {
     const root = locations[0];
     if (!root) throw new DataDirectoryError("directory-inspection-failed");
     for (const claimed of this.claims.values()) {
@@ -5117,12 +5750,12 @@ var DataDirectoryRegistry = class {
       if (!held || !heldRoot) throw new DataDirectoryError("directory-inspection-failed");
       try {
         for (const location of [...held].reverse()) {
-          const current = await this.io.inspect(location.path);
-          if (!current.isDirectory() || current.isSymbolicLink() || !sameDirectory(current, location.identity))
+          const current2 = await observeDirectory(stage, "inspect", () => this.io.inspect(location.path));
+          if (!current2.isDirectory() || current2.isSymbolicLink() || !sameDirectory(current2, location.identity))
             throw new DataDirectoryError("directory-inspection-failed");
         }
-      } catch {
-        throw new DataDirectoryError("directory-inspection-failed");
+      } catch (error2) {
+        throw new DataDirectoryError("directory-inspection-failed", void 0, error2);
       }
       if (sameDirectory(root.identity, heldRoot.identity) || locations.slice(1).some((location) => sameDirectory(location.identity, heldRoot.identity)) || descendants && held.slice(1).some((location) => sameDirectory(location.identity, root.identity))) {
         throw new DataDirectoryError("directory-overlap");
@@ -5142,10 +5775,14 @@ var DataDirectoryRegistry = class {
     if (!isAbsoluteDataDirectory(requested, this.platform)) throw new DataDirectoryError("directory-invalid");
     let actual;
     try {
-      actual = await this.io.canonical(requested);
+      actual = await observeDirectory("data-directory-acquire", "canonical", () => this.io.canonical(requested));
       if (!isAbsoluteDataDirectory(actual, this.platform)) throw new DataDirectoryError("directory-invalid");
       if (selected.kind === "new") {
-        const parent = await this.io.inspect(actual);
+        const parent = await observeDirectory(
+          "data-directory-acquire",
+          "inspect",
+          () => this.io.inspect(actual)
+        );
         if (!parent.isDirectory() || parent.isSymbolicLink())
           throw new DataDirectoryError("directory-not-directory");
         if (this.claims.size > 0) await this.availableObjects(await this.locations(actual, parent), false);
@@ -5153,10 +5790,14 @@ var DataDirectoryRegistry = class {
         if (selected.name !== void 0) {
           actual = native.join(actual, selected.name);
           this.available(actual);
-          await this.io.create(actual);
+          await observeDirectory("data-directory-acquire", "create", () => this.io.create(actual));
         } else {
           this.available(actual, false);
-          actual = await this.io.createRandom(native.join(actual, "dct-"));
+          actual = await observeDirectory(
+            "data-directory-acquire",
+            "create",
+            () => this.io.createRandom(native.join(actual, "dct-"))
+          );
         }
       } else {
         this.available(actual);
@@ -5188,6 +5829,7 @@ var DataDirectoryRegistry = class {
     const removeClaim = () => {
       if (this.claims.get(generation) === claim2) this.claims.delete(generation);
     };
+    const origin = captureFixtureOrigin({ sessionId: void 0 });
     const dispose = async () => {
       await inspectionFinished;
       if (state === "retained" || state === "deleted") return evidence();
@@ -5197,21 +5839,32 @@ var DataDirectoryRegistry = class {
         return evidence();
       }
       try {
-        if (this.claims.get(generation) !== claim2 || identity === void 0)
-          throw new DataDirectoryError("directory-identity-changed", lease);
-        const current = await this.io.inspect(actual);
-        if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) {
-          throw new DataDirectoryError("directory-identity-changed", lease);
-        }
+        const current2 = await observeDirectory("data-directory-cleanup", "identity", async () => {
+          if (this.claims.get(generation) !== claim2 || identity === void 0)
+            throw new DataDirectoryError("directory-identity-changed", lease);
+          const current3 = await observeDirectory(
+            "data-directory-cleanup",
+            "inspect",
+            () => this.io.inspect(actual)
+          );
+          if (!current3.isDirectory() || current3.isSymbolicLink() || current3.dev !== identity.dev || current3.ino !== identity.ino)
+            throw new DataDirectoryError("directory-identity-changed", lease);
+          return current3;
+        });
         if (this.claims.size > 1)
-          await this.availableObjects(await this.locations(actual, current), true, claim2);
-        await this.io.remove(actual);
+          await this.availableObjects(
+            await this.locations(actual, current2, "data-directory-cleanup"),
+            true,
+            claim2,
+            "data-directory-cleanup"
+          );
+        await observeDirectory("data-directory-cleanup", "remove", () => this.io.remove(actual));
         state = "deleted";
         removeClaim();
         return evidence();
       } catch (error2) {
         state = "cleanup-failed";
-        throw error2 instanceof DataDirectoryError ? error2 : new DataDirectoryError("directory-cleanup-failed", lease);
+        throw error2 instanceof DataDirectoryError ? error2 : new DataDirectoryError("directory-cleanup-failed", lease, error2);
       }
     };
     const lease = {
@@ -5220,7 +5873,10 @@ var DataDirectoryRegistry = class {
       },
       release: () => {
         if (pendingRelease) return pendingRelease;
-        const release = dispose();
+        const release = runFixtureResource(
+          origin,
+          () => observeDirectory("data-directory-release", "resource-cleanup", dispose)
+        );
         pendingRelease = release;
         void release.then(
           () => {
@@ -5236,7 +5892,7 @@ var DataDirectoryRegistry = class {
     try {
       onAcquired?.(lease);
       if (overlap) throw new DataDirectoryError("directory-overlap", lease);
-      const root = await this.io.inspect(actual);
+      const root = await observeDirectory("data-directory-acquire", "inspect", () => this.io.inspect(actual));
       if (!root.isDirectory() || root.isSymbolicLink()) {
         if (selected.kind === "existing") removeClaim();
         throw new DataDirectoryError("directory-not-directory", selected.kind === "new" ? lease : void 0);
@@ -5244,14 +5900,14 @@ var DataDirectoryRegistry = class {
       identity = root;
       claim2.locations = await this.locations(actual, root);
       await this.availableObjects(claim2.locations, true, claim2);
-      nonempty = (await this.io.entries(actual)).length > 0;
+      nonempty = (await observeDirectory("data-directory-acquire", "entries", () => this.io.entries(actual))).length > 0;
       return lease;
     } catch (error2) {
       state = "cleanup-failed";
       if (error2 instanceof DataDirectoryError && error2.code === "directory-overlap")
-        throw new DataDirectoryError("directory-overlap", lease);
+        throw new DataDirectoryError("directory-overlap", lease, error2);
       if (error2 instanceof DataDirectoryError && error2.code === "directory-not-directory") throw error2;
-      throw new DataDirectoryError("directory-inspection-failed", lease);
+      throw new DataDirectoryError("directory-inspection-failed", lease, error2);
     } finally {
       finishInspection();
     }
@@ -9957,11 +10613,11 @@ function compactTypeUnion(schema) {
     if (keys2.length !== 1 || keys2[0] !== "type")
       return;
     const type = option.type;
-    for (const member of Array.isArray(type) ? type : [type]) {
-      if (typeof member !== "string")
+    for (const member2 of Array.isArray(type) ? type : [type]) {
+      if (typeof member2 !== "string")
         return;
-      if (!types.includes(member))
-        types.push(member);
+      if (!types.includes(member2))
+        types.push(member2);
     }
   }
   delete schema.anyOf;
@@ -9969,22 +10625,22 @@ function compactTypeUnion(schema) {
 }
 var FOLDABLE_KEYS = /* @__PURE__ */ new Set(["type", "properties", "required", "additionalProperties"]);
 var UNION_KEYS = ["oneOf", "anyOf"];
-function undeclaredConstraint(member) {
-  const extra = member.additionalProperties;
+function undeclaredConstraint(member2) {
+  const extra = member2.additionalProperties;
   if (extra === void 0 || extra === false || typeof extra !== "object" || extra === null)
     return null;
   return Object.keys(extra).length ? extra : null;
 }
 function foldObjects(members2) {
   const objects = [];
-  for (const member of members2) {
-    if (typeof member !== "object" || member.type !== "object")
+  for (const member2 of members2) {
+    if (typeof member2 !== "object" || member2.type !== "object")
       return null;
-    for (const key in member) {
+    for (const key in member2) {
       if (!FOLDABLE_KEYS.has(key))
         return null;
     }
-    objects.push(member);
+    objects.push(member2);
   }
   const properties = {};
   const required2 = /* @__PURE__ */ new Set();
@@ -10793,12 +11449,12 @@ function rewriteKeyNames(ctx) {
   const rewrites = /* @__PURE__ */ new Map();
   for (const record2 of pendingRecords.get(ctx) ?? []) {
     const seen = ctx.seen.get(record2);
-    const names = (seen?.def ?? seen?.schema)?.propertyNames;
-    if (!names || names === true || rewrites.has(names))
+    const names2 = (seen?.def ?? seen?.schema)?.propertyNames;
+    if (!names2 || names2 === true || rewrites.has(names2))
       continue;
-    const rewritten = stringifyKeyNames(bySchema, names, /* @__PURE__ */ new Set());
-    if (rewritten !== names)
-      rewrites.set(names, rewritten);
+    const rewritten = stringifyKeyNames(bySchema, names2, /* @__PURE__ */ new Set());
+    if (rewritten !== names2)
+      rewrites.set(names2, rewritten);
   }
   if (!rewrites.size)
     return;
@@ -13153,11 +13809,11 @@ var OAuthTokenRevocationRequestSchema = object({
 var BRANDS = /* @__PURE__ */ Symbol.for("mcp.sdk.errorBrands");
 function stampErrorBrands(instance, ctor) {
   const brands = /* @__PURE__ */ new Set();
-  let current = ctor;
-  while (typeof current === "function") {
-    const brand = current.mcpBrand;
-    if (Object.prototype.hasOwnProperty.call(current, "mcpBrand") && typeof brand === "string") brands.add(brand);
-    current = Object.getPrototypeOf(current);
+  let current2 = ctor;
+  while (typeof current2 === "function") {
+    const brand = current2.mcpBrand;
+    if (Object.prototype.hasOwnProperty.call(current2, "mcpBrand") && typeof brand === "string") brands.add(brand);
+    current2 = Object.getPrototypeOf(current2);
   }
   if (brands.size === 0) return;
   Object.defineProperty(instance, BRANDS, {
@@ -17619,8 +18275,8 @@ function partitionInputResponses(inputResponses) {
     droppedKeys
   };
 }
-function relatedMessagingUnavailable(member) {
-  throw new SdkError(SdkErrorCode.SendFailed, `ctx.mcpReq.${member} is not available while fulfilling an embedded input request: the request is fulfilled locally and has no related peer request`);
+function relatedMessagingUnavailable(member2) {
+  throw new SdkError(SdkErrorCode.SendFailed, `ctx.mcpReq.${member2} is not available while fulfilling an embedded input request: the request is fulfilled locally and has no related peer request`);
 }
 function synthesizeInputRequestContext(key, method, params, signal, sessionId) {
   return {
@@ -17836,9 +18492,9 @@ var require_code$1 = /* @__PURE__ */ __commonJSMin(((exports) => {
     }
     get names() {
       var _a3;
-      return (_a3 = this._names) !== null && _a3 !== void 0 ? _a3 : this._names = this._items.reduce((names, c) => {
-        if (c instanceof Name) names[c.str] = (names[c.str] || 0) + 1;
-        return names;
+      return (_a3 = this._names) !== null && _a3 !== void 0 ? _a3 : this._names = this._items.reduce((names2, c) => {
+        if (c instanceof Name) names2[c.str] = (names2[c.str] || 0) + 1;
+        return names2;
       }, {});
     }
   };
@@ -18173,9 +18829,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
       return `${varKind} ${this.name}${rhs};` + _n;
     }
-    optimizeNames(names, constants2) {
-      if (!names[this.name.str]) return;
-      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (!names2[this.name.str]) return;
+      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names2, constants2);
       return this;
     }
     get names() {
@@ -18192,9 +18848,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     render({ _n }) {
       return `${this.lhs} = ${this.rhs};` + _n;
     }
-    optimizeNames(names, constants2) {
-      if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects) return;
-      this.rhs = optimizeExpr(this.rhs, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (this.lhs instanceof code_1.Name && !names2[this.lhs.str] && !this.sideEffects) return;
+      this.rhs = optimizeExpr(this.rhs, names2, constants2);
       return this;
     }
     get names() {
@@ -18253,8 +18909,8 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     optimizeNodes() {
       return `${this.code}` ? this : void 0;
     }
-    optimizeNames(names, constants2) {
-      this.code = optimizeExpr(this.code, names, constants2);
+    optimizeNames(names2, constants2) {
+      this.code = optimizeExpr(this.code, names2, constants2);
       return this;
     }
     get names() {
@@ -18280,19 +18936,19 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       }
       return nodes.length > 0 ? this : void 0;
     }
-    optimizeNames(names, constants2) {
+    optimizeNames(names2, constants2) {
       const { nodes } = this;
       let i = nodes.length;
       while (i--) {
         const n = nodes[i];
-        if (n.optimizeNames(names, constants2)) continue;
-        subtractNames(names, n.names);
+        if (n.optimizeNames(names2, constants2)) continue;
+        subtractNames(names2, n.names);
         nodes.splice(i, 1);
       }
       return nodes.length > 0 ? this : void 0;
     }
     get names() {
-      return this.nodes.reduce((names, n) => addNames(names, n.names), {});
+      return this.nodes.reduce((names2, n) => addNames(names2, n.names), {});
     }
   };
   var BlockNode = class extends ParentNode {
@@ -18332,18 +18988,18 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       if (cond === false || !this.nodes.length) return void 0;
       return this;
     }
-    optimizeNames(names, constants2) {
+    optimizeNames(names2, constants2) {
       var _a3;
-      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-      if (!(super.optimizeNames(names, constants2) || this.else)) return;
-      this.condition = optimizeExpr(this.condition, names, constants2);
+      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names2, constants2);
+      if (!(super.optimizeNames(names2, constants2) || this.else)) return;
+      this.condition = optimizeExpr(this.condition, names2, constants2);
       return this;
     }
     get names() {
-      const names = super.names;
-      addExprNames(names, this.condition);
-      if (this.else) addNames(names, this.else.names);
-      return names;
+      const names2 = super.names;
+      addExprNames(names2, this.condition);
+      if (this.else) addNames(names2, this.else.names);
+      return names2;
     }
   };
   If.kind = "if";
@@ -18358,9 +19014,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     render(opts) {
       return `for(${this.iteration})` + super.render(opts);
     }
-    optimizeNames(names, constants2) {
-      if (!super.optimizeNames(names, constants2)) return;
-      this.iteration = optimizeExpr(this.iteration, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (!super.optimizeNames(names2, constants2)) return;
+      this.iteration = optimizeExpr(this.iteration, names2, constants2);
       return this;
     }
     get names() {
@@ -18395,9 +19051,9 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     render(opts) {
       return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
     }
-    optimizeNames(names, constants2) {
-      if (!super.optimizeNames(names, constants2)) return;
-      this.iterable = optimizeExpr(this.iterable, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (!super.optimizeNames(names2, constants2)) return;
+      this.iterable = optimizeExpr(this.iterable, names2, constants2);
       return this;
     }
     get names() {
@@ -18436,18 +19092,18 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
       (_b = this.finally) === null || _b === void 0 || _b.optimizeNodes();
       return this;
     }
-    optimizeNames(names, constants2) {
+    optimizeNames(names2, constants2) {
       var _a3, _b;
-      super.optimizeNames(names, constants2);
-      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names, constants2);
-      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants2);
+      super.optimizeNames(names2, constants2);
+      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names2, constants2);
+      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names2, constants2);
       return this;
     }
     get names() {
-      const names = super.names;
-      if (this.catch) addNames(names, this.catch.names);
-      if (this.finally) addNames(names, this.finally.names);
-      return names;
+      const names2 = super.names;
+      if (this.catch) addNames(names2, this.catch.names);
+      if (this.finally) addNames(names2, this.finally.names);
+      return names2;
     }
   };
   var Catch = class extends BlockNode {
@@ -18682,14 +19338,14 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     }
   };
   exports.CodeGen = CodeGen;
-  function addNames(names, from) {
-    for (const n in from) names[n] = (names[n] || 0) + (from[n] || 0);
-    return names;
+  function addNames(names2, from) {
+    for (const n in from) names2[n] = (names2[n] || 0) + (from[n] || 0);
+    return names2;
   }
-  function addExprNames(names, from) {
-    return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
+  function addExprNames(names2, from) {
+    return from instanceof code_1._CodeOrName ? addNames(names2, from.names) : names2;
   }
-  function optimizeExpr(expr, names, constants2) {
+  function optimizeExpr(expr, names2, constants2) {
     if (expr instanceof code_1.Name) return replaceName(expr);
     if (!canOptimize(expr)) return expr;
     return new code_1._Code(expr._items.reduce((items, c) => {
@@ -18700,16 +19356,16 @@ var require_codegen = /* @__PURE__ */ __commonJSMin(((exports) => {
     }, []));
     function replaceName(n) {
       const c = constants2[n.str];
-      if (c === void 0 || names[n.str] !== 1) return n;
-      delete names[n.str];
+      if (c === void 0 || names2[n.str] !== 1) return n;
+      delete names2[n.str];
       return c;
     }
     function canOptimize(e) {
-      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
+      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names2[c.str] === 1 && constants2[c.str] !== void 0);
     }
   }
-  function subtractNames(names, from) {
-    for (const n in from) names[n] = (names[n] || 0) - (from[n] || 0);
+  function subtractNames(names2, from) {
+    for (const n in from) names2[n] = (names2[n] || 0) - (from[n] || 0);
   }
   function not(x) {
     return typeof x == "boolean" || typeof x == "number" || x === null ? !x : (0, code_1._)`!${par(x)}`;
@@ -18874,7 +19530,7 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 var require_names = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   const codegen_1 = require_codegen();
-  const names = {
+  const names2 = {
     data: new codegen_1.Name("data"),
     valCxt: new codegen_1.Name("valCxt"),
     instancePath: new codegen_1.Name("instancePath"),
@@ -18892,7 +19548,7 @@ var require_names = /* @__PURE__ */ __commonJSMin(((exports) => {
     jsonLen: new codegen_1.Name("jsonLen"),
     jsonPart: new codegen_1.Name("jsonPart")
   };
-  exports.default = names;
+  exports.default = names2;
 }));
 var require_errors = /* @__PURE__ */ __commonJSMin(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
@@ -25176,8 +25832,8 @@ var ClientResponseCache = class {
   */
   async evictKey(method, params) {
     const gk = genKey(method, params);
-    const current = this._evictionGeneration.get(gk);
-    if (current !== void 0) this._evictionGeneration.set(gk, current + 1);
+    const current2 = this._evictionGeneration.get(gk);
+    if (current2 !== void 0) this._evictionGeneration.set(gk, current2 + 1);
     await this._deleteBoth(method, params);
   }
   /**
@@ -25190,9 +25846,9 @@ var ClientResponseCache = class {
   */
   captureGeneration(method, params) {
     const gk = genKey(method, params);
-    const current = this._evictionGeneration.get(gk) ?? 0;
-    this._evictionGeneration.set(gk, current);
-    return current;
+    const current2 = this._evictionGeneration.get(gk) ?? 0;
+    this._evictionGeneration.set(gk, current2);
+    return current2;
   }
   /**
   * Write `value` under `{method}` unless the per-method generation moved
@@ -27402,8 +28058,8 @@ init_define_DCT_TOOL_CATALOG();
 function demand(condition, message) {
   if (!condition) throw new Error(`Invalid official release: ${message}`);
 }
-function fields(value, names) {
-  demand(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), "evidence fields.");
+function fields(value, names2) {
+  demand(isRecord(value) && Object.keys(value).sort().join() === [...names2].sort().join(), "evidence fields.");
 }
 function isOfficialRelativePath(value) {
   return typeof value === "string" && value.length > 0 && value.split("/").every(
@@ -27558,10 +28214,10 @@ async function verifyOfficialPackage(directory, input, options = {}) {
       (bin) => ["", ".cmd", ".ps1"].map((suffix) => `node_modules/.bin/${bin}${suffix}`)
     )
   );
-  async function visit(current, prefix = "") {
-    for (const name of await readdir2(current)) {
+  async function visit(current2, prefix = "") {
+    for (const name of await readdir2(current2)) {
       const relative = `${prefix}${name}`;
-      const absolute = path5.join(current, name);
+      const absolute = path5.join(current2, name);
       const stat2 = await lstat3(absolute);
       if (stat2.isSymbolicLink()) throw new Error(`Official package contains a link: ${relative}`);
       if (path5.relative(canonical2, await realpath3(absolute)).replaceAll("\\", "/") !== relative)
@@ -27972,11 +28628,11 @@ function declaredDialect2(schema, remedy) {
 var BRANDS2 = /* @__PURE__ */ Symbol.for("mcp.sdk.errorBrands");
 function stampErrorBrands2(instance, ctor) {
   const brands = /* @__PURE__ */ new Set();
-  let current = ctor;
-  while (typeof current === "function") {
-    const brand = current.mcpBrand;
-    if (Object.prototype.hasOwnProperty.call(current, "mcpBrand") && typeof brand === "string") brands.add(brand);
-    current = Object.getPrototypeOf(current);
+  let current2 = ctor;
+  while (typeof current2 === "function") {
+    const brand = current2.mcpBrand;
+    if (Object.prototype.hasOwnProperty.call(current2, "mcpBrand") && typeof brand === "string") brands.add(brand);
+    current2 = Object.getPrototypeOf(current2);
   }
   if (brands.size === 0) return;
   Object.defineProperty(instance, BRANDS2, {
@@ -28121,8 +28777,8 @@ var SdkHttpError2 = class extends SdkError2 {
 function isPlainObject$7(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-function isImpliedCapabilityMember(capability, member, declaredValue) {
-  return capability === "elicitation" && member === "form" && declaredValue["form"] === void 0 && declaredValue["url"] === void 0;
+function isImpliedCapabilityMember(capability, member2, declaredValue) {
+  return capability === "elicitation" && member2 === "form" && declaredValue["form"] === void 0 && declaredValue["url"] === void 0;
 }
 function requiredClientCapabilitiesForInputRequest(entry) {
   switch (entry.method) {
@@ -28151,7 +28807,7 @@ function missingClientCapabilities(required2, declared) {
     }
     if (isPlainObject$7(requirement) && isPlainObject$7(declaredValue)) {
       const missingMembers = {};
-      for (const [member, memberRequirement] of Object.entries(requirement)) if (memberRequirement !== void 0 && declaredValue[member] === void 0 && !isImpliedCapabilityMember(capability, member, declaredValue)) missingMembers[member] = memberRequirement;
+      for (const [member2, memberRequirement] of Object.entries(requirement)) if (memberRequirement !== void 0 && declaredValue[member2] === void 0 && !isImpliedCapabilityMember(capability, member2, declaredValue)) missingMembers[member2] = memberRequirement;
       if (Object.keys(missingMembers).length > 0) missing[capability] = missingMembers;
     }
   }
@@ -32441,9 +33097,9 @@ var require_code$12 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     }
     get names() {
       var _a3;
-      return (_a3 = this._names) !== null && _a3 !== void 0 ? _a3 : this._names = this._items.reduce((names, c) => {
-        if (c instanceof Name) names[c.str] = (names[c.str] || 0) + 1;
-        return names;
+      return (_a3 = this._names) !== null && _a3 !== void 0 ? _a3 : this._names = this._items.reduce((names2, c) => {
+        if (c instanceof Name) names2[c.str] = (names2[c.str] || 0) + 1;
+        return names2;
       }, {});
     }
   };
@@ -32778,9 +33434,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
       return `${varKind} ${this.name}${rhs};` + _n;
     }
-    optimizeNames(names, constants2) {
-      if (!names[this.name.str]) return;
-      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (!names2[this.name.str]) return;
+      if (this.rhs) this.rhs = optimizeExpr(this.rhs, names2, constants2);
       return this;
     }
     get names() {
@@ -32797,9 +33453,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     render({ _n }) {
       return `${this.lhs} = ${this.rhs};` + _n;
     }
-    optimizeNames(names, constants2) {
-      if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects) return;
-      this.rhs = optimizeExpr(this.rhs, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (this.lhs instanceof code_1.Name && !names2[this.lhs.str] && !this.sideEffects) return;
+      this.rhs = optimizeExpr(this.rhs, names2, constants2);
       return this;
     }
     get names() {
@@ -32858,8 +33514,8 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     optimizeNodes() {
       return `${this.code}` ? this : void 0;
     }
-    optimizeNames(names, constants2) {
-      this.code = optimizeExpr(this.code, names, constants2);
+    optimizeNames(names2, constants2) {
+      this.code = optimizeExpr(this.code, names2, constants2);
       return this;
     }
     get names() {
@@ -32885,19 +33541,19 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       }
       return nodes.length > 0 ? this : void 0;
     }
-    optimizeNames(names, constants2) {
+    optimizeNames(names2, constants2) {
       const { nodes } = this;
       let i = nodes.length;
       while (i--) {
         const n = nodes[i];
-        if (n.optimizeNames(names, constants2)) continue;
-        subtractNames(names, n.names);
+        if (n.optimizeNames(names2, constants2)) continue;
+        subtractNames(names2, n.names);
         nodes.splice(i, 1);
       }
       return nodes.length > 0 ? this : void 0;
     }
     get names() {
-      return this.nodes.reduce((names, n) => addNames(names, n.names), {});
+      return this.nodes.reduce((names2, n) => addNames(names2, n.names), {});
     }
   };
   var BlockNode = class extends ParentNode {
@@ -32937,18 +33593,18 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       if (cond === false || !this.nodes.length) return void 0;
       return this;
     }
-    optimizeNames(names, constants2) {
+    optimizeNames(names2, constants2) {
       var _a3;
-      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-      if (!(super.optimizeNames(names, constants2) || this.else)) return;
-      this.condition = optimizeExpr(this.condition, names, constants2);
+      this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names2, constants2);
+      if (!(super.optimizeNames(names2, constants2) || this.else)) return;
+      this.condition = optimizeExpr(this.condition, names2, constants2);
       return this;
     }
     get names() {
-      const names = super.names;
-      addExprNames(names, this.condition);
-      if (this.else) addNames(names, this.else.names);
-      return names;
+      const names2 = super.names;
+      addExprNames(names2, this.condition);
+      if (this.else) addNames(names2, this.else.names);
+      return names2;
     }
   };
   If.kind = "if";
@@ -32963,9 +33619,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     render(opts) {
       return `for(${this.iteration})` + super.render(opts);
     }
-    optimizeNames(names, constants2) {
-      if (!super.optimizeNames(names, constants2)) return;
-      this.iteration = optimizeExpr(this.iteration, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (!super.optimizeNames(names2, constants2)) return;
+      this.iteration = optimizeExpr(this.iteration, names2, constants2);
       return this;
     }
     get names() {
@@ -33000,9 +33656,9 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     render(opts) {
       return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
     }
-    optimizeNames(names, constants2) {
-      if (!super.optimizeNames(names, constants2)) return;
-      this.iterable = optimizeExpr(this.iterable, names, constants2);
+    optimizeNames(names2, constants2) {
+      if (!super.optimizeNames(names2, constants2)) return;
+      this.iterable = optimizeExpr(this.iterable, names2, constants2);
       return this;
     }
     get names() {
@@ -33041,18 +33697,18 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
       (_b = this.finally) === null || _b === void 0 || _b.optimizeNodes();
       return this;
     }
-    optimizeNames(names, constants2) {
+    optimizeNames(names2, constants2) {
       var _a3, _b;
-      super.optimizeNames(names, constants2);
-      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names, constants2);
-      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants2);
+      super.optimizeNames(names2, constants2);
+      (_a3 = this.catch) === null || _a3 === void 0 || _a3.optimizeNames(names2, constants2);
+      (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names2, constants2);
       return this;
     }
     get names() {
-      const names = super.names;
-      if (this.catch) addNames(names, this.catch.names);
-      if (this.finally) addNames(names, this.finally.names);
-      return names;
+      const names2 = super.names;
+      if (this.catch) addNames(names2, this.catch.names);
+      if (this.finally) addNames(names2, this.finally.names);
+      return names2;
     }
   };
   var Catch = class extends BlockNode {
@@ -33287,14 +33943,14 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     }
   };
   exports.CodeGen = CodeGen;
-  function addNames(names, from) {
-    for (const n in from) names[n] = (names[n] || 0) + (from[n] || 0);
-    return names;
+  function addNames(names2, from) {
+    for (const n in from) names2[n] = (names2[n] || 0) + (from[n] || 0);
+    return names2;
   }
-  function addExprNames(names, from) {
-    return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
+  function addExprNames(names2, from) {
+    return from instanceof code_1._CodeOrName ? addNames(names2, from.names) : names2;
   }
-  function optimizeExpr(expr, names, constants2) {
+  function optimizeExpr(expr, names2, constants2) {
     if (expr instanceof code_1.Name) return replaceName(expr);
     if (!canOptimize(expr)) return expr;
     return new code_1._Code(expr._items.reduce((items, c) => {
@@ -33305,16 +33961,16 @@ var require_codegen2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     }, []));
     function replaceName(n) {
       const c = constants2[n.str];
-      if (c === void 0 || names[n.str] !== 1) return n;
-      delete names[n.str];
+      if (c === void 0 || names2[n.str] !== 1) return n;
+      delete names2[n.str];
       return c;
     }
     function canOptimize(e) {
-      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
+      return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names2[c.str] === 1 && constants2[c.str] !== void 0);
     }
   }
-  function subtractNames(names, from) {
-    for (const n in from) names[n] = (names[n] || 0) - (from[n] || 0);
+  function subtractNames(names2, from) {
+    for (const n in from) names2[n] = (names2[n] || 0) - (from[n] || 0);
   }
   function not(x) {
     return typeof x == "boolean" || typeof x == "number" || x === null ? !x : (0, code_1._)`!${par(x)}`;
@@ -33479,7 +34135,7 @@ var require_util2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
 var require_names2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   const codegen_1 = require_codegen2();
-  const names = {
+  const names2 = {
     data: new codegen_1.Name("data"),
     valCxt: new codegen_1.Name("valCxt"),
     instancePath: new codegen_1.Name("instancePath"),
@@ -33497,7 +34153,7 @@ var require_names2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
     jsonLen: new codegen_1.Name("jsonLen"),
     jsonPart: new codegen_1.Name("jsonPart")
   };
-  exports.default = names;
+  exports.default = names2;
 }));
 var require_errors2 = /* @__PURE__ */ __commonJSMin2(((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
@@ -39460,14 +40116,14 @@ var LegacyInputRequiredShim = class {
   async fulfill(method, handler, request, ctx, firstResult) {
     const { maxRounds, roundTimeoutMs } = this._host;
     const outerSignal = ctx.mcpReq.signal;
-    let current = firstResult;
+    let current2 = firstResult;
     let round = 0;
     while (true) {
       round += 1;
       if (round > maxRounds) return legacyShimFailure(method, inputRequiredRoundsExceededMessage2(method, maxRounds));
-      const inputRequests = current.inputRequests;
+      const inputRequests = current2.inputRequests;
       const hasInputRequests = inputRequests != null && Object.keys(inputRequests).length > 0;
-      const requestState = typeof current.requestState === "string" ? current.requestState : void 0;
+      const requestState = typeof current2.requestState === "string" ? current2.requestState : void 0;
       if (!hasInputRequests && requestState === void 0) throw new ProtocolError3(ProtocolErrorCode2.InternalError, `Handler for ${method} returned an input-required result with neither inputRequests nor requestState (every InputRequiredResult must include at least one of the two)`);
       let responses;
       if (hasInputRequests) {
@@ -39520,7 +40176,7 @@ var LegacyInputRequiredShim = class {
       }
       const next = await handler(request, ctxNext);
       if (!isInputRequiredResult2(next)) return next;
-      current = next;
+      current2 = next;
     }
   }
   /** Routes one embedded request through the host's existing 2025-era senders (gate already ran). */
@@ -40852,6 +41508,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { realpath as realpath4 } from "node:fs/promises";
 import net from "node:net";
 import path7 from "node:path";
+import { performance as performance3 } from "node:perf_hooks";
 
 // src/domains/cdp-target.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -41054,12 +41711,29 @@ async function spawnPortableApplication(executable, arguments_, _port, cwd = pat
   return child;
 }
 async function getVersion(port) {
-  const response = await fetch(`http://${LOOPBACK}:${port}/json/version`, {
-    signal: AbortSignal.timeout(1e3),
-    redirect: "error"
-  });
+  const finishRequest = beginFixtureStage("endpoint", { phase: "request-start", port, budgetMs: 1e3 });
+  let response;
+  try {
+    response = await fetch(`http://${LOOPBACK}:${port}/json/version`, {
+      signal: AbortSignal.timeout(1e3),
+      redirect: "error"
+    });
+    finishRequest("succeeded", { httpStatus: response.status });
+  } catch (error2) {
+    finishRequest("failed", {}, error2);
+    throw error2;
+  }
+  emitFixtureEvent("endpoint", "decision", { phase: "headers", port, httpStatus: response.status });
   if (!response.ok) throw new Error(`CDP returned HTTP ${response.status}.`);
-  return response.json();
+  const finishBody = beginFixtureStage("endpoint", { phase: "body-start", port });
+  try {
+    const endpoint = await response.json();
+    finishBody("succeeded", { phase: "body-complete" });
+    return endpoint;
+  } catch (error2) {
+    finishBody("failed", { phase: "body-failed" }, error2);
+    throw error2;
+  }
 }
 function applyChromePreset(arguments_) {
   const result = process.platform === "win32" ? withChromeScreenshotFeature(arguments_) : [...arguments_];
@@ -41110,6 +41784,7 @@ function createTargetHost(dependencies = {}) {
     requestWindowsClose: launchWindows.requestNormalClose,
     waitWindowsExit: launchWindows.waitForExit
   });
+  const origins = /* @__PURE__ */ new WeakMap();
   const reservations = dependencies.portReservations ?? createPortReservations();
   const io = {
     probe: probePort,
@@ -41132,18 +41807,86 @@ function createTargetHost(dependencies = {}) {
     profileAvailable,
     ...dependencies
   };
+  async function observeSnapshot(pid, port, signal) {
+    const finish = beginFixtureStage("native-snapshot", { pid, port });
+    try {
+      const evidence = await waitForWork(() => platform.snapshot(pid, port), signal);
+      let ownedDescendantCount;
+      if (fixtureHasSubscribers()) {
+        try {
+          if (Array.isArray(evidence.processIds) && evidence.processIds.every((id) => Number.isSafeInteger(id) && id > 0)) {
+            const owned = new Set(evidence.processIds);
+            owned.delete(pid);
+            ownedDescendantCount = owned.size;
+          }
+        } catch {
+        }
+      }
+      finish("succeeded", {
+        valid: evidence.root.exists,
+        count: evidence.listeners.length,
+        ...ownedDescendantCount === void 0 ? {} : { ownedDescendantCount }
+      });
+      return evidence;
+    } catch (error2) {
+      finish("failed", {}, error2);
+      throw error2;
+    }
+  }
   async function requestNormalClose(target, context) {
-    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
-    if (platform.requestNormalClose) return platform.requestNormalClose(target, context);
-    const accepted = await platform.close(target);
-    if (!accepted) throw new Error("The application rejected normal close.");
-    return { closeRequested: true, processExited: targetExitObserved(target) };
+    return runFixtureResource(origins.get(target), async () => {
+      const finish = beginFixtureStage("native-close", { pid: target.processId, port: target.port });
+      try {
+        let result;
+        if (targetExitObserved(target)) result = { closeRequested: false, processExited: true };
+        else if (platform.requestNormalClose) result = await platform.requestNormalClose(target, context);
+        else {
+          const accepted = await platform.close(target);
+          if (!accepted) throw new Error("The application rejected normal close.");
+          result = { closeRequested: true, processExited: targetExitObserved(target) };
+        }
+        finish("succeeded");
+        return result;
+      } catch (error2) {
+        let nativeError;
+        if (fixtureHasSubscribers()) {
+          try {
+            if (error2 !== null && typeof error2 === "object") {
+              const details = Object.getOwnPropertyDescriptor(error2, "details");
+              const value = details && "value" in details ? details.value : void 0;
+              if (value !== null && typeof value === "object") {
+                const descriptor = Object.getOwnPropertyDescriptor(value, "nativeError");
+                const selected = descriptor && "value" in descriptor ? descriptor.value : void 0;
+                if (typeof selected === "number" && Number.isSafeInteger(selected))
+                  nativeError = selected;
+              }
+            }
+          } catch {
+          }
+        }
+        finish(
+          "failed",
+          { phase: "normal-close", ...typeof nativeError === "number" ? { nativeError } : {} },
+          error2
+        );
+        throw error2;
+      }
+    });
   }
   async function waitForExit(target, signal) {
-    if (platform.waitForExit) await platform.waitForExit(target, signal);
-    else await waitForTargetExit(target, signal);
-    target.releaseProfile?.();
-    target.child?.disposeMonitor?.();
+    return runFixtureResource(origins.get(target), async () => {
+      const finish = beginFixtureStage("target-exit-wait", { pid: target.processId, port: target.port });
+      try {
+        if (platform.waitForExit) await platform.waitForExit(target, signal);
+        else await waitForTargetExit(target, signal);
+        target.releaseProfile?.();
+        target.child?.disposeMonitor?.();
+        finish("succeeded");
+      } catch (error2) {
+        finish("failed", {}, error2);
+        throw error2;
+      }
+    });
   }
   async function rollbackCreatedTarget(target, context) {
     if (!targetExitObserved(target)) context.onRollback?.(target);
@@ -41160,13 +41903,33 @@ function createTargetHost(dependencies = {}) {
     target.child?.once("exit", exited);
     if (targetExitObserved(target)) exited();
     try {
+      const finishRequest = beginFixtureStage("target-close", {
+        phase: "rollback-request",
+        reason: "rollback",
+        pid: target.processId,
+        port: target.port
+      });
       const request = requestNormalClose(target, { signal: requestAbort.signal });
       try {
         await Promise.race([request, actualExit]);
+        finishRequest("succeeded");
       } catch (error2) {
+        finishRequest(targetExitObserved(target) ? "succeeded" : "failed", {}, error2);
         if (!targetExitObserved(target)) throw error2;
       }
-      await waitForExit(target);
+      const finishExit = beginFixtureStage("target-exit-wait", {
+        phase: "rollback-exit",
+        reason: "rollback",
+        pid: target.processId,
+        port: target.port
+      });
+      try {
+        await waitForExit(target);
+        finishExit("succeeded");
+      } catch (error2) {
+        finishExit("failed", {}, error2);
+        throw error2;
+      }
     } finally {
       target.child?.off?.("exit", exited);
     }
@@ -41203,7 +41966,14 @@ function createTargetHost(dependencies = {}) {
         }
         let available;
         try {
-          available = await waitForWork(() => io.probe(probeCandidate), context.signal);
+          const finishProbe = beginFixtureStage("port-probe", { port: probeCandidate });
+          try {
+            available = await waitForWork(() => io.probe(probeCandidate), context.signal);
+            finishProbe("succeeded", { available });
+          } catch (error2) {
+            finishProbe("failed", {}, error2);
+            throw error2;
+          }
         } catch (error2) {
           claimed();
           throw error2;
@@ -41260,6 +42030,7 @@ function createTargetHost(dependencies = {}) {
         const requestedAt = io.now();
         context.onPhase?.("launching");
         let child;
+        const finishSpawn = beginFixtureStage("spawn", { port });
         try {
           context.signal?.throwIfAborted();
           const onCreated = (application) => {
@@ -41280,13 +42051,15 @@ function createTargetHost(dependencies = {}) {
               }
             };
             created = target2;
+            origins.set(target2, captureFixtureOrigin({ pid: application.pid, port }));
+            emitFixtureEvent("spawn", "decision", { pid: application.pid, port, reason: "acquired" });
             observeTargetExit(target2);
-            const observation = new AbortController();
-            readinessSignal = context.signal ? AbortSignal.any([context.signal, observation.signal]) : observation.signal;
-            const exited = () => observation.abort(
+            const observation2 = new AbortController();
+            readinessSignal = context.signal ? AbortSignal.any([context.signal, observation2.signal]) : observation2.signal;
+            const exited = () => observation2.abort(
               new Error("The target application exited before CDP readiness or verification.")
             );
-            const monitorFailed = () => observation.abort(
+            const monitorFailed = () => observation2.abort(
               new Error(
                 "The native process observer failed; retaining application identity for cleanup."
               )
@@ -41317,17 +42090,31 @@ function createTargetHost(dependencies = {}) {
           });
           onCreated(child);
           if (child.pid === void 0) throw new Error("The target process has no PID.");
+          finishSpawn("succeeded", { pid: child.pid });
         } catch (error3) {
+          finishSpawn("failed", {}, error3);
           if (created) {
             try {
               await rollbackCreatedTarget(created, context);
-            } catch (cleanupError2) {
+            } catch (cleanupError) {
+              emitFixtureEvent(
+                "target-close",
+                "decision",
+                { reason: "target-rollback-failed", outcome: "failed", pid: created.processId, port },
+                cleanupError
+              );
               const retained = new RetainedTargetError(errorMessage(error3), created);
+              Object.defineProperty(retained, "cause", {
+                value: error3,
+                configurable: true,
+                writable: true
+              });
               retained.details = {
+                ...errorDetails(error3),
+                ...errorCode(error3) ? { code: errorCode(error3) } : {},
                 processId: created.processId,
                 port,
-                closeConfirmed: false,
-                ...errorDetails(cleanupError2)
+                closeConfirmed: false
               };
               throw retained;
             }
@@ -41342,7 +42129,25 @@ function createTargetHost(dependencies = {}) {
         let foreignRace = false;
         const launchedAt = io.now();
         context.onPhase?.("waiting-cdp");
-        while (io.now() - launchedAt < STARTUP_TIMEOUT_MS) {
+        const finishReadiness = beginFixtureStage("readiness", {
+          phase: "waiting-cdp",
+          pid: processId,
+          port,
+          budgetMs: STARTUP_TIMEOUT_MS
+        });
+        const observedAt = fixtureHasSubscribers() ? performance3.now() : void 0;
+        let attempt = 0;
+        for (let readinessElapsed = io.now() - launchedAt; readinessElapsed < STARTUP_TIMEOUT_MS; readinessElapsed = io.now() - launchedAt) {
+          attempt += 1;
+          const elapsedMs = observedAt !== void 0 && fixtureHasSubscribers() ? Math.max(0, performance3.now() - observedAt) : void 0;
+          const attemptFields = {
+            phase: "attempt",
+            pid: processId,
+            port,
+            attempt,
+            ...elapsedMs === void 0 ? {} : { elapsedMs, remainingMs: Math.max(0, STARTUP_TIMEOUT_MS - elapsedMs) }
+          };
+          const finishAttempt = beginFixtureStage("readiness", attemptFields);
           try {
             context.signal?.throwIfAborted();
             if (targetExitObserved(target))
@@ -41351,21 +42156,60 @@ function createTargetHost(dependencies = {}) {
               throw new Error(
                 "The native process observer failed; retaining application identity for cleanup."
               );
-            const evidence = await waitForWork(() => platform.snapshot(processId, port), readinessSignal);
-            platform.validateNewRoot(evidence, target);
+            const evidence = await runFixtureResource(
+              origins.get(target),
+              () => observeSnapshot(processId, port, readinessSignal)
+            );
+            try {
+              platform.validateNewRoot(evidence, target);
+              emitFixtureEvent("native-snapshot", "decision", {
+                pid: processId,
+                port,
+                valid: evidence.root.exists
+              });
+            } catch (error3) {
+              emitFixtureEvent(
+                "native-snapshot",
+                "decision",
+                {
+                  pid: processId,
+                  port,
+                  valid: false,
+                  reason: evidence.root.exists ? "identity-mismatch" : "identity-missing",
+                  outcome: "rejected"
+                },
+                error3
+              );
+              throw error3;
+            }
             if (!evidence.root.exists) throw new Error("The target root process is absent.");
             target.startedAtUtc = evidence.root.startedAtUtc;
             if (evidence.listeners.some(({ localAddress }) => !["127.0.0.1", "::1"].includes(localAddress))) {
+              emitFixtureEvent("listener-ownership", "decision", {
+                pid: processId,
+                port,
+                reason: "listener-non-loopback",
+                outcome: "rejected"
+              });
               throw new Error("The CDP listener is exposed outside loopback.");
             }
             foreignRace = evidence.listeners.some(
               ({ owningProcess }) => !evidence.processIds.includes(Number(owningProcess))
             );
+            emitFixtureEvent("listener-ownership", "decision", {
+              pid: processId,
+              port,
+              reason: foreignRace ? "listener-foreign" : evidence.listeners.length ? "listener-owned" : "listener-absent"
+            });
             if (foreignRace) {
+              finishAttempt("rejected", {}, new Error("A foreign process won the CDP port race."));
               lastError = new Error("A foreign process won the CDP port race.");
               break;
             }
-            const endpoint = await waitForWork(() => io.getVersion(port), readinessSignal);
+            const endpoint = await runFixtureResource(
+              origins.get(target),
+              () => waitForWork(() => io.getVersion(port), readinessSignal)
+            );
             context.signal?.throwIfAborted();
             if (targetExitObserved(target))
               throw new Error("The target application exited before CDP readiness.");
@@ -41377,25 +42221,25 @@ function createTargetHost(dependencies = {}) {
               targetKind
             });
             Object.assign(target, identity);
-            target.verify = async () => {
-              const current = await waitForWork(
-                () => platform.snapshot(processId, port),
-                readinessSignal
-              );
-              validateProcessIdentity(current, target);
+            target.verify = () => runFixtureResource(origins.get(target), async () => {
+              const current2 = await observeSnapshot(processId, port, readinessSignal);
+              validateProcessIdentity(current2, target);
               const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
               const checked = validateCdpIdentity({
                 endpoint: endpointNow,
                 port,
-                listeners: current.listeners,
-                processIds: current.processIds,
+                listeners: current2.listeners,
+                processIds: current2.processIds,
                 targetKind
               });
               if (checked.webSocketDebuggerUrl !== identity.webSocketDebuggerUrl || checked.browserProduct !== identity.browserProduct)
                 throw new Error("The target CDP endpoint identity changed.");
-            };
+            });
+            finishAttempt("succeeded");
+            finishReadiness("succeeded");
             return target;
           } catch (error3) {
+            finishAttempt("failed", {}, error3);
             lastError = error3;
             if (readinessSignal?.aborted || child.monitoringFailure || targetExitObserved(target) || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
               break;
@@ -41407,14 +42251,40 @@ function createTargetHost(dependencies = {}) {
             }
           }
         }
+        if (fixtureHasSubscribers()) {
+          const fields3 = { phase: "rollback-request", pid: processId, port };
+          try {
+            fields3.exitObserved = targetExitObserved(target);
+          } catch {
+          }
+          try {
+            fields3.exitCode = child.exitCode;
+          } catch {
+          }
+          try {
+            const signalCode = child.signalCode;
+            if (signalCode !== void 0) fields3.signalCode = signalCode;
+          } catch {
+          }
+          try {
+            fields3.monitoringFailed = Boolean(child.monitoringFailure);
+          } catch {
+          }
+          emitFixtureEvent("readiness", "decision", fields3);
+        }
+        finishReadiness("failed", {}, lastError);
         const cancellationBeforeRollback = context.signal?.aborted ? { reason: context.signal.reason } : void 0;
         let closeConfirmed = false;
-        let cleanupError;
         try {
           await rollbackCreatedTarget(target, context);
           closeConfirmed = true;
         } catch (error3) {
-          cleanupError = error3;
+          emitFixtureEvent(
+            "target-close",
+            "decision",
+            { reason: "target-rollback-failed", outcome: "failed", pid: processId, port },
+            error3
+          );
         }
         if (closeConfirmed) {
           target.releaseProfile?.();
@@ -41423,11 +42293,10 @@ function createTargetHost(dependencies = {}) {
         if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
         const message = `The new target did not expose a verified CDP endpoint: ${lastError === void 0 ? void 0 : errorMessage(lastError)}`;
         const error2 = closeConfirmed ? new DetailedError(message) : new RetainedTargetError(message, target);
+        Object.defineProperty(error2, "cause", { value: lastError, configurable: true, writable: true });
         error2.details = {
           ...errorDetails(lastError),
           ...errorCode(lastError) ? { code: errorCode(lastError) } : {},
-          ...errorDetails(cleanupError),
-          ...errorCode(cleanupError) ? { code: errorCode(cleanupError) } : {},
           processId: child.pid,
           port,
           closeConfirmed
@@ -41450,23 +42319,25 @@ function createTargetHost(dependencies = {}) {
     requestNormalClose,
     waitForExit,
     async health(target) {
-      if (targetExitObserved(target)) return "gone";
-      const evidence = await platform.snapshot(target.processId, target.port);
-      if (!evidence.root.exists) return targetExitObserved(target) ? "gone" : "unavailable";
-      try {
-        validateProcessIdentity(evidence, target);
-      } catch {
-        return "identity-changed";
-      }
-      if (evidence.listeners.some(({ owningProcess }) => !evidence.processIds.includes(owningProcess)))
-        return "identity-changed";
-      if (!evidence.listeners.length) return "unavailable";
-      try {
-        await target.verify?.();
-        return "healthy";
-      } catch {
-        return "unavailable";
-      }
+      return runFixtureResource(origins.get(target), async () => {
+        if (targetExitObserved(target)) return "gone";
+        const evidence = await observeSnapshot(target.processId, target.port);
+        if (!evidence.root.exists) return targetExitObserved(target) ? "gone" : "unavailable";
+        try {
+          validateProcessIdentity(evidence, target);
+        } catch {
+          return "identity-changed";
+        }
+        if (evidence.listeners.some(({ owningProcess }) => !evidence.processIds.includes(owningProcess)))
+          return "identity-changed";
+        if (!evidence.listeners.length) return "unavailable";
+        try {
+          await target.verify?.();
+          return "healthy";
+        } catch {
+          return "unavailable";
+        }
+      });
     }
   };
 }
@@ -41565,14 +42436,14 @@ Gateway configuration: ${conditions.conditions?.join(", ") ?? ""}. ${conditions.
           throw new Error(`The official tool catalog changed outside the reviewed variants: ${tool.name}.`);
       }
     },
-    describe(mcpArgs, actual, names, forceRecipe = false) {
-      const chosen = names ?? (actual ? actual.map((tool) => tool.name) : [...entries.keys()]);
+    describe(mcpArgs, actual, names2, forceRecipe = false) {
+      const chosen = names2 ?? (actual ? actual.map((tool) => tool.name) : [...entries.keys()]);
       return chosen.map((name) => {
         const tool = actual?.find((tool2) => tool2.name === name);
         const { suggestedMcpArgs, ...requirement } = requirements(
           name,
           mcpArgs,
-          forceRecipe || actual !== void 0 && names !== void 0 && tool === void 0
+          forceRecipe || actual !== void 0 && names2 !== void 0 && tool === void 0
         );
         return {
           ...requirement,
@@ -41603,6 +42474,7 @@ function workspaceSources(mcpArgs, supportsRoots) {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 function createConnectionDirectory(registry2, isolation, publish, canDelete) {
+  let origin;
   const owners = /* @__PURE__ */ new Set();
   let lease;
   let acquisitionPending = false;
@@ -41615,8 +42487,8 @@ function createConnectionDirectory(registry2, isolation, publish, canDelete) {
     return isolation.mode === "none" ? { mode: "none" } : lease ? { mode: "data-dir", ...lease.evidence, ...releaseFailed ? { state: "cleanup-failed" } : {} } : void 0;
   }
   function update() {
-    const current = evidence();
-    if (current) publish?.(current);
+    const current2 = evidence();
+    if (current2) publish?.(current2);
   }
   return {
     evidence,
@@ -41646,46 +42518,84 @@ function createConnectionDirectory(registry2, isolation, publish, canDelete) {
         update();
         return;
       }
-      acquisitionPending = true;
-      const acquired = (value) => {
-        lease = value;
-        update();
-      };
-      try {
-        acquired(await registry2.acquire(isolation.directory, isolation.cleanup, acquired));
-      } catch (error2) {
-        if (error2 instanceof DataDirectoryError && error2.lease) acquired(error2.lease);
-        throw error2;
-      } finally {
-        acquisitionPending = false;
-        update();
-      }
-    },
-    retry() {
-      if (releasing) return releasing;
-      if (released || !finalRelease || acquisitionPending || successors > 0) return Promise.resolve();
-      for (const owner of owners)
-        if (owner.target && !owner.exited || owner.hasPendingResources()) return Promise.resolve();
-      const attempt = (async () => {
+      origin ??= captureFixtureOrigin({ sessionId: void 0 });
+      return runFixtureResource(origin, async () => {
+        acquisitionPending = true;
+        const acquired = (value) => {
+          lease = value;
+          update();
+        };
         try {
-          if (lease?.evidence.cleanup === "delete-on-release" && canDelete && !await canDelete(lease.evidence.path))
-            throw new DataDirectoryError("directory-cleanup-failed", lease);
-          await lease?.release();
-          releaseFailed = false;
-          released = true;
+          acquired(await registry2.acquire(isolation.directory, isolation.cleanup, acquired));
         } catch (error2) {
-          releaseFailed = true;
-          throw error2 instanceof DataDirectoryError ? error2 : new DataDirectoryError("directory-cleanup-failed", lease);
+          if (error2 instanceof DataDirectoryError && error2.lease) acquired(error2.lease);
+          throw error2;
         } finally {
+          acquisitionPending = false;
           update();
         }
-      })();
-      releasing = attempt;
-      void attempt.finally(() => {
-        releasing = void 0;
-      }).catch(() => {
       });
-      return attempt;
+    },
+    retry() {
+      return runFixtureResource(origin, () => {
+        const blocked = (reason) => {
+          emitFixtureEvent("directory-lease", "decision", {
+            phase: "release-barrier",
+            outcome: "skipped",
+            reason
+          });
+          return Promise.resolve();
+        };
+        if (releasing) {
+          emitFixtureEvent("directory-lease", "decision", {
+            phase: "release-barrier",
+            outcome: "skipped",
+            reason: "release-pending"
+          });
+          return releasing;
+        }
+        if (released) return blocked("already-released");
+        if (!finalRelease) return blocked("release-not-requested");
+        if (acquisitionPending) return blocked("acquisition-pending");
+        if (successors > 0) return blocked("successor-pending");
+        for (const owner of owners) {
+          if (owner.target && !owner.exited) return blocked("target-live");
+          if (owner.hasPendingResources()) return blocked("resources-pending");
+        }
+        const attempt = (async () => {
+          const finish = beginFixtureStage("directory-lease", { phase: "resource-cleanup" });
+          try {
+            if (lease?.evidence.cleanup === "delete-on-release" && canDelete) {
+              const finishAvailability = beginFixtureStage("directory-lease", { phase: "availability" });
+              let available;
+              try {
+                available = await canDelete(lease.evidence.path);
+              } catch (error2) {
+                finishAvailability("failed", {}, error2);
+                throw error2;
+              }
+              finishAvailability(available ? "succeeded" : "rejected", { available });
+              if (!available) throw new DataDirectoryError("directory-cleanup-failed", lease);
+            }
+            await lease?.release();
+            releaseFailed = false;
+            released = true;
+            finish("released");
+          } catch (error2) {
+            releaseFailed = true;
+            finish("failed", {}, error2);
+            throw error2 instanceof DataDirectoryError ? error2 : new DataDirectoryError("directory-cleanup-failed", lease, error2);
+          } finally {
+            update();
+          }
+        })();
+        releasing = attempt;
+        void attempt.finally(() => {
+          releasing = void 0;
+        }).catch(() => {
+        });
+        return attempt;
+      });
     }
   };
 }
@@ -41787,8 +42697,8 @@ function createConnectionOwner(sessionId, onSettled) {
       cleanup = (async () => {
         try {
           const failures = [];
-          const names = [...resources.keys()].sort((a, b) => Number(a === "router") - Number(b === "router"));
-          for (const name of names) {
+          const names2 = [...resources.keys()].sort((a, b) => Number(a === "router") - Number(b === "router"));
+          for (const name of names2) {
             try {
               await owner.closeResource(name);
             } catch (error2) {
@@ -41890,52 +42800,74 @@ function createOperationRegistry(entryId) {
     requests.set(requestId, { fingerprint, operationId });
     emit(operation);
     const accepted = get(operationId);
-    operation.finished = Promise.resolve().then(async () => {
-      try {
-        operation.abort.signal.throwIfAborted();
-        operation.snapshot.state = "running";
-        emit(operation);
-        const result = await job({
-          operationId,
-          signal: operation.abort.signal,
-          phase: (phase) => {
-            if (terminal(operation.snapshot.state)) return;
-            operation.snapshot.phase = phase;
-            emit(operation);
-          },
-          identity: (route) => {
-            if (terminal(operation.snapshot.state)) return;
-            operation.snapshot.connectionId = route.connectionId;
-            operation.snapshot.sessionId = route.sessionId;
-            emit(operation);
-          },
-          isolation: (value) => {
-            operation.snapshot.isolation = structuredClone(value);
-          }
-        });
-        operation.abort.signal.throwIfAborted();
-        operation.snapshot.result = result;
-        operation.snapshot.state = "succeeded";
-      } catch (error2) {
-        const cancelled = operation.abort.signal.aborted && error2 === operation.abort.signal.reason;
-        operation.snapshot.state = cancelled ? "cancelled" : "failed";
-        if (!cancelled) {
-          const code = errorCode(error2);
-          const evidence = lifecycleFailureEvidence(errorDetails(error2) ?? {});
-          operation.snapshot.error = {
-            ...evidence,
-            phase: typeof evidence.phase === "string" ? evidence.phase : operation.snapshot.phase,
-            ...code === void 0 ? {} : { code },
-            message: errorMessage(error2)
-          };
-        }
-      } finally {
-        onSettled?.();
-        operation.snapshot.phase = operation.snapshot.state;
-        notices.add(operationId);
-        emit(operation);
-      }
+    const observationIdentity = () => ({
+      entryId,
+      operationId,
+      requestId,
+      ...operation.snapshot.action === "start" || operation.snapshot.action === "restart" || operation.snapshot.action === "stop" || operation.snapshot.action === "end-task" ? { action: operation.snapshot.action } : {},
+      connectionId: operation.snapshot.connectionId,
+      sessionId: operation.snapshot.sessionId
     });
+    operation.finished = Promise.resolve().then(
+      () => runFixtureObservation(observationIdentity, async () => {
+        const finishObservation = beginFixtureStage("operation");
+        try {
+          operation.abort.signal.throwIfAborted();
+          operation.snapshot.state = "running";
+          emit(operation);
+          const result = await job({
+            operationId,
+            signal: operation.abort.signal,
+            phase: (phase) => {
+              if (terminal(operation.snapshot.state)) return;
+              operation.snapshot.phase = phase;
+              emit(operation);
+              emitFixturePhase(phase);
+            },
+            identity: (route) => {
+              if (terminal(operation.snapshot.state)) return;
+              operation.snapshot.connectionId = route.connectionId;
+              operation.snapshot.sessionId = route.sessionId;
+              emit(operation);
+              emitFixtureEvent("operation-route", "decision");
+            },
+            isolation: (value) => {
+              operation.snapshot.isolation = structuredClone(value);
+            }
+          });
+          operation.abort.signal.throwIfAborted();
+          operation.snapshot.result = result;
+          operation.snapshot.state = "succeeded";
+        } catch (error2) {
+          const cancelled = operation.abort.signal.aborted && error2 === operation.abort.signal.reason;
+          emitFixtureEvent(
+            "operation-error",
+            "decision",
+            { outcome: cancelled ? "cancelled" : "failed" },
+            error2
+          );
+          operation.snapshot.state = cancelled ? "cancelled" : "failed";
+          if (!cancelled) {
+            const code = errorCode(error2);
+            const evidence = lifecycleFailureEvidence(errorDetails(error2) ?? {});
+            operation.snapshot.error = {
+              ...evidence,
+              phase: typeof evidence.phase === "string" ? evidence.phase : operation.snapshot.phase,
+              ...code === void 0 ? {} : { code },
+              message: errorMessage(error2)
+            };
+          }
+        } finally {
+          onSettled?.();
+          operation.snapshot.phase = operation.snapshot.state;
+          notices.add(operationId);
+          emit(operation);
+          finishObservation(
+            operation.snapshot.state === "succeeded" ? "succeeded" : operation.snapshot.state === "cancelled" ? "cancelled" : "failed"
+          );
+        }
+      })
+    );
     return accepted;
   }
   async function wait(operationId, cursor = 0, signal) {
@@ -42068,8 +43000,8 @@ function createLifecycleService({ entryId, handler }) {
     if (closing) throw new Error("The gateway is closing.");
     const connectionId = request.action === "start" ? void 0 : request.connectionId;
     if (request.action !== "start") {
-      const current = handler.status(request.connectionId);
-      if (!("sessionId" in current) || current.sessionId !== request.sessionId)
+      const current2 = handler.status(request.connectionId);
+      if (!("sessionId" in current2) || current2.sessionId !== request.sessionId)
         throw new Error("The target session is absent or stale.");
       if (changing.has(request.connectionId))
         throw new Error("A lifecycle operation is already running for this connection.");
@@ -42171,7 +43103,7 @@ function createTargetController({
   onObservationFailure,
   createOwner
 }) {
-  let current;
+  let current2;
   let state = "idle";
   let reason;
   let taskActive = false;
@@ -42179,12 +43111,12 @@ function createTargetController({
   let changing = false;
   let checking;
   function status() {
-    const target = current?.owner.target;
+    const target = current2?.owner.target;
     return {
       entryId,
       status: state,
       taskActive,
-      ...current ? { sessionId: current.owner.sessionId } : {},
+      ...current2 ? { sessionId: current2.owner.sessionId } : {},
       ...target ? { port: target.port, processId: target.processId, targetKind: target.targetKind } : {},
       ...reason ? { reason } : {}
     };
@@ -42199,9 +43131,9 @@ function createTargetController({
     }
   }
   function requireSession(sessionId) {
-    if (!current || current.owner.sessionId !== sessionId || current.owner.retired)
+    if (!current2 || current2.owner.sessionId !== sessionId || current2.owner.retired)
       throw new Error("The target session is absent, closed or stale.");
-    return current;
+    return current2;
   }
   function gate() {
     if (!gated) router.clearTarget();
@@ -42211,7 +43143,7 @@ function createTargetController({
     if (!selected.owner.confirmExit()) return;
     const target = selected.owner.target;
     target?.releaseProfile?.();
-    if (current === selected) {
+    if (current2 === selected) {
       gate();
       state = "lost";
       reason = "process-exited";
@@ -42232,7 +43164,7 @@ function createTargetController({
     });
   }
   function lose(selected, why) {
-    if (current !== selected || selected.owner.exited) return;
+    if (current2 !== selected || selected.owner.exited) return;
     gate();
     state = "lost";
     reason = why;
@@ -42328,7 +43260,7 @@ function createTargetController({
   }
   async function dispose(selected) {
     selected.owner.retire(new Error("The target session is retired."));
-    if (current === selected) gate();
+    if (current2 === selected) gate();
     try {
       await server.close(selected.owner);
     } finally {
@@ -42336,8 +43268,8 @@ function createTargetController({
         selected.unsubscribe?.();
         selected.owner.target?.child?.disposeMonitor?.();
       }
-      if (current === selected) {
-        current = void 0;
+      if (current2 === selected) {
+        current2 = void 0;
         taskActive = false;
         state = "idle";
         reason = void 0;
@@ -42349,7 +43281,7 @@ function createTargetController({
     const owner = createOwner ? await createOwner(sessionId) : createConnectionOwner(sessionId);
     owner.expectedOperationId = context.operationId;
     const selected = { owner, options };
-    current = selected;
+    current2 = selected;
     state = "starting";
     reason = void 0;
     taskActive = true;
@@ -42378,6 +43310,7 @@ function createTargetController({
       state = "active";
       return status();
     } catch (error2) {
+      emitFixtureEvent("target-acquisition", "decision", { outcome: "failed" }, error2);
       if (error2 instanceof RetainedTargetError) {
         acquire(selected, error2.target);
         if (!owner.exited) {
@@ -42394,26 +43327,50 @@ function createTargetController({
         try {
           await normalClose(selected);
         } catch (closeError) {
+          emitFixtureEvent("target-close", "decision", { outcome: "failed" }, closeError);
           owner.expectedExit = void 0;
           state = "close-failed";
           taskActive = false;
           reason = "target-rollback-failed";
           gate();
-          throw failedClose(selected, closeError);
+          const failure2 = failedClose(selected, closeError);
+          failure2.details = {
+            ...errorDetails(error2),
+            ...errorCode(error2) === void 0 ? {} : { code: errorCode(error2) },
+            entryId,
+            sessionId: owner.sessionId,
+            processId: owner.target.processId,
+            port: owner.target.port,
+            retainedTargets: [{ processId: owner.target.processId, port: owner.target.port }],
+            cleanupError: errorMessage(closeError)
+          };
+          Object.defineProperty(failure2, "cause", { value: error2, configurable: true, writable: true });
+          throw failure2;
         }
       }
-      await dispose(selected);
+      try {
+        await dispose(selected);
+      } catch (cleanupError) {
+        emitFixtureEvent("resource-disposal", "decision", { outcome: "failed" }, cleanupError);
+        const failure2 = new DetailedError(errorMessage(error2), { cause: error2 });
+        failure2.details = {
+          ...errorDetails(error2),
+          ...errorCode(error2) === void 0 ? {} : { code: errorCode(error2) },
+          cleanupError: errorMessage(cleanupError)
+        };
+        throw failure2;
+      }
       throw error2;
     }
   }
   function start(options, sessionId = randomUUID2(), context = {}) {
     return run2(async () => {
-      if (current) throw new Error("An existing target session must be closed before starting another.");
+      if (current2) throw new Error("An existing target session must be closed before starting another.");
       return attach(options, sessionId, context);
     });
   }
   async function retireExited({ sessionId }) {
-    const selected = current;
+    const selected = current2;
     if (selected?.owner.sessionId === sessionId && selected.owner.exited) await dispose(selected);
     return status();
   }
@@ -42502,7 +43459,7 @@ function createTargetController({
     if (state === "active" || state === "lost") taskActive = true;
   }
   async function checkHealth() {
-    const selected = current;
+    const selected = current2;
     const target = selected?.owner.target;
     if (!selected || !target || selected.owner.retired || state !== "active") return;
     if (checking?.owner === selected.owner) return checking.job;
@@ -42518,7 +43475,7 @@ function createTargetController({
         if (selected.owner.signal.aborted) throw error2;
         health = "unavailable";
       }
-      if (current === selected && state === "active" && health !== "healthy")
+      if (current2 === selected && state === "active" && health !== "healthy")
         lose(selected, health === "identity-changed" ? health : "target-unavailable");
     })().finally(() => {
       if (checking?.job === job) checking = void 0;
@@ -42527,7 +43484,7 @@ function createTargetController({
     return job;
   }
   async function cleanupOnDisconnect() {
-    const selected = current;
+    const selected = current2;
     gate();
     taskActive = false;
     if (!selected) return;
@@ -42552,12 +43509,12 @@ function createTargetController({
     checkHealth,
     cleanupOnDisconnect,
     officialDisconnected: () => {
-      if (current) lose(current, "official-disconnected");
+      if (current2) lose(current2, "official-disconnected");
     },
     quarantine: (why) => {
-      if (current) lose(current, why);
+      if (current2) lose(current2, why);
     },
-    canInvoke: () => state === "active" && !gated && !!current && !current.owner.retired
+    canInvoke: () => state === "active" && !gated && !!current2 && !current2.owner.retired
   };
 }
 
@@ -42922,6 +43879,10 @@ async function startPluginRuntime({
       managed.owner.assertOpen();
       return summary(managed);
     } catch (error2) {
+      const primaryEvidence = {
+        ...lifecycleFailureEvidence(errorDetails(error2) ?? {}),
+        ...errorCode(error2) === void 0 ? {} : { code: errorCode(error2) }
+      };
       directory.requestRelease();
       const managed = connection;
       const failedOwner = managed?.owner ?? owner;
@@ -42930,13 +43891,13 @@ async function startPluginRuntime({
         try {
           await disposeResources(failedOwner);
         } catch (cleanupError) {
-          const failure3 = new DetailedError(errorMessage(error2));
+          emitFixtureEvent("resource-disposal", "decision", { outcome: "failed" }, cleanupError);
+          const failure3 = new DetailedError(errorMessage(error2), { cause: error2 });
           failure3.details = {
-            ...lifecycleFailureEvidence(errorDetails(error2) ?? {}),
+            ...primaryEvidence,
             entryId,
             connectionId,
             sessionId: failedOwner.sessionId,
-            phase: "resource-cleanup",
             cleanupError: errorMessage(cleanupError)
           };
           connections.delete(connectionId);
@@ -42946,9 +43907,9 @@ async function startPluginRuntime({
       }
       if (context.signal?.aborted && error2 === context.signal.reason && (!failedOwner.target || failedOwner.exited))
         throw context.signal.reason;
-      const failure2 = new DetailedError(errorMessage(error2));
+      const failure2 = new DetailedError(errorMessage(error2), { cause: error2 });
       failure2.details = {
-        ...lifecycleFailureEvidence(errorDetails(error2) ?? {}),
+        ...primaryEvidence,
         entryId,
         connectionId,
         sessionId: failedOwner.sessionId,
@@ -43046,8 +44007,12 @@ async function startPluginRuntime({
   const catalogOwner = newOwner(randomUUID3());
   const catalogRouter = await createRouter();
   catalogOwner.register("router", catalogRouter);
-  async function cleanup() {
+  function cleanup() {
+    return runFixtureCleanup({ entryId }, performCleanup);
+  }
+  async function performCleanup() {
     if (cleanupPromise) return cleanupPromise;
+    const finishObservation = beginFixtureStage("gateway-cleanup");
     shuttingDown = true;
     for (const directory of directories) directory.requestRelease();
     const closing = [];
@@ -43085,6 +44050,7 @@ async function startPluginRuntime({
         if (result.status === "rejected")
           process.stderr.write(`Gateway cleanup failed: ${errorMessage(result.reason)}
 `);
+      finishObservation(results.some((result) => result.status === "rejected") ? "failed" : "succeeded");
     })();
     return cleanupPromise;
   }
@@ -43176,12 +44142,12 @@ async function startPluginRuntime({
         await connection.controller.checkHealth();
         healthTiming();
         routed(route);
-        const current = summary(connection);
+        const current2 = summary(connection);
         const upstream = connection.upstream;
         if (!connection.controller.canInvoke() || !upstream)
           return lifecycleResult({
-            ...current,
-            reason: current.reason ?? "target-not-ready",
+            ...current2,
+            reason: current2.reason ?? "target-not-ready",
             nextAction: "inspect-connection-error"
           });
         const { _dct: routing, ...upstreamArguments } = arguments_;

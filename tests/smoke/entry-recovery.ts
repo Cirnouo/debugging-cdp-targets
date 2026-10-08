@@ -16,17 +16,68 @@ import {
     requestChromeSmokeClose,
     requireChromeSmokeExecutable,
 } from './chrome-host.ts';
+import {
+    type BrowserStartupRecord,
+    checkChromeSmokeDisplay,
+    createChromeStartupCapture,
+    validateBrowserStartupRecord,
+} from './chrome-startup.ts';
+import {
+    createFixtureArtifacts,
+    createFixtureGatewayClient,
+    createSmokeFailures,
+    fixtureOutputCollectionId,
+    fixtureOutputDirectory,
+} from './fixture-artifacts.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
-import { createClient, readMcpTools } from './mcp-client.ts';
+import { readMcpTools } from './mcp-client.ts';
 
-const chrome = await requireChromeSmokeExecutable();
+const outputDirectory = fixtureOutputDirectory();
+const artifacts = createFixtureArtifacts(outputDirectory, 'entry-recovery', {
+    collectionId: fixtureOutputCollectionId(),
+});
+const failures = createSmokeFailures(artifacts);
+const currentCollection = artifacts.snapshot();
+const controlledDiagnostics =
+    !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
+    const safe = validateBrowserStartupRecord(record);
+    if (!safe) return;
+    try {
+        artifacts.startup(safe);
+        if (firstSample) console.log(JSON.stringify(safe));
+    } catch {}
+}
+artifacts.begin('prerequisites');
+const chrome = await requireChromeSmokeExecutable().catch((error: unknown) => {
+    failures.primary(error, 'prerequisites');
+    failures.finish();
+    throw error;
+});
+const display = await checkChromeSmokeDisplay(controlledDiagnostics);
+if (display) {
+    startupEvidence(display);
+    try {
+        assert.ok(!display.available || display.responsive, 'Controlled Chrome X display is not responsive.');
+    } catch (error) {
+        failures.primary(error, 'prerequisites');
+        failures.finish();
+        throw error;
+    }
+}
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const folder = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-entry-recovery-')));
+const startup = await createChromeStartupCapture(controlledDiagnostics, folder, startupEvidence);
 const managedDirectories = new Map<string, string>();
 const platform = createPlatformAdapter();
 const owned: ProcessTarget[] = [];
 let entryId = '';
-const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+const client = createFixtureGatewayClient(
+    path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
+    outputDirectory,
+    'entry-recovery',
+    artifacts,
+);
 async function tool(name: string, arguments_: Record<string, unknown> = {}) {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
@@ -41,7 +92,17 @@ async function tool(name: string, arguments_: Record<string, unknown> = {}) {
         assertSummary(result.structuredContent.operation.result);
     return result;
 }
-const control = lifecycleClient(tool);
+const executeControl = lifecycleClient(tool);
+const control: typeof executeControl = (request) =>
+    startup && (request.action === 'start' || request.action === 'restart')
+        ? startup.settled(
+              () => executeControl(request),
+              request.action === 'restart',
+              request.action === 'start'
+                  ? request.launch.args?.find((arg) => arg.startsWith('--log-file='))?.slice('--log-file='.length)
+                  : undefined,
+          )
+        : executeControl(request);
 async function status(connectionId?: string): Promise<ControlResult> {
     return control({ action: 'status', entryId, ...(connectionId ? { connectionId } : {}) });
 }
@@ -95,6 +156,8 @@ async function start(index: number) {
             chrome,
             path.join(folder, `profile-${index}`),
             `data:text/html,<title>CONNECTION-${index}</title>`,
+            process.platform,
+            startup?.newLog(),
         ),
     });
     assert.ok(!('connections' in target));
@@ -129,6 +192,7 @@ async function rejectsRoute(target: ConnectionStatus) {
 let normalCloseRequestStartedAt = 0;
 let normalCloseRequestedAt = 0;
 try {
+    artifacts.begin('acceptance');
     await client.request('initialize', {
         protocolVersion: '2025-11-25',
         capabilities: { elicitation: { form: {} } },
@@ -283,32 +347,50 @@ try {
     );
 } catch (error) {
     console.error('Connection smoke primary failure:', error);
-    throw error;
+    failures.primary(error);
 } finally {
+    artifacts.begin('gateway-close');
     const closed = await Promise.allSettled([client.close()]);
+    for (const result of closed) if (result.status === 'rejected') failures.primary(result.reason, 'gateway-close');
     let retainedAfterGatewayCleanup = false;
     for (const fixture of owned) {
-        const evidence = await platform.snapshot(fixture.processId, fixture.port);
-        if (evidence.root.exists) {
-            retainedAfterGatewayCleanup = true;
-            try {
-                const normalCloseRequested = await requestChromeSmokeClose(fixture, platform);
-                console.error(
-                    'Fixture retained after gateway EOF cleanup:',
-                    JSON.stringify({ processId: fixture.processId, port: fixture.port, normalCloseRequested }),
-                );
-            } catch (error) {
-                console.error('Retained fixture normal Close request failed:', fixture.processId, fixture.port, error);
+        await failures.cleanup('target-cleanup', async () => {
+            const evidence = await platform.snapshot(fixture.processId, fixture.port);
+            if (evidence.root.exists) {
+                retainedAfterGatewayCleanup = true;
+                try {
+                    const normalCloseRequested = await requestChromeSmokeClose(fixture, platform);
+                    console.error(
+                        'Fixture retained after gateway EOF cleanup:',
+                        JSON.stringify({ processId: fixture.processId, port: fixture.port, normalCloseRequested }),
+                    );
+                } catch (error) {
+                    console.error(
+                        'Retained fixture normal Close request failed:',
+                        fixture.processId,
+                        fixture.port,
+                        error,
+                    );
+                    failures.primary(error, 'target-cleanup');
+                }
             }
-        }
+        });
     }
-    assert.ok(
-        closed.every((result) => result.status === 'fulfilled'),
-        'Gateway EOF cleanup failed.',
-    );
-    assert.equal(client.child.exitCode, 0, 'Gateway did not exit normally.');
-    assert.equal(retainedAfterGatewayCleanup, false, 'Gateway EOF cleanup retained an application.');
+    await failures.cleanup('gateway-close', async () => {
+        assert.ok(
+            closed.every((result) => result.status === 'fulfilled'),
+            'Gateway EOF cleanup failed.',
+        );
+    });
+    await failures.cleanup('gateway-close', async () => {
+        assert.equal(client.child.exitCode, 0, 'Gateway did not exit normally.');
+    });
+    await failures.cleanup('target-cleanup', async () => {
+        assert.equal(retainedAfterGatewayCleanup, false, 'Gateway EOF cleanup retained an application.');
+    });
     for (const directory of new Set(managedDirectories.values()))
-        await assert.rejects(lstat(directory), { code: 'ENOENT' });
+        await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
     console.log(JSON.stringify({ gatewayExitCode: client.child.exitCode, deletedManagedProfilesUnder: folder }));
+    await startup?.close(!failures.hasFailure() && client.child.exitCode === 0);
+    failures.finish();
 }
