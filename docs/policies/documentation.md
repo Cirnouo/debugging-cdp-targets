@@ -35,6 +35,56 @@ to those rules. SECURITY.md owns vulnerability reporting; CODE_OF_CONDUCT.md
 owns community behavior and private incident reporting.
 Maintain progressive disclosure rather than copying all policies everywhere.
 
+## Root README content boundary
+
+The root README helps users understand the project, check prerequisites and
+complete a first supported task. Every added, changed or retained substantive
+paragraph must explain what the project does, what users need, how to install
+and explicitly invoke the Skill, what to expect in a first task, or where to
+find complete instructions.
+
+Keep each supported host's minimal verified installation commands and necessary
+connection-enablement or restart steps, explicit Skill invocation, a task
+example, and brief isolation-choice and Close/Keep expectations. Current release
+status and concise documentation, contribution and security navigation may
+remain. Do not remove necessary first-use steps merely to shorten the page.
+
+Complete configuration options, directory-selection order and cleanup rules
+belong in docs/user-guide/. Host metadata fields, consumers, primary research
+and host acceptance evidence belong in docs/host-metadata.md. Test matrices,
+platform acceptance and implementation details belong in the corresponding
+compatibility guide, test documentation, source documentation or ADRs. Do not
+add research or acceptance summaries to the root README merely because a
+related implementation changed; use the existing detailed documentation owners.
+
+A current limitation may appear briefly only when it has a concrete user
+consequence or required next action affecting first installation, invocation,
+task operation or applicability. State only the limitation and action or
+consequence needed at the entry point, and link to its detailed owner. A general
+claim that evidence might affect adoption does not justify acceptance history,
+unverified-item lists or evidence matrices. For example, retain the necessary
+explicit Skill invocation without repeating its injection acceptance history.
+
+Before committing a root README change, semantically review the entire resulting
+page, including added, changed and retained content:
+
+- Check each substantive paragraph's user-entry purpose and detailed content
+    ownership, and remove or relocate content outside this boundary.
+- Preserve necessary installation commands, host-specific invocation and setup
+    steps, the task example, key operation expectations and useful guide links.
+- Verify that recommended actions and support claims match current supported
+    behavior and the evidence for that host and platform. Repository checks,
+    CLI verification and manual Desktop acceptance are distinct evidence levels;
+    checking them does not require copying their records into the root README.
+- For each limitation exception, identify its concrete user consequence or next
+    action and ensure that the linked detailed documentation owns the evidence.
+
+Record the actual review scope, conclusions, applicable exceptions and remaining
+limits in the existing PR `Verification` section, with references to the
+corresponding detailed documentation. An unexplained statement such as
+"README boundary checked" is insufficient. Passing format, link or repository
+checks does not establish that this semantic review has been completed.
+
 ## Host metadata research
 
 Before the first implementation for a new host, or a change to an existing
