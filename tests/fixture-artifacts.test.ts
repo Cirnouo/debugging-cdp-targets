@@ -555,7 +555,15 @@ test('streamOnly BEGIN and completed progress are reconstructed for interrupted 
 test('actual fresh-process summary CLI renders running and finalized child evidence to stdout and GHA file', async () => {
     const { createFixtureArtifacts, createSmokeFailures } = await import('./smoke/fixture-artifacts.ts');
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-cli-'));
+    const parentEnvironment = JSON.stringify({ ...process.env });
     try {
+        const inheritedOutput = path.join(directory, 'inherited-runner-summary.md');
+        await writeFile(inheritedOutput, 'Inherited runner summary\n');
+        const ambientEnvironment = {
+            ...process.env,
+            GITHUB_STEP_SUMMARY: inheritedOutput,
+            DCT_TEST_PRIVATE_SENTINEL: 'PRIVATE_SUMMARY_TOKEN /private/runner/path',
+        };
         const entry = fileURLToPath(new URL('./smoke/fixture-ci.ts', import.meta.url));
         const init = spawnSync(process.execPath, [entry, 'init', directory], { encoding: 'utf8' });
         assert.equal(init.status, 0, init.stderr);
@@ -575,6 +583,7 @@ test('actual fresh-process summary CLI renders running and finalized child evide
         });
         const summary = spawnSync(process.execPath, [entry, 'summary', directory, index.collectionId], {
             encoding: 'utf8',
+            env: { ...ambientEnvironment, GITHUB_STEP_SUMMARY: '' },
         });
         assert.equal(summary.status, 0, summary.stderr);
         assert.match(init.stdout, /^[a-f0-9-]{36}\n$/);
@@ -584,8 +593,9 @@ test('actual fresh-process summary CLI renders running and finalized child evide
             /Runtime boundary: spawn; operation: 22222222-2222-4222-8222-222222222222; gateway events: 1/,
         );
         const output = path.join(directory, 'gha-summary.md');
+        await writeFile(output, 'Earlier step summary\n');
         const ghaEnvironment = {
-            ...process.env,
+            ...ambientEnvironment,
             GITHUB_STEP_SUMMARY: output,
             DCT_FIXTURE_ARTIFACT_URL: 'https://github.com/owner/repository/actions/runs/123/artifacts/456',
         };
@@ -594,6 +604,7 @@ test('actual fresh-process summary CLI renders running and finalized child evide
             env: ghaEnvironment,
         });
         assert.equal(interruptedGha.status, 0, interruptedGha.stderr);
+        assert.equal(interruptedGha.stdout, '');
         assert.match(await readFile(output, 'utf8'), /official-server: running/);
         assert.match(
             await readFile(output, 'utf8'),
@@ -607,26 +618,33 @@ test('actual fresh-process summary CLI renders running and finalized child evide
         const gha = spawnSync(process.execPath, [entry, 'summary', directory, index.collectionId], {
             encoding: 'utf8',
             env: {
-                ...process.env,
+                ...ambientEnvironment,
                 GITHUB_STEP_SUMMARY: output,
                 DCT_FIXTURE_ARTIFACT_URL: 'https://github.com/owner/repository/actions/runs/123/artifacts/456',
             },
         });
         assert.equal(gha.status, 0, gha.stderr);
+        assert.equal(gha.stdout, '');
         const text = await readFile(output, 'utf8');
+        assert.match(text, /^Earlier step summary\n/);
+        assert.match(text, /official-server: running/);
         assert.match(text, /official-server: passed/);
         assert.match(text, /entry-recovery: failed/);
         assert.match(
             text,
             /Failure artifact.*https:\/\/github.com\/owner\/repository\/actions\/runs\/123\/artifacts\/456/,
         );
+        assert.doesNotMatch(`${summary.stdout}${text}`, /PRIVATE_SUMMARY_TOKEN|\/private\/runner\/path/);
+        assert.equal(await readFile(inheritedOutput, 'utf8'), 'Inherited runner summary\n');
     } finally {
+        assert.ok(JSON.stringify({ ...process.env }) === parentEnvironment, 'Parent environment changed.');
         await rm(directory, { recursive: true, force: true });
     }
 });
 
 test('actual refused init-stage-current-failure-summary sequence preserves earlier normal and truncated files', async () => {
     const { createFixtureArtifacts, createSmokeFailures } = await import('./smoke/fixture-artifacts.ts');
+    const parentEnvironment = JSON.stringify({ ...process.env });
     for (const truncated of [false, true]) {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-cli-'));
         try {
@@ -646,6 +664,13 @@ test('actual refused init-stage-current-failure-summary sequence preserves earli
             prior.finish(false);
             const names = await readdir(directory);
             const before = await Promise.all(names.map((name) => readFile(path.join(directory, name), 'utf8')));
+            const inheritedOutput = path.join(directory, 'inherited-runner-summary.md');
+            await writeFile(inheritedOutput, 'Inherited runner summary\n');
+            const ambientEnvironment = {
+                ...process.env,
+                GITHUB_STEP_SUMMARY: inheritedOutput,
+                DCT_TEST_PRIVATE_SENTINEL: 'PRIVATE_SUMMARY_TOKEN /private/runner/path',
+            };
             const refused = spawnSync(process.execPath, [entry, 'init', directory], { encoding: 'utf8' });
             assert.equal(refused.status, 1);
             assert.equal(refused.stdout, '');
@@ -667,6 +692,7 @@ test('actual refused init-stage-current-failure-summary sequence preserves earli
             );
             const summary = spawnSync(process.execPath, [entry, 'summary', directory, refused.stdout.trim()], {
                 encoding: 'utf8',
+                env: { ...ambientEnvironment, GITHUB_STEP_SUMMARY: '' },
             });
             assert.equal(summary.status, 0, summary.stderr);
             assert.match(summary.stdout, /Diagnostic limitation: current collection unavailable/);
@@ -674,11 +700,25 @@ test('actual refused init-stage-current-failure-summary sequence preserves earli
                 summary.stdout,
                 /11111111|passed|gateway-cleanup|gateway events: 2000|gateway events: 1/,
             );
+            const output = path.join(directory, 'gha-refused-summary.md');
+            await writeFile(output, 'Earlier step summary\n');
+            const gha = spawnSync(process.execPath, [entry, 'summary', directory, refused.stdout.trim()], {
+                encoding: 'utf8',
+                env: { ...ambientEnvironment, GITHUB_STEP_SUMMARY: output },
+            });
+            assert.equal(gha.status, 0, gha.stderr);
+            assert.equal(gha.stdout, '');
+            const text = await readFile(output, 'utf8');
+            assert.match(text, /^Earlier step summary\nDiagnostic limitation: current collection unavailable/);
+            assert.doesNotMatch(text, /11111111|passed|gateway-cleanup|gateway events: 2000|gateway events: 1/);
+            assert.doesNotMatch(`${summary.stdout}${text}`, /PRIVATE_SUMMARY_TOKEN|\/private\/runner\/path/);
+            assert.equal(await readFile(inheritedOutput, 'utf8'), 'Inherited runner summary\n');
             assert.deepEqual(
                 await Promise.all(names.map((name) => readFile(path.join(directory, name), 'utf8'))),
                 before,
             );
         } finally {
+            assert.ok(JSON.stringify({ ...process.env }) === parentEnvironment, 'Parent environment changed.');
             await rm(directory, { recursive: true, force: true });
         }
     }
