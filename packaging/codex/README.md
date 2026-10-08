@@ -14,9 +14,12 @@ The manifest's `interface.defaultPrompt` supplies three distinct single-line
 starter prompts for screenshots, console/network diagnostics and page-load
 performance. These prompts do not repeat the Skill name. The CLI smoke proves
 that formal explicit Skill invocation supplies the complete installed instructions;
-automatic Skill injection when selecting a Desktop starter prompt and Desktop
-rendering remain pending manual acceptance. Local Plugin validation requires
-three distinct nonempty single-line strings of at most 128
+automatic Skill injection when selecting a Desktop starter prompt remains
+unverified. Manual Desktop 26.1002.52244 acceptance confirmed the project website,
+Skill title/short description/icons and full long description. The
+[host metadata record](../../docs/host-metadata.md) owns the dated version,
+source/cache evidence and remaining presentation limits. Local Plugin validation
+requires three distinct nonempty single-line strings of at most 128
 Unicode code points, matching the
 [Codex 0.161.0 runtime loader](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/manifest.rs#L533-L551).
 This limit applies when Codex loads the manifest.

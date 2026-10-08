@@ -32,8 +32,8 @@ Windows baselines are Codex CLI 0.160.0 and Claude Code 2.1.283; the metadata
 follow-up ran 0.161.0 and 2.1.294, not the older versions. These executables are
 not installed by CI. See [host metadata](../host-metadata.md) for the dated
 primary sources, exact temporary Skill guards, Windows read-only global discovery
-and public catalog HTTP limits, and pending manual Desktop gate. CLI metadata
-and explicit model context cannot substitute for that UI evidence.
+and public catalog HTTP limits, and separate manual Desktop acceptance. CLI
+metadata and explicit model context cannot substitute for that UI evidence.
 Existing CI check names and real Chrome acceptance remain unchanged. Static audits,
 generated comparisons and shared runtime regressions validate both host payloads.
 

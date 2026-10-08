@@ -73,10 +73,14 @@ during discovery before temporary path disables, while model threads are guarded
 to the fixture enabled set. Child Git transport restrictions still permit
 in-process public catalog HTTP fallback. No personal config/global Skill is
 modified. This is not OS-profile, no-read or complete network isolation.
-Desktop website navigation, Skill presentation, candidate long description and
-automatic starter prompt injection remain unverified. See the
-[host metadata record](../host-metadata.md) for primary sources and the pending
-manual pre-merge gate.
+
+On 2026-10-08, manual acceptance on Codex Desktop 26.1002.52244, build 13536,
+prod, confirmed project website navigation, Skill title/short description/icons
+and the full long description at source ebcd580. The installed cache matched all
+380 files from that pinned source before the human checked the UI. Automatic
+starter prompt injection and dark-mode-specific rendering remain unverified.
+See the [host metadata record](../host-metadata.md) for primary sources, cache
+preparation evidence and the exact manual scope.
 
 ## Desktop Chrome acceptance
 

@@ -67,7 +67,7 @@ See [source ownership](src/README.md), [tests](tests/README.md), and
 Before implementing a new host or changing a metadata contract, follow the
 [host research policy](docs/policies/documentation.md#host-metadata-research).
 The [host metadata record](docs/host-metadata.md) owns primary sources, adopted
-fields and the distinction between CLI proof and pending Desktop acceptance.
+fields and the distinction between CLI proof and manual Desktop acceptance.
 
 The accepted [data directory isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
 governs the runtime boundary. Review its intent-first research, existing/new

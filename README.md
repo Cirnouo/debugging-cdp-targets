@@ -52,8 +52,10 @@ In a new conversation, enable the Plugin's MCP connection and invoke
 `$debugging-cdp-targets`. [Installation details](docs/user-guide/installation.md#codex).
 
 Explicit Skill invocation is the verified way to load the full instructions.
-Desktop starter prompt selection and metadata rendering remain pending manual
-acceptance; see the dated [host metadata evidence](docs/host-metadata.md).
+The project website, Skill title/description/icons and full long description
+passed manual Desktop acceptance. Starter prompt selection's automatic full
+Skill injection remains unverified; see the dated
+[host metadata evidence](docs/host-metadata.md).
 
 ### Claude Code
 
@@ -88,7 +90,7 @@ Explore the [user guide](docs/user-guide/README.md):
 [Installation](docs/user-guide/installation.md) · [Compatibility](docs/user-guide/compatibility.md) · [Workflow](docs/user-guide/workflow.md) · [Configuration](docs/user-guide/configuration.md) · [Privacy](docs/user-guide/privacy.md) · [Troubleshooting](docs/user-guide/troubleshooting.md)
 
 The [host metadata record](docs/host-metadata.md) explains project links, Skill
-presentation and actual CLI acceptance separately from the pending Desktop gate.
+presentation and dated CLI/Desktop acceptance with their remaining limits.
 
 ---
 
