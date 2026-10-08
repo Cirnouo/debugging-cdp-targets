@@ -16,6 +16,7 @@ interface WorkflowStep {
 interface WorkflowJob {
     name: string;
     steps: WorkflowStep[];
+    if?: string;
     needs?: string;
     env?: Record<string, string>;
     strategy?: { 'fail-fast'?: boolean; matrix: { include: { os: string; chrome: string }[] } };
@@ -74,6 +75,25 @@ function readWorkflow(source: string): Workflow {
 const workflowUrl = new URL('../.github/workflows/ci.yml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
+
+test('Windows CI requires separate default and interactive lanes unconditionally after typecheck', () => {
+    const job = workflow.jobs['windows-tests'];
+    assert.equal(job.name, 'Windows tests');
+    assert.equal(job.needs, 'quality');
+    assert.equal(Object.hasOwn(job, 'if'), false);
+    assert.equal(Object.hasOwn(job, 'continue-on-error'), false);
+    for (const step of job.steps) {
+        assert.equal(Object.hasOwn(step, 'if'), false);
+        assert.equal(Object.hasOwn(step, 'continue-on-error'), false);
+    }
+    const typecheck = job.steps.findIndex((step) => step.run === 'pnpm typecheck');
+    assert.ok(typecheck >= 0);
+    for (const command of ['pnpm test', 'pnpm test:windows:interactive']) {
+        const matches = job.steps.flatMap((step, index) => (step.run === command ? [index] : []));
+        assert.equal(matches.length, 1, command);
+        assert.ok(matches[0] !== undefined && matches[0] > typecheck, command);
+    }
+});
 
 test('weekly CI runs the same supply-chain-first gates on the default branch', () => {
     assert.deepEqual(workflow.on.schedule, [{ cron: '17 1 * * 1' }]);

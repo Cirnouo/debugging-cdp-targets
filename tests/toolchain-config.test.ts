@@ -28,6 +28,18 @@ const lintStaged = strings(packageData['lint-staged']);
 const biomeInput: unknown = JSON.parse(await readFile(new URL('biome.json', rootUrl), 'utf8'));
 const biome = record(biomeInput);
 
+test('default test and coverage commands select only root regressions with sequential files and retained floors', () => {
+    assert.equal(command(scripts, 'test'), 'node --test --test-concurrency=1 tests/*.test.ts');
+    assert.equal(
+        command(scripts, 'test:coverage'),
+        'node --experimental-test-coverage --test-coverage-lines=52 --test-coverage-branches=71 --test-coverage-functions=61 --test --test-concurrency=1 tests/*.test.ts',
+    );
+});
+
+test('explicit Windows interactive command selects only interactive tests with sequential files', () => {
+    assert.equal(scripts['test:windows:interactive'], 'node --test --test-concurrency=1 tests/interactive/*.test.ts');
+});
+
 test('package scripts expose every writing and non-writing quality gate', () => {
     const required = [
         'prepare',

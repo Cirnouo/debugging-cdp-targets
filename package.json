@@ -17,6 +17,7 @@
         "typecheck": "tsc --noEmit",
         "check:scripts": "node tooling/check-scripts.ts",
         "test": "node --test --test-concurrency=1 tests/*.test.ts",
+        "test:windows:interactive": "node --test --test-concurrency=1 tests/interactive/*.test.ts",
         "test:coverage": "node --experimental-test-coverage --test-coverage-lines=52 --test-coverage-branches=71 --test-coverage-functions=61 --test --test-concurrency=1 tests/*.test.ts",
         "check:repo": "node tooling/repository-audit.ts",
         "check:distribution": "node tooling/distribution-audit.ts",
