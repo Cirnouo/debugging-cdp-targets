@@ -96,6 +96,9 @@ Complete the [trusted installation sequence](docs/policies/supply-chain.md#insta
 in every clone/worktree, then verify the generated Git hook entry under the
 [local hook policy](docs/policies/quality.md#local-git-hook-initialization).
 Do not treat a manual verification run as proof that Git will run `pre-push`.
+Before SSH pushes, initialize and verify the repository's fixed 30/3 keepalive
+settings under the [SSH push policy](docs/policies/quality.md#ssh-push-initialization),
+preserving existing SSH commands and identity/proxy options.
 
 The official Server is a complete unchanged npm release delivered in Plugin dist.
 Builds verify maintained tarball/file evidence and both locks before copying;

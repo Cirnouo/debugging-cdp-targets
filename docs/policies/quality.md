@@ -90,6 +90,53 @@ is useful validation but does not establish that Git will invoke `pre-push`.
 Retain the actual push output and distinguish a hook verification failure from
 a remote transfer failure; never report an absent hook as a successful hook run.
 
+## SSH push initialization
+
+For this repository's SSH pushes using OpenSSH, require `ServerAliveInterval=30` and
+`ServerAliveCountMax=3` before starting Git. These are repository choices using
+the [OpenSSH server-alive options](https://man.openbsd.org/ssh_config.5#ServerAliveInterval):
+send encrypted keepalive requests after 30 seconds without received data and
+disconnect after three unanswered requests. This protects idle transport during
+the lengthy pre-push verification; it does not remedy initial connection timeouts.
+
+Git's [core.sshCommand](https://git-scm.com/docs/git-config#Documentation/git-config.txt-coresshCommand)
+can persist these options locally. This setting is not cloned, so complete this
+initialization in every clone and verify the effective command in each worktree.
+Inspect `git config --show-scope --show-origin --get core.sshCommand`,
+`ssh.variant`, and the current process's `GIT_SSH_COMMAND`, `GIT_SSH` and
+`GIT_SSH_VARIANT` before changing configuration. Git documents its
+[SSH environment precedence](https://git-scm.com/docs/git#Documentation/git.txt-GITSSHCOMMAND);
+the command order is `GIT_SSH_COMMAND`, effective `core.sshCommand`, `GIT_SSH`,
+then `ssh`. A new local command must not hide an existing `GIT_SSH` wrapper.
+
+When the effective client is ordinary OpenSSH with no custom command or wrapper,
+run this from the clone root:
+
+```powershell
+git config --local core.sshCommand "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
+git config --show-scope --show-origin --get core.sshCommand
+```
+
+If an existing command selects an executable, configuration, identity, proxy or
+wrapper, preserve it and add the two options to its actual OpenSSH invocation.
+Replace conflicting occurrences rather than appending duplicates: OpenSSH uses
+the first obtained value. Ensure any higher-priority environment or worktree
+override also has these settings. Other SSH clients require their own supported
+equivalent; do not pass OpenSSH options to them or replace them silently. Do not
+change global Git or SSH configuration for this repository setup.
+
+Verify the effective OpenSSH executable and all existing options with `-G`, using
+the actual push remote's user, host alias and port. For the ordinary GitHub case:
+
+```powershell
+ssh -G -o ServerAliveInterval=30 -o ServerAliveCountMax=3 git@github.com
+```
+
+Inspect the local output for `serveraliveinterval 30` and `serveralivecountmax 3`.
+Keep initialization outside `pre-push`: Git has already opened its transport
+before that hook runs, so a configuration change there cannot affect that push.
+Retain the actual push and hook results under the preceding hook policy.
+
 ## Remote enforcement
 
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
