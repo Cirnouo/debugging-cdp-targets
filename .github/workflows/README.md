@@ -42,10 +42,28 @@ messages and Quality wait for it; Windows/Portable/Real Chrome tests wait for Qu
 failed security check prevents downstream builds. Registry failures also block.
 
 Quality, Windows tests and both Portable tests execute strict TypeScript
-typechecking before their regression tests. Windows additionally parses the
-PowerShell helper with both 5.1 and 7; portable tests remain simulated CDP, not
-claims of real Linux/macOS application acceptance. The first security entry is
-generated JavaScript so lockfile preflight needs no installed dependencies.
+typechecking before their regression tests. The required Windows tests job keeps
+`needs: quality` and runs `pnpm test` followed by `pnpm test:windows:interactive`
+as separate mandatory steps after `pnpm typecheck`, without job/step conditions
+or `continue-on-error`. Windows additionally parses the PowerShell helper with
+both 5.1 and 7; portable tests remain simulated CDP, not claims of real
+Linux/macOS application acceptance. The first security entry is generated
+JavaScript so lockfile preflight needs no installed dependencies.
+
+Contributor `pnpm test`, `pnpm test:coverage`, `pnpm verify:push` and pre-push
+verification use the default `tests/*.test.ts` lane without launching GUI
+fixtures. The explicit `pnpm test:windows:interactive` command selects
+`tests/interactive/*.test.ts` and requires an interactive Windows desktop; it
+fails on non-Windows. Both lanes run files sequentially with
+`--test-concurrency=1`, and default coverage keeps the 52% line, 71% branch and
+61% function floors. See the [quality policy](../../docs/policies/quality.md)
+and [interactive inventory](../../tests/interactive/README.md) for contributor
+requirements and native fixture prerequisites.
+
+Record local default-lane verification, any explicit interactive execution and
+the remote Windows tests result independently, with their tested commit,
+results, prerequisite skips and remaining limits. A passing local pre-push gate
+does not establish interactive acceptance; CI requires both lanes.
 
 Weekly CI runs on Mondays at 01:17 UTC (09:17 Asia/Shanghai); CodeQL runs at
 01:47 UTC (09:47 Asia/Shanghai). Scheduled commit checks use GitHub's explicit
