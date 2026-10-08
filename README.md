@@ -51,12 +51,6 @@ codex plugin add debugging-cdp-targets@debugging-cdp-targets
 In a new conversation, enable the Plugin's MCP connection and invoke
 `$debugging-cdp-targets`. [Installation details](docs/user-guide/installation.md#codex).
 
-Explicit Skill invocation is the verified way to load the full instructions.
-The project website, Skill title/description/icons and full long description
-passed manual Desktop acceptance. Starter prompt selection's automatic full
-Skill injection remains unverified; see the dated
-[host metadata evidence](docs/host-metadata.md).
-
 ### Claude Code
 
 ```powershell
@@ -76,21 +70,16 @@ Launch a separate Chrome debugging window and open https://example.com.
 Inspect the page's network requests and console errors, and summarize what you find.
 ```
 
-The Agent asks isolation intent before preparing a launch and checks occupancy
-before every new target in either mode. Chrome directory choices are Agent
-selection, the explicit Chrome preset, an existing directory, then a new child
-under a selected parent. Cleanup follows a preselected retain/delete policy;
-Close/Keep separately decides application lifetime. See the
-[detailed workflow](docs/user-guide/workflow.md).
+The Agent confirms your data directory isolation choice before launch. Before
+ending the task, it asks whether to **Close** the target or **Keep** it for later
+work. See the [detailed workflow](docs/user-guide/workflow.md) for directory
+selection, cleanup and target lifetime.
 
 ## Documentation
 
 Explore the [user guide](docs/user-guide/README.md):
 
 [Installation](docs/user-guide/installation.md) · [Compatibility](docs/user-guide/compatibility.md) · [Workflow](docs/user-guide/workflow.md) · [Configuration](docs/user-guide/configuration.md) · [Privacy](docs/user-guide/privacy.md) · [Troubleshooting](docs/user-guide/troubleshooting.md)
-
-The [host metadata record](docs/host-metadata.md) explains project links, Skill
-presentation and dated CLI/Desktop acceptance with their remaining limits.
 
 ---
 
