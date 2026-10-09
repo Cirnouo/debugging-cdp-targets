@@ -1,5 +1,9 @@
 # Tests
 
+- `instructions-smoke-evidence.test.ts` rejects arbitrary request/user strings
+  as MCP instruction evidence and validates semantic tool descriptions and the
+  exact Claude host-generated reminder/deferred-discovery carrier.
+
 - `fixture-diagnostics.test.ts` exercises opt-in observation without real targets,
   operation routes, direct I/O origins, primary startup errors, independent EOF
   cleanup, closed metadata and safe receiver failure containment.

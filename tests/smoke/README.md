@@ -1,5 +1,40 @@
 # Explicit integration smoke
 
+`codex-instructions.ts` and `claude-instructions.ts` install the production
+Plugin metadata and Skill into temporary host environments, substituting only
+the MCP command with `mcp-instructions-entry.ts`. Run them explicitly:
+
+```text
+node tests/smoke/codex-instructions.ts [codex-executable]
+node tests/smoke/claude-instructions.ts [claude-executable]
+```
+
+`instructions-evidence.ts` checks production initialization evidence, semantic
+request carriers and source fingerprints for these smokes.
+
+The loopback substitute model captures real outbound requests and checks the
+complete production initialize paragraph at semantic metadata locations. Codex
+returns one controlled search request followed by final text. Claude enables
+ToolSearch only for this child and returns final text without executing search.
+Its scoped MCP Server Instructions reminder is host-generated system context
+transported in a user-role message; the parser requires the exact envelope,
+Plugin scope, paragraph and separate seven-name deferred discovery block before
+the independently verified supplied prompt. It also checks the actual host
+system's reminder contract. This is a controlled-capture assertion, not a rule
+that arbitrary user reminder tags prove authorship.
+Both disable Hooks, invoke no Skill, forbid all MCP tool calls, and launch no
+target or official upstream. Existing Hook/Skill smokes retain their defaults
+and their separate fake process/CDP/upstream I/O boundary.
+
+Each new smoke prints and retains its temporary evidence directory, including
+raw requests, MCP initialize/discovery records and successful acceptance metadata.
+Failure captures remain available for diagnosis. Temporary configuration uses no
+account credentials; Codex may discover Windows known-folder Skills despite HOME
+relocation, so its existing isolation guard disables unrelated Skills only in
+temporary CODEX_HOME before starting the thread. Consumption establishes host
+delivery to the substitute model, not real-model adherence, automatic Skill
+matching, Claude search execution or Desktop presentation.
+
 `timeout-isolation.ts` exercises an intentionally unfinished official handler on
 two isolated Chrome targets, validates timeout quarantine and peer availability,
 then explicitly restarts and normally closes them. It retains test profiles.

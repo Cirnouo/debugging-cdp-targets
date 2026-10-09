@@ -139,8 +139,45 @@ advertised inner implementation name `debugging-cdp-targets` have distinct roles
 | --- | --- | --- |
 | `serverInfo` and capabilities | Codex [retains implementation fields](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1131); the [status processor](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/app-server/src/request_processors/mcp_processor.rs#L529) and generated `McpServerInfo`/`McpServerStatus` expose `serverInfo` and `serverCapabilities`. | Keep existing identity and tools capability. The production-adapter initialize regression verifies the unchanged name/version and exact tools capability; host API observability remains source evidence. |
 | Optional `title`, `description`, `icons`, `websiteUrl` | C5's `app-initial-25361a10f2bf.js` has conditional metadata consumers: `N_n` mention/search tools gated by `openai/mentions`, `I_n` file metadata and `W_n` `openai/settings`. `H_n` chooses `tool_meta.connector_name ?? serverInfo.title ?? name`. `app-shared-40678a67f0e3.js` `Rqr` (export `CG`) accepts HTTPS/data icons with theme fallback. | Keep omitted: no applicable ordinary gateway presentation benefit was found. These fields are not declared unsupported. Claude-specific optional display consumers and actual Desktop presentation remain unverified. |
-| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **IMPLEMENTED:** return the [execution plan's exact 689-byte text](superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production-adapter protocol regression verifies exact text, workflow anchors and the byte bound. Captured dynamic host consumption is pending. |
-| `instructions` in Claude | [Official server-author guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) says instructions help tool search and documents a 2,048-character bound. | Use the same implemented text; it fits both researched bounds. Dynamic host consumption remains pending; search execution and real-model adherence are not established by documentation. |
+| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **IMPLEMENTED:** return the [execution plan's exact 689-byte text](superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production-adapter protocol regression verifies exact text, workflow anchors and the byte bound. Actual 0.162.0 Plugin namespace/search consumption passed in the dated acceptance below. |
+| `instructions` in Claude | [Official server-author guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) says instructions help tool search and documents a 2,048-character bound. | Use the same implemented text; it fits both researched bounds. Actual 2.1.295 first-request consumption passed through the scoped host reminder documented below; search execution and real-model adherence remain unverified. |
+
+### MCP instruction consumption acceptance, 2026-10-09
+
+Independent opt-in smokes captured real outbound loopback model requests from
+Codex CLI 0.162.0 and Claude Code 2.1.295. Temporary Plugins preserve production
+manifests, assets and Skill bytes; only their MCP command selects the target-free
+production-adapter fixture. The fixture advertises the seven actual lifecycle
+tools, obtains the exact 689-byte instructions from the production adapter, and
+records initialize/discovery while failing every tools/call. It imports no
+gateway runtime, catalog router, process manager or official upstream.
+
+| Host | Actual request carrier and verification | Evidence limits |
+| --- | --- | --- |
+| Codex CLI 0.162.0 | After one controlled `tool_search_call` for `dct_connection_status`, the second actual request contains the complete paragraph at `$.tools[11].description` and `$.input[5].tools[0].description`. Server status identifies `debugging-cdp-targets@dct-instructions-test`, and exposes seven lifecycle declarations. | Search metadata consumption only; the substitute model returns final text without any MCP tool call. |
+| Claude Code 2.1.295 | The first actual request contains the complete paragraph at `$.messages[0].content[3].text`: an exact `<system-reminder>` block headed `# MCP Server Instructions`, with sole scope `## plugin:debugging-cdp-targets:cdp-targets`. An independent reminder at `$.messages[0].content[2].text` lists exactly seven deferred Plugin tool names. Upfront tools are `ToolSearch` and an optional exact `DeferredToolPlaceholder`; MCP callable schemas are absent. | The transport role is `user`, not `$.system`. The host's actual system text describes reminder blocks as system context. One final substitute-model text response completes the turn; ToolSearch execution is untested. |
+
+Claude's carrier is established by the controlled harness: the only supplied
+stdin prompt is independently checked as the final text block and contains no
+production instructions, Hooks are disabled, and no Skill or tool is invoked.
+Reminder tags alone do not authenticate arbitrary user content. The parser
+requires exact host envelope, Plugin scope, complete production text, independent
+deferred discovery and host system contract. Regressions reject ordinary echo,
+wrong scope, truncation, duplicate/extra prose, prompt contamination and already
+loaded MCP schemas. The initial system-array-only assertion failed and its raw
+capture was retained; the reviewed correction verifies this specific observed
+host carrier without weakening complete-text acceptance.
+
+Both successful captures retain raw requests, production initialize responses,
+actual versions, semantic locations, zero tools/call evidence, tested Git revision,
+dirty state and SHA-256 hashes of the test/adapter source. Codex uses temporary
+CODEX_HOME isolation; Windows known-folder discovery can still read unrelated
+Skill metadata, so the existing guard disables those Skills in temporary config
+before creating a thread. Existing explicit Skill smokes also passed on these
+versions; their fake process/CDP/upstream I/O boundary is separate from the new
+adapter-only consumption fixture. These results establish host delivery, not
+real-model adherence, automatic Skill matching or Desktop rendering, and do not
+upgrade historical 0.161.0/2.1.294 acceptance records.
 
 The packed Desktop references above identify files and branches without personal
 installation paths; the local bundle has no public source URL. Static consumer

@@ -143,6 +143,7 @@ export async function claudeHost(
     prompt: string,
     afterResult?: (index: number) => Promise<string | undefined>,
     timeoutMs = 90_000,
+    options: { toolSearch?: boolean } = {},
 ) {
     const version = claudeVersion(await claudeCli(executable, ['--version'], temporary, endpoint));
     const args = [
@@ -152,7 +153,7 @@ export async function claudeHost(
         '--model',
         'claude-sonnet-4-6',
         '--tools',
-        '',
+        options.toolSearch ? 'ToolSearch' : '',
         '--permission-mode',
         'dontAsk',
         '--input-format',
@@ -167,7 +168,7 @@ export async function claudeHost(
         path.join(temporary, 'debug.log'),
         ...extra,
     ];
-    const env = claudeEnvironment(temporary, endpoint);
+    const env = claudeEnvironment(temporary, endpoint, process.env, options);
     await writeFile(
         path.join(temporary, 'launch.json'),
         JSON.stringify({ executable, args, cwd: path.join(temporary, 'workspace'), env }, null, 4),
