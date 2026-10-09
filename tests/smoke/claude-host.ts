@@ -7,6 +7,7 @@ export function claudeEnvironment(
     temporary: string,
     endpoint: string,
     parent: NodeJS.ProcessEnv = process.env,
+    options: { toolSearch?: boolean } = {},
 ): NodeJS.ProcessEnv {
     const url = new URL(endpoint);
     assert.ok(
@@ -49,7 +50,8 @@ export function claudeEnvironment(
         DISABLE_TELEMETRY: '1',
         DISABLE_ERROR_REPORTING: '1',
         CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY: '1',
-        ENABLE_TOOL_SEARCH: 'false',
+        ENABLE_TOOL_SEARCH: options.toolSearch ? 'true' : 'false',
+        ...(options.toolSearch ? { MCP_CONNECTION_NONBLOCKING: '0' } : {}),
     });
 }
 export function claudeVersion(value: string): string {

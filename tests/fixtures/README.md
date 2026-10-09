@@ -1,5 +1,10 @@
 # Test fixtures
 
+`mcp-instructions-entry.ts` connects only the production MCP entry adapter with
+an empty official catalog and read-only status. It retains initialization and
+discovery evidence, fails on every tools/call, and imports no runtime, router,
+process manager or upstream. Instruction consumption never launches a target.
+
 `issue-feedback-http.ts` replaces only subprocess `fetch` with a private fake
 GitHub boundary for the actual CI entry test. It records request methods/routes
 in a disposable transcript and cannot send network traffic; the test confirms

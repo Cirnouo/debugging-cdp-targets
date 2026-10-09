@@ -41380,6 +41380,7 @@ function lifecycleTools(hookEvents) {
 }
 
 // src/adapters/mcp-entry-server.ts
+var INITIALIZATION_INSTRUCTIONS = "Use this gateway to inspect local Chrome browsers or other verified CDP-capable applications with official Chrome DevTools tools. Start with dct_connection_status({}) to discover entryId and connection summaries. dct_connection_start launches a new application for each target connection; never take over an existing application. Before preparing a launch, follow the debugging-cdp-targets Skill for isolation choices (including none), occupancy checks, verified startup and readiness. Route every official tool call with the selected connection's current connectionId and sessionId in _dct. Before ending a target's work, obtain Close or Keep unless the user already supplied that choice.";
 var HOOK_EVENTS = ["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"];
 function createMcpEntryServer(options) {
   const routeSchema = {
@@ -41402,7 +41403,10 @@ function createMcpEntryServer(options) {
       }
     };
   });
-  const server = new Server({ name: "debugging-cdp-targets", version: "0.1.0" }, { capabilities: { tools: {} } });
+  const server = new Server(
+    { name: "debugging-cdp-targets", version: "0.1.0" },
+    { capabilities: { tools: {} }, instructions: INITIALIZATION_INSTRUCTIONS }
+  );
   let resolveClosed = () => {
   };
   const closed = new Promise((resolve) => {
