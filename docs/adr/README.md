@@ -39,6 +39,9 @@
 - `0015-explicit-data-directory-isolation.md`: required
     isolation intent, researched application binding, explicit directory operations,
     connection leases, preauthorized whole-directory cleanup and explicit evidence.
+- `0016-toolchain-compatibility.md`: supported stable Node 24 range with the
+    existing minimum, an exact CI/reproduction baseline, optional everyday mise
+    selection and the unchanged pnpm/supply-chain pin.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.

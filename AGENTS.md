@@ -86,11 +86,22 @@ and update the [host metadata evidence](docs/host-metadata.md).
 - [Plugin instructions](packaging/shared/skills/debugging-cdp-targets/SKILL.md)
 - [Tests](tests/README.md) and [tooling](tooling/README.md)
 
-Use Node 24.21.0 and pnpm 12.4.2. Run focused tests first, then
+Use stable Node >=24.21.0 <25 and exact pnpm 12.4.2. Existing Node installations
+within that range are supported; Node 24.21.0 is the CI and problem-reproduction
+baseline. Optional mise selects Node 24 for everyday work and exact pnpm;
+check `node --version` before the trusted installation sequence and update any
+selected older Node to meet the floor. See the
+[toolchain policy](docs/policies/quality.md#toolchain-compatibility).
+
+Run focused tests first, then
 `pnpm verify:push`. Build committed runtime with `pnpm build:plugin`;
 `pnpm check:build` verifies it without writing. Domain changes are test-first.
 Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
 generated JavaScript is distribution output, never a handwritten fallback.
+
+Before creating a linked worktree on Windows, complete the
+[long-path initialization](docs/policies/quality.md#windows-worktree-long-path-initialization)
+in the existing clone and verify effective `core.longpaths=true`.
 
 Complete the [trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order)
 in every clone/worktree, then verify the generated Git hook entry under the

@@ -29,7 +29,7 @@ test('gateway imports only public split SDK entry points', () => {
     }
 });
 
-test('repository audit accepts AGENTS.md as the contributor entry point', async () => {
+test('repository audit accepts the supported Node range and contributor entry point', async (context) => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-agents-')));
     try {
         execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
@@ -40,7 +40,7 @@ test('repository audit accepts AGENTS.md as the contributor entry point', async 
             LICENSE: license,
             '.gitignore': '.idea/\nnode_modules/\n.env*\n',
             'CHANGELOG.md': '## [Unreleased]\n',
-            'package.json': `${JSON.stringify({ version: '0.1.0', engines: { node: '24.21.0' }, packageManager: 'pnpm@12.4.2' }, null, 4)}\n`,
+            'package.json': `${JSON.stringify({ version: '0.1.0', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' }, null, 4)}\n`,
             'docs/README.md': '# Documentation\n',
             'docs/domain-language.md': '# Domain language\n',
             'plugins/README.md': '# Plugins\n',
@@ -75,6 +75,37 @@ test('repository audit accepts AGENTS.md as the contributor entry point', async 
             await writeFile(target, source);
         }
         assert.deepEqual(await auditRepository(root), []);
+        const manifest = { version: '0.1.0', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' };
+        async function auditManifest(value: unknown) {
+            await writeFile(path.join(root, 'package.json'), `${JSON.stringify(value, null, 4)}\n`);
+            return auditRepository(root);
+        }
+        for (const node of ['24.21.0', '^24.12.0', '>=24.21.0', '^25.0.0', undefined]) {
+            await context.test(`rejects Node declaration ${node ?? '(absent)'}`, async () => {
+                assert.deepEqual(await auditManifest({ ...manifest, engines: { node } }), [
+                    'Node supported range drifted: engines.node must be ^24.21.0.',
+                ]);
+            });
+        }
+        await context.test('rejects absent Node engines', async () => {
+            assert.deepEqual(await auditManifest({ ...manifest, engines: undefined }), [
+                'Node supported range drifted: engines.node must be ^24.21.0.',
+            ]);
+        });
+        for (const packageManager of ['pnpm@^12.4.2', 'pnpm@12', 'pnpm@12.4.1', undefined]) {
+            await context.test(`rejects pnpm declaration ${packageManager ?? '(absent)'}`, async () => {
+                assert.deepEqual(await auditManifest({ ...manifest, packageManager }), [
+                    'pnpm pin drifted: packageManager must be pnpm@12.4.2.',
+                ]);
+            });
+        }
+        await context.test('reports Node range and pnpm pin drift independently', async () => {
+            assert.deepEqual(await auditManifest({ ...manifest, engines: {}, packageManager: 'pnpm@latest' }), [
+                'Node supported range drifted: engines.node must be ^24.21.0.',
+                'pnpm pin drifted: packageManager must be pnpm@12.4.2.',
+            ]);
+        });
+        assert.deepEqual(await auditManifest(manifest), []);
         const asset = path.join(root, 'packaging/shared/assets');
         await mkdir(asset);
         await writeFile(path.join(asset, 'README.md'), '# Approved icons\n');

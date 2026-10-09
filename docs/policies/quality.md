@@ -8,6 +8,44 @@ Only each official release subtree verified against maintained release evidence
 keeps upstream formatting and directory documentation. All delivered JavaScript
 still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
 
+## Toolchain compatibility
+
+Support stable Node >=24.21.0 <25, declared as `engines.node: "^24.21.0"`.
+Existing Node installations within that range are supported. Node 24.21.0
+remains the exact CI and problem-reproduction baseline. Keep pnpm exactly
+12.4.2 in `packageManager`, both locks and the isolated audit manifest; a Node
+compatibility change does not authorize dependency upgrades or lock rewrites.
+See [ADR 0016](../adr/0016-toolchain-compatibility.md) for evidence and rationale.
+
+CI also runs `Node compatibility (24.x)` on `ubuntu-latest` after Quality succeeds.
+It uses exact pnpm 12.4.2 and `setup-node` with `node-version: '24.x'` and
+`check-latest: true` to select the newest available stable Node 24 release,
+including when the runner cache has an older match; see the reviewed action's
+[versioned check-latest documentation](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/docs/advanced-usage.md#check-latest-version).
+After a normal frozen install, it runs `pnpm typecheck`, `pnpm test`,
+`pnpm check:build`, `pnpm check:security:build` and `pnpm smoke:official` in order.
+This lane establishes Ubuntu compatibility for the default regressions, generated
+build comparisons and delivered official catalog with normal stdio shutdown.
+It launches no GUI and does not establish latest-24 Windows, macOS or browser
+acceptance. The existing canonical jobs retain exact Node 24.21.0 and their
+acceptance checks. The main Ruleset requirements remain unchanged.
+
+Optional `mise.toml` selects Node `24` and exact pnpm `12.4.2` for everyday work;
+it is not an exact reproducibility baseline. As documented by
+[mise](https://mise.jdx.dev/dev-tools/versions.html#how-a-request-resolves),
+prefix requests can reuse an installed match. `mise install node@24` resolves
+the newest available 24.x without writing configuration. Check `node --version`
+before the trusted installation sequence; update a selected release below
+24.21.0 first, then check again. Do not bypass the supported floor.
+
+[pnpm rejects an incompatible project engine during installation](https://pnpm.io/settings/cli#enginestrict).
+The manifest does not check arbitrary direct `node` invocations, including the
+standalone pre-install audit or installed Plugin runtime. No runtime version
+check is added. Node security updates need explicit review; they are not
+implied by the optional selector or a successful build.
+
+## Verification
+
 Develop changed behavior test-first. Regression tests use isolated fake CDP
 targets; never download packages or launch user browsers in the default suite.
 `pnpm test` and `pnpm test:coverage` select only `tests/*.test.ts` and run files
@@ -68,6 +106,47 @@ official release; altered or incomplete releases fail closed.
 pre-push clears Git's repository routing variables before running verify:push,
 so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.
+
+## Windows worktree long-path initialization
+
+Before creating a linked worktree on Windows, require effective
+`core.longpaths=true` for Git for Windows. Its
+[long-path support](https://gitforwindows.org/git-cannot-create-a-file-or-directory-with-a-long-path.html)
+is opt-in and covers native C-based Git commands; scripted commands and other
+Windows programs can still have path limits.
+
+A longer worktree root can make checkout fail with `Filename too long` even
+when the main checkout works. This occurred in the unchanged official Server's
+deep issue-description tree with `core.longpaths` unset; enabling it locally
+allowed the managed worktree retry to succeed. Preserve the complete official
+release rather than renaming, omitting or shortening its paths.
+
+From the repository root, inspect the effective value and its source before
+creating the worktree:
+
+```powershell
+git config --show-scope --show-origin --get core.longpaths
+```
+
+If unset or false, enable the repository-local setting and verify again:
+
+```powershell
+git config --local core.longpaths true
+git config --show-scope --show-origin --get core.longpaths
+```
+
+Require the final effective value to be `true`. This setup is per clone;
+Git [shares repository configuration across worktrees by default](https://git-scm.com/docs/git-worktree.html#_configuration_file).
+Preserve and resolve existing worktree, command or environment overrides so
+the actual worktree-creation invocation also sees `true`. Do not change global
+or system Git settings or the Windows registry for this setup.
+
+After a failed checkout, inspect `git worktree list --porcelain` and the actual
+failed location and registration before retrying. Preserve unrelated work;
+use the owning tool's managed lifecycle to clean up and retry tool-owned
+worktrees. For a manually created disposable worktree, verify the exact target
+and use normal Git worktree cleanup. Do not use force, reset, clean or recursive
+deletion to recover from this failure.
 
 ## Local Git hook initialization
 
@@ -226,8 +305,8 @@ queue; ordinary CI still cancels superseded ref runs. Release automation follows
 the separate release policy and uploads no custom assets.
 
 Maintained runtime, tools, tests, fixtures, smoke and commitlint configuration
-are TypeScript; Node 24.21.0 runs their erasable syntax natively. The shared
-tsconfig uses strict NodeNext, noEmit, explicit TypeScript extensions,
+are TypeScript; supported Node 24 releases run their erasable syntax natively.
+The shared tsconfig uses strict NodeNext, noEmit, explicit TypeScript extensions,
 verbatimModuleSyntax, erasableSyntaxOnly, noUncheckedIndexedAccess and
 exactOptionalPropertyTypes. allowJs and skipLibCheck are false. No tsx,
 ts-node, transpilation test framework, aliases, enums, parameter properties or
@@ -236,8 +315,8 @@ external data are required; broad any, suppression comments, double assertions
 or production exclusions must not hide migration errors.
 
 `pnpm typecheck` is independent of esbuild and runs before tests in Quality,
-Windows tests and Portable tests. Babel parses original TypeScript for AST and
-syntax checks, including type-only dependencies. Node --check is used only for
+Node compatibility (24.x), Windows tests and Portable tests. Babel parses original
+TypeScript for AST and syntax checks, including type-only dependencies. Node --check is used only for
 generated JavaScript. Plugin and standalone auditor ship self-contained JS;
 installation must not require TypeScript or project dependencies.
 

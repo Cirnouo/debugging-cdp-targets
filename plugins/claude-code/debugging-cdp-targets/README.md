@@ -2,9 +2,9 @@
 
 This complete Plugin connects Claude Code to the unchanged official Chrome
 DevTools MCP Server through one reusable gateway. Version 0.1.0 is unreleased;
-Claude Code 2.1.283 is the first supported and accepted host baseline. Node 24.21.0
-must be available as `node`. No repository dependencies or sibling Plugin are
-needed after installation.
+Claude Code 2.1.283 is the first supported and accepted host baseline. Stable
+Node >=24.21.0 <25 must be available as `node`. No repository dependencies or
+sibling Plugin are needed after installation.
 
 The 2026-10-08 metadata follow-up passed Marketplace installation and all eight
 Hook/Skill scenarios on Windows with Claude Code 2.1.294, including the complete

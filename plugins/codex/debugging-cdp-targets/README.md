@@ -3,11 +3,11 @@
 This complete Plugin launches and inspects verified local CDP targets through the
 official Chrome DevTools MCP Server. It shares runtime and full Skill instructions
 with the independent Claude Code distribution. Version 0.1.0 is unreleased.
-Node 24.21.0 must be available as `node`; installed runtime needs no repository
-dependencies or sibling Plugin. Actual installation and Hooks were accepted with
-Codex CLI 0.160.0 on Windows. The 2026-10-08 metadata follow-up passed with
-Codex CLI 0.161.0, including installed metadata/icon bytes and full formal
-explicit Skill context; the older baseline was not rerun.
+Stable Node >=24.21.0 <25 must be available as `node`; installed runtime needs
+no repository dependencies or sibling Plugin. Actual installation and Hooks were
+accepted with Codex CLI 0.160.0 on Windows. The 2026-10-08 metadata follow-up
+passed with Codex CLI 0.161.0, including installed metadata/icon bytes and full
+formal explicit Skill context; the older baseline was not rerun.
 
 ```powershell
 codex plugin marketplace add Cirnouo/debugging-cdp-targets
@@ -56,7 +56,7 @@ Hook execution requires Codex's standard review and trust of each definition.
 `dist/official-server/` delivers the unchanged official chrome-devtools-mcp 1.10.1
 release, including its public Server bin, resources, licenses, vendor notices and
 published skills. The gateway verifies all of these bytes before each launch.
-Consumers need Node 24.21.0; package preparation is a contributor task.
+Consumers need stable Node >=24.21.0 <25; package preparation is a contributor task.
 
 See the [user guide](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/README.md)
 for detailed installation, compatibility, workflow, configuration, privacy and troubleshooting.

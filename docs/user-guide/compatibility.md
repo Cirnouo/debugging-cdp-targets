@@ -4,8 +4,8 @@ Version 0.1.0 is under development and has not been released.
 
 ## Requirements
 
-- Codex with Plugin support, or Claude Code 2.1.283 or newer, and Node 24.21.0
-    available on PATH. The Plugin includes the complete official
+- Codex with Plugin support, or Claude Code 2.1.283 or newer, and stable Node
+    >=24.21.0 <25 available on PATH. The Plugin includes the complete official
     `chrome-devtools-mcp@1.10.1` release; creating connections needs no npm/npx,
     pnpm, or dependency download.
 - Internet access to obtain or update the Plugin. The installed Server can
@@ -23,6 +23,13 @@ attach to already running browsers. Both the Plugin's CDP transport and the
 target debugging endpoint must listen on loopback only. See
 [configuration](configuration.md) for launch settings and
 [privacy](privacy.md) for the security boundary.
+
+Node 24.21.0 is the exact CI and problem-reproduction baseline. Existing
+stable Node 24 installations at or above that floor are supported; newer major
+versions and prereleases are outside the supported range. Contributors use
+exact pnpm 12.4.2; installed Plugin users do not need pnpm. See
+[contributor setup](../../CONTRIBUTING.md#prepare-a-checkout) for optional mise
+selection and [ADR 0016](../adr/0016-toolchain-compatibility.md) for the policy.
 
 ## Launch and isolation compatibility
 

@@ -2,6 +2,11 @@
 
 ## Installation and scan order
 
+Before this sequence, run `node --version` and confirm stable Node >=24.21.0
+<25. Update any selected older release first, including an installed Node 24
+reused by mise. The standalone Node audit does not enforce `package.json`
+engines; see [toolchain compatibility](quality.md#toolchain-compatibility).
+
 Every local clone and linked worktree must complete this sequence from its root:
 
 1. Run `node tooling/security/dist/check-security.mjs --phase lockfile --root .`.

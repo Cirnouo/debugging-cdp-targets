@@ -444,13 +444,7 @@ export async function auditRepository(root: string) {
     ]);
     const skillText = files.get(`${SHARED_PACKAGING_ROOT}/skills/debugging-cdp-targets/SKILL.md`);
     const frontmatter: unknown = parseYaml(skillText?.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
-    if (
-        !isRecord(packageData) ||
-        !isRecord(packageData.engines) ||
-        !plugins.every(isRecord) ||
-        !isRecord(frontmatter) ||
-        !isRecord(frontmatter.metadata)
-    )
+    if (!isRecord(packageData) || !plugins.every(isRecord) || !isRecord(frontmatter) || !isRecord(frontmatter.metadata))
         return [...errors, 'Malformed repository metadata.'];
     for (const plugin of plugins) {
         if (!isRecord(plugin)) continue;
@@ -467,8 +461,10 @@ export async function auditRepository(root: string) {
         if (files.get('LICENSE') !== files.get(`${host.payloadRoot}/LICENSE`))
             errors.push(`${host.id}: Root and Plugin MIT licenses must match exactly.`);
     if (!files.get('LICENSE')?.includes('Copyright (c) 2026 Cirnouo')) errors.push('MIT attribution is missing.');
-    if (packageData.packageManager !== 'pnpm@12.4.2' || packageData.engines.node !== '24.21.0')
-        errors.push('Pinned toolchain drifted.');
+    if (!isRecord(packageData.engines) || packageData.engines.node !== '^24.21.0')
+        errors.push('Node supported range drifted: engines.node must be ^24.21.0.');
+    if (packageData.packageManager !== 'pnpm@12.4.2')
+        errors.push('pnpm pin drifted: packageManager must be pnpm@12.4.2.');
     const ignore = files.get('.gitignore') ?? '';
     for (const pattern of ['.idea/', 'node_modules/', '.env*'])
         if (!ignore.includes(pattern)) errors.push(`Ignore policy missing ${pattern}.`);
