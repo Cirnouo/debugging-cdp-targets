@@ -603,6 +603,28 @@ test('legacy raw host preserves request and progress ID zero and cancels the act
         const initialized = messages.shift();
         assert.ok(initialized && 'result' in initialized && isRecord(initialized.result));
         assert.equal(initialized.result.protocolVersion, '2024-11-05');
+        assert.deepEqual(initialized.result.serverInfo, { name: 'debugging-cdp-targets', version: '0.1.0' });
+        assert.deepEqual(initialized.result.capabilities, { tools: {} });
+        const instructions = initialized.result.instructions;
+        assert.equal(
+            instructions,
+            "Use this gateway to inspect local Chrome browsers or other verified CDP-capable applications with official Chrome DevTools tools. Start with dct_connection_status({}) to discover entryId and connection summaries. dct_connection_start launches a new application for each target connection; never take over an existing application. Before preparing a launch, follow the debugging-cdp-targets Skill for isolation choices (including none), occupancy checks, verified startup and readiness. Route every official tool call with the selected connection's current connectionId and sessionId in _dct. Before ending a target's work, obtain Close or Keep unless the user already supplied that choice.",
+        );
+        assert.equal(typeof instructions, 'string');
+        if (typeof instructions !== 'string') throw new Error('Expected initialize instructions');
+        for (const anchor of [
+            'dct_connection_status({})',
+            'entryId and connection summaries',
+            'dct_connection_start launches a new application',
+            'never take over an existing application',
+            'debugging-cdp-targets Skill',
+            'isolation choices (including none), occupancy checks, verified startup and readiness',
+            'current connectionId and sessionId in _dct',
+            'obtain Close or Keep unless the user already supplied that choice',
+        ]) {
+            assert.ok(instructions.includes(anchor), anchor);
+        }
+        assert.ok(Buffer.byteLength(instructions, 'utf8') < 1000);
         await peer.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
         await peer.send({
             jsonrpc: '2.0',

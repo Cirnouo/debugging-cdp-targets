@@ -12,6 +12,9 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
+- MCP initialization instructions expose gateway discovery, launch isolation,
+    connection/session routing and Close/Keep workflow to compatible hosts.
+
 - Stable Node >=24.21.0 <25 support, with Node 24.21.0 as the exact CI and
     problem-reproduction baseline, optional mise selection of everyday Node 24,
     and exact pnpm 12.4.2 under the frozen-lockfile and supply-chain controls.

@@ -16,6 +16,14 @@ import {
 import { claudeCli, sandbox } from './smoke/claude-process.ts';
 
 const temporary = path.resolve('isolated');
+test('tool discovery environment is explicitly opt-in and preserves legacy defaults', () => {
+    const endpoint = 'http://127.0.0.1:32123';
+    assert.equal(claudeEnvironment(temporary, endpoint, {}).ENABLE_TOOL_SEARCH, 'false');
+    const enabled = claudeEnvironment(temporary, endpoint, {}, { toolSearch: true });
+    assert.equal(enabled.ENABLE_TOOL_SEARCH, 'true');
+    assert.equal(enabled.MCP_CONNECTION_NONBLOCKING, '0');
+    assert.equal(claudeEnvironment(temporary, endpoint, {}).MCP_CONNECTION_NONBLOCKING, undefined);
+});
 test('child environment discards auth/provider/proxy/Git state and relocates all user paths', () => {
     const result = claudeEnvironment(temporary, 'http://127.0.0.1:32123', {
         PATH: 'native',
