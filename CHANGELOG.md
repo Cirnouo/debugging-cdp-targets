@@ -18,6 +18,9 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
+- MCP initialization instructions expose gateway discovery, launch isolation,
+    connection/session routing and Close/Keep workflow to compatible hosts.
+
 - Explicit project homepages in both manifests, a consumed Codex website field
     and Claude display title for GitHub self-installation.
 - Explicit Codex Skill discovery and host-only title, description and shared

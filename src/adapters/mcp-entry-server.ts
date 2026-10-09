@@ -13,6 +13,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { type ControlRequest, parseConnectionRoute, parseControlRequest } from '../domains/control-contract.ts';
 import { LIFECYCLE_ACTIONS, lifecycleTools } from './lifecycle-tools.ts';
 
+const INITIALIZATION_INSTRUCTIONS =
+    "Use this gateway to inspect local Chrome browsers or other verified CDP-capable applications with official Chrome DevTools tools. Start with dct_connection_status({}) to discover entryId and connection summaries. dct_connection_start launches a new application for each target connection; never take over an existing application. Before preparing a launch, follow the debugging-cdp-targets Skill for isolation choices (including none), occupancy checks, verified startup and readiness. Route every official tool call with the selected connection's current connectionId and sessionId in _dct. Before ending a target's work, obtain Close or Keep unless the user already supplied that choice.";
+
 export const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
 export type HookEventName = (typeof HOOK_EVENTS)[number];
 
@@ -49,7 +52,10 @@ export function createMcpEntryServer(options: {
             },
         };
     });
-    const server = new Server({ name: 'debugging-cdp-targets', version: '0.1.0' }, { capabilities: { tools: {} } });
+    const server = new Server(
+        { name: 'debugging-cdp-targets', version: '0.1.0' },
+        { capabilities: { tools: {} }, instructions: INITIALIZATION_INSTRUCTIONS },
+    );
     let resolveClosed: () => void = () => {};
     const closed = new Promise<void>((resolve) => {
         resolveClosed = resolve;
