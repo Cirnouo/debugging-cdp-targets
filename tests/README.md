@@ -105,7 +105,9 @@
   cannot satisfy missing sections/checks. Current PR CLI fixtures also verify
   format rejection and full raw commitlint validation without altering history.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
-  check automation, package gates, exact lane commands and syntax plans.
+  check automation, package gates, exact lane commands and syntax plans. Parsed
+  CI checks retain canonical versions and names, and require the latest-24
+  Ubuntu lane's setup inputs, quality dependency and unconditional command order.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
   cleanup failures, prerequisite/not-run indexing and the original delivered
@@ -238,6 +240,14 @@ the interactive WinForms fixtures. Run `pnpm test:windows:interactive` explicitl
 from an interactive Windows desktop to select `tests/interactive/*.test.ts`.
 The Windows CI job requires both lanes after typecheck. Real-browser integration
 remains separate and must not touch existing user targets.
+
+The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
+on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Its normal frozen
+install precedes typecheck, default tests, both generated-build comparisons and
+the delivered official catalog smoke in that order. The catalog smoke uses normal
+stdio shutdown and launches no browser. This lane does not establish latest-24
+Windows, macOS or GUI acceptance; the canonical Node 24.21.0 jobs retain those
+checks. See the [toolchain policy](../docs/policies/quality.md#toolchain-compatibility).
 
 For the bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).

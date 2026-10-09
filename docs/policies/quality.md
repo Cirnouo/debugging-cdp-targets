@@ -17,6 +17,19 @@ remains the exact CI and problem-reproduction baseline. Keep pnpm exactly
 compatibility change does not authorize dependency upgrades or lock rewrites.
 See [ADR 0016](../adr/0016-toolchain-compatibility.md) for evidence and rationale.
 
+CI also runs `Node compatibility (24.x)` on `ubuntu-latest` after Quality succeeds.
+It uses exact pnpm 12.4.2 and `setup-node` with `node-version: '24.x'` and
+`check-latest: true` to select the newest available stable Node 24 release,
+including when the runner cache has an older match; see the reviewed action's
+[versioned check-latest documentation](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/docs/advanced-usage.md#check-latest-version).
+After a normal frozen install, it runs `pnpm typecheck`, `pnpm test`,
+`pnpm check:build`, `pnpm check:security:build` and `pnpm smoke:official` in order.
+This lane establishes Ubuntu compatibility for the default regressions, generated
+build comparisons and delivered official catalog with normal stdio shutdown.
+It launches no GUI and does not establish latest-24 Windows, macOS or browser
+acceptance. The existing canonical jobs retain exact Node 24.21.0 and their
+acceptance checks. The main Ruleset requirements remain unchanged.
+
 Optional `mise.toml` selects Node `24` and exact pnpm `12.4.2` for everyday work;
 it is not an exact reproducibility baseline. As documented by
 [mise](https://mise.jdx.dev/dev-tools/versions.html#how-a-request-resolves),
@@ -261,8 +274,8 @@ external data are required; broad any, suppression comments, double assertions
 or production exclusions must not hide migration errors.
 
 `pnpm typecheck` is independent of esbuild and runs before tests in Quality,
-Windows tests and Portable tests. Babel parses original TypeScript for AST and
-syntax checks, including type-only dependencies. Node --check is used only for
+Node compatibility (24.x), Windows tests and Portable tests. Babel parses original
+TypeScript for AST and syntax checks, including type-only dependencies. Node --check is used only for
 generated JavaScript. Plugin and standalone auditor ship self-contained JS;
 installation must not require TypeScript or project dependencies.
 

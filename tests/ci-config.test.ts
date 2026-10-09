@@ -18,6 +18,7 @@ interface WorkflowStep {
 }
 interface WorkflowJob {
     name: string;
+    'runs-on': string;
     steps: WorkflowStep[];
     if?: string;
     needs?: string;
@@ -38,6 +39,7 @@ interface Workflow {
         | 'supply-chain-security'
         | 'commit-messages'
         | 'quality'
+        | 'node-compatibility'
         | 'windows-tests'
         | 'portable-tests'
         | 'real-chrome-tests',
@@ -79,6 +81,56 @@ const workflowUrl = new URL('../.github/workflows/ci.yml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
 
+test('latest Node 24 compatibility runs mandatory Ubuntu checks after the canonical quality gate', () => {
+    const job = workflow.jobs['node-compatibility'];
+    assert.ok(job, 'Latest Node 24 compatibility must be part of reusable CI.');
+    assert.equal(job.name, 'Node compatibility (24.x)');
+    assert.equal(job['runs-on'], 'ubuntu-latest');
+    assert.equal(job.needs, 'quality');
+    for (const key of ['if', 'continue-on-error', 'permissions', 'strategy']) {
+        assert.equal(Object.hasOwn(job, key), false, key);
+    }
+    for (const step of job.steps) {
+        assert.equal(Object.hasOwn(step, 'if'), false);
+        assert.equal(Object.hasOwn(step, 'continue-on-error'), false);
+    }
+    const setup = job.steps.filter((step) => step.uses !== undefined);
+    assert.deepEqual(
+        setup.map((step) => step.uses),
+        [
+            'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+            'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
+            'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+        ],
+    );
+    assert.deepEqual(setup[1]?.with, { version: '12.4.2' });
+    assert.deepEqual(setup[2]?.with, { 'node-version': '24.x', 'check-latest': true, cache: 'pnpm' });
+    assert.deepEqual(job.steps.slice(0, 3), setup);
+    assert.deepEqual(
+        job.steps.slice(3).map((step) => step.run),
+        [
+            'pnpm install --frozen-lockfile',
+            'pnpm typecheck',
+            'pnpm test',
+            'pnpm check:build',
+            'pnpm check:security:build',
+            'pnpm smoke:official',
+        ],
+    );
+});
+
+test('canonical CI jobs retain the exact Node baseline and pnpm version', () => {
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+        if (name === 'node-compatibility') continue;
+        const node = job.steps.filter((step) => step.uses?.startsWith('actions/setup-node@'));
+        const pnpm = job.steps.filter((step) => step.uses?.startsWith('pnpm/action-setup@'));
+        assert.equal(node.length, 1, name);
+        assert.equal(pnpm.length, 1, name);
+        assert.deepEqual(node[0]?.with, { 'node-version': '24.21.0', cache: 'pnpm' }, name);
+        assert.deepEqual(pnpm[0]?.with, { version: '12.4.2' }, name);
+    }
+});
+
 test('Windows CI requires separate default and interactive lanes unconditionally after typecheck', () => {
     const job = workflow.jobs['windows-tests'];
     assert.equal(job.name, 'Windows tests');
@@ -119,6 +171,7 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
             'Supply chain security',
             'Commit messages',
             'Quality',
+            'Node compatibility (24.x)',
             'Windows tests',
             `Portable tests (\${{ matrix.os }})`,
             `Real Chrome (\${{ matrix.os }})`,
@@ -187,7 +240,7 @@ test('CI workflow uses reviewed pins and limits failure artifacts to controlled 
         'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 19);
+    assert.equal(uses.length, 22);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
@@ -268,7 +321,7 @@ test('CI jobs run their required frozen-install and verification commands', () =
 });
 
 test('every execution platform performs independent type checking before tests', () => {
-    for (const name of ['quality', 'windows-tests', 'portable-tests'] as const) {
+    for (const name of ['quality', 'node-compatibility', 'windows-tests', 'portable-tests'] as const) {
         const job = workflow.jobs[name];
         assert.ok(job);
         const commands = job.steps
