@@ -307,7 +307,17 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     if (!accepted) throw new Error('The application rejected normal close.');
                     result = { closeRequested: true, processExited: targetExitObserved(target) };
                 }
-                finish('succeeded');
+                let listenerState: 'owned' | 'foreign' | 'absent' | undefined;
+                if (fixtureHasSubscribers()) {
+                    try {
+                        const descriptor = Object.getOwnPropertyDescriptor(result, 'listenerState');
+                        const value: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined;
+                        if (value === 'owned' || value === 'foreign' || value === 'absent') listenerState = value;
+                    } catch {
+                        // Optional observation cannot invoke accessors or alter the normal Close result.
+                    }
+                }
+                finish('succeeded', listenerState === undefined ? {} : { status: listenerState });
                 return result;
             } catch (error) {
                 let nativeError: number | undefined;

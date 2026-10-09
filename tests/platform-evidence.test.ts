@@ -1,7 +1,239 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import {
+    type FixtureEvent,
+    fixtureHasSubscribers,
+    runFixtureObservation,
+    subscribeFixtureDiagnostics,
+} from '../src/adapters/fixture-diagnostics.ts';
 import { resolveUnixExecutable, unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { errorDetails } from '../src/shared/errors.ts';
+
+const darwinRootRow = '42 1 7 Thu Oct  8 00:16:40 2026 Chrome\n';
+const darwinChildRow = '43 42 7 Thu Oct  8 00:16:41 2026 Chrome Helper\n';
+
+async function darwinOwnerFixture(ps: string, lsof: string, observe = true) {
+    const events: FixtureEvent[] = [];
+    const calls: string[] = [];
+    const stop = observe ? subscribeFixtureDiagnostics((event) => events.push(event)) : () => {};
+    try {
+        const evidence = await runFixtureObservation({ pid: 42, port: 9222 }, () =>
+            unixSnapshot(42, 9222, {
+                platform: 'darwin',
+                currentUser: () => 7,
+                run: async (command, args) => {
+                    calls.push(`${command}:${args.join(' ')}`);
+                    if (command === 'ps') return { code: 0, stdout: ps, stderr: '' };
+                    assert.equal(command, 'lsof');
+                    return {
+                        code: 0,
+                        stdout: args.includes('txt') ? 'p42\nftxt\nn/Applications/Chrome\n' : lsof,
+                        stderr: '',
+                    };
+                },
+            }),
+        );
+        return { evidence, calls, events: events.filter((event) => event.stage === 'listener-owner-evidence') };
+    } finally {
+        stop();
+    }
+}
+
+test('Darwin classifies a listener absent from the earlier ps rows without authorizing it', async () => {
+    const { evidence, calls, events } = await darwinOwnerFixture(darwinRootRow, 'p43\nn127.0.0.1:9222\n');
+    assert.deepEqual(evidence.processIds, [42]);
+    assert.deepEqual(evidence.listeners, [{ localAddress: '127.0.0.1', owningProcess: 43 }]);
+    assert.deepEqual(calls, [
+        'ps:-ww -axo pid=,ppid=,uid=,lstart=,comm=',
+        'lsof:-nP -iTCP:9222 -sTCP:LISTEN -Fpn',
+        'lsof:-a -p 42 -d txt -FfDin',
+    ]);
+    assert.equal(events.length, 2);
+    assert.equal(events[0]?.listenerOwnerCount, 1);
+    assert.equal(events[0]?.listenerRecordCount, 1);
+    assert.equal(events[0]?.listenerOwnerEmittedCount, 1);
+    assert.equal(events[0]?.listenerOwnerOmittedCount, 0);
+    assert.equal(events[1]?.pid, 42);
+    assert.equal(events[1]?.listenerOwnerPid, 43);
+    assert.equal(events[1]?.listenerOwnerRelation, 'owner-row-missing');
+    assert.equal(events[1]?.listenerOwnerOwned, false);
+    assert.equal(events[1]?.listenerOwnerParentPid, undefined);
+    assert.equal(events[1]?.listenerOwnerUid, undefined);
+    assert.equal(events[1]?.listenerOwnerStartedAtMs, undefined);
+    assert.equal(events[1]?.rootOwnerUid, 7);
+    assert.equal(events[1]?.rootOwnerStartedAtMs, new Date(2026, 9, 8, 0, 16, 40).getTime());
+});
+
+test('Darwin ownership evidence reports root, descendants and bounded ancestry rejection classes', async () => {
+    const cases = [
+        { name: 'root', rows: darwinRootRow, owner: 42, relation: 'root', parent: 1, uid: 7 },
+        {
+            name: 'descendant',
+            rows: darwinRootRow + darwinChildRow,
+            owner: 43,
+            relation: 'owned-descendant',
+            parent: 42,
+            uid: 7,
+        },
+        {
+            name: 'missing parent',
+            rows: `${darwinRootRow}43 44 7 Thu Oct  8 00:16:41 2026 Chrome Helper\n`,
+            owner: 43,
+            relation: 'ancestor-row-missing',
+            parent: 44,
+            uid: 7,
+        },
+        {
+            name: 'different uid',
+            rows: `${darwinRootRow}43 42 8 Thu Oct  8 00:16:41 2026 Chrome Helper\n`,
+            owner: 43,
+            relation: 'uid-mismatch',
+            parent: 42,
+            uid: 8,
+        },
+        {
+            name: 'child before root',
+            rows: `${darwinRootRow}43 42 7 Thu Oct  8 00:16:39 2026 Chrome Helper\n`,
+            owner: 43,
+            relation: 'child-before-parent',
+            parent: 42,
+            uid: 7,
+        },
+        {
+            name: 'unrelated root',
+            rows: `${darwinRootRow}43 0 7 Thu Oct  8 00:16:41 2026 Other\n`,
+            owner: 43,
+            relation: 'unrelated-root',
+            parent: 0,
+            uid: 7,
+        },
+        {
+            name: 'ancestry cycle',
+            rows: `${darwinRootRow}43 44 7 Thu Oct  8 00:16:41 2026 Helper\n44 43 7 Thu Oct  8 00:16:41 2026 Helper\n`,
+            owner: 43,
+            relation: 'cycle',
+            parent: 44,
+            uid: 7,
+        },
+        {
+            name: 'root absent',
+            rows: darwinChildRow,
+            owner: 43,
+            relation: 'root-absent',
+            parent: 42,
+            uid: 7,
+        },
+    ];
+    for (const selected of cases) {
+        const { events } = await darwinOwnerFixture(selected.rows, `p${selected.owner}\nn127.0.0.1:9222\n`);
+        const event = events[1];
+        assert.equal(event?.pid, 42, selected.name);
+        assert.equal(event?.listenerOwnerPid, selected.owner, selected.name);
+        assert.equal(event?.listenerOwnerRelation, selected.relation, selected.name);
+        assert.equal(
+            event?.listenerOwnerOwned,
+            selected.relation === 'root' || selected.relation === 'owned-descendant',
+            selected.name,
+        );
+        assert.equal(event?.listenerOwnerParentPid, selected.parent, selected.name);
+        assert.equal(event?.listenerOwnerUid, selected.uid, selected.name);
+        assert.ok(Number.isSafeInteger(event?.listenerOwnerStartedAtMs), selected.name);
+        assert.equal(event?.rootOwnerUid, selected.name === 'root absent' ? undefined : 7, selected.name);
+    }
+});
+
+test('Darwin ownership diagnosis follows at most 32 existing ancestry edges', async () => {
+    for (const length of [32, 33]) {
+        const rows = Array.from(
+            { length },
+            (_, index) =>
+                `${100 + index} ${index === length - 1 ? 42 : 101 + index} 7 Thu Oct  8 00:16:41 2026 Helper\n`,
+        ).join('');
+        const { evidence, events } = await darwinOwnerFixture(darwinRootRow + rows, 'p100\nn127.0.0.1:9222\n');
+        assert.ok(evidence.processIds.includes(100), 'diagnostic traversal never changes existing ownership');
+        assert.equal(events[1]?.listenerOwnerRelation, length === 32 ? 'owned-descendant' : 'depth-limit');
+        assert.equal(events[1]?.listenerOwnerOwned, true);
+    }
+});
+
+test('Darwin listener diagnosis deduplicates owners and explicitly counts capped coverage', async () => {
+    const lsof = Array.from({ length: 10 }, (_, index) => `p${43 + index}\nn127.0.0.1:9222\n`).join('');
+    const { events } = await darwinOwnerFixture(darwinRootRow, `${lsof}p43\nn[::1]:9222\n`);
+    assert.equal(events.length, 9);
+    assert.equal(events[0]?.listenerOwnerCount, 10);
+    assert.equal(events[0]?.listenerRecordCount, 11);
+    assert.equal(events[0]?.listenerOwnerEmittedCount, 8);
+    assert.equal(events[0]?.listenerOwnerOmittedCount, 2);
+    assert.equal(events[1]?.listenerOwnerPid, 43);
+    assert.equal(events[1]?.listenerOwnerRecordCount, 2);
+    assert.equal(events[8]?.listenerOwnerPid, 50);
+    assert.equal(JSON.stringify(events).includes('127.0.0.1'), false);
+    assert.equal(JSON.stringify(events).includes('/Applications'), false);
+});
+
+test('Darwin diagnosis omits unsafe owner metadata and keeps malformed ownership rejected', async () => {
+    for (const owner of ['invalid', '0', '-1', '9007199254740993']) {
+        const { evidence, events } = await darwinOwnerFixture(darwinRootRow, `p${owner}\nn127.0.0.1:9222\n`);
+        assert.equal(evidence.listeners.length, 1);
+        assert.equal(events[1]?.listenerOwnerRelation, 'invalid-owner');
+        assert.equal(events[1]?.listenerOwnerPid, undefined);
+        assert.equal(events[1]?.listenerOwnerParentPid, undefined);
+    }
+    const { events } = await darwinOwnerFixture(
+        `${darwinRootRow}43 9007199254740993 9007199254740993 Thu Oct  8 00:16:41 2026 Helper\n`,
+        'p43\nn127.0.0.1:9222\n',
+    );
+    assert.equal(events[1]?.listenerOwnerPid, 43);
+    assert.equal(events[1]?.listenerOwnerParentPid, undefined);
+    assert.equal(events[1]?.listenerOwnerUid, undefined);
+    const malformed = await darwinOwnerFixture(
+        darwinRootRow,
+        'pinvalid\nn127.0.0.1:9222\npalso-invalid\nn[::1]:9222\n',
+    );
+    assert.equal(malformed.events[0]?.listenerOwnerCount, 1, 'NaN owner values are not distinct verified PIDs');
+    assert.equal(malformed.events[0]?.listenerRecordCount, 2);
+    assert.equal(malformed.events[1]?.listenerOwnerRecordCount, 2);
+    assert.equal(malformed.events[1]?.listenerOwnerRelation, 'invalid-owner');
+    assert.equal(malformed.events[1]?.listenerOwnerOwned, false);
+});
+
+test('Darwin default-disabled diagnosis adds no executor calls or observation state', async () => {
+    assert.equal(fixtureHasSubscribers(), false);
+    const disabled = await darwinOwnerFixture(darwinRootRow + darwinChildRow, 'p43\nn127.0.0.1:9222\n', false);
+    const enabled = await darwinOwnerFixture(darwinRootRow + darwinChildRow, 'p43\nn127.0.0.1:9222\n');
+    assert.deepEqual(disabled.evidence, enabled.evidence);
+    assert.deepEqual(disabled.calls, enabled.calls);
+    assert.deepEqual(disabled.events, []);
+    assert.equal(enabled.events.length, 2);
+    assert.equal(fixtureHasSubscribers(), false);
+});
+
+test('Linux snapshots never emit Darwin listener owner diagnosis', async () => {
+    const events: FixtureEvent[] = [];
+    const stop = subscribeFixtureDiagnostics((event) => events.push(event));
+    try {
+        await unixSnapshot(42, 9222, {
+            platform: 'linux',
+            currentUser: () => 7,
+            readlink: async () => process.execPath,
+            readText: async (file) =>
+                file === '/proc/stat'
+                    ? 'btime 0\n'
+                    : '42 (Chrome) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 100050\n',
+            run: async (command) => ({
+                code: 0,
+                stdout: command === 'ps' ? darwinRootRow : command === 'getconf' ? '100\n' : 'p43\nn127.0.0.1:9222\n',
+                stderr: '',
+            }),
+        });
+        assert.equal(
+            events.some((event) => event.stage === 'listener-owner-evidence'),
+            false,
+        );
+    } finally {
+        stop();
+    }
+});
 
 test('Linux creation evidence preserves kernel tick precision instead of the rounded ps display', async () => {
     const calls: string[] = [];

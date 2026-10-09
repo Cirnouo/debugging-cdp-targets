@@ -272,7 +272,15 @@ for (const [state, expected] of [
     });
 }
 
-function readinessFixture({ processIds = [42], listeners = false } = {}) {
+function readinessFixture({
+    processIds = [42],
+    listeners = false,
+    nativeCloseResult,
+}: {
+    processIds?: number[];
+    listeners?: boolean;
+    nativeCloseResult?: Record<string, unknown>;
+} = {}) {
     const child = Object.assign(new EventEmitter(), {
         pid: 42,
         exitCode: null as number | null,
@@ -300,6 +308,17 @@ function readinessFixture({ processIds = [42], listeners = false } = {}) {
         platformAdapter: {
             reservedRanges: async () => [],
             validateNewRoot: () => {},
+            ...(nativeCloseResult === undefined
+                ? {}
+                : {
+                      requestNormalClose: async () => {
+                          closeCalls++;
+                          beforeClose?.();
+                          child.exitCode = 0;
+                          child.emit('exit', 0);
+                          return nativeCloseResult;
+                      },
+                  }),
             snapshot: async () => {
                 snapshotCalls++;
                 beforeSnapshot?.();
@@ -341,6 +360,86 @@ function readinessFixture({ processIds = [42], listeners = false } = {}) {
         },
     };
 }
+
+for (const status of ['owned', 'foreign', 'absent'] as const) {
+    test(`rollback preserves the existing native Close listener state ${status}`, async (t) => {
+        const records: FixtureEvent[] = [];
+        t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+        const fixture = readinessFixture({
+            nativeCloseResult: { closeRequested: true, processExited: true, listenerState: status },
+        });
+        const result = await fixture.launch().catch((error: unknown) => error);
+        assert.ok(result instanceof Error);
+        assert.equal(result.cause, fixture.failure);
+        assert.equal(errorDetails(result)?.closeConfirmed, true);
+        const close = records.find((record) => record.stage === 'native-close' && record.event === 'end');
+        assert.equal(close?.status, status);
+        assert.deepEqual(fixture.calls(), { snapshots: 1, closes: 1 });
+    });
+}
+
+test('native Close diagnostics omit missing, private, inherited or accessor listener states', async (t) => {
+    const records: FixtureEvent[] = [];
+    t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+    let getterReads = 0;
+    const accessor = Object.defineProperty({}, 'listenerState', {
+        get() {
+            getterReads++;
+            return 'owned';
+        },
+    });
+    const inherited: Record<string, unknown> = {};
+    Object.setPrototypeOf(inherited, { listenerState: 'owned' });
+    for (const nativeCloseResult of [
+        {},
+        { listenerState: '/private/owner' },
+        { listenerState: null },
+        { listenerState: 42 },
+        inherited,
+        accessor,
+        new Proxy(
+            {},
+            {
+                getOwnPropertyDescriptor() {
+                    throw new Error('/private/descriptor');
+                },
+            },
+        ),
+    ]) {
+        records.length = 0;
+        const fixture = readinessFixture({ nativeCloseResult });
+        const result = await fixture.launch().catch((error: unknown) => error);
+        assert.ok(result instanceof Error);
+        assert.equal(result.cause, fixture.failure);
+        assert.equal(errorDetails(result)?.closeConfirmed, true);
+        const close = records.find((record) => record.stage === 'native-close' && record.event === 'end');
+        assert.ok(close);
+        assert.equal(Object.hasOwn(close, 'status'), false);
+        assert.equal(JSON.stringify(records).includes('/private/'), false);
+        assert.deepEqual(fixture.calls(), { snapshots: 1, closes: 1 });
+    }
+    assert.equal(getterReads, 0);
+});
+
+test('disabled native Close diagnostics do not inspect listener state descriptors', async () => {
+    let inspections = 0;
+    const nativeCloseResult = new Proxy(
+        { closeRequested: true, processExited: true, listenerState: 'owned' },
+        {
+            getOwnPropertyDescriptor(target, key) {
+                inspections++;
+                return Reflect.getOwnPropertyDescriptor(target, key);
+            },
+        },
+    );
+    const fixture = readinessFixture({ nativeCloseResult });
+    const result = await fixture.launch().catch((error: unknown) => error);
+    assert.ok(result instanceof Error);
+    assert.equal(result.cause, fixture.failure);
+    assert.equal(errorDetails(result)?.closeConfirmed, true);
+    assert.equal(inspections, 0);
+    assert.deepEqual(fixture.calls(), { snapshots: 1, closes: 1 });
+});
 
 test('verified listener with unanswered HTTP still fails and pending Linux sampling cannot block normal Close', async (t) => {
     let finishRead: (result: BoundedLinuxRead) => void = () => {};

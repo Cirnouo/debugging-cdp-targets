@@ -4145,6 +4145,7 @@ var stages = [
   "spawn",
   "readiness",
   "listener-ownership",
+  "listener-owner-evidence",
   "endpoint",
   "profile-check",
   "native-close",
@@ -4382,6 +4383,19 @@ var rootProcessStates = [
   "idle",
   "unknown"
 ];
+var listenerOwnerRelations = [
+  "root",
+  "owned-descendant",
+  "owner-row-missing",
+  "ancestor-row-missing",
+  "uid-mismatch",
+  "child-before-parent",
+  "unrelated-root",
+  "cycle",
+  "depth-limit",
+  "invalid-owner",
+  "root-absent"
+];
 var signals = [
   "SIGABRT",
   "SIGALRM",
@@ -4442,6 +4456,19 @@ var fieldKeys = [
   "attempt",
   "count",
   "ownedDescendantCount",
+  "listenerOwnerCount",
+  "listenerRecordCount",
+  "listenerOwnerEmittedCount",
+  "listenerOwnerOmittedCount",
+  "listenerOwnerRecordCount",
+  "listenerOwnerPid",
+  "listenerOwnerParentPid",
+  "listenerOwnerUid",
+  "listenerOwnerStartedAtMs",
+  "rootOwnerUid",
+  "rootOwnerStartedAtMs",
+  "listenerOwnerRelation",
+  "listenerOwnerOwned",
   "pendingCount",
   "resourceCount",
   "budgetMs",
@@ -4480,22 +4507,33 @@ function safeField(key, value) {
   if (key === "status") return member(statuses, value);
   if (key === "phase") return member(phases, value);
   if (key === "rootProcessState") return member(rootProcessStates, value);
+  if (key === "listenerOwnerRelation") return member(listenerOwnerRelations, value);
   if (key === "signalCode") return value === null || member(signals, value);
   if (key === "trigger") return value === "gateway-disconnect";
-  if (["stderrPresent", "valid", "available", "exitObserved", "monitoringFailed"].includes(key))
+  if (["stderrPresent", "valid", "available", "exitObserved", "monitoringFailed", "listenerOwnerOwned"].includes(key))
     return typeof value === "boolean";
   if (key === "exitCode")
     return value === null || typeof value === "number" && Number.isInteger(value) && value >= -2147483648 && value <= 4294967295;
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return false;
   if (["durationMs", "timestampMs", "elapsedMs", "budgetMs", "remainingMs"].includes(key)) return true;
   if (!Number.isSafeInteger(value)) return false;
-  if (key === "pid") return value > 0;
+  if (key === "pid" || key === "listenerOwnerPid") return value > 0;
   if (key === "port") return value > 0 && value <= 65535;
   if (key === "httpStatus") return value >= 100 && value <= 599;
   return [
     "attempt",
     "count",
     "ownedDescendantCount",
+    "listenerOwnerCount",
+    "listenerRecordCount",
+    "listenerOwnerEmittedCount",
+    "listenerOwnerOmittedCount",
+    "listenerOwnerRecordCount",
+    "listenerOwnerParentPid",
+    "listenerOwnerUid",
+    "listenerOwnerStartedAtMs",
+    "rootOwnerUid",
+    "rootOwnerStartedAtMs",
     "pendingCount",
     "resourceCount",
     "nativeError",
@@ -5315,6 +5353,62 @@ async function linuxCreationTime(pid, execute, readText) {
   }
   return started.toISOString();
 }
+function classifyListenerOwner(owner, root, rows) {
+  if (!Number.isSafeInteger(owner) || owner <= 0) return "invalid-owner";
+  if (!root) return "root-absent";
+  if (owner === root.pid) return "root";
+  const ownerRow = rows.find((candidate) => candidate.pid === owner);
+  if (!ownerRow) return "owner-row-missing";
+  let row = ownerRow;
+  const seen = /* @__PURE__ */ new Set([owner]);
+  for (let depth = 0; depth < 32; depth++) {
+    const parentPid = row.parent;
+    if (row.uid !== root.uid) return "uid-mismatch";
+    if (parentPid === 0) return "unrelated-root";
+    if (!Number.isSafeInteger(parentPid) || parentPid < 0) return "invalid-owner";
+    if (seen.has(parentPid)) return "cycle";
+    const parent = rows.find((candidate) => candidate.pid === parentPid);
+    if (!parent) return "ancestor-row-missing";
+    if (row.started < parent.started) return "child-before-parent";
+    if (parent.pid === root.pid) return "owned-descendant";
+    seen.add(parent.pid);
+    row = parent;
+  }
+  return "depth-limit";
+}
+function emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const listener of listeners) counts.set(listener.owningProcess, (counts.get(listener.owningProcess) ?? 0) + 1);
+  const root = rows.find((row) => row.pid === pid);
+  const rootFields = root ? { rootOwnerUid: root.uid, rootOwnerStartedAtMs: new Date(root.started).getTime() } : {};
+  const emittedCount = Math.min(counts.size, 8);
+  emitFixtureEvent("listener-owner-evidence", "decision", {
+    pid,
+    ...rootFields,
+    listenerOwnerCount: counts.size,
+    listenerRecordCount: listeners.length,
+    listenerOwnerEmittedCount: emittedCount,
+    listenerOwnerOmittedCount: counts.size - emittedCount
+  });
+  let emitted = 0;
+  for (const [owner, count] of counts) {
+    if (emitted++ >= emittedCount) break;
+    const row = rows.find((candidate) => candidate.pid === owner);
+    emitFixtureEvent("listener-owner-evidence", "decision", {
+      pid,
+      ...rootFields,
+      listenerOwnerPid: owner,
+      ...row ? {
+        listenerOwnerParentPid: row.parent,
+        listenerOwnerUid: row.uid,
+        listenerOwnerStartedAtMs: new Date(row.started).getTime()
+      } : {},
+      listenerOwnerRecordCount: count,
+      listenerOwnerRelation: classifyListenerOwner(owner, root, rows),
+      listenerOwnerOwned: owned.has(owner)
+    });
+  }
+}
 async function unixSnapshot(pid, port, dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
   const execute = dependencies.run ?? run;
@@ -5364,6 +5458,7 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     if (address !== void 0 && owner !== void 0)
       listeners.push({ localAddress: address.replace(/^\[|\]$/g, ""), owningProcess: owner });
   }
+  if (platform === "darwin" && fixtureHasSubscribers()) emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned);
   return {
     root: root ? {
       exists: true,
@@ -41879,7 +41974,16 @@ function createTargetHost(dependencies = {}) {
           if (!accepted) throw new Error("The application rejected normal close.");
           result = { closeRequested: true, processExited: targetExitObserved(target) };
         }
-        finish("succeeded");
+        let listenerState;
+        if (fixtureHasSubscribers()) {
+          try {
+            const descriptor = Object.getOwnPropertyDescriptor(result, "listenerState");
+            const value = descriptor && "value" in descriptor ? descriptor.value : void 0;
+            if (value === "owned" || value === "foreign" || value === "absent") listenerState = value;
+          } catch {
+          }
+        }
+        finish("succeeded", listenerState === void 0 ? {} : { status: listenerState });
         return result;
       } catch (error2) {
         let nativeError;

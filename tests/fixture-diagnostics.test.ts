@@ -24,6 +24,81 @@ import { DetailedError, isRecord } from '../src/shared/errors.ts';
 const entryId = '11111111-1111-4111-8111-111111111111';
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+test('listener owner fixture schema admits only closed relations and safe numeric metadata', () => {
+    const base = {
+        stage: 'listener-owner-evidence',
+        event: 'decision',
+        outcome: 'observed',
+        timestampMs: 1,
+        durationMs: 0,
+        pid: 42,
+        listenerOwnerPid: 43,
+        listenerOwnerParentPid: 0,
+        listenerOwnerUid: 7,
+        listenerOwnerStartedAtMs: 1_000,
+        rootOwnerUid: 7,
+        rootOwnerStartedAtMs: 999,
+        listenerOwnerRecordCount: 2,
+        listenerOwnerOwned: false,
+    };
+    for (const relation of [
+        'root',
+        'owned-descendant',
+        'owner-row-missing',
+        'ancestor-row-missing',
+        'uid-mismatch',
+        'child-before-parent',
+        'unrelated-root',
+        'cycle',
+        'depth-limit',
+        'invalid-owner',
+        'root-absent',
+    ]) {
+        const accepted = validateFixtureEvent({ ...base, listenerOwnerRelation: relation });
+        assert.equal(accepted?.listenerOwnerRelation, relation);
+        assert.equal(accepted?.listenerOwnerOwned, false);
+        assert.ok(Object.isFrozen(accepted));
+    }
+    for (const key of [
+        'listenerOwnerPid',
+        'listenerOwnerParentPid',
+        'listenerOwnerUid',
+        'listenerOwnerStartedAtMs',
+        'rootOwnerUid',
+        'rootOwnerStartedAtMs',
+        'listenerOwnerRecordCount',
+        'listenerOwnerCount',
+        'listenerRecordCount',
+        'listenerOwnerEmittedCount',
+        'listenerOwnerOmittedCount',
+    ]) {
+        for (const invalid of [-1, 0.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, 'PRIVATE_TOKEN', {}, []]) {
+            assert.equal(validateFixtureEvent({ ...base, [key]: invalid }), undefined, key);
+        }
+    }
+    assert.equal(validateFixtureEvent({ ...base, listenerOwnerPid: 0 }), undefined);
+    assert.equal(validateFixtureEvent({ ...base, listenerOwnerOwned: true })?.listenerOwnerOwned, true);
+    for (const invalid of [0, 1, 'true', 'PRIVATE_TOKEN', null, {}, []]) {
+        assert.equal(validateFixtureEvent({ ...base, listenerOwnerOwned: invalid }), undefined);
+    }
+    assert.equal(validateFixtureEvent({ ...base, listenerOwnerRelation: 'PRIVATE_TOKEN' }), undefined);
+    assert.equal(validateFixtureEvent({ ...base, listenerOwnerPath: '/private/path' }), undefined);
+    assert.equal(validateFixtureEvent({ ...base, listenerOwnerRows: [base] }), undefined);
+    const summary = validateFixtureEvent({
+        stage: 'listener-owner-evidence',
+        event: 'decision',
+        outcome: 'observed',
+        timestampMs: 1,
+        durationMs: 0,
+        pid: 42,
+        listenerOwnerCount: 10,
+        listenerRecordCount: 11,
+        listenerOwnerEmittedCount: 8,
+        listenerOwnerOmittedCount: 2,
+    });
+    assert.equal(summary?.listenerOwnerOmittedCount, 2);
+});
+
 test('parallel operations publish distinct routes and primary errors without request contents', async () => {
     const events: FixtureEvent[] = [];
     const unsubscribe = subscribeFixtureDiagnostics((event) => events.push(event));

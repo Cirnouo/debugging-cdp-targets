@@ -837,3 +837,77 @@ remains 20 seconds. New samples must establish a concrete wait point, resource
 change or collection effect before a minimal causal fix and single-variable
 verification can be selected. A successful diagnostic run verifies observation
 capability only; without a reproduced failure the root cause remains unknown.
+
+### Darwin listener ownership evidence
+
+With the controlled subscriber enabled, Darwin snapshots additionally derive
+`listener-owner-evidence` decisions from the same process rows and listener
+records already read by `ps` and `lsof`. This adds no native invocation, file
+read, retry, observer or timer. The public process evidence and all acceptance
+and normal-Close decisions retain their original behavior. Other platforms do
+not emit this Darwin projection; an unconfigured subscriber does no extra
+ownership classification.
+
+Each snapshot emits one count record and at most eight distinct parsed-owner records.
+The count record carries total listener records, distinct parsed owners, emitted owners
+and omitted owners. A positive omitted count explicitly means the owner
+projection is incomplete; consult the unchanged bounded stream without assuming
+an omitted owner was owned. Per-owner records retain the root in `pid`, use
+`listenerOwnerPid` for the observed owner, and count duplicate listener records
+for that owner. `listenerOwnerOwned` preserves membership in the original owned
+process set; a bounded classifier's depth limit does not change that membership.
+Safe available owner/parent PIDs, UID and creation epoch
+milliseconds, plus the root UID and creation epoch milliseconds, allow cautious
+comparison of readiness and rollback observations. Missing or unsafe values are
+omitted. Malformed owner values have the closed invalid-owner relation and no
+usable owner PID; parsed-value counts cannot establish distinct real owners for
+such records. An ancestry walk is limited to 32 edges of the existing rows.
+
+The closed relation is root, owned-descendant, owner-row-missing,
+ancestor-row-missing, uid-mismatch, child-before-parent, unrelated-root, cycle,
+depth-limit, invalid-owner or root-absent. These are facts about that captured
+observation, not permission to accept a listener. In particular,
+owner-row-missing cannot establish that an owner was unrelated or was a newly
+created child. The existing Darwin creation evidence has second resolution;
+matching PID/time observations cannot exclude reuse within that resolution or
+recover the identity of a vanished owner. No additional ancestry scan, raw
+process table, executable claim, address, argv or environment is collected.
+
+The native-close end event also preserves the already returned closed listener
+state as `status: owned`, `foreign` or `absent`. It describes the existing
+pre-close snapshot, not the listener at an earlier readiness rejection or after
+actual process exit. Missing state remains absent, including early-exit and
+legacy close paths. Only an own data property with an exact closed value is
+projected; accessors and invalid metadata cannot alter Close or its original
+error. The collector's cost measures its receive/validation/write path, not the
+producer's optional classification work or all native observation overhead.
+
+### PR 33 macOS ownership rejection
+
+The [first push macOS job for PR 33](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37925889399/job/113806384938)
+failed on attempt 7 at listener ownership, before any endpoint request on that
+attempt. The checked-out head was
+`bd96e88c37e925e647ac4905cb9285b709b56a8d`, with tree
+`fa465350be9e777362f77447dbff0611d648869a`. The successful PR checkout and one
+later rerun used the same tree. They establish passing executions, not the
+cause of the original rejection. The
+[original five-file artifact](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37925889399/artifacts/11613929634)
+has verified archive SHA-256
+`c7b420b7154063bff11d7c33be546b0a3b99d96d0f9813120e14710db4a0df97`.
+
+Readiness lasted 2,558.597 ms, with roughly 17.5 seconds remaining. Attempts
+1-6 found no listener. Attempt 7 observed a valid root, four unique owned
+descendants and two listener records; at least one later listener owner was
+outside the earlier process set. Two records do not establish two owner PIDs
+or two sockets. The process observation preceded listener observation, but the
+old artifact has no owner/ancestry correlation. A real foreign listener and an
+observation gap remain unproved alternatives. Raising the startup timeout
+would not address this immediate rejection.
+
+Rollback immediately took another process/listener snapshot and successfully
+requested normal Close; actual exit and directory cleanup succeeded. That
+snapshot's returned listener state was previously omitted from diagnostics.
+The new projection preserves this already available evidence and can narrow a
+future failure without extra native reads. It cannot recover the original
+mismatching owner retrospectively. The historical macOS cause remains unknown
+and unresolved; synthetic interleavings verify diagnostic behavior only.
