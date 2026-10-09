@@ -10,14 +10,11 @@ Version 0.1.0 remains under development; no release has been published.
 
 ## [Unreleased]
 
-### Changed
-
-- Support stable Node >=24.21.0 <25 while retaining Node 24.21.0 as the exact
-    CI and problem-reproduction baseline. Optional mise selects everyday Node 24;
-    pnpm remains exactly 12.4.2 with unchanged locks and supply-chain controls.
-
 ### Added
 
+- Stable Node >=24.21.0 <25 support, with Node 24.21.0 as the exact CI and
+    problem-reproduction baseline, optional mise selection of everyday Node 24,
+    and exact pnpm 12.4.2 under the frozen-lockfile and supply-chain controls.
 - Explicit project homepages in both manifests, a consumed Codex website field
     and Claude display title for GitHub self-installation.
 - Explicit Codex Skill discovery and host-only title, description and shared
