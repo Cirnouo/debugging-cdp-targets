@@ -1,7 +1,8 @@
 # Host metadata for self-installation
 
 Original research and acceptance date: 2026-10-08. A separate Desktop
-presentation study dated 2026-10-09 appears below. Version 0.1.0 remains unreleased.
+presentation study and Skill/MCP research dated 2026-10-09 appear below.
+Version 0.1.0 remains unreleased.
 The goal is useful, accurate metadata when users add this GitHub repository's
 Marketplace and install either complete host Plugin. Public directory submission
 is outside this contract. This document owns primary host research under the
@@ -43,8 +44,9 @@ rendering it.
 - **C5 — Codex Desktop Skill presentation:** locally inspected packed
     `resources/app.asar` on 2026-10-09. Its `package.json` identifies Windows
     Desktop version **26.1002.52244**, `codexBuildNumber` **13536** and
-    `codexBuildFlavor` **prod**. The outer Windows MSIX package version is a
-    different identity; CLI and daemon versions do not identify this renderer.
+    `codexBuildFlavor` **prod**. The outer Windows MSIX package version
+    **26.1002.7124.0** is a different distribution identity; CLI and daemon
+    versions do not identify this renderer.
     The packed source has no public source URL. Reproducible consumer references
     are `webview/assets/app-initial-25361a10f2bf.js` (`ZOc`, `CNe`/`TMe`, `wR`,
     `Ebr`), `webview/assets/app-shared-40678a67f0e3.js` (`zRr`, `RRr`/`LRr`,
@@ -95,10 +97,10 @@ optional host features are not inferred requirements.
 | `.claude-plugin/marketplace.json` | L2; relative source starts at repository/Marketplace root. Entry display fields override manifest equivalents; manifest version wins; `strict` defaults true. | Same catalog/entry name, owner Cirnouo; existing catalog description and entry description matching Claude manifest; source `./plugins/claude-code/debugging-cdp-targets`. Entry displayName/version/components/category/tags/relevance omitted: leave title/version/components with one manifest owner. | Repository and CLI cache/install. No entry components means the strict component-conflict case is inapplicable. GitHub uses cached copies; local-directory loading alone does not prove GitHub cache/update behavior. |
 | Shared `packaging/shared/skills/debugging-cdp-targets/SKILL.md` frontmatter/body | C2/L3; discovery and explicit instructions. Claude defaults name to directory, description to first body line if absent; Plugin namespace qualifies invocation. | Existing name/description, license MIT, metadata.version `0.1.0`, complete unchanged body. Required shared workflow; package license/version are not routing evidence. | Every maintained shared Skill file matches both payloads in both directions; actual captured explicit body in both hosts. |
 | Codex `packaging/codex/skill-openai.yaml` | C2; maps to `skills/debugging-cdp-targets/agents/openai.yaml`; interface is independent from Plugin interface. PluginShared icons resolve from Skill directory and are confined to this Plugin's assets. | Only interface: `display_name: Debugging CDP Targets`, `short_description: Debug verified local CDP targets`, both icon fields `../../assets/icon.png`. Useful Skill presentation using existing artwork. | Real YAML parser, exact overlay inventory/regular PNG byte checks; `skills/list` returns title/description/absolute icons. The 2026-10-08 manual check confirms Skill title/short description/icons in Plugin detail only. The separate C5 Desktop study below bounds picker and mention behavior. This traversal is not allowed for standalone Skills or generic manifest paths. |
-| Skill invocation policy/dependencies | C2/L3; Codex implicit invocation defaults true; Claude `disable-model-invocation` defaults false and `user-invocable` true. | Codex brand color/default prompt/policy/dependencies omitted; preserve defaults without duplicating starters or inventing dependencies. Claude has no Codex overlay: no documented local YAML consumer established. | Docs/source; automatic Desktop starter behavior not proven by these defaults. |
+| Skill invocation policy/dependencies/default prompt | C2/L3 and the 2026-10-09 research below; invocation defaults, dependency installation and composer prefill have separate consumers. | Keep Codex policy/dependencies/default prompt/brand color omitted and Claude defaults unchanged for the reasons below. Claude has no Codex overlay: no documented local YAML consumer established. | Docs/versioned source and Desktop static consumers; no new invocation or prefill UI acceptance. |
 | Codex `packaging/codex/mcp.json` | M1/C1; schema is configuration/editing metadata. Relative stdio cwd starts at Plugin root. | Agent Plugins MCP schema 1.0.0; `cdp-targets`, stdio `node`, args `dist/mcp-bootstrap.mjs`, cwd `.`. Required local wiring. | Repository and installed gateway CLI discovery. |
 | Claude `packaging/claude-code/.mcp.json` | L1/M1; default root discovery; `${CLAUDE_PLUGIN_ROOT}` expands to installed Plugin root in args. | Same key/type/command; args `${CLAUDE_PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`. Required portable launch; no remote URL/auth/headers. | Repository and installed gateway CLI discovery. No shared implicit cwd assumption. |
-| MCP initialize / tools: `src/adapters/mcp-entry-server.ts`, `lifecycle-tools.ts` | M1; server implementation information, optional instructions, and discovered tool metadata are independent from package presentation. | Server name/version `debugging-cdp-targets` / `0.1.0`, tools capability; title/description/icons/websiteUrl/instructions omitted. Official Tool objects retained with required `_dct` routing extension; seven lifecycle tools have existing name/description/inputSchema. | Existing runtime/catalog contract; no runtime metadata additions. Official annotations/output metadata survive when supplied; no new lifecycle title/icons/annotations/outputSchema. Both CLI smokes discover 73 tools. |
+| MCP initialize / tools: `src/adapters/mcp-entry-server.ts`, `lifecycle-tools.ts` | M1; server implementation information, optional instructions, and discovered tool metadata are independent from package presentation. | Server name/version `debugging-cdp-targets` / `0.1.0`, tools capability; title/description/icons/websiteUrl omitted; instructions currently omitted, with the researched addition **PLANNED** below. Official Tool objects retained with required `_dct` routing extension; seven lifecycle tools have existing name/description/inputSchema. | Existing runtime/catalog contract; no runtime metadata additions. Official annotations/output metadata survive when supplied; no new lifecycle title/icons/annotations/outputSchema. Both CLI smokes discover 73 tools. |
 
 The retained `longDescription` is exactly:
 
@@ -108,6 +110,41 @@ The retained Plugin starter strings are “Open https://example.com in a new Chr
 window and capture a screenshot.”, “Check console errors and failed requests in a
 new Chrome window.” and “Profile page load performance in a new Chrome window.”
 They are starter text, with explicit Skill invocation documented separately.
+
+## Skill and MCP research — 2026-10-09
+
+This update independently distinguishes invocation, dependency installation,
+composer prefill, protocol identity and model discovery. Actual local versions
+are Codex CLI **0.162.0** and Claude Code **2.1.295**; version checks identify
+those executables only. This section records documentation and static source
+research, not new host smokes, UI acceptance or model adherence. Historical
+acceptance below keeps its original versions and dates.
+
+| Skill surface | Consumer and supported behavior | Decision and reason |
+| --- | --- | --- |
+| Codex `policy.allow_implicit_invocation` | Defaults true. The [host provider](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/ext/skills/src/provider/host.rs#L146), [catalog](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/ext/skills/src/catalog.rs#L256) and [list tool](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/ext/skills/src/tools/list.rs#L91) hide false-valued Skills from model discovery. [Explicit selection](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/ext/skills/src/selection.rs#L21) independently requires enablement. | Omit and retain true. This is discovery policy, not permission to launch or bypass the Skill workflow. |
+| Codex `dependencies.tools` | The [YAML model](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/ext/skills/src/loader/metadata.rs) cannot express stdio args/cwd/env. [Dependency matching](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/mcp_skill_dependencies.rs#L368-L393) compares transport and command only; [missing installation](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/mcp_skill_dependencies.rs#L450) constructs empty args/env/cwd. Configuration edits are [feature/approval gated](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/mcp_skill_dependencies.rs#L125). | Omit. A `node` dependency cannot accurately identify this gateway's bootstrap args and Plugin cwd. The bundled `mcp.json` already owns correct wiring. |
+| Codex Skill `interface.default_prompt` | Optional string in the YAML model, distinct from Plugin `interface.defaultPrompt` array. C5's `app-shared-40678a67f0e3.js` `SRr` reads `defaultPrompt`; `DRr` appends the Skill link when needed and exports `ZY`. `skill-card-2699b546e0ea.js` imports `ZY` as `se`; its `onTryInThread` handler invokes `me({prefillPrompt:se(v),startInSidebar:true})`. | Omit: no independent Skill prefill need. A static Skill-card Try prefill consumer is established; actual UI clicking and subsequent full instruction injection are unverified. |
+| Claude `when_to_use`, `argument-hint`, `allowed-tools` | The [official frontmatter reference](https://code.claude.com/docs/en/skills#frontmatter-reference) describes appended discovery text (1,536-character listing bound), autocomplete hints and temporary turn preauthorization respectively. | Omit. The existing description covers trigger scope, there is no stable parameter workflow or new preauthorization need. `allowed-tools` is neither dependency wiring nor a permanent allowlist. |
+| Claude invocation switches | The same reference defaults `disable-model-invocation` to false and `user-invocable` to true. | Retain defaults and the unchanged shared Skill; no host-only overlay is needed. |
+
+MCP `serverInfo`, `capabilities` and `instructions` are separate initialization
+fields under M1. The maintained SDK 2.2 supports optional implementation fields
+and Server options instructions. Existing `name: debugging-cdp-targets`,
+`version: 0.1.0` and `tools: {}` accurately describe the gateway; no additional
+capabilities are warranted. The configured outer server key `cdp-targets` and
+advertised inner implementation name `debugging-cdp-targets` have distinct roles.
+
+| MCP surface | Consumer and evidence | Decision and remaining limit |
+| --- | --- | --- |
+| `serverInfo` and capabilities | Codex [retains implementation fields](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1131); the [status processor](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/app-server/src/request_processors/mcp_processor.rs#L529) and generated `McpServerInfo`/`McpServerStatus` expose `serverInfo` and `serverCapabilities`. | Keep existing identity and tools capability. API observability is established by source, not newly verified against this package at runtime. |
+| Optional `title`, `description`, `icons`, `websiteUrl` | C5's `app-initial-25361a10f2bf.js` has conditional metadata consumers: `N_n` mention/search tools gated by `openai/mentions`, `I_n` file metadata and `W_n` `openai/settings`. `H_n` chooses `tool_meta.connector_name ?? serverInfo.title ?? name`. `app-shared-40678a67f0e3.js` `Rqr` (export `CG`) accepts HTTPS/data icons with theme fallback. | Keep omitted: no applicable ordinary gateway presentation benefit was found. These fields are not declared unsupported. Claude-specific optional display consumers and actual Desktop presentation remain unverified. |
+| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **PLANNED:** adopt the [execution plan's exact 689-byte text](superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production adapter implementation and captured host consumption are pending. |
+| `instructions` in Claude | [Official server-author guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) says instructions help tool search and documents a 2,048-character bound. | Use the same planned text; it fits both researched bounds. Dynamic consumption, search execution and real-model adherence are not established by documentation. |
+
+The packed Desktop references above identify files and branches without personal
+installation paths; the local bundle has no public source URL. Static consumer
+inspection does not prove ordinary gateway rendering or instruction adherence.
 
 ## Executed host acceptance and its limits
 
