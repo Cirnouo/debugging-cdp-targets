@@ -11,6 +11,14 @@ complete grammar. Optional `release/<semver>` preparation branches follow that
 policy; publication requires separately authorized annotated stable or prerelease tags under
 the [release policy](docs/policies/releases.md).
 
+## Changelog edits
+
+Before editing `CHANGELOG.md`, read the
+[Changelog editing workflow](docs/policies/releases.md#changelog-editing-workflow).
+Verify the latest published stable/full release or its absence from authoritative
+published release evidence, use that baseline to select categories, and record
+the evidence and category rationale in the PR `Verification` section.
+
 ## Pull request submissions
 
 Whenever creating or editing a PR, read the current
