@@ -6,12 +6,25 @@ vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 
 ## Prepare a checkout
 
-Fork the repository and clone your fork. Install Node 24.21.0 and pnpm 12.4.2;
-the versions are also declared in mise.toml. Complete the
+Fork the repository and clone your fork. Use stable Node >=24.21.0 <25 and
+exact pnpm 12.4.2. Keep an existing Node installation within that range;
+Node 24.21.0 is the exact CI and problem-reproduction baseline.
+
+Optional `mise.toml` selects Node `24` for everyday work and exact pnpm
+`12.4.2`. A prefix request can reuse an already installed Node 24 release.
+Run `node --version` before the trusted installation sequence below; if the
+selected release is older than 24.21.0, update it first. With mise,
+`mise install node@24` resolves the newest available 24.x without changing
+`mise.toml`, then check `node --version` again. See
+[mise version resolution](https://mise.jdx.dev/dev-tools/versions.html#how-a-request-resolves)
+and the [toolchain policy](docs/policies/quality.md#toolchain-compatibility).
+
+Complete the
 [trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order)
 in every clone and linked worktree. From its root, run:
 
 ```powershell
+node --version
 node tooling/security/dist/check-security.mjs --phase lockfile --root .
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm check:security

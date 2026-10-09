@@ -8,6 +8,31 @@ Only each official release subtree verified against maintained release evidence
 keeps upstream formatting and directory documentation. All delivered JavaScript
 still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
 
+## Toolchain compatibility
+
+Support stable Node >=24.21.0 <25, declared as `engines.node: "^24.21.0"`.
+Existing Node installations within that range are supported. Node 24.21.0
+remains the exact CI and problem-reproduction baseline. Keep pnpm exactly
+12.4.2 in `packageManager`, both locks and the isolated audit manifest; a Node
+compatibility change does not authorize dependency upgrades or lock rewrites.
+See [ADR 0016](../adr/0016-toolchain-compatibility.md) for evidence and rationale.
+
+Optional `mise.toml` selects Node `24` and exact pnpm `12.4.2` for everyday work;
+it is not an exact reproducibility baseline. As documented by
+[mise](https://mise.jdx.dev/dev-tools/versions.html#how-a-request-resolves),
+prefix requests can reuse an installed match. `mise install node@24` resolves
+the newest available 24.x without writing configuration. Check `node --version`
+before the trusted installation sequence; update a selected release below
+24.21.0 first, then check again. Do not bypass the supported floor.
+
+[pnpm rejects an incompatible project engine during installation](https://pnpm.io/settings/cli#enginestrict).
+The manifest does not check arbitrary direct `node` invocations, including the
+standalone pre-install audit or installed Plugin runtime. No runtime version
+check is added. Node security updates need explicit review; they are not
+implied by the optional selector or a successful build.
+
+## Verification
+
 Develop changed behavior test-first. Regression tests use isolated fake CDP
 targets; never download packages or launch user browsers in the default suite.
 `pnpm test` and `pnpm test:coverage` select only `tests/*.test.ts` and run files
@@ -226,8 +251,8 @@ queue; ordinary CI still cancels superseded ref runs. Release automation follows
 the separate release policy and uploads no custom assets.
 
 Maintained runtime, tools, tests, fixtures, smoke and commitlint configuration
-are TypeScript; Node 24.21.0 runs their erasable syntax natively. The shared
-tsconfig uses strict NodeNext, noEmit, explicit TypeScript extensions,
+are TypeScript; supported Node 24 releases run their erasable syntax natively.
+The shared tsconfig uses strict NodeNext, noEmit, explicit TypeScript extensions,
 verbatimModuleSyntax, erasableSyntaxOnly, noUncheckedIndexedAccess and
 exactOptionalPropertyTypes. allowJs and skipLibCheck are false. No tsx,
 ts-node, transpilation test framework, aliases, enums, parameter properties or

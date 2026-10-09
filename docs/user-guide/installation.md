@@ -1,6 +1,6 @@
 # Installation
 
-Use a host with Plugin support and Node 24.21.0 available on PATH. Each host
+Use a host with Plugin support and stable Node >=24.21.0 <25 on PATH. Each host
 receives a complete independent payload from the same maintained runtime, Skill
 and verified official Server release. Installed connections need no npm/npx,
 pnpm, repository dependencies or sibling Plugin. Version 0.1.0 is unreleased.

@@ -10,6 +10,12 @@ Version 0.1.0 remains under development; no release has been published.
 
 ## [Unreleased]
 
+### Changed
+
+- Support stable Node >=24.21.0 <25 while retaining Node 24.21.0 as the exact
+    CI and problem-reproduction baseline. Optional mise selects everyday Node 24;
+    pnpm remains exactly 12.4.2 with unchanged locks and supply-chain controls.
+
 ### Added
 
 - Explicit project homepages in both manifests, a consumed Codex website field
