@@ -41,6 +41,37 @@ release and host formats. A single source release contains both distributions.
 Only an authorized release may create an annotated v<version> tag or GitHub
 Release. Do not publish an npm package; runtime is bundled with the Plugin.
 
+## Changelog editing workflow
+
+Before editing `CHANGELOG.md`, read this policy and complete these steps:
+
+1. Verify the latest published stable/full release, or verify that none exists,
+    using authoritative published release evidence such as this repository's
+    GitHub Releases records or releases API. Inspect enough of the published
+    history to establish the baseline; exclude drafts and prereleases. Git
+    commits, local tags, prereleases, and prepared dated changelog entries alone
+    do not establish that a stable/full release was published. Resolve uncertain
+    publication status before selecting categories.
+2. Compare the final delivered behavior with that verified baseline. Before the
+    first stable publication, use the absent-product baseline and describe the
+    final cumulative capabilities under Added and Security. Do not categorize
+    internal unreleased iterations as Changed, Fixed, or Removed. After stable
+    publication, select categories for the meaningful net difference from the
+    latest published stable/full release, including when preparing prereleases.
+3. Consolidate existing Unreleased entries for the same capability into its
+    final net behavior. Withdraw an entry if the unreleased capability is removed;
+    keep already-published snapshots unchanged. Internal process changes do not
+    need a changelog entry merely because they change contributor instructions.
+4. In the PR `Verification` section, record the baseline version or verified
+    absence, the authoritative evidence inspected, and why the selected
+    categories describe the net user-facing change. Include remaining limits;
+    passing repository checks alone does not verify this semantic judgment.
+
+For example, before the first stable release, support for existing stable Node
+installations `>=24.21.0 <25` belongs under Added even if a development pin
+previously required one exact Node version. Describe the final supported range;
+the unreleased pin adjustment is development history, not a Changed entry.
+
 ## Tag-triggered GitHub publication
 
 Preparing and pushing an explicitly authorized, annotated `v<semver>` tag without

@@ -138,7 +138,11 @@ description and follow the [Agent submission rules](AGENTS.md#pull-request-submi
 The [submission and commit policy](docs/policies/commits-and-scope.md) owns the
 required structure, evidence, conditional N/A reasons, 100-character limits,
 generated squash suffix, and optional Issue trailers. Update relevant documentation
-and meaningful user-facing changes in the Unreleased changelog.
+and meaningful user-facing changes in the Unreleased changelog. Before editing
+the changelog, follow the
+[Changelog editing workflow](docs/policies/releases.md#changelog-editing-workflow)
+to verify the published baseline, choose categories, and record the evidence and
+rationale in PR `Verification`.
 
 The remote Commit messages check rejects a current PR that omits required
 template content or fails commitlint. A failure blocks merge. Fix the reported
