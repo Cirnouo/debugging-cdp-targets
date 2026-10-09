@@ -1,6 +1,7 @@
 # Host metadata for self-installation
 
-Research and acceptance date: 2026-10-08. Version 0.1.0 remains unreleased.
+Original research and acceptance date: 2026-10-08. A separate Desktop
+presentation study dated 2026-10-09 appears below. Version 0.1.0 remains unreleased.
 The goal is useful, accurate metadata when users add this GitHub repository's
 Marketplace and install either complete host Plugin. Public directory submission
 is outside this contract. This document owns primary host research under the
@@ -9,8 +10,9 @@ is outside this contract. This document owns primary host research under the
 ## Sources and evidence levels
 
 The following primary sources establish separate consumers. Live documentation
-was researched on the date above; versioned source is used for version-specific
-behavior. A documented field is not proof of a particular UI rendering it.
+was researched on the original date above; versioned source is used for
+version-specific behavior. A documented field is not proof of a particular UI
+rendering it.
 
 - **C1 — Codex package/catalog:** [official packaging documentation](https://developers.openai.com/plugins/build/plugins)
     and [0.161.0 compatibility manifest parser](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/manifest.rs).
@@ -38,6 +40,17 @@ behavior. A documented field is not proof of a particular UI rendering it.
     version; the [store replacement](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/store.rs#L648-L690)
     stages and replaces an existing cache root with backup/rollback handling.
     The executed same-version refresh below is bounded to Codex CLI 0.161.0.
+- **C5 — Codex Desktop Skill presentation:** locally inspected packed
+    `resources/app.asar` on 2026-10-09. Its `package.json` identifies Windows
+    Desktop version **26.1002.52244**, `codexBuildNumber` **13536** and
+    `codexBuildFlavor` **prod**. The outer Windows MSIX package version is a
+    different identity; CLI and daemon versions do not identify this renderer.
+    The packed source has no public source URL. Reproducible consumer references
+    are `webview/assets/app-initial-25361a10f2bf.js` (`ZOc`, `CNe`/`TMe`, `wR`,
+    `Ebr`), `webview/assets/app-shared-40678a67f0e3.js` (`zRr`, `RRr`/`LRr`,
+    `yJr`, `P2`) and `webview/assets/plugin-detail-view-dd0bb2666944.js` (`Ma`).
+    Their separate presentation paths and evidence limits are recorded below;
+    this is source inspection, not a new API or manual rendering check.
 - **L1 — Claude package:** [official Plugin manifest reference](https://code.claude.com/docs/en/plugins-reference).
     Local loading and listing-only fields are distinguished there.
 - **L2 — Claude catalog:** [Marketplace creation/install documentation](https://code.claude.com/docs/en/plugin-marketplaces)
@@ -52,7 +65,9 @@ behavior. A documented field is not proof of a particular UI rendering it.
 In the matrix, **docs/source** means documented or versioned consumer support;
 **repository** means source/inventory/byte validation; **CLI** means executed
 installed-host discovery or captured model requests; **manual UI** means the
-dated human Desktop check below. Fields outside that check remain unverified.
+dated human Desktop checks or user screenshots below. Packed Desktop source
+inspection is identified separately from actual navigation and rendering.
+Fields outside those checks remain unverified.
 These evidence levels are not interchangeable.
 Source references C1–M1 above apply to the rows that name them.
 
@@ -79,7 +94,7 @@ optional host features are not inferred requirements.
 | Codex installed manifest/Skill metadata | C4; the host consumes its installed cache, independently from the tracked Marketplace snapshot. Source version selects the cache destination; a same-version Plugin add performs installation again. | Retain version `0.1.0`; refresh the catalog, then reinstall its current payload. Required to load updated metadata without confusing source freshness with cache freshness. | Versioned source and actual 0.161.0 same-version marker/stale-file/config fixture; dated full cache identity and manual UI below. |
 | `.claude-plugin/marketplace.json` | L2; relative source starts at repository/Marketplace root. Entry display fields override manifest equivalents; manifest version wins; `strict` defaults true. | Same catalog/entry name, owner Cirnouo; existing catalog description and entry description matching Claude manifest; source `./plugins/claude-code/debugging-cdp-targets`. Entry displayName/version/components/category/tags/relevance omitted: leave title/version/components with one manifest owner. | Repository and CLI cache/install. No entry components means the strict component-conflict case is inapplicable. GitHub uses cached copies; local-directory loading alone does not prove GitHub cache/update behavior. |
 | Shared `packaging/shared/skills/debugging-cdp-targets/SKILL.md` frontmatter/body | C2/L3; discovery and explicit instructions. Claude defaults name to directory, description to first body line if absent; Plugin namespace qualifies invocation. | Existing name/description, license MIT, metadata.version `0.1.0`, complete unchanged body. Required shared workflow; package license/version are not routing evidence. | Every maintained shared Skill file matches both payloads in both directions; actual captured explicit body in both hosts. |
-| Codex `packaging/codex/skill-openai.yaml` | C2; maps to `skills/debugging-cdp-targets/agents/openai.yaml`; interface is independent from Plugin interface. PluginShared icons resolve from Skill directory and are confined to this Plugin's assets. | Only interface: `display_name: Debugging CDP Targets`, `short_description: Debug verified local CDP targets`, both icon fields `../../assets/icon.png`. Useful Skill presentation using existing artwork. | Real YAML parser, exact overlay inventory/regular PNG byte checks; `skills/list` returns title/description/absolute icons. Manual UI confirms Skill title/short description/icons. This traversal is not allowed for standalone Skills or generic manifest paths. |
+| Codex `packaging/codex/skill-openai.yaml` | C2; maps to `skills/debugging-cdp-targets/agents/openai.yaml`; interface is independent from Plugin interface. PluginShared icons resolve from Skill directory and are confined to this Plugin's assets. | Only interface: `display_name: Debugging CDP Targets`, `short_description: Debug verified local CDP targets`, both icon fields `../../assets/icon.png`. Useful Skill presentation using existing artwork. | Real YAML parser, exact overlay inventory/regular PNG byte checks; `skills/list` returns title/description/absolute icons. The 2026-10-08 manual check confirms Skill title/short description/icons in Plugin detail only. The separate C5 Desktop study below bounds picker and mention behavior. This traversal is not allowed for standalone Skills or generic manifest paths. |
 | Skill invocation policy/dependencies | C2/L3; Codex implicit invocation defaults true; Claude `disable-model-invocation` defaults false and `user-invocable` true. | Codex brand color/default prompt/policy/dependencies omitted; preserve defaults without duplicating starters or inventing dependencies. Claude has no Codex overlay: no documented local YAML consumer established. | Docs/source; automatic Desktop starter behavior not proven by these defaults. |
 | Codex `packaging/codex/mcp.json` | M1/C1; schema is configuration/editing metadata. Relative stdio cwd starts at Plugin root. | Agent Plugins MCP schema 1.0.0; `cdp-targets`, stdio `node`, args `dist/mcp-bootstrap.mjs`, cwd `.`. Required local wiring. | Repository and installed gateway CLI discovery. |
 | Claude `packaging/claude-code/.mcp.json` | L1/M1; default root discovery; `${CLAUDE_PLUGIN_ROOT}` expands to installed Plugin root in args. | Same key/type/command; args `${CLAUDE_PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`. Required portable launch; no remote URL/auth/headers. | Repository and installed gateway CLI discovery. No shared implicit cwd assumption. |
@@ -173,9 +188,10 @@ every platform permits the cache filesystem transaction.
 ## Manual Desktop acceptance
 
 On 2026-10-08, the human confirmed that the project website opens the official
-repository, the Skill title/short description/icons display, and the full long
-description renders. Tested Desktop version **26.1002.52244**, build **13536**,
-production channel, came from official app metadata. The tested source was
+repository, the Skill title/short description/icons display in Plugin detail,
+and the full long description renders. Tested Desktop version **26.1002.52244**,
+build **13536**, production channel, came from official app metadata. The tested
+source was
 [ebcd580eb48e6a3fb9de408c0f88e2b9179a33d0](https://github.com/Cirnouo/debugging-cdp-targets/commit/ebcd580eb48e6a3fb9de408c0f88e2b9179a33d0),
 the reviewed head of [PR 26](https://github.com/Cirnouo/debugging-cdp-targets/pull/26).
 This is manual navigation/rendering evidence, separate from the CLI API and
@@ -200,3 +216,32 @@ do not broaden the measured UI scope. Plugin developer/category fields,
 individual manifest icon surfaces, dark-mode-specific rendering and automatic
 full Skill injection from starter prompt selection were not manually verified.
 Use explicit Skill invocation for the proven complete-instruction workflow.
+
+## Desktop Skill presentation study — 2026-10-09
+
+This separate study covers Windows Codex Desktop **26.1002.52244**, build
+**13536**, **prod**, identified by C5's packed app metadata. The 2026-10-09
+user screenshots show this Plugin's custom icon in Plugin detail and the default
+Skill glyph in the dollar picker. Packed source inspection explains the distinct
+consumers; it does not extend the 2026-10-08 API or manual clicking checks.
+
+| Presentation entry | Inspected consumer and result | UI evidence and remaining limits |
+| --- | --- | --- |
+| Plugin detail Skill row | `Ma` passes `interface.iconSmall`, `interface.iconLarge`, `basePath` and `smallOnly: true` to the image renderer. `yJr` reads `plugin/read` icon paths through `P2`, loads binary files and uses data URLs; PNG is supported. | The 2026-10-09 user screenshot shows this Plugin's custom PNG here, consistent with the 2026-10-08 manual Plugin detail acceptance. |
+| Dollar picker Skill row | `ZOc` maps `galleryKind` through `CNe`/`TMe`, then assigns `Icon: wR(r)`. `wR` uses a fixed artifact-template-type map with a default builtin Skill glyph. The row still carries `iconSmall`; the `Icon: wR(r)` selection/rendering branch for ordinary Skills is independent of `interface.iconSmall`, `interface.iconLarge` and `brandColor`. | The 2026-10-09 user screenshot shows this Plugin's default glyph. Custom icon metadata validity does not establish picker rendering. |
+| Selected Skill mention | `Ebr`'s skill-mention `toDOM` uses `wR(skillIcon ?? parsedAppearance.icon)` even though an `iconSmall` attribute exists. The inspected path uses builtin glyphs. | Source inspection only; manual selected-mention rendering was not verified. |
+
+In `app-shared-40678a67f0e3.js`, `zRr` selects `artifact-template.json` only
+for Skill names prefixed with `artifact-template-`; `RRr`/`LRr` parse its
+`galleryKind`. Ordinary Skills do not take that template-kind branch. Documents
+is another ordinary Skill with valid PNG `icon_small` that appears generic in
+the user screenshots. Analytics Dashboard and Business Review are spreadsheet
+and presentation artifact-template kinds with no `icon_small`; their colored
+icons come from builtin type glyphs, not preview image files.
+
+The existing [official Skill metadata documentation](https://learn.chatgpt.com/docs/build-skills#optional-metadata)
+and C2's YAML/asset consumers establish metadata validity. This Plugin's existing
+YAML and PNG remain valid and unchanged. The display restriction above comes
+from C5's inspected renderer consumers, not an SVG requirement or a new metadata
+contract. These observations are limited to this Desktop version and platform;
+they do not establish a product bug or behavior across all versions/platforms.

@@ -101,6 +101,16 @@ State unsupported fields and unverified presentation explicitly. Self-install
 contracts must not inherit public-submission requirements without an applicable
 local consumer or a separately adopted repository quality requirement.
 
+Research each relevant actual presentation entry independently, including Plugin
+detail, the Skill picker and selected Skill mentions when applicable. Record its
+consumer, observed result and remaining unknowns with the host version and date.
+Metadata parsing, API-returned fields, renderer source inspection and actual UI
+navigation/rendering are separate evidence: acceptance at one entry does not
+establish acceptance at another. A version-limited host consumer that does not
+read a presentation field is a legitimate documented limit. Do not invent
+unsupported fields, rename ordinary Skills or misrepresent them as
+artifact-template types to imply unsupported presentation behavior.
+
 Update that record when evidence or the adopted contract changes. Keep source
 references and evidence ownership there; packaging guides, quality rules and
 ADRs link to it instead of maintaining competing research inventories. Changes
