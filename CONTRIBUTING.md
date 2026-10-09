@@ -10,6 +10,10 @@ Fork the repository and clone your fork. Use stable Node >=24.21.0 <25 and
 exact pnpm 12.4.2. Keep an existing Node installation within that range;
 Node 24.21.0 is the exact CI and problem-reproduction baseline.
 
+Before creating a linked worktree on Windows, follow the
+[long-path initialization policy](docs/policies/quality.md#windows-worktree-long-path-initialization)
+in the existing clone and verify effective `core.longpaths=true`.
+
 Optional `mise.toml` selects Node `24` for everyday work and exact pnpm
 `12.4.2`. A prefix request can reuse an already installed Node 24 release.
 Run `node --version` before the trusted installation sequence below; if the

@@ -107,6 +107,47 @@ pre-push clears Git's repository routing variables before running verify:push,
 so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.
 
+## Windows worktree long-path initialization
+
+Before creating a linked worktree on Windows, require effective
+`core.longpaths=true` for Git for Windows. Its
+[long-path support](https://gitforwindows.org/git-cannot-create-a-file-or-directory-with-a-long-path.html)
+is opt-in and covers native C-based Git commands; scripted commands and other
+Windows programs can still have path limits.
+
+A longer worktree root can make checkout fail with `Filename too long` even
+when the main checkout works. This occurred in the unchanged official Server's
+deep issue-description tree with `core.longpaths` unset; enabling it locally
+allowed the managed worktree retry to succeed. Preserve the complete official
+release rather than renaming, omitting or shortening its paths.
+
+From the repository root, inspect the effective value and its source before
+creating the worktree:
+
+```powershell
+git config --show-scope --show-origin --get core.longpaths
+```
+
+If unset or false, enable the repository-local setting and verify again:
+
+```powershell
+git config --local core.longpaths true
+git config --show-scope --show-origin --get core.longpaths
+```
+
+Require the final effective value to be `true`. This setup is per clone;
+Git [shares repository configuration across worktrees by default](https://git-scm.com/docs/git-worktree.html#_configuration_file).
+Preserve and resolve existing worktree, command or environment overrides so
+the actual worktree-creation invocation also sees `true`. Do not change global
+or system Git settings or the Windows registry for this setup.
+
+After a failed checkout, inspect `git worktree list --porcelain` and the actual
+failed location and registration before retrying. Preserve unrelated work;
+use the owning tool's managed lifecycle to clean up and retry tool-owned
+worktrees. For a manually created disposable worktree, verify the exact target
+and use normal Git worktree cleanup. Do not use force, reset, clean or recursive
+deletion to recover from this failure.
+
 ## Local Git hook initialization
 
 After completing the [trusted installation sequence](supply-chain.md#installation-and-scan-order),

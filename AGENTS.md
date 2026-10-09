@@ -99,6 +99,10 @@ Run focused tests first, then
 Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
 generated JavaScript is distribution output, never a handwritten fallback.
 
+Before creating a linked worktree on Windows, complete the
+[long-path initialization](docs/policies/quality.md#windows-worktree-long-path-initialization)
+in the existing clone and verify effective `core.longpaths=true`.
+
 Complete the [trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order)
 in every clone/worktree, then verify the generated Git hook entry under the
 [local hook policy](docs/policies/quality.md#local-git-hook-initialization).
