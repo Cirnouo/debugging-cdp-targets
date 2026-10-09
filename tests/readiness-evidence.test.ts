@@ -2,15 +2,175 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import {
+    emitFixtureEvent,
     type FixtureEvent,
+    runFixtureObservation,
     subscribeFixtureDiagnostics,
     validateFixtureEvent,
 } from '../src/adapters/fixture-diagnostics.ts';
 import { unixSnapshot } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { errorDetails } from '../src/shared/errors.ts';
+import { type BoundedLinuxRead, createLinuxStartupWaitSampler } from './smoke/linux-startup-wait.ts';
 
 const event = { stage: 'readiness', event: 'decision', outcome: 'observed', timestampMs: 1, durationMs: 0 };
+
+const counterFields = [
+    'rootStartTicks',
+    'rootUserTicks',
+    'rootSystemTicks',
+    'rootMajorFaults',
+    'rootBlockIoTicks',
+] as const;
+
+test('proc counter metadata accepts only closed optional safe nonnegative integers', () => {
+    for (const field of counterFields) {
+        for (const value of [0, 42, Number.MAX_SAFE_INTEGER]) {
+            const accepted = validateFixtureEvent({ ...event, [field]: value });
+            assert.ok(accepted);
+            assert.equal(accepted[field], value);
+        }
+        for (const value of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Infinity, '42', null]) {
+            assert.equal(validateFixtureEvent({ ...event, [field]: value }), undefined);
+        }
+        assert.equal(Object.hasOwn(validateFixtureEvent(event) ?? {}, field), false);
+    }
+    assert.equal(validateFixtureEvent({ ...event, rootPrivateCounter: 1 }), undefined);
+});
+
+async function linuxCounterSnapshot(stat: string, reads: string[] = []) {
+    return unixSnapshot(42, 9222, {
+        platform: 'linux',
+        currentUser: () => 7,
+        readlink: async () => process.execPath,
+        readText: async (file) => {
+            reads.push(file);
+            if (file === '/proc/stat') return 'btime 0\n';
+            assert.equal(file, '/proc/42/stat');
+            return stat;
+        },
+        run: async (command) => {
+            if (command === 'ps') return { code: 0, stdout: '42 1 7 Thu Jan  1 00:16:40 1970 chrome\n', stderr: '' };
+            if (command === 'getconf') return { code: 0, stdout: '100\n', stderr: '' };
+            assert.equal(command, 'lsof');
+            return { code: 1, stdout: '', stderr: '' };
+        },
+    });
+}
+
+const completeProcStat =
+    '42 (private name ) with (parentheses)) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 100050 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39\n';
+
+test('Linux proc counters reuse the creation read with complex comm and preserve creation identity', async (t) => {
+    const records: FixtureEvent[] = [];
+    t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+    const reads: string[] = [];
+    const evidence = await linuxCounterSnapshot(completeProcStat, reads);
+    assert.ok(evidence.root.exists);
+    assert.equal(evidence.root.startedAtUtc, '1970-01-01T00:16:40.500Z');
+    assert.deepEqual(reads.sort(), ['/proc/42/stat', '/proc/stat']);
+    const decision = records.find((record) => record.command === 'proc-stat' && record.event === 'decision');
+    assert.ok(decision);
+    assert.equal(decision.valid, true);
+    assert.equal(decision.rootStartTicks, 100050);
+    assert.equal(decision.rootMajorFaults, 9);
+    assert.equal(decision.rootUserTicks, 11);
+    assert.equal(decision.rootSystemTicks, 12);
+    assert.equal(decision.rootBlockIoTicks, 39);
+    assert.equal(JSON.stringify(records).includes('private name'), false);
+});
+
+for (const [field, index] of [
+    ['rootMajorFaults', 9],
+    ['rootUserTicks', 11],
+    ['rootSystemTicks', 12],
+    ['rootBlockIoTicks', 39],
+] as const) {
+    test(`malformed optional ${field} omits only that counter without rejecting identity`, async (t) => {
+        const records: FixtureEvent[] = [];
+        t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+        for (const malformed of ['-1', '0.5', '9007199254740992', 'PRIVATE_TOKEN', '+1', '1e2']) {
+            const fields = completeProcStat
+                .slice(completeProcStat.lastIndexOf(') ') + 2)
+                .trim()
+                .split(/\s+/);
+            fields[index] = malformed;
+            const evidence = await linuxCounterSnapshot(`42 (chrome) ${fields.join(' ')}\n`);
+            assert.ok(evidence.root.exists);
+            assert.equal(evidence.root.startedAtUtc, '1970-01-01T00:16:40.500Z');
+            const decision = records.findLast(
+                (record) => record.command === 'proc-stat' && record.event === 'decision',
+            );
+            assert.ok(decision);
+            assert.equal(decision.valid, true);
+            assert.equal(Object.hasOwn(decision, field), false);
+            assert.equal(decision.rootStartTicks, 100050);
+            for (const [otherField, value] of [
+                ['rootMajorFaults', 9],
+                ['rootUserTicks', 11],
+                ['rootSystemTicks', 12],
+                ['rootBlockIoTicks', 39],
+            ] as const) {
+                if (otherField !== field) assert.equal(decision[otherField], value);
+            }
+            assert.equal(JSON.stringify(records).includes('PRIVATE_TOKEN'), false);
+        }
+    });
+}
+
+test('missing late proc counters remain absent while earlier counters stay available', async (t) => {
+    const records: FixtureEvent[] = [];
+    t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+    await linuxCounterSnapshot('42 (chrome) S 1 2 3 4 5 6 7 8 0 10 0 0 13 14 15 16 17 18 100050\n');
+    const decision = records.find((record) => record.command === 'proc-stat' && record.event === 'decision');
+    assert.ok(decision);
+    assert.equal(decision.rootMajorFaults, 0);
+    assert.equal(decision.rootUserTicks, 0);
+    assert.equal(decision.rootSystemTicks, 0);
+    assert.equal(Object.hasOwn(decision, 'rootBlockIoTicks'), false);
+});
+
+test('invalid Linux PID or start ticks still reject creation evidence and publish no counters', async (t) => {
+    const records: FixtureEvent[] = [];
+    t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+    for (const stat of [
+        completeProcStat.replace(/^42 /, '43 '),
+        completeProcStat.replace('100050', '-1'),
+        completeProcStat.replace('100050', '9007199254740992'),
+        '42 (chrome) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18\n',
+    ]) {
+        await assert.rejects(linuxCounterSnapshot(stat), /creation evidence is unverifiable/);
+        const decision = records.findLast((record) => record.command === 'proc-stat' && record.event === 'decision');
+        assert.ok(decision);
+        assert.equal(decision.valid, false);
+        for (const field of counterFields) assert.equal(Object.hasOwn(decision, field), false);
+    }
+});
+
+test('default Linux creation inspection skips optional counter conversion and extra reads', async () => {
+    const reads: string[] = [];
+    let conversions = 0;
+    const originalNumber = globalThis.Number;
+    const instrumentedNumber = new Proxy(originalNumber, {
+        apply(target, thisArg: unknown, args: unknown[]) {
+            if (args[0] === '987654321') {
+                conversions++;
+                throw new Error('optional counter conversion must be disabled');
+            }
+            return Reflect.apply(target, thisArg, args);
+        },
+    });
+    globalThis.Number = instrumentedNumber;
+    try {
+        const evidence = await linuxCounterSnapshot(completeProcStat.replace(' 11 ', ' 987654321 '), reads);
+        assert.ok(evidence.root.exists);
+        assert.equal(evidence.root.startedAtUtc, '1970-01-01T00:16:40.500Z');
+        assert.equal(conversions, 0);
+        assert.deepEqual(reads.sort(), ['/proc/42/stat', '/proc/stat']);
+    } finally {
+        globalThis.Number = originalNumber;
+    }
+});
 
 test('readiness receiver admits closed process evidence and distinguishes missing from explicit null exit', () => {
     const accepted = validateFixtureEvent({
@@ -122,6 +282,7 @@ function readinessFixture({ processIds = [42], listeners = false } = {}) {
     let clock = 0;
     let beforeClose: (() => void) | undefined;
     let afterAttempt: (() => void) | undefined;
+    let beforeSnapshot: (() => void) | undefined;
     let snapshotCalls = 0;
     let closeCalls = 0;
     const host = createTargetHost({
@@ -141,6 +302,7 @@ function readinessFixture({ processIds = [42], listeners = false } = {}) {
             validateNewRoot: () => {},
             snapshot: async () => {
                 snapshotCalls++;
+                beforeSnapshot?.();
                 return {
                     root: {
                         exists: true,
@@ -174,8 +336,66 @@ function readinessFixture({ processIds = [42], listeners = false } = {}) {
         afterAttempt: (job: () => void) => {
             afterAttempt = job;
         },
+        beforeSnapshot: (job: () => void) => {
+            beforeSnapshot = job;
+        },
     };
 }
+
+test('verified listener with unanswered HTTP still fails and pending Linux sampling cannot block normal Close', async (t) => {
+    let finishRead: (result: BoundedLinuxRead) => void = () => {};
+    let expire: () => void = () => {};
+    let reads = 0;
+    const samples: string[] = [];
+    const sampler = createLinuxStartupWaitSampler((record) => samples.push(`${record.trigger}:${record.outcome}`), {
+        enabled: true,
+        platform: 'linux',
+        now: () => 0,
+        setTimer(job) {
+            expire = job;
+            return 1;
+        },
+        clearTimer() {},
+        read: async () => {
+            reads++;
+            return new Promise((resolve) => {
+                finishRead = resolve;
+            });
+        },
+    });
+    t.after(subscribeFixtureDiagnostics((event) => sampler.observe(event)));
+    const fixture = readinessFixture({ listeners: true });
+    fixture.failure.code = 'ETIMEDOUT';
+    fixture.failure.message = 'Controlled HTTP response timeout';
+    fixture.beforeSnapshot(() => {
+        emitFixtureEvent('native-file', 'decision', {
+            command: 'proc-stat',
+            pid: 42,
+            valid: true,
+            rootStartTicks: 900,
+            rootProcessState: 'disk-sleep',
+        });
+    });
+    const result: unknown = await runFixtureObservation(
+        {
+            entryId: '11111111-1111-4111-8111-111111111111',
+            connectionId: '22222222-2222-4222-8222-222222222222',
+            sessionId: '33333333-3333-4333-8333-333333333333',
+        },
+        () => fixture.launch().catch((error: unknown) => error),
+    );
+    assert.ok(result instanceof Error);
+    assert.equal(result.cause, fixture.failure);
+    assert.equal(errorDetails(result)?.closeConfirmed, true);
+    assert.deepEqual(fixture.calls(), { snapshots: 1, closes: 1 });
+    assert.equal(reads, 1);
+    assert.deepEqual(samples, ['first-owned-listener:skipped', 'rollback-request:skipped']);
+    expire();
+    finishRead({ bytes: 0, limitation: 'missing' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(reads, 1);
+    assert.ok(samples.includes('baseline:limited'));
+});
 
 for (const listeners of [false, true]) {
     test(`native snapshot distinguishes two unique owned descendants from listener count ${Number(listeners)}`, async (t) => {

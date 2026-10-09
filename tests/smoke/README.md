@@ -90,6 +90,8 @@ then explicitly restarts and normally closes them. It retains test profiles.
   `NODE_OPTIONS`, gateway environment switches or inherited browser configuration.
   `fixture-ci.ts` initializes the dependency-free job index before prerequisite
   checks and writes the failure job summary using only fixed labels and safe IDs.
+- `linux-startup-wait.ts` supplies the test-only Linux verified-root wait sampler,
+  bounded fixed proc reads and closed projections for the same diagnostic stream.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
@@ -640,8 +642,18 @@ not establish an unrecorded cause. Absence, truncation, validation rejection and
 incomplete cleanup are evidence limitations.
 Diagnostic durations and readiness `remainingMs` use monotonic elapsed time;
 the production readiness predicate and its existing wall-clock deadline remain
-unchanged. Opt-in synchronous observation can perturb timing; its overhead on
-real Linux/macOS Chrome fixtures has not been measured.
+unchanged. Opt-in synchronous observation can perturb timing. The preload
+measures the full synchronous collector callback, including validation, lock,
+file size checks, append and cleanup, using monotonic elapsed milliseconds.
+It directly appends one closed `collector-cost` record at normal stream shutdown:
+`callbacks`, cumulative `totalMs`, and largest `maxMs`. Rejected events count once;
+write failures remain in the measurement. Publishing this terminal record does
+not recursively enter the diagnostics channel or measure itself. An interrupted
+child or capped stream can lack the terminal record; absence means unknown cost.
+Invalid clock evidence is marked unavailable. Asynchronous Linux sample elapsed
+time is recorded separately. Neither metric measures all Chrome logging costs,
+kernel I/O disturbance, event-loop scheduling delay or instrumentation causation.
+No real Linux/macOS collector-cost acceptance is established by synthetic tests.
 
 An accepted current diagnostics collection also enables `chrome-startup.ts`.
 On Linux, `xdpyinfo` queries the inherited `DISPLAY` inside the smoke's
@@ -675,8 +687,86 @@ event stream retains earlier and pre-restart observations until its existing cap
 
 Native records also expose the fixed Linux `rootProcessState` from existing
 proc-stat reads and a unique `ownedDescendantCount`, separate from listener counts.
+Successful proc-stat decisions optionally include `rootStartTicks`,
+`rootUserTicks`, `rootSystemTicks`, `rootMajorFaults` and `rootBlockIoTicks`.
+The tick fields retain kernel units rather than assuming a clock frequency;
+major faults are counts. They parse only the existing stat buffer, without an
+additional runtime read. Missing or unsafe optional counters remain absent;
+they never weaken PID/creation-time identity checks.
 Retained `exitObserved`, exit code, signal and `monitoringFailed` evidence is sampled
 before rollback Close. These fields add no process scan, watcher or readiness deadline.
+
+For an accepted Linux diagnostics collection, the preload also enables the
+test-only `linux-startup-wait` sampler. It pins entry, connection, session, PID
+and creation ticks only after the proc-stat decision belongs to the same
+completed native snapshot and the following root identity validation succeeds.
+A successful proc-stat read or snapshot END alone does not authorize sampling.
+Concurrent connections stay independent; restart establishes a fresh identity.
+Overlapping frames or a new BEGIN before the previous validation decision are
+quarantined until every outstanding END and successful-END validation decision
+has drained. Quarantined candidates never authorize a read, including the event
+that finally drains the overlap. Missing decisions conservatively leave later
+observation unavailable until a fresh session; this can occur for health/verify
+snapshots that do not publish a root-validation decision. For a previously
+verified root, further affected triggers record `snapshot-ambiguous` or
+`snapshot-unvalidated` skips.
+Before an identity was verified, only the safe native frames remain as evidence
+of that limitation. This trades incomplete diagnostics for unambiguous identity.
+
+Each verified root consumes at most four one-shot triggers: first validated
+snapshot (`baseline`), at least one second of continuously observed `D`
+(`continuous-d`), first owned listener (`first-owned-listener`), and the
+`rollback-request` decision. The D span requires validated observations no more
+than 500 ms apart, conservatively covering the existing 200 ms polling interval;
+non-D, failed/interrupted frames, reversed time or a larger gap reset the span.
+Failed and busy samples consume their trigger without retry or a queue.
+Rollback means triggered when rollback was requested, and may race normal Close.
+Nothing in the runtime waits for this asynchronous sample.
+
+A sample reads only seven fixed files: `/proc/<verified-pid>/stat`, `wchan`,
+`io`, system `/proc/pressure/cpu`, `memory`, `io`, and the process stat again.
+Each read requests at most 4,096 bytes; a full buffer is conservatively overlong
+and is not parsed. The 250 ms total deadline stops publication of metrics and
+subsequent reads. The timer is unreferenced. An already pending filesystem call
+can settle later; bounded bytes and a timer cannot cap kernel syscall latency
+or synchronous event-loop disturbance. The root stays busy until that work
+settles, so another trigger records a skip. Every opened handle is closed even
+after late settlement. Exited/inaccessible roots, timeout, unsafe counters,
+unknown wait symbols, and old-session completion carry closed limitations.
+Before/after creation ticks must match the pinned root; identity uncertainty or
+a stale session discards metrics. Late completion never updates a successor.
+
+| Projection | Unit and interpretation |
+| --- | --- |
+| `process.userTicks`, `systemTicks`, `blockIoTicks` | Kernel ticks; corresponding `*Delta` is within the sample's stat pair. |
+| `process.majorFaults`, `majorFaultsDelta` | Fault counts and within-pair change. |
+| `process.readBytes`, `writeBytes` | Absolute process I/O byte counters, with no invented delta. |
+| `wchan` | Closed symbol class: futex, pipe, poll, I/O, scheduler, or unknown. It is an observation of a wait category. |
+| `systemPsi.*TotalUs` | System-wide cumulative stall microseconds for CPU, memory or I/O `some`/`full`; `scope` is always `system`. |
+| `elapsedMs`, `reads`, `bytes` | Sampler elapsed time and bounded read requests/returned bytes, separate from synchronous collector cost. |
+
+Missing, unsafe or decreasing counters remain unknown rather than zero.
+Process and system counters are also checked against the previous sample for
+the same verified root. Wchan classification is deliberately closed: an
+unmatched symbol remains unknown and raw symbols never enter the stream.
+[Linux proc documentation](https://docs.kernel.org/filesystems/proc.html)
+defines the process counters and wait channel;
+[Linux PSI documentation](https://docs.kernel.org/accounting/psi.html)
+defines system resource pressure. Concurrent system pressure can correlate
+with Chrome's delay, but alone cannot prove what this root was waiting for.
+System CPU `full` is undefined and kernels since 5.13 report zero for backward
+compatibility; that supplied zero cannot establish absence of CPU contention.
+No stack, syscall parameters, thread/descendant traversal or arbitrary file
+content is collected. Unconfigured/refused diagnostics and non-Linux platforms
+create no Linux sampler, reads or timers.
+
+Wait records use the same bounded stream and five filenames. The small summary
+retains the latest eight validated samples; `linuxStartupWaitOmitted` explicitly
+counts earlier summary records and marks the summary incomplete. Consult the
+stream for those earlier samples, subject to its unchanged caps. Completion
+callbacks also contribute to `collector-cost`; an inline busy result nested in
+the channel callback counts only once. Only closed identities, categories,
+safe numbers and limitations survive either projection.
 
 These matchers use [Chromium logging setup](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/common/logging_chrome.cc),
 the [current LOG formatter](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/logging.cc)
@@ -708,3 +798,42 @@ and page/tool content. Only the newly owned controlled fixture is observed.
 These new records cannot explain old runs retrospectively: the underlying roots
 of historical portable CI failures remain **UNKNOWN** until supported by new
 evidence. Static or synthetic tests also do not establish real Chrome acceptance.
+
+### PR 32 first Ubuntu startup failure
+
+The [first PR 32 Ubuntu job](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37915060872/job/113771178523)
+failed before connecting the official MCP Server. Its head was
+`85123e915dc77efa65c81f9d6ad5a1136de9cf27`; the job checked out virtual merge
+`7f47f5fc895b973538b318f703c17390aaedbd30`, whose tree
+`6f39713e5cf2ac0e3b3dd4a3264e47cdfee84435` matched the head tree and the passing
+push and later single rerun. Those passes establish intermittency, not a fix.
+The [original five-file artifact](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37915060872/artifacts/11609822561)
+has archive SHA-256
+`f5c8d1706cb2b4f5d681e0c99c95acd04ca706a053b5eabbc9b5c5014607fdf0`.
+The original full job logs, exact artifact and timing analysis are preserved in
+external task evidence; uploaded artifacts remain subject to GitHub retention.
+
+| Readiness elapsed | Observed boundary |
+| --- | --- |
+| 30.666 ms | First root sample in `D`; no listener. |
+| First 71 attempts | No owned listener and endpoint connection refused. |
+| 18,261.502 ms | First correctly owned listener. |
+| Following two probes | `/json/version` timed out after 1,002.015 and 1,000.747 ms. |
+| 20,719.039 ms | Startup failed; retained child exit evidence still reported alive. |
+| Rollback | Normal Close accepted in 59.531 ms; exit observed after 2,213.688 ms; managed directory deletion succeeded. |
+
+The 73 readiness snapshots recorded 64 `D` and nine `S` states. Native snapshot
+calls totaled 3,917.854 ms, averaging 53.669 ms with a 94.564 ms maximum; there
+was no observed individual native command hang. The last endpoint probe began
+with 535.489 ms remaining but retained its existing one-second request budget;
+that explains part of the final deadline overshoot, not the preceding startup
+delay. The first failure was preserved independently of successful cleanup.
+
+Linux [`/proc` documentation](https://docs.kernel.org/filesystems/proc.html)
+defines `D` as uninterruptible wait. It does not identify storage congestion or
+the responsible wait point by itself. The historical records cannot distinguish
+Chrome's own blocking from diagnostic collection disturbance. The startup limit
+remains 20 seconds. New samples must establish a concrete wait point, resource
+change or collection effect before a minimal causal fix and single-variable
+verification can be selected. A successful diagnostic run verifies observation
+capability only; without a reproduced failure the root cause remains unknown.

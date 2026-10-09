@@ -475,12 +475,27 @@ async function linuxCreationTime(
             I: 'idle',
         };
         const state = processFields?.[0];
+        const counters: FixtureFields = { rootStartTicks: startTicks };
+        // Fields resume at stat field 3: majflt=12, utime=14, stime=15,
+        // delayacct_blkio_ticks=42. Optional diagnostics never authorize identity.
+        for (const [field, index] of [
+            ['rootMajorFaults', 9],
+            ['rootUserTicks', 11],
+            ['rootSystemTicks', 12],
+            ['rootBlockIoTicks', 39],
+        ] as const) {
+            const text = processFields?.[index];
+            if (text === undefined || !/^\d+$/.test(text)) continue;
+            const value = Number(text);
+            if (Number.isSafeInteger(value)) counters[field] = value;
+        }
         emitFixtureEvent('native-file', 'decision', {
             command: 'proc-stat',
             pid,
             valid: true,
             rootProcessState:
                 state !== undefined && Object.hasOwn(states, state) ? (states[state] ?? 'unknown') : 'unknown',
+            ...counters,
         });
     }
     return started.toISOString();

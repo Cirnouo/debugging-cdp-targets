@@ -326,6 +326,11 @@ export interface FixtureFields extends FixtureIdentity {
     exitObserved?: boolean;
     monitoringFailed?: boolean;
     rootProcessState?: (typeof rootProcessStates)[number];
+    rootStartTicks?: number;
+    rootUserTicks?: number;
+    rootSystemTicks?: number;
+    rootMajorFaults?: number;
+    rootBlockIoTicks?: number;
     httpStatus?: number;
     nativeError?: number;
     stderrPresent?: boolean;
@@ -384,6 +389,11 @@ const fieldKeys = [
     'exitObserved',
     'monitoringFailed',
     'rootProcessState',
+    'rootStartTicks',
+    'rootUserTicks',
+    'rootSystemTicks',
+    'rootMajorFaults',
+    'rootBlockIoTicks',
     'httpStatus',
     'nativeError',
     'stderrPresent',
@@ -443,7 +453,19 @@ function safeField(key: string, value: unknown): boolean {
     if (key === 'pid') return value > 0;
     if (key === 'port') return value > 0 && value <= 65535;
     if (key === 'httpStatus') return value >= 100 && value <= 599;
-    return ['attempt', 'count', 'ownedDescendantCount', 'pendingCount', 'resourceCount', 'nativeError'].includes(key);
+    return [
+        'attempt',
+        'count',
+        'ownedDescendantCount',
+        'pendingCount',
+        'resourceCount',
+        'nativeError',
+        'rootStartTicks',
+        'rootUserTicks',
+        'rootSystemTicks',
+        'rootMajorFaults',
+        'rootBlockIoTicks',
+    ].includes(key);
 }
 function copyFields(value: FixtureFields): FixtureFields {
     const result: Record<string, unknown> = {};
@@ -646,12 +668,17 @@ export function beginFixtureStage(stage: FixtureStage, fields: FixtureFields = {
 export function subscribeFixtureDiagnostics(
     callback: (event: FixtureEvent) => void,
     onRejected?: () => void,
+    aroundReceive?: (dispatch: () => void) => void,
 ): () => void {
     const receive = (data: unknown) => {
         try {
-            const event = validateFixtureEvent(data);
-            const returned: unknown = event ? callback(event) : onRejected?.();
-            if (returned !== undefined) void Promise.resolve(returned).catch(() => {});
+            const dispatch = () => {
+                const event = validateFixtureEvent(data);
+                const returned: unknown = event ? callback(event) : onRejected?.();
+                if (returned !== undefined) void Promise.resolve(returned).catch(() => {});
+            };
+            if (aroundReceive) aroundReceive(dispatch);
+            else dispatch();
         } catch {
             // Node treats subscriber throws as fatal; containment belongs inside this callback.
         }

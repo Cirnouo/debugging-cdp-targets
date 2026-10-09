@@ -11,8 +11,17 @@
   data-directory observation, original I/O effects and deadlines, and hostile
   metadata/error privacy through controlled external I/O boundaries.
 - `readiness-evidence.test.ts` checks Linux state from existing native reads,
-  owned descendant counts, and retained child exit evidence before rollback,
+  optional safe proc-stat counters, owned descendant counts, and retained child exit evidence before rollback,
   including closed fields, malformed observations and disabled-mode behavior.
+- `fixture-cost.test.ts` checks monotonic collector callback costs on successful
+  and failed writes, single counting of rejected events, closed timing records,
+  default-off behavior and unchanged stream caps.
+- `fixture-wait.test.ts` checks Linux wait projections in the shared five-file
+  collector, callback cost, bounded summaries and preservation of the original
+  failure while all normal cleanup actions run.
+- `linux-startup-wait.test.ts` checks verified snapshot association, four
+  one-shot Linux sampling triggers, bounded proc reads, process/session reuse,
+  late results, resource counters, privacy and disabled-platform behavior.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.

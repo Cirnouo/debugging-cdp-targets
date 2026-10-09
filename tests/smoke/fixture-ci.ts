@@ -71,6 +71,9 @@ export function newFixtureEnvelope(fixture: 'official-server' | 'entry-recovery'
         incomplete: false,
         collectionRejected: false,
         browserStartup: [],
+        collectorCost: null,
+        linuxStartupWait: [],
+        linuxStartupWaitOmitted: 0,
     };
 }
 export function fixtureJobIndex(command: string, directory: string, label?: string) {
@@ -156,6 +159,15 @@ async function writeFixtureJobSummary(directory: string, file: string) {
                 text += `Runtime boundary: ${progress.lastStage ?? 'unavailable'}; operation: ${progress.lastOperationId ?? 'unavailable'}; gateway events: ${progress.gatewayEvents}.\n\n`;
                 if (progress.incomplete || progress.writeFailed || progress.truncated || progress.invalidEvents > 0)
                     text += 'Stream evidence is incomplete or limited.\n\n';
+                if (progress.collectorCost) {
+                    const cost = progress.collectorCost;
+                    text += `Synchronous diagnostic collector: callbacks=${cost.callbacks}; totalMs=${cost.totalMs}; maxMs=${cost.maxMs}.\n\n`;
+                }
+                for (const wait of progress.linuxStartupWait) {
+                    text += `Linux wait sample: connection=${wait.connectionId}; session=${wait.sessionId}; pid=${wait.pid}; startTicks=${wait.rootStartTicks}; trigger=${wait.trigger}; outcome=${wait.outcome}; elapsedMs=${wait.elapsedMs}; reads=${wait.reads}; bytes=${wait.bytes}; limits=${wait.limitations.join(',') || 'none'}; wchan=${wait.wchan ?? 'unavailable'}.\n\n`;
+                }
+                if (progress.linuxStartupWaitOmitted > 0)
+                    text += `Linux wait summary omitted ${progress.linuxStartupWaitOmitted} earlier records; consult the bounded stream.\n\n`;
                 for (const startup of progress.browserStartup) {
                     if (startup.phase === 'log') {
                         text += `Chrome startup slot ${startup.launch}: categories=${startup.reasons.join(',') || 'unknown'}; INFO=${startup.info}; WARNING=${startup.warning}; ERROR=${startup.error}; FATAL=${startup.fatal}; absent=${startup.absent}; readFailed=${startup.readFailed}; truncated=${startup.truncated}; incomplete=${startup.incomplete}.\n\n`;

@@ -4451,6 +4451,11 @@ var fieldKeys = [
   "exitObserved",
   "monitoringFailed",
   "rootProcessState",
+  "rootStartTicks",
+  "rootUserTicks",
+  "rootSystemTicks",
+  "rootMajorFaults",
+  "rootBlockIoTicks",
   "httpStatus",
   "nativeError",
   "stderrPresent",
@@ -4487,7 +4492,19 @@ function safeField(key, value) {
   if (key === "pid") return value > 0;
   if (key === "port") return value > 0 && value <= 65535;
   if (key === "httpStatus") return value >= 100 && value <= 599;
-  return ["attempt", "count", "ownedDescendantCount", "pendingCount", "resourceCount", "nativeError"].includes(key);
+  return [
+    "attempt",
+    "count",
+    "ownedDescendantCount",
+    "pendingCount",
+    "resourceCount",
+    "nativeError",
+    "rootStartTicks",
+    "rootUserTicks",
+    "rootSystemTicks",
+    "rootMajorFaults",
+    "rootBlockIoTicks"
+  ].includes(key);
 }
 function copyFields(value) {
   const result = {};
@@ -5276,11 +5293,24 @@ async function linuxCreationTime(pid, execute, readText) {
       I: "idle"
     };
     const state = processFields?.[0];
+    const counters = { rootStartTicks: startTicks };
+    for (const [field, index] of [
+      ["rootMajorFaults", 9],
+      ["rootUserTicks", 11],
+      ["rootSystemTicks", 12],
+      ["rootBlockIoTicks", 39]
+    ]) {
+      const text = processFields?.[index];
+      if (text === void 0 || !/^\d+$/.test(text)) continue;
+      const value = Number(text);
+      if (Number.isSafeInteger(value)) counters[field] = value;
+    }
     emitFixtureEvent("native-file", "decision", {
       command: "proc-stat",
       pid,
       valid: true,
-      rootProcessState: state !== void 0 && Object.hasOwn(states, state) ? states[state] ?? "unknown" : "unknown"
+      rootProcessState: state !== void 0 && Object.hasOwn(states, state) ? states[state] ?? "unknown" : "unknown",
+      ...counters
     });
   }
   return started.toISOString();
