@@ -19,6 +19,7 @@ const stages = [
     'spawn',
     'readiness',
     'listener-ownership',
+    'listener-owner-evidence',
     'endpoint',
     'profile-check',
     'native-close',
@@ -256,6 +257,19 @@ const rootProcessStates = [
     'idle',
     'unknown',
 ] as const;
+const listenerOwnerRelations = [
+    'root',
+    'owned-descendant',
+    'owner-row-missing',
+    'ancestor-row-missing',
+    'uid-mismatch',
+    'child-before-parent',
+    'unrelated-root',
+    'cycle',
+    'depth-limit',
+    'invalid-owner',
+    'root-absent',
+] as const;
 const signals = [
     'SIGABRT',
     'SIGALRM',
@@ -317,6 +331,19 @@ export interface FixtureFields extends FixtureIdentity {
     attempt?: number | undefined;
     count?: number | undefined;
     ownedDescendantCount?: number;
+    listenerOwnerCount?: number;
+    listenerRecordCount?: number;
+    listenerOwnerEmittedCount?: number;
+    listenerOwnerOmittedCount?: number;
+    listenerOwnerRecordCount?: number;
+    listenerOwnerPid?: number;
+    listenerOwnerParentPid?: number;
+    listenerOwnerUid?: number;
+    listenerOwnerStartedAtMs?: number;
+    rootOwnerUid?: number;
+    rootOwnerStartedAtMs?: number;
+    listenerOwnerRelation?: (typeof listenerOwnerRelations)[number];
+    listenerOwnerOwned?: boolean;
     pendingCount?: number | undefined;
     resourceCount?: number | undefined;
     budgetMs?: number | undefined;
@@ -326,6 +353,11 @@ export interface FixtureFields extends FixtureIdentity {
     exitObserved?: boolean;
     monitoringFailed?: boolean;
     rootProcessState?: (typeof rootProcessStates)[number];
+    rootStartTicks?: number;
+    rootUserTicks?: number;
+    rootSystemTicks?: number;
+    rootMajorFaults?: number;
+    rootBlockIoTicks?: number;
     httpStatus?: number;
     nativeError?: number;
     stderrPresent?: boolean;
@@ -375,6 +407,19 @@ const fieldKeys = [
     'attempt',
     'count',
     'ownedDescendantCount',
+    'listenerOwnerCount',
+    'listenerRecordCount',
+    'listenerOwnerEmittedCount',
+    'listenerOwnerOmittedCount',
+    'listenerOwnerRecordCount',
+    'listenerOwnerPid',
+    'listenerOwnerParentPid',
+    'listenerOwnerUid',
+    'listenerOwnerStartedAtMs',
+    'rootOwnerUid',
+    'rootOwnerStartedAtMs',
+    'listenerOwnerRelation',
+    'listenerOwnerOwned',
     'pendingCount',
     'resourceCount',
     'budgetMs',
@@ -384,6 +429,11 @@ const fieldKeys = [
     'exitObserved',
     'monitoringFailed',
     'rootProcessState',
+    'rootStartTicks',
+    'rootUserTicks',
+    'rootSystemTicks',
+    'rootMajorFaults',
+    'rootBlockIoTicks',
     'httpStatus',
     'nativeError',
     'stderrPresent',
@@ -428,9 +478,10 @@ function safeField(key: string, value: unknown): boolean {
     if (key === 'status') return member(statuses, value);
     if (key === 'phase') return member(phases, value);
     if (key === 'rootProcessState') return member(rootProcessStates, value);
+    if (key === 'listenerOwnerRelation') return member(listenerOwnerRelations, value);
     if (key === 'signalCode') return value === null || member(signals, value);
     if (key === 'trigger') return value === 'gateway-disconnect';
-    if (['stderrPresent', 'valid', 'available', 'exitObserved', 'monitoringFailed'].includes(key))
+    if (['stderrPresent', 'valid', 'available', 'exitObserved', 'monitoringFailed', 'listenerOwnerOwned'].includes(key))
         return typeof value === 'boolean';
     if (key === 'exitCode')
         return (
@@ -440,10 +491,32 @@ function safeField(key: string, value: unknown): boolean {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return false;
     if (['durationMs', 'timestampMs', 'elapsedMs', 'budgetMs', 'remainingMs'].includes(key)) return true;
     if (!Number.isSafeInteger(value)) return false;
-    if (key === 'pid') return value > 0;
+    if (key === 'pid' || key === 'listenerOwnerPid') return value > 0;
     if (key === 'port') return value > 0 && value <= 65535;
     if (key === 'httpStatus') return value >= 100 && value <= 599;
-    return ['attempt', 'count', 'ownedDescendantCount', 'pendingCount', 'resourceCount', 'nativeError'].includes(key);
+    return [
+        'attempt',
+        'count',
+        'ownedDescendantCount',
+        'listenerOwnerCount',
+        'listenerRecordCount',
+        'listenerOwnerEmittedCount',
+        'listenerOwnerOmittedCount',
+        'listenerOwnerRecordCount',
+        'listenerOwnerParentPid',
+        'listenerOwnerUid',
+        'listenerOwnerStartedAtMs',
+        'rootOwnerUid',
+        'rootOwnerStartedAtMs',
+        'pendingCount',
+        'resourceCount',
+        'nativeError',
+        'rootStartTicks',
+        'rootUserTicks',
+        'rootSystemTicks',
+        'rootMajorFaults',
+        'rootBlockIoTicks',
+    ].includes(key);
 }
 function copyFields(value: FixtureFields): FixtureFields {
     const result: Record<string, unknown> = {};
@@ -646,12 +719,17 @@ export function beginFixtureStage(stage: FixtureStage, fields: FixtureFields = {
 export function subscribeFixtureDiagnostics(
     callback: (event: FixtureEvent) => void,
     onRejected?: () => void,
+    aroundReceive?: (dispatch: () => void) => void,
 ): () => void {
     const receive = (data: unknown) => {
         try {
-            const event = validateFixtureEvent(data);
-            const returned: unknown = event ? callback(event) : onRejected?.();
-            if (returned !== undefined) void Promise.resolve(returned).catch(() => {});
+            const dispatch = () => {
+                const event = validateFixtureEvent(data);
+                const returned: unknown = event ? callback(event) : onRejected?.();
+                if (returned !== undefined) void Promise.resolve(returned).catch(() => {});
+            };
+            if (aroundReceive) aroundReceive(dispatch);
+            else dispatch();
         } catch {
             // Node treats subscriber throws as fatal; containment belongs inside this callback.
         }

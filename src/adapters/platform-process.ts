@@ -475,15 +475,106 @@ async function linuxCreationTime(
             I: 'idle',
         };
         const state = processFields?.[0];
+        const counters: FixtureFields = { rootStartTicks: startTicks };
+        // Fields resume at stat field 3: majflt=12, utime=14, stime=15,
+        // delayacct_blkio_ticks=42. Optional diagnostics never authorize identity.
+        for (const [field, index] of [
+            ['rootMajorFaults', 9],
+            ['rootUserTicks', 11],
+            ['rootSystemTicks', 12],
+            ['rootBlockIoTicks', 39],
+        ] as const) {
+            const text = processFields?.[index];
+            if (text === undefined || !/^\d+$/.test(text)) continue;
+            const value = Number(text);
+            if (Number.isSafeInteger(value)) counters[field] = value;
+        }
         emitFixtureEvent('native-file', 'decision', {
             command: 'proc-stat',
             pid,
             valid: true,
             rootProcessState:
                 state !== undefined && Object.hasOwn(states, state) ? (states[state] ?? 'unknown') : 'unknown',
+            ...counters,
         });
     }
     return started.toISOString();
+}
+
+type UnixProcessRow = { pid: number; parent: number; uid: number; started: string; executable: string };
+
+function classifyListenerOwner(
+    owner: number,
+    root: UnixProcessRow | undefined,
+    rows: readonly UnixProcessRow[],
+): NonNullable<FixtureFields['listenerOwnerRelation']> {
+    if (!Number.isSafeInteger(owner) || owner <= 0) return 'invalid-owner';
+    if (!root) return 'root-absent';
+    if (owner === root.pid) return 'root';
+    const ownerRow = rows.find((candidate) => candidate.pid === owner);
+    if (!ownerRow) return 'owner-row-missing';
+    let row: UnixProcessRow = ownerRow;
+    const seen = new Set([owner]);
+    for (let depth = 0; depth < 32; depth++) {
+        const parentPid = row.parent;
+        if (row.uid !== root.uid) return 'uid-mismatch';
+        if (parentPid === 0) return 'unrelated-root';
+        if (!Number.isSafeInteger(parentPid) || parentPid < 0) return 'invalid-owner';
+        if (seen.has(parentPid)) return 'cycle';
+        const parent = rows.find((candidate) => candidate.pid === parentPid);
+        if (!parent) return 'ancestor-row-missing';
+        if (row.started < parent.started) return 'child-before-parent';
+        if (parent.pid === root.pid) return 'owned-descendant';
+        seen.add(parent.pid);
+        row = parent;
+    }
+    return 'depth-limit';
+}
+
+/** Optional classification of existing buffers; it never authorizes process ownership. */
+function emitDarwinListenerOwnerEvidence(
+    pid: number,
+    rows: readonly UnixProcessRow[],
+    listeners: readonly ListenerEvidence[],
+    owned: ReadonlySet<number>,
+) {
+    // Count distinct parsed owner values, not verified identities. Map coalesces
+    // malformed values parsed as NaN; record counts retain their listener-record total.
+    const counts = new Map<number, number>();
+    for (const listener of listeners) counts.set(listener.owningProcess, (counts.get(listener.owningProcess) ?? 0) + 1);
+    const root = rows.find((row) => row.pid === pid);
+    const rootFields: FixtureFields = root
+        ? { rootOwnerUid: root.uid, rootOwnerStartedAtMs: new Date(root.started).getTime() }
+        : {};
+    const emittedCount = Math.min(counts.size, 8);
+    emitFixtureEvent('listener-owner-evidence', 'decision', {
+        pid,
+        ...rootFields,
+        listenerOwnerCount: counts.size,
+        listenerRecordCount: listeners.length,
+        listenerOwnerEmittedCount: emittedCount,
+        listenerOwnerOmittedCount: counts.size - emittedCount,
+    });
+    let emitted = 0;
+    for (const [owner, count] of counts) {
+        if (emitted++ >= emittedCount) break;
+        const row = rows.find((candidate) => candidate.pid === owner);
+        emitFixtureEvent('listener-owner-evidence', 'decision', {
+            pid,
+            ...rootFields,
+            listenerOwnerPid: owner,
+            ...(row
+                ? {
+                      listenerOwnerParentPid: row.parent,
+                      listenerOwnerUid: row.uid,
+                      listenerOwnerStartedAtMs: new Date(row.started).getTime(),
+                  }
+                : {}),
+            listenerOwnerRecordCount: count,
+            listenerOwnerRelation: classifyListenerOwner(owner, root, rows),
+            listenerOwnerOwned: owned.has(owner),
+        });
+    }
 }
 
 export async function unixSnapshot(
@@ -557,6 +648,7 @@ export async function unixSnapshot(
         if (address !== undefined && owner !== undefined)
             listeners.push({ localAddress: address.replace(/^\[|\]$/g, ''), owningProcess: owner });
     }
+    if (platform === 'darwin' && fixtureHasSubscribers()) emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned);
     return {
         root: root
             ? {

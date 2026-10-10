@@ -8,9 +8,52 @@ import {
 } from '../../src/adapters/fixture-diagnostics.ts';
 import { type BrowserStartupRecord, validateBrowserStartupRecord } from './chrome-startup.ts';
 import { newFixtureEnvelope, readFixtureIndex } from './fixture-ci.ts';
+import { type LinuxStartupWaitRecord, validateLinuxStartupWaitRecord } from './linux-startup-wait.ts';
 import { createStdioClient } from './mcp-client.ts';
 
 export type FixtureLabel = 'official-server' | 'entry-recovery';
+export interface CollectorCostRecord {
+    kind: 'collector-cost';
+    callbacks: number;
+    totalMs: number;
+    maxMs: number;
+}
+
+/** A closed projection; timing never goes back through the diagnostics channel. */
+export function validateCollectorCost(value: unknown): Readonly<CollectorCostRecord> | undefined {
+    try {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+        const descriptors = Object.getOwnPropertyDescriptors(value);
+        const keys = ['kind', 'callbacks', 'totalMs', 'maxMs'];
+        if (
+            Reflect.ownKeys(value).length !== keys.length ||
+            keys.some((key) => !descriptors[key] || !('value' in descriptors[key]))
+        )
+            return;
+        const kind: unknown = descriptors.kind?.value;
+        const callbacks: unknown = descriptors.callbacks?.value;
+        const totalMs: unknown = descriptors.totalMs?.value;
+        const maxMs: unknown = descriptors.maxMs?.value;
+        if (
+            kind !== 'collector-cost' ||
+            typeof callbacks !== 'number' ||
+            !Number.isSafeInteger(callbacks) ||
+            callbacks < 0 ||
+            typeof totalMs !== 'number' ||
+            !Number.isFinite(totalMs) ||
+            totalMs < 0 ||
+            typeof maxMs !== 'number' ||
+            !Number.isFinite(maxMs) ||
+            maxMs < 0 ||
+            maxMs > totalMs ||
+            (callbacks === 0 && totalMs !== 0)
+        )
+            return;
+        return Object.freeze({ kind, callbacks, totalMs, maxMs });
+    } catch {
+        return;
+    }
+}
 export type SmokeStage =
     | 'prerequisites'
     | 'acceptance'
@@ -48,10 +91,14 @@ interface Summary {
     lastOperationId: string | null;
     incomplete: boolean;
     browserStartup: Readonly<BrowserStartupRecord>[];
+    collectorCost: Readonly<CollectorCostRecord> | null;
+    linuxStartupWait: Readonly<LinuxStartupWaitRecord>[];
+    linuxStartupWaitOmitted: number;
 }
 const maxBytes = 1_048_576;
 const maxRecordBytes = 4096;
 const maxEvents = 2000;
+const maxWaitSummary = 8;
 const marker = `${JSON.stringify({ kind: 'truncated' })}\n`;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function record(value: unknown): value is Record<string, unknown> {
@@ -70,6 +117,9 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
         lastOperationId: null as string | null,
         incomplete: false,
         browserStartup: [] as Readonly<BrowserStartupRecord>[],
+        collectorCost: null as Readonly<CollectorCostRecord> | null,
+        linuxStartupWait: [] as Readonly<LinuxStartupWaitRecord>[],
+        linuxStartupWaitOmitted: 0,
     };
     const file = path.join(directory, `${fixture}.events.ndjson`);
     let cleanupEnded = false;
@@ -122,6 +172,20 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
                     progress.browserStartup.push(startup);
                     progress.browserStartup = progress.browserStartup.slice(-66);
                 }
+            } else if (value.kind === 'collector-cost') {
+                const cost = validateCollectorCost(value);
+                if (cost) progress.collectorCost = cost;
+                else progress.invalidEvents++;
+            } else if (value.kind === 'linux-startup-wait') {
+                const wait = validateLinuxStartupWaitRecord(value);
+                if (!wait) progress.invalidEvents++;
+                else {
+                    progress.linuxStartupWait.push(wait);
+                    if (progress.linuxStartupWait.length > maxWaitSummary) {
+                        progress.linuxStartupWait.shift();
+                        progress.linuxStartupWaitOmitted++;
+                    }
+                }
             } else if (value.kind === 'truncated') progress.truncated = true;
             else if (value.kind === 'limitation') {
                 if (value.reason === 'validation-rejected') progress.invalidEvents++;
@@ -132,7 +196,11 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
     } catch {
         progress.writeFailed = true;
     }
-    progress.incomplete = progress.writeFailed || (progress.gatewayEvents > 0 && !cleanupEnded);
+    progress.incomplete =
+        progress.truncated ||
+        progress.writeFailed ||
+        progress.linuxStartupWaitOmitted > 0 ||
+        (progress.gatewayEvents > 0 && !cleanupEnded);
     return progress;
 }
 
@@ -144,6 +212,7 @@ export function createFixtureArtifacts(
         append?: (file: string, record: string) => void;
         streamOnly?: boolean;
         collectionId?: string | null | undefined;
+        now?: () => number;
     } = {},
 ) {
     const summary: Summary = {
@@ -154,6 +223,43 @@ export function createFixtureArtifacts(
     let summaryFile = directory ? path.join(directory, `${fixture}.summary.json`) : undefined;
     let knownSize = -1;
     let knownCount = 0;
+    let callbacks = 0;
+    let totalMs = 0;
+    let maxMs = 0;
+    let measuring = false;
+    let costUnavailable = false;
+    let costFlushed = false;
+    function measure(action: () => void) {
+        if (!eventsFile || measuring) {
+            action();
+            return;
+        }
+        const now = io.now ?? (() => performance.now());
+        let start: number | undefined;
+        try {
+            start = now();
+        } catch {
+            costUnavailable = true;
+        }
+        measuring = true;
+        try {
+            action();
+        } finally {
+            measuring = false;
+            callbacks++;
+            try {
+                const end = now();
+                const elapsed = start === undefined ? Number.NaN : end - start;
+                if (!Number.isFinite(elapsed) || elapsed < 0) costUnavailable = true;
+                else {
+                    totalMs += elapsed;
+                    maxMs = Math.max(maxMs, elapsed);
+                }
+            } catch {
+                costUnavailable = true;
+            }
+        }
+    }
     function persist() {
         if (!summaryFile || io.streamOnly) return;
         try {
@@ -280,6 +386,7 @@ export function createFixtureArtifacts(
         persist();
     }
     const collector = {
+        measure,
         begin(stage: SmokeStage) {
             summary.lastStage = stage;
             summary.smokeStage = stage;
@@ -288,16 +395,18 @@ export function createFixtureArtifacts(
         },
         gateway(value: unknown) {
             if (summary.collectionRejected) return;
-            const event = validateFixtureEvent(value);
-            if (!event) {
-                collector.rejected();
-                return;
-            }
-            summary.lastStage = event.stage;
-            summary.gatewayEvents++;
-            summary.lastOperationId = event.operationId ?? null;
-            append({ kind: 'gateway', ...event });
-            persist();
+            measure(() => {
+                const event = validateFixtureEvent(value);
+                if (!event) {
+                    collector.rejected();
+                    return;
+                }
+                summary.lastStage = event.stage;
+                summary.gatewayEvents++;
+                summary.lastOperationId = event.operationId ?? null;
+                append({ kind: 'gateway', ...event });
+                persist();
+            });
         },
         startup(value: unknown) {
             if (summary.collectionRejected || io.streamOnly) return;
@@ -316,13 +425,41 @@ export function createFixtureArtifacts(
             append(safe);
             persist();
         },
+        linuxWait(value: unknown) {
+            if (summary.collectionRejected) return;
+            measure(() => {
+                const wait = validateLinuxStartupWaitRecord(value);
+                if (!wait) {
+                    collector.rejected();
+                    return;
+                }
+                summary.linuxStartupWait.push(wait);
+                if (summary.linuxStartupWait.length > maxWaitSummary) {
+                    summary.linuxStartupWait.shift();
+                    summary.linuxStartupWaitOmitted++;
+                    summary.incomplete = true;
+                }
+                append(wait);
+                persist();
+            });
+        },
         rejected() {
-            summary.invalidEvents++;
-            append({ kind: 'limitation', reason: 'validation-rejected' });
-            persist();
+            measure(() => {
+                summary.invalidEvents++;
+                append({ kind: 'limitation', reason: 'validation-rejected' });
+                persist();
+            });
         },
         finishStream() {
             if (summary.writeFailed) append({ kind: 'limitation', reason: 'write-failed' });
+            if (costFlushed || !eventsFile) return;
+            costFlushed = true;
+            const cost = validateCollectorCost({ kind: 'collector-cost', callbacks, totalMs, maxMs });
+            if (costUnavailable || !cost) append({ kind: 'limitation', reason: 'collector-cost-unavailable' });
+            else {
+                summary.collectorCost = cost;
+                append(cost);
+            }
         },
         failure(stage: SmokeStage, error: unknown, primary: boolean) {
             const event = lastGateway();
@@ -352,6 +489,9 @@ export function createFixtureArtifacts(
                 summary.truncated ||= progress.truncated;
                 summary.incomplete ||= progress.incomplete;
                 summary.browserStartup = progress.browserStartup;
+                summary.collectorCost = progress.collectorCost;
+                summary.linuxStartupWait = progress.linuxStartupWait;
+                summary.linuxStartupWaitOmitted = progress.linuxStartupWaitOmitted;
             }
             summary.diagnosticAbsent = !!directory && summary.gatewayEvents === 0;
             persist();

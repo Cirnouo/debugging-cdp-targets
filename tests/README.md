@@ -6,13 +6,24 @@
 
 - `fixture-diagnostics.test.ts` exercises opt-in observation without real targets,
   operation routes, direct I/O origins, primary startup errors, independent EOF
-  cleanup, closed metadata and safe receiver failure containment.
+  cleanup, closed metadata, bounded Darwin owner fields and safe receiver failure containment.
 - `fixture-boundaries.test.ts` checks native-command, endpoint, profile and
   data-directory observation, original I/O effects and deadlines, and hostile
   metadata/error privacy through controlled external I/O boundaries.
 - `readiness-evidence.test.ts` checks Linux state from existing native reads,
-  owned descendant counts, and retained child exit evidence before rollback,
+  optional safe proc-stat counters, owned descendant counts, and retained child exit evidence before rollback,
   including closed fields, malformed observations and disabled-mode behavior.
+  It also preserves existing native-Close listener states while rejecting unsafe
+  diagnostic metadata without changing the primary startup cause or cleanup.
+- `fixture-cost.test.ts` checks monotonic collector callback costs on successful
+  and failed writes, single counting of rejected events, closed timing records,
+  default-off behavior and unchanged stream caps.
+- `fixture-wait.test.ts` checks Linux wait projections in the shared five-file
+  collector, callback cost, bounded summaries and preservation of the original
+  failure while all normal cleanup actions run.
+- `linux-startup-wait.test.ts` checks verified snapshot association, four
+  one-shot Linux sampling triggers, bounded proc reads, process/session reuse,
+  late results, resource counters, privacy and disabled-platform behavior.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.
@@ -87,6 +98,7 @@
   integrity reads, checks exact bytes and confirms descriptor cleanup on failures.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
   evidence, independently verified hard links and bounded failure diagnostics,
+  bounded existing-buffer listener-owner classification without extra native I/O,
   precise Linux kernel creation ticks, malformed evidence rejection,
   and PID/path/session mismatch checks with injected I/O.
 - `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and
