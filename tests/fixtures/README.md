@@ -68,7 +68,15 @@ It never launches GUI or signals a real process.
 `native-resource-child.ts` coordinates an owned Node root, a child that outlives
 it, and a grandchild created after root exit through temporary file barriers.
 Descendants use detached, hidden, shell-false launches with ignored stdio, and
-finish through their own ordinary exit paths. It opens no GUI.
+finish through their own ordinary exit paths. Root release waits until independent
+native root/child handles are retained. A thirty-second ordinary self-exit fallback
+prevents permanent fixture orphans after coordination failure; cleanup never uses
+elapsed time or a final marker as exit evidence. It opens no GUI.
+`native-resource-cleanup.ts` retains independent native root/child witnesses before
+root release and reuses a retained late-descendant witness. Failure cleanup sends
+ordinary file signals, waits for all three actual handle exit receipts, then
+disposes observation and removes only a checked owned temporary directory.
+Monitor abandonment and receiver exit cannot discard these independent witnesses.
 `native-resource-witness.ps1` retains an actual owned child process handle before
 fixture release and supplies its identity and ordinary native exit receipt.
 `native-resource-boundary.ps1` replaces only job-accounting and completion-port

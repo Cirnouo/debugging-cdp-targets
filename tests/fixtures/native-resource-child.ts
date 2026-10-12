@@ -7,9 +7,13 @@ import { fileURLToPath } from 'node:url';
 const [mode, directory] = process.argv.slice(2);
 if (!directory) throw new Error('Missing fixture directory.');
 const fixtureDirectory = directory;
+const lifetime = AbortSignal.timeout(30_000);
 async function waitFor(name: string) {
+    lifetime.throwIfAborted();
     const file = path.join(fixtureDirectory, name);
     const watcher = watch(fixtureDirectory);
+    const abort = () => watcher.close();
+    lifetime.addEventListener('abort', abort, { once: true });
     try {
         await new Promise<void>((resolve, reject) => {
             const check = () => {
@@ -17,10 +21,12 @@ async function waitFor(name: string) {
             };
             watcher.on('change', check);
             watcher.on('error', reject);
+            watcher.on('close', () => reject(lifetime.reason ?? new Error('Fixture watcher closed.')));
             check();
         });
     } finally {
         watcher.close();
+        lifetime.removeEventListener('abort', abort);
     }
 }
 function launch(childMode: string) {
@@ -32,16 +38,22 @@ function launch(childMode: string) {
     });
     child.unref();
 }
-if (mode === 'root') {
-    launch('middle');
-    await waitFor('middle-ready');
-} else if (mode === 'middle') {
-    await writeFile(path.join(directory, 'middle-ready'), String(process.pid));
-    await waitFor('launch-late');
-    launch('late');
-    await waitFor('late-ready');
-} else if (mode === 'late') {
-    await writeFile(path.join(directory, 'late-ready'), String(process.pid));
-    await waitFor('finish');
-    await writeFile(path.join(directory, 'late-finished'), 'ordinary fixture exit');
-} else throw new Error('Unknown fixture mode.');
+try {
+    if (mode === 'root') {
+        await writeFile(path.join(directory, 'root-ready'), String(process.pid));
+        launch('middle');
+        await waitFor('middle-ready');
+        await waitFor('root-release');
+    } else if (mode === 'middle') {
+        await writeFile(path.join(directory, 'middle-ready'), String(process.pid));
+        await waitFor('launch-late');
+        launch('late');
+        await waitFor('late-ready');
+    } else if (mode === 'late') {
+        await writeFile(path.join(directory, 'late-ready'), String(process.pid));
+        await waitFor('finish');
+        await writeFile(path.join(directory, 'late-finished'), 'ordinary fixture exit');
+    } else throw new Error('Unknown fixture mode.');
+} catch (error) {
+    if (!lifetime.aborted) throw error;
+}

@@ -274,6 +274,10 @@
   actual root identity/group validation, receiver-local disposal and lost-created
   packet settlement after physical creator exit and original job zero. These
   controls do not establish actual UAC or browser nested-job acceptance.
+  Assertion-failure controls cover cleanup before late-child release, after monitor
+  abandonment, and after receiver exit before late-child/witness arming. Independent
+  native handles remain owned until ordinary actual exit; coordination directories
+  are removed only after those receipts, with the original assertion preserved.
 - `windows-normal-close.test.ts` runs maintained native RequestClose with only
   user32 I/O replaced, covering enumeration/property failures, stale HWND/PID/
   visibility on both eligible and excluding paths, absent candidates,

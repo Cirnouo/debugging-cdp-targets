@@ -9,6 +9,41 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createWindowsLauncher } from '../src/adapters/windows-launch.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { finishNativeResourceFixture, retainNativeResourceFixture } from './fixtures/native-resource-cleanup.ts';
+
+test('failed fixture cleanup retains its coordination directory until independent actual-exit evidence settles', {
+    timeout: 5_000,
+}, async (t) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-resources-'));
+    let exited = () => {};
+    const exit = new Promise<void>((resolve) => {
+        exited = resolve;
+    });
+    let disposed = false;
+    let entered = () => {};
+    const barrier = new Promise<void>((resolve) => {
+        entered = resolve;
+    });
+    const cleaning = finishNativeResourceFixture(directory, {
+        waitForExit: () => {
+            entered();
+            return exit;
+        },
+        disposeMonitor: () => {
+            disposed = true;
+        },
+    });
+    t.after(async () => {
+        exited();
+        await cleaning;
+    });
+    await barrier;
+    assert.equal(disposed, false);
+    await access(directory);
+    exited();
+    await cleaning;
+    await assert.rejects(access(directory), { code: 'ENOENT' });
+});
 
 async function waitForFile(directory: string, name: string, signal?: AbortSignal) {
     signal?.throwIfAborted();
@@ -107,92 +142,65 @@ for (const mode of [
     });
 }
 
-for (const abandon of [false, true]) {
-    test(`native resource group covers descendants created after root exit${abandon ? ' without kill on monitor close' : ''}`, {
+for (const [abandon, failure] of [
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+] as const) {
+    test(`native resource group covers descendants created after root exit${abandon ? ' without kill on monitor close' : ''}${failure ? ' with failed assertion cleanup' : ''}`, {
         skip: process.platform !== 'win32',
-        timeout: 20_000,
+        timeout: 25_000,
     }, async (t) => {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-resources-'));
-        const child = await createWindowsLauncher().launch({
-            executablePath: process.execPath,
-            arguments: [
-                fileURLToPath(new URL('./fixtures/native-resource-child.ts', import.meta.url)),
-                'root',
-                directory,
-            ],
-            cwd: directory,
-            env: Object.fromEntries(
-                Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-            ),
-        });
-        try {
-            if (child.exitCode === null)
-                await new Promise<void>((resolve, reject) => {
-                    child.once('exit', resolve);
-                    child.onMonitorError(() => reject(new Error('Root observation failed.')));
-                });
-            assert.equal(child.exitCode, 0);
-            let completed = false;
-            const resources = child.waitForResourcesClosed().then(() => {
-                completed = true;
-            });
-            void resources.catch(() => {});
-            assert.equal(child.monitorDisposed, false);
-            if (abandon) {
-                child.disposeMonitor();
-                await assert.rejects(resources);
-            }
-            await writeFile(path.join(directory, 'launch-late'), 'after actual root exit');
-            await waitForFile(directory, 'late-ready', t.signal);
-            assert.equal(completed, false);
-            const latePid = Number(await readFile(path.join(directory, 'late-ready'), 'utf8'));
-            const witness = execFile(
-                'powershell.exe',
-                [
-                    '-NoProfile',
-                    '-NonInteractive',
-                    '-ExecutionPolicy',
-                    'Bypass',
-                    '-File',
-                    fileURLToPath(new URL('./fixtures/native-resource-witness.ps1', import.meta.url)),
-                    '-OwnedPid',
-                    String(latePid),
+        const primary = new Error('Injected assertion before late child release.');
+        const run = async () => {
+            const child = await createWindowsLauncher().launch({
+                executablePath: process.execPath,
+                arguments: [
+                    fileURLToPath(new URL('./fixtures/native-resource-child.ts', import.meta.url)),
+                    'root',
+                    directory,
                 ],
-                { windowsHide: true, shell: false },
-            );
-            let output = '';
-            const witnessed = new Promise<void>((resolve, reject) => {
-                witness.once('error', reject);
-                witness.once('close', (code) => {
-                    if (code !== 0) reject(new Error('Passive child witness failed.'));
-                    else {
-                        const receipt: unknown = JSON.parse(output.trim().split(/\r?\n/).at(-1) ?? 'null');
-                        assert.ok(isRecord(receipt));
-                        assert.equal(receipt.pid, latePid);
-                        assert.equal(receipt.exitCode, 0);
-                        resolve();
-                    }
-                });
+                cwd: directory,
+                env: Object.fromEntries(
+                    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+                ),
             });
-            await new Promise<void>((resolve) => {
-                witness.stdout?.on('data', (chunk: Buffer) => {
-                    output += chunk.toString();
-                    if (output.includes('\n')) resolve();
+            const retained = await retainNativeResourceFixture(directory);
+            try {
+                await retained.releaseRoot();
+                if (child.exitCode === null)
+                    await new Promise<void>((resolve, reject) => {
+                        child.once('exit', resolve);
+                        child.onMonitorError(() => reject(new Error('Root observation failed.')));
+                    });
+                assert.equal(child.exitCode, 0);
+                let completed = false;
+                const resources = child.waitForResourcesClosed().then(() => {
+                    completed = true;
                 });
-            });
-            await writeFile(path.join(directory, 'finish'), 'ordinary child exit');
-            await waitForFile(directory, 'late-finished', t.signal);
-            await witnessed;
-            if (!abandon) await resources;
-            assert.equal(child.exitCode, 0);
-        } finally {
-            await writeFile(path.join(directory, 'launch-late'), 'cleanup ordinary exit');
-            await writeFile(path.join(directory, 'finish'), 'cleanup ordinary exit');
-            child.disposeMonitor();
-            assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-            assert.ok(path.basename(directory).startsWith('dct-native-resources-'));
-            await rm(directory, { recursive: true, force: true });
-        }
+                void resources.catch(() => {});
+                assert.equal(child.monitorDisposed, false);
+                if (abandon) {
+                    child.disposeMonitor();
+                    await assert.rejects(resources);
+                }
+                if (failure) throw primary;
+                await writeFile(path.join(directory, 'launch-late'), 'after actual root exit');
+                await retained.armLate(t.signal);
+                assert.equal(completed, false);
+                await writeFile(path.join(directory, 'finish'), 'ordinary child exit');
+                await waitForFile(directory, 'late-finished', t.signal);
+                if (!abandon) await resources;
+                assert.equal(child.exitCode, 0);
+            } finally {
+                await retained.finish(() => child.disposeMonitor());
+            }
+        };
+        if (failure) await assert.rejects(run(), (error: unknown) => error === primary);
+        else await run();
+        await assert.rejects(access(directory), { code: 'ENOENT' });
     });
 }
 
@@ -218,11 +226,13 @@ test('authenticated creator pulls only job assignment rights while the original 
         { windowsHide: true, shell: false },
     );
     void pending.catch(() => {});
+    const retained = await retainNativeResourceFixture(directory);
     try {
+        await retained.releaseRoot();
         await waitForFile(directory, 'handoff-root-exited', t.signal);
         assert.equal(await readFile(path.join(directory, 'handoff-root-exited'), 'utf8'), '0');
         await writeFile(path.join(directory, 'launch-late'), 'after original handle root exit');
-        await waitForFile(directory, 'late-ready', t.signal);
+        await retained.armLate(t.signal);
         await writeFile(path.join(directory, 'finish'), 'ordinary descendant exit');
         const { stdout } = await pending;
         const evidence: unknown = JSON.parse(stdout.trim());
@@ -233,77 +243,58 @@ test('authenticated creator pulls only job assignment rights while the original 
         assert.equal(evidence.creatorQueryError, 5);
         assert.equal(evidence.creatorExit, 0);
     } finally {
-        await writeFile(path.join(directory, 'launch-late'), 'cleanup ordinary exit');
-        await writeFile(path.join(directory, 'finish'), 'cleanup ordinary exit');
-        await pending;
-        assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-        assert.ok(path.basename(directory).startsWith('dct-native-handoff-'));
-        await rm(directory, { recursive: true, force: true });
+        await retained.finish(() => {}, pending);
     }
 });
 
-test('receiver process exit reclaims an unadopted root duplicate without terminating descendants', {
-    skip: process.platform !== 'win32',
-    timeout: 20_000,
-}, async (t) => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
-    try {
-        const { stdout } = await promisify(execFile)(
-            'powershell.exe',
-            [
-                '-NoProfile',
-                '-NonInteractive',
-                '-ExecutionPolicy',
-                'Bypass',
-                '-File',
-                fileURLToPath(new URL('./fixtures/native-resource-handoff.ps1', import.meta.url)),
-                '-Directory',
-                directory,
-                '-NodePath',
-                process.execPath,
-                '-ReceiverExit',
-            ],
-            { windowsHide: true, shell: false },
-        );
-        const receiver: unknown = JSON.parse(stdout.trim());
-        assert.ok(isRecord(receiver));
-        assert.equal(receiver.received, true);
-        await writeFile(path.join(directory, 'launch-late'), 'after receiver process exited');
-        await waitForFile(directory, 'late-ready', t.signal);
-        const latePid = Number(await readFile(path.join(directory, 'late-ready'), 'utf8'));
-        const witness = promisify(execFile)(
-            'powershell.exe',
-            [
-                '-NoProfile',
-                '-NonInteractive',
-                '-ExecutionPolicy',
-                'Bypass',
-                '-File',
-                fileURLToPath(new URL('./fixtures/native-resource-witness.ps1', import.meta.url)),
-                '-OwnedPid',
-                String(latePid),
-            ],
-            { windowsHide: true, shell: false },
-        );
-        await Promise.race([
-            new Promise<void>((resolve) => witness.child.stdout?.once('data', () => resolve())),
-            witness.then(() => {
-                throw new Error('Witness ended before arming.');
-            }),
-        ]);
-        await writeFile(path.join(directory, 'finish'), 'ordinary descendant exit');
-        const receipt: unknown = JSON.parse((await witness).stdout.trim().split(/\r?\n/).at(-1) ?? 'null');
-        assert.ok(isRecord(receipt));
-        assert.equal(receipt.pid, latePid);
-        assert.equal(receipt.exitCode, 0);
-    } finally {
-        await writeFile(path.join(directory, 'launch-late'), 'cleanup ordinary exit');
-        await writeFile(path.join(directory, 'finish'), 'cleanup ordinary exit');
-        assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-        assert.ok(path.basename(directory).startsWith('dct-native-handoff-'));
-        await rm(directory, { recursive: true, force: true });
-    }
-});
+for (const failure of ['none', 'before-late', 'before-witness'] as const) {
+    test(`receiver process exit reclaims an unadopted root duplicate without terminating descendants: ${failure}`, {
+        skip: process.platform !== 'win32',
+        timeout: 25_000,
+    }, async (t) => {
+        const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
+        const primary = new Error('Injected receiver assertion before child witness arming.');
+        const run = async () => {
+            const { stdout } = await promisify(execFile)(
+                'powershell.exe',
+                [
+                    '-NoProfile',
+                    '-NonInteractive',
+                    '-ExecutionPolicy',
+                    'Bypass',
+                    '-File',
+                    fileURLToPath(new URL('./fixtures/native-resource-handoff.ps1', import.meta.url)),
+                    '-Directory',
+                    directory,
+                    '-NodePath',
+                    process.execPath,
+                    '-ReceiverExit',
+                ],
+                { windowsHide: true, shell: false },
+            );
+            const retained = await retainNativeResourceFixture(directory);
+            try {
+                await retained.releaseRoot();
+                const receiver: unknown = JSON.parse(stdout.trim());
+                assert.ok(isRecord(receiver));
+                assert.equal(receiver.received, true);
+                if (failure === 'before-late') throw primary;
+                await writeFile(path.join(directory, 'launch-late'), 'after receiver process exited');
+                if (failure === 'before-witness') {
+                    await waitForFile(directory, 'late-ready', t.signal);
+                    throw primary;
+                }
+                await retained.armLate(t.signal);
+                await writeFile(path.join(directory, 'finish'), 'ordinary descendant exit');
+            } finally {
+                await retained.finish();
+            }
+        };
+        if (failure !== 'none') await assert.rejects(run(), (error: unknown) => error === primary);
+        else await run();
+        await assert.rejects(access(directory), { code: 'ENOENT' });
+    });
+}
 
 test('a lost created packet keeps acquisition pending after creator exit until the original native job is empty', {
     skip: process.platform !== 'win32',
@@ -336,10 +327,12 @@ test('a lost created packet keeps acquisition pending after creator exit until t
             completed = true;
         },
     );
+    const retained = await retainNativeResourceFixture(directory);
     try {
+        await retained.releaseRoot();
         await waitForFile(directory, 'middle-ready', t.signal);
         await writeFile(path.join(directory, 'launch-late'), 'created identity packet was lost');
-        await waitForFile(directory, 'late-ready', t.signal);
+        await retained.armLate(t.signal);
         assert.equal(completed, false);
         await writeFile(path.join(directory, 'finish'), 'ordinary descendants exit');
         const evidence: unknown = JSON.parse((await pending).stdout.trim());
@@ -349,12 +342,7 @@ test('a lost created packet keeps acquisition pending after creator exit until t
             creationPending: false,
         });
     } finally {
-        await writeFile(path.join(directory, 'launch-late'), 'cleanup ordinary exit');
-        await writeFile(path.join(directory, 'finish'), 'cleanup ordinary exit');
-        await pending;
-        assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-        assert.ok(path.basename(directory).startsWith('dct-native-handoff-'));
-        await rm(directory, { recursive: true, force: true });
+        await retained.finish(() => {}, pending);
     }
 });
 
