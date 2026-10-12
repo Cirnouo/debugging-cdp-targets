@@ -45,6 +45,8 @@ export interface ManagedTarget extends ProcessTarget {
         monitoringFailure?: string;
         onMonitorError?(listener: () => void): () => void;
         disposeMonitor?(): void;
+        /** Resolves only when the native application resource group is verified empty. */
+        waitForResourcesClosed?(): Promise<void>;
         ref?(): void;
         unref?(): void;
         once(event: 'exit', listener: () => void): unknown;

@@ -98,7 +98,8 @@ export function createConnectionOwner(sessionId: string, onSettled?: () => void)
             cleanup = (async () => {
                 try {
                     const failures: unknown[] = [];
-                    const names = [...resources.keys()].sort((a, b) => Number(a === 'router') - Number(b === 'router'));
+                    const priority = (name: string) => (name === 'target-resources' ? 2 : Number(name === 'router'));
+                    const names = [...resources.keys()].sort((a, b) => priority(a) - priority(b));
                     for (const name of names) {
                         try {
                             await owner.closeResource(name);

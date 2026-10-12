@@ -211,7 +211,8 @@
   platform adapter, target host and gateway runtime without GUI. Accepted Close
   with the listener absent retains the live root, observer, route identity and
   directory lease; actual matching exit revokes routing immediately, while
-  upstream disposal still gates deletion and the single completion/exit Hook.
+  upstream disposal and independent descendant-resource completion still gate
+  deletion and the single completion/exit Hook.
   Aborted protocol waits and cancelled-operation retries preserve native request
   ownership. Close-helper EOF and mismatched PID/creation time cannot prove exit.
 - `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
@@ -220,6 +221,9 @@
 - `connection-isolation.test.ts` checks connection leases across restart, pending
   native/directory acquisition, late cancellation, actual exit and failed cleanup;
   terminal metadata preserves paths while summaries and Hooks omit them.
+  Independent native resource users hold the directory after immediate root route
+  revocation for Close, Keep, end-task, unexpected exit, restart, late rollback and
+  gateway EOF. Resource observation failure preserves the dead route and claim.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks explicit same-port recovery, literal launch
   evidence and rejection of port races after an application is created.
@@ -255,10 +259,21 @@
   child/handle exit evidence without a target deadline or Unix process polling.
 - `windows-launch.test.ts` checks synchronous actual application acquisition,
   separate close request and exit wait, helper monitoring failures and matching
-  native handle receipts that supplement a lost original observer.
+  native handle receipts that supplement a lost original observer. Root exit and
+  resource-group completion settle independently; malformed/foreign/out-of-order
+  resource receipts cannot release ownership. No-identity termination requires
+  explicit acquisition proof plus physical helper close, with late identity taking
+  priority and never-spawned OS helper failure as the explicit exception.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
+  Hidden descendants outlive the root and spawn later descendants; native job
+  accounting gates completion and observation disposal never kills them. Native
+  boundary controls cover lost notifications, query/port errors and cancellation.
+  Same-integrity authenticated handoffs verify assignment-only job borrowing,
+  actual root identity/group validation, receiver-local disposal and lost-created
+  packet settlement after physical creator exit and original job zero. These
+  controls do not establish actual UAC or browser nested-job acceptance.
 - `windows-normal-close.test.ts` runs maintained native RequestClose with only
   user32 I/O replaced, covering enumeration/property failures, stale HWND/PID/
   visibility on both eligible and excluding paths, absent candidates,

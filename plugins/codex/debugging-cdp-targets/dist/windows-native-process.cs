@@ -22,7 +22,21 @@ public sealed class DctNativeProcess : IDisposable
     public string StartedAtUtc;
     public long CreatedTicks;
     public bool Elevated;
-    public void Dispose() { if (Handle != IntPtr.Zero) { DctNative.CloseHandle(Handle); Handle = IntPtr.Zero; } }
+    public DctNativeResources Resources;
+    public void Dispose() {
+        if (Handle != IntPtr.Zero) { DctNative.CloseHandle(Handle); Handle = IntPtr.Zero; }
+        if (Resources != null) { Resources.Dispose(); Resources = null; }
+    }
+}
+
+public sealed class DctNativeResources : IDisposable
+{
+    public IntPtr Job;
+    public IntPtr Port;
+    public void Dispose() {
+        if (Job != IntPtr.Zero) { DctNative.CloseHandle(Job); Job = IntPtr.Zero; }
+        if (Port != IntPtr.Zero) { DctNative.CloseHandle(Port); Port = IntPtr.Zero; }
+    }
 }
 
 public sealed class DctNativeClose : IDisposable
@@ -71,6 +85,17 @@ public static class DctNative
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool CreateProcess(string application, StringBuilder command, IntPtr processSecurity, IntPtr threadSecurity,
         bool inheritHandles, uint flags, IntPtr environment, string cwd, ref StartupInfoEx startup, out ProcessInformation information);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern IntPtr CreateJobObject(IntPtr security, string name);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr CreateIoCompletionPort(IntPtr file, IntPtr existing, IntPtr key, uint threads);
+    [StructLayout(LayoutKind.Sequential)] private struct JobCompletionPort { public IntPtr Key; public IntPtr Port; }
+    [StructLayout(LayoutKind.Sequential)] private struct JobAccounting {
+        public long UserTime, KernelTime, PeriodUserTime, PeriodKernelTime;
+        public uint PageFaults, TotalProcesses, ActiveProcesses, TerminatedProcesses;
+    }
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool SetInformationJobObject(IntPtr job, int type, ref JobCompletionPort information, int size);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool QueryInformationJobObject(IntPtr job, int type, out JobAccounting information, int size, IntPtr returned);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool included);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GetQueuedCompletionStatus(IntPtr port, out uint bytes, out IntPtr key, out IntPtr overlapped, uint milliseconds);
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct ShellExecuteInfo {
         public int Size; public uint Mask; public IntPtr Window;
@@ -212,29 +237,79 @@ public static class DctNative
         try { return Identify(information.Process, checked((int)GetProcessId(information.Process)), true); }
         catch { CloseHandle(information.Process); throw; }
     }
-    public static DctNativeProcess Adopt(long handle, int pid, bool elevated) {
+    public static DctNativeProcess Adopt(long handle, int pid, string executable, string startedAtUtc, bool elevated, DctNativeResources resources) {
         IntPtr native = new IntPtr(handle);
-        try { return Identify(native, pid, elevated); } catch { CloseHandle(native); throw; }
+        try {
+            DctNativeProcess process = Identify(native, pid, elevated);
+            if (GetProcessId(native) != pid || !Path.GetFullPath(process.ExecutablePath).Equals(Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase) ||
+                DateTime.Parse(startedAtUtc).ToUniversalTime().Ticks != process.CreatedTicks) throw new InvalidOperationException("Transferred application identity changed.");
+            process.Resources = resources;
+            return process;
+        } catch { CloseHandle(native); throw; }
     }
-    public static DctNativeProcess Launch(string executable, string[] arguments, string cwd, IDictionary environment)
+    public static DctNativeResources CreateResources()
+    {
+        DctNativeResources resources = new DctNativeResources();
+        try {
+            resources.Job = CreateJobObject(IntPtr.Zero, null);
+            if (resources.Job == IntPtr.Zero) throw Error();
+            resources.Port = CreateIoCompletionPort(new IntPtr(-1), IntPtr.Zero, IntPtr.Zero, 1);
+            if (resources.Port == IntPtr.Zero) throw Error();
+            JobCompletionPort association = new JobCompletionPort { Key = new IntPtr(1), Port = resources.Port };
+            if (!SetInformationJobObject(resources.Job, 7, ref association, Marshal.SizeOf(typeof(JobCompletionPort)))) throw Error();
+            QueryActiveProcesses(resources);
+            return resources;
+        } catch { resources.Dispose(); throw; }
+    }
+    public static uint QueryActiveProcesses(DctNativeResources resources)
+    {
+        JobAccounting accounting;
+        if (resources == null || resources.Job == IntPtr.Zero) throw new InvalidOperationException("Native resource group unavailable.");
+        if (!QueryInformationJobObject(resources.Job, 1, out accounting, Marshal.SizeOf(typeof(JobAccounting)), IntPtr.Zero)) throw Error();
+        return accounting.ActiveProcesses;
+    }
+    public static void VerifyResources(DctNativeProcess process)
+    {
+        QueryActiveProcesses(process.Resources);
+        bool included;
+        if (!IsProcessInJob(process.Handle, process.Resources.Job, out included)) throw Error();
+        if (!included) throw new InvalidOperationException("Application is outside its owned resource group.");
+    }
+    public static DctNativeResources PullResourceJob(long job, int monitorPid, long monitorTicks)
+    {
+        IntPtr monitor = OpenProcess(Query | 0x40, false, monitorPid);
+        if (monitor == IntPtr.Zero) throw Error();
+        try {
+            DctNativeProcess identity = Identify(monitor, monitorPid, false);
+            if (identity.CreatedTicks != monitorTicks) throw new InvalidOperationException("Native monitor identity changed.");
+            IntPtr duplicate;
+            if (!DuplicateHandle(monitor, new IntPtr(job), GetCurrentProcess(), out duplicate, 1, false, 0)) throw Error();
+            return new DctNativeResources { Job = duplicate };
+        } finally { CloseHandle(monitor); }
+    }
+    public static DctNativeProcess Launch(string executable, string[] arguments, string cwd, IDictionary environment, DctNativeResources resources)
     {
         // Inherit only NUL, never the helper's private protocol or handles. NUL outlives
         // the one-shot elevated creator without drain threads or broken application pipes.
         SecurityAttributes security = new SecurityAttributes { Size = Marshal.SizeOf(typeof(SecurityAttributes)), Inherit = true };
         IntPtr nul = CreateFile("NUL", 0xC0000000, 3, ref security, 3, 0, IntPtr.Zero);
         if (nul == new IntPtr(-1)) throw Error();
-        IntPtr attributes = IntPtr.Zero, handles = IntPtr.Zero, block = IntPtr.Zero;
+        IntPtr attributes = IntPtr.Zero, handles = IntPtr.Zero, jobs = IntPtr.Zero, block = IntPtr.Zero;
         bool initialized = false;
         bool elevated = IsElevated();
         try {
             IntPtr size = IntPtr.Zero;
-            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            InitializeProcThreadAttributeList(IntPtr.Zero, 2, 0, ref size);
             attributes = Marshal.AllocHGlobal(size);
-            if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref size)) throw Error();
+            if (!InitializeProcThreadAttributeList(attributes, 2, 0, ref size)) throw Error();
             initialized = true;
             handles = Marshal.AllocHGlobal(IntPtr.Size);
             Marshal.WriteIntPtr(handles, nul);
             if (!UpdateProcThreadAttribute(attributes, 0, new IntPtr(0x20002), handles, new IntPtr(IntPtr.Size), IntPtr.Zero, IntPtr.Zero)) throw Error();
+            if (resources == null || resources.Job == IntPtr.Zero) throw new InvalidOperationException("Atomic resource ownership unavailable.");
+            jobs = Marshal.AllocHGlobal(IntPtr.Size);
+            Marshal.WriteIntPtr(jobs, resources.Job);
+            if (!UpdateProcThreadAttribute(attributes, 0, new IntPtr(0x2000D), jobs, new IntPtr(IntPtr.Size), IntPtr.Zero, IntPtr.Zero)) throw Error();
             System.Collections.Generic.SortedDictionary<string, string> variables =
                 new System.Collections.Generic.SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (DictionaryEntry variable in environment) variables[(string)variable.Key] = (string)variable.Value;
@@ -253,19 +328,24 @@ public static class DctNative
             if (!CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, true, 0x08080400, block, cwd, ref startup, out process)) throw Error();
             CloseHandle(process.Thread);
             // Keep the original process handle, never a helper PID or a reopened application.
-            try { return Identify(process.Process, process.Id, elevated); }
+            try {
+                DctNativeProcess identified = Identify(process.Process, process.Id, elevated);
+                identified.Resources = resources;
+                return identified;
+            }
             catch {
                 long created, exited, kernel, user;
                 if (!GetProcessTimes(process.Process, out created, out exited, out kernel, out user)) { CloseHandle(process.Process); throw Error(); }
                 DateTime started = DateTime.FromFileTimeUtc(created);
                 return new DctNativeProcess { Handle = process.Process, ProcessId = process.Id, ExecutablePath = executable,
-                    StartedAtUtc = started.ToString("o"), CreatedTicks = started.Ticks, Elevated = elevated };
+                    StartedAtUtc = started.ToString("o"), CreatedTicks = started.Ticks, Elevated = elevated, Resources = resources };
             }
         } finally {
             if (block != IntPtr.Zero) Marshal.FreeHGlobal(block);
             if (initialized) DeleteProcThreadAttributeList(attributes);
             if (attributes != IntPtr.Zero) Marshal.FreeHGlobal(attributes);
             if (handles != IntPtr.Zero) Marshal.FreeHGlobal(handles);
+            if (jobs != IntPtr.Zero) Marshal.FreeHGlobal(jobs);
             CloseHandle(nul);
         }
     }
@@ -286,6 +366,37 @@ public static class DctNative
         uint code;
         if (!GetExitCodeProcess(process.Handle, out code)) throw Error();
         return unchecked((int)code);
+    }
+    public static bool WaitForResourcesClosed(DctNativeProcess process)
+    {
+        return WaitForResourceGroup(process.Resources, true);
+    }
+    public static void WaitForAcquisitionExit(DctNativeProcess creator)
+    {
+        // Creation can race cancellation. Only this retained creator handle's
+        // physical exit proves it can no longer create an application.
+        uint result = WaitForSingleObject(creator.Handle, UInt32.MaxValue);
+        if (result != 0) throw Error();
+    }
+    public static bool SettleResourceAcquisition(DctNativeResources resources)
+    {
+        return WaitForResourceGroup(resources, false);
+    }
+    private static bool WaitForResourceGroup(DctNativeResources resources, bool cancellable)
+    {
+        if (resources == null || resources.Port == IntPtr.Zero) throw new InvalidOperationException("Native resource observation unavailable.");
+        while (!cancellable || !Cancelled) {
+            if (QueryActiveProcesses(resources) == 0) return true;
+            uint bytes;
+            IntPtr key, overlapped;
+            // Notifications may be lost. A bounded native wait only schedules another
+            // accounting query; elapsed time and notification values never prove exit.
+            if (!GetQueuedCompletionStatus(resources.Port, out bytes, out key, out overlapped, 250)) {
+                int error = Marshal.GetLastWin32Error();
+                if (error != 258 || overlapped != IntPtr.Zero) throw new Win32Exception(error);
+            } else if (key != new IntPtr(1)) throw new InvalidOperationException("Foreign native resource completion identity.");
+        }
+        return false;
     }
     public static NamedPipeServerStream CreatePipe(string name)
     {

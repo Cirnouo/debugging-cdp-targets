@@ -59,10 +59,32 @@ I/O are simulated. Accepted Close removes the fixture listener while retaining
 the actual native application observer; matching handle receipts or launch
 observer exit evidence drive real retirement. A registered upstream disposal
 gate holds the temporary directory lease after exit. Cleanup releases the gate
-and supplies matching launch-observer exit evidence even after assertions fail.
+and supplies separate matching launch-observer root/resource exit evidence even
+after assertions fail. Tests may defer native resource completion independently
+from root exit to verify operation and directory release barriers.
 It never launches GUI or signals a real process.
 
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
+`native-resource-child.ts` coordinates an owned Node root, a child that outlives
+it, and a grandchild created after root exit through temporary file barriers.
+Descendants use detached, hidden, shell-false launches with ignored stdio, and
+finish through their own ordinary exit paths. It opens no GUI.
+`native-resource-witness.ps1` retains an actual owned child process handle before
+fixture release and supplies its identity and ordinary native exit receipt.
+`native-resource-boundary.ps1` replaces only job-accounting and completion-port
+P/Invoke boundaries in an in-memory copy of the maintained C# helper. It exercises
+lost/stale notifications, timeout/error distinctions and cancellation, including
+non-cancellable acquisition settlement. No real application is launched.
+`native-resource-identity.ps1` uses its own process identity and duplicated handles
+to exercise adoption failures, foreign-job rejection, stale monitor identity and
+receiver-local disposal. Kernel object comparison avoids confusing a reused
+numeric handle slot with the original process object.
+`native-resource-handoff.ps1` connects two hidden, same-integrity disposable
+PowerShell processes through the existing authenticated pipe primitives. Its
+creator pulls only job-assignment rights, creates the hidden Node fixture, and
+hands the original process observation handle back to the monitor. Variants cover
+receiver exit before adoption and a lost created packet with creator-then-job
+settlement. These controls do not request UAC or prove actual elevated acceptance.
 `normal-close-window.cs` supplies raw owned Win32 windows, including an ordinary
 GUI and a visible, unowned, zero-area layered tool event target deliberately
 ordered first. It records each WM_CLOSE destination and exits its message loop

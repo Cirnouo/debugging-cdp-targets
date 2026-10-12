@@ -70,7 +70,7 @@ async function terminalOperation(f: NativeCloseRuntime, id: string) {
 async function completeClose(f: NativeCloseRuntime, operationId: string) {
     f.emitClose();
     assert.equal(f.application.exitCode, 0);
-    assert.equal(f.application.monitorDisposed, true);
+    assert.equal(f.application.monitorDisposed, false);
     assert.throws(() => f.runtime.controller.status(f.current.connectionId), /absent|closed/);
     f.launchObserverExit();
     await assert.rejects(f.invoke(), /absent|closed/);
@@ -132,6 +132,29 @@ test('accepted native Close retains live root ownership after its listener disap
     assert.equal(f.officialCalls(), 0);
     assert.deepEqual(f.hook(), {});
     await completeClose(f, id);
+});
+
+test('native root Close receipt cannot finish its operation before independent descendant resources close', {
+    timeout: 10_000,
+}, async (t) => {
+    const f = await nativeCloseRuntime(t);
+    const id = operationId(await f.close('close-resource-users'));
+    await awaitingExit(f, id);
+    f.emitClose();
+    f.launchObserverExit(false);
+    assert.equal(f.application.exitCode, 0);
+    assert.equal(f.application.monitorDisposed, false);
+    assert.throws(() => f.runtime.controller.status(f.current.connectionId), /absent|closed/);
+    await f.upstreamDisposing;
+    f.allowDisposal();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(await f.directoryExists(), true);
+    assert.equal((await f.operation(id)).state, 'running');
+    assert.deepEqual(f.hook(), {});
+    f.launchResourcesClosed();
+    await f.deleted;
+    assert.equal((await terminalOperation(f, id)).state, 'succeeded');
+    assert.equal(f.application.monitorDisposed, true);
 });
 
 test('aborting operation_wait leaves the accepted native Close job and observer running without repost or cancellation', {

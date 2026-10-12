@@ -219,8 +219,12 @@ export async function nativeCloseRuntime(t: TestContext) {
         assert.ok(result);
         return result;
     };
-    const launchObserverExit = () => {
+    const launchResourcesClosed = () => {
+        helpers[0]?.emit({ event: 'resources-closed', ...nativeIdentity, activeProcesses: 0 });
+    };
+    const launchObserverExit = (resourcesClosed = true) => {
         helpers[0]?.emit({ event: 'exited', processId: 1601, exitCode: 0 });
+        if (resourcesClosed) launchResourcesClosed();
     };
     t.after(async () => {
         upstreamDisposal.resolve();
@@ -273,6 +277,7 @@ export async function nativeCloseRuntime(t: TestContext) {
         allowDisposal: upstreamDisposal.resolve,
         deleted: deleted.promise,
         launchObserverExit,
+        launchResourcesClosed,
         hook: () => entry.status('PostToolUse'),
         isolation: () => isolation.at(-1),
         listenerPresent: () => listenerPresent,

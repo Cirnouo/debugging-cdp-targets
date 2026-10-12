@@ -26,6 +26,7 @@ const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 class Application extends EventEmitter {
     exitCode: number | null = null;
     signalCode: string | null = null;
+    waitForResourcesClosed?: () => Promise<void>;
     exit() {
         this.exitCode = 0;
         this.emit('exit');
@@ -50,6 +51,7 @@ async function fixture(
         failUpstreamClose?: boolean;
         replacementRouter?: Promise<void>;
         profileAvailable?: (directory: string) => Promise<boolean>;
+        resources?: (index: number) => Promise<void>;
     } = {},
 ) {
     const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-isolation-runtime-')));
@@ -58,13 +60,15 @@ async function fixture(
     const launchEntered = deferred();
     const applications: Application[] = [];
     const launches: { options: LaunchOptions; directory?: string; arguments: string[] }[] = [];
+    const disposal: string[] = [];
+    const directories = options.directories ?? new DataDirectoryRegistry();
     const tools = [{ name: 'list_pages', inputSchema: { type: 'object' as const, properties: {} } }];
     let routers = 0;
     let upstreams = 0;
     let failClose = options.failClose ?? false;
     let failUpstreamClose = options.failUpstreamClose ?? false;
     const runtime = await startPluginRuntime({
-        ...(options.directories ? { dataDirectories: options.directories } : {}),
+        dataDirectories: directories,
         ...(options.profileAvailable ? { profileAvailable: options.profileAvailable } : {}),
         loadCatalog: async () =>
             createToolCatalog({
@@ -77,9 +81,11 @@ async function fixture(
             return {
                 url: `http://127.0.0.1:${31000 + routers}`,
                 setTarget: () => {},
-                clearTarget: () => {},
+                clearTarget: () => disposal.push('route-revoked'),
                 isBusy: () => false,
-                close: async () => {},
+                close: async () => {
+                    disposal.push('router');
+                },
             };
         },
         createHost: () => ({
@@ -102,6 +108,13 @@ async function fixture(
                 });
                 if (options.failLaunch === launches.length) throw new Error('Launch failed before creation.');
                 const child = new Application();
+                if (options.resources) {
+                    const resources = options.resources(applications.length);
+                    child.waitForResourcesClosed = () => {
+                        disposal.push('target-resources');
+                        return resources;
+                    };
+                }
                 applications.push(child);
                 const target = {
                     processId: 1000 + applications.length,
@@ -134,6 +147,7 @@ async function fixture(
                 rootsChanged: async () => {},
                 onExit: () => {},
                 close: async () => {
+                    if (!catalog) disposal.push('upstream');
                     if (!catalog && failUpstreamClose) throw new Error(`EACCES private path ${parent}`);
                 },
             };
@@ -192,6 +206,8 @@ async function fixture(
     }
     return {
         runtime,
+        directories,
+        disposal,
         callbacks,
         control,
         parent,
@@ -219,6 +235,135 @@ function route(connection: ConnectionStatus) {
     assert.ok(connection.sessionId);
     return { connectionId: connection.connectionId, sessionId: connection.sessionId };
 }
+
+for (const action of ['close', 'keep', 'end-task', 'unexpected', 'disconnect'] as const) {
+    test(`native descendant resources retain directory after root exit during ${action}`, {
+        timeout: 10_000,
+    }, async (t) => {
+        const resources = deferred();
+        t.after(() => resources.resolve());
+        const f = await fixture(t, { resources: () => resources.promise });
+        const active = await f.runtime.controller.start(f.dataOptions(), f.context);
+        const held = f.evidence.at(-1);
+        assert.ok(held?.mode === 'data-dir');
+        let pending: Promise<unknown> | undefined;
+        if (action === 'close') pending = f.runtime.controller.stop({ ...route(active), disposition: 'Close' });
+        else if (action === 'disconnect') pending = f.runtime.close();
+        else {
+            if (action === 'keep') await f.runtime.controller.stop({ ...route(active), disposition: 'Keep' });
+            if (action === 'end-task') await f.runtime.controller.endTask(route(active));
+            f.applications[0]?.exit();
+        }
+        let completed = false;
+        void pending?.then(() => {
+            completed = true;
+        });
+        await tick();
+        await tick();
+        assert.equal(f.applications[0]?.exitCode, 0);
+        const status = f.runtime.controller.status();
+        assert.ok('connections' in status);
+        assert.deepEqual(status.connections, []);
+        assert.ok(f.disposal.includes('route-revoked'));
+        assert.ok(f.disposal.includes('upstream'));
+        assert.ok(f.disposal.includes('router'));
+        assert.ok(f.disposal.includes('target-resources'));
+        assert.ok(f.disposal.indexOf('upstream') < f.disposal.indexOf('target-resources'));
+        assert.equal(completed, false);
+        assert.equal((await lstat(held.path)).isDirectory(), true);
+        await assert.rejects(f.directories.acquire({ kind: 'existing', path: held.path }, 'retain'), {
+            code: 'directory-overlap',
+        });
+        resources.resolve();
+        await pending;
+        await f.waitState('deleted');
+        await assert.rejects(lstat(held.path), { code: 'ENOENT' });
+    });
+}
+
+test('restart waits for old native resource users before creating its successor in the same directory', {
+    timeout: 10_000,
+}, async (t) => {
+    const resources = deferred();
+    t.after(() => resources.resolve());
+    const f = await fixture(t, { resources: (index) => (index === 0 ? resources.promise : Promise.resolve()) });
+    const active = await f.runtime.controller.start(f.dataOptions(), f.context);
+    const held = f.evidence.at(-1);
+    assert.ok(held?.mode === 'data-dir');
+    const pending = f.runtime.controller.restart(route(active));
+    await tick();
+    await tick();
+    assert.equal(f.applications[0]?.exitCode, 0);
+    assert.ok(f.disposal.includes('target-resources'));
+    assert.equal(f.launches.length, 1);
+    assert.equal((await lstat(held.path)).isDirectory(), true);
+    resources.resolve();
+    const successor = await pending;
+    assert.equal(f.launches.length, 2);
+    assert.equal(f.launches[1]?.directory, held.path);
+    await f.runtime.controller.stop({ ...route(successor), disposition: 'Close' });
+    await f.waitState('deleted');
+});
+
+test('late rollback after cancellation holds its native resource claim after actual root exit', {
+    timeout: 10_000,
+}, async (t) => {
+    const creation = deferred();
+    const resources = deferred();
+    t.after(() => {
+        creation.resolve();
+        resources.resolve();
+    });
+    const f = await fixture(t, { beforeCreation: creation.promise, resources: () => resources.promise });
+    const abort = new AbortController();
+    const pending = f.runtime.controller.start(f.dataOptions(), { ...f.context, signal: abort.signal });
+    void pending.catch(() => {});
+    await f.waitState('held');
+    await f.launchEntered;
+    abort.abort(new Error('cancelled permission acquisition'));
+    creation.resolve();
+    await tick();
+    await tick();
+    assert.equal(f.applications[0]?.exitCode, 0);
+    assert.ok(f.disposal.includes('target-resources'));
+    assert.equal(f.state(), 'held');
+    const held = f.evidence.at(-1);
+    assert.ok(held?.mode === 'data-dir');
+    assert.equal((await lstat(held.path)).isDirectory(), true);
+    await assert.rejects(f.directories.acquire({ kind: 'existing', path: held.path }, 'retain'), {
+        code: 'directory-overlap',
+    });
+    resources.resolve();
+    await assert.rejects(pending, /cancelled permission/);
+    await f.waitState('deleted');
+});
+
+test('failed native resource observation preserves a dead route and the held directory claim', {
+    timeout: 10_000,
+}, async (t) => {
+    let rejectResources: (error: Error) => void = () => {};
+    const resources = new Promise<void>((_resolve, reject) => {
+        rejectResources = reject;
+    });
+    const f = await fixture(t, { resources: () => resources });
+    const active = await f.runtime.controller.start(f.dataOptions(), f.context);
+    const held = f.evidence.at(-1);
+    assert.ok(held?.mode === 'data-dir');
+    const pending = f.runtime.controller.stop({ ...route(active), disposition: 'Close' });
+    void pending.catch(() => {});
+    await tick();
+    rejectResources(new Error('Native resources observer unavailable.'));
+    await assert.rejects(pending, /observer unavailable/);
+    assert.throws(() => f.runtime.controller.status(active.connectionId), /absent|closed/);
+    assert.equal(f.state(), 'held');
+    assert.equal((await lstat(held.path)).isDirectory(), true);
+    await assert.rejects(f.directories.acquire({ kind: 'existing', path: held.path }, 'retain'), {
+        code: 'directory-overlap',
+    });
+    const hook = JSON.stringify(f.callbacks.status('PostToolUse'));
+    assert.ok(!hook.includes(held.path));
+    assert.match(hook, /RESOURCE_CLEANUP_FAILED/);
+});
 
 test('prevalidation rejects missing binding and invalid official options before directory acquisition', async (t) => {
     const f = await fixture(t);
