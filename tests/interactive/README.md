@@ -4,7 +4,7 @@ Run `pnpm test:windows:interactive` explicitly from an interactive Windows deskt
 The command runs these files sequentially with `--test-concurrency=1`; each file
 fails on non-Windows. The Windows CI job runs this lane after typecheck alongside
 the default regression lane. These tests compile and launch owned disposable
-WinForms fixtures and request normal Close with actual-exit evidence.
+WinForms or raw Win32 fixtures and request normal Close with actual-exit evidence.
 
 - `windows-native.test.ts` retains three cases for visible launch, delayed normal
     close and manifest inspection, owned process/listener/endpoint discovery, and
@@ -15,8 +15,13 @@ WinForms fixtures and request normal Close with actual-exit evidence.
     and short executable identities. The short identity requires a real 8.3 alias.
 - `screenshot-background-anchor.test.ts` retains one case proving opaque anchor
     containment and foreground handoff with normal cleanup of both owned fixtures.
+- `windows-normal-close.test.ts` adds ten cases for first ordinary GUI selection,
+    a real MainWindowHandle event-target misselection, minimized/transparent/
+    frameless compatibility, zero-area/tool/disabled/owned exclusions and first-only
+    delivery with multiple ordinary windows. Every owned fixture has normal timer
+    expiry, and its driver waits for actual exit even after failure.
 
-These eight cases share the inherited desktop and its single foreground window.
+These eighteen cases share the inherited desktop and its single foreground window.
 Concurrent file execution can invalidate another fixture's native observation.
 Preserve sequential execution, native identity checks, assertions and deadlines.
 The root [test inventory](../README.md) describes the default lane and shared

@@ -132,7 +132,7 @@
   launch, keeping delivered code outside maintained-source coverage. No browser
   is launched.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
-  runnable root or interactive lane and retains the three-file, eight-case
+  runnable root or interactive lane and retains the four-file, eighteen-case
   interactive inventory without launching fixtures.
 - `issue-policy.test.ts` validates literal GitHub form bodies against the current
   YAML, including label-only classification, required and optional answers,
@@ -240,11 +240,15 @@
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
+- `windows-normal-close.test.ts` runs maintained native RequestClose with only
+  user32 I/O replaced, covering enumeration/property failures, stale HWND/PID/
+  visibility on both eligible and excluding paths, absent candidates,
+  child/foreign exclusions and first-only delivery.
 - `window-evidence.test.ts` rejects stale identities, replaced windows and
   accepted but unobserved transitions using literal native evidence fixtures.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
-- `interactive/` owns eight explicit Windows GUI cases across the three migrated
+- `interactive/` owns eighteen explicit Windows GUI cases across four
   native/window/anchor test files; see its [inventory and prerequisites](interactive/README.md).
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.

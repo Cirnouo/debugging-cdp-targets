@@ -93,6 +93,19 @@ public static class DctNative
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool GetTokenInformation(IntPtr token, int type, out int information, int size, out int needed);
     [DllImport("user32.dll", SetLastError = true)] private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+    private delegate bool WindowEnumeration(IntPtr window, IntPtr parameter);
+    [StructLayout(LayoutKind.Sequential)] private struct WindowRectangle { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll", SetLastError = true)] private static extern bool EnumWindows(WindowEnumeration callback, IntPtr parameter);
+    [DllImport("user32.dll", SetLastError = true)] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr GetWindow(IntPtr window, uint command);
+    [DllImport("user32.dll", SetLastError = true)] private static extern bool GetWindowRect(IntPtr window, out WindowRectangle rectangle);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)] private static extern IntPtr GetWindowLongPointer(IntPtr window, int index);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)] private static extern int GetWindowLong32(IntPtr window, int index);
+    [DllImport("kernel32.dll")] private static extern void SetLastError(uint error);
 
     private static Win32Exception Error() { return new Win32Exception(Marshal.GetLastWin32Error()); }
     public static void BeginCancellation()
@@ -292,6 +305,54 @@ public static class DctNative
         if (pid != expectedPid) throw new InvalidDataException("Unexpected native helper peer.");
         using (DctNativeProcess peer = Inspect(expectedPid)) if (peer.CreatedTicks != expectedCreatedTicks) throw new InvalidDataException("Native helper peer identity changed.");
     }
+    private static long WindowStyle(IntPtr window, int index)
+    {
+        // Zero is a valid style/owner value; clear last error before ambiguous APIs.
+        SetLastError(0);
+        long style = IntPtr.Size == 8 ? GetWindowLongPointer(window, index).ToInt64() : GetWindowLong32(window, index);
+        if (style == 0 && Marshal.GetLastWin32Error() != 0) throw Error();
+        return style;
+    }
+    private static bool IsNormalWindow(IntPtr window, int pid)
+    {
+        uint ownerPid;
+        if (GetWindowThreadProcessId(window, out ownerPid) == 0) throw Error();
+        if (ownerPid != (uint)pid) return false;
+        if (!IsWindow(window)) throw new InvalidDataException("Native close window disappeared.");
+        bool eligible = IsWindowVisible(window) && IsWindowEnabled(window);
+        if (eligible) {
+            SetLastError(0);
+            IntPtr owner = GetWindow(window, 4); // GW_OWNER
+            if (owner == IntPtr.Zero && Marshal.GetLastWin32Error() != 0) throw Error();
+            eligible = owner == IntPtr.Zero && (WindowStyle(window, -16) & 0x40000000L) == 0 &&
+                (WindowStyle(window, -20) & 0x80L) == 0;
+            if (eligible && !IsIconic(window)) {
+                WindowRectangle rectangle;
+                if (!GetWindowRect(window, out rectangle)) throw Error();
+                eligible = rectangle.Right > rectangle.Left && rectangle.Bottom > rectangle.Top;
+            }
+        }
+        // A destroyed/reused HWND must not turn missing properties into qualification.
+        uint currentPid;
+        if (GetWindowThreadProcessId(window, out currentPid) == 0) throw Error();
+        if (currentPid != (uint)pid || !IsWindow(window))
+            throw new InvalidDataException("Native close window identity changed during selection.");
+        return eligible;
+    }
+    private static IntPtr FindNormalWindow(int pid)
+    {
+        IntPtr selected = IntPtr.Zero;
+        Exception failure = null;
+        WindowEnumeration callback = delegate(IntPtr window, IntPtr parameter) {
+            if (selected != IntPtr.Zero || failure != null) return true;
+            try { if (IsNormalWindow(window, pid)) selected = window; }
+            catch (Exception error) { failure = error; }
+            return true;
+        };
+        if (!EnumWindows(callback, IntPtr.Zero)) throw Error();
+        if (failure != null) throw failure;
+        return selected;
+    }
     public static DctNativeClose RequestClose(int pid, string executable, string startedAtUtc)
     {
         DctNativeProcess target = Inspect(pid);
@@ -302,8 +363,10 @@ public static class DctNative
             if (!Path.GetFullPath(executable).Equals(Path.GetFullPath(target.ExecutablePath), StringComparison.OrdinalIgnoreCase) ||
                 DateTime.Parse(startedAtUtc, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime().Ticks != target.CreatedTicks || targetSession != ownSession)
                 throw new InvalidDataException("Native close process identity changed.");
-            using (Process process = Process.GetProcessById(pid)) {
-                IntPtr window = process.MainWindowHandle;
+            {
+                IntPtr window = FindNormalWindow(pid);
+                if (window != IntPtr.Zero && !IsNormalWindow(window, pid))
+                    throw new InvalidDataException("Native close window identity or qualification changed.");
                 bool requested = window != IntPtr.Zero && PostMessage(window, 0x0010, IntPtr.Zero, IntPtr.Zero);
                 int error = window != IntPtr.Zero && !requested ? Marshal.GetLastWin32Error() : 0;
                 return new DctNativeClose { Target = target, Evidence = new Hashtable {

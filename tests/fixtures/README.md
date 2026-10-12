@@ -53,6 +53,24 @@ response after delivery. The smoke's identity/count/cleanup and subsequent
 empty-Hook assertions still validate that batch.
 
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
+`normal-close-window.cs` supplies raw owned Win32 windows, including an ordinary
+GUI and a visible, unowned, zero-area layered tool event target deliberately
+ordered first. It records each WM_CLOSE destination and exits its message loop
+normally through GUI Close or a five-second safety timer. Variants retain
+minimized, transparent/NOACTIVATE, frameless and multiple GUI compatibility while
+excluding zero-area, tool, disabled and owned windows. Window ordering and safety
+timer setup failures produce bounded type/native-code evidence and normal exit
+before readiness rather than an unscheduled cleanup wait.
+`normal-close-window.ps1` compiles and owns that fixture, calls the actual native
+RequestClose and handle wait, and always observes process exit before returning.
+`normal-close-boundary.cs` models only user32 operations for deterministic
+enumeration/property failures and stale HWND/PID/visibility, including loss while
+reading every ordinary exclusion. Its message sink
+rejects unexpected message arguments and records delivery; process identity,
+selection, revalidation and receipts still execute the maintained C# methods.
+`normal-close-boundary.ps1` replaces exactly the user32 extern declarations in
+a temporary in-memory compilation, refusing missing/ambiguous declarations.
+It requires no additional native compiler and adds no production test APIs.
 `owned-native-fixtures.ts` retains private native identities before readiness
 observation. Cleanup normally Closes every retained fixture, including failed
 readiness acquisitions, and removes ownership only after actual exit evidence.
