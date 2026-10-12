@@ -78,8 +78,23 @@ See [storage and cleanup](privacy.md#data-directory-storage-and-cleanup).
 
 ## Normal manual close
 
-If normal shutdown fails, inspect the reported PID and port, confirm the
-application's identity, and close it manually. Replace `<reported-pid>` and
+Windows normal Close selects the first verified visible, enabled, unowned
+top-level application window that is neither a child nor a tool window. It
+accepts minimized application windows and rechecks the selection before sending
+`WM_CLOSE`. Closing one window can leave a multiple-window application alive;
+the operation continues waiting for actual process exit.
+
+If Close reports a resource-cleanup failure after verified application exit,
+inspect the original start operation's explicit isolation metadata and report
+the retained real directory and cleanup state. An empty connection registry
+does not prove that the directory was deleted. Preserve a leased directory and
+its cleanup evidence; another Close cannot establish exit for an already exited
+process. See the dated
+[Tauri Close evidence](../tauri-close-validation.md#application-results-and-cleanup-timing)
+for the distinction between normal shutdown and resource-user cleanup.
+
+If the reported application remains alive, inspect its PID and port, confirm
+its identity, and close it manually. Replace `<reported-pid>` and
 `<reported-port>` with the values from the Plugin's diagnostic. On Windows:
 
 ```powershell

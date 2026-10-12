@@ -13,6 +13,9 @@
     qualification, one-shot screenshot outcomes and privacy limits.
 - `tauri-screenshot-validation.md` records the separate fixed Tauri fixture
     builds, two failed qualifications and separately authorized helper dispositions.
+- `tauri-close-validation.md` records Windows normal-window Close selection,
+    native resource completion, independent Tauri/Chrome/Electron acceptance
+    and preserved earlier cleanup failures.
 - `policies/` contains repository-wide contribution requirements.
 - `adr/` records architecture decisions and superseded decisions.
 - `superpowers/` contains implementation plans linked to reviewed decisions.
