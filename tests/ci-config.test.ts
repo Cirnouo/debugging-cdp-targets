@@ -143,7 +143,7 @@ test('Windows CI requires separate default and interactive lanes unconditionally
     }
     const typecheck = job.steps.findIndex((step) => step.run === 'pnpm typecheck');
     assert.ok(typecheck >= 0);
-    for (const command of ['pnpm test', 'pnpm test:windows:interactive']) {
+    for (const command of ['pnpm test', 'pnpm test:windows:interactive --allow-gui']) {
         const matches = job.steps.flatMap((step, index) => (step.run === command ? [index] : []));
         assert.equal(matches.length, 1, command);
         assert.ok(matches[0] !== undefined && matches[0] > typecheck, command);
@@ -353,16 +353,19 @@ test('real Chrome CI requires both actual desktop browsers and preserves the aud
     assert.ok(linux?.run && mac?.run);
     assert.doesNotMatch(linux.run, /command -v xdpyinfo/);
     for (const script of ['official-server', 'entry-recovery']) {
-        assert.match(linux.run, new RegExp(`xvfb-run -a node tests/smoke/${script}\\.ts`));
-        assert.match(mac.run, new RegExp(`node tests/smoke/${script}\\.ts`));
+        assert.match(linux.run, new RegExp(`xvfb-run -a node tests/smoke/${script}\\.ts --allow-gui`));
+        assert.match(mac.run, new RegExp(`node tests/smoke/${script}\\.ts --allow-gui`));
     }
     assert.doesNotMatch(mac.run, /xvfb/);
     for (const step of [linux, mac]) {
         assert.ok(step?.run);
         assert.ok(step.run.includes('fixture-ci.ts stage'));
         assert.ok(step.run.indexOf('fixture-ci.ts stage') < step.run.indexOf('node tests/smoke/official-server.ts'));
-        assert.match(step.run, /official-server\.ts --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/);
-        assert.match(step.run, /entry-recovery\.ts --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/);
+        assert.match(
+            step.run,
+            /official-server\.ts --allow-gui --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/,
+        );
+        assert.match(step.run, /entry-recovery\.ts --allow-gui --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/);
         assert.match(step.run, /--collection-id "\$collectionId"/);
         assert.match(step.run, /fixture-ci\.ts stage[^\n]+"\$collectionId"; then :; fi/);
     }

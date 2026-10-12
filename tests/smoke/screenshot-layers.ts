@@ -13,6 +13,7 @@ import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-t
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import type { ApplicationLaunch } from '../../src/domains/launch-command.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
 import {
@@ -28,9 +29,10 @@ import {
 } from './screenshot-fixture.ts';
 import { assertWindowState, sampleWindow } from './window-evidence.ts';
 
+const args = requireGuiAuthorization();
 assert.equal(process.platform, 'win32', 'This opt-in window/PNG acceptance requires Windows.');
-const configPath = process.argv[2];
-const outputParent = process.argv[3];
+const configPath = args[0];
+const outputParent = args[1];
 assert.ok(
     configPath && outputParent && path.isAbsolute(configPath) && path.isAbsolute(outputParent),
     'Supply absolute fixture JSON and evidence parent paths.',

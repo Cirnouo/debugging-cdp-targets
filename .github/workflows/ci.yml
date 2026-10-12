@@ -163,7 +163,7 @@ jobs:
             -   name: Run default Node test suite
                 run: pnpm test
             -   name: Run interactive Windows test suite
-                run: pnpm test:windows:interactive
+                run: pnpm test:windows:interactive --allow-gui
             -   name: Parse TypeScript, generated JavaScript and both PowerShell parsers
                 run: pnpm check:scripts
             -   name: Test from an arbitrary working directory
@@ -264,9 +264,9 @@ jobs:
                     command -v xvfb-run
                     command -v xauth
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
-                    xvfb-run -a node tests/smoke/entry-recovery.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    xvfb-run -a node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
             -   name: Verify macOS desktop Chrome prerequisites and run real acceptance
                 if: runner.os == 'macOS'
                 shell: bash
@@ -276,9 +276,9 @@ jobs:
                     test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
                     command -v lsof
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    node tests/smoke/official-server.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
-                    node tests/smoke/entry-recovery.ts --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
             -   name: Upload controlled Chrome failure diagnostics
                 id: fixture-artifact
                 if: failure() && steps.fixture-initialization.outputs.initialized == 'true'

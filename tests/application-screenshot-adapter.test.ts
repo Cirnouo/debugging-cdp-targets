@@ -130,6 +130,7 @@ function boundary(
     const calls: { method: string; params: Record<string, unknown>; timeout?: number }[] = [];
     const sequence: string[] = [];
     const records: { kind: string; value: unknown }[] = [];
+    const nativeCalls: { script: string; args: string[] }[] = [];
     let connected = false;
     let stopped = false;
     let operation = 'start';
@@ -311,11 +312,15 @@ function boundary(
             };
         },
         async powershell(_script, args) {
+            nativeCalls.push({ script: _script, args });
             if (_script === './windows-png-evidence.ps1') {
                 if (options.pngFailure) throw new Error('PNG decoder failed');
                 return { raw: {}, stdout: '{}', stderr: '' };
             }
             assert.ok(args.includes('-ApplicationPid'));
+            if (_script === './windows-window-evidence.ps1' || args.includes('Titles')) {
+                return { raw: [], stdout: '[]', stderr: '' };
+            }
             const processId = Number(args[args.indexOf('-ApplicationPid') + 1]);
             return {
                 raw: {
@@ -397,8 +402,36 @@ function boundary(
         },
         io,
     );
-    return { adapter, calls, sequence, records, closed: () => stdioClosed };
+    return { adapter, calls, sequence, records, nativeCalls, closed: () => stdioClosed };
 }
+
+test('application adapter forwards CLI GUI authorization only for native window mutations', async () => {
+    const original = process.argv;
+    try {
+        for (const authorized of [false, true]) {
+            process.argv = original.filter((argument) => argument !== '--allow-gui');
+            if (authorized) process.argv.push('--allow-gui');
+            const io = boundary();
+            const route = await io.adapter.acquire(prepared, {
+                root: config.payload.root,
+                inventoryDigest: 'b'.repeat(64),
+            });
+            await route.sample(120);
+            await route.condition('foreground-normal', 120);
+            await route.condition('minimized', 120);
+            const calls = io.nativeCalls.filter((call) => call.script === './windows-window-evidence.ps1');
+            assert.equal(calls.length, 3);
+            for (const [index, call] of calls.entries()) {
+                assert.equal(call.args.includes('-AllowGui'), authorized && index > 0);
+                assert.equal(call.args[call.args.indexOf('-State') + 1], ['None', 'Foreground', 'Minimize'][index]);
+                assert.equal(call.args[call.args.indexOf('-WindowHandle') + 1], '120');
+            }
+            assert.equal((await io.adapter.cleanup()).ok, true);
+        }
+    } finally {
+        process.argv = original;
+    }
+});
 test('application adapter uses sealed entry generic-cdp identities and unchanged 90s receipt timeout', async () => {
     const io = boundary();
     const route = await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });

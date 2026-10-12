@@ -7,10 +7,12 @@ import { promisify } from 'node:util';
 import { createPlatformAdapter, validateProcessIdentity } from '../../src/adapters/platform-process.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import { errorDetails, errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 
+const args = requireGuiAuthorization();
 if (process.platform !== 'win32') throw new Error('Windows elevation smoke requires Windows.');
-const folder = path.resolve(process.argv[2] ?? '.superpowers/sdd/mcp-native-lifecycle/windows-elevation');
-const mode = process.argv[3] ?? 'normal';
+const folder = path.resolve(args[0] ?? '.superpowers/sdd/mcp-native-lifecycle/windows-elevation');
+const mode = args[1] ?? 'normal';
 if (!['normal', 'access-denied-return', 'access-denied-exception'].includes(mode))
     throw new Error('Unknown elevation smoke mode.');
 await mkdir(folder, { recursive: true });

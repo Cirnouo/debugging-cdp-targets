@@ -7,6 +7,7 @@ import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import { type ProcessEvidence, type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { guiMutationArguments } from '../gui-authorization.ts';
 import {
     type ApplicationProbeAdapter,
     type ApplicationProbeConfig,
@@ -278,6 +279,7 @@ export function createApplicationScreenshotAdapter(
                 ...applicationIdentityArguments(selected),
                 '-State',
                 state,
+                ...guiMutationArguments(state),
                 ...(handle === undefined ? [] : ['-WindowHandle', String(handle)]),
             ],
             signal,

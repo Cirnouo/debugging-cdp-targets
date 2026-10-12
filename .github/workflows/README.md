@@ -43,7 +43,7 @@ failed security check prevents downstream builds. Registry failures also block.
 
 Quality, Windows tests and both Portable tests execute strict TypeScript
 typechecking before their regression tests. The required Windows tests job keeps
-`needs: quality` and runs `pnpm test` followed by `pnpm test:windows:interactive`
+`needs: quality` and runs `pnpm test` followed by `pnpm test:windows:interactive --allow-gui`
 as separate mandatory steps after `pnpm typecheck`, without job/step conditions
 or `continue-on-error`. Windows additionally parses the PowerShell helper with
 both 5.1 and 7; portable tests remain simulated CDP, not claims of real
@@ -52,10 +52,13 @@ JavaScript so lockfile preflight needs no installed dependencies.
 
 Contributor `pnpm test`, `pnpm test:coverage`, `pnpm verify:push` and pre-push
 verification use the default `tests/*.test.ts` lane without launching GUI
-fixtures. The explicit `pnpm test:windows:interactive` command selects
-`tests/interactive/*.test.ts` and requires an interactive Windows desktop; it
-fails on non-Windows. Both lanes run files sequentially with
-`--test-concurrency=1`, and default coverage keeps the 52% line, 71% branch and
+fixtures. `pnpm test:windows:interactive` returns a successful explicit skip by
+default. Only `pnpm test:windows:interactive --allow-gui` selects the eighteen
+interactive cases and requires an interactive Windows desktop; after authorization
+it fails on non-Windows. Each file also skips direct Node execution without the
+flag. CI/environment detection never grants GUI permission. Both lanes run files
+sequentially (default `--test-concurrency=1`, interactive `node:test.run`
+concurrency 1), and default coverage keeps the 52% line, 71% branch and
 61% function floors. See the [quality policy](../../docs/policies/quality.md)
 and [interactive inventory](../../tests/interactive/README.md) for contributor
 requirements and native fixture prerequisites.
@@ -71,7 +74,10 @@ branch ref and audit its full ancestry, rejecting missing identity or tag refs.
 
 Real Chrome jobs run the official tools and three-connection recovery smokes on
 `ubuntu-24.04` and `macos-15`, after their own strict typecheck. Linux requires
-Xvfb; macOS starts desktop Chrome directly. The executable path is explicit and
+Xvfb; macOS starts desktop Chrome directly. Both real smoke commands explicitly
+pass `--allow-gui`. Existing Windows CI proves owned native regression behavior;
+Tauri/Electron probes remain opt-in local development evidence without new CI
+application acquisition or toolchains. The executable path is explicit and
 must be an existing actual Chrome binary. Each launch uses an independent
 temporary profile and synthetic local page, validates process/listener/endpoint
 identity and logs the actual OS and Chrome versions. Missing prerequisites fail;

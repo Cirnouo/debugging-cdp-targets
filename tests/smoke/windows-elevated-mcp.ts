@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import { errorDetails, isRecord } from '../../src/shared/errors.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 import { lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
 
+const args = requireGuiAuthorization();
 if (process.platform !== 'win32') throw new Error('Windows elevated MCP smoke requires Windows.');
-const folder = path.resolve(process.argv[2] ?? '.superpowers/sdd/mcp-native-lifecycle/windows-elevated-mcp');
+const folder = path.resolve(args[0] ?? '.superpowers/sdd/mcp-native-lifecycle/windows-elevated-mcp');
 await mkdir(folder, { recursive: true });
 const executable = path.join(folder, 'requireAdministrator.exe');
 const compiled = await promisify(execFile)(

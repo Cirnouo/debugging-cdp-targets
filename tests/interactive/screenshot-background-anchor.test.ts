@@ -9,13 +9,18 @@ import { promisify } from 'node:util';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import { createOwnedNativeFixtures } from '../fixtures/owned-native-fixtures.ts';
+import { GUI_SKIP_REASON, guiAuthorization, guiMutationArguments } from '../gui-authorization.ts';
 import { createScreenshotBackgroundAnchor } from '../smoke/screenshot-background-anchor.ts';
 import { closeEvery } from '../smoke/screenshot-fixture.ts';
 import { sampleWindow, type WindowIdentity } from '../smoke/window-evidence.ts';
 
-assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+const guiAllowed = guiAuthorization().allowed;
+if (guiAllowed) {
+    assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+}
 
 test('actual owned opaque anchor covers native target bounds and hands off foreground with normal exit cleanup', {
+    skip: guiAllowed ? false : GUI_SKIP_REASON,
     timeout: 90_000,
 }, async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-owned-anchor-'));
@@ -85,6 +90,7 @@ test('actual owned opaque anchor covers native target bounds and hands off foreg
                 identity.startedAtUtc,
                 '-State',
                 state,
+                ...guiMutationArguments(state),
                 ...(handle === undefined ? [] : ['-WindowHandle', String(handle)]),
             ],
             { windowsHide: true, shell: false },

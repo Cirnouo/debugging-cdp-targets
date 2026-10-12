@@ -7,8 +7,12 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { isRecord } from '../../src/shared/errors.ts';
+import { GUI_SKIP_REASON, guiAuthorization } from '../gui-authorization.ts';
 
-assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+const guiAllowed = guiAuthorization().allowed;
+if (guiAllowed) {
+    assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+}
 
 for (const mode of [
     'event',
@@ -22,7 +26,10 @@ for (const mode of [
     'owned',
     'multiple',
 ]) {
-    test(`normal Close selects the first ordinary owned GUI for ${mode}`, { timeout: 20_000 }, async () => {
+    test(`normal Close selects the first ordinary owned GUI for ${mode}`, {
+        skip: guiAllowed ? false : GUI_SKIP_REASON,
+        timeout: 20_000,
+    }, async () => {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-normal-close-'));
         try {
             const { stdout } = await promisify(execFile)(
@@ -34,6 +41,7 @@ for (const mode of [
                     'Bypass',
                     '-File',
                     fileURLToPath(new URL('../fixtures/normal-close-window.ps1', import.meta.url)),
+                    '-AllowGui',
                     '-Directory',
                     directory,
                     '-Mode',

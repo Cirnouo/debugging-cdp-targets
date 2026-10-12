@@ -9,6 +9,7 @@ import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { assertSummary, waitForSmokeHookEvents } from '../fixtures/hook-gateway-events.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 import {
     createChromeSmokeLaunch,
     inspectChromeSmokeDirectory,
@@ -32,9 +33,10 @@ import {
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { readMcpTools } from './mcp-client.ts';
 
-const outputDirectory = fixtureOutputDirectory();
+const args = requireGuiAuthorization();
+const outputDirectory = fixtureOutputDirectory(args);
 const artifacts = createFixtureArtifacts(outputDirectory, 'entry-recovery', {
-    collectionId: fixtureOutputCollectionId(),
+    collectionId: fixtureOutputCollectionId(args),
 });
 const failures = createSmokeFailures(artifacts);
 const currentCollection = artifacts.snapshot();

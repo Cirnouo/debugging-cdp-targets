@@ -37,7 +37,7 @@ test('default test and coverage commands select only root regressions with seque
 });
 
 test('explicit Windows interactive command selects only interactive tests with sequential files', () => {
-    assert.equal(scripts['test:windows:interactive'], 'node --test --test-concurrency=1 tests/interactive/*.test.ts');
+    assert.equal(scripts['test:windows:interactive'], 'node tooling/test-windows-interactive.ts');
 });
 
 test('package scripts expose every writing and non-writing quality gate', () => {

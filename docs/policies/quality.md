@@ -53,13 +53,37 @@ sequentially with `--test-concurrency=1`. This default local lane does not launc
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.
 
-Run `pnpm test:windows:interactive` explicitly from an interactive Windows
-desktop for `tests/interactive/*.test.ts`. It also uses `--test-concurrency=1`
-because the eight native GUI cases share the desktop foreground window. The
-command fails on non-Windows; only the existing 8.3-alias prerequisites permit
-conditional case skips. Preserve native assertions, deadlines and normal Close
-with actual-exit evidence. See the [interactive test inventory](../../tests/interactive/README.md).
-Explicit integration smoke commands remain separate.
+GUI-opening tests must skip successfully in default local hooks, scripts and
+direct Node invocations. Authorization comes only from the exact command-line
+parameter `--allow-gui` (`-AllowGui` for direct PowerShell GUI entries).
+CI/environment variables, display availability and the current platform never
+authorize GUI execution. CI passes the parameter explicitly and must run the
+existing GUI acceptance lanes. Developing, modifying and verifying GUI tests
+locally is permitted with explicit opt-in; routine local verification stays GUI-free.
+
+Run `pnpm test:windows:interactive --allow-gui` from an interactive Windows
+desktop for the eighteen cases in `tests/interactive/*.test.ts`. Its native
+TypeScript runner uses `node:test.run` with file concurrency 1 and forwards
+argv to each subprocess. Without authorization, the runner returns a visible
+successful skip before selecting files; each file also skips its individual
+cases without authorization, including direct `node --test` invocations.
+After opt-in, non-Windows fails and only the existing 8.3-alias prerequisites
+permit conditional case skips. Preserve native assertions, deadlines and normal
+Close with actual-exit evidence. See the
+[interactive test inventory](../../tests/interactive/README.md).
+
+Real GUI smoke entrypoints also require `--allow-gui` before acquiring app or
+fixture resources, removing only that flag and preserving their remaining
+arguments. Compile-only PowerShell helpers, passive read-only observations and
+pure official-catalog listing require no GUI permission. The direct
+`windows-window-evidence.ps1` entry requires `-AllowGui` for Minimize, Restore,
+Foreground and Background before identity validation or native acquisition;
+its None mode remains passive and ungated. Authorized TypeScript callers forward
+that flag only on mutation paths, deriving it from their explicit CLI permission.
+The application probes
+for Tauri/Electron remain opt-in development evidence; this rule adds no CI
+application acquisition or toolchain. Existing Windows CI supplies real owned
+native regression evidence, while Linux/macOS CI supplies real Chrome evidence.
 
 Run focused Node tests, then pnpm verify:push: formatting, lint, strict typecheck, syntax,
 coverage, repository audit, deterministic build, distribution, and Git rules.
@@ -228,14 +252,14 @@ reasons follow the [submission policy](commits-and-scope.md). Format failure
 blocks merge; editing the PR body reruns Commit messages through the existing
 `edited` trigger. Local/push/scheduled history audits do not apply this template.
 Quality checks policy and default-lane coverage. The required Windows tests job
-waits for Quality, then runs `pnpm test` and `pnpm test:windows:interactive` as
+waits for Quality, then runs `pnpm test` and `pnpm test:windows:interactive --allow-gui` as
 separate mandatory steps after `pnpm typecheck`, without job/step conditions or
 `continue-on-error`. It also parses the helper with PS 5.1/7 and tests arbitrary
 cwd. Portable tests exercises fake CDP on Linux/macOS. Local default-lane success
 does not substitute for the remote interactive result. No account data or
 profiles are uploaded.
 
-Separate real Chrome jobs run official tools and connection recovery on
+Separate real Chrome jobs explicitly pass `--allow-gui` to official tools and connection recovery on
 ubuntu-24.04 and macos-15 using explicit actual Chrome paths, temporary profiles
 and synthetic local pages. Linux uses Xvfb; macOS uses ordinary Chrome. Missing
 browser or inspection prerequisites fail. The scripts preserve identity checks,

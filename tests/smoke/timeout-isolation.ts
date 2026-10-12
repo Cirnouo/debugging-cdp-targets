@@ -5,9 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 import { lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
 
+requireGuiAuthorization();
 if (process.platform !== 'win32') throw new Error('This opt-in native Chrome smoke is Windows-only.');
 const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-timeout-isolation-'));
 const client = createClient(

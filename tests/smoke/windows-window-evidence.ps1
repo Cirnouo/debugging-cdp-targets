@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)] [int] $ApplicationPid,
+    [switch] $AllowGui,
+    [int] $ApplicationPid,
     [ValidateSet('None', 'Minimize', 'Restore', 'Foreground', 'Background')] [string] $State = 'None',
     [string] $ExecutablePath = '',
     [string] $StartedAtUtc = '',
@@ -9,6 +10,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+if ($State -ne 'None' -and -not $AllowGui) {
+    [Console]::Out.WriteLine('SKIP: Window mutation requires explicit -AllowGui authorization.')
+    exit 0
+}
+if (-not $PSBoundParameters.ContainsKey('ApplicationPid') -or $ApplicationPid -le 0) {
+    throw 'ApplicationPid is required and must be positive.'
+}
 if ($State -ne 'None' -and (!$ExecutablePath -or !$StartedAtUtc)) {
     throw 'Window mutation requires the launched executable and creation time.'
 }

@@ -1,8 +1,13 @@
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)] [string] $Directory, [Parameter(Mandatory = $true)] [string] $Mode)
+param([switch] $AllowGui, [string] $Directory, [string] $Mode)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+if (-not $AllowGui) {
+    [Console]::Out.WriteLine('SKIP: GUI execution requires explicit -AllowGui authorization.')
+    exit 0
+}
+if (-not $Directory -or -not $Mode) { throw 'Authorized GUI fixture requires Directory and Mode.' }
 $executable = Join-Path $Directory 'close-window.exe'
 Add-Type -Path (Join-Path $PSScriptRoot 'normal-close-window.cs') -OutputAssembly $executable -OutputType WindowsApplication
 Add-Type -Path (Join-Path $PSScriptRoot '../../src/adapters/windows-native-process.cs') -ReferencedAssemblies 'System.dll', 'System.Core.dll', 'System.Xml.dll'

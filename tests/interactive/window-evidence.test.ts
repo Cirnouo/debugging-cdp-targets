@@ -10,14 +10,19 @@ import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { createOwnedNativeFixtures } from '../fixtures/owned-native-fixtures.ts';
+import { GUI_SKIP_REASON, guiAuthorization, guiMutationArguments } from '../gui-authorization.ts';
 import { createScreenshotBackgroundAnchor } from '../smoke/screenshot-background-anchor.ts';
 import { closeEvery } from '../smoke/screenshot-fixture.ts';
 import type { WindowIdentity } from '../smoke/window-evidence.ts';
 import { assertWindowState, readWindowSample, sampleWindow } from '../smoke/window-evidence.ts';
 
-assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+const guiAllowed = guiAuthorization().allowed;
+if (guiAllowed) {
+    assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+}
 
 test('controlled native background records NOACTIVATE transitions and preserves Unicode stdout', {
+    skip: guiAllowed ? false : GUI_SKIP_REASON,
     timeout: 90_000,
 }, async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-window-condition-'));
@@ -85,6 +90,7 @@ test('controlled native background records NOACTIVATE transitions and preserves 
                 changed.startedAtUtc ?? identity.startedAtUtc,
                 '-State',
                 state,
+                ...guiMutationArguments(state),
                 ...(handle === undefined ? [] : ['-WindowHandle', String(handle)]),
             ],
             { windowsHide: true, shell: false, encoding: 'buffer' },
@@ -214,6 +220,7 @@ test('controlled native background records NOACTIVATE transitions and preserves 
 });
 
 test('passive selected-tab observer preserves Unicode window title in actual PowerShell JSON stdout', {
+    skip: guiAllowed ? false : GUI_SKIP_REASON,
     timeout: 60_000,
 }, async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-window-unicode-'));
@@ -302,6 +309,7 @@ test('passive selected-tab observer preserves Unicode window title in actual Pow
 
 for (const executableIdentity of ['long', 'short'] as const) {
     test(`window evidence proves minimize and restore using ${executableIdentity} owned executable identity`, {
+        skip: guiAllowed ? false : GUI_SKIP_REASON,
         timeout: 90_000,
     }, async () => {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-window-evidence-'));

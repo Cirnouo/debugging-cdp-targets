@@ -63,6 +63,10 @@ timer setup failures produce bounded type/native-code evidence and normal exit
 before readiness rather than an unscheduled cleanup wait.
 `normal-close-window.ps1` compiles and owns that fixture, calls the actual native
 RequestClose and handle wait, and always observes process exit before returning.
+Direct invocation requires `-AllowGui`; without it the script returns a visible
+successful skip before compiling or creating resources, regardless of CI/env.
+The authorized interactive test forwards that parameter. Compile-only helpers
+and the native user32 I/O seam fixture do not open GUI and need no authorization.
 `normal-close-boundary.cs` models only user32 operations for deterministic
 enumeration/property failures and stale HWND/PID/visibility, including loss while
 reading every ordinary exclusion. Its message sink

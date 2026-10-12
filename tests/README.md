@@ -131,6 +131,18 @@
   copied outside the repository and its gateway entry bytes are checked before
   launch, keeping delivered code outside maintained-source coverage. No browser
   is launched.
+- `gui-authorization.ts` owns the shared command-line-only GUI authorization parser
+  and early successful skip for launch-capable smoke entrypoints. It also derives
+  `-AllowGui` only for explicitly authorized PowerShell window mutation calls.
+- `gui-authorization.test.ts` uses real private Node subprocesses and file markers
+  to verify default denial, CI/environment refusal, exact flag removal, runner argv
+  forwarding and failed-test exit propagation without opening GUI. It also checks
+  all nine real GUI smokes, eighteen direct interactive skips and the direct
+  PowerShell fixture guard. Direct window mutation checks deny all four states
+  before identity/native acquisition while None still performs passive observation.
+  Sampler subprocess and application adapter boundary tests retain mutation-only
+  flag forwarding. Entrypoint regression subprocesses block external
+  child acquisition so a broken guard cannot open a real fixture during the test.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
   runnable root or interactive lane and retains the four-file, eighteen-case
   interactive inventory without launching fixtures.
@@ -256,10 +268,15 @@
 
 Run `pnpm test` or a focused Node test for default regressions. The default
 command and `pnpm test:coverage` select only `tests/*.test.ts`; they do not launch
-the interactive WinForms fixtures. Run `pnpm test:windows:interactive` explicitly
-from an interactive Windows desktop to select `tests/interactive/*.test.ts`.
-The Windows CI job requires both lanes after typecheck. Real-browser integration
-remains separate and must not touch existing user targets.
+the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
+an explicit successful skip by default. Run
+`pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
+to select all eighteen interactive cases. Each file protects direct Node test
+execution with individual authorization skips. GUI authorization comes only from
+`--allow-gui`, never CI/environment or display detection. Local development and
+verification of changed GUI tests may opt in explicitly; default hooks and scripts
+remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
+integration requires the same flag and must not touch existing user targets.
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Its normal frozen
@@ -275,7 +292,8 @@ The separate fixed-fixture follow-up is recorded in
 [Tauri screenshot validation](../docs/tauri-screenshot-validation.md), including
 its two failed qualifications and separately authorized abnormal helper dispositions.
 
-All three package test commands use `--test-concurrency=1` to run files sequentially.
+Both default package test commands use `--test-concurrency=1`; the interactive
+runner uses `node:test.run` with concurrency 1 to run files sequentially.
 The interactive `window-evidence`, `screenshot-background-anchor` and `windows-native`
 fixtures share the inherited Windows desktop and its single foreground window.
 Concurrent files can foreground one owned fixture while invalidating another
