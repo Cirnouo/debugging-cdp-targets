@@ -207,6 +207,13 @@
 - `official-child-lifecycle.test.ts` checks immediate logical transport close,
   actual child exit, EOF-resistant Server disposal, abort during initialization
   and tools/list, retained observation and retry after cleanup failure.
+- `native-close-ownership.test.ts` composes the actual Windows native launcher,
+  platform adapter, target host and gateway runtime without GUI. Accepted Close
+  with the listener absent retains the live root, observer, route identity and
+  directory lease; actual matching exit revokes routing immediately, while
+  upstream disposal still gates deletion and the single completion/exit Hook.
+  Aborted protocol waits and cancelled-operation retries preserve native request
+  ownership. Close-helper EOF and mismatched PID/creation time cannot prove exit.
 - `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
   pending health/request cancellation, busy Close, immutable compact Hook facts,
   replacement rollback, deleted routes and peer shutdown isolation.
