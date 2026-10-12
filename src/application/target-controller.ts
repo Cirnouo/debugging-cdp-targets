@@ -174,6 +174,10 @@ export function createTargetController({
         }
         selected.owner.target = target;
         const child = target.child;
+        if (child?.waitForResourcesClosed) {
+            const waitForResourcesClosed = child.waitForResourcesClosed.bind(child);
+            selected.owner.register('target-resources', { close: waitForResourcesClosed });
+        }
         if (child) {
             const exited = () => processExited(selected);
             child.once('exit', exited);
@@ -262,7 +266,8 @@ export function createTargetController({
         } finally {
             if (selected.owner.exited) {
                 selected.unsubscribe?.();
-                selected.owner.target?.child?.disposeMonitor?.();
+                const child = selected.owner.target?.child;
+                if (!child?.waitForResourcesClosed) child?.disposeMonitor?.();
             }
             if (current === selected) {
                 current = undefined;

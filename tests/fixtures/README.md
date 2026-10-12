@@ -52,7 +52,69 @@ filters by expected identity, discards unrelated events, or reads another
 response after delivery. The smoke's identity/count/cleanup and subsequent
 empty-Hook assertions still validate that batch.
 
+`native-close-runtime.ts` composes the real gateway runtime, lifecycle/controller,
+Windows launcher, platform adapter, target host and data-directory registry.
+Only helper spawn/stdio, native snapshot/port/endpoint reads and MCP transport
+I/O are simulated. Accepted Close removes the fixture listener while retaining
+the actual native application observer; matching handle receipts or launch
+observer exit evidence drive real retirement. A registered upstream disposal
+gate holds the temporary directory lease after exit. Cleanup releases the gate
+and supplies separate matching launch-observer root/resource exit evidence even
+after assertions fail. Tests may defer native resource completion independently
+from root exit to verify operation and directory release barriers.
+It never launches GUI or signals a real process.
+
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
+`native-resource-child.ts` coordinates an owned Node root, a child that outlives
+it, and a grandchild created after root exit through temporary file barriers.
+Descendants use detached, hidden, shell-false launches with ignored stdio, and
+finish through their own ordinary exit paths. Root release waits until independent
+native root/child handles are retained. A thirty-second ordinary self-exit fallback
+prevents permanent fixture orphans after coordination failure; cleanup never uses
+elapsed time or a final marker as exit evidence. It opens no GUI.
+`native-resource-cleanup.ts` retains independent native root/child witnesses before
+root release and reuses a retained late-descendant witness. Failure cleanup sends
+ordinary file signals, waits for all three actual handle exit receipts, then
+disposes observation and removes only a checked owned temporary directory.
+Monitor abandonment and receiver exit cannot discard these independent witnesses.
+`native-resource-witness.ps1` retains an actual owned child process handle before
+fixture release and supplies its identity and ordinary native exit receipt.
+`native-resource-boundary.ps1` replaces only job-accounting and completion-port
+P/Invoke boundaries in an in-memory copy of the maintained C# helper. It exercises
+lost/stale notifications, timeout/error distinctions and cancellation, including
+non-cancellable acquisition settlement. No real application is launched.
+`native-resource-identity.ps1` uses its own process identity and duplicated handles
+to exercise adoption failures, foreign-job rejection, stale monitor identity and
+receiver-local disposal. Kernel object comparison avoids confusing a reused
+numeric handle slot with the original process object.
+`native-resource-handoff.ps1` connects two hidden, same-integrity disposable
+PowerShell processes through the existing authenticated pipe primitives. Its
+creator pulls only job-assignment rights, creates the hidden Node fixture, and
+hands the original process observation handle back to the monitor. Variants cover
+receiver exit before adoption and a lost created packet with creator-then-job
+settlement. These controls do not request UAC or prove actual elevated acceptance.
+`normal-close-window.cs` supplies raw owned Win32 windows, including an ordinary
+GUI and a visible, unowned, zero-area layered tool event target deliberately
+ordered first. It records each WM_CLOSE destination and exits its message loop
+normally through GUI Close or a five-second safety timer. Variants retain
+minimized, transparent/NOACTIVATE, frameless and multiple GUI compatibility while
+excluding zero-area, tool, disabled and owned windows. Window ordering and safety
+timer setup failures produce bounded type/native-code evidence and normal exit
+before readiness rather than an unscheduled cleanup wait.
+`normal-close-window.ps1` compiles and owns that fixture, calls the actual native
+RequestClose and handle wait, and always observes process exit before returning.
+Direct invocation requires `-AllowGui`; without it the script returns a visible
+successful skip before compiling or creating resources, regardless of CI/env.
+The authorized interactive test forwards that parameter. Compile-only helpers
+and the native user32 I/O seam fixture do not open GUI and need no authorization.
+`normal-close-boundary.cs` models only user32 operations for deterministic
+enumeration/property failures and stale HWND/PID/visibility, including loss while
+reading every ordinary exclusion. Its message sink
+rejects unexpected message arguments and records delivery; process identity,
+selection, revalidation and receipts still execute the maintained C# methods.
+`normal-close-boundary.ps1` replaces exactly the user32 extern declarations in
+a temporary in-memory compilation, refusing missing/ambiguous declarations.
+It requires no additional native compiler and adds no production test APIs.
 `owned-native-fixtures.ts` retains private native identities before readiness
 observation. Cleanup normally Closes every retained fixture, including failed
 readiness acquisitions, and removes ownership only after actual exit evidence.

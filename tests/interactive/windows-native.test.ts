@@ -11,10 +11,15 @@ import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { GUI_SKIP_REASON, guiAuthorization } from '../gui-authorization.ts';
 
-assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+const guiAllowed = guiAuthorization().allowed;
+if (guiAllowed) {
+    assert.equal(process.platform, 'win32', 'Interactive Windows tests require Windows and an interactive desktop.');
+}
 
 test('Windows GUI launch preserves visibility and waits past ten seconds for normal close; native manifest inspection distinguishes elevation', {
+    skip: guiAllowed ? false : GUI_SKIP_REASON,
     timeout: 30_000,
 }, async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-test-'));
@@ -100,6 +105,7 @@ test('Windows GUI launch preserves visibility and waits past ten seconds for nor
 });
 
 test('native GUI discovery is verified against its real process, listener and endpoint', {
+    skip: guiAllowed ? false : GUI_SKIP_REASON,
     timeout: 45_000,
 }, async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-test-'));
@@ -146,6 +152,7 @@ test('native GUI discovery is verified against its real process, listener and en
 });
 
 test('Windows native close accepts short executable paths while rejecting changed path and creation time', {
+    skip: guiAllowed ? false : GUI_SKIP_REASON,
     timeout: 45_000,
 }, async (context) => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-test-'));

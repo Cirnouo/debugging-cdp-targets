@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 import {
     createChromeSmokeLaunch,
     inspectChromeSmokeDirectory,
@@ -29,9 +30,10 @@ import {
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { readMcpTools } from './mcp-client.ts';
 
-const outputDirectory = fixtureOutputDirectory();
+const args = requireGuiAuthorization();
+const outputDirectory = fixtureOutputDirectory(args);
 const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
-    collectionId: fixtureOutputCollectionId(),
+    collectionId: fixtureOutputCollectionId(args),
 });
 const failures = createSmokeFailures(artifacts);
 const currentCollection = artifacts.snapshot();

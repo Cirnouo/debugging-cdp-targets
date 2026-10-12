@@ -12,6 +12,11 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $phase = 'inspecting-permission'
 $nativeProcess = $null
+$nativeResources = $null
+$request = $null
+$launchAction = $false
+$createdIdentityForwarded = $false
+$creatorSettled = $true
 
 function Write-Event {
     param([object] $Value)
@@ -22,7 +27,7 @@ function Invoke-Launch {
     param([object] $Launch)
     $environment = @{}
     foreach ($variable in $Launch.env.PSObject.Properties) { $environment[$variable.Name] = [string] $variable.Value }
-    return [DctNative]::Launch([string] $Launch.executablePath, [string[]] $Launch.arguments, [string] $Launch.cwd, $environment)
+    return [DctNative]::Launch([string] $Launch.executablePath, [string[]] $Launch.arguments, [string] $Launch.cwd, $environment, $script:nativeResources)
 }
 
 function Open-Close {
@@ -39,6 +44,7 @@ function Get-NativeError {
 
 function Invoke-Elevated {
     param([object] $Request)
+    $launchOperation = $Request.action -eq 'launch'
     Write-Event @{ event = 'phase'; phase = 'awaiting-permission' }
     $name = 'dct-native-' + [Guid]::NewGuid().ToString('N')
     $pipe = [DctNative]::CreatePipe($name)
@@ -54,6 +60,7 @@ function Invoke-Elevated {
         # ShellExecute's runas verb decides whether Windows policy requires a UAC prompt.
         # Only this fixed helper is elevated; its authenticated one-shot pipe carries launch data.
         $child = [DctNative]::ElevateHelper($powershell, $arguments)
+        if ($launchOperation) { $script:creatorSettled = $false }
         $script:phase = 'permission-handshake'
         if (-not $connected.Wait(30000)) { throw 'The native permission helper did not connect.' }
         [DctNative]::VerifyPeer($pipe, $child.ProcessId, $child.CreatedTicks, $true)
@@ -63,6 +70,9 @@ function Invoke-Elevated {
         $writer = [IO.StreamWriter]::new($pipe, $encoding, 4096, $true)
         $writer.AutoFlush = $true
         if ([DctNative]::Cancelled) { $Request = @{ action = 'cancel' } }
+        if ($Request.action -eq 'launch') {
+            $Request | Add-Member -NotePropertyName resourceJob -NotePropertyValue $script:nativeResources.Job.ToInt64()
+        }
         $writer.WriteLine(($Request | ConvertTo-Json -Depth 10 -Compress))
         $reply = $reader.ReadLine()
         if ([string]::IsNullOrEmpty($reply)) { throw 'The native permission helper exited without a result.' }
@@ -77,9 +87,12 @@ function Invoke-Elevated {
         if ($value.event -eq 'created') {
             # Identity arrives before handle transfer. Later failures retain the real target for normal cleanup.
             Write-Event @{ event = 'started'; processId = $value.processId; executablePath = $value.executablePath; startedAtUtc = $value.startedAtUtc; elevated = $true }
+            $script:createdIdentityForwarded = $true
             $transfer = $reader.ReadLine() | ConvertFrom-Json
             if ($transfer.event -ne 'handle') { throw 'Native observation handle transfer failed after application creation.' }
             $value | Add-Member -NotePropertyName handle -NotePropertyValue $transfer.handle
+            $script:nativeProcess = [DctNative]::Adopt([long] $transfer.handle, [int] $value.processId, [string] $Request.launch.executablePath, [string] $value.startedAtUtc, $true, $script:nativeResources)
+            [DctNative]::VerifyResources($script:nativeProcess)
             $writer.WriteLine('observed')
         }
         return $value
@@ -87,8 +100,15 @@ function Invoke-Elevated {
     finally {
         if ($null -ne $writer) { $writer.Dispose() }
         if ($null -ne $reader) { $reader.Dispose() }
-        if ($null -ne $child) { $child.Dispose() }
         $pipe.Dispose()
+        if ($null -ne $child) {
+            try {
+                if ($launchOperation -and -not $script:createdIdentityForwarded) {
+                    [DctNative]::WaitForAcquisitionExit($child)
+                    $script:creatorSettled = $true
+                }
+            } finally { $child.Dispose() }
+        }
         $monitor.Dispose()
     }
 }
@@ -111,9 +131,12 @@ try {
                 $request = $reader.ReadLine() | ConvertFrom-Json
                 if ($request.action -eq 'cancel') { $result = @{ event = 'cancelled' } }
                 elseif ($request.action -eq 'launch') {
+                    $nativeResources = [DctNative]::PullResourceJob([long] $request.resourceJob, $MonitorPid, $MonitorTicks)
                     $nativeProcess = Invoke-Launch $request.launch
                     $writer.WriteLine((@{ event = 'created'; processId = $nativeProcess.ProcessId; executablePath = $nativeProcess.ExecutablePath; startedAtUtc = $nativeProcess.StartedAtUtc; elevated = $true } | ConvertTo-Json -Compress))
                     $handle = [DctNative]::DuplicateTo($nativeProcess, $MonitorPid)
+                    # The remote duplicate belongs only to the monitor from creation.
+                    # ACK confirms observation; it never grants remote close ownership.
                     $writer.WriteLine((@{ event = 'handle'; handle = $handle } | ConvertTo-Json -Compress))
                     $ack = $reader.ReadLineAsync()
                     if (-not $ack.Wait(30000) -or $ack.Result -ne 'observed') { throw 'Native monitor did not acknowledge application identity.' }
@@ -147,6 +170,7 @@ try {
     }
 
     $request = [Console]::In.ReadLine() | ConvertFrom-Json
+    $launchAction = $request.action -eq 'launch'
     [DctNative]::BeginCancellation()
     if ([DctNative]::Cancelled) { Write-Event @{ event = 'cancelled' }; exit 0 }
     if ($request.action -eq 'launch') {
@@ -154,6 +178,9 @@ try {
         $compatibility = $request.launch.env.PSObject.Properties['__COMPAT_LAYER']
         $layer = if ($null -eq $compatibility) { '' } else { [string] $compatibility.Value }
         $needsElevation = [DctNative]::NeedsElevation([string] $request.launch.executablePath, $layer)
+        # The monitor owns its port from creation through resource completion.
+        # Only an assignment-only job handle is pulled by the authenticated creator.
+        $nativeResources = [DctNative]::CreateResources()
         if (-not $needsElevation) {
             $phase = 'launching'
             Write-Event @{ event = 'phase'; phase = $phase }
@@ -168,14 +195,20 @@ try {
             $phase = 'awaiting-permission'
             $reply = Invoke-Elevated $request
             if ($reply.event -ne 'created') { Write-Event $reply; exit 0 }
-            $nativeProcess = [DctNative]::Adopt([long] $reply.handle, [int] $reply.processId, $true)
         }
         else {
             Write-Event @{ event = 'started'; processId = $nativeProcess.ProcessId; executablePath = $nativeProcess.ExecutablePath; startedAtUtc = $nativeProcess.StartedAtUtc; elevated = $nativeProcess.Elevated }
+            $createdIdentityForwarded = $true
         }
+        [DctNative]::VerifyResources($nativeProcess)
         $phase = 'wait-exit'
         $code = [DctNative]::WaitForExit($nativeProcess)
-        if ($null -ne $code) { Write-Event @{ event = 'exited'; processId = $nativeProcess.ProcessId; exitCode = $code } }
+        if ($null -ne $code) {
+            Write-Event @{ event = 'exited'; processId = $nativeProcess.ProcessId; exitCode = $code }
+            $phase = 'wait-resources'
+            if (-not [DctNative]::WaitForResourcesClosed($nativeProcess)) { throw 'Native resource observation was cancelled.' }
+            Write-Event @{ event = 'resources-closed'; processId = $nativeProcess.ProcessId; startedAtUtc = $nativeProcess.StartedAtUtc; activeProcesses = 0 }
+        }
     }
     elseif ($request.action -eq 'close') {
         $phase = 'normal-close'
@@ -212,10 +245,22 @@ try {
 }
 catch {
     $code = Get-NativeError $_.Exception
-    $category = if ($code -eq 1223) { 'authorization-cancelled' } elseif ($code -eq 5) { 'access-denied' } elseif ($phase -eq 'wait-exit') { 'native-monitor-failed' } else { 'native-operation-failed' }
+    $category = if ($code -eq 1223) { 'authorization-cancelled' } elseif ($code -eq 5) { 'access-denied' } elseif ($phase -eq 'wait-exit' -or $phase -eq 'wait-resources') { 'native-monitor-failed' } else { 'native-operation-failed' }
     Write-Event @{ event = 'error'; phase = $phase; nativeError = $code; category = $category; exceptionType = $_.Exception.GetType().Name }
     exit 1
 }
 finally {
-    if ($null -ne $nativeProcess) { $nativeProcess.Dispose() }
+    try {
+        if ($launchAction -and -not $createdIdentityForwarded -and $creatorSettled) {
+            # Error/EOF without this ordered proof is an unknown acquisition.
+            # Cancellation cannot prove that a creator or its apps have exited.
+            if ($null -ne $nativeResources) { $null = [DctNative]::SettleResourceAcquisition($nativeResources) }
+            Write-Event @{ event = 'acquisition-settled'; applicationMayExist = $false; creationPending = $false }
+        }
+    } catch {
+        # Never emit no-app evidence when native resource accounting is unavailable.
+    } finally {
+        if ($null -ne $nativeProcess) { $nativeProcess.Dispose() }
+        if ($null -ne $nativeResources) { $nativeResources.Dispose() }
+    }
 }

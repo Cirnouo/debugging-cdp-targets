@@ -23,6 +23,18 @@ const interactiveCases = {
         'native GUI discovery is verified against its real process, listener and endpoint',
         'Windows native close accepts short executable paths while rejecting changed path and creation time',
     ],
+    'interactive/windows-normal-close.test.ts': [
+        'normal Close selects the first ordinary owned GUI for event',
+        'normal Close selects the first ordinary owned GUI for normal',
+        'normal Close selects the first ordinary owned GUI for minimized',
+        'normal Close selects the first ordinary owned GUI for transparent',
+        'normal Close selects the first ordinary owned GUI for frameless',
+        'normal Close selects the first ordinary owned GUI for zero-area',
+        'normal Close selects the first ordinary owned GUI for tool',
+        'normal Close selects the first ordinary owned GUI for disabled',
+        'normal Close selects the first ordinary owned GUI for owned',
+        'normal Close selects the first ordinary owned GUI for multiple',
+    ],
 };
 
 async function testFiles(): Promise<string[]> {
@@ -93,7 +105,7 @@ test('every maintained test file belongs to a runnable root or interactive lane'
     );
 });
 
-test('interactive lane retains exactly the eight migrated GUI cases in three files', async () => {
+test('interactive lane retains every declared owned GUI case', async () => {
     const files = await testFiles();
     for (const [file, expected] of Object.entries(interactiveCases)) {
         assert.ok(files.includes(`tests/${file}`), `${file} must retain its migrated cases.`);

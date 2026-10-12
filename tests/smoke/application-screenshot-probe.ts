@@ -3,12 +3,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 import { createApplicationScreenshotAdapter } from './application-screenshot-adapter.ts';
 import { parseApplicationProbeConfig, runApplicationScreenshotProbe } from './application-screenshot-core.ts';
 import { applicationScreenshotGatewayEnvironment } from './application-screenshot-fixture.ts';
 
+const args = requireGuiAuthorization();
 assert.equal(process.platform, 'win32', 'This explicit application probe requires Windows.');
-const [configPath, parent, arm, condition, mode] = process.argv.slice(2);
+const [configPath, parent, arm, condition, mode] = args;
 assert.ok(
     configPath && parent && path.isAbsolute(configPath) && path.isAbsolute(parent),
     'Supply absolute experiment JSON and evidence parent paths.',
@@ -22,7 +24,7 @@ assert.ok(
     mode === 'qualification' || mode === 'viewport' || mode === 'fullPage',
     'Choose qualification, viewport or fullPage.',
 );
-assert.equal(process.argv.length, 7, 'Unexpected application probe arguments.');
+assert.equal(args.length, 5, 'Unexpected application probe arguments.');
 const environment = applicationScreenshotGatewayEnvironment(process.env);
 const configBytes = await readFile(configPath);
 const config = parseApplicationProbeConfig(JSON.parse(configBytes.toString('utf8')) as unknown, environment);

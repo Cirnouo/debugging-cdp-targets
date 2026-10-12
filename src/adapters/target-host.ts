@@ -354,7 +354,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 if (platform.waitForExit) await platform.waitForExit(target, signal);
                 else await waitForTargetExit(target, signal);
                 target.releaseProfile?.();
-                target.child?.disposeMonitor?.();
+                if (!target.child?.waitForResourcesClosed) target.child?.disposeMonitor?.();
                 finish('succeeded');
             } catch (error) {
                 finish('failed', {}, error);
@@ -809,7 +809,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 }
                 if (closeConfirmed) {
                     target.releaseProfile?.();
-                    child.disposeMonitor?.();
+                    if (!child.waitForResourcesClosed) child.disposeMonitor?.();
                 }
                 if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
                 const message = `The new target did not expose a verified CDP endpoint: ${lastError === undefined ? undefined : errorMessage(lastError)}`;

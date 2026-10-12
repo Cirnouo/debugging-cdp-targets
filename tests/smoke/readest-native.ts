@@ -8,10 +8,12 @@ import { promisify } from 'node:util';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
+import { requireGuiAuthorization } from '../gui-authorization.ts';
 
-const source = process.argv[2];
+const args = requireGuiAuthorization();
+const source = args[0];
 if (!source) throw new Error('Provide an explicitly selected readest.exe test copy.');
-const folder = path.resolve(process.argv[3] ?? '.superpowers/sdd/mcp-native-lifecycle/readest-native');
+const folder = path.resolve(args[1] ?? '.superpowers/sdd/mcp-native-lifecycle/readest-native');
 const sourceHash = createHash('sha256')
     .update(await readFile(source))
     .digest('hex');

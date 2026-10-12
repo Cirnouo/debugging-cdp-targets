@@ -17,6 +17,11 @@ Version 0.1.0 is under development and has not been released.
     best effort; Electron, Tauri, or WebView2 alone does not establish compatibility.
 - Linux and macOS require `ps` and `lsof`; Linux additionally requires `getconf`
     and readable `/proc` process evidence.
+- Windows launch requires Windows 10 / Windows Server 2016 or newer for atomic
+    native job assignment through `PROC_THREAD_ATTRIBUTE_JOB_LIST`. Failure to
+    create or observe the owned job leaves launch/cleanup failed rather than
+    falling back to an unobserved application. See Microsoft's
+    [process-creation attribute contract](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 
 The Plugin controls only applications it launches and verifies. It does not
 attach to already running browsers. Both the Plugin's CDP transport and the
@@ -108,6 +113,36 @@ establish acceptance of that later revision or the explicit isolation/connection
 lease change in [ADR 0015](../adr/0015-explicit-data-directory-isolation.md). See
 [the smoke instructions](../../tests/smoke/README.md) for the test boundaries.
 Other application/OS/browser combinations remain best effort.
+
+## Windows normal Close acceptance
+
+On 2026-10-12, Windows 11 Home, Chinese edition, x64, native version
+`10.0.26300` / build `26300`, passed new independent Tauri, Chrome, Electron
+and Chrome-reuse controls on one delivered gateway with Node 24.21.0 and the
+unchanged official Server 1.10.1:
+
+| Application fixture | Actual runtime |
+| --- | --- |
+| Tauri sample 0.1.0 | Tauri 2.12.3, Wry 0.57.0, Tao 0.37.1, WebView2 154.0.4258.62 |
+| Chrome, including final gateway reuse | 155.0.8059.40 |
+| Electron sample | Electron 44.5.1, Chromium 152.0.7977.130, Node 24.21.0 |
+
+Each normal Close verified actual native root exit, zero active processes in the
+owned native job, whole-directory deletion, updated original start metadata,
+an empty registry and a live gateway for the next connection. Final gateway
+stdin EOF exited normally with code 0. The anonymous job has no kill-on-close
+flag or process limits; native root exit still revokes routes immediately while
+resource cleanup waits separately. These real controls establish the tested
+Chrome/Electron nested-job compatibility, not every application or sandbox.
+
+The Tauri fixture has explicit application/version-specific data binding.
+This evidence does not turn arbitrary Tauri, Electron or WebView2 applications
+into universally compatible targets. The job covers inherited descendants,
+including later generations, and excludes unrelated processes and arbitrary
+external brokers. These ordinary-integrity runs do not establish new real UAC
+acceptance. Earlier failed cleanup evidence and retained directories remain
+documented separately in the
+[dated Close validation](../tauri-close-validation.md#application-results-and-cleanup-timing).
 
 ## Windows Chrome window-state compatibility
 

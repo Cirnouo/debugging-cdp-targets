@@ -1,5 +1,24 @@
 # Explicit integration smoke
 
+Real GUI smoke entrypoints require the exact command-line flag `--allow-gui`.
+Without it they return a visible successful skip before app or resource acquisition;
+all other arguments retain their existing order after that flag is removed.
+Neither CI/environment variables nor platform/display detection grant permission.
+This covers `official-server.ts`, `entry-recovery.ts`, `timeout-isolation.ts`,
+`screenshot-layers.ts`, `screenshot-timeout-probe.ts`, `application-screenshot-probe.ts`,
+`readest-native.ts`, `windows-elevation.ts` and `windows-elevated-mcp.ts`. Local
+development and verification of these tests may opt in explicitly; routine local
+hooks and scripts remain GUI-free. The pure `pnpm smoke:official` catalog smoke,
+compile-only PowerShell helpers and passive observers launch no GUI and remain
+ungated. Direct `windows-window-evidence.ps1` mutation modes require `-AllowGui`;
+its default None observation remains passive and ungated.
+
+Windows CI explicitly opts in to real owned native fixture regressions, and
+Linux/macOS CI explicitly opts in to real Chrome acceptance. Tauri/Electron
+application probes remain development verification with separately selected
+fixtures; this change adds no application acquisition or toolchain to CI. These
+forms of evidence remain distinct.
+
 `codex-instructions.ts` and `claude-instructions.ts` install the production
 Plugin metadata and Skill into temporary host environments, substituting only
 the MCP command with `mcp-instructions-entry.ts`. Run them explicitly:
@@ -72,7 +91,7 @@ then explicitly restarts and normally closes them. It retains test profiles.
   A root that remains alive
   after gateway EOF cleanup is reported as retained and fails the smoke, even if a
   fallback normal Close request is accepted.
-  Run `node tests/smoke/entry-recovery.ts` against a verified committed Plugin build.
+  Run `node tests/smoke/entry-recovery.ts --allow-gui` against a verified committed Plugin build.
   Recorded timing distinguishes normal Close request acceptance, connection
   retirement observation, and Hook delivery. Connection retirement observation
   does not establish that upstream cleanup has completed or measure Agent context
@@ -307,8 +326,8 @@ reviewed protocol/singleton guard before an approved preflight.
 For example, with fictional external paths:
 
 ```powershell
-node tests/smoke/application-screenshot-probe.ts 'C:/Test/application.json' 'C:/Test/evidence' candidate foreground-normal qualification
-node tests/smoke/application-screenshot-probe.ts 'C:/Test/application.json' 'C:/Test/evidence' baseline minimized fullPage
+node tests/smoke/application-screenshot-probe.ts --allow-gui 'C:/Test/application.json' 'C:/Test/evidence' candidate foreground-normal qualification
+node tests/smoke/application-screenshot-probe.ts --allow-gui 'C:/Test/application.json' 'C:/Test/evidence' baseline minimized fullPage
 ```
 
 Each invocation retains its new fixture, PNG and raw evidence outside the repository.
@@ -339,8 +358,12 @@ separate abnormal helper dispositions are recorded in
   actual normal close. It preserves the source and all test directories.
 - `windows-window-evidence.ps1` samples window identity, visibility, classes and
   geometry for one test PID, plus native minimized state and placement. Mutation
-  requires the launched executable/creation time and selects one owned HWND;
-  asynchronous request acceptance is separate from its bounded state postcondition.
+  requires explicit `-AllowGui`, the launched executable/creation time and one owned HWND.
+  Minimize, Restore, Foreground and Background skip successfully without the flag
+  before identity validation or native acquisition, including CI-only invocations.
+  None remains read-only and takes no authorization flag from TypeScript callers;
+  mutation callers forward the flag only when their CLI includes `--allow-gui`.
+  Asynchronous request acceptance is separate from its bounded state postcondition.
   Restore uses SW_RESTORE. No titles or page content are recorded.
 - `window-evidence.ts` validates native evidence against the launch identity and
   rejects missing/ambiguous windows, denied actions and unobserved state changes.
@@ -374,7 +397,7 @@ with `pnpm check:build`, then supply an explicitly reviewed fixture and evidence
 parent outside the worktree:
 
 ```powershell
-node tests/smoke/screenshot-timeout-probe.ts 'C:/Test/probe.json' 'C:/Test/evidence'
+node tests/smoke/screenshot-timeout-probe.ts --allow-gui 'C:/Test/probe.json' 'C:/Test/evidence'
 ```
 
 The JSON fields are `label`, `url`, structured `launch`, `background`, `fullPage`,
@@ -470,7 +493,7 @@ result. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 
 ```powershell
-node tests/smoke/screenshot-layers.ts 'C:/Test/fixture.json' 'C:/Test/evidence'
+node tests/smoke/screenshot-layers.ts --allow-gui 'C:/Test/fixture.json' 'C:/Test/evidence'
 ```
 
 The JSON has `label` (lowercase name), `targetKind: "generic-cdp"`, `launch` (structured
@@ -585,9 +608,9 @@ command -v Xvfb
 command -v xvfb-run
 command -v xauth
 if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
-xvfb-run -a node tests/smoke/official-server.ts --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
 if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" entry-recovery "$collectionId"; then :; fi
-xvfb-run -a node tests/smoke/entry-recovery.ts --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+xvfb-run -a node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
 ```
 
 The command creates a fresh invocation directory and preserves earlier runs.

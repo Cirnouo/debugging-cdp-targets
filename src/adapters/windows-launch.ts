@@ -15,6 +15,13 @@ class NativeApplication extends EventEmitter {
     signalCode: string | null = null;
     monitoringFailure?: string;
     monitorDisposed = false;
+    private resourcesSettled = false;
+    private resolveResources = () => {};
+    private rejectResources: (error: Error) => void = () => {};
+    private readonly resources = new Promise<void>((resolve, reject) => {
+        this.resolveResources = resolve;
+        this.rejectResources = reject;
+    });
     private releaseMonitor: () => void;
     constructor(pid: number, startedAtUtc: string, elevated: boolean, releaseMonitor: () => void) {
         super();
@@ -22,11 +29,27 @@ class NativeApplication extends EventEmitter {
         this.startedAtUtc = startedAtUtc;
         this.elevated = elevated;
         this.releaseMonitor = releaseMonitor;
+        void this.resources.catch(() => {});
+    }
+    waitForResourcesClosed() {
+        return this.resources;
     }
     disposeMonitor() {
         if (this.monitorDisposed) return;
+        this.failResources(new Error('Native resource observation was abandoned.'));
         this.monitorDisposed = true;
         this.releaseMonitor();
+    }
+    failResources(error: Error) {
+        if (this.resourcesSettled) return;
+        this.resourcesSettled = true;
+        this.rejectResources(error);
+    }
+    recordResourcesClosed() {
+        if (this.resourcesSettled) return;
+        this.resourcesSettled = true;
+        this.resolveResources();
+        this.disposeMonitor();
     }
     onMonitorError(listener: () => void) {
         this.once('monitor-error', listener);
@@ -39,7 +62,6 @@ class NativeApplication extends EventEmitter {
         if (this.exitCode !== null) return;
         this.exitCode = code;
         this.emit('exit');
-        this.disposeMonitor();
     }
 }
 export interface NativeLaunchContext extends LaunchContext {
@@ -58,6 +80,7 @@ const phases = new Set([
     'native-operation',
     'normal-close',
     'wait-exit',
+    'wait-resources',
 ]);
 function nativeFailure(value: Record<string, unknown>) {
     const error = new DetailedError('Windows native application operation failed.');
@@ -273,10 +296,12 @@ export function createWindowsLauncher({
                 let launchFailure: Error | undefined;
                 let cancellationReason: unknown;
                 let settledWithoutApplication = false;
+                let noApplicationProved = false;
                 const failed = (error: Error, terminal = false) => {
                     launchFailure ??= error;
                     if (application?.monitorDisposed) return;
-                    if (!application && terminal) {
+                    application?.failResources(error);
+                    if (!application && terminal && (noApplicationProved || transport.child.pid === undefined)) {
                         settledWithoutApplication = true;
                         reject(cancellationReason ?? launchFailure);
                     } else if (application && application.exitCode === null && !application.monitoringFailure) {
@@ -292,11 +317,19 @@ export function createWindowsLauncher({
                     context,
                     (value) => {
                         if (settledWithoutApplication) return;
-                        if (value.event === 'cancelled' && !application) {
+                        if (
+                            value.event === 'acquisition-settled' &&
+                            !application &&
+                            value.applicationMayExist === false &&
+                            value.creationPending === false
+                        ) {
+                            noApplicationProved = true;
+                        } else if (value.event === 'cancelled' && !application) {
                             cancellationReason ??=
                                 context.signal?.reason ?? new DOMException('Windows launch cancelled.', 'AbortError');
                             transport.child.stdin.end();
                         } else if (value.event === 'started' && !application) {
+                            noApplicationProved = false;
                             if (
                                 typeof value.processId !== 'number' ||
                                 !Number.isInteger(value.processId) ||
@@ -316,7 +349,10 @@ export function createWindowsLauncher({
                                 value.elevated,
                                 transport.dispose,
                             );
-                            if (launchFailure) application.monitoringFailure = 'native-helper-exited';
+                            if (launchFailure) {
+                                application.monitoringFailure = 'native-helper-exited';
+                                application.failResources(launchFailure);
+                            }
                             applications.set(
                                 key({
                                     processId: application.pid,
@@ -348,6 +384,15 @@ export function createWindowsLauncher({
                             typeof value.exitCode === 'number'
                         ) {
                             application.recordExit(value.exitCode);
+                        } else if (
+                            value.event === 'resources-closed' &&
+                            application &&
+                            application.exitCode !== null &&
+                            value.processId === application.pid &&
+                            value.startedAtUtc === application.startedAtUtc &&
+                            value.activeProcesses === 0
+                        ) {
+                            application.recordResourcesClosed();
                         } else throw new Error('Unexpected native process evidence.');
                     },
                     failed,

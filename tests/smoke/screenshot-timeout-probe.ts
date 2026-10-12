@@ -10,6 +10,7 @@ import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
 import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { guiMutationArguments, requireGuiAuthorization } from '../gui-authorization.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient, type McpRequestInterval } from './mcp-client.ts';
 import { createScreenshotBackgroundAnchor } from './screenshot-background-anchor.ts';
@@ -21,9 +22,10 @@ import {
     runScreenshotTimeoutProbe,
 } from './screenshot-timeout-fixture.ts';
 
+const args = requireGuiAuthorization();
 assert.equal(process.platform, 'win32', 'This opt-in native screenshot probe requires Windows.');
-const configPath = process.argv[2];
-const outputParent = process.argv[3];
+const configPath = args[0];
+const outputParent = args[1];
 assert.ok(
     configPath && outputParent && path.isAbsolute(configPath) && path.isAbsolute(outputParent),
     'Supply absolute fixture JSON and evidence parent paths.',
@@ -128,6 +130,7 @@ async function sampleOwnedWindow(
             selected.startedAtUtc,
             '-State',
             state,
+            ...guiMutationArguments(state),
             ...(handle === undefined ? [] : ['-WindowHandle', String(handle)]),
         ],
         signal,
@@ -205,6 +208,7 @@ async function nativeCondition(condition: 'foreground-normal' | 'background-norm
         identity.startedAtUtc,
         '-State',
         condition === 'foreground-normal' ? 'Foreground' : 'Minimize',
+        ...guiMutationArguments(condition === 'foreground-normal' ? 'Foreground' : 'Minimize'),
         '-WindowHandle',
         String(handle),
     ]);

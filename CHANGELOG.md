@@ -81,6 +81,10 @@ Version 0.1.0 remains under development; no release has been published.
   authorization and CDP readiness waits. Independently verified generic
   application recipes can select a Chromium screenshot surface through existing
   launch arguments; changed arguments use normal Close followed by a fresh start.
+- Windows normal Close selects the first verified visible, enabled, unowned
+    application window, excluding child/tool windows while supporting minimized
+    windows. Dated Tauri, Chrome, Electron and same-gateway Chrome-reuse controls
+    verify normal lifecycle, native exit and whole-directory cleanup.
 - Timeout quarantine, pending transport cleanup and phase-only diagnostics;
   normal close without a listener and explicit retries after native failures.
 - Required explicit no-isolation or data-directory start intent, with researched
@@ -143,5 +147,10 @@ Version 0.1.0 remains under development; no release has been published.
     Hard crash or unverified exit cannot promise eventual deletion.
 - Native application handle waits/events on Windows provide actual-exit evidence
   without process polling; helper exit and observer faults cannot establish app exit.
+- Independent Windows resource completion holds the directory lease and Close
+    completion until the new application's inherited native job is verified empty,
+    while actual root exit immediately revokes routes. Atomic job assignment,
+    separate root/resource receipts and fail-closed acquisition evidence preserve
+    ownership without process limits, kill-on-close, forced shutdown or deletion retries.
 - Normal application Close is independent of unrelated CDP listeners and official
   MCP lifetime, with process identity checks and no application force kill.

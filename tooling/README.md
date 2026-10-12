@@ -81,6 +81,10 @@
   literal output as Markdown structure.
   Fences, indented code, quotes, and comments cannot supply structural headings
   or checklists; code and quoted content can supply evidence beyond starter prose.
+- `test-windows-interactive.ts` is the command-line-only GUI lane runner. Without
+  `--allow-gui` it returns a successful explicit skip before selecting files. With
+  authorization it runs all four interactive files through native `node:test.run`,
+  concurrency 1 and forwarded argv, preserving failed-test exit status.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
 - `check-text-style.ts` audits staged non-Biome text; original official release

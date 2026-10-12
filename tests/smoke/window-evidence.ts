@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { isRecord } from '../../src/shared/errors.ts';
+import { guiMutationArguments } from '../gui-authorization.ts';
 
 export interface WindowIdentity {
     processId: number;
@@ -128,6 +129,7 @@ export async function sampleWindow(expected: WindowIdentity, state: 'None' | 'Mi
             expected.startedAtUtc,
             '-State',
             state,
+            ...guiMutationArguments(state),
             ...(handle === undefined ? [] : ['-WindowHandle', String(handle)]),
         ],
         { windowsHide: true, shell: false },

@@ -4690,6 +4690,15 @@ var NativeApplication = class extends EventEmitter {
   signalCode = null;
   monitoringFailure;
   monitorDisposed = false;
+  resourcesSettled = false;
+  resolveResources = () => {
+  };
+  rejectResources = () => {
+  };
+  resources = new Promise((resolve, reject) => {
+    this.resolveResources = resolve;
+    this.rejectResources = reject;
+  });
   releaseMonitor;
   constructor(pid, startedAtUtc, elevated, releaseMonitor) {
     super();
@@ -4697,11 +4706,28 @@ var NativeApplication = class extends EventEmitter {
     this.startedAtUtc = startedAtUtc;
     this.elevated = elevated;
     this.releaseMonitor = releaseMonitor;
+    void this.resources.catch(() => {
+    });
+  }
+  waitForResourcesClosed() {
+    return this.resources;
   }
   disposeMonitor() {
     if (this.monitorDisposed) return;
+    this.failResources(new Error("Native resource observation was abandoned."));
     this.monitorDisposed = true;
     this.releaseMonitor();
+  }
+  failResources(error2) {
+    if (this.resourcesSettled) return;
+    this.resourcesSettled = true;
+    this.rejectResources(error2);
+  }
+  recordResourcesClosed() {
+    if (this.resourcesSettled) return;
+    this.resourcesSettled = true;
+    this.resolveResources();
+    this.disposeMonitor();
   }
   onMonitorError(listener) {
     this.once("monitor-error", listener);
@@ -4714,7 +4740,6 @@ var NativeApplication = class extends EventEmitter {
     if (this.exitCode !== null) return;
     this.exitCode = code;
     this.emit("exit");
-    this.disposeMonitor();
   }
 };
 var phases2 = /* @__PURE__ */ new Set([
@@ -4724,7 +4749,8 @@ var phases2 = /* @__PURE__ */ new Set([
   "permission-handshake",
   "native-operation",
   "normal-close",
-  "wait-exit"
+  "wait-exit",
+  "wait-resources"
 ]);
 function nativeFailure(value) {
   const error2 = new DetailedError("Windows native application operation failed.");
@@ -4919,10 +4945,12 @@ function createWindowsLauncher({
         let launchFailure;
         let cancellationReason;
         let settledWithoutApplication = false;
+        let noApplicationProved = false;
         const failed = (error2, terminal2 = false) => {
           launchFailure ??= error2;
           if (application?.monitorDisposed) return;
-          if (!application && terminal2) {
+          application?.failResources(error2);
+          if (!application && terminal2 && (noApplicationProved || transport.child.pid === void 0)) {
             settledWithoutApplication = true;
             reject(cancellationReason ?? launchFailure);
           } else if (application && application.exitCode === null && !application.monitoringFailure) {
@@ -4936,10 +4964,13 @@ function createWindowsLauncher({
           context,
           (value) => {
             if (settledWithoutApplication) return;
-            if (value.event === "cancelled" && !application) {
+            if (value.event === "acquisition-settled" && !application && value.applicationMayExist === false && value.creationPending === false) {
+              noApplicationProved = true;
+            } else if (value.event === "cancelled" && !application) {
               cancellationReason ??= context.signal?.reason ?? new DOMException("Windows launch cancelled.", "AbortError");
               transport.child.stdin.end();
             } else if (value.event === "started" && !application) {
+              noApplicationProved = false;
               if (typeof value.processId !== "number" || !Number.isInteger(value.processId) || value.processId <= 0 || value.processId === transport.child.pid || typeof value.startedAtUtc !== "string" || !Number.isFinite(Date.parse(value.startedAtUtc)) || typeof value.executablePath !== "string" || path.win32.resolve(value.executablePath).toLowerCase() !== path.win32.resolve(launch.executablePath).toLowerCase() || typeof value.elevated !== "boolean")
                 throw new Error("Invalid actual application identity from native launch.");
               application = new NativeApplication(
@@ -4948,7 +4979,10 @@ function createWindowsLauncher({
                 value.elevated,
                 transport.dispose
               );
-              if (launchFailure) application.monitoringFailure = "native-helper-exited";
+              if (launchFailure) {
+                application.monitoringFailure = "native-helper-exited";
+                application.failResources(launchFailure);
+              }
               applications.set(
                 key({
                   processId: application.pid,
@@ -4975,6 +5009,8 @@ function createWindowsLauncher({
               resolve(application);
             } else if (value.event === "exited" && application && value.processId === application.pid && typeof value.exitCode === "number") {
               application.recordExit(value.exitCode);
+            } else if (value.event === "resources-closed" && application && application.exitCode !== null && value.processId === application.pid && value.startedAtUtc === application.startedAtUtc && value.activeProcesses === 0) {
+              application.recordResourcesClosed();
             } else throw new Error("Unexpected native process evidence.");
           },
           failed,
@@ -42018,7 +42054,7 @@ function createTargetHost(dependencies = {}) {
         if (platform.waitForExit) await platform.waitForExit(target, signal);
         else await waitForTargetExit(target, signal);
         target.releaseProfile?.();
-        target.child?.disposeMonitor?.();
+        if (!target.child?.waitForResourcesClosed) target.child?.disposeMonitor?.();
         finish("succeeded");
       } catch (error2) {
         finish("failed", {}, error2);
@@ -42426,7 +42462,7 @@ function createTargetHost(dependencies = {}) {
         }
         if (closeConfirmed) {
           target.releaseProfile?.();
-          child.disposeMonitor?.();
+          if (!child.waitForResourcesClosed) child.disposeMonitor?.();
         }
         if (closeConfirmed && cancellationBeforeRollback) throw cancellationBeforeRollback.reason;
         const message = `The new target did not expose a verified CDP endpoint: ${lastError === void 0 ? void 0 : errorMessage(lastError)}`;
@@ -42835,7 +42871,8 @@ function createConnectionOwner(sessionId, onSettled) {
       cleanup = (async () => {
         try {
           const failures = [];
-          const names2 = [...resources.keys()].sort((a, b) => Number(a === "router") - Number(b === "router"));
+          const priority = (name) => name === "target-resources" ? 2 : Number(name === "router");
+          const names2 = [...resources.keys()].sort((a, b) => priority(a) - priority(b));
           for (const name of names2) {
             try {
               await owner.closeResource(name);
@@ -43318,6 +43355,10 @@ function createTargetController({
     }
     selected.owner.target = target;
     const child = target.child;
+    if (child?.waitForResourcesClosed) {
+      const waitForResourcesClosed = child.waitForResourcesClosed.bind(child);
+      selected.owner.register("target-resources", { close: waitForResourcesClosed });
+    }
     if (child) {
       const exited = () => processExited(selected);
       child.once("exit", exited);
@@ -43404,7 +43445,8 @@ function createTargetController({
     } finally {
       if (selected.owner.exited) {
         selected.unsubscribe?.();
-        selected.owner.target?.child?.disposeMonitor?.();
+        const child = selected.owner.target?.child;
+        if (!child?.waitForResourcesClosed) child?.disposeMonitor?.();
       }
       if (current2 === selected) {
         current2 = void 0;

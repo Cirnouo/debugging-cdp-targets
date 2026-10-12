@@ -131,8 +131,20 @@
   copied outside the repository and its gateway entry bytes are checked before
   launch, keeping delivered code outside maintained-source coverage. No browser
   is launched.
+- `gui-authorization.ts` owns the shared command-line-only GUI authorization parser
+  and early successful skip for launch-capable smoke entrypoints. It also derives
+  `-AllowGui` only for explicitly authorized PowerShell window mutation calls.
+- `gui-authorization.test.ts` uses real private Node subprocesses and file markers
+  to verify default denial, CI/environment refusal, exact flag removal, runner argv
+  forwarding and failed-test exit propagation without opening GUI. It also checks
+  all nine real GUI smokes, eighteen direct interactive skips and the direct
+  PowerShell fixture guard. Direct window mutation checks deny all four states
+  before identity/native acquisition while None still performs passive observation.
+  Sampler subprocess and application adapter boundary tests retain mutation-only
+  flag forwarding. Entrypoint regression subprocesses block external
+  child acquisition so a broken guard cannot open a real fixture during the test.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
-  runnable root or interactive lane and retains the three-file, eight-case
+  runnable root or interactive lane and retains the four-file, eighteen-case
   interactive inventory without launching fixtures.
 - `issue-policy.test.ts` validates literal GitHub form bodies against the current
   YAML, including label-only classification, required and optional answers,
@@ -195,12 +207,23 @@
 - `official-child-lifecycle.test.ts` checks immediate logical transport close,
   actual child exit, EOF-resistant Server disposal, abort during initialization
   and tools/list, retained observation and retry after cleanup failure.
+- `native-close-ownership.test.ts` composes the actual Windows native launcher,
+  platform adapter, target host and gateway runtime without GUI. Accepted Close
+  with the listener absent retains the live root, observer, route identity and
+  directory lease; actual matching exit revokes routing immediately, while
+  upstream disposal and independent descendant-resource completion still gate
+  deletion and the single completion/exit Hook.
+  Aborted protocol waits and cancelled-operation retries preserve native request
+  ownership. Close-helper EOF and mismatched PID/creation time cannot prove exit.
 - `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
   pending health/request cancellation, busy Close, immutable compact Hook facts,
   replacement rollback, deleted routes and peer shutdown isolation.
 - `connection-isolation.test.ts` checks connection leases across restart, pending
   native/directory acquisition, late cancellation, actual exit and failed cleanup;
   terminal metadata preserves paths while summaries and Hooks omit them.
+  Independent native resource users hold the directory after immediate root route
+  revocation for Close, Keep, end-task, unexpected exit, restart, late rollback and
+  gateway EOF. Resource observation failure preserves the dead route and claim.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks explicit same-port recovery, literal launch
   evidence and rejection of port races after an application is created.
@@ -236,15 +259,34 @@
   child/handle exit evidence without a target deadline or Unix process polling.
 - `windows-launch.test.ts` checks synchronous actual application acquisition,
   separate close request and exit wait, helper monitoring failures and matching
-  native handle receipts that supplement a lost original observer.
+  native handle receipts that supplement a lost original observer. Root exit and
+  resource-group completion settle independently; malformed/foreign/out-of-order
+  resource receipts cannot release ownership. No-identity termination requires
+  explicit acquisition proof plus physical helper close, with late identity taking
+  priority and never-spawned OS helper failure as the explicit exception.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
+  Hidden descendants outlive the root and spawn later descendants; native job
+  accounting gates completion and observation disposal never kills them. Native
+  boundary controls cover lost notifications, query/port errors and cancellation.
+  Same-integrity authenticated handoffs verify assignment-only job borrowing,
+  actual root identity/group validation, receiver-local disposal and lost-created
+  packet settlement after physical creator exit and original job zero. These
+  controls do not establish actual UAC or browser nested-job acceptance.
+  Assertion-failure controls cover cleanup before late-child release, after monitor
+  abandonment, and after receiver exit before late-child/witness arming. Independent
+  native handles remain owned until ordinary actual exit; coordination directories
+  are removed only after those receipts, with the original assertion preserved.
+- `windows-normal-close.test.ts` runs maintained native RequestClose with only
+  user32 I/O replaced, covering enumeration/property failures, stale HWND/PID/
+  visibility on both eligible and excluding paths, absent candidates,
+  child/foreign exclusions and first-only delivery.
 - `window-evidence.test.ts` rejects stale identities, replaced windows and
   accepted but unobserved transitions using literal native evidence fixtures.
 - `router-quarantine.test.ts` exercises unanswered HTTP/CDP cleanup and metadata privacy.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
-- `interactive/` owns eight explicit Windows GUI cases across the three migrated
+- `interactive/` owns eighteen explicit Windows GUI cases across four
   native/window/anchor test files; see its [inventory and prerequisites](interactive/README.md).
 - `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
   console tests; these do not run in the ordinary suite.
@@ -252,10 +294,15 @@
 
 Run `pnpm test` or a focused Node test for default regressions. The default
 command and `pnpm test:coverage` select only `tests/*.test.ts`; they do not launch
-the interactive WinForms fixtures. Run `pnpm test:windows:interactive` explicitly
-from an interactive Windows desktop to select `tests/interactive/*.test.ts`.
-The Windows CI job requires both lanes after typecheck. Real-browser integration
-remains separate and must not touch existing user targets.
+the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
+an explicit successful skip by default. Run
+`pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
+to select all eighteen interactive cases. Each file protects direct Node test
+execution with individual authorization skips. GUI authorization comes only from
+`--allow-gui`, never CI/environment or display detection. Local development and
+verification of changed GUI tests may opt in explicitly; default hooks and scripts
+remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
+integration requires the same flag and must not touch existing user targets.
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Its normal frozen
@@ -271,7 +318,8 @@ The separate fixed-fixture follow-up is recorded in
 [Tauri screenshot validation](../docs/tauri-screenshot-validation.md), including
 its two failed qualifications and separately authorized abnormal helper dispositions.
 
-All three package test commands use `--test-concurrency=1` to run files sequentially.
+Both default package test commands use `--test-concurrency=1`; the interactive
+runner uses `node:test.run` with concurrency 1 to run files sequentially.
 The interactive `window-evidence`, `screenshot-background-anchor` and `windows-native`
 fixtures share the inherited Windows desktop and its single foreground window.
 Concurrent files can foreground one owned fixture while invalidating another
