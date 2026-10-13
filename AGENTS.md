@@ -4,6 +4,9 @@ Use four spaces, UTF-8, LF, and no tabs. Preserve unrelated work. Before editing
 read applicable ancestor and local AGENTS.md files together, plus only the
 relevant policies. Local instructions do not replace parent instructions.
 
+Use `.yaml` for maintained YAML. Before creating or renaming YAML files, read
+the [filename policy and exact exceptions](docs/policies/quality.md#yaml-filenames).
+
 Before editing AGENTS/Skill instructions, references or their layout/loading
 rules, read the [instruction progressive-disclosure policy](docs/policies/documentation.md#instruction-progressive-disclosure).
 

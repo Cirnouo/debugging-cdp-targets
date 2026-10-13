@@ -8,6 +8,26 @@ Only each official release subtree verified against maintained release evidence
 keeps upstream formatting and directory documentation. All delivered JavaScript
 still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
 
+## YAML filenames
+
+Repository-maintained YAML files use lowercase `.yaml`, never `.yml` or other
+case variants. The sole repository-owned filename exception is
+`.github/ISSUE_TEMPLATE/config.yml`, the exact entry documented by
+[GitHub's template chooser configuration](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository#configuring-the-template-chooser).
+Keep that name to preserve ordinary Issue settings and private security reporting
+links; equivalent `config.yaml` support has not been established. This exception
+does not apply to another directory, basename match or case variant.
+
+Complete official release content retains upstream filenames only after full
+independent package verification under the
+[original release delivery contract](supply-chain.md#official-release-delivery-and-upgrades).
+An official-directory prefix alone grants no exemption. Repository-generated
+files still follow the naming rule even when their formatting is exempt.
+
+Repository auditing and staged text checks share the filename validator. Keep
+`.yml` and case-variant matching in staged checks so incorrect names are rejected,
+and retain both YAML extensions in formatting and security scan coverage.
+
 ## Toolchain compatibility
 
 Support stable Node >=24.21.0 <25, declared as `engines.node: "^24.21.0"`.

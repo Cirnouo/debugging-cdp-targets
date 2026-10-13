@@ -165,6 +165,58 @@ test('pre-commit batches every staged file below the launcher capacity while pre
     }
 });
 
+test('lint-staged routes YAML filename variants through the actual text checker', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-yaml-')));
+    const cleanEnvironment = Object.fromEntries(
+        Object.entries(process.env).filter(([name]) => !name.toUpperCase().startsWith('GIT_')),
+    );
+    const git = (arguments_: string[]) =>
+        execFileSync('git', arguments_, { cwd: root, env: cleanEnvironment, encoding: 'utf8', windowsHide: true });
+    try {
+        git(['init', '--quiet']);
+        git(['config', 'core.autocrlf', 'false']);
+        git([
+            '-c',
+            'user.name=Fixture',
+            '-c',
+            'user.email=fixture@example.invalid',
+            'commit',
+            '--quiet',
+            '--allow-empty',
+            '-m',
+            'fixture',
+        ]);
+        const packageData: unknown = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+        assert.ok(isRecord(packageData) && isRecord(packageData['lint-staged']));
+        await writeFile(
+            path.join(root, 'package.json'),
+            JSON.stringify({ type: 'module', 'lint-staged': packageData['lint-staged'] }),
+        );
+        await mkdir(path.join(root, 'tooling'));
+        const checker = new URL('../tooling/check-text-style.ts', import.meta.url).href;
+        await writeFile(
+            path.join(root, 'tooling/check-text-style.ts'),
+            `import { checkTextStyle } from ${JSON.stringify(checker)};\nconst errors = await checkTextStyle(process.cwd(), process.argv.slice(2));\nif (errors.length) { console.error(errors.join('\\n')); process.exitCode = 1; }\n`,
+        );
+        const files = ['valid.yaml', 'legacy.yml', 'upper.YAML', 'mixed.YaMl', 'short.YML'];
+        for (const file of files) await writeFile(path.join(root, file), 'enabled: true\n');
+        git(['add', '--', ...files]);
+        const result = spawnSync(
+            process.execPath,
+            [fileURLToPath(new URL('../node_modules/lint-staged/bin/lint-staged.js', import.meta.url))],
+            { cwd: root, env: cleanEnvironment, encoding: 'utf8', windowsHide: true, timeout: 60_000 },
+        );
+        const output = result.stdout + result.stderr;
+        assert.equal(result.status, 1, output);
+        for (const file of files.slice(1)) assert.ok(output.includes(`${file}:`), output);
+        assert.ok(!output.includes('valid.yaml:'), output);
+    } finally {
+        assert.equal(path.dirname(root), await realpath(os.tmpdir()));
+        assert.ok(path.basename(root).startsWith('dct-hook-yaml-'));
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 async function textHookFixture(host = 'codex') {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-')));
     const release: unknown = JSON.parse(
@@ -187,6 +239,7 @@ async function textHookFixture(host = 'codex') {
         ['build/src/third_party/THIRD_PARTY_NOTICES', 'Original vendor notices\n'],
         ['build/src/third_party/bundled-packages.json', '{}\n'],
         ['skills/example/SKILL.md', '# Upstream skill\r\n\tOriginal upstream format\r\n'],
+        ['skills/example/upstream.yml', '# Original upstream\r\n\tUnchanged upstream bytes\r\n'],
     ]);
     for (const [file, bytes] of contents) {
         await mkdir(path.dirname(path.join(root, prefix, file)), { recursive: true });
@@ -214,6 +267,37 @@ async function textHookFixture(host = 'codex') {
         );
     return { root, prefix, run };
 }
+
+test('upstream YAML filename exemption requires complete verified bytes for both hosts', async () => {
+    for (const host of ['codex', 'claude-code']) {
+        const fixture = await textHookFixture(host);
+        try {
+            const selected = `${fixture.prefix}/skills/example/upstream.yml`;
+            const original = fixture.run([selected]);
+            assert.equal(original.status, 0, original.stdout + original.stderr);
+            const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
+            await writeFile(license, 'Changed upstream license\n');
+            const changed = fixture.run([selected]);
+            assert.equal(changed.status, 1, changed.stdout + changed.stderr);
+            assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+            await writeFile(license, 'Original upstream license\n');
+            const bin = path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js');
+            await rm(bin);
+            const missing = fixture.run([selected]);
+            assert.equal(missing.status, 1, missing.stdout + missing.stderr);
+            assert.match(missing.stderr, /official|missing|inventory/i);
+            await writeFile(bin, 'export {};\n');
+            await writeFile(path.join(fixture.root, fixture.prefix, 'extra.yml'), 'enabled: true\n');
+            const extra = fixture.run([selected]);
+            assert.equal(extra.status, 1, extra.stdout + extra.stderr);
+            assert.match(extra.stderr, /official|unexpected|inventory/i);
+        } finally {
+            assert.equal(path.dirname(fixture.root), await realpath(os.tmpdir()));
+            assert.ok(path.basename(fixture.root).startsWith('dct-hook-text-'));
+            await rm(fixture.root, { recursive: true, force: true });
+        }
+    }
+});
 
 test('text hook preserves formatting only after verifying the complete original official release', async () => {
     const fixture = await textHookFixture();

@@ -12,6 +12,11 @@ import { isApprovedIconPath, validateIconPng } from './icon-policy.ts';
 import { OFFICIAL_RELEASE } from './payload-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
+export function validateYamlFilename(file: string): string[] {
+    if (!/\.ya?ml$/i.test(file) || file.endsWith('.yaml') || file === '.github/ISSUE_TEMPLATE/config.yml') return [];
+    return [`${file}: maintained YAML filenames must use lowercase .yaml.`];
+}
+
 export function validateTextStyle(file: string, source: string) {
     const errors = [];
     if (source.includes('\r')) errors.push(`${file}: use LF, not CRLF.`);
@@ -411,6 +416,7 @@ export async function auditRepository(root: string) {
     }
     for (const [file, source] of files) {
         if (verifiedOfficial.has(file)) continue;
+        errors.push(...validateYamlFilename(file));
         if (/^\.github\/readme(?:\.[^/]+)?$/i.test(file))
             errors.push(`${file}: GitHub displays this instead of the root README; use .github/INDEX.md.`);
         if (
