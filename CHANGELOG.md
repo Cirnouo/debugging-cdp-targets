@@ -40,8 +40,9 @@ Version 0.1.0 remains under development; no release has been published.
   Codex base icons, a Codex dark variant and a universal Claude directory icon.
 - Independent Codex and Claude Code Plugins and Marketplace catalogs, each with
   a complete runtime and shared application-agnostic debugging instructions,
-  including fixed Chinese/English launch and directory questions with explicit
-  Agent/User/Plugin roles and declared factual variables.
+  including fixed Chinese/English isolation, directory, cleanup, recovery,
+  configuration, input and Close/Keep questions with explicit Agent/User/Plugin
+  roles, declared factual variables and event-to-template mapping.
   Claude Code 2.1.283 is the first supported and accepted baseline.
 - Explicitly authorized tag-triggered stable and prerelease GitHub source releases
   with cumulative Changelog-based notes, new contributor attribution, and required

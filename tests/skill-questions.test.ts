@@ -17,6 +17,44 @@ const requirements: Record<string, { variables: string[]; values: string[] }> = 
     'cleanup-existing': { variables: ['application', 'directory'], values: ['retain', 'delete-on-release'] },
     'cleanup-new-named': { variables: ['application', 'parent', 'name'], values: ['retain', 'delete-on-release'] },
     'cleanup-new-random': { variables: ['application', 'parent'], values: ['retain', 'delete-on-release'] },
+    'cleanup-new-preset': {
+        variables: ['application', 'preset_path', 'preset_parent'],
+        values: ['retain', 'delete-on-release'],
+    },
+    'close-keep': {
+        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'cleanup_policy'],
+        values: ['Close', 'Keep'],
+    },
+    'live-recovery': {
+        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'failure_code'],
+        values: ['restart', 'Close'],
+    },
+    'exit-start': {
+        variables: ['application', 'entry_id', 'connection_id', 'session_id'],
+        values: ['start', 'no-start'],
+    },
+    'tools-start': { variables: ['application', 'tool_names', 'mcp_args'], values: ['start', 'decline'] },
+    'tools-restart': {
+        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'tool_names', 'mcp_args'],
+        values: ['restart', 'decline'],
+    },
+    'replace-launch': {
+        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'old_args', 'start_proposal'],
+        values: ['close-start', 'decline'],
+    },
+    'native-picker': {
+        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'dialog_label'],
+        values: ['completed', 'cancelled'],
+    },
+    'missing-input': { variables: ['application', 'required_fields'], values: [] },
+    'application-input': { variables: [], values: [] },
+    'input-correction': {
+        variables: ['application', 'field_label', 'field_constraint', 'validation_issue'],
+        values: [],
+    },
+    'answer-clarification': { variables: ['template_id', 'quoted_answer'], values: [] },
+    'target-input': { variables: ['candidates'], values: [] },
+    'cancel-intent': { variables: ['entry_id', 'operation_id'], values: ['cancel-wait', 'cancel-operation'] },
 };
 const triggers = {
     'isolation-needed': 'isolation-intent',
@@ -24,9 +62,24 @@ const triggers = {
     'directory-needed': 'directory-choice',
     'existing-path-missing': 'existing-directory-input',
     'new-parent-missing': 'new-directory-input',
+    'new-named-parent-missing': 'missing-input',
     'cleanup-existing-needed': 'cleanup-existing',
     'cleanup-new-named-needed': 'cleanup-new-named',
     'cleanup-new-random-needed': 'cleanup-new-random',
+    'cleanup-new-preset-needed': 'cleanup-new-preset',
+    'task-ending': 'close-keep',
+    'live-connection-failure': 'live-recovery',
+    'active-unexpected-exit': 'exit-start',
+    'tools-before-start': 'tools-start',
+    'tools-on-live-connection': 'tools-restart',
+    'launch-args-change': 'replace-launch',
+    'native-picker-unavailable': 'native-picker',
+    'required-input-unresolved': 'missing-input',
+    'application-unresolved': 'application-input',
+    'invalid-input': 'input-correction',
+    'ambiguous-answer': 'answer-clarification',
+    'ambiguous-target': 'target-input',
+    'ambiguous-cancellation': 'cancel-intent',
 };
 const noticeOnly = [
     'unsupported-isolation',
@@ -34,6 +87,25 @@ const noticeOnly = [
     'unexpressible-isolation',
     'occupied-or-unverifiable',
     'existing-nonempty-retain',
+    'unsupported-tool',
+    'expected-exit',
+    'inactive-exit',
+    'close-wait',
+    'version-mismatch',
+];
+const fieldIds = [
+    'application',
+    'version',
+    'executable',
+    'launch-args',
+    'cwd',
+    'env',
+    'existing-directory',
+    'new-parent',
+    'new-name',
+    'mcp-args',
+    'task',
+    'file-path',
 ];
 
 function readCatalogue(markdown: string): Record<string, unknown> {
@@ -54,7 +126,24 @@ function strings(value: unknown): string[] {
 }
 
 function validateCatalogue(catalogue: Record<string, unknown>) {
-    assert.deepEqual(Object.keys(catalogue).sort(), ['notice_only', 'templates', 'triggers']);
+    assert.deepEqual(Object.keys(catalogue).sort(), ['fields', 'notice_only', 'templates', 'triggers']);
+    assert.ok(isRecord(catalogue.fields));
+    assert.deepEqual(Object.keys(catalogue.fields), fieldIds, 'only registered necessary fields can be requested');
+    for (const field of Object.values(catalogue.fields)) {
+        assert.ok(isRecord(field));
+        assert.deepEqual(Object.keys(field).sort(), ['en', 'zh']);
+        for (const language of ['zh', 'en']) {
+            const localized: unknown = field[language];
+            assert.ok(isRecord(localized));
+            assert.deepEqual(Object.keys(localized).sort(), ['constraint', 'label']);
+            assert.doesNotMatch(strings(localized).join('\n'), /[我你您]|\b(?:i|me|my|we|us|our|you|your|yours)\b/i);
+            assert.doesNotMatch(
+                strings(localized).join('\n'),
+                /\{[^}]+\}/,
+                'field wording is fixed, not another free-form slot',
+            );
+        }
+    }
     const templates = catalogue.templates;
     assert.ok(isRecord(templates));
     assert.deepEqual(Object.keys(templates).sort(), Object.keys(requirements).sort());
@@ -144,7 +233,7 @@ test('delegation and cleanup templates preserve actor responsibilities and actua
                 ? /Agent 选择现有父目录，插件创建随机子目录/
                 : /Agent selects an existing parent and Plugin creates a random child/,
         );
-        for (const id of ['cleanup-existing', 'cleanup-new-named', 'cleanup-new-random']) {
+        for (const id of ['cleanup-existing', 'cleanup-new-named', 'cleanup-new-random', 'cleanup-new-preset']) {
             const template = catalogue.templates[id];
             assert.ok(isRecord(template));
             const text = strings(template[language]).join('\n');
@@ -159,6 +248,19 @@ test('delegation and cleanup templates preserve actor responsibilities and actua
                 assert.match(text, language === 'zh' ? /尚未创建/ : /not yet created/);
             }
         }
+    }
+});
+
+test('first-use Chrome preset cleanup does not require or claim a prepared parent', async () => {
+    const catalogue = readCatalogue(await readFile(source, 'utf8'));
+    assert.ok(isRecord(catalogue.templates));
+    const preset = catalogue.templates['cleanup-new-preset'];
+    assert.ok(isRecord(preset), 'absent preset needs a truthful pre-preparation cleanup variant');
+    for (const language of ['zh', 'en']) {
+        const text = strings(preset[language]).join('\n');
+        assert.match(text, language === 'zh' ? /容器可能尚不存在/ : /containers may not exist/);
+        assert.match(text, language === 'zh' ? /容器.*保留/ : /containers.*remain/);
+        assert.doesNotMatch(text, /已验证的现有父目录|Verified existing parent/);
     }
 });
 
@@ -181,6 +283,17 @@ test('question contract rejects malformed catalogues, invented actions, pronouns
             const template = catalogue.templates['directory-choice'];
             assert.ok(isRecord(template));
             delete template.en;
+        },
+        (catalogue) => {
+            assert.ok(isRecord(catalogue.triggers));
+            catalogue.triggers['active-unexpected-exit'] = 'live-recovery';
+        },
+        (catalogue) => {
+            assert.ok(isRecord(catalogue.fields));
+            catalogue.fields.reason = {
+                zh: { label: '理由', constraint: '解释选择原因。' },
+                en: { label: 'Reason', constraint: 'Explain the choice.' },
+            };
         },
     ];
     for (const replacement of ['Where do you want it?', '{context}', 'Recommended location']) {
