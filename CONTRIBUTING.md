@@ -56,8 +56,8 @@ existing SSH commands and identity/proxy options when adding them.
 
 ## Submit an Issue
 
-Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) for reproducible unexpected
-behavior or the [Feature form](.github/ISSUE_TEMPLATE/feature_request.yml) for a
+Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yaml) for reproducible unexpected
+behavior or the [Feature form](.github/ISSUE_TEMPLATE/feature_request.yaml) for a
 problem and proposed behavior. The current YAML forms own the field headings,
 order, required answers, dropdown choices, and corresponding `template:` labels.
 Keep the generated H3 fields when editing the body, including optional fields;

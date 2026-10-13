@@ -133,8 +133,8 @@ repository settings without explicit authorization.
 
 ## Typed Issue submissions
 
-The current [Bug form](../../.github/ISSUE_TEMPLATE/bug_report.yml) and
-[Feature form](../../.github/ISSUE_TEMPLATE/feature_request.yml) are the sole
+The current [Bug form](../../.github/ISSUE_TEMPLATE/bug_report.yaml) and
+[Feature form](../../.github/ISSUE_TEMPLATE/feature_request.yaml) are the sole
 authority for their generated field labels, order, required answers, dropdown
 options, and classification labels. GitHub's
 [Issue form syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)

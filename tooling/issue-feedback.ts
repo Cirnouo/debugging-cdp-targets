@@ -263,9 +263,9 @@ async function main() {
     const event: unknown = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'));
     const context = issueFeedbackContext(process.env, event);
     const forms = {
-        bugReport: await readFile(new URL('../.github/ISSUE_TEMPLATE/bug_report.yml', import.meta.url), 'utf8'),
+        bugReport: await readFile(new URL('../.github/ISSUE_TEMPLATE/bug_report.yaml', import.meta.url), 'utf8'),
         featureRequest: await readFile(
-            new URL('../.github/ISSUE_TEMPLATE/feature_request.yml', import.meta.url),
+            new URL('../.github/ISSUE_TEMPLATE/feature_request.yaml', import.meta.url),
             'utf8',
         ),
     };

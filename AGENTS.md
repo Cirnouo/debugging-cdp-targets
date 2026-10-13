@@ -58,8 +58,8 @@ Before creating or editing a PR, read the current
 [PR template](.github/PULL_REQUEST_TEMPLATE.md) and
 [submission/commit rules](docs/policies/commits-and-scope.md#commits).
 Before creating or editing a typed Bug or Feature Issue, read the matching
-[Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) or
-[Feature form](.github/ISSUE_TEMPLATE/feature_request.yml) and the
+[Bug form](.github/ISSUE_TEMPLATE/bug_report.yaml) or
+[Feature form](.github/ISSUE_TEMPLATE/feature_request.yaml) and the
 [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions).
 Ordinary freeform Issues remain allowed and exempt; classification follows the
 form labels, never body shape or a required general label.
