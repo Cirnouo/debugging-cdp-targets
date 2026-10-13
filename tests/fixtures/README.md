@@ -72,6 +72,10 @@ finish through their own ordinary exit paths. Root release waits until independe
 native root/child handles are retained. A thirty-second ordinary self-exit fallback
 prevents permanent fixture orphans after coordination failure; cleanup never uses
 elapsed time or a final marker as exit evidence. It opens no GUI.
+`native-resource-ready.ts` publishes the root/middle/late PID-ready barriers only
+after a private file in the same owned directory has been fully written and closed,
+then renamed to the final ready name. Readers keep their single strict PID read;
+other coordination markers retain their existing protocol.
 `native-resource-cleanup.ts` retains independent native root/child witnesses before
 root release and reuses a retained late-descendant witness. Failure cleanup sends
 ordinary file signals, waits for all three actual handle exit receipts, then
