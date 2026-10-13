@@ -108,7 +108,7 @@ then explicitly restarts and normally closes them. It retains test profiles.
   entry. Query parameters configure only that Node subscriber, without
   `NODE_OPTIONS`, gateway environment switches or inherited browser configuration.
   `fixture-ci.ts` initializes the dependency-free job index before prerequisite
-  checks and writes the failure job summary using only fixed labels and safe IDs.
+  checks and writes the diagnostic job summary using only fixed labels and safe IDs.
 - `linux-startup-wait.ts` supplies the test-only Linux verified-root wait sampler,
   bounded fixed proc reads and closed projections for the same diagnostic stream.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
@@ -688,6 +688,8 @@ failed or timed-out query fails the prerequisite check before Chrome starts.
 Refused or unconfigured collections add no browser logging flags or files.
 Controlled launches add plain `--enable-logging` and an absolute `--log-file`
 in a canonical private scratch sibling outside profiles and the upload directory.
+The opt-in startup study's `off` arm omits only those two flags; its missing
+Chrome log projection is expected, while capture and display preflight remain enabled.
 Chrome stdio stays ignored, and the original delivered gateway remains the entry.
 Each startup settlement reads its own log; restart samples before reuse and
 after settlement because Chrome may overwrite the same file on restart.
@@ -765,6 +767,7 @@ a stale session discards metrics. Late completion never updates a successor.
 | `process.majorFaults`, `majorFaultsDelta` | Fault counts and within-pair change. |
 | `process.readBytes`, `writeBytes` | Absolute process I/O byte counters, with no invented delta. |
 | `wchan` | Closed symbol class: futex, pipe, poll, I/O, scheduler, or unknown. It is an observation of a wait category. |
+| `ioWaitKind` | Optional I/O detail: `io-scheduling`, `page-bit-wait`, `buffer-wait`, `writeback-wait`, or `block-tag-wait`, derived from the same wchan read. |
 | `systemPsi.*TotalUs` | System-wide cumulative stall microseconds for CPU, memory or I/O `some`/`full`; `scope` is always `system`. |
 | `elapsedMs`, `reads`, `bytes` | Sampler elapsed time and bounded read requests/returned bytes, separate from synchronous collector cost. |
 
@@ -772,6 +775,9 @@ Missing, unsafe or decreasing counters remain unknown rather than zero.
 Process and system counters are also checked against the previous sample for
 the same verified root. Wchan classification is deliberately closed: an
 unmatched symbol remains unknown and raw symbols never enter the stream.
+The optional `ioWaitKind` refines only `wchan=io`; older records remain valid
+without it. It adds no file read, trigger, timer or deadline. A closed wait kind
+does not identify the filesystem, device, syscall or causal source of a delay.
 [Linux proc documentation](https://docs.kernel.org/filesystems/proc.html)
 defines the process counters and wait channel;
 [Linux PSI documentation](https://docs.kernel.org/accounting/psi.html)
@@ -934,3 +940,96 @@ The new projection preserves this already available evidence and can narrow a
 future failure without extra native reads. It cannot recover the original
 mismatching owner retrospectively. The historical macOS cause remains unknown
 and unresolved; synthetic interleavings verify diagnostic behavior only.
+
+## Bounded Ubuntu startup study
+
+The diagnostic-only `official-server.ts --startup-study --chrome-file-logging on|off`
+mode is Linux-only and requires both explicit `--allow-gui` authorization and a
+valid, freshly initialized diagnostics collection. The two study arguments must
+appear together exactly once, with the literal arm `on` or `off`; malformed,
+unknown or duplicate arguments fail before resource acquisition after the GUI
+authorization check. A refused or missing current collection cannot run a study.
+This mode is outside the default test lane.
+
+Both arms preserve the normal smoke's initialization, official catalog, initial
+status and first-start prefix. They launch exactly one new owned Chrome, verify
+process/listener/endpoint identity, actual browser version and managed Profile
+Path, then run the existing finally cleanup. They skip later CSS, extension,
+multiple-target and recovery acceptance. A successful sample establishes only
+those first-start checks; ordinary CI continues to run the complete official
+tools and entry-recovery smokes on both existing platforms. The production
+readiness predicate, polling strategy and 20-second deadline stay unchanged.
+
+The `on` arm retains the existing `--enable-logging` and absolute `--log-file`
+switches. The `off` arm omits only these two switches. Both retain the same
+parent behavior, accepted collector/preload, private capture, display preflight,
+Linux sampler and cleanup. The closed study result in stdout identifies
+`chromeFileLogging` and `expectedLogAbsence`; `off` expects the absent-log
+projection. Absence in that arm is not evidence of a Chrome logging failure.
+Raw Chrome logs remain excluded from uploads even when private scratch is retained.
+
+After verifying the committed Plugin build, run one explicitly authorized local
+Linux sample with a fresh collection, choosing exactly one arm:
+
+```sh
+export DCT_SMOKE_CHROME_EXECUTABLE=/opt/google/chrome/chrome
+set -euo pipefail
+fixtureDiagnosticsDirectory="$(mktemp -d "${TMPDIR:-/tmp}/dct-startup-study.XXXXXX")"
+collectionId="$(node tests/smoke/fixture-ci.ts init "$fixtureDiagnosticsDirectory")"
+test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+command -v lsof
+command -v getconf
+command -v Xvfb
+command -v xvfb-run
+command -v xauth
+if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
+xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging off --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+```
+
+After either outcome, index only that current collection with
+`node tests/smoke/fixture-ci.ts summary "<absolute-artifact-directory>" "$collectionId"`.
+Do not run a Chrome version/hash command or warmup before its first start.
+The example does not retry a failed sample. `TMPDIR`, when provided, must be an
+existing absolute temporary parent. Every invocation uses a fresh directory;
+earlier evidence is preserved and never presented as current.
+
+The CI input `ubuntu-startup-study` defaults to false. Dispatch `ci.yml` once
+against the reviewed branch with it set to true, using Actions or
+`gh workflow run ci.yml --ref <reviewed-branch> -f ubuntu-startup-study=true`.
+Quality and its supply-chain prerequisite must pass before the study starts.
+The matrix is fixed: blocks 1, 2 and 3 crossed with file logging `on` and `off`,
+six independent fresh `ubuntu-24.04` runner slots, Node 24.21.0, pnpm 12.4.2
+and `/opt/google/chrome/chrome`. Fail-fast is false, with no ignored failures,
+retries, extra batches or replacement slots. A cancelled or incomplete slot is
+recorded as such. The study dispatch has its own run-ID concurrency group and
+cannot cancel ordinary CI's workflow/ref group.
+
+Only this manual study uploads on both success and failure, using `always()`
+and the successful current-initialization guard. Each artifact is named
+`ubuntu-startup-study-block-<block>-logging-<on|off>-<run-id>-<attempt>` and retains
+exactly `job-index.json`, `official-server.events.ndjson`,
+`official-server.summary.json`, `entry-recovery.events.ndjson` and
+`entry-recovery.summary.json` for seven days. The entry-recovery envelope stays
+not-run and its stream stays empty. Hidden files and overwrite remain disabled;
+missing files warn. The neutral job summary indexes the same safe evidence and
+artifact link after either outcome. Ordinary real Chrome jobs retain failure-only
+uploads, and other jobs remain artifact-free.
+
+Compare the first readiness outcome and its monotonic duration as the primary
+measure. Secondary evidence is time to first owned listener, endpoint outcomes,
+safe process counters, `wchan`/optional closed `ioWaitKind`, system PSI,
+native-command and collector costs, and actual exit/profile/scratch cleanup.
+Preserve the tested commit and tree, Actions runner image/toolchain identities,
+actual endpoint browser version, arm and slot alongside the five-file artifacts
+and safe job logs. The sampler still has four one-shot triggers, seven fixed
+file reads, a 4,096-byte per-read bound and a 250 ms total budget. Streams still
+allow 4,096 bytes per record, 2,000 records plus one truncation marker and 1 MiB
+total. Missing terminal cost records, absent cleanup, omitted samples or truncated
+evidence must remain explicit limits.
+
+Fresh runners do not establish known cold caches. Blocks do not place the two
+arms on the same machine, and host load, storage, image and scheduling can differ.
+These six pilot samples cannot prove a causal logging effect or rare-failure
+reliability; an arm difference is association only. If all samples pass, the
+historical failure was not reproduced and the root cause remains unknown.
+The study does not change or replace full real Chrome acceptance.

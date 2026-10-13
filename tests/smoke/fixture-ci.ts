@@ -135,7 +135,7 @@ export function fixtureJobIndex(command: string, directory: string, label?: stri
 async function writeFixtureJobSummary(directory: string, file: string) {
     // Loaded only for presentation; dependency-free init/stage imports no project module.
     const { readFixtureProgress } = await import('./fixture-artifacts.ts');
-    let text = 'Controlled Chrome failure diagnostics\n\n';
+    let text = 'Controlled Chrome diagnostics\n\n';
     try {
         const value = readFixtureIndex(file);
         const stage =
@@ -213,7 +213,7 @@ async function writeFixtureJobSummary(directory: string, file: string) {
         artifact &&
         /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/\d+\/artifacts\/\d+$/.test(artifact)
     )
-        text += `\n[Failure artifact](${artifact})\n`;
+        text += `\n[Diagnostic artifact](${artifact})\n`;
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text);
     else process.stdout.write(text);
 }

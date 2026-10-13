@@ -611,6 +611,19 @@ test('actual fresh-process summary CLI renders running and finalized child evide
             /Runtime boundary: spawn; operation: 22222222-2222-4222-8222-222222222222/,
         );
         parent.finish(false);
+        const successfulStudy = spawnSync(process.execPath, [entry, 'summary', directory, index.collectionId], {
+            encoding: 'utf8',
+            env: { ...ghaEnvironment, GITHUB_STEP_SUMMARY: '' },
+        });
+        assert.equal(successfulStudy.status, 0, successfulStudy.stderr);
+        assert.match(successfulStudy.stdout, /official-server: passed/);
+        assert.match(successfulStudy.stdout, /entry-recovery: not-run/);
+        assert.match(successfulStudy.stdout, /Controlled Chrome diagnostics/);
+        assert.match(
+            successfulStudy.stdout,
+            /\[Diagnostic artifact\]\(https:\/\/github.com\/owner\/repository\/actions\/runs\/123\/artifacts\/456\)/,
+        );
+        assert.doesNotMatch(successfulStudy.stdout, /Failure artifact|failure diagnostics/);
         const second = createFixtureArtifacts(directory, 'entry-recovery', { collectionId: index.collectionId });
         const failures = createSmokeFailures(second);
         failures.primary(new Error('controlled failure'));
@@ -630,9 +643,10 @@ test('actual fresh-process summary CLI renders running and finalized child evide
         assert.match(text, /official-server: running/);
         assert.match(text, /official-server: passed/);
         assert.match(text, /entry-recovery: failed/);
+        assert.match(text, /Controlled Chrome diagnostics/);
         assert.match(
             text,
-            /Failure artifact.*https:\/\/github.com\/owner\/repository\/actions\/runs\/123\/artifacts\/456/,
+            /Diagnostic artifact.*https:\/\/github.com\/owner\/repository\/actions\/runs\/123\/artifacts\/456/,
         );
         assert.doesNotMatch(`${summary.stdout}${text}`, /PRIVATE_SUMMARY_TOKEN|\/private\/runner\/path/);
         assert.equal(await readFile(inheritedOutput, 'utf8'), 'Inherited runner summary\n');
