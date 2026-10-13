@@ -122,6 +122,9 @@ test('both hosts must preserve every maintained shared Skill file even when peer
             'debugging-cdp-targets/references/question-contract.md',
             'debugging-cdp-targets/references/questions.zh.md',
             'debugging-cdp-targets/references/questions.en.md',
+            'debugging-cdp-targets/references/tool-configuration.md',
+            'debugging-cdp-targets/references/screenshot-compatibility.md',
+            'debugging-cdp-targets/references/recovery-and-events.md',
         ]) {
             const original = await readFile(path.join(fixture, 'packaging/shared/skills', file));
             for (const host of PLUGIN_HOSTS)
@@ -186,6 +189,9 @@ test('shared Skill inventory rejects stale delivered files after maintained sour
             ['debugging-cdp-targets/references/question-contract.md', false],
             ['debugging-cdp-targets/references/questions.zh.md', true],
             ['debugging-cdp-targets/references/questions.en.md', false],
+            ['debugging-cdp-targets/references/tool-configuration.md', true],
+            ['debugging-cdp-targets/references/screenshot-compatibility.md', false],
+            ['debugging-cdp-targets/references/recovery-and-events.md', true],
         ] as const) {
             const maintained = path.join(fixture, 'packaging/shared/skills', file);
             const original = await readFile(maintained);

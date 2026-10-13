@@ -45,12 +45,15 @@ test('Plugin inventory accepts only explicit runtime and instruction files', () 
     assert.ok(validatePayloadFileInventory(REQUIRED_PAYLOAD_FILES.slice(1)).length);
 });
 
-test('Plugin inventory requires the complete nested question references and rejects omissions or renames', () => {
+test('Plugin inventory requires the complete nested conditional and question references and rejects omissions or renames', () => {
     const references = [
         'skills/debugging-cdp-targets/references/README.md',
         'skills/debugging-cdp-targets/references/question-contract.md',
         'skills/debugging-cdp-targets/references/questions.zh.md',
         'skills/debugging-cdp-targets/references/questions.en.md',
+        'skills/debugging-cdp-targets/references/tool-configuration.md',
+        'skills/debugging-cdp-targets/references/screenshot-compatibility.md',
+        'skills/debugging-cdp-targets/references/recovery-and-events.md',
     ];
     for (const host of PLUGIN_HOSTS) {
         const files = requiredPayloadFiles(host);

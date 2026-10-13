@@ -85,14 +85,15 @@
   rejects missing/unexpected assets, and exercises PNG size, dimensions, CRCs,
   truncated streams and row filters with independently constructed fixtures.
 - `host-distribution.test.ts` covers both complete host inventories, manifest/MCP/Hook
-  and Marketplace routing, shared bytes, independent version/license/resource drift,
+  and Marketplace routing, shared bytes, installed-relative Skill reference links,
+  independent version/license/resource drift,
   duplicate metadata, linked inputs/roots and read-only build checks.
 - `skill-presentation.test.ts` rejects malformed or duplicate YAML, unknown and
   mistyped Skill fields, invalid icon references and missing/changed/linked PNGs.
   It checks assembly before copying and every shared Skill input against both
   hosts, including matching peer drift that cannot prove maintained identity and
   stale delivered files after maintained shared inputs, including nested question
-  references, are deleted or renamed.
+  and conditional operation references, are deleted or renamed.
 - `skill-questions.test.ts` parses the common question contract and both language
   catalogues separately, reconstructs their shared bilingual contract and checks
   explicit roles, finite fact slots, action order, directory delegation and

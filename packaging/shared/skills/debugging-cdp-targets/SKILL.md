@@ -27,6 +27,11 @@ use English. Paths, code and tool names do not determine language. Switch the
 whole template when the conversation language changes; never translate it
 ad hoc or combine language variants.
 
+First use the inline workflow to decide whether a question remains necessary.
+For notice-only cases or an applicable prior answer, continue without loading
+question references. Only when a question still needs to be asked, follow the
+reading step below.
+
 Before a needed question, read [the common question contract](references/question-contract.md)
 and only the catalogue for the current conversation language:
 [Chinese](references/questions.zh.md) or [English](references/questions.en.md).
@@ -350,16 +355,9 @@ an acquired directory only after that same barrier. Failure before acquisition
 does not delete a directory.
 
 An observation failure, failed/cancelled Close or failed resource disposal
-retains ownership.
-Never force-kill an application to satisfy cleanup. Failed disposal stays in the
-in-memory cleanup ledger; a successful retry completes directory cleanup without
-restoring the route or restarting/replaying. Root identity is reverified before
-deletion; replacement or unverifiable identity retains cleanup ownership.
-If external Chrome occupancy is detected during failed startup or before cleanup,
-retain the directory and report the explicit cleanup evidence rather than deleting
-data another running instance may use.
-Child links do not extend deletion to their external targets. A hard gateway
-crash, or disconnect without verified app exit, cannot guarantee future deletion.
+retains ownership. Never force-kill an application to satisfy cleanup.
+Before disposal or a cleanup retry, read
+[recovery and events](references/recovery-and-events.md).
 
 Read the original start operation's explicit `isolation` metadata or selected
 status `include: ["configuration"]` for the actual path, cleanup policy and state.
@@ -368,8 +366,6 @@ directory or cleanup that has not completed, tell the user its actual absolute
 path, policy and state, including Agent-selected, random-child and resolved-link
 paths. Default summaries and automatic Hooks omit paths and raw filesystem errors.
 
-Later disposal/retry updates the original start operation's directory metadata
-without changing its terminal state/result or producing another completion notice.
 Do not infer deletion from Close, cancellation or route removal; read explicit
 directory evidence.
 
@@ -382,26 +378,12 @@ entryId and connectionId for enabledTools names and upstreamStatus. Query
 `toolNames: ["click_at", "evaluate_script"]` for exact input schemas and conditions.
 Before launch, omit connectionId to query configuration requirements. Exact
 schemas require a connected, valid actual upstream; disconnected/quarantined
-connections provide requirements only. Request selected
-`include: ["configuration"]` for mcpArgs/workspace sources or
-`include: ["diagnostics"]` for bounded diagnostics; includes can combine with
-toolNames. Do not request configuration, schemas or diagnostics unless needed.
+connections provide requirements only.
 
-For example, click_at needs experimentalVision=true with its other conditions.
-Supported explicitly disabled tools and TOOL_NOT_ENABLED include missing
-conditions and complete replacement suggestedMcpArgs. Enabled tools have no
-activation recipe; unsupported tools provide a reason without a recipe.
-Use those only in an explicitly authorized start/restart; the gateway never
-silently enables tools. Slim connections retain their actual slim tool names;
-the global catalog remains full. Working directory does not grant file access:
-use official `--workspace` directories and explicitly include status configuration
-when inspecting workspace sources.
-
-For an unresolved tool-enablement authorization, use `tools-start` before launch
-or `tools-restart` for a verified live connection. Display the complete proposed
-`mcpArgs` replacement, including workspace access; a request to inspect a page
-does not itself authorize unrelated filesystem grants. Unsupported tools only
-receive their established reason, never an invented enablement question.
+On TOOL_NOT_ENABLED or a requested unavailable tool, and before changing tool
+enablement/workspace access or inspecting configuration sources/diagnostics, read
+[tool configuration](references/tool-configuration.md).
+Do not request configuration, schemas or diagnostics unless needed.
 
 Every official call needs `_dct: { connectionId, sessionId }`. The gateway
 removes only this routing field and preserves original arguments/results.
@@ -441,40 +423,9 @@ unnecessary. Normal user window switching/minimizing is supported usage.
 The Plugin adds no focus or window manipulation. This is a Chromium application
 feature, not an MCP/CDP option or `mcpArgs` setting.
 
-The fixed rule preserves valid unrelated ASCII feature/parameter bytes and the
-positional tail after exact `--`. Explicit target disable, repeated/decorated
-target, ambiguous/duplicate/separate-value switches, padded effective boundaries,
-single-argument forms, non-ASCII values and malformed enable entries fail before
-data directory acquisition/spawn. For example, `Other:one/two:three/four` invalidates
-the whole enable list: report it and obtain an explicit correction through
-`input-correction`; never append
-the target to that list or silently remove a disable. See
-[the feature input contract](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/adr/0014-windows-chrome-screenshot-surface.md#feature-input-contract)
-for exact syntax and preserved valid parameter forms.
-
-`generic-cdp` and other platforms receive no screenshot preset. Only for an
-independently confirmed application argv carrier, a new isolated launch may use
-`--enable-features=CDPScreenshotNewSurface` before exact `--`: add it to one valid
-canonical enable list, or keep one bare occurrence. Preserve valid unrelated
-entries and report the same conflicts. A framework name proves no support;
-do not apply this recipe to an unverified WebView2 environment contract or change
-personal profiles/config. Verify fresh image pixels in the intended native state.
-
-Restart keeps exact composed argv. To change it, use an existing Close choice or
-obtain the missing authorization through `replace-launch`, wait for normal Close,
-then start with updated args/fresh requestId
-and use new connection/session/page IDs. Official tools, transparent routing,
-the 60-second timeout, quarantine and explicit recovery remain unchanged.
-Never focus, replay or restart implicitly. The
-[dated comparison](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
-records static-state evidence and its limits.
-
-Before `replace-launch`, settle the complete new start proposal, including any
-still-required isolation/directory/cleanup choices and known evidence. Explain
-the successor directory through that proposal; a `delete-on-release` old directory
-cannot be assumed to remain available for an `existing` successor selection.
-After successful normal Close and actual exit, recheck the applicable startup and
-occupancy gates before new start. Failed or incomplete Close never starts a successor.
+Before correcting screenshot feature argv, applying compatibility to a verified
+generic-cdp carrier, or replacing a launch to change screenshot argv, read
+[screenshot compatibility](references/screenshot-compatibility.md).
 
 ## Errors, native dialogs and task completion
 
@@ -506,29 +457,13 @@ their later actual exit still removes that connection and is reported.
 
 `dct_connection_restart` requires entryId, connectionId, sessionId and requestId;
 optional mcpArgs explicitly replaces configuration. Use it only for a still-live
-connection. It waits for old app exit and disposes old resources before creating
-fresh resources and session on the same connection and exact original port.
-It refuses a busy original port and invalidates old page IDs.
-Old operations cannot cancel a later session.
+connection. Before restarting a live connection, read
+[recovery and events](references/recovery-and-events.md).
 
-Enabled, authorized host Hooks deliver compact operation notices, connection
-errors and exit events at task boundaries. Review and enable the four definitions
-using the current host's Plugin/Hook controls, described in the installed Plugin guide.
-Idle chats receive events next turn; they are not
-woken automatically. An active unexpected exit reports the removed session and
-may suggest an explicitly authorized new start; inactive exit is informational.
-Expected Close/restart exits belong to the operation notice's exits array, grouped
-by operationId. It retains every related actual exit and cleanup result, including
-old Target exit and new Target rollback during restart. Delivery may wait until
-all related cleanup is ready; pending cleanup keeps both notice and exit facts
-unread. Successfully reading a terminal result through operation status, complete
-wait, cancel of an already terminal operation or an identical mutation retry
-acknowledges that notice. Aborted requests and nonterminal responses leave it
-unread. Hooks never embed complete results, errors, configuration, diagnostics,
-schemas, tool names/counts or recipes. With no pending event, Hooks return {}.
-Keep other connections usable. hookEventName must be the sole argument and is
-reserved for automatic Hooks. operationId status cannot combine connectionId,
-toolNames or include. All runtime identities and operation queues stay in memory.
+Before reviewing/enabling host Hooks, interpreting operation/exit notices or their
+acknowledgment, or selecting operation status, read
+[recovery and events](references/recovery-and-events.md).
+Keep other connections usable. All runtime identities and operation queues stay in memory.
 
 If these lifecycle tools are absent, report a plugin/runtime version mismatch.
 Use an updated plugin in a new chat once installation is authorized; do not

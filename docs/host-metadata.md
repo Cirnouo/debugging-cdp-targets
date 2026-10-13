@@ -205,8 +205,8 @@ instructions at that dated baseline; the harness does not copy the body into its
 disable/reload, a distinct neutral thread has zero enabled Skills and lacks that
 body and isolation section. Claude's explicit invocation also supplied the full
 installed entry body at the captured model boundary. These historical smokes
-establish explicit entry injection, not conditional reading of the question
-references introduced on 2026-10-13, locale selection or model adherence.
+establish explicit entry injection, not conditional reading of the question or
+operation references introduced on 2026-10-13, locale selection or model adherence.
 
 The [Codex smoke helper](../tests/smoke/codex-host.ts) disables nonfixture Skills
 through the formal API into disposable CODEX_HOME before model threads, refreshes

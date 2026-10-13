@@ -284,6 +284,33 @@ test('one runtime produces complete peer payloads with identical shared bytes', 
         assert.ok(codex.get(`skills/${file}`)?.equals(bytes), `codex: ${file}`);
         assert.ok(claude.get(`skills/${file}`)?.equals(bytes), `claude-code: ${file}`);
     }
+    for (const [host, files] of outputs) {
+        const skillRoot = 'skills/debugging-cdp-targets/';
+        for (const [file, bytes] of files) {
+            if (!file.startsWith(skillRoot) || !file.endsWith('.md')) continue;
+            for (const match of bytes.toString().matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+                const link = match[1];
+                assert.ok(link);
+                if (/^[a-z]+:/i.test(link)) continue;
+                const [relative, fragment] = link.split('#');
+                const target = path.posix.normalize(
+                    path.posix.join(path.posix.dirname(file), relative || path.posix.basename(file)),
+                );
+                assert.ok(target.startsWith(skillRoot), `${host}: ${file} escapes Skill: ${link}`);
+                const content = files.get(target)?.toString();
+                assert.ok(content, `${host}: ${file} has unresolved installed link: ${link}`);
+                if (fragment) {
+                    const anchors = [...content.matchAll(/^#+ (.+)$/gm)].map((heading) =>
+                        (heading[1] ?? '')
+                            .toLowerCase()
+                            .replace(/[^a-z0-9 -]/g, '')
+                            .replaceAll(' ', '-'),
+                    );
+                    assert.ok(anchors.includes(fragment), `${host}: ${file} has unresolved anchor: ${link}`);
+                }
+            }
+        }
+    }
     assert.equal(
         claude.get('README.md')?.toString(),
         await readFile(path.join(root, 'packaging/claude-code/plugin-README.md'), 'utf8'),
