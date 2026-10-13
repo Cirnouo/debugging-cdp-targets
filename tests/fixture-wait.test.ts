@@ -25,6 +25,33 @@ const wait = {
     systemPsi: { scope: 'system', cpuSomeTotalUs: 1234 },
 };
 
+test('wait artifacts retain closed I/O detail and continue accepting legacy records', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-wait-detail-'));
+    try {
+        const collector = createFixtureArtifacts(directory, 'official-server');
+        const detailed = { ...wait, wchan: 'io', ioWaitKind: 'page-bit-wait' };
+        collector.linuxWait(wait);
+        collector.linuxWait(detailed);
+        collector.finishStream();
+        collector.finish(false);
+        assert.deepEqual(collector.snapshot().linuxStartupWait, [wait, detailed]);
+        assert.equal(collector.snapshot().invalidEvents, 0);
+        assert.deepEqual(readFixtureProgress(directory, 'official-server').linuxStartupWait, [wait, detailed]);
+        const summary: unknown = JSON.parse(
+            await readFile(path.join(directory, 'official-server.summary.json'), 'utf8'),
+        );
+        assert.ok(summary && typeof summary === 'object');
+        assert.deepEqual(Reflect.get(summary, 'linuxStartupWait'), [wait, detailed]);
+        const events: unknown[] = (await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8'))
+            .trim()
+            .split('\n')
+            .map((line): unknown => JSON.parse(line));
+        assert.deepEqual(events.slice(0, 2), [wait, detailed]);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('wait completion uses the same five artifacts and measured callback without altering primary cleanup failure', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-wait-collector-'));
     try {

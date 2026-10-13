@@ -27,6 +27,8 @@
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.
+- `official-startup-study.test.ts` exercises the real smoke CLI's single-launch
+  logging study and normal acceptance through external I/O boundary replacements.
 - `application-screenshot-probe.test.ts` validates complete sealed payload
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry
