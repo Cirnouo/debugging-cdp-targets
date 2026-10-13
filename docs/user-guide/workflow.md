@@ -22,6 +22,22 @@ Inspect the page's network requests and console errors, and summarize what you f
 
 ## Isolation and launch preparation
 
+Launch and directory questions use fixed Chinese and English templates in the
+[shared Skill](../../packaging/shared/skills/debugging-cdp-targets/SKILL.md#canonical-user-questions).
+The Agent uses the established conversation language and substitutes only the
+template's declared facts. Titles, questions, option labels, explanations and
+order remain fixed. Agent, User and Plugin name the responsible roles explicitly.
+For another application, only the Chrome preset directory option is omitted.
+Full Agent delegation requires no User-supplied path: the Agent chooses an
+existing parent and the Plugin creates a random child.
+
+Existing applicable choices are reused; fixed wording does not transfer another
+independent task's paths or authorization. Host preselection is not consent.
+If a host question control cannot carry the complete template, the Agent presents
+the complete text rather than dropping options. A future random child is described
+by its existing parent and allocation method before launch; its actual path is
+reported only after acquisition.
+
 Before preparing a new launch, the Agent asks whether you want data directory
 isolation, unless an applicable prior choice already answers it. None skips
 isolation-support research, isolation-directory selection and cleanup questions
@@ -67,13 +83,15 @@ When a directory choice is needed, the Agent presents these options in order:
 
 1. Agent freely chooses a suitable location.
 2. Chrome preset isolation directory, for Chrome only.
-3. You select an existing empty or nonempty directory.
-4. You select an existing parent and an optional name for a new child.
+3. User selects an existing empty or nonempty directory directly as the isolation directory.
+4. User selects an existing parent; the Plugin creates an isolation child with a
+    random name that does not conflict with existing child directories.
 
 Other applications omit the Chrome-only option and keep the remaining order.
 Existing choices are reused; no reason or location judgment is required.
 Full delegation needs no path from you: the Agent selects an existing suitable
-parent and the program allocates a random `dct-` child. Named children are created
+parent and the program allocates a random `dct-` child. An already explicit named-new
+path remains supported; no optional name is requested. Named children are created
 exclusively by the program from parent/name. Missing existing paths or named
 collisions fail without switching operations, overwriting or choosing a fallback.
 
