@@ -95,6 +95,53 @@ and `THIRD_PARTY_NOTICES` with the complete original release; their reviewed byt
 are covered by release evidence and code fingerprints. This is an explicit audit
 coverage boundary, not a claim that embedded code is vulnerability-free.
 
+## Official release delivery and upgrades
+
+The official Server is a complete unchanged npm release delivered in each host's
+Plugin `dist/official-server/`. Preserve every original release file, including
+licenses and notices, resources, vendor inventory and published Skills. Do not
+compile, rewrite, prune, tree-shake or merge official code into the gateway, or
+omit files to solve payload-size or Windows path problems. The accepted
+[delivery design](../adr/0010-bundled-official-server.md) owns the architecture;
+this section owns its contributor delivery and upgrade procedure.
+
+Before changing the official version, maintained release evidence or related
+build inputs, read this section and the installation sequence above. For an
+official release/evidence update, derive fresh independent evidence from the
+canonical registry tarball after verifying
+its complete SHA-512 integrity. `tooling/official-server-release.json` records
+the exact package identity/version, public bin, tarball URL/integrity and every
+release-relative regular file's SHA-256 and byte length. Reject duplicate or
+escaping paths, symlinks and other non-regular entries. An installed package,
+copied payload, runtime cache or global installation is not independent release
+evidence. Evidence updates require explicit dependency review; never refresh
+release hashes automatically or use an audit/build failure to authorize them.
+
+Before copying, builds verify the installed release's metadata and complete file
+tree against maintained tarball/file evidence and agreement with both
+`pnpm-lock.yaml` and `tooling/security/upstream-pnpm-lock.yaml`. Only the reviewed
+installation-only pnpm bin shims may be excluded from installed input; delivery
+and runtime permit no shim exception. Copy verified release bytes unchanged into
+both host payloads. `pnpm check:build` checks the same evidence and complete
+output inventory without writing, networking, installing or executing the Server.
+A future official release requiring external runtime dependencies needs a new
+packaging design; the current design fails closed instead of omitting them.
+
+Dependency and official-version upgrades retain the trusted installation order,
+full network `pnpm check:security` gate, focused regressions and build verification.
+Official release changes additionally require the fresh tarball evidence above;
+unrelated dependency updates do not require reacquiring an unchanged official
+release. Keep both locks and release evidence consistent and review changed
+fingerprints under the exception policy below. Offline `verify:push` and build
+comparisons do not replace the explicit network gate. Report npm graph audit
+scope and its embedded-library coverage limit described above.
+
+Runtime only verifies the delivered package against independent expected
+evidence and launches its public bin. It must not acquire packages through
+npm/npx, fall back to caches or global installations, or import a private CLI.
+Preserve original upstream release content and the existing runtime contracts;
+dependency upgrades do not authorize a new acquisition or packaging design.
+
 ## Vulnerabilities and bounded review exceptions
 
 High and critical findings block by default; moderate, low and informational

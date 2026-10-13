@@ -1,49 +1,20 @@
 # Contributor entry point
 
-Use four spaces, UTF-8, LF, and no tabs. Preserve unrelated work. Read the
-nearest source AGENTS.md and only the relevant policies before editing.
+Use four spaces, UTF-8, LF, and no tabs. Preserve unrelated work. Before editing,
+read applicable ancestor and local AGENTS.md files together, plus only the
+relevant policies. Local instructions do not replace parent instructions.
+
+Before editing AGENTS/Skill instructions, references or their layout/loading
+rules, read the [instruction progressive-disclosure policy](docs/policies/documentation.md#instruction-progressive-disclosure).
 
 Use `feat/`, `fix/`, `hotfix/`, or `chore/` with a lowercase kebab-case topic
 for the task's overall purpose. Standalone documentation, refactoring, tests,
 CI, and other maintenance use `chore/`; classify each commit independently.
-The [branch and commit policy](docs/policies/commits-and-scope.md) owns the
-complete grammar. Optional `release/<semver>` preparation branches follow that
-policy; publication requires separately authorized annotated stable or prerelease tags under
-the [release policy](docs/policies/releases.md).
-
-## Changelog edits
-
-Before editing `CHANGELOG.md`, read the
-[Changelog editing workflow](docs/policies/releases.md#changelog-editing-workflow).
-Verify the latest published stable/full release or its absence from authoritative
-published release evidence, use that baseline to select categories, and record
-the evidence and category rationale in the PR `Verification` section.
-
-## Pull request submissions
-
-Whenever creating or editing a PR, read the current
-[PR template](.github/PULL_REQUEST_TEMPLATE.md). Preserve every heading and
-checklist label, their order, and each checklist's section. Fill the problem,
-resulting behavior, and final verification with actual evidence, results, and
-remaining limits. Never fabricate results or delete an unchecked required check.
-Select satisfied checks; only checks containing `when applicable` may remain
-unchecked with an adjacent indented `N/A: <reason>` continuation. The
-[commit policy](docs/policies/commits-and-scope.md), including its 100-character
-body/footer limits and raw-title/generated-squash rules, remains authoritative.
-
-## Issue submissions
-
-When creating or editing a typed Bug or Feature Issue, read the current
-[Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) or
-[Feature form](.github/ISSUE_TEMPLATE/feature_request.yml). Preserve generated H3
-field headings exactly once in their original order, including optional fields.
-Answer each required field and use the exact dropdown choice. Apply the form's
-corresponding `template:` label; the provisioned form applies it on creation.
-Follow the [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions).
-Ordinary freeform Issues are allowed and exempt. Do not infer a typed Issue from
-its body or require a general label. Redact tokens, cookies, private page content,
-and personal paths; report suspected vulnerabilities privately through
-[SECURITY.md](SECURITY.md).
+Before choosing a branch or preparing a commit, read the
+[branch and commit policy](docs/policies/commits-and-scope.md) for complete grammar
+and release-branch rules. Before release preparation, tagging or publication,
+read the [release policy](docs/policies/releases.md); publication requires
+separately authorized annotated stable or prerelease tags.
 
 ## Boundaries
 
@@ -64,6 +35,9 @@ and personal paths; report suspected vulnerabilities privately through
   one. Status/start forbid session identity; only stop takes disposition.
 - Keep 0.1.0 unreleased. Never push, publish, tag, open a PR, or modify user
   config/global Skills/old state without explicit authorization.
+- Redact tokens, cookies, private page content and personal paths from public
+    submissions; report suspected vulnerabilities privately through
+    [SECURITY.md](SECURITY.md).
 - Launch through structured executable/args/cwd/env and native platform support.
   Windows privilege detection and one-shot elevation helpers belong to the
   plugin; manage the actual app PID/time/handle. Never force-kill applications.
@@ -77,6 +51,18 @@ and personal paths; report suspected vulnerabilities privately through
     never automatic Hooks or default summaries.
 
 ## Navigation and commands
+
+Before editing `CHANGELOG.md`, read the
+[changelog editing workflow](docs/policies/releases.md#changelog-editing-workflow).
+Before creating or editing a PR, read the current
+[PR template](.github/PULL_REQUEST_TEMPLATE.md) and
+[submission/commit rules](docs/policies/commits-and-scope.md#commits).
+Before creating or editing a typed Bug or Feature Issue, read the matching
+[Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) or
+[Feature form](.github/ISSUE_TEMPLATE/feature_request.yml) and the
+[typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions).
+Ordinary freeform Issues remain allowed and exempt; classification follows the
+form labels, never body shape or a required general label.
 
 Before changing the root README, read and follow the
 [README content boundary](docs/policies/documentation.md#root-readme-content-boundary).
@@ -96,9 +82,7 @@ and update the [host metadata evidence](docs/host-metadata.md).
 
 Use stable Node >=24.21.0 <25 and exact pnpm 12.4.2. Existing Node installations
 within that range are supported; Node 24.21.0 is the CI and problem-reproduction
-baseline. Optional mise selects Node 24 for everyday work and exact pnpm;
-check `node --version` before the trusted installation sequence and update any
-selected older Node to meet the floor. See the
+baseline. Before installation or toolchain changes, read the
 [toolchain policy](docs/policies/quality.md#toolchain-compatibility).
 
 Run focused tests first, then
@@ -106,22 +90,26 @@ Run focused tests first, then
 `pnpm check:build` verifies it without writing. Domain changes are test-first.
 Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
 generated JavaScript is distribution output, never a handwritten fallback.
+Before changing runtime, tests or tooling, read applicable ancestor/local
+AGENTS.md files, the relevant [security policy](docs/policies/security.md),
+[verification policy](docs/policies/quality.md#verification) and accepted ADRs.
 
 Before creating a linked worktree on Windows, complete the
 [long-path initialization](docs/policies/quality.md#windows-worktree-long-path-initialization)
 in the existing clone and verify effective `core.longpaths=true`.
 
-Complete the [trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order)
-in every clone/worktree, then verify the generated Git hook entry under the
+When initializing each clone/worktree, and before installing dependencies,
+read and complete the
+[trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order).
+After setup and before committing/pushing, read and verify the generated hook under the
 [local hook policy](docs/policies/quality.md#local-git-hook-initialization).
 Do not treat a manual verification run as proof that Git will run `pre-push`.
-Before SSH pushes, initialize and verify the repository's fixed 30/3 keepalive
-settings under the [SSH push policy](docs/policies/quality.md#ssh-push-initialization),
-preserving existing SSH commands and identity/proxy options.
+Before starting an SSH push, read and complete the
+[SSH push initialization](docs/policies/quality.md#ssh-push-initialization).
 
 The official Server is a complete unchanged npm release delivered in Plugin dist.
-Builds verify maintained tarball/file evidence and both locks before copying;
-never refresh release hashes automatically. Dependency/version upgrades require
-fresh independent tarball evidence and the explicit supply-chain gate. Runtime
-only verifies and launches the delivered public bin. Preserve original upstream
-licenses, resources, vendor inventory and skills, and document npm graph audit scope.
+Never refresh release hashes automatically. Runtime only verifies and launches
+the delivered public bin. Before building Plugin delivery, dependency upgrades or
+official release/evidence/build-input changes, read the
+[supply-chain policy](docs/policies/supply-chain.md),
+including its [official delivery and upgrade contract](docs/policies/supply-chain.md#official-release-delivery-and-upgrades).
