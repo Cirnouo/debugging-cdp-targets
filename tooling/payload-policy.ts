@@ -22,6 +22,10 @@ export function requiredPayloadFiles(host: HostDescriptor = CODEX_HOST) {
         'skills/README.md',
         'skills/debugging-cdp-targets/README.md',
         'skills/debugging-cdp-targets/SKILL.md',
+        'skills/debugging-cdp-targets/references/README.md',
+        'skills/debugging-cdp-targets/references/question-contract.md',
+        'skills/debugging-cdp-targets/references/questions.zh.md',
+        'skills/debugging-cdp-targets/references/questions.en.md',
         ...OFFICIAL_RELEASE.files.map((file) => `dist/official-server/${file.path}`),
     ]);
 }

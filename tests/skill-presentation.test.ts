@@ -114,7 +114,15 @@ test('both hosts must preserve every maintained shared Skill file even when peer
         for (const file of ['plugins', 'packaging', '.agents', '.claude-plugin', 'package.json', 'LICENSE'])
             await cp(path.join(root, file), path.join(fixture, file), { recursive: true });
         assert.deepEqual(await auditDistribution(fixture), []);
-        for (const file of ['README.md', 'debugging-cdp-targets/README.md', 'debugging-cdp-targets/SKILL.md']) {
+        for (const file of [
+            'README.md',
+            'debugging-cdp-targets/README.md',
+            'debugging-cdp-targets/SKILL.md',
+            'debugging-cdp-targets/references/README.md',
+            'debugging-cdp-targets/references/question-contract.md',
+            'debugging-cdp-targets/references/questions.zh.md',
+            'debugging-cdp-targets/references/questions.en.md',
+        ]) {
             const original = await readFile(path.join(fixture, 'packaging/shared/skills', file));
             for (const host of PLUGIN_HOSTS)
                 await writeFile(
@@ -174,6 +182,10 @@ test('shared Skill inventory rejects stale delivered files after maintained sour
         for (const [file, rename] of [
             ['debugging-cdp-targets/SKILL.md', false],
             ['debugging-cdp-targets/README.md', true],
+            ['debugging-cdp-targets/references/README.md', true],
+            ['debugging-cdp-targets/references/question-contract.md', false],
+            ['debugging-cdp-targets/references/questions.zh.md', true],
+            ['debugging-cdp-targets/references/questions.en.md', false],
         ] as const) {
             const maintained = path.join(fixture, 'packaging/shared/skills', file);
             const original = await readFile(maintained);

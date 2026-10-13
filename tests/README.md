@@ -91,11 +91,13 @@
   mistyped Skill fields, invalid icon references and missing/changed/linked PNGs.
   It checks assembly before copying and every shared Skill input against both
   hosts, including matching peer drift that cannot prove maintained identity and
-  stale delivered files after maintained shared inputs are deleted or renamed.
-- `skill-questions.test.ts` checks the shared bilingual question catalogue,
+  stale delivered files after maintained shared inputs, including nested question
+  references, are deleted or renamed.
+- `skill-questions.test.ts` parses the common question contract and both language
+  catalogues separately, reconstructs their shared bilingual contract and checks
   explicit roles, finite fact slots, action order, directory delegation and
-  cleanup scope, required input fields and lifecycle event mapping, with malformed
-  and mutated instruction fixtures. Static checks
+  cleanup scope, required input fields and lifecycle event mapping, with duplicate/malformed YAML
+  mappings and mutated instruction fixtures. Static checks
   establish the instruction contract, not model compliance; independent model
   scenario sampling is separate acceptance evidence.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
