@@ -11,8 +11,9 @@ This directory owns GitHub Actions workflows.
 - `ci.yaml` validates commit governance and current PR template submissions,
   repository quality, Windows behavior, portable simulated CDP, real Chrome and
   the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
-  request open/reopen/synchronize/title-or-body-edit events. Only failed controlled
-  real Chrome jobs upload the fixed safe fixture diagnostic files described below.
+  request open/reopen/synchronize/title-or-body-edit events. Ordinary controlled
+  real Chrome jobs upload the fixed safe fixture diagnostic files only on failure.
+  The default-off manual Ubuntu startup study is the narrow exception below.
 - `release.yaml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.
@@ -93,8 +94,9 @@ It retains artifacts for seven days, disables hidden files and overwrite, and se
 `job-index.json`, `official-server.events.ndjson`, `official-server.summary.json`,
 `entry-recovery.events.ndjson` and `entry-recovery.summary.json` from the separate
 `RUNNER_TEMP/dct-fixture-diagnostics` directory. There are no profile, workspace
-or temporary-directory wildcards. Other CI jobs remain artifact-free, and the
-release publisher uploads no custom assets. The failure job summary indexes
+or temporary-directory wildcards. Jobs other than ordinary real Chrome and the
+manual study below remain artifact-free, and the release publisher uploads no
+custom assets. The failure job summary indexes
 relative filenames, safe primary stage/operation identity and the artifact link
 when upload succeeds. The index, both independent not-run summaries and empty
 streams start before prerequisites; collection ownership refuses prior evidence.
@@ -106,6 +108,49 @@ and synchronous instrumentation overhead on real Linux/macOS Chrome is unmeasure
 See [smoke diagnostics and reproduction](../../tests/smoke/README.md#controlled-failure-diagnostics).
 New scan and browser checks become required only after their first successful
 GitHub runs and review of the CodeQL findings.
+
+The `ubuntu-startup-study` workflow-dispatch input is boolean and defaults to
+false. Select the reviewed branch in Actions, choose **Run workflow**, and set
+that input to true, or run this single explicitly authorized batch:
+
+```sh
+gh workflow run ci.yaml --ref <reviewed-branch> -f ubuntu-startup-study=true
+```
+
+Its run-ID-specific concurrency group cannot cancel ordinary CI's workflow/ref
+group. All ordinary jobs still execute their full checks, with the same display
+names and gates. The additional Ubuntu startup study waits for Quality and
+uses exactly three blocks crossed with file logging `on`/`off`, six fresh
+`ubuntu-24.04` runner jobs. It uses Node 24.21.0, pnpm 12.4.2 and the fixed actual
+Chrome path `/opt/google/chrome/chrome`. Each slot performs the existing frozen
+install, typecheck, current collection initialization and prerequisites, then
+one `official-server.ts --allow-gui --startup-study --chrome-file-logging on|off`
+invocation under `xvfb-run -a`, with its diagnostics directory and collection UUID.
+No pre-start Chrome version query, binary hashing, warmup, browser download or
+OS package installation is added. There are no retries, replacement slots or
+ignored failures; fail-fast is false so one sample's failure does not cancel peers.
+
+Only this study job uploads and indexes diagnostics after success as well as
+failure, guarded by `always()` and successful current initialization. It retains
+the exact same five safe filenames for seven days, with hidden files and overwrite
+disabled, warning on missing files. Artifact names are
+`ubuntu-startup-study-block-<block>-logging-<on|off>-<run-id>-<attempt>`.
+`entry-recovery` remains not-run with its empty stream. Normal real Chrome
+artifacts keep their original failure-only guard; release publication gains no
+assets. Raw Chrome logs, profiles and private scratch remain excluded.
+
+The primary measure is the first readiness outcome and monotonic duration.
+Secondary evidence includes owned-listener time, endpoint outcomes, safe process
+counters, closed wait kinds, system PSI, native/collector costs and cleanup.
+Both arms retain collectors, capture, display preflight and sampler; the off arm's
+absent Chrome log is expected. This is one batch of six pilot samples, with
+cancelled or incomplete slots recorded without replacement. Fresh runners do not
+establish cold caches, and blocks are not matched machines. Arm differences are
+association only; six successes mean not reproduced and root cause unknown.
+Missing terminal/cleanup records or capped/truncated evidence limits conclusions.
+The study is diagnostic evidence, not full acceptance. See the
+[bounded study procedure](../../tests/smoke/README.md#bounded-ubuntu-startup-study)
+for exact local arguments and the unchanged collection budgets.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

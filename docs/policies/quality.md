@@ -297,12 +297,13 @@ required before private scratch deletion. Unmatched messages and absent logs do
 not establish causes, and optional capture failures do not change acceptance.
 These jobs also run in
 same-commit release CI; simulated tests do not substitute for real acceptance.
-Only failed controlled real Chrome fixture jobs may upload diagnostic artifacts,
+Ordinary controlled real Chrome fixture jobs may upload diagnostic artifacts only on failure,
 using the reviewed
 [official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
 The exact five collector/index filenames, failure condition, seven-day retention
-and separate directory are enforced by CI regressions; other jobs remain
-artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
+and separate directory are enforced by CI regressions. The sole success-upload
+exception is the explicitly opted-in manual Ubuntu startup study described below;
+all other jobs remain artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
 numbers and bounded allowlisted error cause codes. They exclude raw errors,
 messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
 environment, argv, process tables, lock content, hostnames and private paths.
@@ -327,6 +328,34 @@ establish only the recorded direct checks, not complete lifecycle attribution
 or a root cause for historical failures. Synchronous instrumentation overhead
 on real Linux/macOS Chrome fixtures has not been measured. Reproduction and interpretation belong in the
 [smoke inventory](../../tests/smoke/README.md#controlled-failure-diagnostics).
+
+The `ubuntu-startup-study` boolean manual input defaults to false and enables
+the study job only for `workflow_dispatch` with an explicit true value. That
+dispatch uses a run-ID-specific concurrency group, leaving ordinary CI's
+workflow/ref group unchanged. Quality and its supply-chain prerequisite remain
+mandatory. The fixed matrix is three blocks by file logging on/off, six fresh
+`ubuntu-24.04` runner slots, with fail-fast disabled and no retries, replacements
+or ignored failures. It retains Node 24.21.0, pnpm 12.4.2, the fixed actual Chrome
+path and reviewed full Action SHAs. Each slot runs only the official smoke's
+single-start study mode under Xvfb; it never substitutes for the ordinary two-smoke
+real Chrome acceptance. No Chrome version/hash command, warmup, browser download
+or OS package installation is added before the first start.
+
+Only that study job uses `always()` plus the successful current-initialization
+guard to upload and index the same five fixed files on either outcome. Artifact
+names include block, arm, run ID and attempt; retention stays seven days with
+hidden files and overwrite disabled. Entry-recovery remains explicitly not-run.
+The safe collector keeps its existing event/byte limits and raw Chrome logs stay
+excluded. Both arms retain capture, display preflight, collectors and sampler;
+the off arm omits only Chrome's two file-logging switches, making absent Chrome
+log evidence expected. The readiness predicate and 20-second deadline remain
+unchanged. One batch of six pilot samples cannot establish a causal logging
+effect or rare-failure reliability; fresh runners do not prove cold caches and
+blocks do not pair samples on one machine. An all-success batch means the failure
+was not reproduced and its cause remains unknown. Missing terminal/cleanup or
+truncated evidence limits conclusions. See the
+[study procedure](../../tests/smoke/README.md#bounded-ubuntu-startup-study)
+for the fixed protocol, metrics and manual command.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at

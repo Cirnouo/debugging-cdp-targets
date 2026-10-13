@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { type ChildProcess, execFile } from 'node:child_process';
 import { watch } from 'node:fs';
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -9,7 +9,43 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createWindowsLauncher } from '../src/adapters/windows-launch.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { finishNativeResourceFixture, retainNativeResourceFixture } from './fixtures/native-resource-cleanup.ts';
+import {
+    finishNativeResourceFixture,
+    retainNativeResourceFixture,
+    withNativeResourceCleanup,
+} from './fixtures/native-resource-cleanup.ts';
+import {
+    createNativeResourceLog,
+    type NativeResourceLog,
+    type NativeResourceVariant,
+    safeExitCode,
+    safeSignal,
+} from './fixtures/native-resource-log.ts';
+
+async function nativeResourceCase(variant: NativeResourceVariant, action: (log: NativeResourceLog) => Promise<void>) {
+    const log = createNativeResourceLog(variant);
+    try {
+        await log.step('fixture', undefined, () => action(log));
+    } finally {
+        log.finish();
+    }
+}
+
+function observeHelper<T>(
+    log: NativeResourceLog,
+    pending: Promise<T> & { child: ChildProcess },
+    detachedLaunch = false,
+) {
+    if (detachedLaunch) {
+        pending.child.once('spawn', () => log.event('END', 'launch'));
+        pending.child.once('error', () => log.event('FAILURE', 'launch'));
+    }
+    pending.child.once('close', (code, signal) =>
+        log.event('CLOSE', 'launch', undefined, { closeCode: safeExitCode(code), signal: safeSignal(signal) }),
+    );
+    log.observe('additional-exit', undefined, pending);
+    return pending;
+}
 
 test('failed fixture cleanup retains its coordination directory until independent actual-exit evidence settles', {
     timeout: 5_000,
@@ -152,55 +188,84 @@ for (const [abandon, failure] of [
         skip: process.platform !== 'win32',
         timeout: 25_000,
     }, async (t) => {
-        const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-resources-'));
-        const primary = new Error('Injected assertion before late child release.');
-        const run = async () => {
-            const child = await createWindowsLauncher().launch({
-                executablePath: process.execPath,
-                arguments: [
-                    fileURLToPath(new URL('./fixtures/native-resource-child.ts', import.meta.url)),
-                    'root',
-                    directory,
-                ],
-                cwd: directory,
-                env: Object.fromEntries(
-                    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-                ),
-            });
-            const retained = await retainNativeResourceFixture(directory);
-            try {
-                await retained.releaseRoot();
-                if (child.exitCode === null)
-                    await new Promise<void>((resolve, reject) => {
-                        child.once('exit', resolve);
-                        child.onMonitorError(() => reject(new Error('Root observation failed.')));
-                    });
-                assert.equal(child.exitCode, 0);
-                let completed = false;
-                const resources = child.waitForResourcesClosed().then(() => {
-                    completed = true;
-                });
-                void resources.catch(() => {});
-                assert.equal(child.monitorDisposed, false);
-                if (abandon) {
-                    child.disposeMonitor();
-                    await assert.rejects(resources);
-                }
-                if (failure) throw primary;
-                await writeFile(path.join(directory, 'launch-late'), 'after actual root exit');
-                await retained.armLate(t.signal);
-                assert.equal(completed, false);
-                await writeFile(path.join(directory, 'finish'), 'ordinary child exit');
-                await waitForFile(directory, 'late-finished', t.signal);
-                if (!abandon) await resources;
-                assert.equal(child.exitCode, 0);
-            } finally {
-                await retained.finish(() => child.disposeMonitor());
-            }
-        };
-        if (failure) await assert.rejects(run(), (error: unknown) => error === primary);
-        else await run();
-        await assert.rejects(access(directory), { code: 'ENOENT' });
+        await nativeResourceCase(
+            abandon
+                ? failure
+                    ? 'group-abandoned-body-failure'
+                    : 'group-abandoned'
+                : failure
+                  ? 'group-body-failure'
+                  : 'group-normal',
+            async (log) => {
+                const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-resources-'));
+                const primary = new Error('Injected assertion before late child release.');
+                const run = async () => {
+                    const child = await log.step('launch', 'root', () =>
+                        createWindowsLauncher().launch({
+                            executablePath: process.execPath,
+                            arguments: [
+                                fileURLToPath(new URL('./fixtures/native-resource-child.ts', import.meta.url)),
+                                'root',
+                                directory,
+                            ],
+                            cwd: directory,
+                            env: Object.fromEntries(
+                                Object.entries(process.env).filter(
+                                    (entry): entry is [string, string] => entry[1] !== undefined,
+                                ),
+                            ),
+                        }),
+                    );
+                    const retained = await retainNativeResourceFixture(directory, log);
+                    await withNativeResourceCleanup(
+                        log,
+                        async () => {
+                            await retained.releaseRoot();
+                            await log.step('root-exit', 'root', async () => {
+                                if (child.exitCode === null)
+                                    await new Promise<void>((resolve, reject) => {
+                                        child.once('exit', resolve);
+                                        child.onMonitorError(() => reject(new Error('Root observation failed.')));
+                                    });
+                                log.event('END', 'root-exit', 'root', {
+                                    ...(child.exitCode !== null ? { applicationExitCode: child.exitCode } : {}),
+                                    rootExitSource: 'native-handle',
+                                });
+                            });
+                            assert.equal(child.exitCode, 0);
+                            let completed = false;
+                            const resources = log.observe('resource-wait', undefined, () =>
+                                child.waitForResourcesClosed().then(() => {
+                                    completed = true;
+                                }),
+                            );
+                            void resources.catch(() => {});
+                            assert.equal(child.monitorDisposed, false);
+                            if (abandon) {
+                                child.disposeMonitor();
+                                await assert.rejects(resources);
+                            }
+                            if (failure) throw primary;
+                            await log.step('late-release', 'late', () =>
+                                writeFile(path.join(directory, 'launch-late'), 'after actual root exit'),
+                            );
+                            await retained.armLate(t.signal);
+                            assert.equal(completed, false);
+                            await log.step('finish-release', 'late', async () => {
+                                await writeFile(path.join(directory, 'finish'), 'ordinary child exit');
+                                await waitForFile(directory, 'late-finished', t.signal);
+                            });
+                            if (!abandon) await resources;
+                            assert.equal(child.exitCode, 0);
+                        },
+                        () => retained.finish(() => child.disposeMonitor()),
+                    );
+                };
+                if (failure) await assert.rejects(run(), (error: unknown) => error === primary);
+                else await run();
+                await assert.rejects(access(directory), { code: 'ENOENT' });
+            },
+        );
     });
 }
 
@@ -208,54 +273,12 @@ test('authenticated creator pulls only job assignment rights while the original 
     skip: process.platform !== 'win32',
     timeout: 20_000,
 }, async (t) => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
-    const pending = promisify(execFile)(
-        'powershell.exe',
-        [
-            '-NoProfile',
-            '-NonInteractive',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            fileURLToPath(new URL('./fixtures/native-resource-handoff.ps1', import.meta.url)),
-            '-Directory',
-            directory,
-            '-NodePath',
-            process.execPath,
-        ],
-        { windowsHide: true, shell: false },
-    );
-    void pending.catch(() => {});
-    const retained = await retainNativeResourceFixture(directory);
-    try {
-        await retained.releaseRoot();
-        await waitForFile(directory, 'handoff-root-exited', t.signal);
-        assert.equal(await readFile(path.join(directory, 'handoff-root-exited'), 'utf8'), '0');
-        await writeFile(path.join(directory, 'launch-late'), 'after original handle root exit');
-        await retained.armLate(t.signal);
-        await writeFile(path.join(directory, 'finish'), 'ordinary descendant exit');
-        const { stdout } = await pending;
-        const evidence: unknown = JSON.parse(stdout.trim());
-        assert.ok(isRecord(evidence));
-        assert.equal(evidence.rootExit, 0);
-        assert.equal(evidence.closed, true);
-        assert.equal(evidence.active, 0);
-        assert.equal(evidence.creatorQueryError, 5);
-        assert.equal(evidence.creatorExit, 0);
-    } finally {
-        await retained.finish(() => {}, pending);
-    }
-});
-
-for (const failure of ['none', 'before-late', 'before-witness'] as const) {
-    test(`receiver process exit reclaims an unadopted root duplicate without terminating descendants: ${failure}`, {
-        skip: process.platform !== 'win32',
-        timeout: 25_000,
-    }, async (t) => {
+    await nativeResourceCase('creator-handoff', async (log) => {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
-        const primary = new Error('Injected receiver assertion before child witness arming.');
-        const run = async () => {
-            const { stdout } = await promisify(execFile)(
+        log.event('BEGIN', 'launch');
+        const pending = observeHelper(
+            log,
+            promisify(execFile)(
                 'powershell.exe',
                 [
                     '-NoProfile',
@@ -268,31 +291,114 @@ for (const failure of ['none', 'before-late', 'before-witness'] as const) {
                     directory,
                     '-NodePath',
                     process.execPath,
-                    '-ReceiverExit',
                 ],
                 { windowsHide: true, shell: false },
-            );
-            const retained = await retainNativeResourceFixture(directory);
-            try {
+            ),
+            true,
+        );
+        void pending.catch(() => {});
+        const retained = await retainNativeResourceFixture(directory, log);
+        await withNativeResourceCleanup(
+            log,
+            async () => {
                 await retained.releaseRoot();
-                const receiver: unknown = JSON.parse(stdout.trim());
-                assert.ok(isRecord(receiver));
-                assert.equal(receiver.received, true);
-                if (failure === 'before-late') throw primary;
-                await writeFile(path.join(directory, 'launch-late'), 'after receiver process exited');
-                if (failure === 'before-witness') {
-                    await waitForFile(directory, 'late-ready', t.signal);
-                    throw primary;
-                }
+                await log.step('root-exit', 'root', async () => {
+                    await waitForFile(directory, 'handoff-root-exited', t.signal);
+                    assert.equal(await readFile(path.join(directory, 'handoff-root-exited'), 'utf8'), '0');
+                    log.event('END', 'root-exit', 'root', {
+                        applicationExitCode: 0,
+                        rootExitSource: 'handoff-receipt',
+                    });
+                });
+                await log.step('late-release', 'late', () =>
+                    writeFile(path.join(directory, 'launch-late'), 'after original handle root exit'),
+                );
                 await retained.armLate(t.signal);
-                await writeFile(path.join(directory, 'finish'), 'ordinary descendant exit');
-            } finally {
-                await retained.finish();
-            }
-        };
-        if (failure !== 'none') await assert.rejects(run(), (error: unknown) => error === primary);
-        else await run();
-        await assert.rejects(access(directory), { code: 'ENOENT' });
+                await log.step('finish-release', 'late', () =>
+                    writeFile(path.join(directory, 'finish'), 'ordinary descendant exit'),
+                );
+                const { stdout } = await pending;
+                const evidence: unknown = JSON.parse(stdout.trim());
+                assert.ok(isRecord(evidence));
+                assert.equal(evidence.rootExit, 0);
+                assert.equal(evidence.closed, true);
+                assert.equal(evidence.active, 0);
+                assert.equal(evidence.creatorQueryError, 5);
+                assert.equal(evidence.creatorExit, 0);
+            },
+            () => retained.finish(() => {}, pending),
+        );
+    });
+});
+
+for (const failure of ['none', 'before-late', 'before-witness'] as const) {
+    test(`receiver process exit reclaims an unadopted root duplicate without terminating descendants: ${failure}`, {
+        skip: process.platform !== 'win32',
+        timeout: 25_000,
+    }, async (t) => {
+        await nativeResourceCase(
+            failure === 'none'
+                ? 'receiver-none'
+                : failure === 'before-late'
+                  ? 'receiver-before-late'
+                  : 'receiver-before-witness',
+            async (log) => {
+                const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
+                const primary = new Error('Injected receiver assertion before child witness arming.');
+                const run = async () => {
+                    const { stdout } = await log.step('launch', undefined, () =>
+                        observeHelper(
+                            log,
+                            promisify(execFile)(
+                                'powershell.exe',
+                                [
+                                    '-NoProfile',
+                                    '-NonInteractive',
+                                    '-ExecutionPolicy',
+                                    'Bypass',
+                                    '-File',
+                                    fileURLToPath(new URL('./fixtures/native-resource-handoff.ps1', import.meta.url)),
+                                    '-Directory',
+                                    directory,
+                                    '-NodePath',
+                                    process.execPath,
+                                    '-ReceiverExit',
+                                ],
+                                { windowsHide: true, shell: false },
+                            ),
+                        ),
+                    );
+                    const retained = await retainNativeResourceFixture(directory, log);
+                    await withNativeResourceCleanup(
+                        log,
+                        async () => {
+                            await retained.releaseRoot();
+                            const receiver: unknown = JSON.parse(stdout.trim());
+                            assert.ok(isRecord(receiver));
+                            assert.equal(receiver.received, true);
+                            if (failure === 'before-late') throw primary;
+                            await log.step('late-release', 'late', () =>
+                                writeFile(path.join(directory, 'launch-late'), 'after receiver process exited'),
+                            );
+                            if (failure === 'before-witness') {
+                                await log.step('late-ready-wait', 'late', () =>
+                                    waitForFile(directory, 'late-ready', t.signal),
+                                );
+                                throw primary;
+                            }
+                            await retained.armLate(t.signal);
+                            await log.step('finish-release', 'late', () =>
+                                writeFile(path.join(directory, 'finish'), 'ordinary descendant exit'),
+                            );
+                        },
+                        () => retained.finish(),
+                    );
+                };
+                if (failure !== 'none') await assert.rejects(run(), (error: unknown) => error === primary);
+                else await run();
+                await assert.rejects(access(directory), { code: 'ENOENT' });
+            },
+        );
     });
 }
 
@@ -300,50 +406,63 @@ test('a lost created packet keeps acquisition pending after creator exit until t
     skip: process.platform !== 'win32',
     timeout: 20_000,
 }, async (t) => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
-    const pending = promisify(execFile)(
-        'powershell.exe',
-        [
-            '-NoProfile',
-            '-NonInteractive',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            fileURLToPath(new URL('./fixtures/native-resource-handoff.ps1', import.meta.url)),
-            '-Directory',
-            directory,
-            '-NodePath',
-            process.execPath,
-            '-LostPacket',
-        ],
-        { windowsHide: true, shell: false },
-    );
-    let completed = false;
-    void pending.then(
-        () => {
-            completed = true;
-        },
-        () => {
-            completed = true;
-        },
-    );
-    const retained = await retainNativeResourceFixture(directory);
-    try {
-        await retained.releaseRoot();
-        await waitForFile(directory, 'middle-ready', t.signal);
-        await writeFile(path.join(directory, 'launch-late'), 'created identity packet was lost');
-        await retained.armLate(t.signal);
-        assert.equal(completed, false);
-        await writeFile(path.join(directory, 'finish'), 'ordinary descendants exit');
-        const evidence: unknown = JSON.parse((await pending).stdout.trim());
-        assert.deepEqual(evidence, {
-            event: 'acquisition-settled',
-            applicationMayExist: false,
-            creationPending: false,
-        });
-    } finally {
-        await retained.finish(() => {}, pending);
-    }
+    await nativeResourceCase('lost-packet', async (log) => {
+        const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
+        log.event('BEGIN', 'launch');
+        const pending = observeHelper(
+            log,
+            promisify(execFile)(
+                'powershell.exe',
+                [
+                    '-NoProfile',
+                    '-NonInteractive',
+                    '-ExecutionPolicy',
+                    'Bypass',
+                    '-File',
+                    fileURLToPath(new URL('./fixtures/native-resource-handoff.ps1', import.meta.url)),
+                    '-Directory',
+                    directory,
+                    '-NodePath',
+                    process.execPath,
+                    '-LostPacket',
+                ],
+                { windowsHide: true, shell: false },
+            ),
+            true,
+        );
+        let completed = false;
+        void pending.then(
+            () => {
+                completed = true;
+            },
+            () => {
+                completed = true;
+            },
+        );
+        const retained = await retainNativeResourceFixture(directory, log);
+        await withNativeResourceCleanup(
+            log,
+            async () => {
+                await retained.releaseRoot();
+                await waitForFile(directory, 'middle-ready', t.signal);
+                await log.step('late-release', 'late', () =>
+                    writeFile(path.join(directory, 'launch-late'), 'created identity packet was lost'),
+                );
+                await retained.armLate(t.signal);
+                assert.equal(completed, false);
+                await log.step('finish-release', 'late', () =>
+                    writeFile(path.join(directory, 'finish'), 'ordinary descendants exit'),
+                );
+                const evidence: unknown = JSON.parse((await pending).stdout.trim());
+                assert.deepEqual(evidence, {
+                    event: 'acquisition-settled',
+                    applicationMayExist: false,
+                    creationPending: false,
+                });
+            },
+            () => retained.finish(() => {}, pending),
+        );
+    });
 });
 
 test('Windows snapshot uses limited-query identity when MainModule access is denied', {

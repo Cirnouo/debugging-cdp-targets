@@ -30,7 +30,25 @@ import {
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { readMcpTools } from './mcp-client.ts';
 
-const args = requireGuiAuthorization();
+const authorizedArgs = requireGuiAuthorization();
+const args: string[] = [];
+let startupStudy = false;
+let chromeFileLogging: 'on' | 'off' | undefined;
+for (let index = 0; index < authorizedArgs.length; index++) {
+    const argument = authorizedArgs[index];
+    if (argument === '--startup-study') {
+        if (startupStudy) throw new Error('Duplicate --startup-study.');
+        startupStudy = true;
+    } else if (argument === '--chrome-file-logging') {
+        if (chromeFileLogging !== undefined) throw new Error('Duplicate --chrome-file-logging.');
+        const arm = authorizedArgs[++index];
+        if (arm !== 'on' && arm !== 'off') throw new Error('Expected --chrome-file-logging on|off.');
+        chromeFileLogging = arm;
+    } else if (argument !== undefined) args.push(argument);
+}
+if (startupStudy !== (chromeFileLogging !== undefined))
+    throw new Error('Startup study requires both --startup-study and explicit --chrome-file-logging on|off.');
+if (startupStudy && process.platform !== 'linux') throw new Error('Startup study requires Linux.');
 const outputDirectory = fixtureOutputDirectory(args);
 const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
     collectionId: fixtureOutputCollectionId(args),
@@ -39,6 +57,17 @@ const failures = createSmokeFailures(artifacts);
 const currentCollection = artifacts.snapshot();
 const controlledDiagnostics =
     !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+if (startupStudy && (!controlledDiagnostics || currentCollection.collectionId !== fixtureOutputCollectionId(args))) {
+    const error = new Error('Startup study requires a current accepted diagnostics collection.');
+    failures.primary(error, 'prerequisites');
+    failures.finish();
+}
+if (startupStudy)
+    console.log(
+        JSON.stringify({
+            startupStudy: { chromeFileLogging, launch: 1, expectedLogAbsence: chromeFileLogging === 'off' },
+        }),
+    );
 function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
     const safe = validateBrowserStartupRecord(record);
     if (!safe) return;
@@ -128,12 +157,13 @@ function textContent(result: Record<string, unknown>) {
         .join('\n');
 }
 function launch(profile: string, title: string) {
+    const startupLog = startup?.newLog();
     return createChromeSmokeLaunch(
         chrome,
         path.join(folder, profile),
         `data:text/html,<title>${title}</title><style>h1{color:rgb(12,34,56)}</style><h1>Isolated smoke</h1>`,
         process.platform,
-        startup?.newLog(),
+        chromeFileLogging === 'off' ? undefined : startupLog,
     );
 }
 let entryId: string | undefined;
@@ -181,65 +211,69 @@ try {
     const firstDirectory = await inspectChromeSmokeDirectory(tool, first, firstFixture);
     managedDirectories.add(firstDirectory);
     console.log(JSON.stringify({ first }));
-    const pagesOne = await tool('list_pages', route(first));
-    assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
-    assert.match(JSON.stringify(pagesOne), /FIRST/);
-    const page = textContent(pagesOne).match(/^(\d+):.*FIRST/m);
-    assert.ok(page?.[1], 'The isolated page must have an official page ID.');
-    const pageId = Number(page[1]);
-    const snapshot = await tool('take_snapshot', { ...route(first), pageId });
-    assert.notEqual(snapshot.isError, true, JSON.stringify(snapshot));
-    const heading = textContent(snapshot).match(/uid=(\S+) heading "Isolated smoke"/);
-    assert.ok(heading?.[1], 'The isolated heading must have an official snapshot UID.');
-    const styles = await tool('get_css_styles', { ...route(first), pageId, uid: heading[1] });
-    assert.notEqual(styles.isError, true, JSON.stringify(styles));
-    assert.match(textContent(styles), /color:\s*rgb\(12,\s*34,\s*56\)/);
-    const extensions = tools.find((entry) => /list.*extension|extension.*list/.test(entry.name));
-    assert.ok(extensions);
-    const extensionResult = await tool(extensions.name, route(first));
-    assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
-    await closeSmokeConnection(control, {
-        action: 'stop',
-        requestId: randomUUID(),
-        entryId,
-        connectionId: first.connectionId,
-        sessionId: first.sessionId,
-        disposition: 'Close',
-    });
-    active = undefined;
-    await assert.rejects(lstat(firstDirectory), { code: 'ENOENT' });
-    await emptyGateway(entryId);
-    const second = await control({
-        action: 'start',
-        requestId: randomUUID(),
-        entryId,
-        basePort: 19222,
-        ...launch('profile-two', 'SECOND'),
-    });
-    assert.ok(!('connections' in second) && second.sessionId);
-    assert.notEqual(second.connectionId, first.connectionId);
-    assert.notEqual(second.sessionId, first.sessionId);
-    active = second;
-    const secondFixture = await inspectChromeSmokeTarget(second, chrome);
-    const secondDirectory = await inspectChromeSmokeDirectory(tool, second, secondFixture);
-    managedDirectories.add(secondDirectory);
-    console.log(JSON.stringify({ second }));
-    const pagesTwo = await tool('list_pages', route(second));
-    assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
-    assert.match(JSON.stringify(pagesTwo), /SECOND/);
-    assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
-    await closeSmokeConnection(control, {
-        action: 'stop',
-        requestId: randomUUID(),
-        entryId,
-        connectionId: second.connectionId,
-        sessionId: second.sessionId,
-        disposition: 'Close',
-    });
-    active = undefined;
-    await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
-    await emptyGateway(entryId);
-    console.log('Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.');
+    if (!startupStudy) {
+        const pagesOne = await tool('list_pages', route(first));
+        assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
+        assert.match(JSON.stringify(pagesOne), /FIRST/);
+        const page = textContent(pagesOne).match(/^(\d+):.*FIRST/m);
+        assert.ok(page?.[1], 'The isolated page must have an official page ID.');
+        const pageId = Number(page[1]);
+        const snapshot = await tool('take_snapshot', { ...route(first), pageId });
+        assert.notEqual(snapshot.isError, true, JSON.stringify(snapshot));
+        const heading = textContent(snapshot).match(/uid=(\S+) heading "Isolated smoke"/);
+        assert.ok(heading?.[1], 'The isolated heading must have an official snapshot UID.');
+        const styles = await tool('get_css_styles', { ...route(first), pageId, uid: heading[1] });
+        assert.notEqual(styles.isError, true, JSON.stringify(styles));
+        assert.match(textContent(styles), /color:\s*rgb\(12,\s*34,\s*56\)/);
+        const extensions = tools.find((entry) => /list.*extension|extension.*list/.test(entry.name));
+        assert.ok(extensions);
+        const extensionResult = await tool(extensions.name, route(first));
+        assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
+        await closeSmokeConnection(control, {
+            action: 'stop',
+            requestId: randomUUID(),
+            entryId,
+            connectionId: first.connectionId,
+            sessionId: first.sessionId,
+            disposition: 'Close',
+        });
+        active = undefined;
+        await assert.rejects(lstat(firstDirectory), { code: 'ENOENT' });
+        await emptyGateway(entryId);
+        const second = await control({
+            action: 'start',
+            requestId: randomUUID(),
+            entryId,
+            basePort: 19222,
+            ...launch('profile-two', 'SECOND'),
+        });
+        assert.ok(!('connections' in second) && second.sessionId);
+        assert.notEqual(second.connectionId, first.connectionId);
+        assert.notEqual(second.sessionId, first.sessionId);
+        active = second;
+        const secondFixture = await inspectChromeSmokeTarget(second, chrome);
+        const secondDirectory = await inspectChromeSmokeDirectory(tool, second, secondFixture);
+        managedDirectories.add(secondDirectory);
+        console.log(JSON.stringify({ second }));
+        const pagesTwo = await tool('list_pages', route(second));
+        assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
+        assert.match(JSON.stringify(pagesTwo), /SECOND/);
+        assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
+        await closeSmokeConnection(control, {
+            action: 'stop',
+            requestId: randomUUID(),
+            entryId,
+            connectionId: second.connectionId,
+            sessionId: second.sessionId,
+            disposition: 'Close',
+        });
+        active = undefined;
+        await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
+        await emptyGateway(entryId);
+        console.log(
+            'Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.',
+        );
+    }
 } catch (error) {
     failures.primary(error);
 } finally {
@@ -257,7 +291,10 @@ try {
             }),
         );
     }
-    await failures.cleanup('gateway-close', () => client.close());
+    await failures.cleanup('gateway-close', async () => {
+        await client.close();
+        if (startupStudy) assert.equal(client.child.exitCode, 0, 'The study gateway must exit normally.');
+    });
     for (const directory of managedDirectories)
         await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
     if (monitor) {
@@ -273,5 +310,16 @@ try {
         console.log(JSON.stringify({ testProfileFolder: folder }));
     }
     await startup?.close(!failures.hasFailure() && client.child.exitCode === 0);
+    if (startupStudy)
+        console.log(
+            JSON.stringify({
+                startupStudyResult: {
+                    kind: 'single-launch study',
+                    chromeFileLogging,
+                    expectedLogAbsence: chromeFileLogging === 'off',
+                    result: failures.hasFailure() ? 'failed' : 'passed',
+                },
+            }),
+        );
     failures.finish();
 }

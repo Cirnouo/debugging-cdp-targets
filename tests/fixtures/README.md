@@ -79,6 +79,28 @@ disposes observation and removes only a checked owned temporary directory.
 Monitor abandonment and receiver exit cannot discard these independent witnesses.
 `native-resource-witness.ps1` retains an actual owned child process handle before
 fixture release and supplies its identity and ordinary native exit receipt.
+It emits controlled compile/inspect/armed/wait/exit progress and numeric failure
+receipts; invalid PID zero is rejected before compilation or native inspection.
+`native-resource-witness.ts` drains both witness pipes with bounded protocol
+retention, strictly validates PID text and the complete owned identity, and keeps
+witness close codes/signals separate from actual fixture exit receipts. Safe
+failures never include raw streams, executable paths, command arguments or errors.
+Timely SPAWN records and later safe evidence distinguish the existing helper's
+positive int32 `witnessPid` from target `ownedPid`; missing/invalid helper PIDs
+remain null and never participate in target identity or exit success. A
+SPAWN record includes `spawned:true` only when that existing PID supplies OS
+spawn evidence; `spawned:false` means unconfirmed, not proof that no app exists.
+The returned ChildProcess object alone cannot establish a successful OS spawn.
+A matching terminal failure after an accepted exit retains both the actual application exit
+and the helper's disposal-failure evidence without accepting overall success.
+`native-resource-log.ts` emits timely lifecycle BEGIN/END/FAILURE records for the
+nine native resource variants, correlated by fixture UUID and monotonic elapsed
+time. Each safe record is limited to 4 KiB, and each fixture to 128 records and
+128 KiB, reserving a limitation notice and summary. Counters expose truncation,
+write failure and incomplete execution. Sink failures cannot block cleanup or
+replace body/cleanup errors; hard crashes and unavailable output cannot guarantee
+console persistence. These diagnostics strengthen future attribution without
+establishing the cause or repair of any historical witness failure.
 `native-resource-boundary.ps1` replaces only job-accounting and completion-port
 P/Invoke boundaries in an in-memory copy of the maintained C# helper. It exercises
 lost/stale notifications, timeout/error distinctions and cancellation, including

@@ -33,6 +33,7 @@ export interface LinuxStartupWaitRecord {
     readonly bytes: number;
     readonly limitations: readonly LinuxStartupWaitLimitation[];
     readonly wchan?: 'futex' | 'pipe' | 'poll' | 'io' | 'scheduler' | 'unknown';
+    readonly ioWaitKind?: 'io-scheduling' | 'page-bit-wait' | 'buffer-wait' | 'writeback-wait' | 'block-tag-wait';
     readonly process?: Readonly<
         Partial<
             Record<
@@ -113,6 +114,7 @@ const psiKeys = [
     'ioFullTotalUs',
 ] as const;
 const wchanClasses = ['futex', 'pipe', 'poll', 'io', 'scheduler', 'unknown'] as const;
+const ioWaitKinds = ['io-scheduling', 'page-bit-wait', 'buffer-wait', 'writeback-wait', 'block-tag-wait'] as const;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Trigger = LinuxStartupWaitRecord['trigger'];
 type ProcessMetrics = NonNullable<LinuxStartupWaitRecord['process']>;
@@ -229,6 +231,7 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
             'bytes',
             'limitations',
             'wchan',
+            'ioWaitKind',
             'process',
             'systemPsi',
         ]);
@@ -254,6 +257,11 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
         const limits = closedLimitations(selected.limitations);
         if (!limits) return;
         if (selected.wchan !== undefined && !member(wchanClasses, selected.wchan)) return;
+        let ioWaitKind: LinuxStartupWaitRecord['ioWaitKind'];
+        if ('ioWaitKind' in selected) {
+            if (!member(ioWaitKinds, selected.ioWaitKind) || selected.wchan !== 'io') return;
+            ioWaitKind = selected.ioWaitKind;
+        }
         let process: ProcessMetrics | undefined;
         if ('process' in selected) {
             const fields = closed(selected.process, processKeys);
@@ -304,6 +312,7 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
             bytes: selected.bytes,
             limitations: limits,
             ...(selected.wchan === undefined ? {} : { wchan: selected.wchan }),
+            ...(ioWaitKind === undefined ? {} : { ioWaitKind }),
             ...(process === undefined ? {} : { process }),
             ...(systemPsi === undefined ? {} : { systemPsi }),
         });
@@ -336,25 +345,22 @@ function parseStat(text: string | undefined, pid: number) {
         blockIoTicks: counter(fields[39]),
     };
 }
-function classifyWchan(text: string): LinuxStartupWaitRecord['wchan'] {
+function classifyWchan(text: string): Pick<LinuxStartupWaitRecord, 'wchan' | 'ioWaitKind'> {
     const symbol = text.trim();
-    if (['futex_wait_queue_me', 'futex_wait', 'do_futex', 'futex_wait_queue'].includes(symbol)) return 'futex';
-    if (['pipe_read', 'pipe_write', 'wait_for_partner'].includes(symbol)) return 'pipe';
-    if (['ep_poll', 'do_epoll_wait', 'do_poll', 'poll_schedule_timeout', 'do_select'].includes(symbol)) return 'poll';
-    if (
-        [
-            'io_schedule',
-            'io_schedule_timeout',
-            'folio_wait_bit_common',
-            'wait_on_page_bit_common',
-            'wait_on_buffer',
-            'wait_on_page_writeback',
-            'blk_mq_get_tag',
-        ].includes(symbol)
-    )
-        return 'io';
-    if (['schedule', 'schedule_timeout', 'hrtimer_nanosleep', 'do_nanosleep'].includes(symbol)) return 'scheduler';
-    return 'unknown';
+    if (['futex_wait_queue_me', 'futex_wait', 'do_futex', 'futex_wait_queue'].includes(symbol))
+        return { wchan: 'futex' };
+    if (['pipe_read', 'pipe_write', 'wait_for_partner'].includes(symbol)) return { wchan: 'pipe' };
+    if (['ep_poll', 'do_epoll_wait', 'do_poll', 'poll_schedule_timeout', 'do_select'].includes(symbol))
+        return { wchan: 'poll' };
+    if (['io_schedule', 'io_schedule_timeout'].includes(symbol)) return { wchan: 'io', ioWaitKind: 'io-scheduling' };
+    if (['folio_wait_bit_common', 'wait_on_page_bit_common'].includes(symbol))
+        return { wchan: 'io', ioWaitKind: 'page-bit-wait' };
+    if (symbol === 'wait_on_buffer') return { wchan: 'io', ioWaitKind: 'buffer-wait' };
+    if (symbol === 'wait_on_page_writeback') return { wchan: 'io', ioWaitKind: 'writeback-wait' };
+    if (symbol === 'blk_mq_get_tag') return { wchan: 'io', ioWaitKind: 'block-tag-wait' };
+    if (['schedule', 'schedule_timeout', 'hrtimer_nanosleep', 'do_nanosleep'].includes(symbol))
+        return { wchan: 'scheduler' };
+    return { wchan: 'unknown' };
 }
 function ioCounter(text: string | undefined, name: 'read_bytes' | 'write_bytes'): number | undefined {
     const values = text?.split('\n').filter((line) => line.startsWith(`${name}:`));
@@ -471,7 +477,7 @@ export function createLinuxStartupWaitSampler(
         let published = false;
         let timer: unknown;
         const stale = () => connection.root !== root || connection.sessionId !== root.sessionId;
-        function publish(metrics: Pick<LinuxStartupWaitRecord, 'process' | 'systemPsi' | 'wchan'> = {}) {
+        function publish(metrics: Pick<LinuxStartupWaitRecord, 'process' | 'systemPsi' | 'wchan' | 'ioWaitKind'> = {}) {
             if (published) return;
             published = true;
             if (timer !== undefined) clearTimer(timer);
@@ -615,12 +621,12 @@ export function createLinuxStartupWaitSampler(
                     else if (name === 'some' || text?.includes('full ')) limits.add('psi-unknown');
                 }
             }
-            const wchan = wait === undefined ? undefined : classifyWchan(wait);
-            if (wchan === 'unknown') limits.add('wchan-unknown');
+            const waitDetail = wait === undefined ? {} : classifyWchan(wait);
+            if (waitDetail.wchan === 'unknown') limits.add('wchan-unknown');
             publish({
                 ...(Object.keys(process).length ? { process } : {}),
                 ...(Object.keys(systemPsi).length > 1 ? { systemPsi } : {}),
-                ...(wchan === undefined ? {} : { wchan }),
+                ...waitDetail,
             });
         }
         timer = setTimer(() => {
