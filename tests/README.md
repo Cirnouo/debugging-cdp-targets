@@ -92,6 +92,12 @@
   It checks assembly before copying and every shared Skill input against both
   hosts, including matching peer drift that cannot prove maintained identity and
   stale delivered files after maintained shared inputs are deleted or renamed.
+- `skill-questions.test.ts` checks the shared bilingual question catalogue,
+  explicit roles, finite fact slots, action order, directory delegation and
+  cleanup scope, required input fields and lifecycle event mapping, with malformed
+  and mutated instruction fixtures. Static checks
+  establish the instruction contract, not model compliance; independent model
+  scenario sampling is separate acceptance evidence.
 - `official-package.test.ts` checks frozen input agreement, exact release evidence,
   path/link rejection, complete file verification and source/packaged resolution.
 - `file-evidence.test.ts` reproduces path replacement and in-place mutation during
