@@ -993,9 +993,9 @@ The example does not retry a failed sample. `TMPDIR`, when provided, must be an
 existing absolute temporary parent. Every invocation uses a fresh directory;
 earlier evidence is preserved and never presented as current.
 
-The CI input `ubuntu-startup-study` defaults to false. Dispatch `ci.yml` once
+The CI input `ubuntu-startup-study` defaults to false. Dispatch `ci.yaml` once
 against the reviewed branch with it set to true, using Actions or
-`gh workflow run ci.yml --ref <reviewed-branch> -f ubuntu-startup-study=true`.
+`gh workflow run ci.yaml --ref <reviewed-branch> -f ubuntu-startup-study=true`.
 Quality and its supply-chain prerequisite must pass before the study starts.
 The matrix is fixed: blocks 1, 2 and 3 crossed with file logging `on` and `off`,
 six independent fresh `ubuntu-24.04` runner slots, Node 24.21.0, pnpm 12.4.2

@@ -154,6 +154,49 @@ test('GitHub directory documentation uses INDEX.md without overriding the root R
     );
 });
 
+test('repository audit enforces YAML filenames before generated formatting exemptions', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-yaml-names-')));
+    const cases: [string, boolean][] = [
+        ['example.yaml', true],
+        ['nested/example.yaml', true],
+        ['example.yml.md', true],
+        ['.github/ISSUE_TEMPLATE/config.yml', true],
+        ['example.yml', false],
+        ['example.YML', false],
+        ['example.YAML', false],
+        ['example.YaMl', false],
+        ['nested/config.yml', false],
+        ['.hidden/legacy.yml', false],
+        ['.github/ISSUE_TEMPLATE/nested/config.yml', false],
+        ['.github/ISSUE_TEMPLATE/config.YML', false],
+    ];
+    for (const host of PLUGIN_HOSTS) {
+        cases.push(
+            [`${host.payloadRoot}/dist/valid.yaml`, true],
+            [`${host.payloadRoot}/dist/legacy.yml`, false],
+            [`${host.payloadRoot}/dist/upper.YAML`, false],
+        );
+    }
+    try {
+        execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+        // Test one path at a time: case variants alias on Windows filesystems.
+        for (const [file, accepted] of cases) {
+            const target = path.join(root, file);
+            await mkdir(path.dirname(target), { recursive: true });
+            await writeFile(target, 'enabled: true\n');
+            const errors = await auditRepository(root);
+            const diagnostics = errors.filter((error) => error.startsWith(`${file}:`));
+            assert.equal(diagnostics.length > 0, !accepted, `${file}: ${diagnostics.join('\n')}`);
+            if (!accepted) assert.match(diagnostics.join('\n'), /\.yaml/);
+            await rm(target);
+        }
+    } finally {
+        assert.equal(path.dirname(root), await realpath(os.tmpdir()));
+        assert.ok(path.basename(root).startsWith('dct-yaml-names-'));
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 test('only the fully verified official output is exempt from directory documentation and owned-module rules', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-upstream-repo-')));
     try {
@@ -180,6 +223,12 @@ test('only the fully verified official output is exempt from directory documenta
                 path.join(root, prefix, 'LICENSE'),
                 await readFile(new URL('../node_modules/chrome-devtools-mcp/LICENSE', import.meta.url)),
             );
+            const unexpected = `${prefix}/unexpected.yml`;
+            await writeFile(path.join(root, unexpected), 'enabled: true\n');
+            const errors = await auditRepository(root);
+            assert.ok(errors.some((error) => /Official package.*unexpected/i.test(error)));
+            assert.ok(errors.some((error) => error.startsWith(`${unexpected}:`) && error.includes('.yaml')));
+            await rm(path.join(root, unexpected));
         }
     } finally {
         await rm(root, { recursive: true, force: true });

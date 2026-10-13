@@ -11,4 +11,4 @@ repository home page.
 - `PULL_REQUEST_TEMPLATE.md` is the canonical current PR structure and checklist
   source enforced remotely by Commit messages. It guides verification evidence,
   optional Issue associations and other PR references, and generated squash suffixes.
-- `codeql-config.yml` limits security analysis to maintained code and workflows.
+- `codeql-config.yaml` limits security analysis to maintained code and workflows.

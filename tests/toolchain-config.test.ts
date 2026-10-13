@@ -103,10 +103,13 @@ test('Biome owns JavaScript and JSON with repository formatting policy', () => {
 test('lint-staged writes only Biome-supported files and preserves default protections', () => {
     assert.deepEqual(Object.keys(lintStaged), [
         '*.{ts,mts,cts,js,cjs,mjs,json}',
-        '*.{md,yaml,yml,ps1,psd1,psm1,toml,sh}',
+        '*.{md,[yY][aA][mM][lL],[yY][mM][lL],ps1,psd1,psm1,toml,sh}',
     ]);
     assert.match(command(lintStaged, '*.{ts,mts,cts,js,cjs,mjs,json}'), /biome check --write/);
-    assert.equal(lintStaged['*.{md,yaml,yml,ps1,psd1,psm1,toml,sh}'], 'node tooling/check-text-style.ts');
+    assert.equal(
+        lintStaged['*.{md,[yY][aA][mM][lL],[yY][mM][lL],ps1,psd1,psm1,toml,sh}'],
+        'node tooling/check-text-style.ts',
+    );
     assert.doesNotMatch(JSON.stringify(lintStaged), /no-stash|hide-unstaged/i);
 });
 

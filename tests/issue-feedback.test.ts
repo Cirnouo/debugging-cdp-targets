@@ -9,8 +9,8 @@ import { issueFeedbackContext, runIssueFeedback } from '../tooling/issue-feedbac
 import { createGitHubIssueRequest } from '../tooling/issue-github.ts';
 
 const forms = {
-    bugReport: readFileSync(new URL('../.github/ISSUE_TEMPLATE/bug_report.yml', import.meta.url), 'utf8'),
-    featureRequest: readFileSync(new URL('../.github/ISSUE_TEMPLATE/feature_request.yml', import.meta.url), 'utf8'),
+    bugReport: readFileSync(new URL('../.github/ISSUE_TEMPLATE/bug_report.yaml', import.meta.url), 'utf8'),
+    featureRequest: readFileSync(new URL('../.github/ISSUE_TEMPLATE/feature_request.yaml', import.meta.url), 'utf8'),
 };
 const body = `### Problem or use case
 
