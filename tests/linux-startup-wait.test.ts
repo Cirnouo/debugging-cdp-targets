@@ -129,6 +129,110 @@ test('Linux startup wait sampler is available as a bounded fixture-only observer
     assert.equal(typeof module?.validateLinuxStartupWaitRecord, 'function', 'Missing closed sampler projection.');
 });
 
+for (const [symbol, kind] of [
+    ['io_schedule', 'io-scheduling'],
+    ['io_schedule_timeout', 'io-scheduling'],
+    ['folio_wait_bit_common', 'page-bit-wait'],
+    ['wait_on_page_bit_common', 'page-bit-wait'],
+    ['wait_on_buffer', 'buffer-wait'],
+    ['wait_on_page_writeback', 'writeback-wait'],
+    ['blk_mq_get_tag', 'block-tag-wait'],
+] as const) {
+    test(`existing wchan read projects ${symbol} as closed ${kind} detail`, async () => {
+        const h = harness(async (file) => {
+            if (file.endsWith('/stat')) return bounded(stat());
+            if (file.endsWith('/wchan')) return bounded(` ${symbol}\n`);
+            if (/^\/proc\/\d+\/io$/.test(file)) return bounded('read_bytes: 8192\nwrite_bytes: 4096\n');
+            return bounded('some avg10=0.00 avg60=0.10 avg300=1.00 total=1234\n');
+        });
+        h.snapshot(0);
+        await tick();
+        const record = h.records[0];
+        assert.ok(record);
+        assert.equal(record.wchan, 'io');
+        assert.equal(Reflect.get(record, 'ioWaitKind'), kind);
+        assert.equal(record.outcome, 'sampled');
+        assert.equal(record.reads, 7);
+        assert.deepEqual(h.paths, [
+            '/proc/123/stat',
+            '/proc/123/wchan',
+            '/proc/123/io',
+            '/proc/pressure/cpu',
+            '/proc/pressure/memory',
+            '/proc/pressure/io',
+            '/proc/123/stat',
+        ]);
+        assert.equal(h.timers.size, 0);
+        assert.doesNotMatch(JSON.stringify(record), new RegExp(symbol));
+    });
+}
+
+test('non-I/O, unknown and unavailable wchan reads never invent an I/O wait detail', async () => {
+    for (const [value, expected] of [
+        [bounded('futex_wait_queue_me'), 'futex'],
+        [bounded('pipe_read'), 'pipe'],
+        [bounded('ep_poll'), 'poll'],
+        [bounded('schedule'), 'scheduler'],
+        [bounded('0'), 'unknown'],
+        [bounded('PRIVATE_io_schedule'), 'unknown'],
+        [bounded('io_schedule\nPRIVATE'), 'unknown'],
+        [{ bytes: 0, limitation: 'permission' }, undefined],
+    ] as const) {
+        const h = harness(async (file) => {
+            if (file.endsWith('/stat')) return bounded(stat());
+            return file.endsWith('/wchan') ? value : bounded('');
+        });
+        h.snapshot(0);
+        await tick();
+        assert.equal(h.records[0]?.wchan, expected);
+        assert.equal(Object.hasOwn(h.records[0] ?? {}, 'ioWaitKind'), false);
+        assert.doesNotMatch(JSON.stringify(h.records), /PRIVATE|io_schedule/);
+    }
+});
+
+test('closed I/O wait detail validation accepts legacy records and detaches every allowed detail', async () => {
+    const h = harness();
+    h.snapshot(0);
+    await tick();
+    const legacy = { ...h.records[0], wchan: 'io' };
+    assert.deepEqual(validateLinuxStartupWaitRecord(legacy), legacy);
+    for (const ioWaitKind of ['io-scheduling', 'page-bit-wait', 'buffer-wait', 'writeback-wait', 'block-tag-wait']) {
+        const candidate = { ...legacy, ioWaitKind };
+        const result = validateLinuxStartupWaitRecord(candidate);
+        assert.deepEqual(result, candidate);
+        assert.notEqual(result, candidate);
+        assert.ok(Object.isFrozen(result));
+    }
+});
+
+test('closed I/O wait detail rejects contradictions, raw symbols and hostile values without access', async () => {
+    const h = harness();
+    h.snapshot(0);
+    await tick();
+    const record = h.records[0];
+    assert.ok(record);
+    for (const wchan of [undefined, 'futex', 'pipe', 'poll', 'scheduler', 'unknown'])
+        assert.equal(validateLinuxStartupWaitRecord({ ...record, wchan, ioWaitKind: 'buffer-wait' }), undefined);
+    let accessed = 0;
+    const hostileValue = {
+        toString() {
+            accessed++;
+            throw new Error('PRIVATE');
+        },
+    };
+    for (const ioWaitKind of [undefined, null, 0, '', 'io_schedule', 'PRIVATE', [], hostileValue])
+        assert.equal(validateLinuxStartupWaitRecord({ ...record, wchan: 'io', ioWaitKind }), undefined);
+    const hostileRecord = Object.defineProperty({ ...record, wchan: 'io' }, 'ioWaitKind', {
+        enumerable: true,
+        get() {
+            accessed++;
+            throw new Error('PRIVATE');
+        },
+    });
+    assert.equal(validateLinuxStartupWaitRecord(hostileRecord), undefined);
+    assert.equal(accessed, 0);
+});
+
 test('only the same completed and successfully validated snapshot authorizes root reads', async () => {
     const h = harness();
     h.event('native-file', 'decision', 0, { command: 'proc-stat', valid: true, rootStartTicks: 900 });
@@ -470,12 +574,14 @@ test('PID reuse or changed before/after start ticks discards all process metrics
         const h = harness(async (file) => {
             reads++;
             if (file.endsWith('/stat')) return bounded(stat(123, reads === changeAt ? '901' : '900'));
+            if (file.endsWith('/wchan')) return bounded('io_schedule');
             return bounded('PRIVATE_RAW_ADDRESS 0x1234');
         });
         h.snapshot(0);
         await tick();
         assert.equal(h.records[0]?.process, undefined);
         assert.equal(h.records[0]?.wchan, undefined);
+        assert.equal(Object.hasOwn(h.records[0] ?? {}, 'ioWaitKind'), false);
         assert.ok(h.records[0]?.limitations.includes('identity-mismatch'));
         assert.equal(h.paths.length, changeAt);
     }
@@ -546,6 +652,23 @@ test('the 250 ms total budget stops continuation even when I/O resolves before t
     assert.equal(h.records.length, 1);
     assert.deepEqual(h.records[0]?.limitations, ['timeout']);
     assert.equal(h.records[0]?.process, undefined);
+});
+
+test('a deadline after the I/O wait read discards its detail without continuing reads', async () => {
+    let h: ReturnType<typeof harness>;
+    h = harness(async (file) => {
+        if (file.endsWith('/stat')) return bounded(stat());
+        if (file.endsWith('/wchan')) return bounded('wait_on_buffer');
+        h.advance(251);
+        return bounded('');
+    });
+    h.snapshot(0);
+    await tick();
+    assert.equal(h.paths.length, 3);
+    assert.equal(h.records.length, 1);
+    assert.deepEqual(h.records[0]?.limitations, ['timeout']);
+    assert.equal(h.records[0]?.wchan, undefined);
+    assert.equal(Object.hasOwn(h.records[0] ?? {}, 'ioWaitKind'), false);
 });
 
 test('the real bounded file reader caps bytes, conservatively rejects a full buffer and closes failures', async () => {
