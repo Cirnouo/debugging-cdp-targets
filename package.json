@@ -32,7 +32,7 @@
     },
     "lint-staged": {
         "*.{ts,mts,cts,js,cjs,mjs,json}": "biome check --write --no-errors-on-unmatched",
-        "*.{md,yaml,yml,ps1,psd1,psm1,toml,sh}": "node tooling/check-text-style.ts"
+        "*.{md,[yY][aA][mM][lL],[yY][mM][lL],ps1,psd1,psm1,toml,sh}": "node tooling/check-text-style.ts"
     },
     "devDependencies": {
         "@babel/parser": "7.29.9",

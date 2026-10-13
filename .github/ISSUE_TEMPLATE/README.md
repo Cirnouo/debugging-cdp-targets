@@ -1,8 +1,8 @@
 # Issue forms
 
-- `bug_report.yml` collects Plugin host/version, environment, reproduction, behavior, and redacted
+- `bug_report.yaml` collects Plugin host/version, environment, reproduction, behavior, and redacted
   diagnostics for a bug.
-- `feature_request.yml` collects the problem, proposed behavior, and alternatives.
+- `feature_request.yaml` collects the problem, proposed behavior, and alternatives.
 - `config.yml` preserves ordinary issues and links to private security reporting.
 
 The YAML forms own generated H3 field labels, order, required answers, dropdown

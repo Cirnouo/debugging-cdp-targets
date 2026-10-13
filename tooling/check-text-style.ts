@@ -5,7 +5,7 @@ import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage } from '../src/shared/errors.ts';
 import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import { PLUGIN_HOSTS } from './host-policy.ts';
-import { validateTextStyle } from './repository-audit.ts';
+import { validateTextStyle, validateYamlFilename } from './repository-audit.ts';
 
 export async function checkTextStyle(root: string, arguments_: readonly string[]) {
     const paths = arguments_.map((argument) => {
@@ -25,6 +25,7 @@ export async function checkTextStyle(root: string, arguments_: readonly string[]
     const errors = [];
     for (const { absolute, relative } of paths) {
         if (verified.has(relative)) continue;
+        errors.push(...validateYamlFilename(relative));
         errors.push(...validateTextStyle(relative, await readFile(absolute, 'utf8')));
     }
     return errors;

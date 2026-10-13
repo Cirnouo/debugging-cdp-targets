@@ -133,8 +133,8 @@ repository settings without explicit authorization.
 
 ## Typed Issue submissions
 
-The current [Bug form](../../.github/ISSUE_TEMPLATE/bug_report.yml) and
-[Feature form](../../.github/ISSUE_TEMPLATE/feature_request.yml) are the sole
+The current [Bug form](../../.github/ISSUE_TEMPLATE/bug_report.yaml) and
+[Feature form](../../.github/ISSUE_TEMPLATE/feature_request.yaml) are the sole
 authority for their generated field labels, order, required answers, dropdown
 options, and classification labels. GitHub's
 [Issue form syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)
@@ -168,7 +168,7 @@ Read the current form before creating or editing a typed Issue, redact sensitive
 examples, and follow [SECURITY.md](../../SECURITY.md) for private vulnerability
 reporting. Typed body validation has no local command or Agent tool hook.
 
-The remote [Issue forms workflow](../../.github/workflows/issues.yml) runs on
+The remote [Issue forms workflow](../../.github/workflows/issues.yaml) runs on
 open, body/title edit, reopen, and label changes using the trusted default-branch
 event commit. GitHub requires this workflow on the default branch for
 [Issue events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#issues).

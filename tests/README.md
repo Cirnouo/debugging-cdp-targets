@@ -112,8 +112,9 @@
   bounded existing-buffer listener-owner classification without extra native I/O,
   precise Linux kernel creation ticks, malformed evidence rejection,
   and PID/path/session mismatch checks with injected I/O.
-- `repository-audit.test.ts` tests AST boundaries, text-style enforcement, and
-  directory documentation that preserves the root README on GitHub.
+- `repository-audit.test.ts` tests AST boundaries, text-style enforcement, YAML
+  filenames including generated output and exact exceptions, and directory
+  documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons, single-gateway manifests,
   required portable MCP schema declarations, and allowlists.
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
@@ -171,6 +172,8 @@
   minimal writer permissions, step-scoped token and diagnostic recursion exclusion.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
+  It also verifies staged YAML case-variant routing through the actual lint-staged
+  configuration and complete official-byte verification before filename exemptions.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
 - `chrome-smoke-config.test.ts` checks explicit portable executable selection,

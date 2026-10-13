@@ -8,7 +8,7 @@ import test from 'node:test';
 import { parse } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
 
-const workflowUrl = new URL('../.github/workflows/codeql.yml', import.meta.url);
+const workflowUrl = new URL('../.github/workflows/codeql.yaml', import.meta.url);
 async function workflow() {
     assert.ok(existsSync(workflowUrl), 'A maintained CodeQL workflow is required.');
     const parsed: unknown = parse(await readFile(workflowUrl, 'utf8'));
@@ -56,7 +56,7 @@ test('CodeQL covers owned languages without executing a C# build', async () => {
     const init = steps.find((step) => String(step.uses).includes('/init@'));
     assert.ok(isRecord(init?.with));
     assert.equal(init.with['build-mode'], `\${{ matrix.build-mode }}`);
-    const config: unknown = parse(await readFile(new URL('../.github/codeql-config.yml', import.meta.url), 'utf8'));
+    const config: unknown = parse(await readFile(new URL('../.github/codeql-config.yaml', import.meta.url), 'utf8'));
     assert.ok(isRecord(config));
     assert.deepEqual(config.paths, ['src', 'tooling', '.github']);
     assert.deepEqual(config.queries, [{ uses: 'security-extended' }]);

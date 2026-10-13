@@ -56,8 +56,8 @@ existing SSH commands and identity/proxy options when adding them.
 
 ## Submit an Issue
 
-Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yml) for reproducible unexpected
-behavior or the [Feature form](.github/ISSUE_TEMPLATE/feature_request.yml) for a
+Use the [Bug form](.github/ISSUE_TEMPLATE/bug_report.yaml) for reproducible unexpected
+behavior or the [Feature form](.github/ISSUE_TEMPLATE/feature_request.yaml) for a
 problem and proposed behavior. The current YAML forms own the field headings,
 order, required answers, dropdown choices, and corresponding `template:` labels.
 Keep the generated H3 fields when editing the body, including optional fields;
@@ -66,7 +66,7 @@ form label when submitting a typed Issue through another interface. See the
 [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions)
 and [Agent submission rules](AGENTS.md#issue-submissions).
 
-The [remote Issue workflow](.github/workflows/issues.yml) reads the latest Issue
+The [remote Issue workflow](.github/workflows/issues.yaml) reads the latest Issue
 and reports structural form errors with a `template: invalid` label and an owned
 bot comment. Edit the body or its form label to rerun validation. A repair clears
 that diagnostic label and updates the existing comment to resolution. Ordinary

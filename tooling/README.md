@@ -9,7 +9,7 @@
   SDK input/source-map hashes, and exact vendored package licenses.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its original YAML and semver licenses.
-- `repository-audit.ts` checks text, AST layer boundaries, versions, docs,
+- `repository-audit.ts` checks text, YAML filenames, AST layer boundaries, versions, docs,
   symlink, and production safety.
 - `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
   MCP/Hook format, Marketplace pointer and byte-identical packaging into a disposable directory;
@@ -87,7 +87,7 @@
   concurrency 1 and forwarded argv, preserving failed-test exit status.
 - `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
   with Node, and parses the Windows helper with PowerShell 5.1 and 7.
-- `check-text-style.ts` audits staged non-Biome text; original official release
+- `check-text-style.ts` audits staged non-Biome text and YAML filenames; original official release
   files are exempt only after complete independent byte verification.
 - `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
 - `smoke-official-catalog.ts` independently copies both host Plugins outside
