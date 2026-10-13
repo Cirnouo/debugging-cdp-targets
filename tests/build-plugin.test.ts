@@ -270,6 +270,18 @@ test('Plugin generation assembles canonical packaging inputs and root license in
         ['mcp.json', '../packaging/codex/mcp.json'],
         ['hooks/hooks.json', '../packaging/codex/hooks/hooks.json'],
         ['skills/debugging-cdp-targets/SKILL.md', '../packaging/shared/skills/debugging-cdp-targets/SKILL.md'],
+        ...[
+            'README.md',
+            'question-contract.md',
+            'questions.zh.md',
+            'questions.en.md',
+            'tool-configuration.md',
+            'screenshot-compatibility.md',
+            'recovery-and-events.md',
+        ].map((file) => [
+            `skills/debugging-cdp-targets/references/${file}`,
+            `../packaging/shared/skills/debugging-cdp-targets/references/${file}`,
+        ]),
         ['dist/README.md', '../packaging/shared/dist/README.md'],
     ];
     for (const [destination, input] of mappings) {
@@ -295,6 +307,24 @@ test('payload assembly rejects unexpected host inputs that could compete with sh
             await rm(competing);
             if (file.startsWith('dist/')) await rmdir(path.dirname(competing));
             if (file.startsWith('skills/')) await rm(path.join(root, 'packaging/codex/skills'), { recursive: true });
+        }
+        for (const file of [
+            'README.md',
+            'question-contract.md',
+            'questions.zh.md',
+            'questions.en.md',
+            'tool-configuration.md',
+            'screenshot-compatibility.md',
+            'recovery-and-events.md',
+        ]) {
+            const reference = path.join(root, 'packaging/shared/skills/debugging-cdp-targets/references', file);
+            const original = await readFile(reference);
+            await rm(reference);
+            await assert.rejects(assembleCodexPayload(runtime, root), /Missing Plugin file/);
+            await writeFile(`${reference}.renamed`, original);
+            await assert.rejects(assembleCodexPayload(runtime, root), /Unexpected Plugin file/);
+            await rm(`${reference}.renamed`);
+            await writeFile(reference, original);
         }
         runtime.set('README.md', Buffer.from('competing runtime documentation'));
         await assert.rejects(assembleCodexPayload(runtime, root), /Duplicate packaging path/);

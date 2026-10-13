@@ -5,7 +5,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
 import { compareDistributionTrees, readDistributionTree, validateMcpEntries } from '../tooling/distribution-audit.ts';
-import { REQUIRED_PAYLOAD_FILES, validatePayloadFileInventory } from '../tooling/payload-policy.ts';
+import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
+import {
+    REQUIRED_PAYLOAD_FILES,
+    requiredPayloadFiles,
+    validatePayloadFileInventory,
+} from '../tooling/payload-policy.ts';
 
 test('MCP manifest requires one gateway entry without slots or connection limits', () => {
     const entry = {
@@ -38,6 +43,39 @@ test('Plugin inventory accepts only explicit runtime and instruction files', () 
     assert.deepEqual(validatePayloadFileInventory(REQUIRED_PAYLOAD_FILES), []);
     assert.ok(validatePayloadFileInventory([...REQUIRED_PAYLOAD_FILES, 'node_modules/secret.txt']).length);
     assert.ok(validatePayloadFileInventory(REQUIRED_PAYLOAD_FILES.slice(1)).length);
+});
+
+test('Plugin inventory requires the complete nested conditional and question references and rejects omissions or renames', () => {
+    const references = [
+        'skills/debugging-cdp-targets/references/README.md',
+        'skills/debugging-cdp-targets/references/question-contract.md',
+        'skills/debugging-cdp-targets/references/questions.zh.md',
+        'skills/debugging-cdp-targets/references/questions.en.md',
+        'skills/debugging-cdp-targets/references/tool-configuration.md',
+        'skills/debugging-cdp-targets/references/screenshot-compatibility.md',
+        'skills/debugging-cdp-targets/references/recovery-and-events.md',
+    ];
+    for (const host of PLUGIN_HOSTS) {
+        const files = requiredPayloadFiles(host);
+        assert.deepEqual(
+            files.filter((file) => file.startsWith('skills/debugging-cdp-targets/references/')),
+            references,
+        );
+        for (const reference of references) {
+            assert.ok(
+                validatePayloadFileInventory(
+                    files.filter((file) => file !== reference),
+                    host,
+                ).length,
+            );
+            assert.ok(
+                validatePayloadFileInventory(
+                    files.map((file) => (file === reference ? `${file}.renamed` : file)),
+                    host,
+                ).length,
+            );
+        }
+    }
 });
 
 test('Plugin allowlist independently includes every reviewed official release path', async () => {

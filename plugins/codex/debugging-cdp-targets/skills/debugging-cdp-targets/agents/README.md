@@ -1,7 +1,8 @@
 # Codex Skill presentation
 
 `openai.yaml` declares the Skill's display name, short description and icons.
-It is Codex-only presentation metadata; the shared `SKILL.md` owns instructions.
+It is Codex-only presentation metadata; the shared `SKILL.md` owns workflow instructions and selects the common question
+contract plus only the current language catalogue in `references/` when needed.
 
 For a PluginShared Skill, Codex resolves icons relative to the Skill directory,
 `skills/debugging-cdp-targets/`, rather than this `agents/` directory. Both

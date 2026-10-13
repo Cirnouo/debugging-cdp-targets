@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { parseDocument } from 'yaml';
+import { parseDocument, stringify } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
 
-const source = new URL('../packaging/shared/skills/debugging-cdp-targets/SKILL.md', import.meta.url);
+const references = new URL('../packaging/shared/skills/debugging-cdp-targets/references/', import.meta.url);
+
+async function readSources(): Promise<[string, string, string]> {
+    const [contract, zh, en] = await Promise.all([
+        readFile(new URL('question-contract.md', references), 'utf8'),
+        readFile(new URL('questions.zh.md', references), 'utf8'),
+        readFile(new URL('questions.en.md', references), 'utf8'),
+    ]);
+    return [contract, zh, en];
+}
 const requirements: Record<string, { variables: string[]; values: string[] }> = {
     'isolation-intent': { variables: ['application'], values: ['data-dir', 'none'] },
     'partial-isolation': { variables: ['application', 'scope', 'effects'], values: ['data-dir', 'none'] },
@@ -108,14 +117,57 @@ const fieldIds = [
     'file-path',
 ];
 
-function readCatalogue(markdown: string): Record<string, unknown> {
-    const blocks = [...markdown.matchAll(/^```yaml dct-question-templates\n([\s\S]*?)^```$/gm)];
-    assert.equal(blocks.length, 1, 'one authoritative question catalogue is required');
-    const document = parseDocument(blocks[0]?.[1] ?? '');
+function readBlock(markdown: string, kind: string): Record<string, unknown> {
+    const blocks = [...markdown.matchAll(/^```yaml (dct-question-(?:contract|locale))\n([\s\S]*?)^```$/gm)].filter(
+        (match) => match[1] === kind,
+    );
+    assert.equal(blocks.length, 1, `one authoritative ${kind} block is required`);
+    const document = parseDocument(blocks[0]?.[2] ?? '');
     assert.deepEqual(document.errors, [], 'catalogue YAML must reject duplicate or malformed mappings');
     const value: unknown = document.toJS();
     assert.ok(isRecord(value));
     return value;
+}
+
+function readCatalogue(contractMarkdown: string, zhMarkdown: string, enMarkdown: string): Record<string, unknown> {
+    const contract = readBlock(contractMarkdown, 'dct-question-contract');
+    assert.deepEqual(Object.keys(contract).sort(), ['fields', 'notice_only', 'templates', 'triggers']);
+    assert.deepEqual(contract.fields, fieldIds, 'common field IDs retain their registry order');
+    assert.ok(isRecord(contract.templates));
+    assert.deepEqual(Object.keys(contract.templates).sort(), Object.keys(requirements).sort());
+    const fields: Record<string, unknown> = {};
+    const templates: Record<string, unknown> = {};
+    for (const id of fieldIds) fields[id] = {};
+    for (const [id, expected] of Object.entries(requirements)) {
+        const template: unknown = contract.templates[id];
+        assert.ok(isRecord(template));
+        assert.deepEqual(Object.keys(template), ['variables']);
+        assert.deepEqual(template.variables, expected.variables, `${id}: common fact slots`);
+        templates[id] = { variables: template.variables };
+    }
+    for (const [language, markdown] of [
+        ['zh', zhMarkdown],
+        ['en', enMarkdown],
+    ]) {
+        assert.ok(language && markdown);
+        const locale = readBlock(markdown, 'dct-question-locale');
+        assert.deepEqual(Object.keys(locale).sort(), ['fields', 'language', 'templates']);
+        assert.equal(locale.language, language);
+        assert.ok(isRecord(locale.fields) && isRecord(locale.templates));
+        assert.deepEqual(Object.keys(locale.fields), fieldIds);
+        assert.deepEqual(Object.keys(locale.templates), Object.keys(contract.templates));
+        for (const id of fieldIds) {
+            const field = fields[id];
+            assert.ok(isRecord(field));
+            field[language] = locale.fields[id];
+        }
+        for (const id of Object.keys(requirements)) {
+            const template = templates[id];
+            assert.ok(isRecord(template));
+            template[language] = locale.templates[id];
+        }
+    }
+    return { fields, triggers: contract.triggers, notice_only: contract.notice_only, templates };
 }
 
 function strings(value: unknown): string[] {
@@ -191,11 +243,11 @@ function validateCatalogue(catalogue: Record<string, unknown>) {
 }
 
 test('shared Skill has a closed bilingual question contract with explicit roles and typed fact slots', async () => {
-    validateCatalogue(readCatalogue(await readFile(source, 'utf8')));
+    validateCatalogue(readCatalogue(...(await readSources())));
 });
 
 test('delegation and cleanup templates preserve actor responsibilities and actual versus future directory scope', async () => {
-    const catalogue = readCatalogue(await readFile(source, 'utf8'));
+    const catalogue = readCatalogue(...(await readSources()));
     assert.ok(isRecord(catalogue.templates));
     const directory = catalogue.templates['directory-choice'];
     assert.ok(isRecord(directory));
@@ -252,7 +304,7 @@ test('delegation and cleanup templates preserve actor responsibilities and actua
 });
 
 test('first-use Chrome preset cleanup does not require or claim a prepared parent', async () => {
-    const catalogue = readCatalogue(await readFile(source, 'utf8'));
+    const catalogue = readCatalogue(...(await readSources()));
     assert.ok(isRecord(catalogue.templates));
     const preset = catalogue.templates['cleanup-new-preset'];
     assert.ok(isRecord(preset), 'absent preset needs a truthful pre-preparation cleanup variant');
@@ -264,11 +316,58 @@ test('first-use Chrome preset cleanup does not require or claim a prepared paren
     }
 });
 
+test('split catalogues reject language mismatches, field drift and undeclared template slots', async () => {
+    const [contract, zh, en] = await readSources();
+    type Documents = [Record<string, unknown>, Record<string, unknown>, Record<string, unknown>];
+    const original: Documents = [
+        readBlock(contract, 'dct-question-contract'),
+        readBlock(zh, 'dct-question-locale'),
+        readBlock(en, 'dct-question-locale'),
+    ];
+    const mutations: ((documents: Documents) => void)[] = [
+        ([common]) => {
+            assert.ok(Array.isArray(common.fields));
+            common.fields.reverse();
+        },
+        ([common]) => {
+            assert.ok(isRecord(common.templates));
+            const template: unknown = common.templates['directory-choice'];
+            assert.ok(isRecord(template) && Array.isArray(template.variables));
+            template.variables.push('context');
+        },
+        ([, chinese]) => {
+            chinese.language = 'en';
+        },
+        ([, , english]) => {
+            assert.ok(isRecord(english.fields));
+            delete english.fields['new-parent'];
+        },
+        ([, , english]) => {
+            assert.ok(isRecord(english.templates));
+            delete english.templates['close-keep'];
+        },
+    ];
+    for (const mutate of mutations) {
+        const changed = structuredClone(original);
+        mutate(changed);
+        const markdown = changed.map(
+            (document, index) =>
+                `\`\`\`yaml dct-question-${index === 0 ? 'contract' : 'locale'}\n${stringify(document)}\`\`\``,
+        );
+        assert.throws(() => readCatalogue(markdown[0] ?? '', markdown[1] ?? '', markdown[2] ?? ''));
+    }
+});
+
 test('question contract rejects malformed catalogues, invented actions, pronouns and fact-slot escape hatches', async () => {
-    const markdown = await readFile(source, 'utf8');
-    assert.throws(() => readCatalogue(`${markdown}\n${markdown}`), /one authoritative/);
-    assert.throws(() => readCatalogue('```yaml dct-question-templates\ntemplates: {}\ntemplates: {}\n```'), /YAML/);
-    const original = readCatalogue(markdown);
+    const sources = await readSources();
+    for (const [index, kind] of ['dct-question-contract', 'dct-question-locale', 'dct-question-locale'].entries()) {
+        const markdown = sources[index];
+        assert.ok(markdown);
+        assert.throws(() => readBlock(`${markdown}\n${markdown}`, kind), /one authoritative/);
+        for (const yaml of ['templates: {}\ntemplates: {}', 'templates: ['])
+            assert.throws(() => readBlock(`\`\`\`yaml ${kind}\n${yaml}\n\`\`\``, kind), /YAML/);
+    }
+    const original = readCatalogue(...sources);
     const mutations: ((catalogue: Record<string, unknown>) => void)[] = [
         (catalogue) => {
             assert.ok(isRecord(catalogue.templates));

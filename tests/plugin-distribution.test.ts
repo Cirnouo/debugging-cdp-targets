@@ -54,7 +54,17 @@ test('plugin payload has only manifests, artwork, one skill, license, and self-c
         'windows-native-process.cs',
     ]);
     const skill = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets'));
-    assert.deepEqual(skill.sort(), ['README.md', 'SKILL.md', 'agents']);
+    assert.deepEqual(skill.sort(), ['README.md', 'SKILL.md', 'agents', 'references']);
+    const references = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets', 'references'));
+    assert.deepEqual(references.sort(), [
+        'README.md',
+        'question-contract.md',
+        'questions.en.md',
+        'questions.zh.md',
+        'recovery-and-events.md',
+        'screenshot-compatibility.md',
+        'tool-configuration.md',
+    ]);
     const presentation = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets', 'agents'));
     assert.deepEqual(presentation.sort(), ['README.md', 'openai.yaml']);
 });
