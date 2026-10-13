@@ -66,7 +66,7 @@ form label when submitting a typed Issue through another interface. See the
 [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions)
 and [Agent submission rules](AGENTS.md#issue-submissions).
 
-The [remote Issue workflow](.github/workflows/issues.yml) reads the latest Issue
+The [remote Issue workflow](.github/workflows/issues.yaml) reads the latest Issue
 and reports structural form errors with a `template: invalid` label and an owned
 bot comment. Edit the body or its form label to rerun validation. A repair clears
 that diagnostic label and updates the existing comment to resolution. Ordinary

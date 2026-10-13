@@ -2,25 +2,25 @@
 
 This directory owns GitHub Actions workflows.
 
-- `codeql.yml` scans maintained TypeScript/JavaScript, native C# and Actions on
+- `codeql.yaml` scans maintained TypeScript/JavaScript, native C# and Actions on
   main pushes, PRs, manual runs and Mondays at 01:47 UTC. It runs security-extended
   queries without a product build or project install. Only analysis jobs receive
   security-events write permission. The C# job verifies that its extracted source
   archive contains the owned native helper before the job can succeed.
 
-- `ci.yml` validates commit governance and current PR template submissions,
+- `ci.yaml` validates commit governance and current PR template submissions,
   repository quality, Windows behavior, portable simulated CDP, real Chrome and
   the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-or-body-edit events. Only failed controlled
   real Chrome jobs upload the fixed safe fixture diagnostic files described below.
-- `release.yml` runs that same-commit CI through `workflow_call` for newly
+- `release.yaml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.
   Tag updates, deletion,
   forced pushes and build metadata do not publish. The publisher strictly validates
   SemVer candidates before release API operations; arbitrary legal prerelease labels
   are accepted without a whitelist.
-- `issues.yml` checks the latest labeled Bug/Feature Issue on open, edit, reopen,
+- `issues.yaml` checks the latest labeled Bug/Feature Issue on open, edit, reopen,
   and classification-label changes. Diagnostic-label events are excluded. A
   separate read-only supply-chain gate audits the same trusted default-branch
   event SHA before the feedback job can execute. Both checkouts disable persisted

@@ -77,7 +77,7 @@ function readWorkflow(source: string): Workflow {
     };
 }
 
-const workflowUrl = new URL('../.github/workflows/ci.yml', import.meta.url);
+const workflowUrl = new URL('../.github/workflows/ci.yaml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
 
@@ -183,7 +183,7 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
 });
 
 test('release workflow publishes new stable and prerelease candidate tags after the same-commit reusable CI', async () => {
-    const releaseSource = await readFile(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+    const releaseSource = await readFile(new URL('../.github/workflows/release.yaml', import.meta.url), 'utf8');
     const release: unknown = parse(releaseSource);
     assert.ok(isRecord(release) && isRecord(release.on) && isRecord(release.jobs));
     assert.deepEqual(release.on, { push: { tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*'] } });
@@ -192,7 +192,7 @@ test('release workflow publishes new stable and prerelease candidate tags after 
     const verify: unknown = release.jobs.verify;
     const publish: unknown = release.jobs.publish;
     assert.ok(isRecord(verify) && isRecord(publish) && Array.isArray(publish.steps));
-    assert.equal(verify.uses, './.github/workflows/ci.yml');
+    assert.equal(verify.uses, './.github/workflows/ci.yaml');
     assert.equal(verify.if, 'github.event.created && !github.event.deleted && !github.event.forced');
     assert.deepEqual(verify.permissions, { contents: 'read' });
     assert.equal(publish.needs, 'verify');

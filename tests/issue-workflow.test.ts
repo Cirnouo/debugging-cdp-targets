@@ -4,7 +4,7 @@ import test from 'node:test';
 import { parse } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
 
-const file = new URL('../.github/workflows/issues.yml', import.meta.url);
+const file = new URL('../.github/workflows/issues.yaml', import.meta.url);
 function workflow() {
     assert.ok(existsSync(file), 'remote Issue feedback workflow must exist');
     const value: unknown = parse(readFileSync(file, 'utf8'));
