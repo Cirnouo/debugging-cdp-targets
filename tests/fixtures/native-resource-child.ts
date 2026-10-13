@@ -3,6 +3,7 @@ import { watch } from 'node:fs';
 import { access, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { publishNativeResourcePid } from './native-resource-ready.ts';
 
 const [mode, directory] = process.argv.slice(2);
 if (!directory) throw new Error('Missing fixture directory.');
@@ -40,17 +41,17 @@ function launch(childMode: string) {
 }
 try {
     if (mode === 'root') {
-        await writeFile(path.join(directory, 'root-ready'), String(process.pid));
+        await publishNativeResourcePid(directory, 'root', process.pid);
         launch('middle');
         await waitFor('middle-ready');
         await waitFor('root-release');
     } else if (mode === 'middle') {
-        await writeFile(path.join(directory, 'middle-ready'), String(process.pid));
+        await publishNativeResourcePid(directory, 'middle', process.pid);
         await waitFor('launch-late');
         launch('late');
         await waitFor('late-ready');
     } else if (mode === 'late') {
-        await writeFile(path.join(directory, 'late-ready'), String(process.pid));
+        await publishNativeResourcePid(directory, 'late', process.pid);
         await waitFor('finish');
         await writeFile(path.join(directory, 'late-finished'), 'ordinary fixture exit');
     } else throw new Error('Unknown fixture mode.');

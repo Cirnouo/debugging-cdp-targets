@@ -72,6 +72,10 @@ finish through their own ordinary exit paths. Root release waits until independe
 native root/child handles are retained. A thirty-second ordinary self-exit fallback
 prevents permanent fixture orphans after coordination failure; cleanup never uses
 elapsed time or a final marker as exit evidence. It opens no GUI.
+`native-resource-ready.ts` publishes the root/middle/late PID-ready barriers only
+after a private file in the same owned directory has been fully written and closed,
+then renamed to the final ready name. Readers keep their single strict PID read;
+other coordination markers retain their existing protocol.
 `native-resource-cleanup.ts` retains independent native root/child witnesses before
 root release and reuses a retained late-descendant witness. Failure cleanup sends
 ordinary file signals, waits for all three actual handle exit receipts, then
@@ -101,6 +105,10 @@ write failure and incomplete execution. Sink failures cannot block cleanup or
 replace body/cleanup errors; hard crashes and unavailable output cannot guarantee
 console persistence. These diagnostics strengthen future attribution without
 establishing the cause or repair of any historical witness failure.
+Existing witness completion is observed without extra waiting. Pending or rejected
+witnesses, failed cleanup and unhandled fixture failure latch incomplete evidence;
+post-summary callbacks stay incomplete. Expected body errors with successful
+cleanup remain complete. A summary alone never substitutes for actual exit evidence.
 `native-resource-boundary.ps1` replaces only job-accounting and completion-port
 P/Invoke boundaries in an in-memory copy of the maintained C# helper. It exercises
 lost/stale notifications, timeout/error distinctions and cancellation, including

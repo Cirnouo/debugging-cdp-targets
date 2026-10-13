@@ -270,6 +270,8 @@ export function createNativeResourceLog(
     let writeFailed = false;
     let finished = false;
     let pending = 0;
+    let pendingWitnesses = 0;
+    let incomplete = false;
     let limited = false;
     const snapshot = () => ({
         emittedEvents,
@@ -278,7 +280,7 @@ export function createNativeResourceLog(
         droppedBytes,
         truncated,
         writeFailed,
-        incomplete: !finished || pending > 0 || truncated || writeFailed,
+        incomplete: incomplete || !finished || pending > 0 || pendingWitnesses > 0 || truncated || writeFailed,
     });
     const failed = (error?: Error | null) => {
         if (!error) return;
@@ -295,6 +297,13 @@ export function createNativeResourceLog(
         evidence: NativeResourceEvidence = {},
         reserved = false,
     ) {
+        if (finished && event !== 'SUMMARY' && !incomplete) {
+            incomplete = true;
+            if (!limited && event !== 'LIMITATION') {
+                limited = true;
+                emit('LIMITATION', 'fixture', undefined, {}, true);
+            }
+        }
         const safe = project(evidence);
         const relativeMs = Math.max(0, Math.round((clock() - origin) * 1000) / 1000);
         const record = {
@@ -351,6 +360,7 @@ export function createNativeResourceLog(
     }
     function settled(stage: NativeResourceStage, role: WitnessRole | undefined, rejected = false, error?: unknown) {
         pending--;
+        if (rejected && (stage === 'fixture' || stage === 'cleanup')) incomplete = true;
         event(
             rejected ? 'FAILURE' : 'END',
             stage,
@@ -362,6 +372,19 @@ export function createNativeResourceLog(
         fixtureId,
         event,
         snapshot,
+        trackWitnessExit(exited: Promise<void>): void {
+            // Observe the original waiter; rejection does not prove the helper exited.
+            pendingWitnesses++;
+            void exited.then(
+                () => {
+                    pendingWitnesses--;
+                },
+                () => {
+                    pendingWitnesses--;
+                    incomplete = true;
+                },
+            );
+        },
         async step<T>(
             stage: NativeResourceStage,
             role: WitnessRole | undefined,
@@ -398,6 +421,7 @@ export function createNativeResourceLog(
         },
         finish() {
             if (!finished) {
+                incomplete ||= pending > 0 || pendingWitnesses > 0;
                 finished = true;
                 emit('SUMMARY', 'fixture', undefined, {}, true);
             }

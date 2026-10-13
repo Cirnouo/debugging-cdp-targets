@@ -118,6 +118,7 @@ export function retainExitWitness(
     });
     void armed.catch(() => {});
     void exited.catch(() => {});
+    log.trackWitnessExit(exited);
     let bad = false;
     let failed = false;
     let spawnFailed = false;
