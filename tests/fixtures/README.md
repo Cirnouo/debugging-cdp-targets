@@ -105,6 +105,10 @@ write failure and incomplete execution. Sink failures cannot block cleanup or
 replace body/cleanup errors; hard crashes and unavailable output cannot guarantee
 console persistence. These diagnostics strengthen future attribution without
 establishing the cause or repair of any historical witness failure.
+Existing witness completion is observed without extra waiting. Pending or rejected
+witnesses, failed cleanup and unhandled fixture failure latch incomplete evidence;
+post-summary callbacks stay incomplete. Expected body errors with successful
+cleanup remain complete. A summary alone never substitutes for actual exit evidence.
 `native-resource-boundary.ps1` replaces only job-accounting and completion-port
 P/Invoke boundaries in an in-memory copy of the maintained C# helper. It exercises
 lost/stale notifications, timeout/error distinctions and cancellation, including

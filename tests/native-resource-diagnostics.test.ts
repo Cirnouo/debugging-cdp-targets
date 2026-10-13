@@ -125,7 +125,7 @@ test('native witness phases and safe failures are visible before close without p
 });
 
 test('native witness success uses matching full identity and drained ordinary exit receipt', async () => {
-    const { child, retained, records, last } = witness();
+    const { child, retained, log, records, last } = witness();
     const armed = `${JSON.stringify({ event: 'armed', role: 'root', pid: 123, executablePath: process.execPath, startedAtUtc: '2026-10-13T00:00:00.000Z' })}\n`;
     child.stdout.write(armed.slice(0, 20));
     child.stdout.write(armed.slice(20));
@@ -136,6 +136,171 @@ test('native witness success uses matching full identity and drained ordinary ex
     child.stdout.write(`${JSON.stringify({ event: 'exited', role: 'root', pid: 123, exitCode: 0 })}\n`);
     child.emit('close', 0, null);
     await retained.exited;
+    log.finish();
+    assert.equal(last().event, 'SUMMARY');
+    assert.equal(log.snapshot().incomplete, false);
+});
+
+test('finish with a closed root and pending middle witness stays incomplete after late callbacks', async () => {
+    const { log, records, last } = logger('group-abandoned-body-failure');
+    const rootChild = new WitnessChild(501);
+    const middleChild = new WitnessChild(502);
+    const root = retainExitWitness(123, 'root', 'initial-arming', log, () => rootChild);
+    const middle = retainExitWitness(124, 'middle', 'initial-arming', log, () => middleChild);
+    rootChild.stdout.write(
+        `${JSON.stringify({ event: 'armed', role: 'root', pid: 123, executablePath: process.execPath, startedAtUtc: '2026-10-13T00:00:00Z' })}\n`,
+    );
+    middleChild.stdout.write(
+        `${JSON.stringify({ event: 'armed', role: 'middle', pid: 124, executablePath: process.execPath, startedAtUtc: '2026-10-13T00:00:00Z' })}\n`,
+    );
+    await Promise.all([root.armed, middle.armed]);
+    rootChild.stdout.write('{"event":"exited","role":"root","pid":123,"exitCode":0}\n');
+    rootChild.emit('close', 0, null);
+    await root.exited;
+    const primary = new Error('injected primary');
+    const cleanup = new Error('late PID cleanup failure');
+    await assert.rejects(
+        withNativeResourceCleanup(
+            log,
+            () => {
+                throw primary;
+            },
+            () => {
+                throw cleanup;
+            },
+        ),
+        (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.deepEqual(error.errors, [primary, cleanup]);
+            assert.equal(error.cause, primary);
+            return true;
+        },
+    );
+    log.finish();
+    const summary = last();
+    assert.equal(summary.event, 'SUMMARY');
+    assert.ok(isRecord(summary.limits));
+    assert.equal(summary.limits.incomplete, true);
+    middleChild.stdout.write('{"event":"phase","role":"middle","pid":124,"phase":"wait"}\n');
+    middleChild.stdout.write('{"event":"exited","role":"middle","pid":124,"exitCode":0}\n');
+    middleChild.emit('close', 0, null);
+    await middle.exited;
+    assert.equal(log.snapshot().incomplete, true);
+    const lateRecords = records().filter((record) => Number(record.sequence) > Number(summary.sequence));
+    assert.ok(lateRecords.some((record) => record.event === 'PHASE' && record.role === 'middle'));
+    assert.ok(lateRecords.some((record) => record.event === 'CLOSE' && record.role === 'middle'));
+    assert.ok(lateRecords.every((record) => isRecord(record.limits) && record.limits.incomplete === true));
+});
+
+test('finish with only an armed witness pending cannot publish complete evidence', async () => {
+    const { child, retained, log, last } = witness('middle');
+    child.stdout.write(
+        `${JSON.stringify({ event: 'armed', role: 'middle', pid: 123, executablePath: process.execPath, startedAtUtc: '2026-10-13T00:00:00Z' })}\n`,
+    );
+    await retained.armed;
+    log.finish();
+    const summary = last();
+    assert.ok(isRecord(summary.limits));
+    assert.equal(summary.limits.incomplete, true);
+    child.stdout.write('{"event":"exited","role":"middle","pid":123,"exitCode":0}\n');
+    child.emit('close', 0, null);
+    await retained.exited;
+    assert.equal(log.snapshot().incomplete, true);
+});
+
+test('rejected witness observation before helper close stays incomplete and preserves its error', async () => {
+    const { child, retained, log, records, last } = witness('middle');
+    child.stdout.write(
+        `${JSON.stringify({ event: 'armed', role: 'middle', pid: 123, executablePath: process.execPath, startedAtUtc: '2026-10-13T00:00:00Z' })}\n`,
+    );
+    const armed = retained.armed;
+    const exited = retained.exited;
+    await armed;
+    child.stderr.emit('error', new Error('private pipe failure'));
+    let failure: NativeFixtureFailure | undefined;
+    await assert.rejects(exited, (error: unknown) => {
+        assert.ok(error instanceof NativeFixtureFailure);
+        assert.equal(error.diagnostic.closeCode, null);
+        failure = error;
+        return true;
+    });
+    assert.ok(!records().some((record) => record.event === 'CLOSE'));
+    log.finish();
+    assert.ok(isRecord(last().limits));
+    assert.equal(log.snapshot().incomplete, true);
+    child.emit('close', 1, null);
+    await assert.rejects(exited, (error: unknown) => error === failure);
+    assert.equal(retained.armed, armed);
+    assert.equal(retained.exited, exited);
+    assert.equal(log.snapshot().incomplete, true);
+    const closed = last();
+    assert.equal(closed.event, 'CLOSE');
+    assert.ok(isRecord(closed.limits) && closed.limits.incomplete === true);
+});
+
+for (const stage of ['fixture', 'cleanup'] as const) {
+    test(`unhandled ${stage} failure before witness acquisition leaves incomplete evidence`, async () => {
+        const { log, last } = logger();
+        const failure = new Error('private early failure');
+        await assert.rejects(
+            log.step(stage, undefined, () => {
+                throw failure;
+            }),
+            (error: unknown) => error === failure,
+        );
+        log.finish();
+        assert.equal(last().event, 'SUMMARY');
+        assert.equal(log.snapshot().incomplete, true);
+    });
+}
+
+test('expected body and resource wait failures with complete cleanup remain complete', async () => {
+    const { log } = logger('group-body-failure');
+    const primary = new Error('expected primary');
+    const resource = new Error('expected resource wait');
+    await log.step('fixture', undefined, async () => {
+        await assert.rejects(
+            log.observe('resource-wait', undefined, Promise.reject(resource)),
+            (error: unknown) => error === resource,
+        );
+        await assert.rejects(
+            withNativeResourceCleanup(
+                log,
+                () => {
+                    throw primary;
+                },
+                () => {},
+            ),
+            (error: unknown) => error === primary,
+        );
+    });
+    log.finish();
+    assert.equal(log.snapshot().incomplete, false);
+});
+
+test('post-summary callbacks publish bounded sticky incomplete evidence', async () => {
+    const { child, retained, log, records, lines } = witness();
+    child.stdout.write(
+        `${JSON.stringify({ event: 'armed', role: 'root', pid: 123, executablePath: process.execPath, startedAtUtc: '2026-10-13T00:00:00Z' })}\n`,
+    );
+    await retained.armed;
+    child.stdout.write('{"event":"exited","role":"root","pid":123,"exitCode":0}\n');
+    child.emit('close', 0, null);
+    await retained.exited;
+    log.finish();
+    const summary = records().at(-1);
+    assert.ok(summary && isRecord(summary.limits));
+    assert.equal(summary.limits.incomplete, false);
+    child.stdout.write('{"event":"phase","role":"root","pid":123,"phase":"exit"}\n');
+    child.stderr.emit('error', new Error('late private pipe failure'));
+    assert.equal(log.snapshot().incomplete, true);
+    const lateRecords = records().filter((record) => Number(record.sequence) > Number(summary.sequence));
+    assert.ok(lateRecords.length > 0);
+    assert.ok(lateRecords.every((record) => isRecord(record.limits) && record.limits.incomplete === true));
+    assert.equal(lateRecords.filter((record) => record.event === 'LIMITATION').length, 1);
+    assert.ok(lines.length <= 128);
+    assert.ok(lines.every((line) => Buffer.byteLength(line) <= 4096));
+    assert.ok(lines.reduce((total, line) => total + Buffer.byteLength(line), 0) <= 131072);
 });
 
 for (const kind of ['diagnostics-only', 'foreign-identity', 'truncated', 'signal', 'spawn'] as const) {
