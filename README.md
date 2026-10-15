@@ -21,6 +21,8 @@
 
 <p align="center">Version 0.1.0 is under development and has not been released.</p>
 
+<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
+
 <p align="center"><a href="#why-use-it">Why use it</a> · <a href="#requirements">Requirements</a> · <a href="#quick-start">Quick start</a> · <a href="#start-a-task">Start a task</a> · <a href="#documentation">Documentation</a></p>
 
 ## Why use it

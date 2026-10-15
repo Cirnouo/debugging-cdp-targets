@@ -32,8 +32,9 @@ Version 0.1.0 remains under development; no release has been published.
 - Complete Codex same-version refresh instructions: upgrade the Marketplace,
     then reinstall the current Plugin payload to refresh its installed cache.
 
-- A project README with a themed icon, a short host-specific quick start and a
-    topic-based user guide for installation, operation, compatibility and privacy.
+- English and Simplified Chinese project READMEs with language navigation, a
+    themed icon, a short host-specific quick start and a topic-based user guide
+    for installation, operation, compatibility and privacy.
 - Three Codex starter prompts for screenshot capture, console/network diagnosis
     and page-load performance profiling.
 - A generated geometric project icon with theme-aware README artwork, universal
