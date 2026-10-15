@@ -264,13 +264,19 @@ Retain the actual push and hook results under the preceding hook policy.
 
 CI uses frozen pnpm installs, read-only permissions, full-SHA Actions, and
 cancellation of superseded ref runs. Commit messages validates topology, raw PR
-titles, predicted squash messages with the PR number and original description,
-and source branches. For current PR events it also validates the complete body
-against the current PR template, with no history exemptions or body rewriting.
+titles, predicted final squash headers with the actual PR number, and source
+branches. For current PR events it independently validates the complete body
+against the current PR template. PR Markdown is not a commitlint body; commit
+body/footer width and separator rules do not apply to the description.
 Required sections, checklists, actual verification evidence, and conditional N/A
 reasons follow the [submission policy](commits-and-scope.md). Format failure
 blocks merge; editing the PR body reruns Commit messages through the existing
-`edited` trigger. Local/push/scheduled history audits do not apply this template.
+`edited` trigger. PR CI cannot prevalidate the future curated squash body. Before
+merging, validate the exact final candidate through raw stdin and compare its
+header with the validated title plus the actual PR suffix under the submission
+policy. Local/push/scheduled history audits continue to validate original actual
+commit messages strictly, without applying the current PR template, rewriting
+messages or granting historical exemptions.
 Quality checks policy and default-lane coverage. The required Windows tests job
 waits for Quality, then runs `pnpm test` and `pnpm test:windows:interactive --allow-gui` as
 separate mandatory steps after `pnpm typecheck`, without job/step conditions or
@@ -399,8 +405,10 @@ Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
 It also requires CodeQL (javascript-typescript), CodeQL (csharp), CodeQL (actions),
 Real Chrome (ubuntu-24.04) and Real Chrome (macos-15), for eleven checks total.
 It has no routine bypass actors. Single-maintainer PRs require zero additional
-approvals. Only squash merges are allowed, using the PR title and generated PR
-number as the commit title under the [commit policy](commits-and-scope.md).
+approvals. Only squash merges are allowed. The required `PR_TITLE` + `BLANK`
+default starts with the PR title and an empty body; the merge author curates the
+complete message and retains the generated PR number under the
+[commit policy](commits-and-scope.md).
 Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
 
 Successful initial CodeQL scans returned no findings and confirmed native helper
