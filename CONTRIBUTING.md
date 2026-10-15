@@ -134,25 +134,37 @@ targets and agree to normal Close cleanup before running them.
 Target main and use a PR title accepted by the commit policy, for example
 `fix(target): reject stale session identity`. Read the current
 [PR template](.github/PULL_REQUEST_TEMPLATE.md) before creating or editing the
-description and follow the [Agent submission rules](AGENTS.md#pull-request-submissions).
+description and follow the [contributor instructions](AGENTS.md).
 The [submission and commit policy](docs/policies/commits-and-scope.md) owns the
-required structure, evidence, conditional N/A reasons, 100-character limits,
-generated squash suffix, and optional Issue trailers. Update relevant documentation
-and meaningful user-facing changes in the Unreleased changelog. Before editing
+required structure, evidence, conditional N/A reasons, title and commit limits,
+generated squash suffix, and optional Issue references. Write the description
+for Markdown readability; commit body/footer width and separator rules do not
+apply to it. Keep its What/Why meaning aligned with the final change, while
+checks, results, review notes and screenshots may remain specific to the PR.
+Update relevant documentation and meaningful user-facing changes in the
+Unreleased changelog. Before editing
 the changelog, follow the
 [Changelog editing workflow](docs/policies/releases.md#changelog-editing-workflow)
 to verify the published baseline, choose categories, and record the evidence and
 rationale in PR `Verification`.
 
-The remote Commit messages check rejects a current PR that omits required
-template content or fails commitlint. A failure blocks merge. Fix the reported
-errors in the PR title or body; editing reruns the existing check. The body format
-check runs after GitHub receives the submission.
+The remote Commit messages check independently validates the raw title, the
+predicted final header with the actual PR number, and the body against the
+current template. A failure blocks merge. Fix the reported errors in the PR title
+or body; editing reruns the existing check. The template check runs after GitHub
+receives the submission and does not prevalidate the future curated squash body.
 
 The main Ruleset requires an up-to-date PR and successful required GitHub checks.
-The maintainer reviews contributions and merges with squash, checking the actual
-merge message with GitHub's generated PR number. Current single-maintainer settings
-require no additional approving reviewer. Local Git hooks complement the remote checks.
+The maintainer reviews contributions and merges each PR as one logical squash
+commit; topic branches may contain multiple atomic commits. The required GitHub
+default is `PR_TITLE` + `BLANK`. Before merging, independently explain the
+important What/Why and How when needed in the actual message, curate its body
+instead of copying the full description, and validate the exact complete
+candidate through raw stdin under the commit policy. Compare its header with
+the validated title plus GitHub's actual generated PR number. Actual push and
+history checks retain all existing commit-message rules. Current single-maintainer
+settings require no additional approving reviewer. Local Git hooks complement
+the remote checks.
 
 Keep version 0.1.0 unreleased. Pushing, creating releases or tags, and changing
 repository or user configuration require the authorization described in

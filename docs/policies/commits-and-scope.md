@@ -74,10 +74,12 @@ these boundaries at error severity. The Conventional Commits parser, original
 message, other commitlint rules and Git topology checks remain authoritative
 for their existing responsibilities.
 
-This repository configures GitHub squash merging with `PR_TITLE` + `PR_BODY`:
-the PR title becomes the commit title with GitHub's generated PR number retained,
-and the PR description becomes the commit body. This is a
-[configured GitHub feature](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/configuring-commit-squashing-for-pull-requests).
+One PR becomes one logical squash commit on main. Its topic branch may contain
+multiple coherent, atomic commits. This repository's required GitHub squash
+default is `PR_TITLE` + `BLANK`: start with the PR title and an empty body, then
+curate the actual squash message before merging. These are the
+[`squash_merge_commit_title` and `squash_merge_commit_message` settings](https://docs.github.com/en/rest/repos/repos#update-a-repository)
+for [GitHub's configurable squash messages](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/configuring-commit-squashing-for-pull-requests).
 It is repository configuration, not a universal default or a Conventional
 Commits rule.
 
@@ -91,13 +93,38 @@ check the actual merge message before merging.
 Other authored `#number` or `(#number)` references in topic commit subjects,
 raw PR titles, and descriptions may identify Issues or other PRs, including a
 PR that introduced a regression. These references are distinct from the final
-generated current-PR suffix and remain in the predicted squash message.
+generated current-PR suffix. Authored references in the raw PR title remain in
+the predicted squash header. Description references are independent; select
+useful references separately for the curated squash body.
 
 The 100-character header limit includes the generated suffix. For example,
 ` (#123)` uses seven characters, leaving at most 93 characters for the raw title.
-PR checks validate the raw title and the predicted header with its actual PR
-number plus the original PR description. Keep description lines within the same
-body/footer limit; editing a title or description reruns the existing gate.
+PR checks independently validate the raw title and the predicted final header
+with the actual PR number. Both must pass the existing header rules. Editing a
+title or description reruns the existing gate.
+
+The PR description and actual squash message must accurately explain the same
+important What and Why, but need not share wording or format. Write the PR body
+for Markdown readability and review. Commit body/footer line-width and separator
+rules do not apply to it. Checks, results, review notes and screenshots may remain
+specific to the PR. Use deeper headings within the existing template sections
+for review notes rather than adding H2 sections.
+
+The merge author must independently explain the important What and Why in the
+actual squash message, adding How when it helps understand the change. Curate
+the body from the final change instead of copying the complete PR description.
+The default title is only a starting point. No literal `What:` or `Why:` labels
+or new message schema are required. The existing commitlint width, footer and
+blank-line rules and their exceptions still apply to the complete commit message;
+this does not add a retrospective body-presence requirement to history.
+
+Before merging, compare the final header with the validated raw title plus the
+actual ` (#<current-PR-number>)` suffix and validate the exact complete candidate.
+The existing `validateCommitMessage` in `tooling/governance.ts` supplies raw stdin
+to commitlint and can validate that candidate without rewriting it. Use raw stdin
+for this check: commitlint's `--edit` parsing can strip comment lines, so it does
+not establish that the exact candidate passed. PR CI cannot prevalidate a future
+curated body. Push and history checks validate the actual stored commit message.
 
 The current [.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
 is the sole source of required PR headings, checklist labels, placement, order,
@@ -115,9 +142,9 @@ unchecked only with an adjacent indented `N/A: <reason>` continuation. Do not
 delete unchecked required checks or claim results that have not been observed.
 
 The remote Commit messages check validates the current PR body against this
-template in addition to validating the complete original body with commitlint
-and the predicted squash suffix. A missing or empty body fails. A failed check
-blocks merge; edit the title or body to fix the reported errors and let the
+template independently of commitlint's raw-title and predicted-header checks.
+A missing or empty body fails. A failed check blocks merge; edit the title or
+body to fix the reported errors and let the
 existing PR `edited` event rerun the check. Older PR numbers or historical prose
 provide no exception for a current submission. Local, push, and scheduled
 history checks continue to validate original commit messages without applying
@@ -205,21 +232,26 @@ without creating duplicate owned comments or changing unrelated content.
 
 ## Optional Issue and PR references
 
-Issue association and other PR references are optional. When the change resolves
-an Issue, use `Closes`, `Fixes`, or `Resolves` followed by its Issue reference.
-Use `Refs: #220` for a non-closing reference to an Issue or another PR. Put these
-trailers at the end of the PR description, with a blank line after the description
-body. Use one reference per trailer line and `owner/repository#number` for a
-reference in another repository.
+Issue association and other PR references are optional. Prefer the PR description
+for visible Issue associations and regression-source explanations. When the PR
+resolves an Issue, use a GitHub-supported closing keyword such as `Closes`,
+`Fixes`, or `Resolves` followed by its Issue reference. Use `owner/repository#number`
+for another repository. Non-closing references may use ordinary Markdown links
+or references such as `#220`. The PR description does not require commit-footer
+placement, one-reference-per-line formatting or blank-line separators.
 
-Prefer the PR description for Issue associations and regression-source
-explanations so references are visible on the PR and carried into the squash
-body. Title references are allowed; titles alone do not close Issues. Topic
-commits may also include these trailers, but keep closing keywords in the PR
-description so squash merging retains them. Closing keywords in a PR description
-create a visible PR-Issue link when the PR targets the default branch; merging
-that PR into the default branch closes the Issue. See
+Closing keywords in a PR description create a visible PR-Issue link when the PR
+targets the default branch; merging that PR into the default branch closes the
+Issue independently of the curated squash body. Title references are allowed;
+titles alone do not close Issues. See
 [GitHub's issue-linking documentation](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue).
+
+Select useful commit references independently when curating the squash message;
+do not rely on copying the description. Topic commits may also carry references.
+In an actual commit, use `Closes #219`, `Fixes #219`, or `Resolves #219` for an
+Issue closure and `Refs: #220` for a non-closing Issue or PR reference. Put these
+trailers at the end of the message, with a blank line after its header or body,
+and use one reference per trailer line. All existing commit-footer rules apply.
 
 For example, PR #123 resolves Issue #219 and fixes a regression introduced by
 PR #220. Its raw title may be `fix(target): reject stale identity from #220`,
@@ -228,7 +260,8 @@ and its complete final squash message can look like this:
 ```text
 fix(target): reject stale identity from #220 (#123)
 
-Fix the stale-session regression introduced by PR #220.
+Reject stale session identities so tools cannot route to a replaced session.
+This fixes the regression introduced by PR #220.
 
 Closes #219
 Refs: #220
