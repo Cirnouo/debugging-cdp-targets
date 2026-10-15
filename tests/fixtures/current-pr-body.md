@@ -5,7 +5,7 @@ https://github.com/example/project/issues/219
 ## Resulting behavior
 
 The gate rejects descriptions that omit the required verification evidence.
-observations: the complete description is retained for squash validation
+observations: the complete description supplies review context
 
 ## Verification
 

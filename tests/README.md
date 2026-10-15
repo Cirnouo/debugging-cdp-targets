@@ -122,8 +122,11 @@
   and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
 - `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
-  They also check predicted squash headers with PR numbers, reject invalid original PR
-  descriptions and unwrapped non-merge commit bodies regardless of commit identity.
+  They independently check raw PR titles and predicted squash headers with actual
+  PR numbers, enforce the current description template, and accept long prose,
+  wide tables, fenced evidence and adjacent trailer-looking review text. Actual
+  non-merge commit bodies retain strict length/footer rules regardless of commit
+  identity, including invalid topic commits under valid long PR descriptions.
   Complete original and GitHub-wrapped message fixtures exercise ordinary body
   labels, reserved footer boundaries and adjacent trailer groups. Disposable Git
   and PR entry points verify exact message and event bytes before and after audits.
@@ -131,7 +134,8 @@
   and placement, selection and conditional N/A rules, placeholder paragraphs,
   Unicode and fenced evidence. Structural examples in code, quotes, or comments
   cannot satisfy missing sections/checks. Current PR CLI fixtures also verify
-  format rejection and full raw commitlint validation without altering history.
+  template rejection independently of header checks and full raw actual-commit
+  validation without altering history.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, exact lane commands and syntax plans. Parsed
   CI checks retain canonical versions and names, and require the latest-24

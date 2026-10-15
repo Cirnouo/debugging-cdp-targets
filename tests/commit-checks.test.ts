@@ -56,7 +56,7 @@ function sanitizedGitEnvironment(environment = process.env, overrides = {}) {
     };
 }
 
-test('builds a pull request audit for title, complete squash message, source branch and commit range', () => {
+test('builds a pull request audit for raw title, squash header, source branch and commit range', () => {
     const event = {
         number: 123,
         pull_request: {
@@ -74,9 +74,8 @@ test('builds a pull request audit for title, complete squash message, source bra
                 message: 'ci(tooling): add quality gates',
             },
             {
-                label: 'pull request squash message',
-                message:
-                    'ci(tooling): add quality gates (#123)\n\nExplain the final behavior.\n\nCloses #220\nRefs: #221',
+                label: 'pull request squash header',
+                message: 'ci(tooling): add quality gates (#123)',
             },
         ],
         range: 'base..head',
@@ -84,7 +83,7 @@ test('builds a pull request audit for title, complete squash message, source bra
     });
 });
 
-test('PR squash validation rejects long descriptions and missing or malformed body evidence', () => {
+test('PR headers exclude long descriptions while identity rejects missing or malformed bodies', () => {
     const pr = {
         title: 'fix(governance): validate squash messages',
         head: { ref: 'fix/squash-check', sha: 'head' },
@@ -95,7 +94,7 @@ test('PR squash validation rejects long descriptions and missing or malformed bo
         event: { number: 123, pull_request: { ...pr, body: 'x'.repeat(101) } },
     });
     assert.equal(
-        request.directMessages.some(({ message }) => !commitlintAccepts(message)),
+        request.directMessages.every(({ message }) => commitlintAccepts(message)),
         true,
     );
     for (const body of [undefined, false, 42, {}]) {
@@ -118,28 +117,24 @@ test('PR squash validation rejects long descriptions and missing or malformed bo
     );
 });
 
-test('PR squash messages preserve empty descriptions and issue footers', () => {
+test('PR squash headers exclude empty descriptions and issue footers without changing the event', () => {
     const pr = {
         title: 'fix(target): reject stale identity',
         head: { ref: 'fix/stale-identity', sha: 'head' },
         base: { sha: 'base' },
     };
-    const cases: [string | null, string][] = [
-        [null, 'fix(target): reject stale identity (#123)'],
-        ['', 'fix(target): reject stale identity (#123)'],
-        ['Closes #220', 'fix(target): reject stale identity (#123)\n\nCloses #220'],
-        [
-            'Validate the endpoint.\n\nFixes #220\nResolves owner/repository#221\nRefs: #222',
-            'fix(target): reject stale identity (#123)\n\nValidate the endpoint.\n\nFixes #220\nResolves owner/repository#221\nRefs: #222',
-        ],
+    const cases = [
+        null,
+        '',
+        'Closes #220',
+        'Validate the endpoint.\n\nFixes #220\nResolves owner/repository#221\nRefs: #222',
     ];
-    for (const [body, expected] of cases) {
-        const request = buildCommitCheckRequest({
-            eventName: 'pull_request',
-            event: { number: 123, pull_request: { ...pr, body } },
-        });
-        assert.equal(request.directMessages[1]?.message, expected);
-        assert.deepEqual(recordErrors(expected), []);
+    for (const body of cases) {
+        const event = { number: 123, pull_request: { ...pr, body } };
+        const original = Buffer.from(JSON.stringify(event));
+        const request = buildCommitCheckRequest({ eventName: 'pull_request', event });
+        assert.equal(request.directMessages[1]?.message, 'fix(target): reject stale identity (#123)');
+        assert.deepEqual(Buffer.from(JSON.stringify(event)), original);
     }
 });
 
@@ -224,7 +219,7 @@ test('PR squash headers include the actual number in the 100-character budget', 
     }
 });
 
-test('PR metadata does not hide invalid raw titles or unseparated issue footers', () => {
+test('PR number suffixes do not hide invalid raw titles', () => {
     const pr = {
         body: null,
         head: { ref: 'fix/stale-identity', sha: 'head' },
@@ -240,20 +235,6 @@ test('PR metadata does not hide invalid raw titles or unseparated issue footers'
         assert.equal(titleCheck.message, title);
         assert.notDeepEqual(recordErrors(titleCheck.message), []);
     }
-    const request = buildCommitCheckRequest({
-        eventName: 'pull_request',
-        event: {
-            number: 123,
-            pull_request: {
-                ...pr,
-                title: 'fix(target): reject stale identity',
-                body: 'Validate the endpoint.\nCloses #220',
-            },
-        },
-    });
-    const [, squashCheck] = request.directMessages;
-    assert.ok(squashCheck);
-    assert.match(recordErrors(squashCheck.message).join('\n'), /footer.*blank line/i);
 });
 
 test('non-merge commits reject unwrapped squash bodies regardless of commit identity', async () => {
@@ -719,35 +700,36 @@ test('keeps ordinary footer separation in parity with commitlint', () => {
     }
 });
 
-test('accepts complete body label squash messages and preserves original PR prediction bytes', async (context) => {
+test('accepts historical body label commits and excludes either original or wrapped descriptions from PR headers', async (context) => {
     const fixture = await wrappedBodyLabelFixture();
+    assert.deepEqual(recordErrors(fixture.actualMessage), []);
+    assert.equal(commitlintAccepts(fixture.actualMessage), true);
     const wrappedBody = fixture.actualMessage.slice(fixture.actualMessage.indexOf('\n\n') + 2);
-    for (const [label, body, expected] of [
-        [
-            'original PR description',
-            fixture.originalBody,
-            `${fixture.title} (#${fixture.number})\n\n${fixture.originalBody}`,
-        ],
-        ['actual wrapped squash message', wrappedBody, fixture.actualMessage],
+    for (const [label, body] of [
+        ['original PR description', fixture.originalBody],
+        ['actual wrapped squash description', wrappedBody],
     ] as const) {
         await context.test(label, () => {
+            const event = {
+                number: fixture.number,
+                pull_request: {
+                    title: fixture.title,
+                    body,
+                    base: { sha: 'base' },
+                    head: { ref: 'chore/commit-footer-boundaries', sha: 'head' },
+                },
+            };
+            const eventBytes = Buffer.from(JSON.stringify(event));
             const request = buildCommitCheckRequest({
                 eventName: 'pull_request',
-                event: {
-                    number: fixture.number,
-                    pull_request: {
-                        title: fixture.title,
-                        body,
-                        base: { sha: 'base' },
-                        head: { ref: 'chore/commit-footer-boundaries', sha: 'head' },
-                    },
-                },
+                event,
             });
             const prediction = request.directMessages[1];
-            assert.ok(prediction && expected);
-            assert.deepEqual(Buffer.from(prediction.message), Buffer.from(expected));
+            assert.ok(prediction);
+            assert.equal(prediction.message, `${fixture.title} (#${fixture.number})`);
             assert.deepEqual(recordErrors(prediction.message), []);
             assert.equal(commitlintAccepts(prediction.message), true);
+            assert.deepEqual(Buffer.from(JSON.stringify(event)), eventBytes);
         });
     }
 });
@@ -881,8 +863,10 @@ test('accepts URL-only long body lines when commitlint accepts them', () => {
     assert.deepEqual(recordErrors(message), []);
 });
 
-test('current PR CLI enforces the template while preserving raw squash description and commitlint rules', async () => {
+test('current PR CLI validates review descriptions independently of headers and actual topic commits', async (context) => {
     const compliantBody = await readFile(new URL('./fixtures/current-pr-body.md', import.meta.url), 'utf8');
+    const reviewNote = 'observations: the complete description supplies review context';
+    const longProse = 'The review includes detailed behavior and verification evidence. '.repeat(4);
     const directory = await mkdtemp(path.join(os.tmpdir(), 'cdp-current-pr-'));
     const fixtureEnvironment = sanitizedGitEnvironment();
     const git = (args: string[]) => {
@@ -906,38 +890,18 @@ test('current PR CLI enforces the template while preserving raw squash descripti
         git(['commit', '--allow-empty', '-m', 'chore(tooling): add current PR head']);
         const head = git(['rev-parse', 'HEAD']);
         const eventPath = path.join(directory, '.git', 'event.json');
-        for (const [body, status, diagnostic] of [
-            [compliantBody, 0, /audit passed/i],
-            [null, 1, /pull request body/i],
-            ['', 1, /pull request body/i],
-            ['An old PR description cannot waive the current template.', 1, /pull request body/i],
-            [compliantBody.replace('## Verification', '## Results'), 1, /pull request body/i],
-            [
-                compliantBody.replace(
-                    'observations: the complete description is retained for squash validation',
-                    'x'.repeat(101),
-                ),
-                1,
-                /body-max-line-length/i,
-            ],
-            [compliantBody.replace('\n\nCloses #219', '\nCloses #219'), 1, /footer.*blank/i],
-        ] as const) {
+        const audit = async (body: string | null, rangeBase = base, rangeHead = head) => {
             const event = {
                 number: 219,
                 pull_request: {
                     title: 'chore(tooling): validate current submissions',
                     body,
-                    base: { sha: base },
-                    head: { ref: 'chore/current-submissions', sha: head },
+                    base: { sha: rangeBase },
+                    head: { ref: 'chore/current-submissions', sha: rangeHead },
                 },
             };
             const bytes = Buffer.from(`${JSON.stringify(event)}\n`);
             await writeFile(eventPath, bytes);
-            const request = buildCommitCheckRequest({ eventName: 'pull_request', event });
-            assert.equal(
-                request.directMessages[1]?.message,
-                `chore(tooling): validate current submissions (#219)${body ? `\n\n${body}` : ''}`,
-            );
             const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
                 cwd: directory,
                 encoding: 'utf8',
@@ -945,9 +909,76 @@ test('current PR CLI enforces the template while preserving raw squash descripti
                 windowsHide: true,
             });
             assert.equal(result.error, undefined);
-            assert.equal(result.status, status, result.stdout + result.stderr);
-            assert.match(result.stdout + result.stderr, diagnostic);
             assert.deepEqual(await readFile(eventPath), bytes);
+            return result;
+        };
+        for (const [label, body, status, diagnostic] of [
+            ['compliant body', compliantBody, 0, /audit passed/i],
+            ['null body', null, 1, /pull request body/i],
+            ['empty body', '', 1, /pull request body/i],
+            ['historical prose', 'An old PR description cannot waive the current template.', 1, /pull request body/i],
+            ['missing section', compliantBody.replace('## Verification', '## Results'), 1, /pull request body/i],
+            ['long prose', compliantBody.replace(reviewNote, longProse), 0, /audit passed/i],
+            [
+                'wide table',
+                compliantBody.replace(reviewNote, `| Evidence | Details |\n| --- | --- |\n| Result | ${longProse} |`),
+                0,
+                /audit passed/i,
+            ],
+            [
+                'long fenced evidence',
+                compliantBody.replace(reviewNote, `\`\`\`text\n${'evidence='.repeat(30)}\n\`\`\``),
+                0,
+                /audit passed/i,
+            ],
+            [
+                'adjacent reserved trailer-looking prose',
+                compliantBody.replace(reviewNote, 'Review notes.\nRefs: #220\nBREAKING CHANGE: callers must migrate'),
+                0,
+                /audit passed/i,
+            ],
+            [
+                'adjacent closing reference',
+                compliantBody.replace(reviewNote, 'Review notes.\nCloses #219'),
+                0,
+                /audit passed/i,
+            ],
+        ] as const) {
+            await context.test(label, async () => {
+                const result = await audit(body);
+                assert.equal(result.status, status, result.stdout + result.stderr);
+                assert.match(result.stdout + result.stderr, diagnostic);
+                if (status === 0) assert.equal(result.stderr, '');
+            });
+        }
+        for (const [label, message, diagnostic] of [
+            [
+                'overlong actual commit body',
+                `chore(tooling): describe validation\n\n${'x'.repeat(101)}\n`,
+                /body-max-line-length/i,
+            ],
+            [
+                'unseparated actual commit footer',
+                'chore(tooling): describe validation\n\nReview notes.\nRefs: #220\n',
+                /footer.*blank/i,
+            ],
+        ] as const) {
+            await context.test(label, async () => {
+                assert.equal(commitlintAccepts(message), false);
+                assert.match(recordErrors(message).join('\n'), diagnostic);
+                const rangeBase = git(['rev-parse', 'HEAD']);
+                const messagePath = path.join(directory, '.git', 'topic-message');
+                const messageBytes = Buffer.from(message);
+                await writeFile(messagePath, messageBytes);
+                git(['commit', '--allow-empty', '--cleanup=verbatim', '--file', messagePath]);
+                const rangeHead = git(['rev-parse', 'HEAD']);
+                const result = await audit(compliantBody.replace(reviewNote, longProse), rangeBase, rangeHead);
+                assert.equal(result.status, 1, result.stdout + result.stderr);
+                assert.match(result.stderr, diagnostic);
+                assert.ok(result.stderr.includes(`${rangeHead}:`), result.stderr);
+                assert.doesNotMatch(result.stderr, /pull request (?:body|title|squash)/i);
+                assert.deepEqual(await readFile(messagePath), messageBytes);
+            });
         }
     } finally {
         assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
