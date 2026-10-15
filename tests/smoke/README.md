@@ -103,6 +103,7 @@ then explicitly restarts and normally closes them. It retains test profiles.
   stdio to close before temporary-file cleanup; process exit alone is insufficient.
 - `fixture-artifacts.ts` supplies the opt-in bounded streaming collector and
   first-failure-preserving cleanup recorder for the two controlled Chrome smokes.
+  `fixture-stream-quota.ts` applies the armed stream's fixed class quotas.
   `fixture-preload.ts` subscribes safely to the internal fixture channel through
   `--import`; the original delivered `dist/mcp-bootstrap.mjs` remains the child
   entry. Query parameters configure only that Node subscriber, without
@@ -113,6 +114,11 @@ then explicitly restarts and normally closes them. It retains test profiles.
   bounded fixed proc reads and closed projections for the same diagnostic stream.
   `linux-startup-resources.ts` supplies its optional kernel wait classification,
   mapped block-device counters and visible cgroup evidence.
+- `linux-first-start-capture.ts`, `linux-first-start-capture-io.ts`,
+  `linux-first-start-capture-record.ts` and `first-start-capture-ci.ts`
+  supply the separately admitted, failure-focused
+  first-start observer. Ordinary successful starts discard detailed samples;
+  a failed first start retains completed device and visible resource context.
 - `linux-readahead-study.ts` supplies the separately opted-in Linux queue lease,
   bounded research observations and closed evidence for actual release and
   original-value restoration. It is test-only and never shipped.
@@ -978,6 +984,106 @@ The new projection preserves this already available evidence and can narrow a
 future failure without extra native reads. It cannot recover the original
 mismatching owner retrospectively. The historical macOS cause remains unknown
 and unresolved; synthetic interleavings verify diagnostic behavior only.
+
+### Failed first-start completed I/O capture
+
+The additional first-start observer defaults off. The existing ordinary Linux
+job can admit it for one explicitly authorized, non-forced push transition on
+`fix/chrome-startup-stall` from
+`79bd8801aa3882c20cd01fca5549aea366f12d25`. Admission requires attempt one,
+the exact repository/ref, consistent event `after`, `GITHUB_SHA`, actual clean
+checkout and commit-tree identity. PR, edited, scheduled, manual, created,
+deleted and rerun events never enable this observer. The gate verifies runtime
+identity; the human approval of the specific new head/tree is independently
+recorded before the one push. It is not a persistent global consumption lock.
+Do not dispatch or rerun CI to fill a quota or continue until a failure occurs.
+Ordinary PR checks and both ordinary smoke flows remain required.
+
+The flag configures only the accepted official-server child's private preload
+query. It is removed from the gateway's inherited environment, cannot enable
+the study or entry-recovery fixture, and does not change Chrome arguments,
+queue readahead, readiness, normal Close or cleanup. Only the first selected
+operation may supply samples. The root is admitted after its completed native
+snapshot and successful identity validation; a later start is not a substitute.
+The internal `readinessExitReason` distinguishes actual budget exhaustion from
+foreign-listener, terminal-condition and interrupted-poll exits without a new
+clock read or native probe. A fixture failure alone is not proof of that symptom.
+
+At most six slots run: baseline on the first verified root, then waiting-CDP
+BEGIN-relative 4, 8, 12, 16 and 19 seconds on the gateway monotonic clock.
+Baseline retains its actual time. Slots over 250 ms late, unavailable or busy
+are recorded without backfill. Process/system PSI, executable-backing device
+and visible cgroup families have independent discovery, 250 ms result limits
+and actual pending ownership. Each family performs API work sequentially;
+a blocked stack helper or cgroup discovery cannot discard a completed device
+family. There is no periodic privileged stack helper or new postfailure sample.
+An expired result does not cancel a native read; the same owner remains busy
+until it settles and closes the handle.
+
+The per-slot file acquisition caps are 8 process, 12 device and 36 cgroup,
+plus at most 10 discovery acquisitions: 346 total, at most 1,417,216 returned
+bytes and 2,768 read calls. A new reader opens each file once, advances by actual
+bytes read and requires EOF in at most eight calls. A cumulative full 4,096
+bytes is conservatively unknown even for an exactly full file. A short read
+alone cannot prove EOF or a unique mount mapping. Mountinfo above this bound
+leaves cgroup mapping unavailable; never accept its prefix as a complete table.
+Sampling metadata has a separate conservative hard cap of 336 API calls.
+All figures bound application operations and returned data, not kernel work,
+physical I/O or event-loop latency. Required close/unlock work is reserved
+before admission and is not abandoned at an outcome deadline.
+
+Device and parent queue counters retain separate identity epochs and actual
+acquisition intervals. Their completed reads/sectors are shared-device work;
+512-byte sectors determine the completed-byte conversion. Cumulative read time
+is not wall time, and `inFlight` is a gauge. The executable device need not hold
+every library or profile and does not represent all Chrome descendants.
+The cgroup family projects leaf plus at most three visible ancestors, selected
+and queue `io.max` keys, CPU quota/throttle and memory limit/event context.
+Depth caps, missing controllers, root-not-applicable, unavailable counters and
+membership/namespace changes remain explicit. Non-root leaf `io.stat` is bio
+accounting, not completed device I/O. Neither an absent visible policy nor a
+visible mount root excludes hidden ancestors or Azure host/backend throttling.
+
+The observer caches fixed closed records in memory, at most 64 records/256 KiB
+of serialized UTF-8 including newlines. Success retains selection/cost/discard
+receipts rather than detailed samples. Failure stops new admissions and permits
+one static-order flush only after the matching `native-close END` or confirmed
+actual exit. A Close BEGIN is too early: its identity snapshot may still be
+pending before normal shutdown is submitted. A failed Close END is retained as
+failed, never as proof that shutdown was submitted. There is no native lifecycle
+await on diagnostic flushing. A hung Close path or early process death may lose
+the cache and must remain incomplete.
+
+The same five artifact files and failure-only ordinary upload are used. Armed
+streams reserve 100 records/400 KiB within the existing 2,000-record/1 MiB
+limit; ordinary records use at most 1,900/624 KiB. The reservation contains
+closed capture records, fixed lifecycle slots and all markers/fallbacks.
+Ordinary exhaustion keeps the overall summary incomplete while allowing the
+reserved classes to proceed. Both writers enforce the same count/class rules
+under one immediate non-waiting lock attempt. The cache summary has its own
+bounded slots; it does not evict the existing wait or readahead summaries.
+Added writer work has separate scan/write/metadata accounting and limits;
+the aggregate limits are 68 attempts, 408 reserved metadata operations and
+two MiB of incremental scans. The child owns 64 attempts/384 operations/one MiB,
+including four marker attempts; the parent owns four attempts/24 operations/one
+MiB, including retained-summary reconstruction. Each transaction reserves six
+operations before its first filesystem API and keeps required release work
+inside that reservation. Exhaustion can sacrifice detail, so these caps are
+not a retention guarantee. Job-index and unarmed summaries retain their 64 KiB
+read limit; armed summary presentation is separately bounded by one MiB.
+Costs with pending work or an unmeasured final self-report write cannot be
+reported as complete. Raw stacks, symbols, cgroup/mount paths and private
+content never enter these artifacts.
+
+Report every authorized position, including cancellation, zero starts,
+identity rejection, missing artifacts and cleanup failures. For a useful
+budget-failed first start, seek two compatible device endpoints completed
+before Close, including one within 1.5 seconds before failure, and show the
+actual process/PSI and visible-policy windows alongside them. Missing evidence
+is not zero and post-Close work cannot replace the endpoint. If the single
+ordinary opportunity passes, report failure not reproduced and stop; do not
+repeat a success batch or claim a repair. Commit/push and the resulting real
+CI capture require separate authorization after local patch and code review.
 
 ## Bounded Ubuntu startup study
 

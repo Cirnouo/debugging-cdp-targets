@@ -61,8 +61,15 @@ if (startupStudy !== (chromeFileLogging !== undefined))
     throw new Error('Startup study requires both --startup-study and explicit --chrome-file-logging on|off.');
 if (startupStudy && process.platform !== 'linux') throw new Error('Startup study requires Linux.');
 const outputDirectory = fixtureOutputDirectory(args);
+const failedFirstStartCapture =
+    process.platform === 'linux' &&
+    !startupStudy &&
+    process.env.DCT_SMOKE_FAILED_FIRST_START_CAPTURE === '1' &&
+    outputDirectory !== undefined &&
+    fixtureOutputCollectionId(args) !== undefined;
 const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
     collectionId: fixtureOutputCollectionId(args),
+    firstStartCapture: failedFirstStartCapture,
 });
 const failures = createSmokeFailures(artifacts);
 const currentCollection = artifacts.snapshot();

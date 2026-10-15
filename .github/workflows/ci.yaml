@@ -281,7 +281,12 @@ jobs:
                     command -v xvfb-run
                     command -v xauth
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    captureAdmission="$(node tests/smoke/first-start-capture-ci.ts)"
+                    if [ "$captureAdmission" = 'admitted' ]; then
+                        DCT_SMOKE_FAILED_FIRST_START_CAPTURE=1 xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    else
+                        xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    fi
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
                     xvfb-run -a node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
             -   name: Verify macOS desktop Chrome prerequisites and run real acceptance

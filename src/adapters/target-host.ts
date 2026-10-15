@@ -628,6 +628,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 });
                 const observedAt = fixtureHasSubscribers() ? performance.now() : undefined;
                 let attempt = 0;
+                let readinessExitReason: FixtureFields['readinessExitReason'] = 'budget-exhausted';
                 for (
                     let readinessElapsed = io.now() - launchedAt;
                     readinessElapsed < STARTUP_TIMEOUT_MS;
@@ -707,6 +708,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                                   : 'listener-absent',
                         });
                         if (foreignRace) {
+                            readinessExitReason = 'foreign-listener';
                             finishAttempt('rejected', {}, new Error('A foreign process won the CDP port race.'));
                             lastError = new Error('A foreign process won the CDP port race.');
                             break;
@@ -756,18 +758,26 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             child.exitCode !== null ||
                             typeof child.signalCode === 'string' ||
                             /exposed|identity|Google Chrome|PID/.test(errorMessage(error))
-                        )
+                        ) {
+                            readinessExitReason = 'terminal-condition';
                             break;
+                        }
                         try {
                             await waitForWork(() => io.sleep(POLL_INTERVAL_MS), readinessSignal);
                         } catch (waitingError) {
+                            readinessExitReason = 'poll-interrupted';
                             lastError = waitingError;
                             break;
                         }
                     }
                 }
                 if (fixtureHasSubscribers()) {
-                    const fields: FixtureFields = { phase: 'rollback-request', pid: processId, port };
+                    const fields: FixtureFields = {
+                        phase: 'rollback-request',
+                        pid: processId,
+                        port,
+                        readinessExitReason,
+                    };
                     try {
                         fields.exitObserved = targetExitObserved(target);
                     } catch {

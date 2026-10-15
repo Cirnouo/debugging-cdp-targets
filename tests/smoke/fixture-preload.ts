@@ -1,5 +1,6 @@
 import { subscribeFixtureDiagnostics } from '../../src/adapters/fixture-diagnostics.ts';
 import { createFixtureArtifacts } from './fixture-artifacts.ts';
+import { createLinuxFirstStartCapture } from './linux-first-start-capture.ts';
 import { createReadaheadInitialization, createReadaheadObserver } from './linux-readahead-study.ts';
 import { createLinuxStartupWaitSampler } from './linux-startup-wait.ts';
 
@@ -9,9 +10,15 @@ try {
     const directory = query.get('directory');
     const fixture = query.get('fixture');
     if (directory && (fixture === 'official-server' || fixture === 'entry-recovery')) {
+        const firstStartCapture =
+            query.get('firstStartCapture') === '1' &&
+            process.platform === 'linux' &&
+            fixture === 'official-server' &&
+            !query.has('readaheadKb');
         const collector = createFixtureArtifacts(directory, fixture, {
             streamOnly: true,
             collectionId: query.get('collectionId'),
+            firstStartCapture,
         });
         if (!collector.snapshot().collectionRejected) {
             const assigned = query.get('readaheadKb');
@@ -42,16 +49,21 @@ try {
                           resources: true,
                       })
                     : undefined;
+            const firstStart = firstStartCapture
+                ? createLinuxFirstStartCapture((record) => collector.firstStartCapture(record), { enabled: true })
+                : undefined;
             subscribeFixtureDiagnostics(
                 (event) => {
                     collector.gateway(event);
                     sampler?.observe(event);
                     research?.observe(event);
+                    firstStart?.observe(event);
                 },
                 () => collector.rejected(),
                 (dispatch) => collector.measure(dispatch),
             );
             process.once('exit', () => collector.finishStream());
+            if (firstStart) process.once('beforeExit', () => firstStart.finish());
             if (initialization)
                 process.once('beforeExit', async () => {
                     await initialization.settled();

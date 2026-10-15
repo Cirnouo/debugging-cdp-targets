@@ -373,7 +373,12 @@ if (process.env.STUDY_TRACE) {
 
     async function invoke(
         args: string[],
-        options: { collection?: 'valid' | 'refused'; platform?: string; failure?: string } = {},
+        options: {
+            collection?: 'valid' | 'refused';
+            platform?: string;
+            failure?: string;
+            failedFirstStartCapture?: boolean;
+        } = {},
     ): Promise<Invocation> {
         const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-study-regression-'));
         try {
@@ -407,6 +412,7 @@ if (process.env.STUDY_TRACE) {
                         STUDY_TRACE: traceFile,
                         STUDY_PLATFORM: options.platform ?? 'linux',
                         STUDY_FAILURE: options.failure ?? '',
+                        DCT_SMOKE_FAILED_FIRST_START_CAPTURE: options.failedFirstStartCapture ? '1' : '0',
                     },
                 },
             );
@@ -729,6 +735,35 @@ if (process.env.STUDY_TRACE) {
                 assert.match(result.stderr, /Error: Profile observation failed/);
                 assert.ok(Array.isArray(result.summary.secondary) && result.summary.secondary.length > 0);
             }
+        }
+    });
+
+    test('failed-first-start capture is passed only to the current ordinary Linux fixture child', async () => {
+        for (const scenario of [
+            { options: { collection: 'valid' as const, failedFirstStartCapture: true }, armed: true },
+            { options: { collection: 'valid' as const }, armed: false },
+            {
+                options: { collection: 'valid' as const, failedFirstStartCapture: true, platform: 'darwin' },
+                armed: false,
+            },
+            { options: { failedFirstStartCapture: true }, armed: false },
+            { options: { collection: 'refused' as const, failedFirstStartCapture: true }, armed: false },
+            { options: { collection: 'valid' as const, failedFirstStartCapture: true }, study: true, armed: false },
+        ]) {
+            const result = await invoke(scenario.study ? study('on') : ['--allow-gui'], scenario.options);
+            assert.equal(result.status, 0, result.stderr);
+            const gatewaySpawn = result.trace.find((item) => item.event === 'spawn')?.detail;
+            assert.ok(isRecord(gatewaySpawn) && Array.isArray(gatewaySpawn.args));
+            const preloadArgument = gatewaySpawn.args.find(
+                (value: unknown) => typeof value === 'string' && value.includes('fixture-preload.ts?'),
+            );
+            const armed =
+                typeof preloadArgument === 'string'
+                    ? new URL(preloadArgument).searchParams.get('firstStartCapture') === '1'
+                    : false;
+            assert.equal(armed, scenario.armed);
+            assert.equal(calls(result, 'dct_connection_start').length, scenario.study ? 1 : 2);
+            assert.equal(calls(result, 'dct_connection_stop').length, scenario.study ? 1 : 2);
         }
     });
 

@@ -587,3 +587,22 @@ test('real Chrome CI requires both actual desktop browsers and preserves the aud
     assert.ok(job.steps.every((step) => step['continue-on-error'] !== true));
     assert.doesNotMatch(commands, /--no-sandbox|--headless|kill -9|pkill|download|apt-get|brew install/);
 });
+
+test('failed first-start capture runs its identity gate only in ordinary Linux acceptance and scopes enablement to official smoke', () => {
+    const job = workflow.jobs['real-chrome-tests'];
+    const linux = job.steps.find((step) => step.if === "runner.os == 'Linux'");
+    assert.ok(linux?.run);
+    assert.match(linux.run, /captureAdmission="\$\(node tests\/smoke\/first-start-capture-ci\.ts\)"/);
+    assert.match(linux.run, /if \[ "\$captureAdmission" = 'admitted' \]; then/);
+    assert.match(
+        linux.run,
+        /DCT_SMOKE_FAILED_FIRST_START_CAPTURE=1 xvfb-run -a node tests\/smoke\/official-server\.ts/,
+    );
+    assert.doesNotMatch(linux.run, /export DCT_SMOKE_FAILED_FIRST_START_CAPTURE/);
+    for (const other of Object.values(workflow.jobs)
+        .flatMap((item) => item.steps)
+        .filter((step) => step !== linux)) {
+        assert.doesNotMatch(other.run ?? '', /first-start-capture-ci|DCT_SMOKE_FAILED_FIRST_START_CAPTURE/);
+        assert.equal(other.env?.DCT_SMOKE_FAILED_FIRST_START_CAPTURE, undefined);
+    }
+});

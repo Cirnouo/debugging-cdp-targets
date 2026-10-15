@@ -1,5 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+    appendFileSync,
+    closeSync,
+    existsSync,
+    mkdirSync,
+    openSync,
+    readFileSync,
+    readSync,
+    rmdirSync,
+    statSync,
+    writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import {
     type FixtureError,
@@ -7,7 +18,14 @@ import {
     validateFixtureEvent,
 } from '../../src/adapters/fixture-diagnostics.ts';
 import { type BrowserStartupRecord, validateBrowserStartupRecord } from './chrome-startup.ts';
-import { newFixtureEnvelope, readFixtureIndex } from './fixture-ci.ts';
+import { newFixtureEnvelope, readFixtureIndex, readFixtureSummary } from './fixture-ci.ts';
+import {
+    createArmedFixtureWriter,
+    createFixtureStreamQuota,
+    type FirstStartWriterCost,
+    validateFirstStartWriterCost,
+} from './fixture-stream-quota.ts';
+import { type FirstStartCaptureRecord, validateFirstStartCaptureRecord } from './linux-first-start-capture-record.ts';
 import { type ReadaheadRecord, readaheadExitProof, validateReadaheadRecord } from './linux-readahead-study.ts';
 import { type LinuxStartupWaitRecord, validateLinuxStartupWaitRecord } from './linux-startup-wait.ts';
 import { createStdioClient } from './mcp-client.ts';
@@ -69,6 +87,12 @@ interface Failure {
     runtimeStage: string | null;
 }
 interface Summary {
+    firstStartCapture: Readonly<FirstStartCaptureRecord>[];
+    firstStartCaptureArmed: boolean;
+    firstStartCaptureOmitted: number;
+    firstStartCaptureLimitations: string[];
+    firstStartCaptureWriter: ReturnType<ReturnType<typeof createArmedFixtureWriter>['snapshot']> | null;
+    firstStartCaptureWriterChild: Readonly<FirstStartWriterCost> | null;
     readaheadStudy: Readonly<ReadaheadRecord>[];
     readaheadStudyOmitted: number;
     schemaVersion: 1;
@@ -109,8 +133,19 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 /** Reconstruct child progress on demand, including interrupted BEGIN records. */
-export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
+export function readFixtureProgress(
+    directory: string,
+    fixture: FixtureLabel,
+    firstStartCaptureArmed = false,
+    scanBudget = maxBytes,
+) {
     const progress = {
+        firstStartCapture: [] as Readonly<FirstStartCaptureRecord>[],
+        firstStartCaptureArmed,
+        firstStartCaptureOmitted: 0,
+        firstStartCaptureLimitations: [] as string[],
+        firstStartCaptureWriterChild: null as Readonly<FirstStartWriterCost> | null,
+        scannedBytes: 0,
         readaheadStudy: [] as Readonly<ReadaheadRecord>[],
         readaheadStudyOmitted: 0,
         events: 0,
@@ -128,17 +163,55 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
     };
     const file = path.join(directory, `${fixture}.events.ndjson`);
     let cleanupEnded = false;
+    const quota = firstStartCaptureArmed ? createFixtureStreamQuota() : undefined;
+    if (firstStartCaptureArmed && scanBudget <= 0) {
+        progress.incomplete = true;
+        progress.firstStartCaptureLimitations.push(
+            'writer-scan-budget',
+            'selection-missing',
+            'outcome-missing',
+            'terminal-missing',
+            'self-report-write-unavailable',
+        );
+        return progress;
+    }
     try {
         if (existsSync(`${file}.lock`)) progress.writeFailed = true;
-        if (statSync(file).size > maxBytes) {
+        const size = statSync(file).size;
+        if (size > Math.min(maxBytes, scanBudget)) {
             progress.truncated = true;
             progress.incomplete = true;
+            if (firstStartCaptureArmed) progress.firstStartCaptureLimitations.push('writer-scan-budget');
             return progress;
         }
-        const lines = readFileSync(file, 'utf8').split('\n');
+        let content: string;
+        if (firstStartCaptureArmed) {
+            const buffer = Buffer.alloc(size);
+            const descriptor = openSync(file, 'r');
+            let read = 0;
+            try {
+                while (read < size) {
+                    const count = readSync(descriptor, buffer, read, size - read, read);
+                    progress.scannedBytes += count;
+                    if (count === 0) {
+                        progress.writeFailed = true;
+                        break;
+                    }
+                    read += count;
+                }
+            } finally {
+                closeSync(descriptor);
+            }
+            content = buffer.subarray(0, read).toString('utf8');
+            if (content && !content.endsWith('\n')) progress.writeFailed = true;
+        } else {
+            content = readFileSync(file, 'utf8');
+            progress.scannedBytes = Buffer.byteLength(content);
+        }
+        const lines = content.split('\n');
         for (const line of lines.slice(0, maxEvents + 1)) {
             if (!line) continue;
-            if (Buffer.byteLength(line) > maxRecordBytes) {
+            if (Buffer.byteLength(line) + (firstStartCaptureArmed ? 1 : 0) > maxRecordBytes) {
                 progress.invalidEvents++;
                 continue;
             }
@@ -154,6 +227,11 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
                 continue;
             }
             progress.events++;
+            if (quota && !quota.accept(value, Buffer.byteLength(line) + 1).accepted) {
+                progress.truncated = true;
+                progress.invalidEvents++;
+                continue;
+            }
             if (value.kind === 'gateway') {
                 const { kind: _kind, ...fields } = value;
                 const event = validateFixtureEvent(fields);
@@ -165,6 +243,20 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
                 progress.lastStage = event.stage;
                 progress.lastOperationId = event.operationId ?? null;
                 if (event.stage === 'gateway-cleanup' && event.event === 'end') cleanupEnded = true;
+            } else if (value.kind === 'linux-first-start-capture') {
+                const capture = validateFirstStartCaptureRecord(value);
+                if (!capture || !firstStartCaptureArmed) progress.invalidEvents++;
+                else {
+                    progress.firstStartCapture.push(capture);
+                    if (progress.firstStartCapture.length > 64) {
+                        progress.firstStartCapture.shift();
+                        progress.firstStartCaptureOmitted++;
+                    }
+                }
+            } else if (value.kind === 'first-start-writer-cost') {
+                const cost = validateFirstStartWriterCost(value);
+                if (!cost || !firstStartCaptureArmed || progress.firstStartCaptureWriterChild) progress.invalidEvents++;
+                else progress.firstStartCaptureWriterChild = cost;
             } else if (value.kind === 'browser-startup') {
                 const startup = validateBrowserStartupRecord(value);
                 if (!startup) progress.invalidEvents++;
@@ -211,11 +303,25 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
     } catch {
         progress.writeFailed = true;
     }
+    if (firstStartCaptureArmed) {
+        for (const [slot, reason] of [
+            ['selection', 'selection-missing'],
+            ['first-start-outcome', 'outcome-missing'],
+            ['observer-terminal', 'terminal-missing'],
+        ]) {
+            if (!progress.firstStartCapture.some((capture) => capture.slot === slot))
+                progress.firstStartCaptureLimitations.push(reason ?? 'receipt-missing');
+        }
+        progress.firstStartCaptureLimitations.push('self-report-write-unavailable');
+        if (!progress.firstStartCaptureWriterChild) progress.firstStartCaptureLimitations.push('writer-cost-missing');
+    }
     progress.incomplete =
         progress.truncated ||
         progress.writeFailed ||
         progress.linuxStartupWaitOmitted > 0 ||
         progress.readaheadStudyOmitted > 0 ||
+        progress.firstStartCaptureOmitted > 0 ||
+        progress.firstStartCaptureLimitations.length > 0 ||
         (progress.gatewayEvents > 0 && !cleanupEnded);
     return progress;
 }
@@ -229,12 +335,14 @@ export function createFixtureArtifacts(
         streamOnly?: boolean;
         collectionId?: string | null | undefined;
         now?: () => number;
+        firstStartCapture?: boolean;
     } = {},
 ) {
     const summary: Summary = {
         readaheadStudy: [],
         readaheadStudyOmitted: 0,
         ...newFixtureEnvelope(fixture, randomUUID()),
+        firstStartCaptureArmed: io.firstStartCapture === true && fixture === 'official-server',
         state: 'running',
     };
     let eventsFile = directory ? path.join(directory, `${fixture}.events.ndjson`) : undefined;
@@ -247,6 +355,7 @@ export function createFixtureArtifacts(
     let measuring = false;
     let costUnavailable = false;
     let costFlushed = false;
+    let armedWriter: ReturnType<typeof createArmedFixtureWriter> | undefined;
     function measure(action: () => void) {
         if (!eventsFile || measuring) {
             action();
@@ -281,13 +390,33 @@ export function createFixtureArtifacts(
     function persist() {
         if (!summaryFile || io.streamOnly) return;
         try {
-            writeFileSync(summaryFile, `${JSON.stringify(summary)}\n`, 'utf8');
+            let value = summary;
+            if (summary.firstStartCaptureArmed) {
+                const { schemaVersion, fixture, collectionId, firstStartCaptureArmed, ...body } = summary;
+                value = { schemaVersion, fixture, collectionId, firstStartCaptureArmed, ...body };
+            }
+            writeFileSync(summaryFile, `${JSON.stringify(value)}\n`, 'utf8');
         } catch {
             summary.writeFailed = true;
         }
     }
-    function append(value: unknown) {
+    function append(value: unknown, create?: (event: ReturnType<typeof validateFixtureEvent>) => unknown) {
         if (!eventsFile) return;
+        if (armedWriter) {
+            const written = create ? armedWriter.appendFromGateway(create) : armedWriter.append(value);
+            const state = armedWriter.snapshot();
+            summary.firstStartCaptureWriter = state;
+            if (written) summary.events++;
+            else summary.droppedEvents++;
+            summary.truncated ||= state.exhausted;
+            summary.writeFailed ||= state.writeFailed;
+            summary.incomplete ||= state.exhausted || state.writeFailed;
+            if (state.exhausted && !summary.firstStartCaptureLimitations.includes('writer-budget-or-capacity'))
+                summary.firstStartCaptureLimitations.push('writer-budget-or-capacity');
+            if (state.releaseFailed && !summary.firstStartCaptureLimitations.includes('writer-release-failed'))
+                summary.firstStartCaptureLimitations.push('writer-release-failed');
+            return;
+        }
         let ownsLock = false;
         try {
             if (summary.truncated) {
@@ -346,6 +475,7 @@ export function createFixtureArtifacts(
     }
     function lastGateway() {
         if (!eventsFile) return;
+        if (armedWriter) return armedWriter.lastGateway();
         try {
             if (statSync(eventsFile).size > maxBytes) return;
             for (const line of readFileSync(eventsFile, 'utf8').trim().split('\n').reverse()) {
@@ -365,7 +495,7 @@ export function createFixtureArtifacts(
         try {
             mkdirSync(directory, { recursive: true });
             if (summaryFile && eventsFile && existsSync(summaryFile)) {
-                const prior = readFixtureIndex(summaryFile);
+                const prior = readFixtureSummary(summaryFile, summary.firstStartCaptureArmed);
                 if (
                     !record(prior) ||
                     prior.fixture !== fixture ||
@@ -403,7 +533,31 @@ export function createFixtureArtifacts(
         }
         persist();
     }
+    if (eventsFile && summary.firstStartCaptureArmed)
+        armedWriter = createArmedFixtureWriter(eventsFile, io.streamOnly === true, io);
+    if (!eventsFile && summary.firstStartCaptureArmed) {
+        summary.incomplete = true;
+        summary.firstStartCaptureLimitations.push('collection-unavailable');
+    }
     const collector = {
+        firstStartCapture(value: unknown) {
+            if (!summary.firstStartCaptureArmed || summary.collectionRejected || !eventsFile) return;
+            measure(() => {
+                const safe = validateFirstStartCaptureRecord(value);
+                if (!safe) {
+                    collector.rejected();
+                    return;
+                }
+                summary.firstStartCapture.push(safe);
+                if (summary.firstStartCapture.length > 64) {
+                    summary.firstStartCapture.shift();
+                    summary.firstStartCaptureOmitted++;
+                    summary.incomplete = true;
+                }
+                append(safe);
+                persist();
+            });
+        },
         readahead(value: unknown) {
             if (summary.collectionRejected) return;
             const safe = validateReadaheadRecord(value);
@@ -485,6 +639,7 @@ export function createFixtureArtifacts(
             });
         },
         finishStream() {
+            if (!costFlushed && armedWriter && io.streamOnly) append(armedWriter.cost());
             if (summary.writeFailed) append({ kind: 'limitation', reason: 'write-failed' });
             if (costFlushed || !eventsFile) return;
             costFlushed = true;
@@ -496,24 +651,35 @@ export function createFixtureArtifacts(
             }
         },
         failure(stage: SmokeStage, error: unknown, primary: boolean) {
-            const event = lastGateway();
-            const failure: Failure = {
-                stage,
-                error: serializeFixtureError(error),
-                operationId: event?.operationId ?? null,
-                runtimeStage: event?.stage ?? null,
+            let constructed = false;
+            const create = (event: ReturnType<typeof validateFixtureEvent>) => {
+                constructed = true;
+                const failure: Failure = {
+                    stage,
+                    error: serializeFixtureError(error),
+                    operationId: event?.operationId ?? null,
+                    runtimeStage: event?.stage ?? null,
+                };
+                if (primary && !summary.primary) summary.primary = failure;
+                else if (summary.secondary.length < 32) summary.secondary.push(failure);
+                else summary.droppedEvents++;
+                return { kind: 'failure', primary, ...failure };
             };
-            if (primary && !summary.primary) summary.primary = failure;
-            else if (summary.secondary.length < 32) summary.secondary.push(failure);
-            else summary.droppedEvents++;
-            append({ kind: 'failure', primary, ...failure });
+            if (armedWriter) append(undefined, create);
+            else append(create(lastGateway()));
+            // Admission can fail before the callback. Preserve the original
+            // failure without presenting an unrefreshed cached attribution.
+            if (!constructed) create(undefined);
             persist();
         },
         finish(failed: boolean) {
             summary.state = failed ? 'failed' : 'passed';
             // Child writes may have advanced the stream. Read only bounded safe records.
             if (eventsFile && directory) {
-                const progress = readFixtureProgress(directory, fixture);
+                const scanBudget = armedWriter ? (armedWriter.reserveReconstruction() ?? 0) : maxBytes;
+                const progress = readFixtureProgress(directory, fixture, summary.firstStartCaptureArmed, scanBudget);
+                armedWriter?.settleReconstruction(progress.scannedBytes);
+                summary.firstStartCaptureWriter = armedWriter?.snapshot() ?? null;
                 summary.events = progress.events;
                 summary.gatewayEvents = progress.gatewayEvents;
                 summary.invalidEvents = progress.invalidEvents;
@@ -528,6 +694,12 @@ export function createFixtureArtifacts(
                 summary.linuxStartupWaitOmitted = progress.linuxStartupWaitOmitted;
                 summary.readaheadStudy = progress.readaheadStudy;
                 summary.readaheadStudyOmitted = progress.readaheadStudyOmitted;
+                summary.firstStartCapture = progress.firstStartCapture;
+                summary.firstStartCaptureOmitted = progress.firstStartCaptureOmitted;
+                summary.firstStartCaptureWriterChild = progress.firstStartCaptureWriterChild;
+                summary.firstStartCaptureLimitations = [
+                    ...new Set([...summary.firstStartCaptureLimitations, ...progress.firstStartCaptureLimitations]),
+                ];
             }
             summary.diagnosticAbsent = !!directory && summary.gatewayEvents === 0;
             persist();
@@ -620,12 +792,15 @@ export function fixtureGatewayArguments(
     fixture: FixtureLabel = 'official-server',
     collectionId?: string | null,
     readahead?: { executable: string; assignedKb: 128 | 1024 },
+    firstStartCapture = false,
 ): string[] {
     if (!directory || !collectionId || !uuid.test(collectionId)) return [entry];
     const preload = new URL('./fixture-preload.ts', import.meta.url);
     preload.searchParams.set('directory', directory);
     preload.searchParams.set('fixture', fixture);
     preload.searchParams.set('collectionId', collectionId);
+    if (firstStartCapture && fixture === 'official-server' && !readahead)
+        preload.searchParams.set('firstStartCapture', '1');
     if (readahead) {
         preload.searchParams.set('readaheadKb', String(readahead.assignedKb));
         preload.searchParams.set('readaheadExecutable', readahead.executable);
@@ -633,7 +808,11 @@ export function fixtureGatewayArguments(
     return ['--import', preload.href, entry];
 }
 export function fixtureGatewayEnvironment(inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-    return Object.fromEntries(Object.entries(inherited).filter(([name]) => name.toUpperCase() !== 'NODE_OPTIONS'));
+    return Object.fromEntries(
+        Object.entries(inherited).filter(
+            ([name]) => !['NODE_OPTIONS', 'DCT_SMOKE_FAILED_FIRST_START_CAPTURE'].includes(name.toUpperCase()),
+        ),
+    );
 }
 export function createFixtureGatewayClient(
     entry: string,
@@ -644,7 +823,14 @@ export function createFixtureGatewayClient(
 ) {
     return createStdioClient(
         process.execPath,
-        fixtureGatewayArguments(entry, directory, fixture, artifacts.snapshot().collectionId, readahead),
+        fixtureGatewayArguments(
+            entry,
+            directory,
+            fixture,
+            artifacts.snapshot().collectionId,
+            readahead,
+            artifacts.snapshot().firstStartCaptureArmed,
+        ),
         { env: fixtureGatewayEnvironment() },
     );
 }

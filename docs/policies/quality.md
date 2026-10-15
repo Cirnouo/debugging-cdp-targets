@@ -340,6 +340,23 @@ metadata, completed device I/O, actual queue readahead and visible cgroup
 reclaim/throttling/limits retain their distinct scopes and unavailable states.
 Pending reads/helpers retain sampler ownership after timeout; production
 readiness does not await them, and they never retry a trigger or signal Chrome.
+The additional failed-first-start observer is default-off and admits only the
+one reviewed ordinary push transition, attempt one, on the investigation branch.
+PR/manual/scheduled/retry events remain unarmed. It selects only the first
+official-server operation and samples baseline plus 4/8/12/16/19-second slots;
+each group has a 250 ms result limit, independent real pending ownership and
+strict EOF/identity validation. Success discards its detailed cache; a failure
+can flush only after the actual normal-Close request path ends or app exit is
+confirmed. No failure-edge flush, postfailure sample, new native wait or forced
+shutdown is permitted. All static record/metadata/read and writer budgets,
+closed projections and partial-evidence rules are documented in the
+[capture procedure](../../tests/smoke/README.md#failed-first-start-completed-io-capture).
+Armed streams reserve capacity inside the same 2,000-record/1 MiB total and five
+filenames; ordinary quota exhaustion does not suppress the reserved classes,
+but always remains incomplete. Every marker and fallback counts against the
+hard caps. Ordinary upload remains failure-only with seven-day retention.
+Local design/implementation approval does not authorize the subsequent push
+and automatic CI collection; confirm those actions on the actual reviewed patch.
 Synchronous instrumentation overhead
 on real Linux/macOS Chrome fixtures has not been measured. Reproduction and interpretation belong in the
 [smoke inventory](../../tests/smoke/README.md#controlled-failure-diagnostics).

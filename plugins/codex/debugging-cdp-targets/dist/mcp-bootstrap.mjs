@@ -4383,6 +4383,12 @@ var rootProcessStates = [
   "idle",
   "unknown"
 ];
+var readinessExitReasons = [
+  "budget-exhausted",
+  "foreign-listener",
+  "terminal-condition",
+  "poll-interrupted"
+];
 var listenerOwnerRelations = [
   "root",
   "owned-descendant",
@@ -4477,6 +4483,7 @@ var fieldKeys = [
   "signalCode",
   "exitObserved",
   "monitoringFailed",
+  "readinessExitReason",
   "rootProcessState",
   "rootStartTicks",
   "rootUserTicks",
@@ -4507,6 +4514,7 @@ function safeField(key, value) {
   if (key === "status") return member(statuses, value);
   if (key === "phase") return member(phases, value);
   if (key === "rootProcessState") return member(rootProcessStates, value);
+  if (key === "readinessExitReason") return member(readinessExitReasons, value);
   if (key === "listenerOwnerRelation") return member(listenerOwnerRelations, value);
   if (key === "signalCode") return value === null || member(signals, value);
   if (key === "trigger") return value === "gateway-disconnect";
@@ -42311,6 +42319,7 @@ function createTargetHost(dependencies = {}) {
         });
         const observedAt = fixtureHasSubscribers() ? performance3.now() : void 0;
         let attempt = 0;
+        let readinessExitReason = "budget-exhausted";
         for (let readinessElapsed = io.now() - launchedAt; readinessElapsed < STARTUP_TIMEOUT_MS; readinessElapsed = io.now() - launchedAt) {
           attempt += 1;
           const elapsedMs = observedAt !== void 0 && fixtureHasSubscribers() ? Math.max(0, performance3.now() - observedAt) : void 0;
@@ -42376,6 +42385,7 @@ function createTargetHost(dependencies = {}) {
               reason: foreignRace ? "listener-foreign" : evidence.listeners.length ? "listener-owned" : "listener-absent"
             });
             if (foreignRace) {
+              readinessExitReason = "foreign-listener";
               finishAttempt("rejected", {}, new Error("A foreign process won the CDP port race."));
               lastError = new Error("A foreign process won the CDP port race.");
               break;
@@ -42415,18 +42425,26 @@ function createTargetHost(dependencies = {}) {
           } catch (error3) {
             finishAttempt("failed", {}, error3);
             lastError = error3;
-            if (readinessSignal?.aborted || child.monitoringFailure || targetExitObserved(target) || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
+            if (readinessSignal?.aborted || child.monitoringFailure || targetExitObserved(target) || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3))) {
+              readinessExitReason = "terminal-condition";
               break;
+            }
             try {
               await waitForWork(() => io.sleep(POLL_INTERVAL_MS), readinessSignal);
             } catch (waitingError) {
+              readinessExitReason = "poll-interrupted";
               lastError = waitingError;
               break;
             }
           }
         }
         if (fixtureHasSubscribers()) {
-          const fields3 = { phase: "rollback-request", pid: processId, port };
+          const fields3 = {
+            phase: "rollback-request",
+            pid: processId,
+            port,
+            readinessExitReason
+          };
           try {
             fields3.exitObserved = targetExitObserved(target);
           } catch {

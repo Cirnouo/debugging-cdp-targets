@@ -257,6 +257,12 @@ const rootProcessStates = [
     'idle',
     'unknown',
 ] as const;
+const readinessExitReasons = [
+    'budget-exhausted',
+    'foreign-listener',
+    'terminal-condition',
+    'poll-interrupted',
+] as const;
 const listenerOwnerRelations = [
     'root',
     'owned-descendant',
@@ -352,6 +358,7 @@ export interface FixtureFields extends FixtureIdentity {
     signalCode?: string | null;
     exitObserved?: boolean;
     monitoringFailed?: boolean;
+    readinessExitReason?: (typeof readinessExitReasons)[number];
     rootProcessState?: (typeof rootProcessStates)[number];
     rootStartTicks?: number;
     rootUserTicks?: number;
@@ -428,6 +435,7 @@ const fieldKeys = [
     'signalCode',
     'exitObserved',
     'monitoringFailed',
+    'readinessExitReason',
     'rootProcessState',
     'rootStartTicks',
     'rootUserTicks',
@@ -478,6 +486,7 @@ function safeField(key: string, value: unknown): boolean {
     if (key === 'status') return member(statuses, value);
     if (key === 'phase') return member(phases, value);
     if (key === 'rootProcessState') return member(rootProcessStates, value);
+    if (key === 'readinessExitReason') return member(readinessExitReasons, value);
     if (key === 'listenerOwnerRelation') return member(listenerOwnerRelations, value);
     if (key === 'signalCode') return value === null || member(signals, value);
     if (key === 'trigger') return value === 'gateway-disconnect';

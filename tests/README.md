@@ -15,6 +15,8 @@
   including closed fields, malformed observations and disabled-mode behavior.
   It also preserves existing native-Close listener states while rejecting unsafe
   diagnostic metadata without changing the primary startup cause or cleanup.
+  Literal failure branches verify readiness exit classification without extra
+  clock, getter, probe, or normal-Close effects.
 - `fixture-cost.test.ts` checks monotonic collector callback costs on successful
   and failed writes, single counting of rejected events, closed timing records,
   default-off behavior and unchanged stream caps.
@@ -32,6 +34,15 @@
   admission and association, single-start ownership, late writer settlement,
   actual resource-release proof, original-value restoration, terminal overlap
   and honest closed read-cost evidence through external I/O boundaries.
+- `linux-first-start-capture.test.ts` checks the separately armed observer's
+  bounded EOF reads, identity epochs, independent pending ownership, six fixed
+  slots and Close-gated failed-start cache through external I/O boundaries.
+- `fixture-first-start-artifacts.test.ts` checks reserved stream capacity,
+  marker/fallback accounting, retained summaries and honest incomplete output.
+- `fixture-first-start-integration.test.ts` checks the observer's failure flush
+  and success discard through the actual shared parent/preload artifact writer.
+- `first-start-capture-ci.test.ts` checks the push-only current-checkout admission
+  gate and rejects PR, rerun, malformed event and contradictory identity inputs.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.
