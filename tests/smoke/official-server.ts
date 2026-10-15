@@ -26,14 +26,18 @@ import {
     createSmokeFailures,
     fixtureOutputCollectionId,
     fixtureOutputDirectory,
+    fixtureReadaheadExitProof,
+    readFixtureProgress,
 } from './fixture-artifacts.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
+import { createReadaheadLease, createReadaheadObserver } from './linux-readahead-study.ts';
 import { readMcpTools } from './mcp-client.ts';
 
 const authorizedArgs = requireGuiAuthorization();
 const args: string[] = [];
 let startupStudy = false;
 let chromeFileLogging: 'on' | 'off' | undefined;
+let readaheadKb: 128 | 1024 | undefined;
 for (let index = 0; index < authorizedArgs.length; index++) {
     const argument = authorizedArgs[index];
     if (argument === '--startup-study') {
@@ -44,8 +48,15 @@ for (let index = 0; index < authorizedArgs.length; index++) {
         const arm = authorizedArgs[++index];
         if (arm !== 'on' && arm !== 'off') throw new Error('Expected --chrome-file-logging on|off.');
         chromeFileLogging = arm;
+    } else if (argument === '--readahead-kb') {
+        if (readaheadKb !== undefined) throw new Error('Duplicate --readahead-kb.');
+        const value = authorizedArgs[++index];
+        if (value !== '128' && value !== '1024') throw new Error('Expected --readahead-kb 128|1024.');
+        readaheadKb = value === '128' ? 128 : 1024;
     } else if (argument !== undefined) args.push(argument);
 }
+if (readaheadKb !== undefined && (!startupStudy || chromeFileLogging !== 'on' || process.platform !== 'linux'))
+    throw new Error('Readahead study requires Linux --startup-study --chrome-file-logging on.');
 if (startupStudy !== (chromeFileLogging !== undefined))
     throw new Error('Startup study requires both --startup-study and explicit --chrome-file-logging on|off.');
 if (startupStudy && process.platform !== 'linux') throw new Error('Startup study requires Linux.');
@@ -65,7 +76,11 @@ if (startupStudy && (!controlledDiagnostics || currentCollection.collectionId !=
 if (startupStudy)
     console.log(
         JSON.stringify({
-            startupStudy: { chromeFileLogging, launch: 1, expectedLogAbsence: chromeFileLogging === 'off' },
+            startupStudy: {
+                chromeFileLogging,
+                ...(readaheadKb === undefined ? { launch: 1 } : { readaheadKb, launchLimit: 1 }),
+                expectedLogAbsence: chromeFileLogging === 'off',
+            },
         }),
     );
 function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
@@ -130,7 +145,14 @@ const client = createFixtureGatewayClient(
     outputDirectory,
     'official-server',
     artifacts,
+    readaheadKb === undefined ? undefined : { executable: chrome, assignedKb: readaheadKb },
 );
+const readahead =
+    readaheadKb === undefined
+        ? undefined
+        : createReadaheadLease(chrome, readaheadKb, (record) => artifacts.readahead(record));
+let prelaunchObserver: ReturnType<typeof createReadaheadObserver> | undefined;
+let startRequestId: string | undefined;
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
@@ -179,6 +201,7 @@ async function emptyGateway(id: string) {
 }
 try {
     artifacts.begin('acceptance');
+    await readahead?.admit();
     const initialized = await client.request('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
@@ -198,15 +221,28 @@ try {
     validateIdentity(entryId, 'entry ID');
     await emptyGateway(entryId);
     await assert.rejects(() => tool('list_pages'), /routing/);
-    const first = await control({
-        action: 'start',
-        requestId: randomUUID(),
+    if (readahead && readaheadKb !== undefined) {
+        prelaunchObserver = createReadaheadObserver(
+            readahead.identity(),
+            (record) => artifacts.readahead(record),
+            undefined,
+            readaheadKb,
+        );
+        await prelaunchObserver.prelaunch();
+    }
+    startRequestId = randomUUID();
+    const startRequest = {
+        action: 'start' as const,
+        requestId: startRequestId,
         entryId,
         basePort: 19222,
         ...launch('profile-one', 'FIRST'),
-    });
+    };
+    readahead?.launch();
+    const first = await control(startRequest);
     assert.ok(!('connections' in first) && first.sessionId);
     active = first;
+    if (first.processId !== undefined) await readahead?.verifyApplication(first.processId);
     const firstFixture = await inspectChromeSmokeTarget(first, chrome);
     const firstDirectory = await inspectChromeSmokeDirectory(tool, first, firstFixture);
     managedDirectories.add(firstDirectory);
@@ -295,6 +331,27 @@ try {
         await client.close();
         if (startupStudy) assert.equal(client.child.exitCode, 0, 'The study gateway must exit normally.');
     });
+    if (readahead)
+        await failures.cleanup('gateway-close', async () => {
+            await prelaunchObserver?.settled();
+            let proof = readahead.launches() === 0;
+            if (!proof && outputDirectory && entryId && startRequestId) {
+                const progress = readFixtureProgress(outputDirectory, 'official-server');
+                proof =
+                    fixtureReadaheadExitProof(
+                        outputDirectory,
+                        { entryId, requestId: startRequestId },
+                        client.child.exitCode === 0,
+                    ) &&
+                    progress.readaheadStudy.some(
+                        (record) => record.phase === 'observer' && record.outcome === 'verified',
+                    );
+                const application = progress.readaheadStudy.filter((record) => record.phase === 'application');
+                if (application.some((record) => record.outcome !== 'verified'))
+                    failures.primary(new Error('Readahead launched application association unavailable.'));
+            }
+            await readahead.restore(proof);
+        });
     for (const directory of managedDirectories)
         await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
     if (monitor) {
@@ -316,6 +373,7 @@ try {
                 startupStudyResult: {
                     kind: 'single-launch study',
                     chromeFileLogging,
+                    ...(readahead ? { readaheadKb, launches: readahead.launches() } : {}),
                     expectedLogAbsence: chromeFileLogging === 'off',
                     result: failures.hasFailure() ? 'failed' : 'passed',
                 },

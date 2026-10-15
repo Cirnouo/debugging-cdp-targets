@@ -113,6 +113,9 @@ then explicitly restarts and normally closes them. It retains test profiles.
   bounded fixed proc reads and closed projections for the same diagnostic stream.
   `linux-startup-resources.ts` supplies its optional kernel wait classification,
   mapped block-device counters and visible cgroup evidence.
+- `linux-readahead-study.ts` supplies the separately opted-in Linux queue lease,
+  bounded research observations and closed evidence for actual release and
+  original-value restoration. It is test-only and never shipped.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
@@ -1039,7 +1042,7 @@ retries, extra batches or replacement slots. A cancelled or incomplete slot is
 recorded as such. The study dispatch has its own run-ID concurrency group and
 cannot cancel ordinary CI's workflow/ref group.
 
-Only this manual study uploads on both success and failure, using `always()`
+Both manual studies upload on success and failure, using `always()`
 and the successful current-initialization guard. Each artifact is named
 `ubuntu-startup-study-block-<block>-logging-<on|off>-<run-id>-<attempt>` and retains
 exactly `job-index.json`, `official-server.events.ndjson`,
@@ -1070,3 +1073,147 @@ These six pilot samples cannot prove a causal logging effect or rare-failure
 reliability; an arm difference is association only. If all samples pass, the
 historical failure was not reproduced and the root cause remains unknown.
 The study does not change or replace full real Chrome acceptance.
+
+## Bounded Ubuntu readahead study
+
+The separate Linux-only queue intervention adds `--readahead-kb 128|1024` to
+`official-server.ts --allow-gui --startup-study --chrome-file-logging on`.
+It requires explicit GUI authorization, a valid freshly initialized collection
+and fixed file logging on. It remains test-only and outside the default lane.
+The default-false `ubuntu-readahead-study` manual input selects this job; leave
+`ubuntu-startup-study` false. Selecting both inputs fails Quality before any
+research Chrome starts, and neither research job runs. One explicitly authorized
+dispatch is:
+
+```sh
+gh workflow run ci.yaml --ref <reviewed-branch> -f ubuntu-readahead-study=true
+```
+
+Quality and the existing supply-chain gate precede the six independent fresh
+`ubuntu-24.04` runner slots. Node 24.21.0, pnpm 12.4.2, the explicit executable,
+trusted frozen install, typecheck, current collection initialization, stage and
+Xvfb prerequisites remain the same. Allocations are fixed before execution:
+
+| Slot | Block | Assigned queue RA (KiB) |
+| --- | --- | --- |
+| 1 | 1 | 128 |
+| 2 | 1 | 1024 |
+| 3 | 2 | 1024 |
+| 4 | 2 | 128 |
+| 5 | 3 | 128 |
+| 6 | 3 | 1024 |
+
+Matrix order is not chronological scheduling, and block labels do not pair
+samples on a machine. Logging stays on in all six slots. Fail-fast is false;
+there are no retries, replacement slots, adaptive extra batches or ignored
+failures. An admission failure retains its assignment with zero Chrome starts;
+an admitted slot starts at most once. The run-ID-specific concurrency group
+cannot cancel ordinary CI's workflow/ref group. Both ordinary acceptance smokes
+still run with their original commands and gates on Linux and macOS.
+
+The CI invocation after accepted initialization and staging is exactly:
+
+```sh
+xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging on --readahead-kb "${{ matrix.readaheadKb }}" --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+```
+
+For an explicitly authorized disposable Linux sample outside Actions, use the
+startup-study initialization/prerequisite sequence above with a fresh directory,
+then this command, choosing one literal assigned value:
+
+```sh
+xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging on --readahead-kb 128 --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+```
+
+Do not query Chrome's version, hash or read its entire executable, copy the
+browser, benchmark storage, warm caches or use `drop_caches` before the first
+start. No browser download or extra OS package installation belongs to this
+protocol. Actual Chrome version comes from verified CDP output; any whole-file
+fingerprint belongs after actual exit. A fresh runner's first start does not
+prove every page/cache layer is cold.
+
+Before launch, the fixture derives the explicit canonical executable's device
+and unique partition/parent-queue mapping from metadata. It records the original
+RA, explicitly sets either assigned value and verifies readback. The 128 KiB
+arm does not assume the original value was 128. Canonical identity must be
+reverified before each write and restoration, and the launched executable must
+map to that same selected device/queue. Ambiguous, unsupported or changed mapping,
+unavailable permissions or mismatched readback makes admission unavailable;
+there is no guessed device or fallback. This intervention changes a disposable
+runner guest queue used by other processes, not a Chrome-exclusive setting.
+
+Partial, failed or timed-out writes retain responsibility for the original RA
+even if no Chrome started. Every pending write helper must actually settle before
+restoration, so a late write cannot invalidate a claimed restore. After normal
+Close, actual owned application and relevant resource exit must be proved before
+restoring and verifying the original RA on the same verified queue. Gateway-child
+exit and a successful smoke alone do not prove that barrier. Cleanup, pending
+ownership, missing exit proof and restoration failure remain explicit outcomes;
+Chrome is never force-killed to complete a sample. Preserve primary startup
+failures while reporting cleanup and restoration separately.
+
+Small prelaunch and terminal device-counter observations supplement the existing
+bounded wait/resource samples. Terminal observation must not block or delay
+readiness, immediate rollback or normal Close. Retain its observation start and
+completion times and whether cleanup overlaps. A terminal window not proved
+complete before Close/rollback is overlapped or unavailable and excluded from
+clean-window comparisons. Failed startup remains in its assigned arm regardless.
+Closed enum/numeric research records reuse the existing 4,096-byte record,
+2,000-event plus truncation-marker and 1 MiB stream caps; raw errors, stacks,
+symbols, paths and page content are excluded. Missing, rejected, malformed or
+truncated records cannot prove readiness, exit or restoration.
+
+Each new observation phase has a 250 ms result budget, with at most 64 text
+reads of 4,096 bytes each; canonical/stat/directory operations are counted
+separately as `metadataOps`. This budget does not cancel actual filesystem work
+or a privileged writer. Pending work retains ownership until settlement. Cost
+records distinguish complete, pending and unavailable byte accounting; the final
+gateway observer record reconciles its lifetime costs and must not be added to
+the phase records again. Parent and gateway timestamps use different clock
+origins and cannot be subtracted. Existing wait-sampler limits remain unchanged.
+
+Final restoration evidence records `startCalls` as zero or one control start
+calls, rather than inferring a process count from absent events. Verified
+admission and restoration include the independently observed `readAheadKb`.
+Missing final evidence cannot establish zero starts or a successful restore.
+
+Upload and index use `always()` plus accepted current initialization after either
+outcome. The artifact name is
+`ubuntu-readahead-study-slot-<slot>-block-<block>-ra-<128|1024>-<run-id>-<attempt>`.
+The same five fixed files are retained for seven days, with hidden files and
+overwrite disabled; entry-recovery stays not-run with its empty stream. Raw
+Chrome logs, profiles, private scratch and browser wildcards remain excluded.
+Keep the run, attempt, exact head/tree and artifact digests with the assignment
+and safe runner/image/toolchain metadata.
+
+Report all six assigned outcomes first: include unavailable admission, missing
+records, timeout, no-CDP, truncation, cancellation, cleanup and restore failures.
+A timeout means not ready within the unchanged 20-second native readiness budget,
+not a successful 20-second startup. A slot without CDP version stays in the arm's
+outcome table even if it cannot enter a complete software stratum.
+
+Then compare only joint observed ImageVersion, actual Chrome, kernel, original
+RA and visible queue configuration strata supported in both arms, including
+visible queue class and rotational attributes. Do not substitute image README
+versions for runtime versions. Numeric device identities are local to a VM and
+do not establish common physical devices; queue attributes do not prove physical
+media or topology. Different software/original-RA/visible-queue configurations
+are explicit confounding, rather than an identifiable RA comparison.
+
+Within a shared stratum, compare first owned listener and verified readiness,
+root D observations, closed wait kinds, device completed reads/sectors/readMs,
+read bytes and bytes per completed read, submitted process reads/faults, reclaim
+and observed cgroup policies. These shared device windows are non-atomic, and
+cumulative request readMs is neither wall time nor Chrome-exclusive latency.
+Fewer requests in a shorter window alone cannot distinguish different request
+granularity from less background I/O; ancestor, VM and host limits remain unknown.
+Report read amplification and reclaim tradeoffs even if readiness improves.
+
+A request-granularity interpretation needs verified RA change, fewer completed
+requests/less page waiting and better readiness, with the byte/reclaim tradeoff.
+If controls run quickly, the slow condition was not reproduced. No corresponding
+input/readiness change means no demonstrated effect on the dominant path;
+worse amplification, reclaim or latency remains contrary evidence. All success
+does not prove a historical Azure IOPS cap, a repair or broad reliability. An
+inconclusive result cannot authorize another slot or dispatch. This research
+never replaces ordinary full official-tools and entry-recovery acceptance.

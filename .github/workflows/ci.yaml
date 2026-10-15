@@ -19,6 +19,11 @@ on:
                 type: boolean
                 required: false
                 default: false
+            ubuntu-readahead-study:
+                description: Run the bounded Ubuntu queue readahead study (six fresh runners)
+                type: boolean
+                required: false
+                default: false
     workflow_call:
     schedule:
         -   cron: '17 1 * * 1'
@@ -27,7 +32,7 @@ permissions:
     contents: read
 
 concurrency:
-    group: ${{ github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}
+    group: ${{ github.event_name == 'workflow_dispatch' && (inputs['ubuntu-startup-study'] == true || inputs['ubuntu-readahead-study'] == true) && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}
     cancel-in-progress: true
 
 jobs:
@@ -86,6 +91,12 @@ jobs:
         needs: supply-chain-security
         runs-on: ubuntu-latest
         steps:
+            -   name: Reject conflicting research inputs
+                if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] == true
+                shell: bash
+                run: |
+                    printf 'Select only one Ubuntu research study.\n' >&2
+                    exit 1
             -   name: Check out repository
                 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
             -   name: Set up pnpm
@@ -309,7 +320,7 @@ jobs:
 
     ubuntu-startup-study:
         name: Ubuntu startup study (block ${{ matrix.block }}, file logging ${{ matrix.fileLogging }})
-        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true
+        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] != true
         needs: quality
         runs-on: ubuntu-24.04
         timeout-minutes: 20
@@ -378,6 +389,99 @@ jobs:
                     overwrite: false
                     if-no-files-found: warn
             -   name: Index Ubuntu startup study diagnostics
+                if: always() && steps.fixture-initialization.outputs.initialized == 'true'
+                env:
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "${{ steps.fixture-initialization.outputs.collection-id }}"
+
+    ubuntu-readahead-study:
+        name: Ubuntu readahead study (slot ${{ matrix.slot }}, block ${{ matrix.block }}, RA ${{ matrix.readaheadKb }} KiB)
+        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-readahead-study'] == true && inputs['ubuntu-startup-study'] != true
+        needs: quality
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    -   slot: 1
+                        block: 1
+                        readaheadKb: 128
+                    -   slot: 2
+                        block: 1
+                        readaheadKb: 1024
+                    -   slot: 3
+                        block: 2
+                        readaheadKb: 1024
+                    -   slot: 4
+                        block: 2
+                        readaheadKb: 128
+                    -   slot: 5
+                        block: 3
+                        readaheadKb: 128
+                    -   slot: 6
+                        block: 3
+                        readaheadKb: 1024
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current controlled Chrome collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId=""
+                    if collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"; then
+                        printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    else
+                        printf 'initialized=false\n' >> "$GITHUB_OUTPUT"
+                    fi
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one Ubuntu Chrome readahead study sample
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="${{ steps.fixture-initialization.outputs.collection-id }}"
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging on --readahead-kb "${{ matrix.readaheadKb }}" --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+            -   name: Upload Ubuntu readahead study diagnostics
+                id: fixture-artifact
+                if: always() && steps.fixture-initialization.outputs.initialized == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-readahead-study-slot-${{ matrix.slot }}-block-${{ matrix.block }}-ra-${{ matrix.readaheadKb }}-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: warn
+            -   name: Index Ubuntu readahead study diagnostics
                 if: always() && steps.fixture-initialization.outputs.initialized == 'true'
                 env:
                     DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}

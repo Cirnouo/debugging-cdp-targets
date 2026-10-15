@@ -15,7 +15,7 @@ import { isRecord } from '../src/shared/errors.ts';
 import { fixtureJobIndex } from './smoke/fixture-ci.ts';
 
 // Run the actual CLI with only external I/O replaced. Validators, collector and capture run.
-function installStudyBoundary() {
+async function installStudyBoundary() {
     const trace: { event: string; detail?: unknown }[] = [];
     const note = (event: string, detail?: unknown) => trace.push({ event, detail });
     const traceFile = process.env.STUDY_TRACE;
@@ -29,6 +29,10 @@ function installStudyBoundary() {
     let operation: Record<string, unknown> | undefined;
     const deleted = new Set<string>();
     const failure = process.env.STUDY_FAILURE;
+    let readaheadValue = 256;
+    let createArtifacts: typeof import('./smoke/fixture-artifacts.ts').createFixtureArtifacts | undefined;
+    let gatewayArtifacts: ReturnType<typeof import('./smoke/fixture-artifacts.ts').createFixtureArtifacts> | undefined;
+    let startIdentity: Record<string, unknown> | undefined;
     const enoent = () => Object.assign(new Error('Not found'), { code: 'ENOENT' });
     const scratchIdentity = { dev: 7, ino: 8, isDirectory: () => true, isSymbolicLink: () => false };
     const privateFs = {
@@ -38,7 +42,9 @@ function installStudyBoundary() {
         },
         async stat(file: string) {
             note('executable-stat', file);
-            return { isFile: () => true };
+            if (failure === 'preload-late-metadata' && file === '/synthetic/chrome')
+                await new Promise((resolve) => setTimeout(resolve, 350));
+            return { isFile: () => true, dev: 2049n, ino: 1n };
         },
         async mkdtemp(prefix: string) {
             const folder = prefix.includes('dct-chrome-startup-') ? '/synthetic/startup' : '/synthetic/smoke';
@@ -47,7 +53,14 @@ function installStudyBoundary() {
         },
         async realpath(file: string) {
             note('realpath', file);
+            if (failure === 'preload-late-canonical' && file === '/synthetic/chrome')
+                await new Promise((resolve) => setTimeout(resolve, 350));
+            if (file === '/sys/dev/block/8:1') return '/sys/devices/disk/block/sda/sda1';
+            if (file === '/sys/dev/block/8:0') return '/sys/devices/disk/block/sda';
             return file;
+        },
+        async readdir(file: string) {
+            return file.endsWith('/sda1') ? ['partition'] : [];
         },
         async lstat(file: string) {
             note('scratch-inspect', file);
@@ -93,6 +106,34 @@ function installStudyBoundary() {
                 port: 19222,
             };
             operation = { state: 'succeeded', result: target };
+            if (gatewayArtifacts) {
+                startIdentity = {
+                    entryId,
+                    connectionId: target.connectionId,
+                    sessionId: target.sessionId,
+                    operationId: '44444444-4444-4444-8444-444444444444',
+                };
+                gatewayArtifacts.gateway({
+                    ...startIdentity,
+                    stage: 'operation-route',
+                    event: 'decision',
+                    outcome: 'observed',
+                    action: 'start',
+                    requestId: args.requestId,
+                    timestampMs: 1,
+                    durationMs: 0,
+                });
+                gatewayArtifacts.gateway({
+                    ...startIdentity,
+                    stage: 'spawn',
+                    event: 'decision',
+                    outcome: 'observed',
+                    reason: 'acquired',
+                    pid: 4100,
+                    timestampMs: 2,
+                    durationMs: 0,
+                });
+            }
             if (failure === 'start') {
                 assert.ok(directory);
                 deleted.add(directory);
@@ -106,6 +147,18 @@ function installStudyBoundary() {
             assert.ok(directory);
             if (failure !== 'profile-cleanup') deleted.add(directory);
             operation = { state: 'succeeded', result: { ...target, status: 'idle' } };
+            if (gatewayArtifacts && startIdentity)
+                gatewayArtifacts.gateway({
+                    entryId,
+                    connectionId: startIdentity.connectionId,
+                    originOperationId: startIdentity.operationId,
+                    stage: 'directory-lease',
+                    event: 'end',
+                    outcome: 'released',
+                    phase: 'resource-cleanup',
+                    timestampMs: 3,
+                    durationMs: 0,
+                });
             target = undefined;
             return { structuredContent: { operationId: '44444444-4444-4444-8444-444444444444' } };
         }
@@ -121,6 +174,39 @@ function installStudyBoundary() {
     }
     function spawn(executable: string, args: string[], options: unknown) {
         note('spawn', { executable, args, options });
+        if (executable === '/usr/bin/sudo') {
+            const stdout = new PassThrough();
+            const child = Object.assign(new EventEmitter(), {
+                stdout,
+                stderr: new PassThrough(),
+                stdin: new Writable({
+                    write(chunk, _encoding, done) {
+                        const assigned = Number(String(chunk).trim());
+                        if (failure !== 'readahead-write-failure') readaheadValue = assigned;
+                        note('readahead-write', assigned);
+                        queueMicrotask(() => {
+                            stdout.write(chunk);
+                            stdout.end();
+                            child.emit('close', failure === 'readahead-write-failure' ? 1 : 0, null);
+                        });
+                        done();
+                    },
+                }),
+            });
+            return child;
+        }
+        if (failure === 'readahead-success') {
+            const preload = args.find((argument) => argument.includes('fixture-preload.ts?'));
+            assert.ok(preload && createArtifacts);
+            const query = new URL(preload).searchParams;
+            const output = query.get('directory');
+            assert.ok(output);
+            gatewayArtifacts = createArtifacts(output, 'official-server', {
+                streamOnly: true,
+                collectionId: query.get('collectionId'),
+            });
+            assert.equal(gatewayArtifacts.snapshot().collectionRejected, false);
+        }
         const child = Object.assign(new EventEmitter(), {
             exitCode: null as number | null,
             signalCode: null,
@@ -145,6 +231,18 @@ function installStudyBoundary() {
                     done();
                 },
                 final(done) {
+                    gatewayArtifacts?.readahead({
+                        kind: 'linux-readahead-study',
+                        phase: 'observer',
+                        outcome: 'verified',
+                        clock: 'gateway',
+                        assignedKb: 1024,
+                        startedMs: 4,
+                        endedMs: 4,
+                        cost: 'complete',
+                        reads: 0,
+                        bytes: 0,
+                    });
                     const code = failure === 'gateway-exit' ? 7 : 0;
                     note('gateway-exit', code);
                     child.exitCode = code;
@@ -176,6 +274,25 @@ function installStudyBoundary() {
     Object.defineProperty(globalThis, '__studyBoundary', {
         value: {
             privateFs,
+            async readaheadRead(file: string) {
+                if (failure === 'readahead-io') return { bytes: 0, limitation: 'permission' };
+                if (failure === 'preload-late-initialization-read' && file.endsWith('/sda1/dev'))
+                    await new Promise((resolve) => setTimeout(resolve, 350));
+                if (failure === 'preload-late-read' && file.endsWith('/stat')) {
+                    await new Promise((resolve) => setTimeout(resolve, 350));
+                    note('late-read-settled');
+                }
+                let text: string;
+                if (file.endsWith('/sda1/dev')) text = '8:1';
+                else if (file.endsWith('/sda/dev')) text = '8:0';
+                else if (file.endsWith('/partition')) text = '1';
+                else if (file.endsWith('/read_ahead_kb')) text = String(readaheadValue);
+                else if (file.endsWith('/rotational')) text = '0';
+                else if (file.endsWith('/stat')) text = '1 0 8 2 0 0 0 0 0 2 2';
+                else throw new Error('Missing bounded fixture read.');
+                text += '\n';
+                return { bytes: Buffer.byteLength(text), text };
+            },
             childProcess: {
                 ...childProcess,
                 spawn,
@@ -208,11 +325,20 @@ function installStudyBoundary() {
     registerHooks({
         resolve(specifier, context, next) {
             const parent = context.parentURL ?? '';
-            const privateModule = /\/(?:official-server|chrome-host|chrome-startup)\.ts$/.test(parent);
+            const privateModule = /\/(?:official-server|chrome-host|chrome-startup|linux-readahead-study)\.ts$/.test(
+                parent,
+            );
             let source: string | undefined;
             if (privateModule && specifier === 'node:fs/promises')
                 source =
-                    "export * from 'node:fs/promises'; export const { access, stat, mkdtemp, realpath, lstat, rm } = globalThis.__studyBoundary.privateFs;";
+                    "export * from 'node:fs/promises'; export const { access, stat, mkdtemp, realpath, readdir, lstat, rm } = globalThis.__studyBoundary.privateFs;";
+            if (parent.endsWith('/linux-readahead-study.ts') && specifier === './linux-startup-wait.ts') {
+                const actual = next(specifier, context).url;
+                source =
+                    'export * from ' +
+                    JSON.stringify(actual) +
+                    '; export const readLinuxStartupFile = globalThis.__studyBoundary.readaheadRead;';
+            }
             if (privateModule && specifier === 'node:path') source = 'export default globalThis.__studyBoundary.path;';
             if (specifier === 'node:child_process')
                 source =
@@ -230,10 +356,11 @@ function installStudyBoundary() {
             return next(specifier, context);
         },
     });
+    createArtifacts = (await import('./smoke/fixture-artifacts.ts')).createFixtureArtifacts;
 }
 
 if (process.env.STUDY_TRACE) {
-    installStudyBoundary();
+    await installStudyBoundary();
 } else {
     interface Invocation {
         status: number | null;
@@ -313,6 +440,131 @@ if (process.env.STUDY_TRACE) {
         );
     }
     const study = (arm: string) => ['--allow-gui', '--startup-study', '--chrome-file-logging', arm];
+
+    test('readahead CLI rejects invalid scope and values before any acquisition', async () => {
+        for (const args of [
+            ['--readahead-kb', '128'],
+            [...study('off').slice(1), '--readahead-kb', '128'],
+            [...study('on').slice(1), '--readahead-kb', '256'],
+            [...study('on').slice(1), '--readahead-kb', '128', '--readahead-kb', '1024'],
+        ]) {
+            const result = await invoke(['--allow-gui', ...args], { collection: 'valid' });
+            assert.notEqual(result.status, 0);
+            assert.deepEqual(result.trace, []);
+        }
+        const skipped = await invoke([...study('on').slice(1), '--readahead-kb', '1024'], { collection: 'valid' });
+        assert.equal(skipped.status, 0);
+        assert.deepEqual(skipped.trace, []);
+    });
+
+    test('admitted readahead CLI starts once and missing actual resource proof prevents restore after child success', async () => {
+        const result = await invoke([...study('on'), '--readahead-kb', '1024'], { collection: 'valid' });
+        assert.equal(calls(result, 'dct_connection_start').length, 1, result.stderr);
+        assert.equal(calls(result, 'dct_connection_stop').length, 1);
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /pending actual exit\/resource proof/);
+        assert.deepEqual(
+            result.trace.filter((record) => record.event === 'readahead-write').map((record) => record.detail),
+            [1024],
+        );
+    });
+
+    test('readahead CLI admission I/O and write failures retain zero start calls in safe final evidence', async () => {
+        for (const failure of ['readahead-io', 'readahead-write-failure']) {
+            const result = await invoke([...study('on'), '--readahead-kb', '1024'], { collection: 'valid', failure });
+            assert.notEqual(result.status, 0, failure);
+            assert.equal(calls(result, 'dct_connection_start').length, 0, failure);
+            assert.ok(Array.isArray(result.summary?.readaheadStudy));
+            const last = result.summary.readaheadStudy.at(-1);
+            assert.ok(isRecord(last));
+            assert.equal(last.phase, 'restore');
+            assert.equal(last.startCalls, 0);
+            assert.equal(last.outcome, failure === 'readahead-io' ? 'unavailable' : 'pending');
+        }
+    });
+
+    test('readahead CLI complete owned resource proof permits one successful restoration with actual readback', async () => {
+        const result = await invoke([...study('on'), '--readahead-kb', '1024'], {
+            collection: 'valid',
+            failure: 'readahead-success',
+        });
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(calls(result, 'dct_connection_start').length, 1);
+        assert.equal(calls(result, 'dct_connection_stop').length, 1);
+        assert.deepEqual(
+            result.trace.filter((record) => record.event === 'readahead-write').map((record) => record.detail),
+            [1024, 256],
+        );
+        assert.ok(Array.isArray(result.summary?.readaheadStudy));
+        const last = result.summary.readaheadStudy.at(-1);
+        assert.ok(isRecord(last));
+        assert.equal(last.phase, 'restore');
+        assert.equal(last.outcome, 'verified');
+        assert.equal(last.readAheadKb, 256);
+        assert.equal(last.startCalls, 1);
+    });
+
+    test('real Node preload bounds initialization and reconciles late resource cost before beforeExit marker', async () => {
+        const { createFixtureArtifacts, readFixtureProgress } = await import('./smoke/fixture-artifacts.ts');
+        for (const failure of [
+            'preload-late-canonical',
+            'preload-late-initialization-read',
+            'preload-late-metadata',
+            'preload-late-read',
+        ]) {
+            const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-real-preload-regression-'));
+            try {
+                const diagnostics = path.join(folder, 'diagnostics');
+                const collectionId = await fixtureJobIndex('init', diagnostics);
+                assert.ok(collectionId);
+                const parent = createFixtureArtifacts(diagnostics, 'official-server', { collectionId });
+                assert.equal(parent.snapshot().collectionRejected, false);
+                const preload = new URL('./smoke/fixture-preload.ts', import.meta.url);
+                preload.searchParams.set('directory', diagnostics);
+                preload.searchParams.set('fixture', 'official-server');
+                preload.searchParams.set('collectionId', collectionId);
+                preload.searchParams.set('readaheadKb', '1024');
+                preload.searchParams.set('readaheadExecutable', '/synthetic/chrome');
+                const script = `await import(${JSON.stringify(preload.href)}); const { channel } = await import('node:diagnostics_channel'); channel('debugging-cdp-targets.fixture').publish({stage:'readiness',phase:'waiting-cdp',event:'end',outcome:'succeeded',timestampMs:1,durationMs:0});`;
+                const child = spawnSync(
+                    process.execPath,
+                    ['--import', import.meta.url, '--input-type=module', '--eval', script],
+                    {
+                        encoding: 'utf8',
+                        timeout: 5000,
+                        env: {
+                            ...process.env,
+                            NODE_OPTIONS: '',
+                            STUDY_TRACE: path.join(folder, 'trace.json'),
+                            STUDY_PLATFORM: 'linux',
+                            STUDY_FAILURE: failure,
+                        },
+                    },
+                );
+                assert.ifError(child.error);
+                assert.equal(child.status, 0, child.stderr);
+                const progress = readFixtureProgress(diagnostics, 'official-server');
+                assert.equal(progress.invalidEvents, 0);
+                const bounded = progress.readaheadStudy.find(
+                    (record) => record.phase === (failure === 'preload-late-read' ? 'terminal' : 'initialization'),
+                );
+                assert.equal(bounded?.outcome, 'unavailable', failure);
+                assert.equal(bounded?.cost, 'pending', failure);
+                assert.equal(bounded?.bytes, undefined, failure);
+                const marker = progress.readaheadStudy.at(-1);
+                assert.equal(marker?.phase, 'observer');
+                assert.equal(marker?.outcome, 'verified');
+                assert.equal(marker?.cost, 'complete');
+                assert.equal(
+                    marker?.bytes,
+                    failure === 'preload-late-read' ? 48 : failure === 'preload-late-initialization-read' ? 4 : 0,
+                );
+                assert.ok((marker?.metadataOps ?? 0) > 0);
+            } finally {
+                await rm(folder, { recursive: true, force: true });
+            }
+        }
+    });
 
     test('study CLI keeps GUI authorization first even for hostile parameters', async () => {
         const result = await invoke(['--startup-study', '--chrome-file-logging', 'bad', '--unknown'], {

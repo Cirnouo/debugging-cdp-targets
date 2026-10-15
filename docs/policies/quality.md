@@ -307,8 +307,8 @@ Ordinary controlled real Chrome fixture jobs may upload diagnostic artifacts onl
 using the reviewed
 [official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
 The exact five collector/index filenames, failure condition, seven-day retention
-and separate directory are enforced by CI regressions. The sole success-upload
-exception is the explicitly opted-in manual Ubuntu startup study described below;
+and separate directory are enforced by CI regressions. The success-upload
+exceptions are the two explicitly opted-in manual Ubuntu studies described below;
 all other jobs remain artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
 numbers and bounded allowlisted error cause codes. They exclude raw errors,
 messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
@@ -356,7 +356,7 @@ single-start study mode under Xvfb; it never substitutes for the ordinary two-sm
 real Chrome acceptance. No Chrome version/hash command, warmup, browser download
 or OS package installation is added before the first start.
 
-Only that study job uses `always()` plus the successful current-initialization
+Both study jobs use `always()` plus the successful current-initialization
 guard to upload and index the same five fixed files on either outcome. Artifact
 names include block, arm, run ID and attempt; retention stays seven days with
 hidden files and overwrite disabled. Entry-recovery remains explicitly not-run.
@@ -371,6 +371,53 @@ was not reproduced and its cause remains unknown. Missing terminal/cleanup or
 truncated evidence limits conclusions. See the
 [study procedure](../../tests/smoke/README.md#bounded-ubuntu-startup-study)
 for the fixed protocol, metrics and manual command.
+
+The separate `ubuntu-readahead-study` boolean manual input defaults to false and
+requires explicit `workflow_dispatch` selection. It is mutually exclusive with
+`ubuntu-startup-study`: selecting both fails the first Quality step before either
+research job can start Chrome, and neither study job runs. Both opt-ins use
+run-ID-specific concurrency without cancelling ordinary CI. The new quality-gated
+job fixes file logging on and freezes six slot/block/RA KiB allocations:
+`1/1/128`, `2/1/1024`, `3/2/1024`, `4/2/128`, `5/3/128`, `6/3/1024`.
+Matrix order does not promise chronological execution. Blocks are organizational,
+not matched machines. An intervention-admission failure retains its assigned
+outcome with zero starts; an admitted slot has at most one Chrome start.
+No retry, replacement, warmup, pre-start version/hash/full-binary read, download
+or OS package installation is permitted. Original readiness/identity/normal Close
+and both ordinary acceptance smokes remain required and unchanged.
+
+Only the test fixture may change the executable's verified backing queue on its
+disposable research runner. It must derive canonical executable/device/partition
+and queue identity without a guessed device or fallback, retain the original RA,
+set and verify either assigned value, and verify identity before writes and restore.
+Unsupported mapping, permission or readback failure remains explicit unavailable
+admission. Partial/failed/timed-out writes retain restoration responsibility.
+Pending write helpers must actually settle, then actual owned application and
+resource exit must be proved before restoring and verifying the original RA.
+Gateway-child exit or smoke success alone cannot prove that barrier. Failed or
+pending cleanup/restoration stays explicit; Chrome must never be force-killed.
+
+Terminal device observations must not block or delay readiness, rollback or
+normal Close. Retain observation start/completion and cleanup overlap; a window
+not proved complete before cleanup is overlapped or unavailable, and cannot enter
+a clean-window comparison. Closed numeric/enum evidence stays within existing
+record/event/byte caps and the same five fixed artifacts, seven-day retention,
+hidden-files exclusion and disabled overwrite. New artifact names carry slot,
+block, assigned RA, run ID and attempt. Upload/index retain `always()` and accepted
+current initialization; admission failures cannot disappear from the outcome set.
+
+First report every assigned outcome, including missing, unavailable, timeout,
+no-CDP, cleanup and restore failures. Then compare only joint observed software,
+original RA and visible queue configuration strata supported in both arms.
+Visible queue classes are not proof of physical media, numeric device identities
+are local to each VM, and queue intervention affects other users of the guest
+device. Shared non-atomic counter windows and cumulative read time do not isolate
+Chrome latency or expose ancestor/host limits. Report completed request counts,
+read bytes and bytes per read together, including amplification/reclaim tradeoffs.
+Different configurations are explicit confounding. Fresh runners do not prove
+cold caches, and all success does not establish a repair or historical root cause.
+The separate [readahead study procedure](../../tests/smoke/README.md#bounded-ubuntu-readahead-study)
+does not replace the ordinary two-smoke real Chrome acceptance.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at

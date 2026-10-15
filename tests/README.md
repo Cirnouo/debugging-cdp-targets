@@ -28,11 +28,17 @@
   fixed helper cancellation and settlement, device/partition queue evidence,
   visible cgroup counters and limits, hostile input and closed-record consistency
   through external I/O boundary replacements.
+- `linux-readahead-study.test.ts` checks unique executable/queue mapping, bounded
+  admission and association, single-start ownership, late writer settlement,
+  actual resource-release proof, original-value restoration, terminal overlap
+  and honest closed read-cost evidence through external I/O boundaries.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.
 - `official-startup-study.test.ts` exercises the real smoke CLI's single-launch
-  logging study and normal acceptance through external I/O boundary replacements.
+  logging and readahead studies and normal acceptance through external I/O
+  boundary replacements, including zero-start admission failures, successful
+  restoration and real Node preload settlement.
 - `application-screenshot-probe.test.ts` validates complete sealed payload
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry
@@ -144,6 +150,13 @@
   check automation, package gates, exact lane commands and syntax plans. Parsed
   CI checks retain canonical versions and names, and require the latest-24
   Ubuntu lane's setup inputs, quality dependency and unconditional command order.
+  Research CI checks also retain both default-false manual inputs, reject a
+  conflicting dispatch before either research job starts, freeze the six queue
+  readahead allocations and single-start command, and enforce current collection
+  ownership and the five-file artifact boundary on success or failure. These
+  parsed configuration checks launch no Chrome and do not establish an RA effect;
+  the [readahead study procedure](smoke/README.md#bounded-ubuntu-readahead-study)
+  owns interpretation and cleanup requirements.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
   cleanup failures, prerequisite/not-run indexing and the original delivered

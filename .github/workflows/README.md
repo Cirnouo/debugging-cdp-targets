@@ -95,7 +95,7 @@ It retains artifacts for seven days, disables hidden files and overwrite, and se
 `entry-recovery.events.ndjson` and `entry-recovery.summary.json` from the separate
 `RUNNER_TEMP/dct-fixture-diagnostics` directory. There are no profile, workspace
 or temporary-directory wildcards. Jobs other than ordinary real Chrome and the
-manual study below remain artifact-free, and the release publisher uploads no
+manual studies below remain artifact-free, and the release publisher uploads no
 custom assets. The failure job summary indexes
 relative filenames, safe primary stage/operation identity and the artifact link
 when upload succeeds. The index, both independent not-run summaries and empty
@@ -130,7 +130,7 @@ No pre-start Chrome version query, binary hashing, warmup, browser download or
 OS package installation is added. There are no retries, replacement slots or
 ignored failures; fail-fast is false so one sample's failure does not cancel peers.
 
-Only this study job uploads and indexes diagnostics after success as well as
+Both explicitly selected study jobs upload and index diagnostics after success as well as
 failure, guarded by `always()` and successful current initialization. It retains
 the exact same five safe filenames for seven days, with hidden files and overwrite
 disabled, warning on missing files. Artifact names are
@@ -151,6 +151,42 @@ Missing terminal/cleanup records or capped/truncated evidence limits conclusions
 The study is diagnostic evidence, not full acceptance. See the
 [bounded study procedure](../../tests/smoke/README.md#bounded-ubuntu-startup-study)
 for exact local arguments and the unchanged collection budgets.
+
+The separate `ubuntu-readahead-study` boolean input also defaults to false. Set
+only this input for an explicitly authorized queue intervention batch:
+
+```sh
+gh workflow run ci.yaml --ref <reviewed-branch> -f ubuntu-readahead-study=true
+```
+
+The two research inputs are mutually exclusive. Selecting both fails Quality
+before any research Chrome starts, and neither research job executes. The new
+study also uses a run-ID-specific concurrency group, the existing supply-chain
+and Quality gates, trusted frozen installation, typecheck, current collection
+initialization and Xvfb prerequisites. Ordinary job names, commands and gates
+remain the same, including both real Chrome acceptance smokes.
+
+The six explicit matrix allocations are slot/block/RA KiB:
+`1/1/128`, `2/1/1024`, `3/2/1024`, `4/2/128`, `5/3/128`, `6/3/1024`.
+This order is an allocation order, not chronological scheduling, and blocks do
+not pair samples on a machine. Logging is fixed on. An admission failure retains
+its assigned slot with zero starts; an admitted slot starts Chrome at most once.
+There are no retries, replacement slots, warmups, downloads, extra OS packages
+or pre-start Chrome version queries or binary hashes.
+
+The new artifacts are named
+`ubuntu-readahead-study-slot-<slot>-block-<block>-ra-<128|1024>-<run-id>-<attempt>`.
+They use the same five fixed files, successful current-initialization guard,
+`always()` upload/index, seven-day retention, hidden-files exclusion and disabled
+overwrite. All assigned outcomes, including unavailable admission, missing CDP,
+timeout, cleanup or restoration failure, remain visible. No raw browser log or
+profile is uploaded. See the
+[readahead procedure](../../tests/smoke/README.md#bounded-ubuntu-readahead-study)
+for queue identity, pending-helper/actual-resource-exit restoration and terminal
+observation rules. Compare only shared software, original RA and visible queue
+configuration strata; preserve request-count/read-byte tradeoffs and overlapping
+or unavailable device windows. An all-success batch is evidence that the failure
+was not reproduced, and does not establish a repair.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

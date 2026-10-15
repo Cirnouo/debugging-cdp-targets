@@ -8,6 +8,7 @@ import {
 } from '../../src/adapters/fixture-diagnostics.ts';
 import { type BrowserStartupRecord, validateBrowserStartupRecord } from './chrome-startup.ts';
 import { newFixtureEnvelope, readFixtureIndex } from './fixture-ci.ts';
+import { type ReadaheadRecord, readaheadExitProof, validateReadaheadRecord } from './linux-readahead-study.ts';
 import { type LinuxStartupWaitRecord, validateLinuxStartupWaitRecord } from './linux-startup-wait.ts';
 import { createStdioClient } from './mcp-client.ts';
 
@@ -68,6 +69,8 @@ interface Failure {
     runtimeStage: string | null;
 }
 interface Summary {
+    readaheadStudy: Readonly<ReadaheadRecord>[];
+    readaheadStudyOmitted: number;
     schemaVersion: 1;
     fixture: FixtureLabel;
     state: 'not-run' | 'running' | 'passed' | 'failed';
@@ -108,6 +111,8 @@ function record(value: unknown): value is Record<string, unknown> {
 /** Reconstruct child progress on demand, including interrupted BEGIN records. */
 export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
     const progress = {
+        readaheadStudy: [] as Readonly<ReadaheadRecord>[],
+        readaheadStudyOmitted: 0,
         events: 0,
         gatewayEvents: 0,
         invalidEvents: 0,
@@ -186,11 +191,21 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
                         progress.linuxStartupWaitOmitted++;
                     }
                 }
+            } else if (value.kind === 'linux-readahead-study') {
+                const study = validateReadaheadRecord(value);
+                if (!study) progress.invalidEvents++;
+                else {
+                    progress.readaheadStudy.push(study);
+                    if (progress.readaheadStudy.length > 8) {
+                        progress.readaheadStudy.shift();
+                        progress.readaheadStudyOmitted++;
+                    }
+                }
             } else if (value.kind === 'truncated') progress.truncated = true;
             else if (value.kind === 'limitation') {
                 if (value.reason === 'validation-rejected') progress.invalidEvents++;
                 if (value.reason === 'write-failed') progress.writeFailed = true;
-            }
+            } else if (value.kind !== 'smoke' && value.kind !== 'failure') progress.invalidEvents++;
         }
         if (lines.length > maxEvents + 2) progress.truncated = true;
     } catch {
@@ -200,6 +215,7 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
         progress.truncated ||
         progress.writeFailed ||
         progress.linuxStartupWaitOmitted > 0 ||
+        progress.readaheadStudyOmitted > 0 ||
         (progress.gatewayEvents > 0 && !cleanupEnded);
     return progress;
 }
@@ -216,6 +232,8 @@ export function createFixtureArtifacts(
     } = {},
 ) {
     const summary: Summary = {
+        readaheadStudy: [],
+        readaheadStudyOmitted: 0,
         ...newFixtureEnvelope(fixture, randomUUID()),
         state: 'running',
     };
@@ -386,6 +404,22 @@ export function createFixtureArtifacts(
         persist();
     }
     const collector = {
+        readahead(value: unknown) {
+            if (summary.collectionRejected) return;
+            const safe = validateReadaheadRecord(value);
+            if (!safe) {
+                collector.rejected();
+                return;
+            }
+            summary.readaheadStudy.push(safe);
+            if (summary.readaheadStudy.length > 8) {
+                summary.readaheadStudy.shift();
+                summary.readaheadStudyOmitted++;
+                summary.incomplete = true;
+            }
+            append(safe);
+            persist();
+        },
         measure,
         begin(stage: SmokeStage) {
             summary.lastStage = stage;
@@ -492,6 +526,8 @@ export function createFixtureArtifacts(
                 summary.collectorCost = progress.collectorCost;
                 summary.linuxStartupWait = progress.linuxStartupWait;
                 summary.linuxStartupWaitOmitted = progress.linuxStartupWaitOmitted;
+                summary.readaheadStudy = progress.readaheadStudy;
+                summary.readaheadStudyOmitted = progress.readaheadStudyOmitted;
             }
             summary.diagnosticAbsent = !!directory && summary.gatewayEvents === 0;
             persist();
@@ -505,6 +541,27 @@ export function createFixtureArtifacts(
     return collector;
 }
 export type FixtureArtifacts = ReturnType<typeof createFixtureArtifacts>;
+
+export function fixtureReadaheadExitProof(
+    directory: string,
+    selected: { entryId: string; requestId: string },
+    childClosed: boolean,
+) {
+    const progress = readFixtureProgress(directory, 'official-server');
+    if (progress.truncated || progress.writeFailed || progress.invalidEvents > 0) return false;
+    try {
+        const file = path.join(directory, 'official-server.events.ndjson');
+        if (statSync(file).size > maxBytes) return false;
+        const records: unknown[] = readFileSync(file, 'utf8')
+            .trim()
+            .split('\n')
+            .filter(Boolean)
+            .map((line) => JSON.parse(line));
+        return readaheadExitProof(records, selected, childClosed);
+    } catch {
+        return false;
+    }
+}
 
 /** Each action is attempted once, in caller order; original first failure is rethrown. */
 export function createSmokeFailures(artifacts: FixtureArtifacts) {
@@ -562,12 +619,17 @@ export function fixtureGatewayArguments(
     directory?: string,
     fixture: FixtureLabel = 'official-server',
     collectionId?: string | null,
+    readahead?: { executable: string; assignedKb: 128 | 1024 },
 ): string[] {
     if (!directory || !collectionId || !uuid.test(collectionId)) return [entry];
     const preload = new URL('./fixture-preload.ts', import.meta.url);
     preload.searchParams.set('directory', directory);
     preload.searchParams.set('fixture', fixture);
     preload.searchParams.set('collectionId', collectionId);
+    if (readahead) {
+        preload.searchParams.set('readaheadKb', String(readahead.assignedKb));
+        preload.searchParams.set('readaheadExecutable', readahead.executable);
+    }
     return ['--import', preload.href, entry];
 }
 export function fixtureGatewayEnvironment(inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -578,10 +640,11 @@ export function createFixtureGatewayClient(
     directory: string | undefined,
     fixture: FixtureLabel,
     artifacts: FixtureArtifacts,
+    readahead?: { executable: string; assignedKb: 128 | 1024 },
 ) {
     return createStdioClient(
         process.execPath,
-        fixtureGatewayArguments(entry, directory, fixture, artifacts.snapshot().collectionId),
+        fixtureGatewayArguments(entry, directory, fixture, artifacts.snapshot().collectionId, readahead),
         { env: fixtureGatewayEnvironment() },
     );
 }

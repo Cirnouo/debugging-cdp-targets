@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 import { parse } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
@@ -25,7 +26,11 @@ interface WorkflowJob {
     env?: Record<string, string>;
     strategy?: {
         'fail-fast'?: boolean;
-        matrix: { include?: { os: string; chrome: string }[]; block?: number[]; fileLogging?: string[] };
+        matrix: {
+            include?: ({ os: string; chrome: string } | { slot: number; block: number; readaheadKb: number })[];
+            block?: number[];
+            fileLogging?: string[];
+        };
     };
     'continue-on-error'?: boolean;
 }
@@ -46,7 +51,8 @@ interface Workflow {
         | 'windows-tests'
         | 'portable-tests'
         | 'real-chrome-tests'
-        | 'ubuntu-startup-study',
+        | 'ubuntu-startup-study'
+        | 'ubuntu-readahead-study',
         WorkflowJob
     >;
 }
@@ -94,20 +100,106 @@ test('Ubuntu startup study requires explicit manual opt-in and cannot cancel ord
                 required: false,
                 default: false,
             },
+            'ubuntu-readahead-study': {
+                description: 'Run the bounded Ubuntu queue readahead study (six fresh runners)',
+                type: 'boolean',
+                required: false,
+                default: false,
+            },
         },
     });
     assert.equal(
         workflow.jobs['ubuntu-startup-study']?.if,
-        "github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true",
+        "github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] != true",
     );
     assert.deepEqual(workflow.concurrency, {
-        group: `\${{ github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}`,
+        group: `\${{ github.event_name == 'workflow_dispatch' && (inputs['ubuntu-startup-study'] == true || inputs['ubuntu-readahead-study'] == true) && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}`,
         'cancel-in-progress': true,
     });
     for (const [name, job] of Object.entries(workflow.jobs)) {
-        if (name === 'ubuntu-startup-study') continue;
+        if (name === 'ubuntu-startup-study' || name === 'ubuntu-readahead-study') continue;
         assert.equal(job.if, undefined, name);
     }
+});
+
+test('research inputs are exclusive and conflicting dispatch fails before either research job can start Chrome', () => {
+    const reject = workflow.jobs.quality.steps[0];
+    assert.equal(reject?.name, 'Reject conflicting research inputs');
+    assert.equal(reject?.shell, 'bash');
+    assert.equal(reject?.run, "printf 'Select only one Ubuntu research study.\\n' >&2\nexit 1\n");
+    assert.equal(reject?.['continue-on-error'], undefined);
+    const selected = (condition: string | undefined, event: string, logging: boolean, readahead: boolean): unknown => {
+        assert.ok(condition);
+        return runInNewContext(condition, {
+            github: { event_name: event },
+            inputs: { 'ubuntu-startup-study': logging, 'ubuntu-readahead-study': readahead },
+        });
+    };
+    for (const [event, logging, readahead, oldRuns, newRuns, rejected] of [
+        ['workflow_dispatch', false, false, false, false, false],
+        ['workflow_dispatch', true, false, true, false, false],
+        ['workflow_dispatch', false, true, false, true, false],
+        ['workflow_dispatch', true, true, false, false, true],
+        ['push', true, true, false, false, false],
+        ['pull_request', false, true, false, false, false],
+        ['schedule', false, true, false, false, false],
+        ['workflow_call', false, true, false, false, false],
+    ] as const) {
+        assert.equal(selected(workflow.jobs['ubuntu-startup-study']?.if, event, logging, readahead), oldRuns);
+        assert.equal(selected(workflow.jobs['ubuntu-readahead-study']?.if, event, logging, readahead), newRuns);
+        assert.equal(selected(reject?.if, event, logging, readahead), rejected);
+    }
+});
+
+test('Ubuntu readahead study freezes six quality-gated single-start allocations and controlled evidence', () => {
+    const job = workflow.jobs['ubuntu-readahead-study'];
+    assert.ok(job, 'The separate opt-in queue study must be present.');
+    assert.equal(job.needs, 'quality');
+    assert.equal(job['runs-on'], 'ubuntu-24.04');
+    assert.equal(
+        job.if,
+        "github.event_name == 'workflow_dispatch' && inputs['ubuntu-readahead-study'] == true && inputs['ubuntu-startup-study'] != true",
+    );
+    assert.deepEqual(job.strategy, {
+        'fail-fast': false,
+        matrix: {
+            include: [
+                { slot: 1, block: 1, readaheadKb: 128 },
+                { slot: 2, block: 1, readaheadKb: 1024 },
+                { slot: 3, block: 2, readaheadKb: 1024 },
+                { slot: 4, block: 2, readaheadKb: 128 },
+                { slot: 5, block: 3, readaheadKb: 128 },
+                { slot: 6, block: 3, readaheadKb: 1024 },
+            ],
+        },
+    });
+    assert.deepEqual(job.env, { DCT_SMOKE_CHROME_EXECUTABLE: '/opt/google/chrome/chrome' });
+    assert.equal(Object.hasOwn(job, 'permissions'), false);
+    assert.equal(job['continue-on-error'], undefined);
+    for (const step of job.steps) assert.equal(step['continue-on-error'], undefined);
+    const old = workflow.jobs['ubuntu-startup-study'];
+    assert.deepEqual(job.steps.slice(0, 6), old.steps.slice(0, 6));
+    const smoke = job.steps[6];
+    assert.equal(smoke?.if, undefined);
+    assert.equal(smoke?.shell, 'bash');
+    assert.equal(
+        smoke?.run,
+        old.steps[6]?.run?.replace(
+            `--chrome-file-logging "\${{ matrix.fileLogging }}"`,
+            `--chrome-file-logging on --readahead-kb "\${{ matrix.readaheadKb }}"`,
+        ),
+    );
+    const commands = job.steps.map((step) => step.run ?? '').join('\n');
+    assert.equal(commands.match(/node tests\/smoke\/official-server\.ts/g)?.length, 1);
+    assert.doesNotMatch(
+        commands,
+        /entry-recovery\.ts|--version|sha256|shasum|warmup|retry|--no-sandbox|--headless|kill -9|pkill|download|apt-get|brew install/,
+    );
+    const summary = job.steps[8];
+    assert.equal(summary?.if, "always() && steps.fixture-initialization.outputs.initialized == 'true'");
+    assert.deepEqual(summary?.env, old.steps[8]?.env);
+    assert.equal(summary?.run, old.steps[8]?.run);
+    assert.equal(job.steps.length, 9);
 });
 
 test('Ubuntu startup study has exactly six quality-gated fresh runner slots without ignored failures', () => {
@@ -275,6 +367,7 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
             `Portable tests (\${{ matrix.os }})`,
             `Real Chrome (\${{ matrix.os }})`,
             `Ubuntu startup study (block \${{ matrix.block }}, file logging \${{ matrix.fileLogging }})`,
+            `Ubuntu readahead study (slot \${{ matrix.slot }}, block \${{ matrix.block }}, RA \${{ matrix.readaheadKb }} KiB)`,
         ],
     );
     assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
@@ -340,14 +433,14 @@ test('CI workflow uses reviewed pins and limits artifacts to controlled Chrome f
         'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 26);
+    assert.equal(uses.length, 30);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
     assert.match(source, /# v6\.0\.10/);
     for (const [name, job] of Object.entries(workflow.jobs)) {
         const uploads = job.steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
-        if (name !== 'real-chrome-tests' && name !== 'ubuntu-startup-study') {
+        if (name !== 'real-chrome-tests' && name !== 'ubuntu-startup-study' && name !== 'ubuntu-readahead-study') {
             assert.deepEqual(uploads, []);
             continue;
         }
@@ -355,13 +448,15 @@ test('CI workflow uses reviewed pins and limits artifacts to controlled Chrome f
         const upload = uploads[0];
         assert.equal(
             upload?.if,
-            `${name === 'ubuntu-startup-study' ? 'always()' : 'failure()'} && steps.fixture-initialization.outputs.initialized == 'true'`,
+            `${name === 'real-chrome-tests' ? 'failure()' : 'always()'} && steps.fixture-initialization.outputs.initialized == 'true'`,
         );
         assert.deepEqual(upload?.with, {
             name:
-                name === 'ubuntu-startup-study'
-                    ? `ubuntu-startup-study-block-\${{ matrix.block }}-logging-\${{ matrix.fileLogging }}-\${{ github.run_id }}-\${{ github.run_attempt }}`
-                    : `controlled-chrome-\${{ matrix.os }}-\${{ github.run_id }}-\${{ github.run_attempt }}`,
+                name === 'ubuntu-readahead-study'
+                    ? `ubuntu-readahead-study-slot-\${{ matrix.slot }}-block-\${{ matrix.block }}-ra-\${{ matrix.readaheadKb }}-\${{ github.run_id }}-\${{ github.run_attempt }}`
+                    : name === 'ubuntu-startup-study'
+                      ? `ubuntu-startup-study-block-\${{ matrix.block }}-logging-\${{ matrix.fileLogging }}-\${{ github.run_id }}-\${{ github.run_attempt }}`
+                      : `controlled-chrome-\${{ matrix.os }}-\${{ github.run_id }}-\${{ github.run_attempt }}`,
             path: `${[
                 `\${{ runner.temp }}/dct-fixture-diagnostics/job-index.json`,
                 `\${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson`,
