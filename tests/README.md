@@ -24,6 +24,10 @@
 - `linux-startup-wait.test.ts` checks verified snapshot association, four
   one-shot Linux sampling triggers, bounded proc reads, process/session reuse,
   late results, resource counters, privacy and disabled-platform behavior.
+- `linux-startup-resources.test.ts` checks exact kernel-frame classification,
+  fixed helper cancellation and settlement, device/partition queue evidence,
+  visible cgroup counters and limits, hostile input and closed-record consistency
+  through external I/O boundary replacements.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.

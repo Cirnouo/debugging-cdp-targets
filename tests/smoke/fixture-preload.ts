@@ -15,7 +15,10 @@ try {
         if (!collector.snapshot().collectionRejected) {
             const sampler =
                 process.platform === 'linux'
-                    ? createLinuxStartupWaitSampler((record) => collector.linuxWait(record), { enabled: true })
+                    ? createLinuxStartupWaitSampler((record) => collector.linuxWait(record), {
+                          enabled: true,
+                          resources: true,
+                      })
                     : undefined;
             subscribeFixtureDiagnostics(
                 (event) => {

@@ -331,7 +331,16 @@ changing the production readiness predicate or wall-clock deadline.
 Primary smoke failures remain primary while the existing cleanup and assertions
 run in order; diagnostic failure cannot replace runtime outcomes. Artifacts
 establish only the recorded direct checks, not complete lifecycle attribution
-or a root cause for historical failures. Synchronous instrumentation overhead
+or a root cause for historical failures. The controlled Linux preload enables
+optional verified-root resource diagnostics at the existing four one-shot
+triggers, within the shared 250 ms sample budget, 22 accounted reads and unchanged
+record/stream caps. A fixed bounded sudo/cat helper contributes only a closed
+kernel wait classification; no raw stack or path is retained. Executable device
+metadata, completed device I/O, actual queue readahead and visible cgroup
+reclaim/throttling/limits retain their distinct scopes and unavailable states.
+Pending reads/helpers retain sampler ownership after timeout; production
+readiness does not await them, and they never retry a trigger or signal Chrome.
+Synchronous instrumentation overhead
 on real Linux/macOS Chrome fixtures has not been measured. Reproduction and interpretation belong in the
 [smoke inventory](../../tests/smoke/README.md#controlled-failure-diagnostics).
 

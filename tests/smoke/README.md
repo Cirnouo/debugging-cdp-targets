@@ -111,6 +111,8 @@ then explicitly restarts and normally closes them. It retains test profiles.
   checks and writes the diagnostic job summary using only fixed labels and safe IDs.
 - `linux-startup-wait.ts` supplies the test-only Linux verified-root wait sampler,
   bounded fixed proc reads and closed projections for the same diagnostic stream.
+  `linux-startup-resources.ts` supplies its optional kernel wait classification,
+  mapped block-device counters and visible cgroup evidence.
 - `chrome-host.ts` shares literal Chrome launch arguments, executable preflight,
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
@@ -748,11 +750,17 @@ Failed and busy samples consume their trigger without retry or a queue.
 Rollback means triggered when rollback was requested, and may race normal Close.
 Nothing in the runtime waits for this asynchronous sample.
 
-A sample reads only seven fixed files: `/proc/<verified-pid>/stat`, `wchan`,
-`io`, system `/proc/pressure/cpu`, `memory`, `io`, and the process stat again.
-Each read requests at most 4,096 bytes; a full buffer is conservatively overlong
-and is not parsed. The 250 ms total deadline stops publication of metrics and
-subsequent reads. The timer is unreferenced. An already pending filesystem call
+Generic sampler callers retain seven fixed reads: `/proc/<verified-pid>/stat`,
+`wchan`, `io`, system `/proc/pressure/cpu`, `memory`, `io`, and the process stat
+again. The controlled Linux preload explicitly enables resource evidence,
+raising the ceiling to 22 accounted reads plus four stat/realpath metadata
+operations. Each read accepts fewer than 4,096 bytes; a full buffer is
+conservatively overlong and is not parsed. The conservative aggregate
+retained/accounted input ceiling is 90,112 bytes, and the serialized record
+cap remains 4,096 bytes. Helper transport chunks can cross the per-read
+threshold before SIGTERM takes effect; this is not a physical transport cap.
+The shared 250 ms total deadline stops publication of metrics and subsequent
+reads. The timer is unreferenced. An already pending filesystem call or helper
 can settle later; bounded bytes and a timer cannot cap kernel syscall latency
 or synchronous event-loop disturbance. The root stays busy until that work
 settles, so another trigger records a skip. Every opened handle is closed even
@@ -769,6 +777,13 @@ a stale session discards metrics. Late completion never updates a successor.
 | `wchan` | Closed symbol class: futex, pipe, poll, I/O, scheduler, or unknown. It is an observation of a wait category. |
 | `ioWaitKind` | Optional I/O detail: `io-scheduling`, `page-bit-wait`, `buffer-wait`, `writeback-wait`, or `block-tag-wait`, derived from the same wchan read. |
 | `systemPsi.*TotalUs` | System-wide cumulative stall microseconds for CPU, memory or I/O `some`/`full`; `scope` is always `system`. |
+| `resources.kernel` | Closed exact-frame classification: filemap fault, buffered read, writeback, dirty throttling, unspecified page wait, other, or unavailable. |
+| `resources.storage`, `major`, `minor` | Filesystem block device derived from the verified executable's metadata; partition counters retain their own device identity. |
+| `resources.readsCompleted`, `sectorsRead`, `readMs`, `writesCompleted`, `writeMs`, `inFlight`, `ioMs`, `weightedIoMs` | Absolute system-device counters; sectors are 512-byte units and times are milliseconds. These are not Chrome-exclusive throughput. |
+| `resources.queueMajor`, `queueMinor`, `readAheadKb`, `rotational` | Actual queue metadata, from the parent device for a partition; readahead is in KiB and rotational is 0 or 1. |
+| `resources.cgroup`, `fileRefault`, `pgscan`, `pgsteal`, `memoryHighEvents`, `memoryMaxEvents`, `nrThrottled`, `throttledUs` | Visible target cgroup only: reclaim/event counts and cumulative CPU throttling microseconds, with explicit counter availability. |
+| `resources.memoryHighLimit`, `memoryMaxLimit`, `cpuQuotaLimit` | Visible finite, max or unavailable states; finite memory limits are bytes and CPU quota/period are microseconds. |
+| `resources.ioMax`, `readBpsLimit`, `writeBpsLimit`, `readIopsLimit`, `writeIopsLimit` | Visible leaf `io.max` for the mapped queue device only; unavailable, unmapped, absent-entry and configured states remain distinct. Configured limits retain finite/max states. |
 | `elapsedMs`, `reads`, `bytes` | Sampler elapsed time and bounded read requests/returned bytes, separate from synchronous collector cost. |
 
 Missing, unsafe or decreasing counters remain unknown rather than zero.
@@ -785,9 +800,29 @@ defines system resource pressure. Concurrent system pressure can correlate
 with Chrome's delay, but alone cannot prove what this root was waiting for.
 System CPU `full` is undefined and kernels since 5.13 report zero for backward
 compatibility; that supplied zero cannot establish absence of CPU contention.
-No stack, syscall parameters, thread/descendant traversal or arbitrary file
-content is collected. Unconfigured/refused diagnostics and non-Linux platforms
-create no Linux sampler, reads or timers.
+Resource evidence uses one fixed structured helper, `/usr/bin/sudo -n
+/usr/bin/cat /proc/<verified-pid>/stack`, because ordinary unprivileged reads
+may be denied. It uses no shell, ignores stderr and caps stdout. Deadline or
+overflow sends SIGTERM only to that helper; pending ownership remains until
+its actual close. Missing or denied helper support leaves a closed limitation.
+Only exact known frame tokens classify a wait; a page-wait frame alone does not
+prove a filemap fault, and compiler suffixes are never stripped to invent a match.
+Raw stack text, symbols and addresses never enter the stream or summary.
+
+Executable metadata and canonical sysfs mapping are rechecked before accepting
+device evidence. Overlay/non-block/unsupported mappings remain unavailable.
+The cgroup probe accepts one unambiguous unified mount at `/sys/fs/cgroup` and
+maps the target membership through its visible mount root; unsupported or
+escaped layouts remain unavailable. It does not enumerate ancestors. A visible
+leaf's max or absent limit cannot exclude ancestor, host or VM constraints.
+[Linux block statistics](https://docs.kernel.org/admin-guide/iostats.html) and
+[cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+define these counters and scopes. Process `readBytes` measures submitted I/O,
+and major faults are not block-request counts; use device completion deltas
+with their explicit shared scope when studying storage progress.
+No syscall parameters, thread/descendant traversal, mount/cgroup paths or raw
+file content enters diagnostics. Unconfigured/refused diagnostics and non-Linux
+platforms create no Linux sampler, reads, helpers or timers.
 
 Wait records use the same bounded stream and five filenames. The small summary
 retains the latest eight validated samples; `linuxStartupWaitOmitted` explicitly
@@ -1021,8 +1056,10 @@ safe process counters, `wchan`/optional closed `ioWaitKind`, system PSI,
 native-command and collector costs, and actual exit/profile/scratch cleanup.
 Preserve the tested commit and tree, Actions runner image/toolchain identities,
 actual endpoint browser version, arm and slot alongside the five-file artifacts
-and safe job logs. The sampler still has four one-shot triggers, seven fixed
-file reads, a 4,096-byte per-read bound and a 250 ms total budget. Streams still
+and safe job logs. The controlled preload retains four one-shot triggers,
+up to 22 accounted reads plus four metadata operations, and a shared 250 ms
+budget, as described in the sampler contract above. Each read retains/accounts
+at most 4,096 bytes; helper transport chunks may cross that threshold. Streams still
 allow 4,096 bytes per record, 2,000 records plus one truncation marker and 1 MiB
 total. Missing terminal cost records, absent cleanup, omitted samples or truncated
 evidence must remain explicit limits.
