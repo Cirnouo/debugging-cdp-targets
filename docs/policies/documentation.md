@@ -178,6 +178,49 @@ corresponding detailed documentation. An unexplained statement such as
 "README boundary checked" is insufficient. Passing format, link or repository
 checks does not establish that this semantic review has been completed.
 
+### Adding a root README language
+
+Before adding a root README translation, follow this procedure together with
+this section's content boundary and semantic review requirements:
+
+1. Keep English at `README.md`, without an English alias. Name each additional
+    root translation `README.<BCP47-tag>.md`, using a language tag from
+    [BCP 47's RFC 5646](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.1).
+    This filename pattern is repository policy; BCP 47 defines language tags,
+    not README filenames. Follow the tag casing recommended in
+    [RFC 5646 section 2.1.1](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.1.1)
+    and preserve the existing `README.zh-CN.md` filename.
+2. Translate the complete current English entry guide, including headings,
+    table of contents, descriptive link text and image alternative text.
+    Preserve project and product names, commands, Skill identifiers, versions,
+    paths, URLs, support and release facts, and shared assets. Translate prose
+    without changing the meaning or strength of requirements and limitations.
+    Keep links to the existing detailed-document destinations. This procedure
+    covers root READMEs only; it does not authorize translating subdirectory
+    documentation or installed guides.
+3. Update every root language page's language navigation atomically with the
+    new translation. Show every available language in the same order on every
+    page, retaining the existing languages' order and adding the new language
+    consistently. Use each language's own name as its label. Keep the row
+    centered below the Shields badges and, when present, the active development
+    slogan, and above the localized table of contents. The current language
+    is plain text, neither linked nor bold; every other language uses a relative
+    link to its sibling README. Preserve the shared header assets and layout.
+4. Review the complete new translation against English and review all affected
+    pages under the semantic requirements above. Check translated headings and
+    table-of-contents anchors, every language link and detailed-document link,
+    and literal commands, identifiers and facts. Render all affected pages at
+    desktop and narrow widths in light and dark themes; inspect header order,
+    language navigation, wrapping, assets and readability. Follow the existing
+    [verification policy](quality.md#verification) for applicable checks; format
+    and link checks alone do not establish translation or visual correctness.
+5. In the PR `Verification` section, record the actual semantic, link/anchor and
+    rendered review scope and results, the commands run, and remaining limits.
+    Identify the pages, viewport widths, themes and renderer actually inspected;
+    distinguish a scenario walkthrough from an executed rendered review. Apply
+    the existing [submission policy](commits-and-scope.md#commits) rather than
+    introducing a separate translation report or approval workflow.
+
 ## Host metadata research
 
 Before the first implementation for a new host, or a change to an existing
