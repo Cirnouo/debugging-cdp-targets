@@ -86,6 +86,9 @@ relevant to your change. These files remain the authoritative contributor rules.
 See [source ownership](src/README.md), [tests](tests/README.md), and
 [tooling](tooling/README.md) for navigation.
 
+Before adding a root README translation, follow the
+[root README language procedure](docs/policies/documentation.md#adding-a-root-readme-language).
+
 Before implementing a new host or changing a metadata contract, follow the
 [host research policy](docs/policies/documentation.md#host-metadata-research).
 The [host metadata record](docs/host-metadata.md) owns primary sources, adopted
