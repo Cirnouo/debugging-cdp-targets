@@ -54,9 +54,11 @@
 - `check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
-  PR checks predict the squash header with its PR number and validate the original
-  description and current template only for PR events. Every non-merge commit is
-  validated directly without message normalization or commit-specific exceptions.
+  PR checks independently validate the raw title and predicted squash header with
+  its actual PR number. The original description is review content validated
+  against the current template only for PR events; commit body/footer rules do
+  not apply to it. Every actual non-merge commit in the selected range or ancestry
+  is validated directly without message normalization or commit-specific exceptions.
 - `pull-request-policy.ts` validates current PR section order, canonical checklist
   labels/placement, selections, conditional N/A reasons, and evidence by reading
   the supplied current template. The CLI loads `.github/PULL_REQUEST_TEMPLATE.md`;
