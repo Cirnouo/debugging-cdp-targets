@@ -73,7 +73,7 @@ claude plugin install debugging-cdp-targets@debugging-cdp-targets
 ```
 
 Agent 会在启动前确认你的数据目录隔离选择。在结束任务前，
-它会询问你是要**关闭（Close）**目标，还是**保留（Keep）**目标以便后续继续工作。
+它会询问你是要<strong>关闭（Close）</strong>目标，还是<strong>保留（Keep）</strong>目标以便后续继续工作。
 有关目录选择、清理与目标存续时间，请参阅[详细工作流程](docs/user-guide/workflow.md)。
 
 ## 文档
