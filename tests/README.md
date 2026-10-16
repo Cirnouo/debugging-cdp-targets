@@ -314,6 +314,10 @@
 - `native-resource-preparation.test.ts` gates one fresh Windows fixture DLL before
     consumers and checks compiler failure/timeout retention, physical helper close,
     pending case continuation and late cleanup witness barriers through external I/O.
+    Its compile-only Windows regression uses an owned 8.3 TEMP parent in a child
+    environment, preserves strict assembly identity checks and verifies normal cleanup;
+    unavailable filesystem aliases produce an explicit prerequisite skip.
+    Real-directory resolution failure retains raw ownership without compilation or retry.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
   Hidden descendants outlive the root and spawn later descendants; native job

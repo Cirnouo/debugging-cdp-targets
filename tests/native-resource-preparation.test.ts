@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { access, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import {
     createNativeResourceAssembly,
     type NativeAssemblyCompile,
@@ -61,6 +65,86 @@ function compiler() {
     };
 }
 
+test('real native compilation accepts a TEMP parent reached through its 8.3 alias', {
+    skip: process.platform !== 'win32',
+    timeout: 90_000,
+}, async (context) => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'dct assembly 中文 [alias] '));
+    try {
+        const { stdout } = await promisify(execFile)(
+            'powershell.exe',
+            [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); [Console]::Out.WriteLine((New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:DCT_ALIAS_PARENT).ShortPath)',
+            ],
+            { windowsHide: true, shell: false, env: { ...process.env, DCT_ALIAS_PARENT: parent } },
+        );
+        const shortParent = stdout.trim();
+        const canonicalParent = await realpath(parent);
+        assert.equal(await realpath(shortParent), canonicalParent);
+        if (shortParent.toLowerCase() === canonicalParent.toLowerCase()) {
+            context.skip('The owned temporary parent has no 8.3 alias on this filesystem.');
+            return;
+        }
+        context.diagnostic(JSON.stringify({ parent, shortParent }));
+        const result = await promisify(execFile)(
+            process.execPath,
+            [fileURLToPath(new URL('./fixtures/native-resource-assembly-short-path.ts', import.meta.url))],
+            { windowsHide: true, shell: false, env: { ...process.env, TEMP: shortParent, TMP: shortParent } },
+        );
+        const receipt: unknown = JSON.parse(result.stdout.trim());
+        context.diagnostic(result.stdout.trim());
+        assert.ok(typeof receipt === 'object' && receipt !== null);
+        assert.ok('compilerStarts' in receipt && receipt.compilerStarts === 1);
+        assert.ok('cleaned' in receipt && receipt.cleaned === true);
+    } finally {
+        // An uncertain child/compiler failure must not recursively delete retained output writers.
+        await rmdir(parent).catch((error: unknown) => {
+            if (!(error instanceof Error && 'code' in error && error.code === 'ENOTEMPTY')) throw error;
+        });
+    }
+});
+
+test('owned directory resolution failure retains raw ownership without compiling, consuming or retrying', async () => {
+    const failure = new Error('real directory unavailable');
+    let resolutions = 0;
+    let compilerStarts = 0;
+    let consumers = 0;
+    let rawDirectory: string | undefined;
+    const owner = createNativeResourceAssembly({
+        platform: 'win32',
+        resolveDirectory: async (directory: string) => {
+            resolutions++;
+            rawDirectory = directory;
+            throw failure;
+        },
+        compile: () => {
+            compilerStarts++;
+            throw new Error('compiler must not start');
+        },
+    });
+    const use = () => {
+        consumers++;
+    };
+    try {
+        await assert.rejects(owner.run(use), (error: unknown) => error instanceof Error && error.cause === failure);
+        await assert.rejects(owner.run(use), (error: unknown) => error instanceof Error && error.cause === failure);
+        assert.equal(resolutions, 1);
+        assert.equal(compilerStarts, 0);
+        assert.equal(consumers, 0);
+        assert.equal(owner.retainedDirectory, rawDirectory);
+        assert.ok(rawDirectory);
+        await owner.dispose();
+        await access(rawDirectory);
+    } finally {
+        await owner.dispose();
+        // The only possible compile replacement above throws synchronously before any I/O.
+        if (owner.retainedDirectory) await rmdir(owner.retainedDirectory);
+    }
+});
+
 test('one gated compilation precedes all case consumers and disposal rejects future cases', async () => {
     const io = compiler();
     const owner = createNativeResourceAssembly({ platform: 'win32', compile: io.compile });
@@ -112,7 +196,8 @@ for (const failure of ['compiler', 'timeout', 'partial', 'missing', 'receipt'] a
         assert.equal(io.count(), 1);
         assert.equal(consumers, 0);
         const directory = path.dirname(io.output());
-        assert.equal(owner.retainedDirectory, directory);
+        assert.ok(owner.retainedDirectory);
+        assert.equal(await realpath(owner.retainedDirectory), await realpath(directory));
         await owner.dispose();
         await access(directory);
         // A callback rejection/timeout cannot establish compiler descendant exit.

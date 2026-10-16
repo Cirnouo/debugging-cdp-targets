@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,7 @@ export function createNativeResourceAssembly(
     options: {
         platform?: NodeJS.Platform;
         compile?: NativeAssemblyCompile;
+        resolveDirectory?: (directory: string) => Promise<string>;
         remove?: (directory: string) => Promise<void>;
     } = {},
 ) {
@@ -48,8 +49,11 @@ export function createNativeResourceAssembly(
             if ((options.platform ?? process.platform) !== 'win32')
                 throw new Error('Native preparation requires Windows.');
             directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-assembly-中文 [owned] '));
-            const nativeAssembly = path.join(directory, 'native process.dll');
             try {
+                const nativeAssembly = path.join(
+                    await (options.resolveDirectory ?? realpath)(directory),
+                    'native process.dll',
+                );
                 const stdout = await new Promise<string>((resolve, reject) => {
                     const child = compile(
                         [
