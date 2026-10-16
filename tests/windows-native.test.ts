@@ -4,11 +4,12 @@ import { watch } from 'node:fs';
 import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createWindowsLauncher } from '../src/adapters/windows-launch.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { createNativeResourceAssembly, type NativeAssemblyScope } from './fixtures/native-resource-assembly.ts';
 import {
     finishNativeResourceFixture,
     retainNativeResourceFixture,
@@ -22,20 +23,35 @@ import {
     safeSignal,
 } from './fixtures/native-resource-log.ts';
 
-async function nativeResourceCase(variant: NativeResourceVariant, action: (log: NativeResourceLog) => Promise<void>) {
-    const log = createNativeResourceLog(variant);
-    try {
-        await log.step('fixture', undefined, () => action(log));
-    } finally {
-        log.finish();
-    }
-}
+const nativeAssembly = createNativeResourceAssembly();
+before(
+    async () => {
+        if (process.platform === 'win32') await nativeAssembly.prepare();
+    },
+    { timeout: 65_000 },
+);
+after(() => nativeAssembly.dispose());
 
+async function nativeResourceCase(
+    variant: NativeResourceVariant,
+    action: (log: NativeResourceLog, assembly: NativeAssemblyScope) => Promise<void>,
+) {
+    return nativeAssembly.run(async (assembly) => {
+        const log = createNativeResourceLog(variant);
+        try {
+            await log.step('fixture', undefined, () => action(log, assembly));
+        } finally {
+            log.finish();
+        }
+    });
+}
 function observeHelper<T>(
     log: NativeResourceLog,
     pending: Promise<T> & { child: ChildProcess },
+    assembly: NativeAssemblyScope,
     detachedLaunch = false,
 ) {
+    assembly.trackChild(pending.child);
     if (detachedLaunch) {
         pending.child.once('spawn', () => log.event('END', 'launch'));
         pending.child.once('error', () => log.event('FAILURE', 'launch'));
@@ -196,7 +212,7 @@ for (const [abandon, failure] of [
                 : failure
                   ? 'group-body-failure'
                   : 'group-normal',
-            async (log) => {
+            async (log, assembly) => {
                 const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-resources-'));
                 const primary = new Error('Injected assertion before late child release.');
                 const run = async () => {
@@ -216,7 +232,7 @@ for (const [abandon, failure] of [
                             ),
                         }),
                     );
-                    const retained = await retainNativeResourceFixture(directory, log);
+                    const retained = await retainNativeResourceFixture(directory, log, assembly);
                     await withNativeResourceCleanup(
                         log,
                         async () => {
@@ -273,7 +289,7 @@ test('authenticated creator pulls only job assignment rights while the original 
     skip: process.platform !== 'win32',
     timeout: 20_000,
 }, async (t) => {
-    await nativeResourceCase('creator-handoff', async (log) => {
+    await nativeResourceCase('creator-handoff', async (log, assembly) => {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
         log.event('BEGIN', 'launch');
         const pending = observeHelper(
@@ -291,13 +307,16 @@ test('authenticated creator pulls only job assignment rights while the original 
                     directory,
                     '-NodePath',
                     process.execPath,
+                    '-NativeAssembly',
+                    assembly.nativeAssembly,
                 ],
                 { windowsHide: true, shell: false },
             ),
+            assembly,
             true,
         );
         void pending.catch(() => {});
-        const retained = await retainNativeResourceFixture(directory, log);
+        const retained = await retainNativeResourceFixture(directory, log, assembly);
         await withNativeResourceCleanup(
             log,
             async () => {
@@ -342,7 +361,7 @@ for (const failure of ['none', 'before-late', 'before-witness'] as const) {
                 : failure === 'before-late'
                   ? 'receiver-before-late'
                   : 'receiver-before-witness',
-            async (log) => {
+            async (log, assembly) => {
                 const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
                 const primary = new Error('Injected receiver assertion before child witness arming.');
                 const run = async () => {
@@ -362,13 +381,16 @@ for (const failure of ['none', 'before-late', 'before-witness'] as const) {
                                     directory,
                                     '-NodePath',
                                     process.execPath,
+                                    '-NativeAssembly',
+                                    assembly.nativeAssembly,
                                     '-ReceiverExit',
                                 ],
                                 { windowsHide: true, shell: false },
                             ),
+                            assembly,
                         ),
                     );
-                    const retained = await retainNativeResourceFixture(directory, log);
+                    const retained = await retainNativeResourceFixture(directory, log, assembly);
                     await withNativeResourceCleanup(
                         log,
                         async () => {
@@ -406,7 +428,7 @@ test('a lost created packet keeps acquisition pending after creator exit until t
     skip: process.platform !== 'win32',
     timeout: 20_000,
 }, async (t) => {
-    await nativeResourceCase('lost-packet', async (log) => {
+    await nativeResourceCase('lost-packet', async (log, assembly) => {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-handoff-'));
         log.event('BEGIN', 'launch');
         const pending = observeHelper(
@@ -424,10 +446,13 @@ test('a lost created packet keeps acquisition pending after creator exit until t
                     directory,
                     '-NodePath',
                     process.execPath,
+                    '-NativeAssembly',
+                    assembly.nativeAssembly,
                     '-LostPacket',
                 ],
                 { windowsHide: true, shell: false },
             ),
+            assembly,
             true,
         );
         let completed = false;
@@ -439,7 +464,7 @@ test('a lost created packet keeps acquisition pending after creator exit until t
                 completed = true;
             },
         );
-        const retained = await retainNativeResourceFixture(directory, log);
+        const retained = await retainNativeResourceFixture(directory, log, assembly);
         await withNativeResourceCleanup(
             log,
             async () => {

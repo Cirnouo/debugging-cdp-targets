@@ -311,6 +311,9 @@
   explicit acquisition proof plus physical helper close, with late identity taking
   priority and never-spawned OS helper failure as the explicit exception.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
+- `native-resource-preparation.test.ts` gates one fresh Windows fixture DLL before
+    consumers and checks compiler failure/timeout retention, physical helper close,
+    pending case continuation and late cleanup witness barriers through external I/O.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
   Hidden descendants outlive the root and spawn later descendants; native job

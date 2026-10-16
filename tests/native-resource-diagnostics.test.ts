@@ -906,3 +906,70 @@ test('PowerShell invalid PID emits a controlled failure without native inspectio
     assert.equal(receipt.win32Code, null);
     assert.ok(typeof receipt.hresult === 'number' && Number.isInteger(receipt.hresult));
 });
+
+test('prepared native assembly is forwarded literally to every witness role', async () => {
+    const nativeAssembly = 'C:\\owned 中文 [fixture]\\native process.dll';
+    for (const role of ['root', 'middle', 'late'] as const) {
+        const child = new WitnessChild();
+        const { log } = logger();
+        let actual: string[] = [];
+        const retained = retainExitWitness(
+            123,
+            role,
+            'initial-arming',
+            log,
+            (_executable, args) => {
+                actual = args;
+                return child;
+            },
+            { nativeAssembly, assertActive: () => {}, trackChild: () => {} },
+        );
+        child.emit('close', 1, null);
+        await assert.rejects(retained.exited);
+        assert.deepEqual(actual.slice(-2), ['-NativeAssembly', nativeAssembly]);
+    }
+});
+
+test('valid PID with missing or invalid explicit assembly fails at loading without source fallback', {
+    skip: process.platform !== 'win32',
+    timeout: 15_000,
+}, async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-native-test-'));
+    try {
+        const bad = path.join(directory, 'invalid 中文 [assembly].dll');
+        await writeFile(bad, 'invalid assembly');
+        for (const nativeAssembly of [undefined, path.join(directory, 'missing.dll'), bad]) {
+            const result = await new Promise<{ error: Error | null; stdout: string }>((resolve) => {
+                execFile(
+                    'powershell.exe',
+                    [
+                        '-NoProfile',
+                        '-NonInteractive',
+                        '-ExecutionPolicy',
+                        'Bypass',
+                        '-File',
+                        fileURLToPath(new URL('./fixtures/native-resource-witness.ps1', import.meta.url)),
+                        '-OwnedPid',
+                        '2147483647',
+                        '-Role',
+                        'root',
+                        ...(nativeAssembly ? ['-NativeAssembly', nativeAssembly] : []),
+                    ],
+                    { windowsHide: true, shell: false, maxBuffer: 262144 },
+                    (error, stdout) => resolve({ error, stdout }),
+                );
+            });
+            assert.ok(result.error);
+            const receipts: unknown[] = result.stdout
+                .trim()
+                .split('\n')
+                .map((line) => JSON.parse(line));
+            assert.ok(receipts.every((receipt) => isRecord(receipt) && receipt.phase === 'load'));
+            const failure = receipts.at(-1);
+            assert.ok(isRecord(failure));
+            assert.equal(failure.errorKind, 'load');
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});

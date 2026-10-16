@@ -2,6 +2,7 @@ import { watch } from 'node:fs';
 import { access, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { NativeAssemblyScope } from './native-resource-assembly.ts';
 import type { NativeResourceLog, WitnessContext, WitnessRole } from './native-resource-log.ts';
 import { pidInputFailure, retainWitnessFromPidText } from './native-resource-witness.ts';
 
@@ -26,7 +27,11 @@ export async function waitForResourceFile(directory: string, name: string, signa
     }
 }
 
-export async function retainNativeResourceFixture(directory: string, log: NativeResourceLog) {
+export async function retainNativeResourceFixture(
+    directory: string,
+    log: NativeResourceLog,
+    assembly?: NativeAssemblyScope,
+) {
     async function retain(role: WitnessRole, context: WitnessContext) {
         let text: string;
         try {
@@ -41,7 +46,7 @@ export async function retainNativeResourceFixture(directory: string, log: Native
                 log,
             );
         }
-        return retainWitnessFromPidText(text, role, context, log);
+        return retainWitnessFromPidText(text, role, context, log, undefined, assembly);
     }
     const [root, middle] = await log.step('initial-arming', undefined, async () => {
         await Promise.all(['root-ready', 'middle-ready'].map((name) => waitForResourceFile(directory, name)));
