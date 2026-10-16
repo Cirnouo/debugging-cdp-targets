@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { type FixtureEvent, validateFixtureEvent } from '../../src/adapters/fixture-diagnostics.ts';
+import {
+    CREATION_IDENTITY_FIELD_KEYS,
+    type FixtureEvent,
+    type FixtureOrigin,
+    validateFixtureEvent,
+} from '../../src/adapters/fixture-diagnostics.ts';
 import {
     type CaptureBudget,
     type CaptureIdentity,
@@ -27,6 +32,8 @@ export interface FirstStartCaptureDependencies {
     setTimer?: (callback: () => void, delay: number) => unknown;
     clearTimer?: (timer: unknown) => void;
     io?: CaptureIo;
+    revokeCreationIdentity?: () => void;
+    creationIdentityStats?: () => unknown;
 }
 const families = ['process', 'device', 'cgroup'] as const;
 const schedule = [0, 4000, 8000, 12000, 16000, 19000] as const;
@@ -118,7 +125,13 @@ export function createLinuxFirstStartCapture(
     deps: FirstStartCaptureDependencies = {},
 ) {
     if (deps.enabled !== true || (deps.platform ?? process.platform) !== 'linux')
-        return { observe(_value: unknown): void {}, finish(): void {} };
+        return {
+            observe(_value: unknown): void {},
+            finish(): void {},
+            matchesCreationOrigin(_origin: FixtureOrigin): boolean {
+                return false;
+            },
+        };
     const now = deps.now ?? (() => performance.now());
     const setTimer =
         deps.setTimer ??
@@ -145,6 +158,7 @@ export function createLinuxFirstStartCapture(
     const phaseBudgets: Array<Partial<Record<CaptureFamily, CaptureBudget>>> = Array.from({ length: 6 }, () => ({}));
     let selected: FixtureEvent | undefined;
     let launchSeen = false;
+    let acquired = false;
     let waitingAt: number | undefined;
     let rootStart: number | undefined;
     let executable: CaptureIdentity | undefined;
@@ -162,6 +176,9 @@ export function createLinuxFirstStartCapture(
     let sinkCalls = 0;
     let sinkFailed = 0;
     let callbackMs = 0;
+    let creationStopped = false;
+    let creationCalls = 0;
+    let creationRetained = 0;
     let snapshot:
         | { began: number; depth: number; debt: number; ambiguous: boolean; candidate?: FixtureEvent; ended?: number }
         | undefined;
@@ -178,21 +195,22 @@ export function createLinuxFirstStartCapture(
                   ...(rootStart === undefined ? {} : { rootStartTicks: rootStart }),
               }
             : {};
-    function put(key: string, value: Omit<FirstStartCaptureRecord, 'kind' | 'atMs'> & { atMs?: number }): void {
-        if (cache.has(key) || finished) return;
+    function put(key: string, value: Omit<FirstStartCaptureRecord, 'kind' | 'atMs'> & { atMs?: number }): boolean {
+        if (cache.has(key) || finished) return false;
         const record = validateFirstStartCaptureRecord({
             kind: 'linux-first-start-capture',
             atMs: now(),
             ...identity(),
             ...value,
         });
-        if (!record) return;
+        if (!record) return false;
         const size = Buffer.byteLength(JSON.stringify(record)) + 1;
-        if (cache.size >= 64 || cacheBytes + size > 256 * 1024) return;
+        if (cache.size >= 64 || cacheBytes + size > 256 * 1024) return false;
         cache.set(key, record);
         cacheBytes += size;
+        return true;
     }
-    function matches(event: FixtureEvent): boolean {
+    function matches(event: FixtureOrigin): boolean {
         return (
             !!selected &&
             event.entryId === selected.entryId &&
@@ -203,6 +221,25 @@ export function createLinuxFirstStartCapture(
                 (event.originOperationId === selected.operationId && event.requestId === undefined)) &&
             (event.pid === undefined || selected.pid === undefined || event.pid === selected.pid)
         );
+    }
+    function matchesCreationOrigin(origin: FixtureOrigin): boolean {
+        return (
+            !creationStopped &&
+            acquired &&
+            admission() &&
+            !!selected?.pid &&
+            origin.pid === selected.pid &&
+            matches(origin)
+        );
+    }
+    function revokeCreation(): void {
+        if (creationStopped) return;
+        creationStopped = true;
+        try {
+            deps.revokeCreationIdentity?.();
+        } catch {
+            /* Diagnostic control cannot interrupt lifecycle reception. */
+        }
     }
     function admission(): boolean {
         return waiting && !stopped && !finished;
@@ -879,6 +916,7 @@ export function createLinuxFirstStartCapture(
         stopped = true;
         for (const timer of timers) clearTimer(timer);
         for (const family of families) groups[family].cutoff?.();
+        revokeCreation();
     }
     function finalRecords(): void {
         const finalSlots: CaptureStatus[] = slotStates.map((state, phase) => {
@@ -969,7 +1007,48 @@ export function createLinuxFirstStartCapture(
             slot: 'limitations',
             status: closeGate ? 'retained' : 'no-close-gate',
             metrics: { pending: Object.values(finalCost).reduce((sum, cost) => sum + cost.pending, 0) },
+            creationObservation: creationReceipt(),
         });
+    }
+    function creationReceipt(): NonNullable<FirstStartCaptureRecord['creationObservation']> {
+        const unavailable = {
+            stats: 'unavailable' as const,
+            retained: creationRetained,
+            omitted: creationCalls - creationRetained,
+            producerCpu: 'unmeasured' as const,
+        };
+        try {
+            const stats = deps.creationIdentityStats?.();
+            if (!stats || typeof stats !== 'object') return unavailable;
+            const keys = ['sourceAttempts', 'comparisons', 'tokens', 'capped', 'disabled', 'revoked'];
+            const prototype: unknown = Object.getPrototypeOf(stats);
+            if ((prototype !== Object.prototype && prototype !== null) || Reflect.ownKeys(stats).length !== keys.length)
+                return unavailable;
+            const copied: Record<string, unknown> = {};
+            for (const key of keys) {
+                const descriptor = Object.getOwnPropertyDescriptor(stats, key);
+                if (!descriptor?.enumerable || !('value' in descriptor)) return unavailable;
+                copied[key] = descriptor.value;
+            }
+            if (typeof copied.comparisons !== 'number' || copied.comparisons < creationCalls) return unavailable;
+            const receipt = {
+                ...unavailable,
+                ...copied,
+                stats: 'available',
+                omitted: copied.comparisons - creationRetained,
+            };
+            return (
+                validateFirstStartCaptureRecord({
+                    kind: 'linux-first-start-capture',
+                    slot: 'limitations',
+                    status: 'retained',
+                    atMs: 0,
+                    creationObservation: receipt,
+                })?.creationObservation ?? unavailable
+            );
+        } catch {
+            return unavailable;
+        }
     }
     function send(record: FirstStartCaptureRecord): void {
         const began = now();
@@ -987,12 +1066,13 @@ export function createLinuxFirstStartCapture(
         finalRecords();
         const discarded =
             outcome === 'succeeded'
-                ? [...cache.values()].filter((record) => record.slot === 'family' || record.slot.endsWith('epoch'))
-                      .length
+                ? [...cache.values()].filter(
+                      (record) => record.slot === 'family' || record.slot.endsWith('epoch') || record.creation,
+                  ).length
                 : 0;
         if (outcome === 'succeeded')
             for (const [key, record] of cache)
-                if (record.slot === 'family' || record.slot.endsWith('epoch')) {
+                if (record.slot === 'family' || record.slot.endsWith('epoch') || record.creation) {
                     cache.delete(key);
                     cacheBytes -= Buffer.byteLength(JSON.stringify(record)) + 1;
                 }
@@ -1011,7 +1091,15 @@ export function createLinuxFirstStartCapture(
         const latestDevice = records
             .filter((record) => record.slot === 'family' && record.family === 'device' && record.status === 'complete')
             .sort((a, b) => (b.phase ?? 0) - (a.phase ?? 0))[0];
-        const bindingOrder = ['selection', 'root-binding', 'device-epoch', 'cgroup-epoch', 'first-start-outcome'];
+        const bindingOrder = [
+            'selection',
+            'root-binding',
+            'device-epoch',
+            'cgroup-epoch',
+            'first-start-outcome',
+            'creation-first-comparison',
+            'creation-first-rejected',
+        ];
         const priority = (record: FirstStartCaptureRecord): number => {
             const binding = bindingOrder.indexOf(record.slot);
             if (binding >= 0) return binding;
@@ -1021,12 +1109,12 @@ export function createLinuxFirstStartCapture(
                 record.phase === 0 &&
                 record.status === 'complete'
             )
-                return 5;
-            if (record === latestDevice) return 6;
+                return 7;
+            if (record === latestDevice) return 8;
             if (record.slot === 'family') {
                 const family =
                     record.family === 'process' ? 0 : record.family === 'device' ? 1 : 2 + (record.scope ?? 0);
-                return 7 + (record.phase ?? 0) * 6 + family;
+                return 9 + (record.phase ?? 0) * 6 + family;
             }
             if (record.slot === 'cost')
                 return 70 + (record.phase === 6 ? 0 : record.phase === 7 ? 7 : (record.phase ?? 0) + 1);
@@ -1077,7 +1165,19 @@ export function createLinuxFirstStartCapture(
         try {
             if (finished) return;
             const event = validateFixtureEvent(value);
-            if (!event) return;
+            if (!event) {
+                if (
+                    !launchSeen &&
+                    value &&
+                    typeof value === 'object' &&
+                    Object.getOwnPropertyDescriptor(value, 'stage')?.value === 'spawn' &&
+                    Object.getOwnPropertyDescriptor(value, 'event')?.value === 'begin'
+                ) {
+                    launchSeen = true;
+                    stop();
+                }
+                return;
+            }
             if (!selected) {
                 if (launchSeen || event.stage !== 'spawn' || event.event !== 'begin') return;
                 launchSeen = true;
@@ -1089,7 +1189,7 @@ export function createLinuxFirstStartCapture(
                     !event.connectionId ||
                     !event.sessionId
                 ) {
-                    stopped = true;
+                    stop();
                     return;
                 }
                 selected = event;
@@ -1097,14 +1197,41 @@ export function createLinuxFirstStartCapture(
                 return;
             }
             if (!matches(event)) return;
+            if (event.stage === 'process-creation-identity') {
+                if (!matchesCreationOrigin(event) || creationCalls >= 128) return;
+                const sequence = ++creationCalls;
+                const creation = Object.fromEntries(
+                    CREATION_IDENTITY_FIELD_KEYS.filter((key) => key in event).map((key) => [key, event[key]]),
+                );
+                // Invocation sequence, not timestamps, distinguishes equal-time comparisons.
+                const slot =
+                    sequence === 1
+                        ? 'creation-first-comparison'
+                        : event.outcome === 'rejected'
+                          ? 'creation-first-rejected'
+                          : undefined;
+                if (
+                    slot &&
+                    put(slot, {
+                        slot,
+                        status: event.outcome === 'rejected' ? 'identity-invalid' : 'complete',
+                        atMs: event.timestampMs,
+                        creation,
+                    })
+                )
+                    creationRetained++;
+                return;
+            }
             if (
                 event.stage === 'spawn' &&
                 event.event === 'decision' &&
                 event.reason === 'acquired' &&
                 event.pid &&
                 !stopped
-            )
+            ) {
                 selected = { ...selected, pid: event.pid };
+                acquired = true;
+            }
             if (
                 event.stage === 'readiness' &&
                 event.event === 'begin' &&
@@ -1112,7 +1239,7 @@ export function createLinuxFirstStartCapture(
                 waitingAt === undefined &&
                 !stopped
             ) {
-                if (!selected.pid || event.pid !== selected.pid) return;
+                if (!acquired || !selected.pid || event.pid !== selected.pid) return;
                 waitingAt = event.timestampMs;
                 waiting = true;
                 for (let phase = 1; phase < 6; phase++)
@@ -1121,11 +1248,22 @@ export function createLinuxFirstStartCapture(
                     );
                 return;
             }
-            if (event.stage === 'operation' && event.event === 'end' && ['failed', 'cancelled'].includes(event.outcome))
-                terminal(event.outcome === 'cancelled' ? 'cancelled' : 'failed');
+            if (
+                waitingAt === undefined &&
+                event.stage === 'operation' &&
+                event.event === 'end' &&
+                ['succeeded', 'failed', 'cancelled'].includes(event.outcome)
+            )
+                terminal(
+                    event.outcome === 'succeeded'
+                        ? 'succeeded'
+                        : event.outcome === 'cancelled'
+                          ? 'cancelled'
+                          : 'failed',
+                );
             if (event.stage === 'readiness' && event.phase === 'rollback-request' && event.event === 'decision') {
                 failureReason = event.readinessExitReason;
-                terminal(event.outcome === 'cancelled' ? 'cancelled' : 'failed');
+                stop();
             } else if (event.stage === 'readiness' && event.phase === 'waiting-cdp' && event.event === 'end')
                 terminal(
                     event.outcome === 'succeeded'
@@ -1237,5 +1375,5 @@ export function createLinuxFirstStartCapture(
             /* No lifecycle effect. */
         }
     }
-    return { observe, finish };
+    return { observe, finish, matchesCreationOrigin };
 }

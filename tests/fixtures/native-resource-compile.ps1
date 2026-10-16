@@ -8,6 +8,7 @@ $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../src/adapters/wi
 $options = [CodeDom.Compiler.CompilerParameters]::new()
 $options.GenerateExecutable = $false
 $options.OutputAssembly = $NativeAssembly
+$options.TempFiles = [CodeDom.Compiler.TempFileCollection]::new([IO.Path]::GetDirectoryName($NativeAssembly), $true)
 foreach ($reference in @('System.dll', 'System.Core.dll', 'System.Xml.dll')) {
     [void] $options.ReferencedAssemblies.Add($reference)
 }

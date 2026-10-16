@@ -1,4 +1,7 @@
-import { createLinuxFirstStartCapture } from '../smoke/linux-first-start-capture.ts';
+import {
+    createLinuxFirstStartCapture,
+    type FirstStartCaptureDependencies,
+} from '../smoke/linux-first-start-capture.ts';
 import type { CaptureIo } from '../smoke/linux-first-start-capture-io.ts';
 import type { FirstStartCaptureRecord } from '../smoke/linux-first-start-capture-record.ts';
 
@@ -72,6 +75,7 @@ export function fakeFirstStartIo(textOverride?: (file: string, text: string) => 
 export function createFirstStartHarness(
     override: CaptureIo = {},
     onRecord?: (record: FirstStartCaptureRecord) => void,
+    diagnostic: Pick<FirstStartCaptureDependencies, 'revokeCreationIdentity' | 'creationIdentityStats'> = {},
 ) {
     let now = 0;
     let sequence = 0;
@@ -85,6 +89,7 @@ export function createFirstStartHarness(
             onRecord?.(record);
         },
         {
+            ...diagnostic,
             enabled: true,
             platform: 'linux',
             now: () => now,

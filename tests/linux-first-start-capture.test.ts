@@ -4,12 +4,440 @@ import {
     drainFirstStart as drain,
     fakeCaptureStat,
     fakeFirstStartIo,
+    firstStartRoute,
     createFirstStartHarness as harness,
     captureTick as tick,
 } from './fixtures/first-start-capture-fake.ts';
+import * as preload from './smoke/fixture-preload.ts';
 import { createLinuxFirstStartCapture } from './smoke/linux-first-start-capture.ts';
 import { createCaptureBudget, readFirstStartFile } from './smoke/linux-first-start-capture-io.ts';
 import { validateFirstStartCaptureRecord } from './smoke/linux-first-start-capture-record.ts';
+
+const creationReject = {
+    phase: 'process-identity',
+    outcome: 'rejected',
+    creationNewlyLaunched: true,
+    creationToleranceMs: 1000,
+    creationSourceStatus: 'missing',
+    creationComparisonStatus: 'reached',
+    creationBranch: 'new-lower-rejected',
+    creationExpectedUtcMs: 1,
+    creationObservedUtcMs: -1001,
+    creationUpperNowStatus: 'not-evaluated',
+};
+
+test('creation first rejection retains one slot and equal-time later rejection fills the second', async () => {
+    const h = harness();
+    h.begin();
+    for (let index = 0; index < 4; index++) h.event('process-creation-identity', 'decision', creationReject);
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+    assert.equal(h.records.length, 0);
+    assert.equal(h.paths.length, 0);
+    h.event('native-close', 'end', { outcome: 'failed' });
+    await drain(h);
+    const records = h.records.filter((record) => record.slot.startsWith('creation-'));
+    assert.deepEqual(
+        records.map((record) => record.slot),
+        ['creation-first-comparison', 'creation-first-rejected'],
+    );
+    assert.deepEqual(
+        records.map((record) => record.creation?.creationObservedUtcMs),
+        [-1001, -1001],
+    );
+    assert.deepEqual(
+        h.records.slice(0, 7).map((record) => record.slot),
+        [
+            'selection',
+            'root-binding',
+            'device-epoch',
+            'cgroup-epoch',
+            'first-start-outcome',
+            'creation-first-comparison',
+            'creation-first-rejected',
+        ],
+    );
+    assert.equal(h.records.find((record) => record.slot === 'limitations')?.creationObservation?.omitted, 2);
+});
+
+test('creation fields validate independently and remain forbidden on old slots', () => {
+    const { phase: _phase, outcome: _outcome, ...creation } = creationReject;
+    const record = {
+        kind: 'linux-first-start-capture',
+        slot: 'creation-first-comparison',
+        status: 'identity-invalid',
+        atMs: 0,
+        creation,
+    };
+    assert.ok(validateFirstStartCaptureRecord(record));
+    assert.equal(validateFirstStartCaptureRecord({ ...record, status: 'complete' }), undefined);
+    assert.equal(validateFirstStartCaptureRecord({ ...record, metrics: { readBytes: 1 } }), undefined);
+    assert.equal(validateFirstStartCaptureRecord({ ...record, slot: 'selection' }), undefined);
+    assert.equal(
+        validateFirstStartCaptureRecord({ ...record, creation: { ...creation, creationExpectedUtcMs: 0.5 } }),
+        undefined,
+    );
+    assert.equal(
+        validateFirstStartCaptureRecord({ ...record, creation: { ...creation, creationUpperNowUtcMs: 1 } }),
+        undefined,
+    );
+    assert.equal(
+        validateFirstStartCaptureRecord({ ...record, creation: { ...creation, rawUtc: 'PRIVATE' } }),
+        undefined,
+    );
+    assert.equal(
+        validateFirstStartCaptureRecord({
+            kind: 'linux-first-start-capture',
+            slot: 'selection',
+            status: 'armed',
+            atMs: 0,
+            metrics: { readBytes: -1 },
+        }),
+        undefined,
+    );
+});
+
+test('readiness END locks outcome separately from rollback stop and later operation failure', async () => {
+    const h = harness();
+    h.begin();
+    h.event('readiness', 'decision', { phase: 'rollback-request', readinessExitReason: 'budget-exhausted' });
+    h.event('native-close', 'end');
+    h.advance(1);
+    assert.equal(h.records.length, 0);
+    h.event('operation', 'end', { outcome: 'failed' });
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'cancelled' });
+    await drain(h);
+    assert.equal(h.records.find((record) => record.slot === 'first-start-outcome')?.status, 'cancelled');
+});
+
+test('preload dispatch keeps creation decisions off synchronous gateway and legacy observers', () => {
+    const calls: string[] = [];
+    const observers = {
+        gateway: () => calls.push('gateway'),
+        sampler: { observe: () => calls.push('sampler') },
+        research: { observe: () => calls.push('research') },
+        firstStart: { observe: () => calls.push('capture') },
+    };
+    preload.dispatchFixtureDiagnostic({ stage: 'process-creation-identity' }, observers);
+    assert.deepEqual(calls, ['capture']);
+    calls.length = 0;
+    preload.dispatchFixtureDiagnostic({ stage: 'spawn' }, observers);
+    assert.deepEqual(calls, ['gateway', 'sampler', 'research', 'capture']);
+});
+
+test('creation revocation and throwing stats cannot swallow original terminal or later Close gate', async () => {
+    let revoked = 0;
+    const h = harness({}, undefined, {
+        revokeCreationIdentity() {
+            revoked++;
+            throw Error('control');
+        },
+        creationIdentityStats() {
+            throw Error('stats');
+        },
+    });
+    h.begin();
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), true);
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+    assert.equal(revoked, 1);
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+    h.event('native-close', 'begin');
+    assert.equal(h.records.length, 0);
+    h.event('native-close', 'end', { outcome: 'failed' });
+    await drain(h);
+    assert.equal(h.records.find((record) => record.slot === 'first-start-outcome')?.status, 'failed');
+    assert.equal(h.records.find((record) => record.slot === 'limitations')?.creationObservation?.stats, 'unavailable');
+    assert.ok(h.records.some((record) => record.slot === 'observer-terminal'));
+});
+
+test('invalid first spawn consumes creation selection rather than selecting a later valid start', () => {
+    let revoked = 0;
+    const h = harness({}, undefined, {
+        revokeCreationIdentity() {
+            revoked++;
+        },
+    });
+    h.event('spawn', 'begin', { entryId: 'invalid' });
+    h.begin();
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+    assert.equal(revoked, 1);
+    assert.equal(h.paths.length, 0);
+});
+
+test('creation admission pins first acquired PID and original origin and stops on finish', () => {
+    const h = harness();
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+    h.event('spawn', 'begin');
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+    h.event('spawn', 'decision', { reason: 'acquired' });
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+    h.event('readiness', 'begin', { phase: 'waiting-cdp' });
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), true);
+    const origin = {
+        ...firstStartRoute,
+        originOperationId: firstStartRoute.operationId,
+        operationId: undefined,
+        requestId: undefined,
+    };
+    assert.equal(h.matchesCreationOrigin(origin), true);
+    for (const key of ['entryId', 'connectionId', 'sessionId', 'operationId', 'requestId', 'pid'] as const)
+        assert.equal(
+            h.matchesCreationOrigin({
+                ...firstStartRoute,
+                [key]: key === 'pid' ? 321 : '66666666-6666-4666-8666-666666666666',
+            }),
+            false,
+            key,
+        );
+    h.finish();
+    assert.equal(h.matchesCreationOrigin(origin), false);
+    h.begin();
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+});
+
+test('spawn BEGIN PID alone cannot authorize creation observation without acquired evidence', () => {
+    const h = harness();
+    h.event('spawn', 'begin');
+    h.event('readiness', 'begin', { phase: 'waiting-cdp' });
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+    h.snapshot();
+    assert.equal(h.paths.length, 0);
+});
+
+test('missing first-spawn identity or restart selection revokes without resource reads', () => {
+    for (const fields of [
+        { requestId: undefined },
+        { connectionId: undefined },
+        { sessionId: undefined },
+        { operationId: undefined },
+        { entryId: undefined },
+        { action: 'restart' },
+    ]) {
+        let revoked = 0;
+        const h = harness({}, undefined, {
+            revokeCreationIdentity() {
+                revoked++;
+            },
+        });
+        h.event('spawn', 'begin', fields);
+        h.begin();
+        assert.equal(revoked, 1);
+        assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+        assert.equal(h.paths.length, 0);
+    }
+    const inert = createLinuxFirstStartCapture(() => {
+        throw Error('inert');
+    });
+    assert.equal(inert.matchesCreationOrigin(firstStartRoute), false);
+});
+
+test('missing readiness END stays incomplete despite later operation terminal and Close', async () => {
+    const h = harness();
+    h.begin();
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('readiness', 'decision', { phase: 'rollback-request', readinessExitReason: 'budget-exhausted' });
+    h.event('operation', 'end', { outcome: 'failed' });
+    h.event('native-close', 'end');
+    await drain(h);
+    h.finish();
+    assert.equal(h.records.length, 0);
+    assert.equal(h.matchesCreationOrigin(firstStartRoute), false);
+});
+
+test('operation terminal before readiness revokes and preserves original failure through Close', async () => {
+    let revoked = 0;
+    const h = harness({}, undefined, {
+        revokeCreationIdentity() {
+            revoked++;
+        },
+    });
+    h.event('spawn', 'begin');
+    h.event('operation', 'end', { outcome: 'failed' });
+    assert.equal(revoked, 1);
+    h.event('native-close', 'end');
+    await drain(h);
+    assert.equal(h.records.find((record) => record.slot === 'first-start-outcome')?.status, 'failed');
+});
+
+test('success drops both creation slots while later whole-fixture failure cannot rewrite readiness', async () => {
+    const h = harness();
+    h.begin();
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'succeeded' });
+    h.event('operation', 'end', { outcome: 'failed' });
+    await drain(h);
+    assert.equal(
+        h.records.some((record) => record.creation),
+        false,
+    );
+    assert.equal(h.records.find((record) => record.slot === 'first-start-outcome')?.status, 'succeeded');
+    assert.equal(h.records.find((record) => record.slot === 'retention-decision')?.metrics?.discarded, 4);
+});
+
+test('creation receipts preserve capped and disabled separately from normal revocation', async () => {
+    for (const disabled of [false, true]) {
+        const h = harness({}, undefined, {
+            creationIdentityStats: () => ({
+                sourceAttempts: 128,
+                comparisons: 2,
+                tokens: 128,
+                capped: true,
+                disabled,
+                revoked: true,
+            }),
+        });
+        h.begin();
+        h.event('process-creation-identity', 'decision', creationReject);
+        h.event('process-creation-identity', 'decision', creationReject);
+        h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+        h.event('native-close', 'end');
+        await drain(h);
+        const receipt = h.records.find((record) => record.slot === 'limitations')?.creationObservation;
+        assert.equal(receipt?.stats, 'available');
+        assert.equal(receipt.sourceAttempts, 128);
+        assert.equal(receipt.capped, true);
+        assert.equal(receipt.disabled, disabled);
+        assert.equal(receipt.revoked, true);
+        assert.equal(receipt.producerCpu, 'unmeasured');
+    }
+});
+
+test('available producer comparison stats account for unretained dispatches explicitly', async () => {
+    const h = harness({}, undefined, {
+        creationIdentityStats: () => ({
+            sourceAttempts: 4,
+            comparisons: 4,
+            tokens: 4,
+            capped: false,
+            disabled: true,
+            revoked: true,
+        }),
+    });
+    h.begin();
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+    h.event('native-close', 'end');
+    await drain(h);
+    const receipt = h.records.find((record) => record.slot === 'limitations')?.creationObservation;
+    assert.equal(receipt?.retained, 1);
+    assert.equal(receipt?.omitted, 3);
+    const inconsistent = harness({}, undefined, {
+        creationIdentityStats: () => ({
+            sourceAttempts: 3,
+            comparisons: 3,
+            tokens: 3,
+            capped: false,
+            disabled: false,
+            revoked: true,
+        }),
+    });
+    inconsistent.begin();
+    for (let index = 0; index < 4; index++) inconsistent.event('process-creation-identity', 'decision', creationReject);
+    inconsistent.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+    inconsistent.event('native-close', 'end');
+    await drain(inconsistent);
+    assert.equal(
+        inconsistent.records.find((record) => record.slot === 'limitations')?.creationObservation?.stats,
+        'unavailable',
+    );
+});
+
+test('first accepted comparison and later rejection retain distinct invocation records only', async () => {
+    const h = harness();
+    h.begin();
+    h.event('process-creation-identity', 'decision', {
+        ...creationReject,
+        outcome: 'observed',
+        creationNewlyLaunched: false,
+        creationBranch: 'established-accepted',
+        creationExpectedUtcMs: -1001,
+    });
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+    h.event('native-close', 'end');
+    await drain(h);
+    assert.deepEqual(
+        h.records.filter((record) => record.creation).map((record) => record.status),
+        ['complete', 'identity-invalid'],
+    );
+    assert.equal(h.records.find((record) => record.slot === 'limitations')?.creationObservation?.omitted, 1);
+});
+
+test('closed creation decoder independently enforces source, UTC, Number and status dependencies', () => {
+    const complete = {
+        creationNewlyLaunched: false,
+        creationToleranceMs: 1000,
+        creationSourceStatus: 'complete',
+        creationComparisonStatus: 'reached',
+        creationBranch: 'established-accepted',
+        creationExpectedUtcMs: 2009,
+        creationObservedUtcMs: 2009,
+        creationUpperNowStatus: 'not-evaluated',
+        creationBootSeconds: 0,
+        creationStartTicks: 201,
+        creationClkTck: 100,
+        creationComputedNumberMs: 2009.9999999999998,
+        creationStatReadStartedMs: 0.1,
+        creationStatReadEndedMs: 0.2,
+        creationBootReadStartedMs: 0.1,
+        creationBootReadEndedMs: 0.2,
+        creationClkReadStartedMs: 0.1,
+        creationClkReadEndedMs: 0.2,
+    };
+    const base = { kind: 'linux-first-start-capture', slot: 'creation-first-comparison', status: 'complete', atMs: 0 };
+    assert.ok(validateFirstStartCaptureRecord({ ...base, creation: complete }));
+    for (const change of [
+        { creationExpectedUtcMs: -8640000000000001 },
+        { creationExpectedUtcMs: Infinity },
+        { creationObservedUtcMs: 2009.5 },
+        { creationObservedUtcMs: 2010 },
+        { creationComputedNumberMs: NaN },
+        { creationComputedNumberMs: 2010 },
+        { creationStartTicks: 201.5 },
+        { creationClkTck: 0 },
+        { creationBootSeconds: -1 },
+        { creationStatReadEndedMs: 0 },
+        { creationClkReadStartedMs: -1 },
+        { creationSourceStatus: 'missing' },
+        { creationComparisonStatus: 'not-reached' },
+        { creationUpperNowStatus: 'read' },
+        { creationBranch: 'new-accepted' },
+        { rawUtc: 'x'.repeat(4097) },
+    ])
+        assert.equal(
+            validateFirstStartCaptureRecord({ ...base, creation: { ...complete, ...change } }),
+            undefined,
+            JSON.stringify(change),
+        );
+    let getterCalls = 0;
+    for (const creation of [
+        Object.assign(Object.create({ private: 1 }), complete),
+        { ...complete, [Symbol('private')]: 1 },
+        {
+            ...complete,
+            get creationExpectedUtcMs() {
+                getterCalls++;
+                return 2009;
+            },
+        },
+    ])
+        assert.equal(validateFirstStartCaptureRecord({ ...base, creation }), undefined);
+    assert.equal(getterCalls, 0);
+    assert.equal(
+        validateFirstStartCaptureRecord({ ...base, slot: 'creation-first-rejected', creation: complete }),
+        undefined,
+    );
+    assert.equal(
+        validateFirstStartCaptureRecord({
+            ...base,
+            slot: 'limitations',
+            creationObservation: { stats: 'available', retained: 0, omitted: 0, producerCpu: 'unmeasured' },
+        }),
+        undefined,
+    );
+});
 
 test('failed capture waits for matching native-close END, never any BEGIN', async () => {
     const h = harness();
@@ -264,6 +692,7 @@ test('hung cgroup discovery cannot block device results and retains pending owne
     h.advance(4000);
     await tick();
     h.event('readiness', 'decision', { phase: 'rollback-request', readinessExitReason: 'budget-exhausted' });
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
     h.event('native-close', 'begin');
     await tick();
     assert.equal(h.records.length, 0);
@@ -449,6 +878,7 @@ test('fixed slots and cumulative cost obey global application I/O caps', async (
         await tick();
     }
     h.event('readiness', 'decision', { phase: 'rollback-request', readinessExitReason: 'budget-exhausted' });
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
     h.event('native-close', 'end');
     await drain(h);
     assert.ok(h.records.length <= 54);
@@ -572,7 +1002,7 @@ test('a successful actual-exit wait can release a failed cache without a Close E
     assert.ok(h.records.some((record) => record.slot === 'first-start-outcome' && record.status === 'failed'));
 });
 
-test('maximal partition and four-scope sampling fills exactly the frozen 54 slots within every allocation', async () => {
+test('maximal partition and four-scope sampling fills exactly the bounded 56 slots including creation within every allocation', async () => {
     const fake = fakeFirstStartIo((file, text) =>
         file.endsWith('/cgroup') ? '0::/a/b/c/d/e\n' : file === '/sys/devices/disk/part/dev' ? '8:1\n' : text,
     );
@@ -598,6 +1028,8 @@ test('maximal partition and four-scope sampling fills exactly the frozen 54 slot
         },
     });
     h.bind();
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('process-creation-identity', 'decision', creationReject);
     await tick();
     for (const time of [4000, 8000, 12000, 16000, 19000]) {
         h.advance(time);
@@ -606,7 +1038,7 @@ test('maximal partition and four-scope sampling fills exactly the frozen 54 slot
     h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
     h.event('native-close', 'end');
     await drain(h);
-    assert.equal(h.records.length, 54);
+    assert.equal(h.records.length, 56);
     assert.equal(h.records.filter((record) => record.slot === 'family').length, 36);
     assert.ok(
         h.records.some(
@@ -625,6 +1057,8 @@ test('maximal partition and four-scope sampling fills exactly the frozen 54 slot
 test('flush batches contain at most eight records and prioritize binding then baseline/latest device', async () => {
     const h = harness();
     h.bind();
+    h.event('process-creation-identity', 'decision', creationReject);
+    h.event('process-creation-identity', 'decision', creationReject);
     await tick();
     h.advance(19000);
     await tick();

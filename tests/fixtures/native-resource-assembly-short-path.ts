@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { access, rm } from 'node:fs/promises';
+import { access, readdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createNativeResourceAssembly } from './native-resource-assembly.ts';
@@ -25,9 +25,29 @@ try {
         assert.match(scope.nativeAssembly, /中文 \[owned\]/);
         return scope.nativeAssembly;
     });
+    const directory = path.dirname(assembly);
+    const compilerTemporaryFiles = { tmp: 0, cmdline: 0, out: 0, err: 0 };
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const extension = path.extname(entry.name).slice(1);
+        if (extension !== 'tmp' && extension !== 'cmdline' && extension !== 'out' && extension !== 'err') continue;
+        assert.ok(entry.isFile(), 'compiler temporary resources must be regular files');
+        assert.equal(path.dirname(await realpath(path.join(directory, entry.name))), directory);
+        compilerTemporaryFiles[extension]++;
+    }
+    for (const [extension, count] of Object.entries(compilerTemporaryFiles)) {
+        assert.ok(count > 0, `owned compiler temporary resource .${extension} must remain until owner disposal`);
+    }
     await owner.dispose();
-    await assert.rejects(access(path.dirname(assembly)), { code: 'ENOENT' });
-    console.log(JSON.stringify({ compilerStarts, assembly, cleaned: true }));
+    await assert.rejects(access(directory), { code: 'ENOENT' });
+    console.log(
+        JSON.stringify({
+            compilerStarts,
+            compilerTemporaryFiles,
+            compilerTemporaryFilesOwned: true,
+            assembly,
+            cleaned: true,
+        }),
+    );
 } catch (error) {
     await owner.dispose();
     const retained = owner.retainedDirectory;

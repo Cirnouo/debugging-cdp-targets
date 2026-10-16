@@ -1,8 +1,28 @@
-import { subscribeFixtureDiagnostics } from '../../src/adapters/fixture-diagnostics.ts';
+import { type FixtureSubscription, subscribeFixtureDiagnostics } from '../../src/adapters/fixture-diagnostics.ts';
 import { createFixtureArtifacts } from './fixture-artifacts.ts';
 import { createLinuxFirstStartCapture } from './linux-first-start-capture.ts';
 import { createReadaheadInitialization, createReadaheadObserver } from './linux-readahead-study.ts';
 import { createLinuxStartupWaitSampler } from './linux-startup-wait.ts';
+
+/** Creation details stay in the armed observer's bounded memory until its normal flush gate. */
+export function dispatchFixtureDiagnostic(
+    event: { readonly stage: string },
+    receivers: {
+        gateway: (event: unknown) => void;
+        sampler?: { observe(event: unknown): void } | undefined;
+        research?: { observe(event: unknown): void } | undefined;
+        firstStart?: { observe(event: unknown): void } | undefined;
+    },
+): void {
+    if (event.stage === 'process-creation-identity') {
+        receivers.firstStart?.observe(event);
+        return;
+    }
+    receivers.gateway(event);
+    receivers.sampler?.observe(event);
+    receivers.research?.observe(event);
+    receivers.firstStart?.observe(event);
+}
 
 // Query configuration belongs only to this owned Node child; it is never inherited by Chrome/upstream.
 try {
@@ -49,18 +69,25 @@ try {
                           resources: true,
                       })
                     : undefined;
+            let subscription: FixtureSubscription | undefined;
             const firstStart = firstStartCapture
-                ? createLinuxFirstStartCapture((record) => collector.firstStartCapture(record), { enabled: true })
+                ? createLinuxFirstStartCapture((record) => collector.firstStartCapture(record), {
+                      enabled: true,
+                      revokeCreationIdentity: () => subscription?.revokeCreationIdentity(),
+                      creationIdentityStats: () => subscription?.creationIdentityStats(),
+                  })
                 : undefined;
-            subscribeFixtureDiagnostics(
-                (event) => {
-                    collector.gateway(event);
-                    sampler?.observe(event);
-                    research?.observe(event);
-                    firstStart?.observe(event);
-                },
+            subscription = subscribeFixtureDiagnostics(
+                (event) =>
+                    dispatchFixtureDiagnostic(event, {
+                        gateway: (value) => collector.gateway(value),
+                        sampler,
+                        research,
+                        firstStart,
+                    }),
                 () => collector.rejected(),
                 (dispatch) => collector.measure(dispatch),
+                firstStart ? { creationIdentity: { matches: firstStart.matchesCreationOrigin } } : {},
             );
             process.once('exit', () => collector.finishStream());
             if (firstStart) process.once('beforeExit', () => firstStart.finish());

@@ -1,3 +1,5 @@
+import { type CreationIdentityFields, validateCreationIdentityFields } from '../../src/adapters/fixture-diagnostics.ts';
+
 /** Closed, path-free test evidence. Slots are immutable and have one owner. */
 export const captureAuxiliarySlots = [
     'selection',
@@ -5,6 +7,8 @@ export const captureAuxiliarySlots = [
     'device-epoch',
     'cgroup-epoch',
     'first-start-outcome',
+    'creation-first-comparison',
+    'creation-first-rejected',
     'six-slot-status',
     'retention-decision',
     'limitations',
@@ -171,6 +175,19 @@ export interface FirstStartCaptureRecord {
     readonly limits?: Readonly<CaptureLimits>;
     readonly cost?: Readonly<Partial<Record<CaptureFamily, Readonly<CaptureCost>>>>;
     readonly slots?: readonly CaptureStatus[];
+    readonly creation?: Readonly<CreationIdentityFields>;
+    readonly creationObservation?: Readonly<{
+        stats: 'available' | 'unavailable';
+        sourceAttempts?: number;
+        comparisons?: number;
+        tokens?: number;
+        retained: number;
+        omitted: number;
+        capped?: boolean;
+        disabled?: boolean;
+        revoked?: boolean;
+        producerCpu: 'unmeasured';
+    }>;
 }
 export function captureClosed(value: unknown, keys: readonly string[]): Record<string, unknown> | undefined {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return;
@@ -221,6 +238,8 @@ export function validateFirstStartCaptureRecord(value: unknown): FirstStartCaptu
             'limits',
             'cost',
             'slots',
+            'creation',
+            'creationObservation',
         ]);
         if (
             fields?.kind !== 'linux-first-start-capture' ||
@@ -229,6 +248,78 @@ export function validateFirstStartCaptureRecord(value: unknown): FirstStartCaptu
             !finite(fields.atMs)
         )
             return;
+        const creationSlot = fields.slot === 'creation-first-comparison' || fields.slot === 'creation-first-rejected';
+        if (creationSlot !== 'creation' in fields) return;
+        if (creationSlot) {
+            if (!member(['complete', 'identity-invalid'], fields.status)) return;
+            if (
+                Object.keys(fields).some(
+                    (key) =>
+                        ![
+                            'kind',
+                            'slot',
+                            'status',
+                            'atMs',
+                            'entryId',
+                            'connectionId',
+                            'sessionId',
+                            'operationId',
+                            'requestId',
+                            'pid',
+                            'rootStartTicks',
+                            'creation',
+                        ].includes(key),
+                )
+            )
+                return;
+            const creation = validateCreationIdentityFields(fields.creation);
+            if (!creation) return;
+            if (fields.slot === 'creation-first-rejected' && fields.status !== 'identity-invalid') return;
+            if (
+                fields.status === 'complete' &&
+                (creation.creationComparisonStatus !== 'reached' || creation.creationBranch?.endsWith('rejected'))
+            )
+                return;
+            fields.creation = creation;
+        }
+        if ('creationObservation' in fields) {
+            if (fields.slot !== 'limitations') return;
+            const receipt = captureClosed(fields.creationObservation, [
+                'stats',
+                'sourceAttempts',
+                'comparisons',
+                'tokens',
+                'retained',
+                'omitted',
+                'capped',
+                'disabled',
+                'revoked',
+                'producerCpu',
+            ]);
+            if (
+                !receipt ||
+                !member(['available', 'unavailable'], receipt.stats) ||
+                receipt.producerCpu !== 'unmeasured' ||
+                !integer(receipt.retained) ||
+                receipt.retained > 2 ||
+                !integer(receipt.omitted) ||
+                receipt.omitted > 128
+            )
+                return;
+            const counters = ['sourceAttempts', 'comparisons', 'tokens'];
+            const flags = ['capped', 'disabled', 'revoked'];
+            if (receipt.stats === 'available') {
+                if (
+                    counters.some((key) => !integer(receipt[key]) || Number(receipt[key]) > 128) ||
+                    flags.some((key) => typeof receipt[key] !== 'boolean') ||
+                    Number(receipt.sourceAttempts) > Number(receipt.tokens) ||
+                    Number(receipt.comparisons) > Number(receipt.tokens) ||
+                    Number(receipt.retained) + Number(receipt.omitted) !== Number(receipt.comparisons)
+                )
+                    return;
+            } else if ([...counters, ...flags].some((key) => key in receipt)) return;
+            fields.creationObservation = Object.freeze(receipt);
+        }
         for (const key of ['entryId', 'connectionId', 'sessionId', 'operationId', 'requestId'])
             if (key in fields && (typeof fields[key] !== 'string' || !uuid.test(fields[key]))) return;
         for (const key of ['pid', 'rootStartTicks', 'phase', 'scope', 'depth', 'epoch'])

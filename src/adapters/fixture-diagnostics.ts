@@ -5,6 +5,7 @@ import { performance } from 'node:perf_hooks';
 /** Internal fixture contract; the only supported receiver catches inside its subscriber. */
 export const FIXTURE_DIAGNOSTICS_CHANNEL = 'debugging-cdp-targets.fixture';
 const observation = channel(FIXTURE_DIAGNOSTICS_CHANNEL);
+const creationRegistryObservation = channel('debugging-cdp-targets.fixture.creation-observation-registry');
 const stages = [
     'operation',
     'operation-phase',
@@ -26,6 +27,7 @@ const stages = [
     'native-command',
     'native-file',
     'native-snapshot',
+    'process-creation-identity',
     'data-directory-acquire',
     'data-directory-release',
     'data-directory-cleanup',
@@ -330,7 +332,213 @@ export interface FixtureIdentity {
     port?: number | undefined;
     trigger?: 'gateway-disconnect' | undefined;
 }
-export interface FixtureFields extends FixtureIdentity {
+export interface CreationIdentityFields {
+    creationNewlyLaunched?: boolean;
+    creationBranch?:
+        | 'new-lower-rejected'
+        | 'new-upper-rejected'
+        | 'new-accepted'
+        | 'established-delta-rejected'
+        | 'established-accepted'
+        | 'creation-unverifiable';
+    creationToleranceMs?: number;
+    creationExpectedUtcMs?: number;
+    creationObservedUtcMs?: number;
+    creationUpperNowUtcMs?: number;
+    creationUpperNowStatus?: 'read' | 'not-evaluated';
+    creationBootSeconds?: number;
+    creationStartTicks?: number;
+    creationClkTck?: number;
+    creationComputedNumberMs?: number;
+    creationStatReadStartedMs?: number;
+    creationStatReadEndedMs?: number;
+    creationBootReadStartedMs?: number;
+    creationBootReadEndedMs?: number;
+    creationClkReadStartedMs?: number;
+    creationClkReadEndedMs?: number;
+    creationSourceStatus?: 'complete' | 'missing' | 'unverifiable';
+    creationComparisonStatus?: 'reached' | 'unverifiable' | 'not-reached';
+}
+const creationSourceKeys = [
+    'creationBootSeconds',
+    'creationStartTicks',
+    'creationClkTck',
+    'creationComputedNumberMs',
+    'creationStatReadStartedMs',
+    'creationStatReadEndedMs',
+    'creationBootReadStartedMs',
+    'creationBootReadEndedMs',
+    'creationClkReadStartedMs',
+    'creationClkReadEndedMs',
+] as const;
+const creationKeys = [
+    ...creationSourceKeys,
+    'creationNewlyLaunched',
+    'creationBranch',
+    'creationToleranceMs',
+    'creationExpectedUtcMs',
+    'creationObservedUtcMs',
+    'creationUpperNowUtcMs',
+    'creationUpperNowStatus',
+    'creationSourceStatus',
+    'creationComparisonStatus',
+] as const;
+function utc(value: unknown): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value) && Math.abs(value) <= 8_640_000_000_000_000;
+}
+function safeCreationField(key: string, value: unknown): boolean {
+    if (key === 'creationNewlyLaunched') return typeof value === 'boolean';
+    if (key === 'creationToleranceMs') return value === 1_000;
+    if (key === 'creationBranch')
+        return member(
+            [
+                'new-lower-rejected',
+                'new-upper-rejected',
+                'new-accepted',
+                'established-delta-rejected',
+                'established-accepted',
+                'creation-unverifiable',
+            ],
+            value,
+        );
+    if (key === 'creationUpperNowStatus') return member(['read', 'not-evaluated'], value);
+    if (key === 'creationSourceStatus') return member(['complete', 'missing', 'unverifiable'], value);
+    if (key === 'creationComparisonStatus') return member(['reached', 'unverifiable', 'not-reached'], value);
+    if (['creationExpectedUtcMs', 'creationObservedUtcMs', 'creationUpperNowUtcMs'].includes(key)) return utc(value);
+    if (typeof value !== 'number' || !Number.isFinite(value)) return false;
+    if (key === 'creationComputedNumberMs') return Math.abs(value) <= 8_640_000_000_000_000;
+    if (key.endsWith('Ms')) return value >= 0;
+    return Number.isSafeInteger(value) && value >= (key === 'creationClkTck' ? 1 : 0);
+}
+function validCreation(selected: Record<string, unknown>): boolean {
+    if (selected.stage !== 'process-creation-identity') return creationKeys.every((key) => !(key in selected));
+    const allowed = [
+        ...identityKeys,
+        ...creationKeys,
+        'stage',
+        'event',
+        'phase',
+        'outcome',
+        'timestampMs',
+        'durationMs',
+    ];
+    if (Object.keys(selected).some((key) => !allowed.includes(key))) return false;
+    if (
+        selected.event !== 'decision' ||
+        selected.phase !== 'process-identity' ||
+        !member(['observed', 'rejected'], selected.outcome) ||
+        selected.error !== undefined ||
+        typeof selected.creationNewlyLaunched !== 'boolean' ||
+        selected.creationToleranceMs !== 1_000 ||
+        !member(['complete', 'missing', 'unverifiable'], selected.creationSourceStatus) ||
+        !member(['reached', 'unverifiable', 'not-reached'], selected.creationComparisonStatus) ||
+        !member(['read', 'not-evaluated'], selected.creationUpperNowStatus)
+    )
+        return false;
+    if (selected.creationSourceStatus === 'complete') {
+        if (!creationSourceKeys.every((key) => key in selected)) return false;
+        for (const prefix of ['Stat', 'Boot', 'Clk']) {
+            const start = selected[`creation${prefix}ReadStartedMs`];
+            const end = selected[`creation${prefix}ReadEndedMs`];
+            if (typeof start !== 'number' || typeof end !== 'number' || end < start) return false;
+        }
+        if (
+            selected.creationComputedNumberMs !==
+            Number(selected.creationBootSeconds) * 1_000 +
+                (Number(selected.creationStartTicks) / Number(selected.creationClkTck)) * 1_000
+        )
+            return false;
+        if (
+            selected.creationObservedUtcMs !== undefined &&
+            Math.trunc(Number(selected.creationComputedNumberMs)) !== selected.creationObservedUtcMs
+        )
+            return false;
+    } else if (creationSourceKeys.some((key) => key in selected)) return false;
+    const branch = selected.creationBranch;
+    const status = selected.creationComparisonStatus;
+    if (
+        (status !== 'reached' ||
+            member(['new-lower-rejected', 'new-upper-rejected', 'established-delta-rejected'], branch)) &&
+        selected.outcome !== 'rejected'
+    )
+        return false;
+    if (status === 'not-reached') {
+        if (
+            branch !== undefined ||
+            selected.creationExpectedUtcMs !== undefined ||
+            selected.creationObservedUtcMs !== undefined
+        )
+            return false;
+    } else if (status === 'unverifiable') {
+        if (
+            branch !== 'creation-unverifiable' ||
+            selected.creationExpectedUtcMs !== undefined ||
+            selected.creationObservedUtcMs !== undefined
+        )
+            return false;
+    } else {
+        if (
+            !utc(selected.creationExpectedUtcMs) ||
+            !utc(selected.creationObservedUtcMs) ||
+            branch === 'creation-unverifiable'
+        )
+            return false;
+        if (
+            selected.creationNewlyLaunched
+                ? !member(['new-lower-rejected', 'new-upper-rejected', 'new-accepted'], branch)
+                : !member(['established-delta-rejected', 'established-accepted'], branch)
+        )
+            return false;
+    }
+    if (
+        status === 'reached' &&
+        typeof selected.creationObservedUtcMs === 'number' &&
+        typeof selected.creationExpectedUtcMs === 'number'
+    ) {
+        const actual = selected.creationObservedUtcMs;
+        const expected = selected.creationExpectedUtcMs;
+        if (
+            branch === 'new-lower-rejected'
+                ? !(actual < expected - 1_000)
+                : selected.creationNewlyLaunched && actual < expected - 1_000
+        )
+            return false;
+        if (branch === 'established-delta-rejected' && !(Math.abs(actual - expected) > 1_000)) return false;
+        if (branch === 'established-accepted' && Math.abs(actual - expected) > 1_000) return false;
+        if (branch === 'new-upper-rejected' && !(actual > Number(selected.creationUpperNowUtcMs) + 1_000)) return false;
+        if (branch === 'new-accepted' && actual > Number(selected.creationUpperNowUtcMs) + 1_000) return false;
+    }
+    const upper = branch === 'new-upper-rejected' || branch === 'new-accepted';
+    return upper
+        ? selected.creationUpperNowStatus === 'read' && utc(selected.creationUpperNowUtcMs)
+        : selected.creationUpperNowStatus === 'not-evaluated' && selected.creationUpperNowUtcMs === undefined;
+}
+
+/** Closed numeric group shared by the internal event and fixture receipt decoder. */
+export const CREATION_IDENTITY_FIELD_KEYS = creationKeys;
+export function validateCreationIdentityFields(value: unknown): Readonly<CreationIdentityFields> | undefined {
+    try {
+        const selected = detachedRecord(value, creationKeys);
+        if (!selected || Object.entries(selected).some(([key, field]) => !safeCreationField(key, field))) return;
+        if (
+            !validCreation({
+                ...selected,
+                stage: 'process-creation-identity',
+                event: 'decision',
+                phase: 'process-identity',
+                outcome: 'rejected',
+                timestampMs: 0,
+                durationMs: 0,
+            })
+        )
+            return;
+        return Object.freeze(selected);
+    } catch {
+        return;
+    }
+}
+
+export interface FixtureFields extends FixtureIdentity, CreationIdentityFields {
     outcome?: FixtureOutcome;
     durationMs?: number | undefined;
     elapsedMs?: number;
@@ -408,6 +616,7 @@ const identityKeys = [
 ] as const;
 const fieldKeys = [
     ...identityKeys,
+    ...creationKeys,
     'outcome',
     'durationMs',
     'elapsedMs',
@@ -465,7 +674,9 @@ function plain(value: unknown): value is Record<string, unknown> {
 function detachedRecord(value: unknown, keys: readonly string[]): Record<string, unknown> | undefined {
     if (!plain(value)) return;
     const result: Record<string, unknown> = {};
-    for (const key of Reflect.ownKeys(value)) {
+    const ownKeys = Reflect.ownKeys(value);
+    if (ownKeys.length > keys.length) return;
+    for (const key of ownKeys) {
         if (typeof key !== 'string' || !keys.includes(key)) return;
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (!descriptor || !('value' in descriptor) || !descriptor.enumerable) return;
@@ -474,6 +685,7 @@ function detachedRecord(value: unknown, keys: readonly string[]): Record<string,
     return result;
 }
 function safeField(key: string, value: unknown): boolean {
+    if (creationKeys.some((selected) => selected === key)) return safeCreationField(key, value);
     if (['entryId', 'operationId', 'originOperationId', 'requestId', 'connectionId', 'sessionId'].includes(key))
         return (
             typeof value === 'string' &&
@@ -611,6 +823,7 @@ export function validateFixtureEvent(value: unknown): FixtureEvent | undefined {
         )
             return;
         for (const key of fieldKeys) if (key in selected && !safeField(key, selected[key])) return;
+        if (!validCreation(selected)) return;
         const error = 'error' in selected ? detachedError(selected.error) : undefined;
         if ('error' in selected && !error) return;
         return Object.freeze({
@@ -676,11 +889,23 @@ export function emitFixtureEvent(
     fields: FixtureFields = {},
     error?: unknown,
 ): void {
+    publishFixtureEvent(stage, event, fields, error);
+}
+function publishFixtureEvent(
+    stage: FixtureStage,
+    event: FixtureEvent['event'],
+    fields: FixtureFields,
+    error?: unknown,
+    creationFrame?: FixtureCreationFrame,
+): void {
     if (!observation.hasSubscribers) return;
     let payload: FixtureEvent;
     try {
         if (!member(stages, stage) || !member(['begin', 'end', 'decision'], event)) return;
-        const metadata = copyFields({ ...current(), ...fields });
+        const scoped = current();
+        if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
+        const metadata = copyFields({ ...scoped, ...fields });
+        if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
         payload = Object.freeze({
             ...metadata,
             stage,
@@ -695,7 +920,12 @@ export function emitFixtureEvent(
     }
     // Arbitrary diagnostics_channel subscribers are not isolated by a publisher try/catch.
     // Only subscribeFixtureDiagnostics is supported; its catch runs INSIDE its callback.
+    if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
     observation.publish(payload);
+}
+export function emitFixtureCreationDecision(frame: FixtureCreationFrame, fields: FixtureFields): void {
+    if (!fixtureCreationFrameActive(frame)) return;
+    publishFixtureEvent('process-creation-identity', 'decision', fields, undefined, frame);
 }
 type Finish = (outcome: FixtureOutcome, fields?: FixtureFields, error?: unknown) => void;
 const unobservedFinish: Finish = () => {};
@@ -729,7 +959,22 @@ export function subscribeFixtureDiagnostics(
     callback: (event: FixtureEvent) => void,
     onRejected?: () => void,
     aroundReceive?: (dispatch: () => void) => void,
-): () => void {
+    options: { creationIdentity?: { matches: (origin: FixtureOrigin) => boolean } } = {},
+): FixtureSubscription {
+    const request: CreationRequest | undefined = options.creationIdentity
+        ? {
+              matches: options.creationIdentity.matches,
+              active: true,
+              sourceAttempts: 0,
+              comparisons: 0,
+              tokens: 0,
+              capped: false,
+              disabled: false,
+              revoked: false,
+          }
+        : undefined;
+    const registry = request ? acquireCreationRegistry() : undefined;
+    if (request && registry) registry.requests.add(request);
     const receive = (data: unknown) => {
         try {
             const dispatch = () => {
@@ -744,5 +989,239 @@ export function subscribeFixtureDiagnostics(
         }
     };
     observation.subscribe(receive);
-    return () => observation.unsubscribe(receive);
+    return Object.assign(
+        () => {
+            observation.unsubscribe(receive);
+            if (request) {
+                request.active = false;
+                request.revoked = true;
+                if (registry) releaseCreationRequest(registry, request);
+            }
+        },
+        {
+            revokeCreationIdentity: () => {
+                if (request) {
+                    request.active = false;
+                    request.revoked = true;
+                }
+            },
+            creationIdentityStats: () =>
+                Object.freeze({
+                    sourceAttempts: request?.sourceAttempts ?? 0,
+                    comparisons: request?.comparisons ?? 0,
+                    tokens: request?.tokens ?? 0,
+                    capped: request?.capped ?? false,
+                    disabled: (request?.disabled ?? false) || (registry?.bookkeepingFailed ?? false),
+                    revoked: request?.revoked ?? false,
+                }),
+        },
+    );
+}
+
+export interface CreationIdentityStats {
+    readonly sourceAttempts: number;
+    readonly comparisons: number;
+    readonly tokens: number;
+    readonly capped: boolean;
+    readonly disabled: boolean;
+    readonly revoked: boolean;
+}
+export type FixtureSubscription = (() => void) & {
+    revokeCreationIdentity(): void;
+    creationIdentityStats(): CreationIdentityStats;
+};
+type CreationRequest = {
+    matches: (origin: FixtureOrigin) => boolean;
+    active: boolean;
+    sourceAttempts: number;
+    comparisons: number;
+    tokens: number;
+    capped: boolean;
+    disabled: boolean;
+    revoked: boolean;
+};
+type CreationRegistry = {
+    requests: Set<unknown>;
+    bookkeepingFailed: boolean;
+    responder: (query: unknown) => void;
+};
+const registryQueryKind = 'creation-observation-registry';
+function isCreationRegistry(value: unknown): value is CreationRegistry {
+    const record = detachedRecord(value, ['requests', 'bookkeepingFailed', 'responder']);
+    return (
+        !!record &&
+        record.requests instanceof Set &&
+        typeof record.bookkeepingFailed === 'boolean' &&
+        typeof record.responder === 'function'
+    );
+}
+/** Only in-process references cross this private named channel, never fixture events or receipts. */
+function discoverCreationRegistry(): CreationRegistry | undefined {
+    if (!creationRegistryObservation.hasSubscribers) return;
+    const query: { kind: string; reply: unknown } = { kind: registryQueryKind, reply: undefined };
+    try {
+        creationRegistryObservation.publish(query);
+        const reply = Object.getOwnPropertyDescriptor(query, 'reply');
+        if (reply && 'value' in reply && isCreationRegistry(reply.value)) return reply.value;
+    } catch {
+        const reply = Object.getOwnPropertyDescriptor(query, 'reply');
+        if (reply && 'value' in reply && isCreationRegistry(reply.value)) reply.value.bookkeepingFailed = true;
+    }
+}
+function acquireCreationRegistry(): CreationRegistry {
+    const existing = discoverCreationRegistry();
+    if (existing) return existing;
+    const registry: CreationRegistry = {
+        requests: new Set(),
+        bookkeepingFailed: false,
+        responder(query: unknown) {
+            try {
+                const record = detachedRecord(query, ['kind', 'reply']);
+                if (!record || record.kind !== registryQueryKind || record.reply !== undefined || !plain(query)) return;
+                const reply = Object.getOwnPropertyDescriptor(query, 'reply');
+                if (!reply || !('value' in reply) || !reply.writable || !reply.configurable) return;
+                Object.defineProperty(query, 'reply', { ...reply, value: registry });
+            } catch {
+                registry.bookkeepingFailed = true;
+            }
+        },
+    };
+    creationRegistryObservation.subscribe(registry.responder);
+    return registry;
+}
+function releaseCreationRequest(registry: CreationRegistry, request: CreationRequest): void {
+    try {
+        registry.requests.delete(request);
+        if (registry.requests.size === 0) creationRegistryObservation.unsubscribe(registry.responder);
+    } catch {
+        registry.bookkeepingFailed = true;
+    }
+}
+function isCreationRequest(value: unknown): value is CreationRequest {
+    const record = detachedRecord(value, [
+        'matches',
+        'active',
+        'sourceAttempts',
+        'comparisons',
+        'tokens',
+        'capped',
+        'disabled',
+        'revoked',
+    ]);
+    if (!record || typeof record.matches !== 'function') return false;
+    for (const key of ['active', 'capped', 'disabled', 'revoked']) if (typeof record[key] !== 'boolean') return false;
+    for (const key of ['sourceAttempts', 'comparisons', 'tokens']) {
+        const count = record[key];
+        if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0 || count > 128) return false;
+    }
+    return true;
+}
+export interface FixtureCreationFrame {
+    readonly origin: FixtureOrigin;
+    readonly request: CreationRequest;
+    readonly registry: CreationRegistry;
+    compared: boolean;
+}
+/** Correlation preserves invalid explicit resource presence before normal serialization drops it. */
+function captureCreationOrigin(resourceIdentity: Pick<FixtureIdentity, 'pid' | 'port'> | undefined): FixtureOrigin {
+    const scope = scopes.getStore();
+    const raw = scope ? (typeof scope === 'function' ? scope() : scope) : {};
+    const fallback = { ...resourceIdentity };
+    for (const key of ['pid', 'port'] as const) {
+        const descriptor = Object.getOwnPropertyDescriptor(raw, key);
+        if (
+            descriptor &&
+            (!('value' in descriptor) || (descriptor.value !== undefined && !safeField(key, descriptor.value)))
+        )
+            delete fallback[key];
+    }
+    const selected = { ...fallback, ...copyFields(raw) };
+    const { operationId, requestId: _requestId, action: _action, trigger: _trigger, ...identity } = selected;
+    return Object.freeze(copyFields({ ...identity, ...(operationId ? { originOperationId: operationId } : {}) }));
+}
+/** Admission is separate from ordinary subscriber presence and precedes added clocks. */
+export function reserveFixtureCreationObservation(
+    source: boolean,
+    previous?: FixtureCreationFrame,
+    resourceIdentity?: Pick<FixtureIdentity, 'pid' | 'port'>,
+): FixtureCreationFrame | undefined {
+    let registry: CreationRegistry | undefined;
+    try {
+        registry = discoverCreationRegistry();
+        if (!registry || registry.bookkeepingFailed) return;
+        let available = false;
+        for (const request of registry.requests) {
+            if (!isCreationRequest(request)) {
+                registry.bookkeepingFailed = true;
+                return;
+            }
+            if (!request.active || request.disabled) continue;
+            if (
+                request.tokens < 128 ||
+                (!source && previous?.registry === registry && previous.request === request && !previous.compared)
+            )
+                available = true;
+            else request.capped = true;
+        }
+        if (!available) return;
+        const origin = captureCreationOrigin(resourceIdentity);
+        for (const request of registry.requests) {
+            if (!isCreationRequest(request)) {
+                registry.bookkeepingFailed = true;
+                return;
+            }
+            if (!request.active || request.disabled) continue;
+            try {
+                if (!request.matches(origin)) continue;
+                if (!request.active || request.disabled || registry.bookkeepingFailed) continue;
+                const reuse =
+                    !source &&
+                    previous?.registry === registry &&
+                    previous.request === request &&
+                    !previous.compared &&
+                    sameFixtureOrigin(previous.origin, origin);
+                if (!reuse && request.tokens >= 128) {
+                    request.capped = true;
+                    continue;
+                }
+                if (!reuse) request.tokens++;
+                if (source) request.sourceAttempts++;
+                else request.comparisons++;
+                const frame = reuse ? previous : { origin, request, registry, compared: false };
+                if (!source) frame.compared = true;
+                return frame;
+            } catch {
+                request.disabled = true;
+            }
+        }
+    } catch {
+        if (registry) registry.bookkeepingFailed = true;
+    }
+}
+
+export function fixtureCreationObservationEnabled(): boolean {
+    let registry: CreationRegistry | undefined;
+    try {
+        registry = discoverCreationRegistry();
+        if (!registry || registry.bookkeepingFailed) return false;
+        for (const request of registry.requests) {
+            if (!isCreationRequest(request)) {
+                registry.bookkeepingFailed = true;
+                return false;
+            }
+            if (request.active && !request.disabled) return true;
+        }
+    } catch {
+        if (registry) registry.bookkeepingFailed = true;
+    }
+    return false;
+}
+
+/** Compare only the already-detached, closed scope identity used by admission. */
+export function sameFixtureOrigin(left: FixtureOrigin, right: FixtureOrigin): boolean {
+    return identityKeys.every((key) => left[key] === right[key]);
+}
+
+export function fixtureCreationFrameActive(frame: FixtureCreationFrame): boolean {
+    return !frame.registry.bookkeepingFailed && frame.request.active && !frame.request.disabled;
 }

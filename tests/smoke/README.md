@@ -990,7 +990,7 @@ and unresolved; synthetic interleavings verify diagnostic behavior only.
 The additional first-start observer defaults off. The existing ordinary Linux
 job can admit it for one explicitly authorized, non-forced push transition on
 `fix/chrome-startup-stall` from
-`79bd8801aa3882c20cd01fca5549aea366f12d25`. Admission requires attempt one,
+`1a598a7ca01c4e17535c5c9c98cd4564d6369e77`. Admission requires attempt one,
 the exact repository/ref, consistent event `after`, `GITHUB_SHA`, actual clean
 checkout and commit-tree identity. PR, edited, scheduled, manual, created,
 deleted and rerun events never enable this observer. The gate verifies runtime
@@ -1008,6 +1008,38 @@ snapshot and successful identity validation; a later start is not a substitute.
 The internal `readinessExitReason` distinguishes actual budget exhaustion from
 foreign-listener, terminal-condition and interrupted-poll exits without a new
 clock read or native probe. A fixture failure alone is not proof of that symptom.
+
+The armed preload alone requests the internal creation-identity observer;
+ordinary diagnostic subscribers do not enable it. It observes the selected
+first start's actual creation-time comparison and the same existing proc-stat,
+boot-time and `CLK_TCK` reads. It adds no operating-system read or helper call.
+Six monotonic interval bounds describe those three reads, without claiming an
+atomic snapshot. Private metadata binds to the actual returned root object and
+its saved values and origin. Missing, copied, mutated or inconsistent evidence
+cannot supply a complete source association.
+
+One shared budget admits at most 128 observation frames before added source
+timing or metadata. Failed source attempts consume their reservation. A source
+and its first comparison share one frame; repeated or independent comparisons
+need another. Already admitted work may finish at the cap, while further
+admission stops. This budget never stops production polling. A rollback decision
+immediately stops new creation observation and sampling. The matching waiting-CDP
+END locks the first readiness outcome; the operation terminal is a fallback only
+when readiness never began. Missing readiness END stays incomplete, including
+after a later operation or Close result. Revocation preserves Close/exit receivers
+and admitted pending ownership.
+
+Reached, verifiable comparisons retain numeric expected/observed UTC. A complete
+source association additionally retains the original computed Number, boot
+seconds/start ticks/clock ticks and read bounds. Unreached or unverifiable
+comparisons retain their status without fabricated comparison UTC. Records
+identify the actual branch and whether
+the original upper-bound wall-clock call ran. The original 1,000 ms tolerance,
+`Date.now()` short-circuit, error priority and readiness predicate remain.
+Added timing, metadata or subscriber failures only remove diagnostic evidence;
+they cannot replace the original I/O or comparison result. Producer CPU cost is
+explicitly unmeasured; existing subscriber count/total/max costs remain distinct
+from read intervals. No raw time string, process text, stack or path is retained.
 
 At most six slots run: baseline on the first verified root, then waiting-CDP
 BEGIN-relative 4, 8, 12, 16 and 19 seconds on the gateway monotonic clock.
@@ -1045,8 +1077,27 @@ accounting, not completed device I/O. Neither an absent visible policy nor a
 visible mount root excludes hidden ancestors or Azure host/backend throttling.
 
 The observer caches fixed closed records in memory, at most 64 records/256 KiB
-of serialized UTF-8 including newlines. Success retains selection/cost/discard
-receipts rather than detailed samples. Failure stops new admissions and permits
+of serialized UTF-8 including newlines, with at most 4,096 bytes per record.
+Two existing auxiliary-capacity slots retain the first comparison and the
+first distinct rejected comparison; private invocation identity distinguishes
+them even when timestamps coincide. An initial rejected comparison occupies
+only the first slot. The 36 family, eight cost and 12 auxiliary slots allocate
+at most 56 records without increasing any stream or writer budget.
+Each comparison record carries a closed nested `creation` group; accepted
+comparisons use `complete`, while rejected comparisons use `identity-invalid`.
+The existing `limitations` slot adds an optional closed `creationObservation`
+receipt. Available producer statistics report source attempts, comparisons,
+reserved tokens, cap refusal, diagnostic disable and normal revocation separately,
+with `omitted = comparisons - retained`. Unavailable or inconsistent statistics
+remain explicitly unavailable; retained/omitted then describe only observed cache
+calls, without invented producer counts. Producer CPU remains `unmeasured`.
+First readiness success discards these two comparison details and the bounded
+family/epoch details, retaining existing binding/selection/cost/discard receipts.
+This outcome is separate from subsequent upstream, Close, cleanup and fixture
+results. The parallel legacy wait sampler still retains its ordinary successful
+I/O/PSI/resource records; a later fixture failure can upload those earlier
+records. They cannot stand in for a failed first-start sample.
+Failure stops new admissions and permits
 one static-order flush only after the matching `native-close END` or confirmed
 actual exit. A Close BEGIN is too early: its identity snapshot may still be
 pending before normal shutdown is submitted. A failed Close END is retained as

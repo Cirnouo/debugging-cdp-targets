@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import type {
     ListenerEvidence,
@@ -14,9 +15,16 @@ import type { LaunchContext } from '../domains/control-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import {
     beginFixtureStage,
+    type CreationIdentityFields,
+    emitFixtureCreationDecision,
     emitFixtureEvent,
+    type FixtureCreationFrame,
     type FixtureFields,
+    fixtureCreationFrameActive,
+    fixtureCreationObservationEnabled,
     fixtureHasSubscribers,
+    reserveFixtureCreationObservation,
+    sameFixtureOrigin,
 } from './fixture-diagnostics.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
@@ -283,25 +291,175 @@ export function validateProcessIdentity(
     { newlyLaunched = false } = {},
 ) {
     const root = evidence.root;
-    if (!root?.exists) throw new Error('The target root process is absent.');
-    if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
-        throw new Error('The process executable identity changed.');
-    if (root.sessionId !== evidence.currentSessionId) throw new Error('The process user/session identity changed.');
-    const actual = Date.parse(root.startedAtUtc);
-    const recorded = Date.parse(target.startedAtUtc);
-    if (!Number.isFinite(actual) || !Number.isFinite(recorded))
-        throw new Error('The process creation time is unverifiable.');
-    if (
-        newlyLaunched ? actual < recorded - 1_000 || actual > Date.now() + 1_000 : Math.abs(actual - recorded) > 1_000
-    ) {
-        throw new Error('The process creation time changed; the PID may have been reused.');
+    let actual: number | undefined;
+    let recorded: number | undefined;
+    let upperNow: number | undefined;
+    let branch: CreationIdentityFields['creationBranch'];
+    let failed = true;
+    try {
+        if (!root?.exists) throw new Error('The target root process is absent.');
+        if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
+            throw new Error('The process executable identity changed.');
+        if (root.sessionId !== evidence.currentSessionId) throw new Error('The process user/session identity changed.');
+        actual = Date.parse(root.startedAtUtc);
+        recorded = Date.parse(target.startedAtUtc);
+        if (!Number.isFinite(actual) || !Number.isFinite(recorded)) {
+            branch = 'creation-unverifiable';
+            throw new Error('The process creation time is unverifiable.');
+        }
+        let changed: boolean;
+        if (newlyLaunched) {
+            if (actual < recorded - 1_000) changed = true;
+            else {
+                upperNow = Date.now();
+                changed = actual > upperNow + 1_000;
+            }
+        } else changed = Math.abs(actual - recorded) > 1_000;
+        if (changed) {
+            branch = newlyLaunched
+                ? upperNow === undefined
+                    ? 'new-lower-rejected'
+                    : 'new-upper-rejected'
+                : 'established-delta-rejected';
+            throw new Error('The process creation time changed; the PID may have been reused.');
+        }
+        branch = newlyLaunched ? 'new-accepted' : 'established-accepted';
+        if (
+            target.targetKind === 'chrome' &&
+            process.platform === 'win32' &&
+            (root.productName !== 'Google Chrome' || root.companyName !== 'Google LLC')
+        ) {
+            throw new Error('The target executable is not identified as Google Chrome.');
+        }
+        failed = false;
+    } finally {
+        if (fixtureCreationObservationEnabled()) {
+            try {
+                observeCreationDecision(root, newlyLaunched, actual, recorded, upperNow, branch, failed);
+            } catch {
+                /* Observation must never replace an identity decision. */
+            }
+        }
     }
+}
+
+type CreationCarrier = {
+    frame: FixtureCreationFrame;
+    pid: number;
+    port: number;
+    fields?: CreationIdentityFields;
+    invalid?: boolean;
+    clipped?: number;
+};
+type BoundCreation = CreationCarrier & {
+    raw: string;
+    clipped: number;
+    executablePath: string;
+    sessionId: number;
+};
+const creationSources = new WeakMap<RootEvidence, BoundCreation>();
+function boundRootMatches(root: RootEvidence, source: BoundCreation): boolean {
+    const prototype: unknown = Object.getPrototypeOf(root);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    for (const [key, value] of [
+        ['exists', true],
+        ['startedAtUtc', source.raw],
+        ['executablePath', source.executablePath],
+        ['sessionId', source.sessionId],
+    ]) {
+        if (typeof key !== 'string') return false;
+        const descriptor = Object.getOwnPropertyDescriptor(root, key);
+        if (!descriptor || !('value' in descriptor) || descriptor.value !== value) return false;
+    }
+    return true;
+}
+function observeCreationDecision(
+    root: RootEvidence,
+    newlyLaunched: boolean,
+    actual: number | undefined,
+    recorded: number | undefined,
+    upperNow: number | undefined,
+    branch: CreationIdentityFields['creationBranch'],
+    failed: boolean,
+) {
+    const source = creationSources.get(root);
+    const frame = reserveFixtureCreationObservation(
+        false,
+        source?.frame,
+        source ? { pid: source.pid, port: source.port } : undefined,
+    );
+    if (!frame) return;
+    const sameOrigin = source && sameFixtureOrigin(frame.origin, source.frame.origin);
+    let sourceStatus: CreationIdentityFields['creationSourceStatus'] = source ? 'unverifiable' : 'missing';
     if (
-        target.targetKind === 'chrome' &&
-        process.platform === 'win32' &&
-        (root.productName !== 'Google Chrome' || root.companyName !== 'Google LLC')
-    ) {
-        throw new Error('The target executable is not identified as Google Chrome.');
+        source &&
+        sameOrigin &&
+        source.pid === frame.origin.pid &&
+        source.port === frame.origin.port &&
+        !source.invalid &&
+        source.fields &&
+        boundRootMatches(root, source) &&
+        (actual === undefined || actual === source.clipped)
+    )
+        sourceStatus = 'complete';
+    const comparisonStatus =
+        branch === undefined ? 'not-reached' : branch === 'creation-unverifiable' ? 'unverifiable' : 'reached';
+    if (!fixtureCreationFrameActive(frame)) return;
+    const fields: FixtureFields = {
+        ...frame.origin,
+        phase: 'process-identity',
+        outcome: failed ? 'rejected' : 'observed',
+        creationNewlyLaunched: newlyLaunched,
+        creationToleranceMs: 1_000,
+        creationSourceStatus: sourceStatus,
+        creationComparisonStatus: comparisonStatus,
+        creationUpperNowStatus: upperNow === undefined ? 'not-evaluated' : 'read',
+        ...(branch === undefined ? {} : { creationBranch: branch }),
+        ...(comparisonStatus === 'reached' && recorded !== undefined && actual !== undefined
+            ? { creationExpectedUtcMs: recorded, creationObservedUtcMs: actual }
+            : {}),
+        ...(upperNow === undefined ? {} : { creationUpperNowUtcMs: upperNow }),
+        ...(sourceStatus === 'complete' ? source?.fields : {}),
+    };
+    emitFixtureCreationDecision(frame, fields);
+}
+function creationClock(carrier: CreationCarrier): number | undefined {
+    try {
+        return performance.now();
+    } catch {
+        carrier.invalid = true;
+        return;
+    }
+}
+async function creationRead<T>(
+    carrier: CreationCarrier | undefined,
+    prefix: 'Stat' | 'Boot' | 'Clk',
+    job: () => Promise<T>,
+): Promise<T> {
+    if (!carrier) return job();
+    const started = creationClock(carrier);
+    try {
+        return await job();
+    } finally {
+        const ended = creationClock(carrier);
+        try {
+            if (
+                started !== undefined &&
+                ended !== undefined &&
+                Number.isFinite(started) &&
+                Number.isFinite(ended) &&
+                started >= 0 &&
+                ended >= started
+            ) {
+                carrier.fields = {
+                    ...carrier.fields,
+                    [`creation${prefix}ReadStartedMs`]: started,
+                    [`creation${prefix}ReadEndedMs`]: ended,
+                };
+            } else carrier.invalid = true;
+        } catch {
+            carrier.invalid = true;
+        }
     }
 }
 
@@ -426,11 +584,12 @@ async function linuxCreationTime(
     pid: number,
     execute: ProcessExecutor,
     readText: (file: string) => Promise<string>,
+    carrier?: CreationCarrier,
 ): Promise<string> {
     const [stat, boot, clock] = await Promise.all([
-        observeNativeFile('proc-stat', () => readText(`/proc/${pid}/stat`)),
-        observeNativeFile('proc-boot', () => readText('/proc/stat')),
-        observeNativeCommand('getconf', execute, 'getconf', ['CLK_TCK']),
+        creationRead(carrier, 'Stat', () => observeNativeFile('proc-stat', () => readText(`/proc/${pid}/stat`))),
+        creationRead(carrier, 'Boot', () => observeNativeFile('proc-boot', () => readText('/proc/stat'))),
+        creationRead(carrier, 'Clk', () => observeNativeCommand('getconf', execute, 'getconf', ['CLK_TCK'])),
     ]);
     // comm may contain spaces and closing parentheses; fields resume after its last ') '.
     const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
@@ -458,8 +617,23 @@ async function linuxCreationTime(
         throw new Error('The Linux process creation evidence is unverifiable.');
     }
     // ps lstart truncates startTicks / CLK_TCK; retain the kernel's fractional seconds.
-    const started = new Date(bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000);
+    const computedNumberMs = bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000;
+    const started = new Date(computedNumberMs);
     if (!Number.isFinite(started.getTime())) throw new Error('The Linux process creation evidence is unverifiable.');
+    if (carrier) {
+        try {
+            carrier.clipped = started.getTime();
+            carrier.fields = {
+                ...carrier.fields,
+                creationBootSeconds: bootSeconds,
+                creationStartTicks: startTicks,
+                creationClkTck: ticksPerSecond,
+                creationComputedNumberMs: computedNumberMs,
+            };
+        } catch {
+            carrier.invalid = true;
+        }
+    }
     if (fixtureHasSubscribers()) {
         // The kernel's /proc stat field 3 reports a fixed task state:
         // https://docs.kernel.org/filesystems/proc.html#process-specific-subdirectories
@@ -609,9 +783,19 @@ export async function unixSnapshot(
             : [];
     });
     const root = rows.find((row) => row.pid === pid);
+    const frame =
+        root && platform === 'linux' && fixtureCreationObservationEnabled()
+            ? reserveFixtureCreationObservation(true, undefined, { pid, port })
+            : undefined;
+    const carrier: CreationCarrier | undefined = frame ? { frame, pid, port } : undefined;
     const rootStartedAt =
         root && platform === 'linux'
-            ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile(file, 'utf8')))
+            ? await linuxCreationTime(
+                  pid,
+                  execute,
+                  dependencies.readText ?? ((file) => readFile(file, 'utf8')),
+                  carrier,
+              )
             : root?.started;
     const owned = new Set(root ? [pid] : []);
     for (let changed = true; changed; ) {
@@ -649,7 +833,7 @@ export async function unixSnapshot(
             listeners.push({ localAddress: address.replace(/^\[|\]$/g, ''), owningProcess: owner });
     }
     if (platform === 'darwin' && fixtureHasSubscribers()) emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned);
-    return {
+    const evidence: ProcessEvidence = {
         root: root
             ? {
                   exists: true,
@@ -672,6 +856,20 @@ export async function unixSnapshot(
         processIds: [...owned],
         listeners,
     };
+    if (carrier && carrier.clipped !== undefined && root && evidence.root.exists) {
+        try {
+            creationSources.set(evidence.root, {
+                ...carrier,
+                raw: evidence.root.startedAtUtc,
+                clipped: carrier.clipped,
+                executablePath: evidence.root.executablePath,
+                sessionId: evidence.root.sessionId,
+            });
+        } catch {
+            /* Invalid diagnostic metadata cannot replace the snapshot. */
+        }
+    }
+    return evidence;
 }
 
 export function createPlatformAdapter(

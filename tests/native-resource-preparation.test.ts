@@ -99,6 +99,15 @@ test('real native compilation accepts a TEMP parent reached through its 8.3 alia
         assert.ok(typeof receipt === 'object' && receipt !== null);
         assert.ok('compilerStarts' in receipt && receipt.compilerStarts === 1);
         assert.ok('cleaned' in receipt && receipt.cleaned === true);
+        assert.ok('compilerTemporaryFilesOwned' in receipt && receipt.compilerTemporaryFilesOwned === true);
+        assert.ok('compilerTemporaryFiles' in receipt);
+        const temporaryFiles = receipt.compilerTemporaryFiles;
+        assert.ok(typeof temporaryFiles === 'object' && temporaryFiles !== null);
+        for (const extension of ['tmp', 'cmdline', 'out', 'err']) {
+            assert.ok(extension in temporaryFiles);
+            const count: unknown = Reflect.get(temporaryFiles, extension);
+            assert.ok(typeof count === 'number' && Number.isSafeInteger(count) && count > 0);
+        }
     } finally {
         // An uncertain child/compiler failure must not recursively delete retained output writers.
         await rmdir(parent).catch((error: unknown) => {

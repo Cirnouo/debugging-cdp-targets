@@ -22,7 +22,7 @@ function candidate() {
             runnerOs: 'Linux',
         },
         event: {
-            before: '79bd8801aa3882c20cd01fca5549aea366f12d25',
+            before: '1a598a7ca01c4e17535c5c9c98cd4564d6369e77',
             after: sha,
             ref: 'refs/heads/fix/chrome-startup-stall',
             created: false,
@@ -53,6 +53,7 @@ test('event type, repository, branch, attempt, SHA, tree and worktree mismatches
         ['context', 'ref', 'refs/pull/46/merge'],
         ['context', 'sha', 'f'.repeat(40)],
         ['event', 'before', 'f'.repeat(40)],
+        ['event', 'before', '79bd8801aa3882c20cd01fca5549aea366f12d25'],
         ['event', 'after', 'f'.repeat(40)],
         ['event', 'ref', 'refs/heads/main'],
         ['event', 'created', true],

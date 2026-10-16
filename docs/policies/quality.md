@@ -351,6 +351,20 @@ confirmed. No failure-edge flush, postfailure sample, new native wait or forced
 shutdown is permitted. All static record/metadata/read and writer budgets,
 closed projections and partial-evidence rules are documented in the
 [capture procedure](../../tests/smoke/README.md#failed-first-start-completed-io-capture).
+Only this armed preload requests the internal creation-identity observer.
+It binds numeric evidence from the actual creation-time inputs/comparison to
+the same root object and origin, without additional OS reads or changing the
+1,000 ms tolerance, wall-clock short-circuit or error priority. A shared 128-frame
+budget reserves before added source timing/metadata and charges failed source
+attempts; two existing auxiliary slots cache first/distinct-first-rejected
+comparisons. Diagnostic faults cannot replace native outcomes. A rollback decision
+stops new observation immediately; matching readiness END locks the outcome, and
+missing END remains incomplete. Operation terminal fallback applies only when
+readiness never began. Revocation preserves pending work and Close/exit receivers.
+Closed comparison records and optional producer statistics distinguish unavailable
+evidence from zero counts; producer CPU remains unmeasured. Its success discard
+does not suppress the parallel legacy wait
+sampler or turn an entire later failure artifact into failure-only sample data.
 Armed streams reserve capacity inside the same 2,000-record/1 MiB total and five
 filenames; ordinary quota exhaustion does not suppress the reserved classes,
 but always remains incomplete. Every marker and fallback counts against the

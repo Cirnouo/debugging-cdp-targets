@@ -4131,6 +4131,7 @@ import { channel } from "node:diagnostics_channel";
 import { performance as performance2 } from "node:perf_hooks";
 var FIXTURE_DIAGNOSTICS_CHANNEL = "debugging-cdp-targets.fixture";
 var observation = channel(FIXTURE_DIAGNOSTICS_CHANNEL);
+var creationRegistryObservation = channel("debugging-cdp-targets.fixture.creation-observation-registry");
 var stages = [
   "operation",
   "operation-phase",
@@ -4152,6 +4153,7 @@ var stages = [
   "native-command",
   "native-file",
   "native-snapshot",
+  "process-creation-identity",
   "data-directory-acquire",
   "data-directory-release",
   "data-directory-cleanup",
@@ -4441,6 +4443,57 @@ var signals = [
   "SIGLOST",
   "SIGINFO"
 ];
+var creationSourceKeys = [
+  "creationBootSeconds",
+  "creationStartTicks",
+  "creationClkTck",
+  "creationComputedNumberMs",
+  "creationStatReadStartedMs",
+  "creationStatReadEndedMs",
+  "creationBootReadStartedMs",
+  "creationBootReadEndedMs",
+  "creationClkReadStartedMs",
+  "creationClkReadEndedMs"
+];
+var creationKeys = [
+  ...creationSourceKeys,
+  "creationNewlyLaunched",
+  "creationBranch",
+  "creationToleranceMs",
+  "creationExpectedUtcMs",
+  "creationObservedUtcMs",
+  "creationUpperNowUtcMs",
+  "creationUpperNowStatus",
+  "creationSourceStatus",
+  "creationComparisonStatus"
+];
+function utc(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && Math.abs(value) <= 864e13;
+}
+function safeCreationField(key, value) {
+  if (key === "creationNewlyLaunched") return typeof value === "boolean";
+  if (key === "creationToleranceMs") return value === 1e3;
+  if (key === "creationBranch")
+    return member(
+      [
+        "new-lower-rejected",
+        "new-upper-rejected",
+        "new-accepted",
+        "established-delta-rejected",
+        "established-accepted",
+        "creation-unverifiable"
+      ],
+      value
+    );
+  if (key === "creationUpperNowStatus") return member(["read", "not-evaluated"], value);
+  if (key === "creationSourceStatus") return member(["complete", "missing", "unverifiable"], value);
+  if (key === "creationComparisonStatus") return member(["reached", "unverifiable", "not-reached"], value);
+  if (["creationExpectedUtcMs", "creationObservedUtcMs", "creationUpperNowUtcMs"].includes(key)) return utc(value);
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  if (key === "creationComputedNumberMs") return Math.abs(value) <= 864e13;
+  if (key.endsWith("Ms")) return value >= 0;
+  return Number.isSafeInteger(value) && value >= (key === "creationClkTck" ? 1 : 0);
+}
 var scopes = new AsyncLocalStorage();
 var identityKeys = [
   "entryId",
@@ -4456,6 +4509,7 @@ var identityKeys = [
 ];
 var fieldKeys = [
   ...identityKeys,
+  ...creationKeys,
   "outcome",
   "durationMs",
   "elapsedMs",
@@ -4504,7 +4558,26 @@ var eventKeys = [...fieldKeys, "stage", "event", "timestampMs", "error"];
 function member(values, value) {
   return typeof value === "string" && values.some((selected) => selected === value);
 }
+function plain(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === null || prototype === Object.prototype;
+}
+function detachedRecord(value, keys2) {
+  if (!plain(value)) return;
+  const result = {};
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.length > keys2.length) return;
+  for (const key of ownKeys) {
+    if (typeof key !== "string" || !keys2.includes(key)) return;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) return;
+    result[key] = descriptor.value;
+  }
+  return result;
+}
 function safeField(key, value) {
+  if (creationKeys.some((selected) => selected === key)) return safeCreationField(key, value);
   if (["entryId", "operationId", "originOperationId", "requestId", "connectionId", "sessionId"].includes(key))
     return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
   if (key === "action") return member(actions, value);
@@ -4627,11 +4700,17 @@ function runFixtureCleanup(identity, job) {
   return scopes.run({ ...selected, trigger: "gateway-disconnect" }, job);
 }
 function emitFixtureEvent(stage, event, fields3 = {}, error2) {
+  publishFixtureEvent(stage, event, fields3, error2);
+}
+function publishFixtureEvent(stage, event, fields3, error2, creationFrame) {
   if (!observation.hasSubscribers) return;
   let payload;
   try {
     if (!member(stages, stage) || !member(["begin", "end", "decision"], event)) return;
-    const metadata = copyFields({ ...current(), ...fields3 });
+    const scoped = current();
+    if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
+    const metadata = copyFields({ ...scoped, ...fields3 });
+    if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
     payload = Object.freeze({
       ...metadata,
       stage,
@@ -4644,7 +4723,12 @@ function emitFixtureEvent(stage, event, fields3 = {}, error2) {
   } catch {
     return;
   }
+  if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
   observation.publish(payload);
+}
+function emitFixtureCreationDecision(frame, fields3) {
+  if (!fixtureCreationFrameActive(frame)) return;
+  publishFixtureEvent("process-creation-identity", "decision", fields3, void 0, frame);
 }
 var unobservedFinish = () => {
 };
@@ -4674,6 +4758,124 @@ function beginFixtureStage(stage, fields3 = {}) {
     );
   };
 }
+var registryQueryKind = "creation-observation-registry";
+function isCreationRegistry(value) {
+  const record2 = detachedRecord(value, ["requests", "bookkeepingFailed", "responder"]);
+  return !!record2 && record2.requests instanceof Set && typeof record2.bookkeepingFailed === "boolean" && typeof record2.responder === "function";
+}
+function discoverCreationRegistry() {
+  if (!creationRegistryObservation.hasSubscribers) return;
+  const query = { kind: registryQueryKind, reply: void 0 };
+  try {
+    creationRegistryObservation.publish(query);
+    const reply = Object.getOwnPropertyDescriptor(query, "reply");
+    if (reply && "value" in reply && isCreationRegistry(reply.value)) return reply.value;
+  } catch {
+    const reply = Object.getOwnPropertyDescriptor(query, "reply");
+    if (reply && "value" in reply && isCreationRegistry(reply.value)) reply.value.bookkeepingFailed = true;
+  }
+}
+function isCreationRequest(value) {
+  const record2 = detachedRecord(value, [
+    "matches",
+    "active",
+    "sourceAttempts",
+    "comparisons",
+    "tokens",
+    "capped",
+    "disabled",
+    "revoked"
+  ]);
+  if (!record2 || typeof record2.matches !== "function") return false;
+  for (const key of ["active", "capped", "disabled", "revoked"]) if (typeof record2[key] !== "boolean") return false;
+  for (const key of ["sourceAttempts", "comparisons", "tokens"]) {
+    const count = record2[key];
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > 128) return false;
+  }
+  return true;
+}
+function captureCreationOrigin(resourceIdentity) {
+  const scope = scopes.getStore();
+  const raw = scope ? typeof scope === "function" ? scope() : scope : {};
+  const fallback = { ...resourceIdentity };
+  for (const key of ["pid", "port"]) {
+    const descriptor = Object.getOwnPropertyDescriptor(raw, key);
+    if (descriptor && (!("value" in descriptor) || descriptor.value !== void 0 && !safeField(key, descriptor.value)))
+      delete fallback[key];
+  }
+  const selected = { ...fallback, ...copyFields(raw) };
+  const { operationId, requestId: _requestId, action: _action, trigger: _trigger, ...identity } = selected;
+  return Object.freeze(copyFields({ ...identity, ...operationId ? { originOperationId: operationId } : {} }));
+}
+function reserveFixtureCreationObservation(source, previous, resourceIdentity) {
+  let registry2;
+  try {
+    registry2 = discoverCreationRegistry();
+    if (!registry2 || registry2.bookkeepingFailed) return;
+    let available = false;
+    for (const request of registry2.requests) {
+      if (!isCreationRequest(request)) {
+        registry2.bookkeepingFailed = true;
+        return;
+      }
+      if (!request.active || request.disabled) continue;
+      if (request.tokens < 128 || !source && previous?.registry === registry2 && previous.request === request && !previous.compared)
+        available = true;
+      else request.capped = true;
+    }
+    if (!available) return;
+    const origin = captureCreationOrigin(resourceIdentity);
+    for (const request of registry2.requests) {
+      if (!isCreationRequest(request)) {
+        registry2.bookkeepingFailed = true;
+        return;
+      }
+      if (!request.active || request.disabled) continue;
+      try {
+        if (!request.matches(origin)) continue;
+        if (!request.active || request.disabled || registry2.bookkeepingFailed) continue;
+        const reuse = !source && previous?.registry === registry2 && previous.request === request && !previous.compared && sameFixtureOrigin(previous.origin, origin);
+        if (!reuse && request.tokens >= 128) {
+          request.capped = true;
+          continue;
+        }
+        if (!reuse) request.tokens++;
+        if (source) request.sourceAttempts++;
+        else request.comparisons++;
+        const frame = reuse ? previous : { origin, request, registry: registry2, compared: false };
+        if (!source) frame.compared = true;
+        return frame;
+      } catch {
+        request.disabled = true;
+      }
+    }
+  } catch {
+    if (registry2) registry2.bookkeepingFailed = true;
+  }
+}
+function fixtureCreationObservationEnabled() {
+  let registry2;
+  try {
+    registry2 = discoverCreationRegistry();
+    if (!registry2 || registry2.bookkeepingFailed) return false;
+    for (const request of registry2.requests) {
+      if (!isCreationRequest(request)) {
+        registry2.bookkeepingFailed = true;
+        return false;
+      }
+      if (request.active && !request.disabled) return true;
+    }
+  } catch {
+    if (registry2) registry2.bookkeepingFailed = true;
+  }
+  return false;
+}
+function sameFixtureOrigin(left, right) {
+  return identityKeys.every((key) => left[key] === right[key]);
+}
+function fixtureCreationFrameActive(frame) {
+  return !frame.registry.bookkeepingFailed && frame.request.active && !frame.request.disabled;
+}
 
 // src/adapters/platform-process.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -4681,6 +4883,7 @@ init_define_DCT_TOOL_CATALOG();
 import { spawn as spawn2 } from "node:child_process";
 import { readFile, readlink, stat } from "node:fs/promises";
 import path2 from "node:path";
+import { performance as performance3 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/adapters/windows-launch.ts
@@ -5241,19 +5444,120 @@ function normalizePath(value) {
 }
 function validateProcessIdentity(evidence, target, { newlyLaunched = false } = {}) {
   const root = evidence.root;
-  if (!root?.exists) throw new Error("The target root process is absent.");
-  if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
-    throw new Error("The process executable identity changed.");
-  if (root.sessionId !== evidence.currentSessionId) throw new Error("The process user/session identity changed.");
-  const actual = Date.parse(root.startedAtUtc);
-  const recorded = Date.parse(target.startedAtUtc);
-  if (!Number.isFinite(actual) || !Number.isFinite(recorded))
-    throw new Error("The process creation time is unverifiable.");
-  if (newlyLaunched ? actual < recorded - 1e3 || actual > Date.now() + 1e3 : Math.abs(actual - recorded) > 1e3) {
-    throw new Error("The process creation time changed; the PID may have been reused.");
+  let actual;
+  let recorded;
+  let upperNow;
+  let branch;
+  let failed = true;
+  try {
+    if (!root?.exists) throw new Error("The target root process is absent.");
+    if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
+      throw new Error("The process executable identity changed.");
+    if (root.sessionId !== evidence.currentSessionId) throw new Error("The process user/session identity changed.");
+    actual = Date.parse(root.startedAtUtc);
+    recorded = Date.parse(target.startedAtUtc);
+    if (!Number.isFinite(actual) || !Number.isFinite(recorded)) {
+      branch = "creation-unverifiable";
+      throw new Error("The process creation time is unverifiable.");
+    }
+    let changed;
+    if (newlyLaunched) {
+      if (actual < recorded - 1e3) changed = true;
+      else {
+        upperNow = Date.now();
+        changed = actual > upperNow + 1e3;
+      }
+    } else changed = Math.abs(actual - recorded) > 1e3;
+    if (changed) {
+      branch = newlyLaunched ? upperNow === void 0 ? "new-lower-rejected" : "new-upper-rejected" : "established-delta-rejected";
+      throw new Error("The process creation time changed; the PID may have been reused.");
+    }
+    branch = newlyLaunched ? "new-accepted" : "established-accepted";
+    if (target.targetKind === "chrome" && process.platform === "win32" && (root.productName !== "Google Chrome" || root.companyName !== "Google LLC")) {
+      throw new Error("The target executable is not identified as Google Chrome.");
+    }
+    failed = false;
+  } finally {
+    if (fixtureCreationObservationEnabled()) {
+      try {
+        observeCreationDecision(root, newlyLaunched, actual, recorded, upperNow, branch, failed);
+      } catch {
+      }
+    }
   }
-  if (target.targetKind === "chrome" && process.platform === "win32" && (root.productName !== "Google Chrome" || root.companyName !== "Google LLC")) {
-    throw new Error("The target executable is not identified as Google Chrome.");
+}
+var creationSources = /* @__PURE__ */ new WeakMap();
+function boundRootMatches(root, source) {
+  const prototype = Object.getPrototypeOf(root);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  for (const [key, value] of [
+    ["exists", true],
+    ["startedAtUtc", source.raw],
+    ["executablePath", source.executablePath],
+    ["sessionId", source.sessionId]
+  ]) {
+    if (typeof key !== "string") return false;
+    const descriptor = Object.getOwnPropertyDescriptor(root, key);
+    if (!descriptor || !("value" in descriptor) || descriptor.value !== value) return false;
+  }
+  return true;
+}
+function observeCreationDecision(root, newlyLaunched, actual, recorded, upperNow, branch, failed) {
+  const source = creationSources.get(root);
+  const frame = reserveFixtureCreationObservation(
+    false,
+    source?.frame,
+    source ? { pid: source.pid, port: source.port } : void 0
+  );
+  if (!frame) return;
+  const sameOrigin = source && sameFixtureOrigin(frame.origin, source.frame.origin);
+  let sourceStatus = source ? "unverifiable" : "missing";
+  if (source && sameOrigin && source.pid === frame.origin.pid && source.port === frame.origin.port && !source.invalid && source.fields && boundRootMatches(root, source) && (actual === void 0 || actual === source.clipped))
+    sourceStatus = "complete";
+  const comparisonStatus = branch === void 0 ? "not-reached" : branch === "creation-unverifiable" ? "unverifiable" : "reached";
+  if (!fixtureCreationFrameActive(frame)) return;
+  const fields3 = {
+    ...frame.origin,
+    phase: "process-identity",
+    outcome: failed ? "rejected" : "observed",
+    creationNewlyLaunched: newlyLaunched,
+    creationToleranceMs: 1e3,
+    creationSourceStatus: sourceStatus,
+    creationComparisonStatus: comparisonStatus,
+    creationUpperNowStatus: upperNow === void 0 ? "not-evaluated" : "read",
+    ...branch === void 0 ? {} : { creationBranch: branch },
+    ...comparisonStatus === "reached" && recorded !== void 0 && actual !== void 0 ? { creationExpectedUtcMs: recorded, creationObservedUtcMs: actual } : {},
+    ...upperNow === void 0 ? {} : { creationUpperNowUtcMs: upperNow },
+    ...sourceStatus === "complete" ? source?.fields : {}
+  };
+  emitFixtureCreationDecision(frame, fields3);
+}
+function creationClock(carrier) {
+  try {
+    return performance3.now();
+  } catch {
+    carrier.invalid = true;
+    return;
+  }
+}
+async function creationRead(carrier, prefix, job) {
+  if (!carrier) return job();
+  const started = creationClock(carrier);
+  try {
+    return await job();
+  } finally {
+    const ended = creationClock(carrier);
+    try {
+      if (started !== void 0 && ended !== void 0 && Number.isFinite(started) && Number.isFinite(ended) && started >= 0 && ended >= started) {
+        carrier.fields = {
+          ...carrier.fields,
+          [`creation${prefix}ReadStartedMs`]: started,
+          [`creation${prefix}ReadEndedMs`]: ended
+        };
+      } else carrier.invalid = true;
+    } catch {
+      carrier.invalid = true;
+    }
   }
 }
 async function resolveUnixExecutable({
@@ -5342,11 +5646,11 @@ async function resolveUnixExecutable({
   }
   return executable;
 }
-async function linuxCreationTime(pid, execute, readText) {
+async function linuxCreationTime(pid, execute, readText, carrier) {
   const [stat2, boot, clock] = await Promise.all([
-    observeNativeFile("proc-stat", () => readText(`/proc/${pid}/stat`)),
-    observeNativeFile("proc-boot", () => readText("/proc/stat")),
-    observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"])
+    creationRead(carrier, "Stat", () => observeNativeFile("proc-stat", () => readText(`/proc/${pid}/stat`))),
+    creationRead(carrier, "Boot", () => observeNativeFile("proc-boot", () => readText("/proc/stat"))),
+    creationRead(carrier, "Clk", () => observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"]))
   ]);
   const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
   const processFields = processStat?.[2]?.split(/\s+/);
@@ -5360,8 +5664,23 @@ async function linuxCreationTime(pid, execute, readText) {
     emitFixtureEvent("native-file", "decision", { command: "proc-stat", pid, valid: false });
     throw new Error("The Linux process creation evidence is unverifiable.");
   }
-  const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
+  const computedNumberMs = bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3;
+  const started = new Date(computedNumberMs);
   if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
+  if (carrier) {
+    try {
+      carrier.clipped = started.getTime();
+      carrier.fields = {
+        ...carrier.fields,
+        creationBootSeconds: bootSeconds,
+        creationStartTicks: startTicks,
+        creationClkTck: ticksPerSecond,
+        creationComputedNumberMs: computedNumberMs
+      };
+    } catch {
+      carrier.invalid = true;
+    }
+  }
   if (fixtureHasSubscribers()) {
     const states = {
       R: "running",
@@ -5473,7 +5792,14 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     ] : [];
   });
   const root = rows.find((row) => row.pid === pid);
-  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile(file, "utf8"))) : root?.started;
+  const frame = root && platform === "linux" && fixtureCreationObservationEnabled() ? reserveFixtureCreationObservation(true, void 0, { pid, port }) : void 0;
+  const carrier = frame ? { frame, pid, port } : void 0;
+  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(
+    pid,
+    execute,
+    dependencies.readText ?? ((file) => readFile(file, "utf8")),
+    carrier
+  ) : root?.started;
   const owned = new Set(root ? [pid] : []);
   for (let changed = true; changed; ) {
     changed = false;
@@ -5503,7 +5829,7 @@ async function unixSnapshot(pid, port, dependencies = {}) {
       listeners.push({ localAddress: address.replace(/^\[|\]$/g, ""), owningProcess: owner });
   }
   if (platform === "darwin" && fixtureHasSubscribers()) emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned);
-  return {
+  const evidence = {
     root: root ? {
       exists: true,
       executablePath: await resolveUnixExecutable({
@@ -5522,6 +5848,19 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     processIds: [...owned],
     listeners
   };
+  if (carrier && carrier.clipped !== void 0 && root && evidence.root.exists) {
+    try {
+      creationSources.set(evidence.root, {
+        ...carrier,
+        raw: evidence.root.startedAtUtc,
+        clipped: carrier.clipped,
+        executablePath: evidence.root.executablePath,
+        sessionId: evidence.root.sessionId
+      });
+    } catch {
+    }
+  }
+  return evidence;
 }
 function createPlatformAdapter(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
@@ -41681,7 +42020,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { realpath as realpath4 } from "node:fs/promises";
 import net from "node:net";
 import path7 from "node:path";
-import { performance as performance3 } from "node:perf_hooks";
+import { performance as performance4 } from "node:perf_hooks";
 
 // src/domains/cdp-target.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -42317,12 +42656,12 @@ function createTargetHost(dependencies = {}) {
           port,
           budgetMs: STARTUP_TIMEOUT_MS
         });
-        const observedAt = fixtureHasSubscribers() ? performance3.now() : void 0;
+        const observedAt = fixtureHasSubscribers() ? performance4.now() : void 0;
         let attempt = 0;
         let readinessExitReason = "budget-exhausted";
         for (let readinessElapsed = io.now() - launchedAt; readinessElapsed < STARTUP_TIMEOUT_MS; readinessElapsed = io.now() - launchedAt) {
           attempt += 1;
-          const elapsedMs = observedAt !== void 0 && fixtureHasSubscribers() ? Math.max(0, performance3.now() - observedAt) : void 0;
+          const elapsedMs = observedAt !== void 0 && fixtureHasSubscribers() ? Math.max(0, performance4.now() - observedAt) : void 0;
           const attemptFields = {
             phase: "attempt",
             pid: processId,
