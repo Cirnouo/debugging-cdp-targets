@@ -990,12 +990,19 @@ and unresolved; synthetic interleavings verify diagnostic behavior only.
 The additional first-start observer defaults off. The existing ordinary Linux
 job can admit it for one explicitly authorized, non-forced push transition on
 `fix/chrome-startup-stall` from
-`1a598a7ca01c4e17535c5c9c98cd4564d6369e77`. Admission requires attempt one,
-the exact repository/ref, consistent event `after`, `GITHUB_SHA`, actual clean
-checkout and commit-tree identity. PR, edited, scheduled, manual, created,
-deleted and rerun events never enable this observer. The gate verifies runtime
-identity; the human approval of the specific new head/tree is independently
-recorded before the one push. It is not a persistent global consumption lock.
+`d3d0bde698f6b0654245a285144451cbfc928957`. The historical transition from
+`1a598a7ca01c4e17535c5c9c98cd4564d6369e77` to that `d3` commit has already
+consumed its opportunity. Before any separately authorized future publication,
+the actual remote branch ref must still equal that exact `d3` commit; mere
+fast-forward compatibility is insufficient. Any changed remote ref stops
+publication pending review and rebinding of the exact transition.
+Admission requires attempt one, the exact repository/ref, consistent event
+`after`, `GITHUB_SHA`, actual clean checkout and commit-tree identity.
+PR, edited, scheduled, manual, created, deleted and rerun events never enable
+this observer. This gate verifies CI event and checkout identity; production
+Linux child identity is independently authorized by its native interval checks.
+Human approval of the specific new head/tree is independently recorded before
+the one push. The gate is not a persistent global consumption lock.
 Do not dispatch or rerun CI to fill a quota or continue until a failure occurs.
 Ordinary PR checks and both ordinary smoke flows remain required.
 
@@ -1010,13 +1017,22 @@ foreign-listener, terminal-condition and interrupted-poll exits without a new
 clock read or native probe. A fixture failure alone is not proof of that symptom.
 
 The armed preload alone requests the internal creation-identity observer;
-ordinary diagnostic subscribers do not enable it. It observes the selected
-first start's actual creation-time comparison and the same existing proc-stat,
-boot-time and `CLK_TCK` reads. It adds no operating-system read or helper call.
-Six monotonic interval bounds describe those three reads, without claiming an
-atomic snapshot. Private metadata binds to the actual returned root object and
-its saved values and origin. Missing, copied, mutated or inconsistent evidence
-cannot supply a complete source association.
+ordinary diagnostic subscribers do not enable it. The standalone legacy scalar
+observer and its tests retain the creation-time comparison and source-association
+guarantees described below. Current production Linux child authorization uses
+conservative birth intervals and UTC/boot-clock calibration; this existing closed
+scalar diagnostic schema has no complete interval/calibration comparison fields.
+Complete comparison evidence for the current production interval decision is
+therefore unavailable, and legacy scalar records cannot represent that decision.
+This amendment adds no diagnostic fields or operating-system reads.
+
+In the standalone legacy scalar path, observation covers the selected first
+start's actual creation-time comparison and the same existing proc-stat,
+boot-time and `CLK_TCK` reads, with no additional operating-system read or helper
+call. Six monotonic interval bounds describe those three reads, without claiming
+an atomic snapshot. Private metadata binds to the actual returned root object
+and its saved values and origin. Missing, copied, mutated or inconsistent
+evidence cannot supply a complete source association.
 
 One shared budget admits at most 128 observation frames before added source
 timing or metadata. Failed source attempts consume their reservation. A source
@@ -1029,13 +1045,14 @@ when readiness never began. Missing readiness END stays incomplete, including
 after a later operation or Close result. Revocation preserves Close/exit receivers
 and admitted pending ownership.
 
-Reached, verifiable comparisons retain numeric expected/observed UTC. A complete
-source association additionally retains the original computed Number, boot
-seconds/start ticks/clock ticks and read bounds. Unreached or unverifiable
-comparisons retain their status without fabricated comparison UTC. Records
+Reached, verifiable legacy scalar comparisons retain numeric expected/observed
+UTC. A complete source association additionally retains the original computed
+Number, boot seconds/start ticks/clock ticks and read bounds. Unreached or
+unverifiable comparisons retain their status without fabricated comparison UTC. Records
 identify the actual branch and whether
-the original upper-bound wall-clock call ran. The original 1,000 ms tolerance,
-`Date.now()` short-circuit, error priority and readiness predicate remain.
+the original upper-bound wall-clock call ran. The standalone legacy path
+preserves its 1,000 ms tolerance, `Date.now()` short-circuit and error priority. Current production interval checks
+retain the 1,000 ms policy and 20-second readiness budget.
 Added timing, metadata or subscriber failures only remove diagnostic evidence;
 they cannot replace the original I/O or comparison result. Producer CPU cost is
 explicitly unmeasured; existing subscriber count/total/max costs remain distinct
@@ -1078,13 +1095,15 @@ visible mount root excludes hidden ancestors or Azure host/backend throttling.
 
 The observer caches fixed closed records in memory, at most 64 records/256 KiB
 of serialized UTF-8 including newlines, with at most 4,096 bytes per record.
-Two existing auxiliary-capacity slots retain the first comparison and the
-first distinct rejected comparison; private invocation identity distinguishes
-them even when timestamps coincide. An initial rejected comparison occupies
+Two existing auxiliary-capacity slots retain the first legacy scalar comparison
+and the first distinct rejected legacy scalar comparison; private invocation
+identity distinguishes them even when timestamps coincide. An initial rejected comparison occupies
 only the first slot. The 36 family, eight cost and 12 auxiliary slots allocate
 at most 56 records without increasing any stream or writer budget.
-Each comparison record carries a closed nested `creation` group; accepted
-comparisons use `complete`, while rejected comparisons use `identity-invalid`.
+Each legacy scalar comparison record carries a closed nested `creation` group;
+accepted comparisons use `complete`, while rejected comparisons use
+`identity-invalid`. These statuses do not establish complete current production
+interval/calibration evidence.
 The existing `limitations` slot adds an optional closed `creationObservation`
 receipt. Available producer statistics report source attempts, comparisons,
 reserved tokens, cap refusal, diagnostic disable and normal revocation separately,

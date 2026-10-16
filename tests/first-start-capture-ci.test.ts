@@ -22,7 +22,7 @@ function candidate() {
             runnerOs: 'Linux',
         },
         event: {
-            before: '1a598a7ca01c4e17535c5c9c98cd4564d6369e77',
+            before: 'd3d0bde698f6b0654245a285144451cbfc928957',
             after: sha,
             ref: 'refs/heads/fix/chrome-startup-stall',
             created: false,
@@ -36,6 +36,12 @@ function candidate() {
 
 test('the one ordinary push transition admits only exact current checkout identity', () => {
     assert.equal(evaluateFirstStartCaptureAdmission(candidate()), 'admitted');
+});
+
+test('the consumed historical push window is ineligible', () => {
+    const input = candidate();
+    input.event.before = '1a598a7ca01c4e17535c5c9c98cd4564d6369e77';
+    assert.equal(evaluateFirstStartCaptureAdmission(input), 'ineligible');
 });
 
 test('event type, repository, branch, attempt, SHA, tree and worktree mismatches close admission', () => {
