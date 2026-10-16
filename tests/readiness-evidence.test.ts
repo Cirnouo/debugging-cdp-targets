@@ -8,7 +8,7 @@ import {
     subscribeFixtureDiagnostics,
     validateFixtureEvent,
 } from '../src/adapters/fixture-diagnostics.ts';
-import { unixSnapshot } from '../src/adapters/platform-process.ts';
+import { unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { errorDetails } from '../src/shared/errors.ts';
 import { type BoundedLinuxRead, createLinuxStartupWaitSampler } from './smoke/linux-startup-wait.ts';
@@ -296,7 +296,6 @@ function readinessFixture({
         code: 'ECONNREFUSED',
     });
     let clock = 0;
-    let clockCalls = 0;
     let endpointCalls = 0;
     let sleepCalls = 0;
     let beforeClose: (() => void) | undefined;
@@ -311,20 +310,24 @@ function readinessFixture({
             endpointCalls++;
             throw failure;
         },
-        now: () => {
-            clockCalls++;
-            return clock;
-        },
+        now: () => clock,
         sleep: async (ms) => {
             sleepCalls++;
             assert.equal(ms, 200);
             if (interruptPoll) throw failure;
-            clock += 25_000;
+            // Delayed scheduling consumes the exact remaining readiness budget.
+            clock += 20_000;
             afterAttempt?.();
         },
         platformAdapter: {
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             ...(nativeCloseResult === undefined
                 ? {}
                 : {
@@ -370,7 +373,7 @@ function readinessFixture({
         launch: () =>
             host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
         calls: () => ({ snapshots: snapshotCalls, closes: closeCalls }),
-        readinessCalls: () => ({ clockCalls, endpointCalls, sleepCalls }),
+        readinessCalls: () => ({ elapsed: clock, endpointCalls, sleepCalls }),
         beforeClose: (job: () => void) => {
             beforeClose = job;
         },
@@ -399,10 +402,10 @@ test('readiness exit reason is a closed optional fixture field', () => {
 });
 
 for (const [reason, options, expected] of [
-    ['budget-exhausted', {}, { clockCalls: 4, endpointCalls: 1, sleepCalls: 1 }],
-    ['foreign-listener', { foreignListener: true }, { clockCalls: 3, endpointCalls: 0, sleepCalls: 0 }],
-    ['terminal-condition', { terminal: true }, { clockCalls: 3, endpointCalls: 1, sleepCalls: 0 }],
-    ['poll-interrupted', { interruptPoll: true }, { clockCalls: 3, endpointCalls: 1, sleepCalls: 1 }],
+    ['budget-exhausted', {}, { elapsed: 20_000, endpointCalls: 1, sleepCalls: 1 }],
+    ['foreign-listener', { foreignListener: true }, { elapsed: 0, endpointCalls: 0, sleepCalls: 0 }],
+    ['terminal-condition', { terminal: true }, { elapsed: 0, endpointCalls: 1, sleepCalls: 0 }],
+    ['poll-interrupted', { interruptPoll: true }, { elapsed: 0, endpointCalls: 1, sleepCalls: 1 }],
 ] as const) {
     test(`actual readiness branch reports ${reason} with unchanged clock/probe/Close effects`, async (t) => {
         const records: FixtureEvent[] = [];

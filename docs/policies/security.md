@@ -9,9 +9,41 @@ package cache cannot authorize attaching to a process.
 
 Validate executable path, launch creation time, user/session, process tree,
 loopback listener ownership, and browser-level WebSocket endpoint.
-On Linux, derive root creation time from `/proc` boot time and process start
-ticks with the system `CLK_TCK`, preserving fractional precision instead of
-the rounded `ps lstart` display. Missing or malformed evidence fails closed.
+On Linux, calibrate the reader's boot clock against bracketed UTC reads using
+direct `/proc/uptime` text before launch and after the associated root stat read.
+Bind the exact actual child, target object, adapter source, PID, raw start ticks
+and `CLK_TCK` privately. Initial authorization requires the entire conservative
+birth interval to fit the unchanged request-minus-1000-ms to now-plus-1000-ms
+policy. Intersect consistent pre/post offset intervals with the coarse `/proc/stat`
+`btime` interval; missing, malformed, backwards or contradictory evidence fails
+closed. No rounded `ps` display, `os.uptime` fallback or public timestamp authorizes
+Linux identity. Choose an exactly representable integer Date inside the accepted
+interval and keep it fixed. Later readiness, verification, health and normal Close
+require the same raw ticks and source plus executable, user and actual-child
+lifetime continuity, without obtaining a fresh UTC calibration.
+
+The conversion follows the three integer branches of
+[Linux v6.8 nsec_to_clock_t](https://github.com/torvalds/linux/blob/v6.8/kernel/time/time.c#L733-L747),
+also present in the reviewed
+[v3.10](https://github.com/torvalds/linux/blob/v3.10/kernel/time.c#L634-L647),
+[v4.18](https://github.com/torvalds/linux/blob/v4.18/kernel/time/time.c#L758-L771) and
+[v6.17](https://github.com/torvalds/linux/blob/v6.17/kernel/time/time.c) source. Exact BigInt bounds
+include uint64 multiplication wrap; ambiguous intervals fail containment instead
+of choosing a convenient recent inverse. All positive safe `CLK_TCK` values with
+a defined conversion are considered; there is no H=100 or architecture allowlist.
+A nonempty conservative hull is not a general preimage-existence validator:
+the trusted kernel proc source supplies the actual conversion. The unchanged
+reader proc/time-namespace context and stable realtime-minus-boottime mapping
+are explicit assumptions. These checks do not authenticate vendor kernels or
+proc virtualizers, detect arbitrary compensated clock excursions, or establish
+same-tick PID-generation uniqueness. Actual-child exit/monitor guards remain
+required before and after asynchronous work.
+
+An unbound rollback uses exactly the same registration, provenance and interval
+policy. Unverifiable identity sends no signal and retains ownership until actual
+exit or verified normal cleanup. Prelaunch calibration observes launch cancellation;
+first-root calibration uses only the remaining 20-second readiness budget. Late
+completion cannot bind a cancelled decision. Normal Close has no added deadline.
 On macOS, an absolute installed executable can also be verified through a unique
 mapped hard-link alias: its regular-file device/inode must match the kernel's
 `lsof` text mapping for the target PID. This covers Chrome's asynchronous

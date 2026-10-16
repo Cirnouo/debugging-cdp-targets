@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { RawData } from 'ws';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
+import { validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import type { ManagedTarget } from '../src/domains/cdp-target.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
 
@@ -227,7 +228,13 @@ function hostFixture({ endpointFailure = false, closeSucceeds = true, race = fal
             currentSessionId: 1,
             listeners: [{ localAddress: '127.0.0.1', owningProcess: race && port === 9222 ? 999 : pid }],
         }),
-        validateNewRoot: () => {},
+        prepareLaunch: async () => ({}),
+        registerLaunch: () => {},
+        validateIdentity: async (evidence, target, context) => {
+            if (context?.newlyLaunched) {
+                if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+            } else validateProcessIdentity(evidence, target);
+        },
         close: async (target) => {
             closed.push(target.port);
             if (closeSucceeds) child.emit('exit', 0);

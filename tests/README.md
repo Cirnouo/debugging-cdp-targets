@@ -1,5 +1,25 @@
 # Tests
 
+- `linux-creation-identity.test.ts` exercises the strict uptime provider, exact
+  conservative kernel inverse bounds, complete interval containment, private
+  actual-child registration, raw continuity and all lifecycle consumers through
+  injected OS I/O. Late calibration, cancellation, remaining readiness budget,
+  malformed sources, copied/mutated roots and observer failures cannot authorize
+  forwarding or signals. `platform-evidence.test.ts` retains the actual host/adapter
+  regression for combined boot-second and tick quantization at the original
+  1000-ms boundary. These deterministic tests do not establish the cause or repair
+  of the historical CI no-listener timeout or its unrecorded early identity failure.
+
+The closed Linux creation diagnostic fields describe the legacy scalar
+`btime + ticks / CLK_TCK` comparison. Their standalone/source-bundle regressions
+continue to check that exact behavior. Production Linux interval authorization
+does not emit a synthetic scalar comparison: `creationBranch`,
+`creationExpectedUtcMs`, `creationObservedUtcMs` and comparison completeness are
+unavailable for the new interval decision. Existing proc counter/root observations
+and collector admission/lifecycle limits remain diagnostic only. No current
+capture claims complete interval/calibration evidence; no new public fields were
+added. Security proof is unconditional with diagnostics disabled, enabled or failing.
+
 - `instructions-smoke-evidence.test.ts` rejects arbitrary request/user strings
   as MCP instruction evidence and validates semantic tool descriptions and the
   exact Claude host-generated reminder/deferred-discovery carrier.
@@ -15,8 +35,8 @@
   including closed fields, malformed observations and disabled-mode behavior.
   It also preserves existing native-Close listener states while rejecting unsafe
   diagnostic metadata without changing the primary startup cause or cleanup.
-  Literal failure branches verify readiness exit classification without extra
-  clock, getter, probe, or normal-Close effects.
+  Literal failure branches verify readiness exit classification, elapsed budget,
+  retry spacing, getter, probe and normal-Close effects independently of clock-read count.
 - `fixture-cost.test.ts` checks monotonic collector callback costs on successful
   and failed writes, single counting of rejected events, closed timing records,
   default-off behavior and unchanged stream caps.

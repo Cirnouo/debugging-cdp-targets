@@ -12,7 +12,7 @@ import {
     runFixtureObservation,
     subscribeFixtureDiagnostics,
 } from '../src/adapters/fixture-diagnostics.ts';
-import { resolveUnixExecutable, unixSnapshot } from '../src/adapters/platform-process.ts';
+import { resolveUnixExecutable, unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createTargetHost, type HostDependencies } from '../src/adapters/target-host.ts';
 import { createConnectionDirectory } from '../src/application/connection-directory.ts';
 import { createConnectionOwner } from '../src/application/connection-owner.ts';
@@ -54,7 +54,13 @@ for (const observed of [false, true]) {
         const host = createTargetHost({
             platformAdapter: {
                 reservedRanges: async () => [],
-                validateNewRoot: () => {},
+                prepareLaunch: async () => ({}),
+                registerLaunch: () => {},
+                validateIdentity: async (evidence, target, context) => {
+                    if (context?.newlyLaunched) {
+                        if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                    } else validateProcessIdentity(evidence, target);
+                },
                 snapshot: async () => ({
                     root: { exists: false },
                     currentSessionId: 0,
@@ -426,7 +432,13 @@ function endpointHost(
         },
         platformAdapter: {
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             snapshot: async () => ({
                 root: {
                     exists: true,
@@ -727,20 +739,22 @@ test('throwing safe subscriber cannot alter native I/O outcome or profile releas
     );
 });
 
-test('readiness keeps the original clock-call predicate and 200ms retry spacing with observation enabled', async (t) => {
+test('readiness keeps its elapsed budget and 200ms retry spacing with observation enabled', async (t) => {
     const records = observations(t);
-    let timeReads = 0;
+    let clock = 0;
     const sleeps: number[] = [];
     const host = endpointHost(
         9222,
         async () => {},
         async () => {
+            clock += 7_000;
             throw ioError('ECONNREFUSED', 'connect');
         },
         {
-            now: () => timeReads++ * 6_000,
+            now: () => clock,
             sleep: async (milliseconds) => {
                 sleeps.push(milliseconds);
+                clock += milliseconds;
             },
         },
     );
@@ -750,7 +764,7 @@ test('readiness keeps the original clock-call predicate and 200ms retry spacing 
         ),
         /verified CDP endpoint/,
     );
-    assert.equal(timeReads, 6);
+    assert.equal(clock, 21_600);
     assert.deepEqual(sleeps, [200, 200, 200]);
     const attempts = records.filter(
         (record) => record.stage === 'readiness' && record.phase === 'attempt' && record.event === 'begin',
@@ -783,7 +797,13 @@ test('a hung native snapshot leaves a correlated begin before cancellation and p
         spawn: async () => child,
         platformAdapter: {
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             snapshot: () => {
                 snapshots++;
                 signalSnapshot();

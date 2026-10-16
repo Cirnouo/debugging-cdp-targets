@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
+import { validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 
 function fixture({ busy = false, race = false } = {}) {
@@ -21,7 +22,13 @@ function fixture({ busy = false, race = false } = {}) {
             processIds: [pid],
             listeners: [{ localAddress: '127.0.0.1', owningProcess: race ? 999 : pid }],
         }),
-        validateNewRoot: () => {},
+        prepareLaunch: async () => ({}),
+        registerLaunch: () => {},
+        validateIdentity: async (evidence, target, context) => {
+            if (context?.newlyLaunched) {
+                if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+            } else validateProcessIdentity(evidence, target);
+        },
         close: async (target) => {
             closed.push(target.port);
             child.emit('exit', 0);

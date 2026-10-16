@@ -26,14 +26,32 @@ import {
     reserveFixtureCreationObservation,
     sameFixtureOrigin,
 } from './fixture-diagnostics.ts';
+import {
+    intersectLinuxIntervals,
+    type LinuxCalibration,
+    linuxBirthInterval,
+    linuxPublicTime,
+    readLinuxCalibration,
+} from './linux-creation-identity.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
 export type ProcessExecutor = (executable: string, arguments_: string[]) => Promise<ProcessResult>;
+export interface IdentityValidationContext extends LaunchContext {
+    newlyLaunched?: boolean;
+    /** Readiness owns this clock/deadline; independent normal cleanup has no such deadline. */
+    assertReadinessActive?: () => void;
+}
 type UnixFileIdentity = { dev: bigint; ino: bigint; regularFile: boolean };
 export interface PlatformAdapter {
     snapshot(pid: number, port: number): Promise<ProcessEvidence>;
-    validateNewRoot(evidence: ProcessEvidence, target: ProcessTarget): void;
+    prepareLaunch(context?: LaunchContext): Promise<object>;
+    registerLaunch(target: ManagedTarget, calibration: object, requestedAt: number): void;
+    validateIdentity(
+        evidence: ProcessEvidence,
+        target: ManagedTarget,
+        context?: IdentityValidationContext,
+    ): Promise<void>;
     reservedRanges(): Promise<PortRange[]>;
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
     requestNormalClose?(target: ManagedTarget, context?: LaunchContext): Promise<Record<string, unknown>>;
@@ -285,6 +303,9 @@ function normalizePath(value: string) {
     return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
+/** Scalar/native policy for non-Linux targets and the legacy diagnostic comparison harness.
+ * Production Linux consumers use their adapter's registered validateIdentity policy.
+ */
 export function validateProcessIdentity(
     evidence: Pick<ProcessEvidence, 'root' | 'currentSessionId'>,
     target: Pick<ProcessTarget, 'executablePath' | 'startedAtUtc' | 'targetKind'>,
@@ -358,7 +379,10 @@ type BoundCreation = CreationCarrier & {
     sessionId: number;
 };
 const creationSources = new WeakMap<RootEvidence, BoundCreation>();
-function boundRootMatches(root: RootEvidence, source: BoundCreation): boolean {
+function boundRootMatches(
+    root: RootEvidence,
+    source: Pick<BoundCreation, 'raw' | 'executablePath' | 'sessionId'>,
+): boolean {
     const prototype: unknown = Object.getPrototypeOf(root);
     if (prototype !== Object.prototype && prototype !== null) return false;
     for (const [key, value] of [
@@ -580,15 +604,33 @@ export async function resolveUnixExecutable({
     return executable;
 }
 
+type LinuxSource = { sequence: number; targets: Map<number, { target: ManagedTarget; port: number; time?: string }> };
+type LinuxRootProof = {
+    source: LinuxSource;
+    sequence: number;
+    pid: number;
+    port: number;
+    ticks: bigint;
+    h: bigint;
+    boot: bigint | undefined;
+    raw: string;
+    executablePath: string;
+    sessionId: number;
+};
+const linuxRoots = new WeakMap<RootEvidence, LinuxRootProof>();
+
 async function linuxCreationTime(
     pid: number,
     execute: ProcessExecutor,
     readText: (file: string) => Promise<string>,
     carrier?: CreationCarrier,
-): Promise<string> {
+    knownTime?: string,
+): Promise<{ startedAtUtc: string; ticks: bigint; h: bigint; boot: bigint | undefined }> {
     const [stat, boot, clock] = await Promise.all([
         creationRead(carrier, 'Stat', () => observeNativeFile('proc-stat', () => readText(`/proc/${pid}/stat`))),
-        creationRead(carrier, 'Boot', () => observeNativeFile('proc-boot', () => readText('/proc/stat'))),
+        knownTime === undefined
+            ? creationRead(carrier, 'Boot', () => observeNativeFile('proc-boot', () => readText('/proc/stat')))
+            : Promise.resolve(''),
         creationRead(carrier, 'Clk', () => observeNativeCommand('getconf', execute, 'getconf', ['CLK_TCK'])),
     ]);
     // comm may contain spaces and closing parentheses; fields resume after its last ') '.
@@ -605,8 +647,7 @@ async function linuxCreationTime(
         ticks === undefined ||
         !/^\d+$/.test(ticks) ||
         !Number.isSafeInteger(startTicks) ||
-        bootTimes.length !== 1 ||
-        !Number.isSafeInteger(bootSeconds) ||
+        (knownTime === undefined && (bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds))) ||
         clock.code !== 0 ||
         clock.stderr.trim() ||
         !/^\d+$/.test(clockText) ||
@@ -616,11 +657,13 @@ async function linuxCreationTime(
         emitFixtureEvent('native-file', 'decision', { command: 'proc-stat', pid, valid: false });
         throw new Error('The Linux process creation evidence is unverifiable.');
     }
-    // ps lstart truncates startTicks / CLK_TCK; retain the kernel's fractional seconds.
-    const computedNumberMs = bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000;
+    // Preserve the legacy scalar for snapshot compatibility and closed diagnostics.
+    // Linux authorization uses private raw proof and calibrated intervals, never this estimate.
+    const computedNumberMs =
+        knownTime === undefined ? bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000 : Date.parse(knownTime);
     const started = new Date(computedNumberMs);
     if (!Number.isFinite(started.getTime())) throw new Error('The Linux process creation evidence is unverifiable.');
-    if (carrier) {
+    if (carrier && knownTime === undefined) {
         try {
             carrier.clipped = started.getTime();
             carrier.fields = {
@@ -672,7 +715,13 @@ async function linuxCreationTime(
             ...counters,
         });
     }
-    return started.toISOString();
+    if (carrier && knownTime !== undefined) carrier.invalid = true;
+    return {
+        startedAtUtc: started.toISOString(),
+        ticks: BigInt(startTicks),
+        h: BigInt(ticksPerSecond),
+        boot: knownTime === undefined ? BigInt(bootSeconds) : undefined,
+    };
 }
 
 type UnixProcessRow = { pid: number; parent: number; uid: number; started: string; executable: string };
@@ -751,16 +800,27 @@ function emitDarwinListenerOwnerEvidence(
     }
 }
 
+type UnixDependencies = {
+    platform?: NodeJS.Platform;
+    currentUser?: () => number;
+    readlink?: (file: string) => Promise<string>;
+    readText?: (file: string) => Promise<string>;
+    run?: ProcessExecutor;
+};
+
 export async function unixSnapshot(
     pid: number,
     port: number,
-    dependencies: {
-        platform?: NodeJS.Platform;
-        currentUser?: () => number;
-        readlink?: (file: string) => Promise<string>;
-        readText?: (file: string) => Promise<string>;
-        run?: ProcessExecutor;
-    } = {},
+    dependencies: UnixDependencies = {},
+): Promise<ProcessEvidence> {
+    return snapshotUnix(pid, port, dependencies);
+}
+
+async function snapshotUnix(
+    pid: number,
+    port: number,
+    dependencies: UnixDependencies = {},
+    source?: LinuxSource,
 ): Promise<ProcessEvidence> {
     const platform = dependencies.platform ?? process.platform;
     const execute = dependencies.run ?? run;
@@ -788,15 +848,18 @@ export async function unixSnapshot(
             ? reserveFixtureCreationObservation(true, undefined, { pid, port })
             : undefined;
     const carrier: CreationCarrier | undefined = frame ? { frame, pid, port } : undefined;
-    const rootStartedAt =
+    const sequence = source ? ++source.sequence : 0;
+    const previous = source?.targets.get(pid);
+    const linuxCreation =
         root && platform === 'linux'
             ? await linuxCreationTime(
                   pid,
                   execute,
                   dependencies.readText ?? ((file) => readFile(file, 'utf8')),
                   carrier,
+                  previous?.port === port ? previous.time : undefined,
               )
-            : root?.started;
+            : undefined;
     const owned = new Set(root ? [pid] : []);
     for (let changed = true; changed; ) {
         changed = false;
@@ -845,7 +908,7 @@ export async function unixSnapshot(
                       ...(dependencies.readlink ? { readlink: dependencies.readlink } : {}),
                   }),
                   sessionId: root.uid,
-                  startedAtUtc: rootStartedAt ?? root.started,
+                  startedAtUtc: linuxCreation?.startedAtUtc ?? root.started,
               }
             : { exists: false },
         currentSessionId:
@@ -856,6 +919,19 @@ export async function unixSnapshot(
         processIds: [...owned],
         listeners,
     };
+    if (source && linuxCreation && evidence.root.exists)
+        linuxRoots.set(evidence.root, {
+            source,
+            sequence,
+            pid,
+            port,
+            ticks: linuxCreation.ticks,
+            h: linuxCreation.h,
+            boot: linuxCreation.boot,
+            raw: evidence.root.startedAtUtc,
+            executablePath: evidence.root.executablePath,
+            sessionId: evidence.root.sessionId,
+        });
     if (carrier && carrier.clipped !== undefined && root && evidence.root.exists) {
         try {
             creationSources.set(evidence.root, {
@@ -881,9 +957,14 @@ export function createPlatformAdapter(
         waitWindowsExit?: (target: ProcessTarget, signal?: AbortSignal) => Promise<Record<string, unknown>>;
         requestUnixClose?: (pid: number) => void;
         sleep?: (ms: number) => Promise<void>;
+        now?: () => number;
+        unix?: Omit<UnixDependencies, 'platform'>;
     } = {},
 ): PlatformAdapter {
     const platform = dependencies.platform ?? process.platform;
+    const source: LinuxSource = { sequence: 0, targets: new Map() };
+    const now = dependencies.now ?? Date.now;
+    const readText = dependencies.unix?.readText ?? ((file: string) => readFile(file, 'utf8'));
     const windows = createWindowsLauncher();
     const closeWindows = dependencies.closeWindows;
     const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, 'SIGTERM'));
@@ -892,7 +973,190 @@ export function createPlatformAdapter(
         dependencies.snapshot ??
         (platform === 'win32'
             ? async (pid, port) => parseSnapshot(await windowsHelper('Snapshot', { RootProcessId: pid, Port: port }))
-            : unixSnapshot);
+            : (pid, port) => snapshotUnix(pid, port, { ...dependencies.unix, platform }, source));
+    const calibrations = new WeakMap<object, { value: LinuxCalibration | undefined; target?: ManagedTarget }>();
+    type LaunchProof = {
+        token: object;
+        calibration: LinuxCalibration | undefined;
+        requestedAt: number;
+        sequence: number;
+        child: NonNullable<ManagedTarget['child']>;
+        pid: number;
+        port: number;
+        path: string;
+        kind: ProcessTarget['targetKind'];
+        requestText: string;
+        bound?: { ticks: bigint; h: bigint; sessionId: number; publicTime: string };
+    };
+    const launches = new WeakMap<ManagedTarget, LaunchProof>();
+    const registeredChildren = new WeakSet<NonNullable<ManagedTarget['child']>>();
+    async function prepareLaunch(context: LaunchContext = {}): Promise<object> {
+        context.signal?.throwIfAborted();
+        const value =
+            platform === 'linux' ? await abortable(readLinuxCalibration(readText, now), context.signal) : undefined;
+        context.signal?.throwIfAborted();
+        const token = {};
+        calibrations.set(token, { value });
+        return token;
+    }
+    function registerLaunch(target: ManagedTarget, token: object, requestedAt: number) {
+        if (platform !== 'linux') return;
+        const prior = launches.get(target);
+        if (prior) {
+            if (
+                prior.token === token &&
+                prior.child === target.child &&
+                prior.pid === target.processId &&
+                prior.requestedAt === requestedAt
+            )
+                return;
+            throw new Error('The registered Linux child identity changed.');
+        }
+        const calibration = calibrations.get(token);
+        const child = target.child;
+        const pid = child && Object.getOwnPropertyDescriptor(child, 'pid');
+        if (
+            !calibration?.value ||
+            calibration.target ||
+            !child ||
+            !pid ||
+            !('value' in pid) ||
+            pid.value !== target.processId ||
+            !Number.isSafeInteger(target.processId) ||
+            target.processId <= 0 ||
+            !Number.isSafeInteger(requestedAt)
+        )
+            throw new Error('The Linux launch identity is unverifiable.');
+        observeTargetExit(target);
+        if (targetExitObserved(target) || child.monitoringFailure)
+            throw new Error('The Linux actual-child identity is unavailable.');
+        const registeredPid = target.processId;
+        if (source.targets.has(registeredPid) || registeredChildren.has(child))
+            throw new Error('The Linux child identity is already registered.');
+        registeredChildren.add(child);
+        source.targets.set(registeredPid, { target, port: target.port });
+        calibration.target = target;
+        launches.set(target, {
+            token,
+            calibration: calibration.value,
+            requestedAt,
+            sequence: source.sequence,
+            child,
+            pid: target.processId,
+            port: target.port,
+            path: target.executablePath,
+            kind: target.targetKind,
+            requestText: target.startedAtUtc,
+        });
+        child.once('exit', () => {
+            if (source.targets.get(registeredPid)?.target === target) source.targets.delete(registeredPid);
+        });
+    }
+    function checkLaunch(target: ManagedTarget, proof: LaunchProof, context: LaunchContext) {
+        context.signal?.throwIfAborted();
+        const pid = Object.getOwnPropertyDescriptor(proof.child, 'pid');
+        if (
+            target.child !== proof.child ||
+            target.processId !== proof.pid ||
+            target.port !== proof.port ||
+            !pid ||
+            !('value' in pid) ||
+            pid.value !== proof.pid ||
+            target.executablePath !== proof.path ||
+            target.targetKind !== proof.kind ||
+            target.startedAtUtc !== (proof.bound?.publicTime ?? proof.requestText) ||
+            targetExitObserved(target) ||
+            proof.child.monitoringFailure
+        )
+            throw new Error('The registered Linux child identity is unavailable or changed.');
+    }
+    async function validateIdentity(
+        evidence: ProcessEvidence,
+        target: ManagedTarget,
+        context: IdentityValidationContext = {},
+    ) {
+        if (platform !== 'linux') {
+            validateProcessIdentity(evidence, target, { newlyLaunched: context.newlyLaunched ?? false });
+            if (context.newlyLaunched && evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+            return;
+        }
+        const launch = launches.get(target);
+        if (!launch) throw new Error('The Linux target has no registered launch identity.');
+        checkLaunch(target, launch, context);
+        const raw = linuxRoots.get(evidence.root);
+        if (
+            !raw ||
+            raw.source !== source ||
+            raw.sequence <= launch.sequence ||
+            raw.pid !== launch.pid ||
+            raw.port !== launch.port ||
+            !boundRootMatches(evidence.root, raw) ||
+            normalizePath(raw.executablePath) !== normalizePath(launch.path) ||
+            raw.sessionId !== evidence.currentSessionId
+        )
+            throw new Error('The Linux root identity proof is unverifiable.');
+        if (launch.bound) {
+            if (
+                raw.ticks !== launch.bound.ticks ||
+                raw.h !== launch.bound.h ||
+                raw.sessionId !== launch.bound.sessionId
+            )
+                throw new Error('The Linux process creation identity changed.');
+            return;
+        }
+        if (raw.boot === undefined) throw new Error('The Linux initial creation identity lacks boot evidence.');
+        // This read occurs after the associated stat read, in this adapter's unchanged proc reader context.
+        const post = await abortable(readLinuxCalibration(readText, now), context.signal);
+        checkLaunch(target, launch, context);
+        if (
+            !launch.calibration ||
+            post.uptimeUpperNs < launch.calibration.uptimeUpperNs ||
+            launch.calibration.beforeUtcMs < launch.requestedAt ||
+            post.beforeUtcMs < launch.calibration.afterUtcMs
+        )
+            throw new Error('The Linux process creation clock identity moved backwards.');
+        if (
+            linuxRoots.get(evidence.root) !== raw ||
+            !boundRootMatches(evidence.root, raw) ||
+            evidence.currentSessionId !== raw.sessionId
+        )
+            throw new Error('The Linux root identity proof changed.');
+        const offset =
+            launch.calibration &&
+            intersectLinuxIntervals(launch.calibration, post, {
+                lowerNs: raw.boot * 1_000_000_000n,
+                upperNs: (raw.boot + 1n) * 1_000_000_000n,
+            });
+        const birth = linuxBirthInterval({
+            rawTicks: raw.ticks,
+            clkTck: raw.h,
+            readerBirthUpperNs: post.uptimeUpperNs,
+        });
+        const decisionNow = now();
+        if (decisionNow < post.afterUtcMs)
+            throw new Error('The Linux process creation clock identity moved backwards.');
+        const publicTime =
+            offset &&
+            birth &&
+            linuxPublicTime(
+                { lowerNs: offset.lowerNs + birth.lowerNs, upperNs: offset.upperNs + birth.upperNs },
+                launch.requestedAt,
+                decisionNow,
+            );
+        if (!publicTime) throw new Error('The Linux process creation identity interval is unverifiable.');
+        context.assertReadinessActive?.();
+        checkLaunch(target, launch, context);
+        // A concurrent first validation may already have bound the same child.
+        const concurrent = launches.get(target)?.bound;
+        if (
+            concurrent &&
+            (concurrent.ticks !== raw.ticks || concurrent.h !== raw.h || concurrent.sessionId !== raw.sessionId)
+        )
+            throw new Error('The Linux process creation identity changed.');
+        if (!launch.bound) launch.bound = { ticks: raw.ticks, h: raw.h, sessionId: raw.sessionId, publicTime };
+        source.targets.set(launch.pid, { target, port: launch.port, time: launch.bound.publicTime });
+        target.startedAtUtc = launch.bound.publicTime;
+    }
     const nativeExit = new WeakMap<ManagedTarget, Promise<Record<string, unknown>>>();
     async function requestNormalClose(
         target: ManagedTarget,
@@ -914,7 +1178,14 @@ export function createPlatformAdapter(
             error.details = { phase: 'process-identity', listenerState, closeRequested: false, processExited: false };
             throw error;
         }
-        validateProcessIdentity(evidence, target);
+        await validateIdentity(evidence, target, context);
+        context.signal?.throwIfAborted();
+        if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+        if (platform === 'linux') {
+            const launch = launches.get(target);
+            if (!launch) throw new Error('The Linux target has no registered launch identity.');
+            checkLaunch(target, launch, context);
+        }
         if (platform !== 'win32') {
             requestUnixClose(target.processId);
             return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
@@ -964,7 +1235,9 @@ export function createPlatformAdapter(
     }
     return {
         snapshot,
-        validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
+        prepareLaunch,
+        registerLaunch,
+        validateIdentity,
         async reservedRanges() {
             if (process.platform === 'linux') {
                 const value = await readFile('/proc/sys/net/ipv4/ip_local_reserved_ports', 'utf8');

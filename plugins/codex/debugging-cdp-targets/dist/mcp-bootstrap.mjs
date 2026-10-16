@@ -4886,6 +4886,81 @@ import path2 from "node:path";
 import { performance as performance3 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
+// src/adapters/linux-creation-identity.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+var SECOND = 1000000000n;
+var MILLISECOND = 1000000n;
+var MODULUS = 1n << 64n;
+var SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+var DATE_LIMIT = 8640000000000000n;
+function minimum(a, b) {
+  return a < b ? a : b;
+}
+function ceiling(a, b) {
+  return a / b + (a % b > 0n ? 1n : 0n);
+}
+function linuxBirthInterval({
+  rawTicks: q,
+  clkTck: h,
+  readerBirthUpperNs: x
+}) {
+  if (q < 0n || q > SAFE || h <= 0n || h > SAFE || x < 0n || x >= MODULUS) return;
+  if (SECOND % h === 0n) {
+    const divisor2 = SECOND / h;
+    const lowerNs2 = q * divisor2;
+    const upperNs2 = minimum(x, (q + 1n) * divisor2 - 1n);
+    return lowerNs2 <= upperNs2 ? { lowerNs: lowerNs2, upperNs: upperNs2 } : void 0;
+  }
+  const multiplier = h % 512n === 0n ? h : 9n;
+  const divisor = h % 512n === 0n ? SECOND : (9n * SECOND + h / 2n) / h;
+  if (divisor === 0n) return;
+  const left = q * divisor;
+  const right = minimum((q + 1n) * divisor - 1n, MODULUS - 1n);
+  if (left >= MODULUS || right < left || multiplier * x < left) return;
+  const lastWrap = (multiplier * x - left) / MODULUS;
+  const lowerNs = ceiling(left, multiplier);
+  const upperNs = minimum(x, (lastWrap * MODULUS + right) / multiplier);
+  return lowerNs <= upperNs ? { lowerNs, upperNs } : void 0;
+}
+async function readLinuxCalibration(readText, now) {
+  const before = now();
+  const text = await readText("/proc/uptime");
+  const after = now();
+  const match = /^(\d+)\.(\d{2})[ \t]+\d+\.\d{2}\n?$/.exec(text);
+  if (!match || !Number.isSafeInteger(before) || !Number.isSafeInteger(after) || before < 0 || after < before)
+    throw new Error("The Linux clock calibration is unverifiable.");
+  const uptimeNs = BigInt(match[1] ?? "") * SECOND + BigInt(match[2] ?? "") * 10000000n;
+  const uptimeUpperNs = uptimeNs + 9999999n;
+  if (uptimeUpperNs >= MODULUS) throw new Error("The Linux clock calibration is unverifiable.");
+  return {
+    lowerNs: BigInt(before) * MILLISECOND - uptimeNs - 10000000n,
+    upperNs: (BigInt(after) + 1n) * MILLISECOND - uptimeNs,
+    uptimeUpperNs,
+    beforeUtcMs: before,
+    afterUtcMs: after
+  };
+}
+function intersectLinuxIntervals(...intervals) {
+  let lowerNs = intervals[0]?.lowerNs;
+  let upperNs = intervals[0]?.upperNs;
+  if (lowerNs === void 0 || upperNs === void 0) return;
+  for (const interval of intervals) {
+    if (interval.lowerNs > lowerNs) lowerNs = interval.lowerNs;
+    if (interval.upperNs < upperNs) upperNs = interval.upperNs;
+  }
+  return lowerNs <= upperNs ? { lowerNs, upperNs } : void 0;
+}
+function linuxPublicTime(interval, requestUtc, decisionUtc) {
+  if (!Number.isSafeInteger(requestUtc) || !Number.isSafeInteger(decisionUtc) || decisionUtc < requestUtc) return;
+  if (interval.lowerNs > interval.upperNs || interval.lowerNs < (BigInt(requestUtc) - 1000n) * MILLISECOND || interval.upperNs > (BigInt(decisionUtc) + 1000n) * MILLISECOND)
+    return;
+  const point = ceiling(interval.lowerNs, MILLISECOND);
+  if (point < -DATE_LIMIT || point > DATE_LIMIT || point * MILLISECOND > interval.upperNs) return;
+  const date4 = new Date(Number(point));
+  return date4.getTime() === Number(point) ? date4.toISOString() : void 0;
+}
+
 // src/adapters/windows-launch.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
@@ -5646,10 +5721,11 @@ async function resolveUnixExecutable({
   }
   return executable;
 }
-async function linuxCreationTime(pid, execute, readText, carrier) {
+var linuxRoots = /* @__PURE__ */ new WeakMap();
+async function linuxCreationTime(pid, execute, readText, carrier, knownTime) {
   const [stat2, boot, clock] = await Promise.all([
     creationRead(carrier, "Stat", () => observeNativeFile("proc-stat", () => readText(`/proc/${pid}/stat`))),
-    creationRead(carrier, "Boot", () => observeNativeFile("proc-boot", () => readText("/proc/stat"))),
+    knownTime === void 0 ? creationRead(carrier, "Boot", () => observeNativeFile("proc-boot", () => readText("/proc/stat"))) : Promise.resolve(""),
     creationRead(carrier, "Clk", () => observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"]))
   ]);
   const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
@@ -5660,14 +5736,14 @@ async function linuxCreationTime(pid, execute, readText, carrier) {
   const startTicks = Number(ticks);
   const bootSeconds = Number(bootTimes[0]?.[1]);
   const ticksPerSecond = Number(clockText);
-  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
+  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || knownTime === void 0 && (bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds)) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
     emitFixtureEvent("native-file", "decision", { command: "proc-stat", pid, valid: false });
     throw new Error("The Linux process creation evidence is unverifiable.");
   }
-  const computedNumberMs = bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3;
+  const computedNumberMs = knownTime === void 0 ? bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3 : Date.parse(knownTime);
   const started = new Date(computedNumberMs);
   if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
-  if (carrier) {
+  if (carrier && knownTime === void 0) {
     try {
       carrier.clipped = started.getTime();
       carrier.fields = {
@@ -5714,7 +5790,13 @@ async function linuxCreationTime(pid, execute, readText, carrier) {
       ...counters
     });
   }
-  return started.toISOString();
+  if (carrier && knownTime !== void 0) carrier.invalid = true;
+  return {
+    startedAtUtc: started.toISOString(),
+    ticks: BigInt(startTicks),
+    h: BigInt(ticksPerSecond),
+    boot: knownTime === void 0 ? BigInt(bootSeconds) : void 0
+  };
 }
 function classifyListenerOwner(owner, root, rows) {
   if (!Number.isSafeInteger(owner) || owner <= 0) return "invalid-owner";
@@ -5772,7 +5854,7 @@ function emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned) {
     });
   }
 }
-async function unixSnapshot(pid, port, dependencies = {}) {
+async function snapshotUnix(pid, port, dependencies = {}, source) {
   const platform = dependencies.platform ?? process.platform;
   const execute = dependencies.run ?? run;
   const processes = await observeNativeCommand("ps", execute, "ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
@@ -5794,12 +5876,15 @@ async function unixSnapshot(pid, port, dependencies = {}) {
   const root = rows.find((row) => row.pid === pid);
   const frame = root && platform === "linux" && fixtureCreationObservationEnabled() ? reserveFixtureCreationObservation(true, void 0, { pid, port }) : void 0;
   const carrier = frame ? { frame, pid, port } : void 0;
-  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(
+  const sequence = source ? ++source.sequence : 0;
+  const previous = source?.targets.get(pid);
+  const linuxCreation = root && platform === "linux" ? await linuxCreationTime(
     pid,
     execute,
     dependencies.readText ?? ((file) => readFile(file, "utf8")),
-    carrier
-  ) : root?.started;
+    carrier,
+    previous?.port === port ? previous.time : void 0
+  ) : void 0;
   const owned = new Set(root ? [pid] : []);
   for (let changed = true; changed; ) {
     changed = false;
@@ -5840,7 +5925,7 @@ async function unixSnapshot(pid, port, dependencies = {}) {
         ...dependencies.readlink ? { readlink: dependencies.readlink } : {}
       }),
       sessionId: root.uid,
-      startedAtUtc: rootStartedAt ?? root.started
+      startedAtUtc: linuxCreation?.startedAtUtc ?? root.started
     } : { exists: false },
     currentSessionId: (dependencies.currentUser ?? process.getuid)?.() ?? (() => {
       throw new Error("Unix user identity unavailable.");
@@ -5848,6 +5933,19 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     processIds: [...owned],
     listeners
   };
+  if (source && linuxCreation && evidence.root.exists)
+    linuxRoots.set(evidence.root, {
+      source,
+      sequence,
+      pid,
+      port,
+      ticks: linuxCreation.ticks,
+      h: linuxCreation.h,
+      boot: linuxCreation.boot,
+      raw: evidence.root.startedAtUtc,
+      executablePath: evidence.root.executablePath,
+      sessionId: evidence.root.sessionId
+    });
   if (carrier && carrier.clipped !== void 0 && root && evidence.root.exists) {
     try {
       creationSources.set(evidence.root, {
@@ -5864,11 +5962,120 @@ async function unixSnapshot(pid, port, dependencies = {}) {
 }
 function createPlatformAdapter(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
+  const source = { sequence: 0, targets: /* @__PURE__ */ new Map() };
+  const now = dependencies.now ?? Date.now;
+  const readText = dependencies.unix?.readText ?? ((file) => readFile(file, "utf8"));
   const windows = createWindowsLauncher();
   const closeWindows = dependencies.closeWindows;
   const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, "SIGTERM"));
   if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
-  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
+  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : (pid, port) => snapshotUnix(pid, port, { ...dependencies.unix, platform }, source));
+  const calibrations = /* @__PURE__ */ new WeakMap();
+  const launches = /* @__PURE__ */ new WeakMap();
+  const registeredChildren = /* @__PURE__ */ new WeakSet();
+  async function prepareLaunch(context = {}) {
+    context.signal?.throwIfAborted();
+    const value = platform === "linux" ? await abortable(readLinuxCalibration(readText, now), context.signal) : void 0;
+    context.signal?.throwIfAborted();
+    const token = {};
+    calibrations.set(token, { value });
+    return token;
+  }
+  function registerLaunch(target, token, requestedAt) {
+    if (platform !== "linux") return;
+    const prior = launches.get(target);
+    if (prior) {
+      if (prior.token === token && prior.child === target.child && prior.pid === target.processId && prior.requestedAt === requestedAt)
+        return;
+      throw new Error("The registered Linux child identity changed.");
+    }
+    const calibration = calibrations.get(token);
+    const child = target.child;
+    const pid = child && Object.getOwnPropertyDescriptor(child, "pid");
+    if (!calibration?.value || calibration.target || !child || !pid || !("value" in pid) || pid.value !== target.processId || !Number.isSafeInteger(target.processId) || target.processId <= 0 || !Number.isSafeInteger(requestedAt))
+      throw new Error("The Linux launch identity is unverifiable.");
+    observeTargetExit(target);
+    if (targetExitObserved(target) || child.monitoringFailure)
+      throw new Error("The Linux actual-child identity is unavailable.");
+    const registeredPid = target.processId;
+    if (source.targets.has(registeredPid) || registeredChildren.has(child))
+      throw new Error("The Linux child identity is already registered.");
+    registeredChildren.add(child);
+    source.targets.set(registeredPid, { target, port: target.port });
+    calibration.target = target;
+    launches.set(target, {
+      token,
+      calibration: calibration.value,
+      requestedAt,
+      sequence: source.sequence,
+      child,
+      pid: target.processId,
+      port: target.port,
+      path: target.executablePath,
+      kind: target.targetKind,
+      requestText: target.startedAtUtc
+    });
+    child.once("exit", () => {
+      if (source.targets.get(registeredPid)?.target === target) source.targets.delete(registeredPid);
+    });
+  }
+  function checkLaunch(target, proof, context) {
+    context.signal?.throwIfAborted();
+    const pid = Object.getOwnPropertyDescriptor(proof.child, "pid");
+    if (target.child !== proof.child || target.processId !== proof.pid || target.port !== proof.port || !pid || !("value" in pid) || pid.value !== proof.pid || target.executablePath !== proof.path || target.targetKind !== proof.kind || target.startedAtUtc !== (proof.bound?.publicTime ?? proof.requestText) || targetExitObserved(target) || proof.child.monitoringFailure)
+      throw new Error("The registered Linux child identity is unavailable or changed.");
+  }
+  async function validateIdentity2(evidence, target, context = {}) {
+    if (platform !== "linux") {
+      validateProcessIdentity(evidence, target, { newlyLaunched: context.newlyLaunched ?? false });
+      if (context.newlyLaunched && evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+      return;
+    }
+    const launch = launches.get(target);
+    if (!launch) throw new Error("The Linux target has no registered launch identity.");
+    checkLaunch(target, launch, context);
+    const raw = linuxRoots.get(evidence.root);
+    if (!raw || raw.source !== source || raw.sequence <= launch.sequence || raw.pid !== launch.pid || raw.port !== launch.port || !boundRootMatches(evidence.root, raw) || normalizePath(raw.executablePath) !== normalizePath(launch.path) || raw.sessionId !== evidence.currentSessionId)
+      throw new Error("The Linux root identity proof is unverifiable.");
+    if (launch.bound) {
+      if (raw.ticks !== launch.bound.ticks || raw.h !== launch.bound.h || raw.sessionId !== launch.bound.sessionId)
+        throw new Error("The Linux process creation identity changed.");
+      return;
+    }
+    if (raw.boot === void 0) throw new Error("The Linux initial creation identity lacks boot evidence.");
+    const post = await abortable(readLinuxCalibration(readText, now), context.signal);
+    checkLaunch(target, launch, context);
+    if (!launch.calibration || post.uptimeUpperNs < launch.calibration.uptimeUpperNs || launch.calibration.beforeUtcMs < launch.requestedAt || post.beforeUtcMs < launch.calibration.afterUtcMs)
+      throw new Error("The Linux process creation clock identity moved backwards.");
+    if (linuxRoots.get(evidence.root) !== raw || !boundRootMatches(evidence.root, raw) || evidence.currentSessionId !== raw.sessionId)
+      throw new Error("The Linux root identity proof changed.");
+    const offset = launch.calibration && intersectLinuxIntervals(launch.calibration, post, {
+      lowerNs: raw.boot * 1000000000n,
+      upperNs: (raw.boot + 1n) * 1000000000n
+    });
+    const birth = linuxBirthInterval({
+      rawTicks: raw.ticks,
+      clkTck: raw.h,
+      readerBirthUpperNs: post.uptimeUpperNs
+    });
+    const decisionNow = now();
+    if (decisionNow < post.afterUtcMs)
+      throw new Error("The Linux process creation clock identity moved backwards.");
+    const publicTime = offset && birth && linuxPublicTime(
+      { lowerNs: offset.lowerNs + birth.lowerNs, upperNs: offset.upperNs + birth.upperNs },
+      launch.requestedAt,
+      decisionNow
+    );
+    if (!publicTime) throw new Error("The Linux process creation identity interval is unverifiable.");
+    context.assertReadinessActive?.();
+    checkLaunch(target, launch, context);
+    const concurrent = launches.get(target)?.bound;
+    if (concurrent && (concurrent.ticks !== raw.ticks || concurrent.h !== raw.h || concurrent.sessionId !== raw.sessionId))
+      throw new Error("The Linux process creation identity changed.");
+    if (!launch.bound) launch.bound = { ticks: raw.ticks, h: raw.h, sessionId: raw.sessionId, publicTime };
+    source.targets.set(launch.pid, { target, port: launch.port, time: launch.bound.publicTime });
+    target.startedAtUtc = launch.bound.publicTime;
+  }
   const nativeExit = /* @__PURE__ */ new WeakMap();
   async function requestNormalClose(target, context = {}) {
     observeTargetExit(target);
@@ -5883,7 +6090,14 @@ function createPlatformAdapter(dependencies = {}) {
       error2.details = { phase: "process-identity", listenerState, closeRequested: false, processExited: false };
       throw error2;
     }
-    validateProcessIdentity(evidence, target);
+    await validateIdentity2(evidence, target, context);
+    context.signal?.throwIfAborted();
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    if (platform === "linux") {
+      const launch = launches.get(target);
+      if (!launch) throw new Error("The Linux target has no registered launch identity.");
+      checkLaunch(target, launch, context);
+    }
     if (platform !== "win32") {
       requestUnixClose(target.processId);
       return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
@@ -5934,7 +6148,9 @@ function createPlatformAdapter(dependencies = {}) {
   }
   return {
     snapshot,
-    validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
+    prepareLaunch,
+    registerLaunch,
+    validateIdentity: validateIdentity2,
     async reservedRanges() {
       if (process.platform === "linux") {
         const value = await readFile("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
@@ -7899,7 +8115,7 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
   def.format = def.format || "float64";
   const isInt = def.format?.includes("int");
   const origin = isInt ? "int" : "number";
-  const [minimum, maximum] = NUMBER_FORMAT_RANGES[def.format];
+  const [minimum2, maximum] = NUMBER_FORMAT_RANGES[def.format];
   inst._zod.check = (payload) => {
     const input = payload.value;
     if (isInt) {
@@ -7941,12 +8157,12 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
         return;
       }
     }
-    if (input < minimum) {
+    if (input < minimum2) {
       payload.issues.push({
         origin: "number",
         input,
         code: "too_small",
-        minimum,
+        minimum: minimum2,
         inclusive: true,
         inst,
         continue: !def.abort
@@ -10762,11 +10978,11 @@ function _maxLength(maximum, params) {
   return ch;
 }
 // @__NO_SIDE_EFFECTS__
-function _minLength(minimum, params) {
+function _minLength(minimum2, params) {
   return new $ZodCheckMinLength({
     check: "min_length",
     ...normalizeParams(params),
-    minimum
+    minimum: minimum2
   });
 }
 // @__NO_SIDE_EFFECTS__
@@ -11477,8 +11693,8 @@ var minContributor = (agg, def) => narrowMin(agg, "minimum", def.minimum);
 var maxContributor = (agg, def) => narrowMax(agg, "maximum", def.maximum);
 var formatContributor = (ranges) => (agg, def) => {
   setFormat(agg, def.format);
-  const [minimum, maximum] = ranges[def.format];
-  narrowMin(agg, "minimum", minimum);
+  const [minimum2, maximum] = ranges[def.format];
+  narrowMin(agg, "minimum", minimum2);
   narrowMax(agg, "maximum", maximum);
 };
 var contributors = {
@@ -11548,9 +11764,9 @@ var exactPattern = (p) => exactPatterns.get(p) ?? p;
 var stringProcessor = (schema, ctx, _json, _params) => {
   const json = _json;
   json.type = "string";
-  const { minimum, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
-  if (typeof minimum === "number")
-    json.minLength = minimum;
+  const { minimum: minimum2, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
+  if (typeof minimum2 === "number")
+    json.minLength = minimum2;
   if (typeof maximum === "number")
     json.maxLength = maximum;
   if (format) {
@@ -11579,9 +11795,9 @@ var stringProcessor = (schema, ctx, _json, _params) => {
 };
 var numberProcessor = (schema, ctx, _json, params) => {
   const json = _json;
-  const { minimum, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
+  const { minimum: minimum2, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
   json.type = isInt ? "integer" : "number";
-  const exMin = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY);
+  const exMin = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum2 ?? Number.NEGATIVE_INFINITY);
   const exMax = typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY);
   const legacy = ctx.target === "draft-04" || ctx.target === "openapi-3.0";
   if (exMin) {
@@ -11591,8 +11807,8 @@ var numberProcessor = (schema, ctx, _json, params) => {
     } else {
       json.exclusiveMinimum = exclusiveMinimum;
     }
-  } else if (typeof minimum === "number") {
-    json.minimum = minimum;
+  } else if (typeof minimum2 === "number") {
+    json.minimum = minimum2;
   }
   if (exMax) {
     if (legacy) {
@@ -11722,9 +11938,9 @@ var fileProcessor = (schema, _ctx, json, _params) => {
   _json.type = "string";
   _json.format = "binary";
   _json.contentEncoding = "binary";
-  const { minimum, maximum, mime } = aggregateChecks(schema);
-  if (minimum !== void 0)
-    _json.minLength = minimum;
+  const { minimum: minimum2, maximum, mime } = aggregateChecks(schema);
+  if (minimum2 !== void 0)
+    _json.minLength = minimum2;
   if (maximum !== void 0)
     _json.maxLength = maximum;
   if (!mime)
@@ -11757,9 +11973,9 @@ var setProcessor = (schema, ctx, json, params) => {
 var arrayProcessor = (schema, ctx, _json, params) => {
   const json = _json;
   const def = schema._zod.def;
-  const { minimum, maximum } = aggregateChecks(schema);
-  if (typeof minimum === "number")
-    json.minItems = minimum;
+  const { minimum: minimum2, maximum } = aggregateChecks(schema);
+  if (typeof minimum2 === "number")
+    json.minItems = minimum2;
   if (typeof maximum === "number")
     json.maxItems = maximum;
   json.type = "array";
@@ -11905,9 +12121,9 @@ var tupleProcessor = (schema, ctx, _json, params) => {
     if (isClosed)
       json.maxItems = maxItems;
   }
-  const { minimum, maximum } = aggregateChecks(schema);
-  if (typeof minimum === "number")
-    json.minItems = minimum;
+  const { minimum: minimum2, maximum } = aggregateChecks(schema);
+  if (typeof minimum2 === "number")
+    json.minItems = minimum2;
   if (typeof maximum === "number")
     json.maxItems = maximum;
 };
@@ -11935,7 +12151,7 @@ function stringifyKeyNames(bySchema, json, visited) {
   const values = json.enum ?? (json.const !== void 0 ? [json.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+  const { minimum: minimum2, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -12705,8 +12921,8 @@ var ZodNumber = /* @__PURE__ */ $constructor(
   },
   /* @__PURE__ */ util_exports.derived({
     minValue: (inst) => {
-      const { minimum, exclusiveMinimum } = aggregateChecks(inst);
-      return Math.max(minimum ?? Number.NEGATIVE_INFINITY, exclusiveMinimum ?? Number.NEGATIVE_INFINITY);
+      const { minimum: minimum2, exclusiveMinimum } = aggregateChecks(inst);
+      return Math.max(minimum2 ?? Number.NEGATIVE_INFINITY, exclusiveMinimum ?? Number.NEGATIVE_INFINITY);
     },
     maxValue: (inst) => {
       const { maximum, exclusiveMaximum } = aggregateChecks(inst);
@@ -12873,8 +13089,8 @@ var ZodDate = /* @__PURE__ */ $constructor(
   },
   /* @__PURE__ */ util_exports.derived({
     minDate: (inst) => {
-      const { minimum } = aggregateChecks(inst);
-      return minimum ? new Date(minimum) : null;
+      const { minimum: minimum2 } = aggregateChecks(inst);
+      return minimum2 ? new Date(minimum2) : null;
     },
     maxDate: (inst) => {
       const { maximum } = aggregateChecks(inst);
@@ -42181,6 +42397,13 @@ function waitForWork(work, signal) {
     if (signal.aborted) aborted2();
   });
 }
+function requireTargetObservation(target, signal) {
+  signal?.throwIfAborted();
+  if (targetExitObserved(target))
+    throw new Error("The target application exited before CDP readiness or verification.");
+  if (target.child?.monitoringFailure)
+    throw new Error("The native process observer failed; retaining application identity for cleanup.");
+}
 async function probeAddress(port, host) {
   const server = net.createServer();
   try {
@@ -42549,13 +42772,18 @@ function createTargetHost(dependencies = {}) {
         );
         context.signal?.throwIfAborted();
         const requestedAt = io.now();
+        const calibration = await waitForWork(() => platform.prepareLaunch(context), context.signal);
+        context.signal?.throwIfAborted();
         context.onPhase?.("launching");
         let child;
         const finishSpawn = beginFixtureStage("spawn", { port });
         try {
           context.signal?.throwIfAborted();
           const onCreated = (application) => {
-            if (created) return;
+            if (created) {
+              if (created.child === application && created.processId === application.pid) return;
+              throw new Error("The actual launched child identity changed.");
+            }
             if (application.pid === void 0) throw new Error("The target process has no PID.");
             const target2 = {
               port,
@@ -42602,6 +42830,8 @@ function createTargetHost(dependencies = {}) {
               exited();
               releaseResources();
             } else if (application.monitoringFailure) monitorFailed();
+            if (!context.signal?.aborted && !targetExitObserved(target2) && !application.monitoringFailure)
+              platform.registerLaunch(target2, calibration, requestedAt);
             context.onCreated?.(target2);
           };
           child = await io.spawn(executablePath, args, port, cwd, env, {
@@ -42649,6 +42879,10 @@ function createTargetHost(dependencies = {}) {
         let lastError;
         let foreignRace = false;
         const launchedAt = io.now();
+        const assertReadinessActive = () => {
+          if (io.now() - launchedAt >= STARTUP_TIMEOUT_MS)
+            throw new Error("The CDP readiness budget expired.");
+        };
         context.onPhase?.("waiting-cdp");
         const finishReadiness = beginFixtureStage("readiness", {
           phase: "waiting-cdp",
@@ -42683,7 +42917,21 @@ function createTargetHost(dependencies = {}) {
               () => observeSnapshot(processId, port, readinessSignal)
             );
             try {
-              platform.validateNewRoot(evidence, target);
+              const remaining = STARTUP_TIMEOUT_MS - (io.now() - launchedAt);
+              if (remaining <= 0) throw new Error("The CDP readiness budget expired.");
+              const identitySignal = AbortSignal.any([
+                ...readinessSignal ? [readinessSignal] : [],
+                AbortSignal.timeout(Math.ceil(remaining))
+              ]);
+              await waitForWork(
+                () => platform.validateIdentity(evidence, target, {
+                  signal: identitySignal,
+                  newlyLaunched: true,
+                  assertReadinessActive
+                }),
+                identitySignal
+              );
+              requireTargetObservation(target, identitySignal);
               emitFixtureEvent("native-snapshot", "decision", {
                 pid: processId,
                 port,
@@ -42705,7 +42953,6 @@ function createTargetHost(dependencies = {}) {
               throw error3;
             }
             if (!evidence.root.exists) throw new Error("The target root process is absent.");
-            target.startedAtUtc = evidence.root.startedAtUtc;
             if (evidence.listeners.some(({ localAddress }) => !["127.0.0.1", "::1"].includes(localAddress))) {
               emitFixtureEvent("listener-ownership", "decision", {
                 pid: processId,
@@ -42731,11 +42978,12 @@ function createTargetHost(dependencies = {}) {
             }
             const endpoint = await runFixtureResource(
               origins.get(target),
-              () => waitForWork(() => io.getVersion(port), readinessSignal)
+              () => waitForWork(() => {
+                assertReadinessActive();
+                return io.getVersion(port);
+              }, readinessSignal)
             );
-            context.signal?.throwIfAborted();
-            if (targetExitObserved(target))
-              throw new Error("The target application exited before CDP readiness.");
+            requireTargetObservation(target, readinessSignal);
             const identity = validateCdpIdentity({
               endpoint,
               port,
@@ -42746,8 +42994,12 @@ function createTargetHost(dependencies = {}) {
             Object.assign(target, identity);
             target.verify = () => runFixtureResource(origins.get(target), async () => {
               const current2 = await observeSnapshot(processId, port, readinessSignal);
-              validateProcessIdentity(current2, target);
+              await platform.validateIdentity(current2, target, {
+                ...readinessSignal ? { signal: readinessSignal } : {}
+              });
+              requireTargetObservation(target, readinessSignal);
               const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
+              requireTargetObservation(target, readinessSignal);
               const checked = validateCdpIdentity({
                 endpoint: endpointNow,
                 port,
@@ -42855,7 +43107,7 @@ function createTargetHost(dependencies = {}) {
         const evidence = await observeSnapshot(target.processId, target.port);
         if (!evidence.root.exists) return targetExitObserved(target) ? "gone" : "unavailable";
         try {
-          validateProcessIdentity(evidence, target);
+          await platform.validateIdentity(evidence, target);
         } catch {
           return "identity-changed";
         }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import {
     type FixtureEvent,
@@ -6,7 +7,13 @@ import {
     runFixtureObservation,
     subscribeFixtureDiagnostics,
 } from '../src/adapters/fixture-diagnostics.ts';
-import { resolveUnixExecutable, unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
+import {
+    createPlatformAdapter,
+    resolveUnixExecutable,
+    unixSnapshot,
+    validateProcessIdentity,
+} from '../src/adapters/platform-process.ts';
+import { createTargetHost } from '../src/adapters/target-host.ts';
 import { errorDetails } from '../src/shared/errors.ts';
 
 const darwinRootRow = '42 1 7 Thu Oct  8 00:16:40 2026 Chrome\n';
@@ -267,6 +274,66 @@ test('Linux creation evidence preserves kernel tick precision instead of the rou
         () => validateProcessIdentity(evidence, { ...target, startedAtUtc: '1970-01-01T00:16:45Z' }),
         /creation time changed/,
     );
+});
+
+test('Linux accepts its newly launched child across combined boot and tick quantization', async (t) => {
+    // Stable boot epoch is 2026-10-16T00:00:00.999Z; this child is born at
+    // boottime 123.459s, one millisecond after the literal request timestamp.
+    let clock = Date.parse('2026-10-16T00:02:04.457Z');
+    t.mock.method(Date, 'now', () => clock);
+    const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null as number | null });
+    t.after(() => {
+        child.exitCode = 0;
+        child.emit('exit', 0);
+    });
+    const platform = createPlatformAdapter({
+        platform: 'linux',
+        unix: {
+            currentUser: () => 7,
+            readlink: async () => process.execPath,
+            readText: async (file) => {
+                if (file === '/proc/uptime')
+                    return clock === Date.parse('2026-10-16T00:02:04.457Z') ? '123.45 0.00\n' : '123.46 0.00\n';
+                if (file === '/proc/stat') return 'btime 1792108800\n';
+                assert.equal(file, '/proc/42/stat');
+                return '42 (chrome) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 12345\n';
+            },
+            run: async (command) => {
+                if (command === 'ps')
+                    return { code: 0, stdout: '42 1 7 Fri Oct 16 00:02:04 2026 chrome\n', stderr: '' };
+                if (command === 'getconf') return { code: 0, stdout: '100\n', stderr: '' };
+                assert.equal(command, 'lsof');
+                return { code: 0, stdout: 'p42\nn127.0.0.1:9222\n', stderr: '' };
+            },
+        },
+        requestUnixClose: () => {
+            child.exitCode = 0;
+            child.emit('exit', 0);
+        },
+    });
+    const host = createTargetHost({
+        platformAdapter: { ...platform, reservedRanges: async () => [] },
+        probe: async () => true,
+        spawn: async (_executable, _arguments, _port, _cwd, _env, context) => {
+            clock = Date.parse('2026-10-16T00:02:04.459Z');
+            context?.onCreated?.(child);
+            return child;
+        },
+        getVersion: async () => ({
+            Browser: 'Chrome/155',
+            webSocketDebuggerUrl: 'ws://127.0.0.1:9222/devtools/browser/ready',
+        }),
+    });
+    await assert.doesNotReject(async () => {
+        const target = await host.launch({
+            isolation: { mode: 'none' },
+            launch: { executable: process.execPath },
+            basePort: 9222,
+        });
+        assert.equal(target.child, child);
+        assert.equal(target.processId, 42);
+        assert.equal(target.webSocketDebuggerUrl, 'ws://127.0.0.1:9222/devtools/browser/ready');
+    });
 });
 
 test('Darwin resolves absolute executable evidence from lsof text mappings, not a relative ps name', async () => {
