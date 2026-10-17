@@ -13,7 +13,8 @@ This directory owns GitHub Actions workflows.
   the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
   request open/reopen/synchronize/title-or-body-edit events. Ordinary controlled
   real Chrome jobs upload the fixed safe fixture diagnostic files only on failure.
-  The default-off manual Ubuntu startup study is the narrow exception below.
+  The two default-off manual Ubuntu studies and bounded first-start assessment
+  are the narrow success-upload exceptions below.
 - `release.yaml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.
@@ -94,8 +95,8 @@ It retains artifacts for seven days, disables hidden files and overwrite, and se
 `job-index.json`, `official-server.events.ndjson`, `official-server.summary.json`,
 `entry-recovery.events.ndjson` and `entry-recovery.summary.json` from the separate
 `RUNNER_TEMP/dct-fixture-diagnostics` directory. There are no profile, workspace
-or temporary-directory wildcards. Jobs other than ordinary real Chrome and the
-manual studies below remain artifact-free, and the release publisher uploads no
+or temporary-directory wildcards. Jobs other than ordinary real Chrome, the
+manual studies and the assessment below remain artifact-free, and the release publisher uploads no
 custom assets. The failure job summary indexes
 relative filenames, safe primary stage/operation identity and the artifact link
 when upload succeeds. The index, both independent not-run summaries and empty
@@ -218,3 +219,79 @@ must be enabled separately before publication. See the release policy for
 pre-tag installation acceptance, cumulative Changelog snapshots, and explicit
 authorization for every release. GitHub prereleases do not create a separate
 Marketplace channel; repository-based installation is unchanged.
+
+## Bounded current-version first-start assessment
+
+The third manual success-upload exception is `ubuntu-first-start-assessment`,
+default false. Its data inputs are `assessment-round-id`, `assessment-source-sha`
+and `assessment-source-tree`; both legacy research selectors must stay false.
+Quality rejects conflicting selections before Chrome-dependent jobs and runs
+the non-launching `first-start-assessment-ci.ts quality` source/context check.
+The exact repository, investigation branch, CI workflow/ref, Linux, attempt one,
+round and clean actual HEAD/tree must agree. `GITHUB_WORKFLOW_REF` is inherited
+actual context. Input values pass through env/with data, without shell-source
+interpolation. The fixture repeats native admission just before acquisition.
+
+The topology is six literal jobs, `ubuntu-first-start-assessment-1` through `-6`,
+each with one matching literal slot and at most one first start on `ubuntu-24.04`.
+Slot 1 needs Quality. Each later job needs Quality and its predecessor's final
+successful result and exact `safe-to-continue=true`. There is no matrix, controller,
+anchor, retry, ignored failure or always-run job admission. This mode alone uses
+a run-ID-specific concurrency group with cancellation disabled; ordinary and
+legacy-study concurrency semantics remain unchanged. The ordinary official and
+entry-recovery smokes on both platforms and all eighteen Windows interactive
+cases remain required.
+
+The complete path is strictly ordered: qualified assessment command success,
+independent complete-five-file preflight producing an opaque metadata token,
+exact-five upload, existing index presentation, then metadata-only postcheck.
+Every prior step outcome and conclusion must succeed, upload must return its
+artifact ID and URL, and postcheck must return `safe-to-continue=true`. Final
+job/post-job failure still prevents successor admission. The index step runs
+the unchanged CLI once, holds its sanitized text in shell memory, rejects its
+explicit graceful-fallback messages or missing fixed markers. Its single held
+capture line must have only `none` or `self-report-write-unavailable` limitations;
+missing selection/outcome/terminal/writer-cost evidence or any unsupported
+limitation refuses continuation. It appends that same text with a fixed quoted
+printf. This conservative format check is distinct from fixture
+qualification and the independent pre/postflight file checks; a format change
+can stop the round. It adds no artifact-body or event rescan.
+
+The separate failure-only partial path requires the original assessment to fail
+and complete preflight to remain skipped. It independently checks current closed
+file ownership, uploads only that eligible five-file set and indexes existing failed/
+incomplete presentation. Missing/subset, running or foreign evidence is ineligible
+under its conservative ownership policy. It never makes the job successful or
+enables a successor. Once complete preflight is attempted, even a late output-write
+failure refuses partial acquisition/upload/index. This conservatively loses a
+potential partial artifact to preserve one aggregate JSON acquisition per slot.
+Complete and partial artifacts have separate unique names
+including round, literal slot, run and attempt. Both use the reviewed pinned
+action, exact existing five paths, seven-day retention, no hidden files or
+overwrite and `if-no-files-found: error`. Ordinary real Chrome uploads remain
+failure-only. No profile, raw Chrome log, private scratch or wildcard is uploaded.
+
+A later round requires separate authorization of its exact reviewed SHA/tree,
+round UUID and single dispatch-attempt receipt, followed by recording its actual
+run ID. Inputs/local implementation provide no execution authority or persistent
+one-use lock. All six assigned positions are consumed, including preparation
+failure, zero starts, cancellation, missing data and downstream skips; there is
+no rerun, replacement, backfill or extra dispatch. The dispatch maximum is six
+assessment roots plus sixteen ordinary roots, twenty-two total. A separately
+authorized natural publication push/PR scope may add thirty-two, giving at most
+fifty-four combined only under separate authorization. Existing Windows GUI
+activity is separate. Six serial twenty-minute provider limits allow at most
+120 execution minutes excluding dependencies, queues and cancellation grace.
+Native readiness stays twenty seconds; normal Close has no new deadline.
+Provider cutoff can interrupt cleanup/flush, leaving it unverified/incomplete or
+unknown, without force-kill or automatic resume.
+
+Report first-start, lifecycle cleanup, collection and CI/provider axes separately,
+binding actual source/tree and run/slot/software conditions. Audit downloaded
+archive entries and hashes after an authorized round; local postflight and upload
+status cannot independently prove remote inventory. A finite green round can
+complete the planned bounded assessment without requiring a failure witness:
+report no target failure observed in N executed qualified positions and explain
+every skipped/incomplete assignment. No universal stability, historical repair
+or physical-device causality follows. The [smoke assessment procedure](../../tests/smoke/README.md#bounded-current-version-first-start-assessment)
+owns the exact CLI, admission, receipt, byte/call limits and interpretation.

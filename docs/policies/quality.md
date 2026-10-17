@@ -308,7 +308,8 @@ using the reviewed
 [official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
 The exact five collector/index filenames, failure condition, seven-day retention
 and separate directory are enforced by CI regressions. The success-upload
-exceptions are the two explicitly opted-in manual Ubuntu studies described below;
+exceptions are the two explicitly opted-in manual Ubuntu studies and the bounded
+current-version first-start assessment described below;
 all other jobs remain artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
 numbers and bounded allowlisted error cause codes. They exclude raw errors,
 messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
@@ -405,8 +406,9 @@ for the fixed protocol, metrics and manual command.
 
 The separate `ubuntu-readahead-study` boolean manual input defaults to false and
 requires explicit `workflow_dispatch` selection. It is mutually exclusive with
-`ubuntu-startup-study`: selecting both fails the first Quality step before either
-research job can start Chrome, and neither study job runs. Both opt-ins use
+`ubuntu-startup-study` and `ubuntu-first-start-assessment`: selecting multiple
+research modes fails the first Quality step before any
+research job can start Chrome, and no selected research job runs. Both legacy opt-ins use
 run-ID-specific concurrency without cancelling ordinary CI. The new quality-gated
 job fixes file logging on and freezes six slot/block/RA KiB allocations:
 `1/1/128`, `2/1/1024`, `3/2/1024`, `4/2/128`, `5/3/128`, `6/3/1024`.
@@ -449,6 +451,74 @@ Different configurations are explicit confounding. Fresh runners do not prove
 cold caches, and all success does not establish a repair or historical root cause.
 The separate [readahead study procedure](../../tests/smoke/README.md#bounded-ubuntu-readahead-study)
 does not replace the ordinary two-smoke real Chrome acceptance.
+
+The third narrow manual success-upload exception is the default-false
+`ubuntu-first-start-assessment` input. All three research selectors are mutually
+exclusive. Quality rejects conflicts and independently validates the exact
+manual source SHA/tree, round UUID, repository/ref/workflow/context and attempt
+one before Chrome-dependent jobs. Each fixture revalidates its native admission
+immediately before acquisition. Actual `GITHUB_WORKFLOW_REF` stays inherited;
+arbitrary input/context values travel through env/with as data, never shell source.
+This manual path does not reuse or broaden the consumed ordinary push gate.
+Ordinary Linux presentation forwards that gate's one already-acquired result
+through literal admitted/ineligible/unavailable values with source null; unknown
+or gate error becomes unavailable. It adds no native/Git probe or capture authority.
+
+The assessment consists of six explicit serial `ubuntu-24.04` jobs and literal
+slots, each with at most one assessment first start. Slot 1 needs Quality; each
+successor needs Quality and its predecessor's final successful job result plus
+exact `safe-to-continue=true`. There is no assessment matrix, controller, retry,
+ignored failure, YAML anchor or always-run job admission. Only this new mode
+uses a run-ID-specific group with `cancel-in-progress=false`; other concurrency
+semantics stay unchanged. Existing ordinary double-start official acceptance,
+entry recovery, both legacy studies and all eighteen Windows interactive cases
+retain their required checks.
+
+Continuation requires the original qualified assessment command's successful
+exit, complete current-five-file preflight with bounded opaque metadata token,
+exact-five upload, accepted existing index presentation and metadata-only stable
+postcheck, in that order. Each step's outcome and conclusion must succeed.
+Subsequent final job/post-job failure still stops the successor. Missing receipt,
+unqualified terminal evidence, cleanup failure, unstable metadata, refused budget,
+missing file, upload/index/provider failure or cancellation cannot be repaired by
+a partial upload. The complete-path index wrapper rejects explicit graceful
+fallback and missing fixed presentation markers. Its single held capture line
+allows only `none` or `self-report-write-unavailable` limitations, refusing missing
+selection/outcome/terminal/writer-cost evidence and unsupported limitations.
+Its fixed-format coupling can conservatively stop a round; it adds no body/event
+rescan or fixture API. The separate failure-only
+partial path requires original assessment failure, skipped complete preflight
+and independently proven current closed ownership. Any attempted complete
+preflight, including late output-write failure, refuses further partial
+acquisition/upload/index. This conservative loss of potential partial evidence
+preserves the aggregate per-slot JSON byte ceiling and one body read per JSON.
+Partial evidence preserves the original failure and never emits continuation.
+Ordinary success uploads remain forbidden. Assessment uploads use the reviewed
+action, seven-day retention,
+unique round/slot/run/attempt names, exact existing five paths, hidden-files and
+overwrite disabled, and `if-no-files-found: error`.
+
+One separately authorized round reserves all six positions, including zero-start,
+failed, cancelled, missing or skipped outcomes. No rerun, replacement, backfill,
+warmup or additional dispatch follows. Assessment roots total at most six, plus
+sixteen ordinary roots in the same dispatch: at most twenty-two. Separately
+authorized natural publication push/PR runs may add thirty-two, for a combined
+maximum of fifty-four only under that separate authorization. Windows native
+GUI activity is outside those Chrome-root counts. Six serial twenty-minute
+provider allowances total at most 120 execution minutes, excluding dependencies,
+queue time and cancellation grace; native readiness remains twenty seconds and
+normal Close has no new deadline. Provider cutoff can interrupt cleanup/flush,
+which stays unverified/incomplete or unknown without force-kill or automatic resume.
+
+Report startup, actual lifecycle cleanup, collection availability and CI/provider
+outcomes separately. Audit downloaded archive inventory/hashes after an authorized
+round; local pre/postflight and upload success alone are not remote-inventory proof.
+A finite green round can complete the bounded assessment without a failure
+witness: report no target failure observed in N executed qualified positions,
+record every skipped/incomplete position and actual conditions, and make no
+universal stability or historical-repair claim. Inputs and local preparation
+authorize no execution. The [assessment procedure](../../tests/smoke/README.md#bounded-current-version-first-start-assessment)
+owns the exact source/context, receipt, byte/call budgets and interpretation.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at

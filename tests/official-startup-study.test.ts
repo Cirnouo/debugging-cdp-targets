@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as childProcess from 'node:child_process';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, writeSync } from 'node:fs';
 import * as filesystem from 'node:fs/promises';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
@@ -34,6 +34,7 @@ async function installStudyBoundary() {
     let operation: Record<string, unknown> | undefined;
     const deleted = new Set<string>();
     const failure = process.env.STUDY_FAILURE;
+    const assessment = process.argv.includes('--first-start-assessment');
     let rawTicks = '12345';
     const procText = (file: string) => {
         assert.ok(target?.processId === 4100, 'Native proc reads require the current simulated owned target.');
@@ -78,6 +79,7 @@ async function installStudyBoundary() {
         },
         async access(file: string) {
             note('executable-access', file);
+            if (failure === 'preparation') throw new Error('Executable preparation failed.');
         },
         async stat(file: string) {
             note('executable-stat', file);
@@ -162,6 +164,17 @@ async function installStudyBoundary() {
                     timestampMs: 1,
                     durationMs: 0,
                 });
+                if (assessment) {
+                    gatewayArtifacts.firstStartCapture({
+                        kind: 'linux-first-start-capture',
+                        slot: 'selection',
+                        status: 'armed',
+                        atMs: 0,
+                        ...startIdentity,
+                        requestId:
+                            failure === 'foreign-selection' ? '88888888-8888-4888-8888-888888888888' : args.requestId,
+                    });
+                }
                 gatewayArtifacts.gateway({
                     ...startIdentity,
                     stage: 'spawn',
@@ -182,6 +195,16 @@ async function installStudyBoundary() {
             return { structuredContent: { operationId: '44444444-4444-4444-8444-444444444444' } };
         }
         if (name === 'dct_connection_stop') {
+            if (failure === 'normal-close-pending') {
+                note('normal-close-pending');
+                // Model provider termination of this private synthetic fixture only.
+                // A pending response never supplies target-exit or terminal evidence.
+                setImmediate(() => {
+                    note('provider-termination');
+                    process.exit(23);
+                });
+                return;
+            }
             if (failure === 'cleanup' || failure === 'profile-and-cleanup') throw new Error('Normal Close failed.');
             assert.ok(directory);
             if (failure !== 'profile-cleanup') deleted.add(directory);
@@ -271,7 +294,7 @@ async function installStudyBoundary() {
             });
             return child;
         }
-        if (failure === 'readahead-success') {
+        if (failure === 'readahead-success' || assessment) {
             const preload = args.find((argument) => argument.includes('fixture-preload.ts?'));
             assert.ok(preload && createArtifacts);
             const query = new URL(preload).searchParams;
@@ -280,6 +303,7 @@ async function installStudyBoundary() {
             gatewayArtifacts = createArtifacts(output, 'official-server', {
                 streamOnly: true,
                 collectionId: query.get('collectionId'),
+                firstStartCapture: assessment,
             });
             assert.equal(gatewayArtifacts.snapshot().collectionRejected, false);
         }
@@ -300,25 +324,83 @@ async function installStudyBoundary() {
                             assert.ok(error instanceof Error);
                             response = { error: { code: -32000, message: error.message } };
                         }
-                        queueMicrotask(() =>
-                            child.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response })}\n`),
-                        );
+                        if (response.result !== undefined || response.error !== undefined)
+                            queueMicrotask(() =>
+                                child.stdout.write(
+                                    `${JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response })}\n`,
+                                ),
+                            );
                     } else note('notify', request.method);
                     done();
                 },
                 final(done) {
-                    gatewayArtifacts?.readahead({
-                        kind: 'linux-readahead-study',
-                        phase: 'observer',
-                        outcome: 'verified',
-                        clock: 'gateway',
-                        assignedKb: 1024,
-                        startedMs: 4,
-                        endedMs: 4,
-                        cost: 'complete',
-                        reads: 0,
-                        bytes: 0,
-                    });
+                    if (!assessment)
+                        gatewayArtifacts?.readahead({
+                            kind: 'linux-readahead-study',
+                            phase: 'observer',
+                            outcome: 'verified',
+                            clock: 'gateway',
+                            assignedKb: 1024,
+                            startedMs: 4,
+                            endedMs: 4,
+                            cost: 'complete',
+                            reads: 0,
+                            bytes: 0,
+                        });
+                    if (assessment && gatewayArtifacts && startIdentity) {
+                        const selected = trace.find(
+                            (item) =>
+                                item.event === 'request' &&
+                                isRecord(item.detail) &&
+                                item.detail.name === 'dct_connection_start',
+                        )?.detail;
+                        assert.ok(isRecord(selected) && isRecord(selected.arguments));
+                        const requestId = selected.arguments.requestId;
+                        const receipt = (slot: string, status: string, fields: object = {}) =>
+                            gatewayArtifacts?.firstStartCapture({
+                                kind: 'linux-first-start-capture',
+                                slot,
+                                status,
+                                atMs: 1,
+                                ...startIdentity,
+                                requestId,
+                                ...fields,
+                            });
+                        receipt('first-start-outcome', failure === 'start' ? 'failed' : 'succeeded');
+                        receipt('retention-decision', failure === 'start' ? 'retained' : 'discarded', {
+                            metrics: { discarded: 1, admitted: 1, completed: 1, pending: 0, skipped: 5 },
+                        });
+                        receipt('six-slot-status', 'complete', {
+                            slots: [
+                                'complete',
+                                'not-admitted',
+                                'not-admitted',
+                                'not-admitted',
+                                'not-admitted',
+                                'not-admitted',
+                            ],
+                        });
+                        receipt('limitations', 'no-close-gate', {
+                            creationObservation: {
+                                stats: 'available',
+                                sourceAttempts: 1,
+                                comparisons: 1,
+                                tokens: 1,
+                                retained: 1,
+                                omitted: 0,
+                                capped: false,
+                                disabled: false,
+                                revoked: true,
+                                producerCpu: 'unmeasured',
+                            },
+                        });
+                        receipt('writer-state', 'partial', {
+                            reason: 'incomplete',
+                            metrics: { sinkCalls: 7, sinkFailed: 0, callbackMs: 1, records: 7, serializedBytes: 200 },
+                        });
+                        if (failure !== 'missing-observer-terminal') receipt('observer-terminal', 'complete');
+                        gatewayArtifacts.finishStream();
+                    }
                     const code = failure === 'gateway-exit' ? 7 : 0;
                     note('gateway-exit', code);
                     child.exitCode = code;
@@ -358,12 +440,29 @@ async function installStudyBoundary() {
             childProcess: {
                 ...childProcess,
                 spawn,
+                execFileSync(executable: string, args: string[]) {
+                    assert.equal(executable, 'git');
+                    note('admission-git', args);
+                    if (args[0] === 'status') return failure === 'dirty-source' ? ' M synthetic\n' : '';
+                    return args[2] === 'HEAD' ? `${'a'.repeat(40)}\n` : `${'b'.repeat(40)}\n`;
+                },
                 spawnSync(...args: unknown[]) {
                     note('display-preflight', args);
                     return { status: 0 };
                 },
             },
             path: path.posix,
+            writeControl(fd: number, line: string) {
+                assert.equal(fd, 1);
+                const value: unknown = JSON.parse(line);
+                note('control-write', value);
+                assert.ok(isRecord(value));
+                const controlFailure = process.env.STUDY_CONTROL_FAILURE || failure;
+                if (controlFailure === `${value.phase}-partial`) return writeSync(fd, line.slice(0, 8));
+                if (controlFailure === `${value.phase}-epipe`)
+                    throw Object.assign(new Error('synthetic pipe'), { code: 'EPIPE' });
+                return writeSync(fd, line);
+            },
             async readChromeSmokeProfile(fixture: unknown) {
                 note('profile-probe', fixture);
                 if (failure === 'profile' || failure === 'profile-and-cleanup')
@@ -406,7 +505,9 @@ async function installStudyBoundary() {
             if (privateModule && specifier === 'node:path') source = 'export default globalThis.__studyBoundary.path;';
             if (specifier === 'node:child_process')
                 source =
-                    "export * from 'node:child_process'; export default globalThis.__studyBoundary.childProcess; export const { spawn, spawnSync } = globalThis.__studyBoundary.childProcess;";
+                    "export * from 'node:child_process'; export default globalThis.__studyBoundary.childProcess; export const { spawn, spawnSync, execFileSync } = globalThis.__studyBoundary.childProcess;";
+            if (parent.endsWith('/official-server.ts') && specifier === 'node:fs')
+                source = "export * from 'node:fs'; export const writeSync = globalThis.__studyBoundary.writeControl;";
             if (parent.endsWith('/chrome-host.ts') && specifier === './chrome-profile-probe.ts')
                 source = 'export const readChromeSmokeProfile = globalThis.__studyBoundary.readChromeSmokeProfile;';
             if (source && !parent.startsWith('data:')) return { url: virtual(source), shortCircuit: true };
@@ -435,6 +536,11 @@ if (process.env.STUDY_TRACE) {
             platform?: string;
             failure?: string;
             failedFirstStartCapture?: boolean;
+            assessment?: boolean;
+            assessmentEnvironment?: Record<string, string>;
+            controlFailure?: string;
+            ordinaryAdmission?: string;
+            ordinaryCi?: boolean;
         } = {},
     ): Promise<Invocation> {
         const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-study-regression-'));
@@ -442,6 +548,8 @@ if (process.env.STUDY_TRACE) {
             const traceFile = path.join(folder, 'trace.json');
             const diagnostics = path.join(folder, 'diagnostics');
             const collection = options.collection ? await fixtureJobIndex('init', diagnostics) : undefined;
+            const eventFile = path.join(folder, 'dispatch.json');
+            writeFileSync(eventFile, '{}');
             const diagnosticsArgs = options.collection
                 ? [
                       '--diagnostics',
@@ -469,7 +577,33 @@ if (process.env.STUDY_TRACE) {
                         STUDY_TRACE: traceFile,
                         STUDY_PLATFORM: options.platform ?? 'linux',
                         STUDY_FAILURE: options.failure ?? '',
+                        STUDY_CONTROL_FAILURE: options.controlFailure ?? '',
+                        GITHUB_ACTIONS: options.ordinaryCi ? 'true' : 'false',
+                        DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION: options.ordinaryAdmission ?? '',
                         DCT_SMOKE_FAILED_FIRST_START_CAPTURE: options.failedFirstStartCapture ? '1' : '0',
+                        ...(options.assessment
+                            ? {
+                                  GITHUB_EVENT_NAME: 'workflow_dispatch',
+                                  GITHUB_REPOSITORY: 'Cirnouo/debugging-cdp-targets',
+                                  GITHUB_REF: 'refs/heads/fix/chrome-startup-stall',
+                                  GITHUB_SHA: 'a'.repeat(40),
+                                  GITHUB_WORKFLOW: 'CI',
+                                  GITHUB_WORKFLOW_REF:
+                                      'Cirnouo/debugging-cdp-targets/.github/workflows/ci.yaml@refs/heads/fix/chrome-startup-stall',
+                                  RUNNER_OS: 'Linux',
+                                  GITHUB_RUN_ID: '42',
+                                  GITHUB_RUN_ATTEMPT: '1',
+                                  GITHUB_JOB: 'ubuntu-first-start-assessment-1',
+                                  GITHUB_EVENT_PATH: eventFile,
+                                  DCT_ASSESSMENT_ENABLED: 'true',
+                                  DCT_ASSESSMENT_STARTUP_STUDY: 'false',
+                                  DCT_ASSESSMENT_READAHEAD_STUDY: 'false',
+                                  DCT_ASSESSMENT_ROUND_ID: '77777777-7777-4777-8777-777777777777',
+                                  DCT_ASSESSMENT_SOURCE_SHA: 'a'.repeat(40),
+                                  DCT_ASSESSMENT_SOURCE_TREE: 'b'.repeat(40),
+                              }
+                            : {}),
+                        ...options.assessmentEnvironment,
                     },
                 },
             );
@@ -503,6 +637,227 @@ if (process.env.STUDY_TRACE) {
         );
     }
     const study = (arm: string) => ['--allow-gui', '--startup-study', '--chrome-file-logging', arm];
+    const assess = ['--allow-gui', '--first-start-assessment', '--assessment-slot', '1'];
+    function controls(result: Invocation) {
+        return result.trace.filter((item) => item.event === 'control-write').map((item) => item.detail);
+    }
+
+    test('ordinary Linux CI control maps the already acquired result without a second admission read', async () => {
+        for (const [supplied, expected] of [
+            ['admitted', 'admitted'],
+            ['ineligible', 'ineligible'],
+            ['unavailable', 'unavailable'],
+            ['PRIVATE_UNTRUSTED_VALUE', 'unavailable'],
+            ['', 'unavailable'],
+        ] as const) {
+            const result = await invoke(['--allow-gui'], {
+                collection: 'valid',
+                ordinaryCi: true,
+                ordinaryAdmission: supplied,
+            });
+            assert.equal(result.status, 0, result.stderr);
+            assert.equal(calls(result, 'dct_connection_start').length, 2);
+            assert.equal(calls(result, 'dct_connection_stop').length, 2);
+            const [admission, terminal] = controls(result);
+            assert.ok(isRecord(admission) && isRecord(terminal));
+            assert.equal(controls(result).length, 2);
+            assert.equal(admission.result, expected);
+            assert.equal(admission.source, null);
+            assert.equal(terminal.source, null);
+            assert.equal(terminal.configured, false, 'Presentation-only admitted cannot arm capture.');
+            assert.equal(terminal.selection, 'not-observed');
+            assert.equal(terminal.fixtureOutcome, 'passed');
+            assert.deepEqual(terminal.cleanup, { targetClosed: true, gatewayExited: true, profileDeleted: true });
+            assert.equal(result.trace.filter((item) => item.event === 'admission-git').length, 0);
+            assert.doesNotMatch(result.stdout, /PRIVATE_UNTRUSTED_VALUE/);
+            const spawned = result.trace.find((item) => item.event === 'spawn')?.detail;
+            assert.ok(isRecord(spawned) && isRecord(spawned.options) && isRecord(spawned.options.env));
+            assert.equal(spawned.options.env.DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION, undefined);
+        }
+    });
+
+    test('ordinary control partial writes and EPIPE preserve both starts and original smoke exits', async () => {
+        for (const failure of ['admission-partial', 'admission-epipe', 'terminal-partial', 'terminal-epipe']) {
+            const result = await invoke(['--allow-gui'], {
+                collection: 'valid',
+                ordinaryCi: true,
+                ordinaryAdmission: 'admitted',
+                controlFailure: failure,
+            });
+            assert.equal(result.status, 0, result.stderr);
+            assert.equal(calls(result, 'dct_connection_start').length, 2);
+            assert.equal(calls(result, 'dct_connection_stop').length, 2);
+            assert.equal(controls(result).length, 2);
+            assert.equal(result.summary?.state, 'passed');
+            assert.equal(result.trace.filter((item) => item.event === 'admission-git').length, 0);
+        }
+        const failed = await invoke(['--allow-gui'], {
+            collection: 'valid',
+            ordinaryCi: true,
+            ordinaryAdmission: 'admitted',
+            failure: 'profile-and-cleanup',
+            controlFailure: 'terminal-epipe',
+        });
+        assert.notEqual(failed.status, 0);
+        assert.match(failed.stderr, /Error: Profile observation failed/);
+        assert.doesNotMatch(failed.stderr, /synthetic pipe|First-start assessment evidence/);
+        assert.equal(calls(failed, 'dct_connection_stop').length, 1);
+        assert.equal(failed.trace.filter((item) => item.event === 'gateway-exit').length, 1);
+    });
+
+    test('assessment rejects conflicts and requires native source admission and accepted collection before resources', async () => {
+        for (const args of [
+            [...assess, '--first-start-assessment'],
+            [...assess, '--assessment-slot', '1'],
+            [...assess.slice(0, -1), 'quality'],
+            [...assess.slice(0, -1), '7'],
+            [...assess, '--startup-study', '--chrome-file-logging', 'on'],
+            [...assess, '--chrome-file-logging', 'off'],
+            [...assess, '--readahead-kb', '128'],
+            ['--allow-gui', '--assessment-slot', '1'],
+        ]) {
+            const result = await invoke(args, { collection: 'valid', assessment: true });
+            assert.notEqual(result.status, 0);
+            assert.equal(calls(result, 'dct_connection_start').length, 0);
+            assert.ok(
+                !result.trace.some((item) => ['executable-access', 'spawn', 'scratch-create'].includes(item.event)),
+            );
+        }
+        for (const options of [
+            {},
+            { collection: 'refused' as const },
+            { collection: 'valid' as const, platform: 'win32' },
+            { collection: 'valid' as const, failedFirstStartCapture: true },
+            { collection: 'valid' as const, failure: 'dirty-source' },
+            { collection: 'valid' as const, assessmentEnvironment: { GITHUB_JOB: 'quality' } },
+            { collection: 'valid' as const, assessmentEnvironment: { GITHUB_RUN_ATTEMPT: '2' } },
+        ]) {
+            const result = await invoke(assess, { ...options, assessment: true });
+            assert.notEqual(result.status, 0, result.stdout);
+            assert.ok(
+                !result.trace.some((item) => ['executable-access', 'spawn', 'scratch-create'].includes(item.event)),
+            );
+            assert.equal(calls(result, 'dct_connection_start').length, 0);
+        }
+        const skipped = await invoke(assess.slice(1), { collection: 'valid', assessment: true });
+        assert.equal(skipped.status, 0);
+        assert.deepEqual(skipped.trace, []);
+    });
+
+    test('assessment writes admission before acquisition and qualifies exactly one verified first start and original finally', async () => {
+        const result = await invoke(assess, { collection: 'valid', assessment: true });
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(calls(result, 'dct_connection_start').length, 1);
+        assert.equal(calls(result, 'dct_connection_stop').length, 1);
+        assert.equal(calls(result, 'dct_connection_restart').length, 0);
+        assert.equal(result.trace.filter((item) => item.event === 'admission-git').length, 4);
+        assert.equal(calls(result, 'get_css_styles').length, 0);
+        assert.equal(calls(result, 'take_snapshot').length, 0);
+        const receipts = controls(result);
+        assert.equal(receipts.length, 2);
+        const [admission, terminal] = receipts;
+        assert.ok(isRecord(admission) && isRecord(terminal));
+        assert.equal(admission.result, 'admitted');
+        assert.equal(terminal.firstOutcome, 'succeeded');
+        assert.equal(terminal.parentBinding, 'bound');
+        assert.equal(terminal.fixtureOutcome, 'passed');
+        assert.deepEqual(terminal.cleanup, { targetClosed: true, gatewayExited: true, profileDeleted: true });
+        const expected = calls(result, 'dct_connection_start')[0]?.detail;
+        assert.ok(isRecord(expected) && isRecord(expected.arguments) && isRecord(terminal.selected));
+        assert.equal(terminal.selected.requestId, expected.arguments.requestId);
+        assert.ok(
+            result.trace.findIndex((item) => item.event === 'control-write') <
+                result.trace.findIndex((item) => item.event === 'executable-access'),
+        );
+        assert.equal(result.trace.at(-1)?.event, 'control-write');
+        assert.equal(result.summary?.state, 'passed');
+        assert.equal(result.recovery?.state, 'not-run');
+        const spawned = result.trace.find((item) => item.event === 'spawn')?.detail;
+        assert.ok(
+            isRecord(spawned) &&
+                Array.isArray(spawned.args) &&
+                isRecord(spawned.options) &&
+                isRecord(spawned.options.env),
+        );
+        assert.ok(spawned.args.some((arg) => typeof arg === 'string' && arg.includes('firstStartCapture=1')));
+        assert.ok(!Object.keys(spawned.options.env).some((key) => key.startsWith('DCT_ASSESSMENT_')));
+        assert.ok(!result.trace.some((item) => item.event === 'native-signal'));
+    });
+
+    test('assessment output failure is contained, admission prevents launch and terminal never repairs its write', async () => {
+        for (const failure of ['admission-partial', 'admission-epipe', 'terminal-partial', 'terminal-epipe']) {
+            const result = await invoke(assess, { collection: 'valid', assessment: true, failure });
+            assert.notEqual(result.status, 0, failure);
+            const admitted = failure.startsWith('admission');
+            assert.equal(calls(result, 'dct_connection_start').length, admitted ? 0 : 1);
+            assert.equal(calls(result, 'dct_connection_stop').length, admitted ? 0 : 1);
+            assert.equal(controls(result).length, 2);
+            assert.equal(result.summary?.state, admitted ? 'failed' : 'passed');
+            assert.ok(!result.stderr.includes('synthetic pipe'));
+        }
+    });
+
+    test('assessment failures keep cleanup and actual fixture outcome separate from evidence qualification', async () => {
+        for (const failure of [
+            'preparation',
+            'start',
+            'profile-and-cleanup',
+            'cleanup',
+            'profile-cleanup',
+            'gateway-exit',
+            'missing-observer-terminal',
+            'foreign-selection',
+        ]) {
+            const result = await invoke(assess, { collection: 'valid', assessment: true, failure });
+            assert.notEqual(result.status, 0, failure);
+            const launches = failure === 'preparation' ? 0 : 1;
+            assert.equal(calls(result, 'dct_connection_start').length, launches);
+            assert.equal(calls(result, 'dct_connection_stop').length, failure === 'start' ? 0 : launches);
+            assert.equal(result.trace.filter((item) => item.event === 'gateway-exit').length, launches);
+            assert.equal(controls(result).length, 2);
+            assert.equal(
+                result.summary?.state,
+                ['missing-observer-terminal', 'foreign-selection'].includes(failure) ? 'passed' : 'failed',
+            );
+            if (failure === 'profile-and-cleanup') assert.match(result.stderr, /Error: Profile observation failed/);
+            if (failure === 'start') {
+                const terminal = controls(result)[1];
+                const request = calls(result, 'dct_connection_start')[0]?.detail;
+                assert.ok(
+                    isRecord(terminal) &&
+                        isRecord(terminal.selected) &&
+                        isRecord(request) &&
+                        isRecord(request.arguments),
+                );
+                assert.equal(terminal.selected.requestId, request.arguments.requestId);
+            }
+            assert.ok(!result.trace.some((item) => item.event === 'native-signal'));
+        }
+        const original = await invoke(assess, {
+            collection: 'valid',
+            assessment: true,
+            failure: 'profile-and-cleanup',
+            controlFailure: 'terminal-epipe',
+        });
+        assert.match(original.stderr, /Error: Profile observation failed/);
+        assert.doesNotMatch(
+            original.stderr,
+            /Error: synthetic pipe|Error: First-start assessment evidence unavailable/,
+        );
+        assert.equal(calls(original, 'dct_connection_stop').length, 1);
+        assert.equal(original.trace.filter((item) => item.event === 'gateway-exit').length, 1);
+    });
+
+    test('provider termination while normal Close is pending cannot emit terminal or claim cleanup', async () => {
+        const result = await invoke(assess, { collection: 'valid', assessment: true, failure: 'normal-close-pending' });
+        assert.equal(result.status, 23);
+        assert.equal(calls(result, 'dct_connection_start').length, 1);
+        assert.equal(calls(result, 'dct_connection_stop').length, 1);
+        assert.equal(controls(result).length, 1);
+        assert.equal(result.summary?.state, 'running');
+        assert.equal(result.trace.at(-1)?.event, 'provider-termination');
+        assert.ok(!result.trace.some((item) => ['gateway-exit', 'native-signal'].includes(item.event)));
+    });
 
     test('readahead CLI rejects invalid scope and values before any acquisition', async () => {
         for (const args of [

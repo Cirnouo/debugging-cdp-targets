@@ -143,6 +143,10 @@ then explicitly restarts and normally closes them. It retains test profiles.
   supply the separately admitted, failure-focused
   first-start observer. Ordinary successful starts discard detailed samples;
   a failed first start retains completed device and visible resource context.
+- `first-start-control.ts` projects already-held admission and finished-summary
+  evidence into two bounded closed receipts and qualifies assessment continuation.
+  `first-start-assessment-ci.ts` owns the separate manual source/round/slot reader,
+  non-launching Quality check and bounded five-file preflight/metadata postcheck.
 - `linux-readahead-study.ts` supplies the separately opted-in Linux queue lease,
   bounded research observations and closed evidence for actual release and
   original-value restoration. It is test-only and never shipped.
@@ -1258,15 +1262,146 @@ separate approval. An isolated Linux batch through the existing ordinary CLI
 would bypass this CI gate and needs trusted environment/toolchain/Chrome proof;
 each successful CLI also performs a second ordinary startup, up to two physical
 launches per enhanced position. Same-machine repeats may warm caches and do not
-establish hosted-Azure acceptance. A dedicated repeated hosted batch has no
-existing path and requires a separately reviewed admission/workflow/artifact/
-budget design. The six-slot logging/readahead studies disable enhanced capture
+establish hosted-Azure acceptance. A dedicated repeated hosted batch uses the
+separately reviewed bounded assessment path below, whose local implementation
+alone authorizes no dispatch. The six-slot logging/readahead studies disable enhanced capture
 under `startupStudy` and change conditions; they cannot substitute for repeated
 current private-interval/completed-I/O capture. No future batch or run is authorized
 by this preparation or by gate admission. A proven current defect fix can be
 accepted while the historical unique root cause remains unknown; finite success
 means only no failure observed in those recorded positions, never universal
 stability or proof of historical repair.
+
+## Bounded current-version first-start assessment
+
+The default-false `ubuntu-first-start-assessment` manual input selects six literal
+jobs, `ubuntu-first-start-assessment-1` through `ubuntu-first-start-assessment-6`,
+on fresh `ubuntu-24.04` runners in serial order. Each reserves one first-start
+position. Quality and its supply-chain prerequisite must succeed; slot 1 needs
+Quality, and every later slot needs Quality plus the predecessor's final job
+success and exact `safe-to-continue=true` output. No matrix, controller, retry,
+replacement, backfill, warmup or ignored failure is part of this path. All six
+positions are reserved by the one separately authorized round; zero-start
+preparation/admission failure, cancellation, missing data and downstream skip
+consume their assigned positions. They never authorize another dispatch or attempt.
+
+Before a later dispatch, separately approve the exact reviewed source commit and
+tree, a round UUID and the single dispatch-attempt receipt; record the actual run
+ID after dispatch. Supply `assessment-source-sha`, `assessment-source-tree` and
+`assessment-round-id` as data alongside the true assessment selector. Leave both
+legacy study selectors false. Inputs and a nonce provide no human authorization
+or persistent global one-use lock. Local implementation/review authorizes no
+push, browser execution, upload or CI run.
+
+The non-launching `node tests/smoke/first-start-assessment-ci.ts quality` command
+rejects simultaneous research selectors and validates exact repository,
+`refs/heads/fix/chrome-startup-stall`, workflow-dispatch, CI workflow identity,
+actual `GITHUB_WORKFLOW_REF`, Linux, attempt one and source inputs before any
+Chrome-dependent job. Source SHA must equal event context and actual clean HEAD;
+the expected tree must equal both HEAD tree and that SHA object's tree. The
+fixture independently calls the same native admission reader immediately before
+resource acquisition, with its matching literal job/slot identity. The workflow
+inherits actual GitHub context and passes selected input data through env/with;
+it never inserts those values into shell source.
+
+Each admitted slot runs the existing official fixture exactly once with
+`--allow-gui --first-start-assessment --assessment-slot 1` (or its own literal
+slot 2 through 6), an absolute current diagnostics directory and the current
+collection UUID. It retains the normal catalog/first-start/identity/listener/
+endpoint/Profile Path prefix and existing finally cleanup. Only this mode omits
+the second official start and entry recovery. Duplicate flags, nonliteral slots,
+legacy capture opt-in, startup-study, file-logging and readahead combinations
+fail before acquisition. No prelaunch Chrome version/hash probe, package
+installation, changed readiness budget or new normal-Close deadline is added.
+The gateway child strips all assessment control carriers and the ordinary
+presentation carrier at its existing inheritance boundary.
+
+Linux official invocations emit at most one admission and one terminal control
+receipt, each at most 4,096 UTF-8 bytes including LF. Ordinary CI forwards only
+its existing gate result through literal admitted/ineligible/unavailable cases;
+unknown output or gate error maps to unavailable. That presentation has
+`source=null`, performs no extra native/Git/event read and grants no capture
+authority. Ordinary output failure stays best-effort. Assessment instead needs
+three independent true facts: admission receipt completely written before
+acquisition, terminal receipt completely written, and terminal qualification.
+The finish hook uses the held persisted summary, independently captured first
+parent request identity and actual cleanup facts. It cannot replace the original
+smoke Error or skip cleanup. Successful smoke with unavailable control evidence
+is a failed assessment, while its recorded actual smoke outcome stays intact.
+
+A successful qualifying command must pass the independent complete five-file
+preflight before upload. It validates only the fixed current paths
+`job-index.json`, `official-server.events.ndjson`, `official-server.summary.json`,
+`entry-recovery.events.ndjson` and `entry-recovery.summary.json`. The index retains
+its existing official-server running/entry-recovery not-run labels; source/run/
+attempt bind through existing summary envelopes and admission, without new index
+fields. Three JSON bodies have a combined 1,179,648-byte bound plus three sentinel
+bytes per slot; each is read at most once across mutually exclusive complete and
+partial acquisition routes. Event files receive metadata only. An opaque
+metadata token passes through existing `GITHUB_OUTPUT`, never a new artifact.
+Preflight and metadata-only postcheck reserve at most 48 metadata calls together.
+These separate post-cleanup bounds do not enlarge observer, writer or stream quotas.
+
+The pinned upload action retains exactly those five paths for seven days, with
+hidden files and overwrite disabled and missing files treated as an error.
+Artifact names include round, literal slot, run and attempt. The unchanged index
+presentation CLI then runs once. The complete-path wrapper holds its existing
+sanitized text, checks fixed header/stage/passed/not-run/files markers and refuses
+explicit graceful-fallback messages. The single held capture line must report
+only `none` or `self-report-write-unavailable` limitations; missing selection,
+outcome, terminal or writer-cost evidence and unsupported limitations refuse
+indexing. It then appends that same text to the job summary. Existing incomplete
+informational text alone is allowed. This conservative coupling to the
+presentation format can stop a round
+if that format changes. It proves presentation acceptance separately from the
+fixture qualification and metadata checks. Nonzero command, fallback, append or
+upload failure blocks continuation. The final metadata-only postcheck must match
+the token before producing `safe-to-continue=true`; all prior step outcomes and
+conclusions and the predecessor's final job/post-job result remain mandatory.
+
+Only original assessment failure with complete preflight skipped can follow the
+separate bounded partial ownership check and uniquely named partial artifact path.
+Attempted complete preflight, including failure writing its output after acquiring
+JSON, refuses any subsequent partial acquisition/upload/index. This conservatively
+loses otherwise possible partial evidence to preserve the per-slot byte ceiling
+and at most one body read per JSON. Current closed ownership of all five files
+is required by the conservative implementation;
+missing/subset, running, rejected or foreign envelopes skip upload. No missing
+file is synthesized. Its existing index presentation may describe failure or
+incompleteness and never contributes successor output. Preflight/upload/index/
+postcheck/provider failure cannot be repaired by a rerun. Local stable metadata
+and upload success do not independently prove remote archive inventory: after an
+authorized round, audit downloaded entries, hashes and schemas before interpretation.
+
+The six assessment jobs allow at most six physical Chrome roots. Ordinary Linux
+and macOS acceptance in that dispatch retain up to sixteen roots, for a dispatch
+maximum of twenty-two. Separately authorized publication-triggered natural push
+and PR workflows may add up to thirty-two, for a combined maximum of fifty-four
+only when both scopes were separately authorized. Existing Windows activity is
+separate; all eighteen mandatory interactive cases remain. Each serial assessment
+job has a twenty-minute provider limit, at most 120 execution minutes in aggregate
+excluding dependencies, queue time and provider cancellation grace. Native
+readiness remains twenty seconds and creation authorization tolerance 1,000 ms.
+Provider cutoff or host/gateway loss can interrupt normal Close and final flush;
+cleanup is then unverified/incomplete or unknown. The provider bound cannot
+guarantee verified normal Close. No script force-kill, replay or automatic resume
+resolves that ambiguity.
+
+Report every assigned position across separate first-start, actual Close/exit/
+gateway/profile cleanup, collection configured/selected/completeness, and CI/
+prerequisite/upload/provider axes. Keep ordinary first positions separate from
+the six assessment positions. Bind actual SHA/tree, round/run/job/attempt/slot,
+runner image, OS/kernel/toolchain and verified endpoint Chrome version. Fresh
+runners do not prove cold caches or independence. Missing values stay unavailable.
+Interpret completed compatible device windows before Close in their distinct
+process/device/visible-cgroup scopes. Incomplete failure evidence is a collection
+issue; complete ambiguous evidence leaves named hypotheses for a separately
+approved design. A finite green round can complete this bounded assessment:
+report no target failure observed in N executed qualified current-version
+positions under the recorded conditions, and give every skipped/incomplete
+position its reason. No failure witness is required. This does not prove a
+historical repair, universal stability, physical-device causality or full SDK
+disconnect/failed-retention behavior.
 
 ## Bounded Ubuntu startup study
 

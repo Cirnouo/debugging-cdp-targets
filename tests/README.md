@@ -63,6 +63,12 @@ added. Security proof is unconditional with diagnostics disabled, enabled or fai
   and success discard through the actual shared parent/preload artifact writer.
 - `first-start-capture-ci.test.ts` checks the push-only current-checkout admission
   gate and rejects PR, rerun, malformed event and contradictory identity inputs.
+- `first-start-control.test.ts` checks closed admission/terminal projections,
+  first-request origin binding, qualification, privacy, once-only bounded writes
+  and partial-write/EPIPE containment without new native reads.
+- `first-start-assessment-ci.test.ts` checks manual source/tree/round/slot admission,
+  exact Quality CLI inputs, current five-file ownership, bounded stable acquisition,
+  cross-step metadata digest outputs and metadata-only continuation postchecks.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.
@@ -70,6 +76,8 @@ added. Security proof is unconditional with diagnostics disabled, enabled or fai
   logging and readahead studies and normal acceptance through external I/O
   boundary replacements, including zero-start admission failures, successful
   restoration and real Node preload settlement.
+  Assessment cases require one first start and qualified admission/terminal output;
+  ordinary Linux presentation retains two starts and performs no new admission read.
 - `application-screenshot-probe.test.ts` validates complete sealed payload
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry
@@ -188,6 +196,17 @@ added. Security proof is unconditional with diagnostics disabled, enabled or fai
   parsed configuration checks launch no Chrome and do not establish an RA effect;
   the [readahead study procedure](smoke/README.md#bounded-ubuntu-readahead-study)
   owns interpretation and cleanup requirements.
+  Assessment CI regressions evaluate the parsed six-job needs/step/output and
+  concurrency conditions under failed, cancelled, skipped and missing-output
+  cases. The complete index wrapper executes under Bash with only the existing
+  summary CLI I/O replaced; Windows uses Bash from its existing Git installation.
+  All six wrappers reject the exact unchanged CLI presentation from a transient
+  event-read failure and missing/unsupported capture limitations, while accepting
+  self-report-only or no limitations. Exit-zero fallback and append failure are
+  checked independently of fixture qualification and file postflight. Parsed
+  partial-route conditions reject every attempted complete preflight, including
+  late output-write failure, and preserve original-failure/skipped-preflight
+  partial evidence without a second per-slot JSON acquisition.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
   cleanup failures, prerequisite/not-run indexing and the original delivered

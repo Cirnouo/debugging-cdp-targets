@@ -19,7 +19,12 @@ import {
     fakeFirstStartIo,
     firstStartRoute,
 } from './fixtures/first-start-capture-fake.ts';
-import { createFixtureArtifacts, readFixtureProgress } from './smoke/fixture-artifacts.ts';
+import {
+    type FirstStartControlProjection,
+    projectFirstStartTerminal,
+    qualifyFirstStartTerminal,
+} from './smoke/first-start-control.ts';
+import { createFixtureArtifacts, createSmokeFailures, readFixtureProgress } from './smoke/fixture-artifacts.ts';
 import { dispatchFixtureDiagnostic } from './smoke/fixture-preload.ts';
 
 test('actual preload arms only an owned official collection and revokes without dropping Close END', async () => {
@@ -358,8 +363,44 @@ test('successful selected readiness keeps an intentional discard receipt through
         h.event('readiness', 'end', { phase: 'waiting-cdp' });
         await drainFirstStart(h);
         child.finishStream();
-        parent.failure('acceptance', Error('later whole-fixture failure'), true);
-        parent.finish(true);
+        const original = Error('later whole-fixture failure');
+        let terminal: FirstStartControlProjection | undefined;
+        let finished: unknown;
+        const failures = createSmokeFailures(parent, (summary) => {
+            finished = summary;
+            terminal = projectFirstStartTerminal(summary, {
+                expected: {
+                    entryId: firstStartRoute.entryId,
+                    requestId: firstStartRoute.requestId,
+                    collectionId: parent.snapshot().collectionId,
+                },
+                cleanup: { targetClosed: false, gatewayExited: true, profileDeleted: false },
+            });
+        });
+        failures.primary(original);
+        assert.throws(
+            () => failures.finish(),
+            (error) => error === original,
+        );
+        assert.deepEqual(
+            JSON.parse(await readFile(path.join(directory, 'official-server.summary.json'), 'utf8')),
+            finished,
+        );
+        assert.ok(terminal);
+        if (process.platform === 'linux') {
+            assert.equal(terminal.valid, true);
+            assert.equal(terminal.record.firstOutcome, 'succeeded');
+            assert.equal(terminal.record.fixtureOutcome, 'failed');
+            assert.deepEqual(terminal.record.cleanup, {
+                targetClosed: false,
+                gatewayExited: true,
+                profileDeleted: false,
+            });
+        } else {
+            assert.equal(terminal.valid, false);
+            assert.equal(terminal.record.kind, 'first-start-control-unavailable');
+        }
+        assert.equal(qualifyFirstStartTerminal(terminal), false);
         const progress = readFixtureProgress(directory, 'official-server', true);
         assert.equal(progress.invalidEvents, 0);
         assert.equal(

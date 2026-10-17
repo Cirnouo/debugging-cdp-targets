@@ -24,6 +24,26 @@ on:
                 type: boolean
                 required: false
                 default: false
+            ubuntu-first-start-assessment:
+                description: Run the bounded current-version first-start assessment (six serial fresh runners)
+                type: boolean
+                required: false
+                default: false
+            assessment-round-id:
+                description: Separately approved assessment round UUID
+                type: string
+                required: false
+                default: ''
+            assessment-source-sha:
+                description: Reviewed exact current source commit SHA
+                type: string
+                required: false
+                default: ''
+            assessment-source-tree:
+                description: Reviewed exact current source tree SHA
+                type: string
+                required: false
+                default: ''
     workflow_call:
     schedule:
         -   cron: '17 1 * * 1'
@@ -32,8 +52,8 @@ permissions:
     contents: read
 
 concurrency:
-    group: ${{ github.event_name == 'workflow_dispatch' && (inputs['ubuntu-startup-study'] == true || inputs['ubuntu-readahead-study'] == true) && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}
-    cancel-in-progress: true
+    group: ${{ github.event_name == 'workflow_dispatch' && inputs['ubuntu-first-start-assessment'] == true && format('ci-first-start-assessment-{0}-{1}', github.workflow, github.run_id) || github.event_name == 'workflow_dispatch' && (inputs['ubuntu-startup-study'] == true || inputs['ubuntu-readahead-study'] == true) && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}
+    cancel-in-progress: ${{ !(github.event_name == 'workflow_dispatch' && inputs['ubuntu-first-start-assessment'] == true) }}
 
 jobs:
     supply-chain-security:
@@ -92,10 +112,10 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             -   name: Reject conflicting research inputs
-                if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] == true
+                if: github.event_name == 'workflow_dispatch' && ((inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] == true) || (inputs['ubuntu-first-start-assessment'] == true && (inputs['ubuntu-startup-study'] == true || inputs['ubuntu-readahead-study'] == true)))
                 shell: bash
                 run: |
-                    printf 'Select only one Ubuntu research study.\n' >&2
+                    printf 'Select only one Ubuntu research mode.\n' >&2
                     exit 1
             -   name: Check out repository
                 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -110,6 +130,15 @@ jobs:
                     cache: pnpm
             -   name: Install dependencies
                 run: pnpm install --frozen-lockfile
+            -   name: Validate assessment selectors and reviewed source
+                env:
+                    DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+                    DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+                    DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+                    DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+                    DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+                    DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+                run: node tests/smoke/first-start-assessment-ci.ts quality
             -   name: Audit repository
                 run: pnpm check:repo
             -   name: Check formatting
@@ -281,11 +310,23 @@ jobs:
                     command -v xvfb-run
                     command -v xauth
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    captureAdmission="$(node tests/smoke/first-start-capture-ci.ts)"
-                    if [ "$captureAdmission" = 'admitted' ]; then
-                        DCT_SMOKE_FAILED_FIRST_START_CAPTURE=1 xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    captureAdmission='unavailable'
+                    if captureAdmission="$(node tests/smoke/first-start-capture-ci.ts)"; then
+                        case "$captureAdmission" in
+                            admitted) captureAdmission='admitted' ;;
+                            ineligible) captureAdmission='ineligible' ;;
+                            unavailable) captureAdmission='unavailable' ;;
+                            *) captureAdmission='unavailable' ;;
+                        esac
                     else
-                        xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                        captureAdmission='unavailable'
+                    fi
+                    if [ "$captureAdmission" = 'admitted' ]; then
+                        DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION=admitted DCT_SMOKE_FAILED_FIRST_START_CAPTURE=1 xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    elif [ "$captureAdmission" = 'ineligible' ]; then
+                        DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION=ineligible xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    else
+                        DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION=unavailable xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
                     fi
                     if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
                     xvfb-run -a node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
@@ -325,7 +366,7 @@ jobs:
 
     ubuntu-startup-study:
         name: Ubuntu startup study (block ${{ matrix.block }}, file logging ${{ matrix.fileLogging }})
-        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] != true
+        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && inputs['ubuntu-readahead-study'] != true && inputs['ubuntu-first-start-assessment'] != true
         needs: quality
         runs-on: ubuntu-24.04
         timeout-minutes: 20
@@ -401,7 +442,7 @@ jobs:
 
     ubuntu-readahead-study:
         name: Ubuntu readahead study (slot ${{ matrix.slot }}, block ${{ matrix.block }}, RA ${{ matrix.readaheadKb }} KiB)
-        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-readahead-study'] == true && inputs['ubuntu-startup-study'] != true
+        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-readahead-study'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-first-start-assessment'] != true
         needs: quality
         runs-on: ubuntu-24.04
         timeout-minutes: 20
@@ -491,3 +532,975 @@ jobs:
                 env:
                     DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
                 run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "${{ steps.fixture-initialization.outputs.collection-id }}"
+
+    ubuntu-first-start-assessment-1:
+        name: Ubuntu first-start assessment (slot 1)
+        if: github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs['ubuntu-first-start-assessment'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-readahead-study'] != true && needs.quality.result == 'success'
+        needs: quality
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        outputs:
+            safe-to-continue: ${{ steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.postcheck.outcome == 'success' && steps.postcheck.conclusion == 'success' && steps.postcheck.outputs.safe-to-continue == 'true' && 'true' || 'false' }}
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+            DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+            DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+            DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+            DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+            DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current assessment collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"
+                    printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one qualified first-start assessment
+                id: assessment
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true'
+                shell: bash
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    set -euo pipefail
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$DCT_ASSESSMENT_COLLECTION_ID"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --first-start-assessment --assessment-slot 1 --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$DCT_ASSESSMENT_COLLECTION_ID"
+            -   name: Verify complete current five-file evidence
+                id: pre-upload
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts pre-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 1
+            -   name: Upload complete assessment evidence
+                id: fixture-artifact
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != ''
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-${{ inputs['assessment-round-id'] }}-slot-1-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index complete assessment evidence
+                id: fixture-index
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    summaryPath="$GITHUB_STEP_SUMMARY"
+                    indexPresentation="$(GITHUB_STEP_SUMMARY= node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID")"
+                    refuseIndex() { printf 'Assessment index unavailable; continuation is refused.\n' >&2; exit 1; }
+                    case "$indexPresentation" in
+                        'Controlled Chrome diagnostics'$'\n\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation" in
+                        *'current collection unavailable; prior evidence was preserved and is excluded.'*|*'Job index unavailable.'*|*'diagnostic file unavailable; not-run state unverified.'*) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nJob stage: official-server.\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nofficial-server: passed; official-server.summary.json; official-server.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nentry-recovery: not-run; entry-recovery.summary.json; entry-recovery.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nFiles: job-index.json, official-server.events.ndjson, official-server.summary.json, entry-recovery.events.ndjson, entry-recovery.summary.json\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    captureLine=
+                    while IFS= read -r line; do
+                        case "$line" in
+                            'Failed first-start capture: '*)
+                                [ -z "$captureLine" ] || refuseIndex
+                                captureLine="$line"
+                                ;;
+                        esac
+                    done <<< "$indexPresentation"
+                    capturePattern='^Failed first-start capture: retained=[0-9]+; omitted=[0-9]+; limitations=(none|self-report-write-unavailable)\.$'
+                    [[ "$captureLine" =~ $capturePattern ]] || refuseIndex
+                    printf '%s\n' "$indexPresentation" >> "$summaryPath"
+            -   name: Revalidate metadata before successor admission
+                id: postcheck
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_ASSESSMENT_METADATA_TOKEN: ${{ steps.pre-upload.outputs.metadata-token }}
+                run: node tests/smoke/first-start-assessment-ci.ts postcheck "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 1
+            -   name: Check failed slot current closed evidence ownership
+                id: partial-upload
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts partial-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 1
+            -   name: Upload incomplete failed-slot evidence
+                id: partial-artifact
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-partial-${{ inputs['assessment-round-id'] }}-slot-1-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index incomplete failed-slot evidence
+                id: partial-index
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-artifact.outcome == 'success' && steps.partial-artifact.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.partial-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID"
+
+    ubuntu-first-start-assessment-2:
+        name: Ubuntu first-start assessment (slot 2)
+        if: github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs['ubuntu-first-start-assessment'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-readahead-study'] != true && needs.quality.result == 'success' && needs['ubuntu-first-start-assessment-1'].result == 'success' && needs['ubuntu-first-start-assessment-1'].outputs.safe-to-continue == 'true'
+        needs: [quality, ubuntu-first-start-assessment-1]
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        outputs:
+            safe-to-continue: ${{ steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.postcheck.outcome == 'success' && steps.postcheck.conclusion == 'success' && steps.postcheck.outputs.safe-to-continue == 'true' && 'true' || 'false' }}
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+            DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+            DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+            DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+            DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+            DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current assessment collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"
+                    printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one qualified first-start assessment
+                id: assessment
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true'
+                shell: bash
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    set -euo pipefail
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$DCT_ASSESSMENT_COLLECTION_ID"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --first-start-assessment --assessment-slot 2 --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$DCT_ASSESSMENT_COLLECTION_ID"
+            -   name: Verify complete current five-file evidence
+                id: pre-upload
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts pre-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 2
+            -   name: Upload complete assessment evidence
+                id: fixture-artifact
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != ''
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-${{ inputs['assessment-round-id'] }}-slot-2-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index complete assessment evidence
+                id: fixture-index
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    summaryPath="$GITHUB_STEP_SUMMARY"
+                    indexPresentation="$(GITHUB_STEP_SUMMARY= node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID")"
+                    refuseIndex() { printf 'Assessment index unavailable; continuation is refused.\n' >&2; exit 1; }
+                    case "$indexPresentation" in
+                        'Controlled Chrome diagnostics'$'\n\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation" in
+                        *'current collection unavailable; prior evidence was preserved and is excluded.'*|*'Job index unavailable.'*|*'diagnostic file unavailable; not-run state unverified.'*) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nJob stage: official-server.\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nofficial-server: passed; official-server.summary.json; official-server.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nentry-recovery: not-run; entry-recovery.summary.json; entry-recovery.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nFiles: job-index.json, official-server.events.ndjson, official-server.summary.json, entry-recovery.events.ndjson, entry-recovery.summary.json\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    captureLine=
+                    while IFS= read -r line; do
+                        case "$line" in
+                            'Failed first-start capture: '*)
+                                [ -z "$captureLine" ] || refuseIndex
+                                captureLine="$line"
+                                ;;
+                        esac
+                    done <<< "$indexPresentation"
+                    capturePattern='^Failed first-start capture: retained=[0-9]+; omitted=[0-9]+; limitations=(none|self-report-write-unavailable)\.$'
+                    [[ "$captureLine" =~ $capturePattern ]] || refuseIndex
+                    printf '%s\n' "$indexPresentation" >> "$summaryPath"
+            -   name: Revalidate metadata before successor admission
+                id: postcheck
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_ASSESSMENT_METADATA_TOKEN: ${{ steps.pre-upload.outputs.metadata-token }}
+                run: node tests/smoke/first-start-assessment-ci.ts postcheck "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 2
+            -   name: Check failed slot current closed evidence ownership
+                id: partial-upload
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts partial-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 2
+            -   name: Upload incomplete failed-slot evidence
+                id: partial-artifact
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-partial-${{ inputs['assessment-round-id'] }}-slot-2-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index incomplete failed-slot evidence
+                id: partial-index
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-artifact.outcome == 'success' && steps.partial-artifact.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.partial-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID"
+
+    ubuntu-first-start-assessment-3:
+        name: Ubuntu first-start assessment (slot 3)
+        if: github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs['ubuntu-first-start-assessment'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-readahead-study'] != true && needs.quality.result == 'success' && needs['ubuntu-first-start-assessment-2'].result == 'success' && needs['ubuntu-first-start-assessment-2'].outputs.safe-to-continue == 'true'
+        needs: [quality, ubuntu-first-start-assessment-2]
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        outputs:
+            safe-to-continue: ${{ steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.postcheck.outcome == 'success' && steps.postcheck.conclusion == 'success' && steps.postcheck.outputs.safe-to-continue == 'true' && 'true' || 'false' }}
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+            DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+            DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+            DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+            DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+            DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current assessment collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"
+                    printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one qualified first-start assessment
+                id: assessment
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true'
+                shell: bash
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    set -euo pipefail
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$DCT_ASSESSMENT_COLLECTION_ID"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --first-start-assessment --assessment-slot 3 --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$DCT_ASSESSMENT_COLLECTION_ID"
+            -   name: Verify complete current five-file evidence
+                id: pre-upload
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts pre-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 3
+            -   name: Upload complete assessment evidence
+                id: fixture-artifact
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != ''
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-${{ inputs['assessment-round-id'] }}-slot-3-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index complete assessment evidence
+                id: fixture-index
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    summaryPath="$GITHUB_STEP_SUMMARY"
+                    indexPresentation="$(GITHUB_STEP_SUMMARY= node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID")"
+                    refuseIndex() { printf 'Assessment index unavailable; continuation is refused.\n' >&2; exit 1; }
+                    case "$indexPresentation" in
+                        'Controlled Chrome diagnostics'$'\n\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation" in
+                        *'current collection unavailable; prior evidence was preserved and is excluded.'*|*'Job index unavailable.'*|*'diagnostic file unavailable; not-run state unverified.'*) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nJob stage: official-server.\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nofficial-server: passed; official-server.summary.json; official-server.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nentry-recovery: not-run; entry-recovery.summary.json; entry-recovery.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nFiles: job-index.json, official-server.events.ndjson, official-server.summary.json, entry-recovery.events.ndjson, entry-recovery.summary.json\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    captureLine=
+                    while IFS= read -r line; do
+                        case "$line" in
+                            'Failed first-start capture: '*)
+                                [ -z "$captureLine" ] || refuseIndex
+                                captureLine="$line"
+                                ;;
+                        esac
+                    done <<< "$indexPresentation"
+                    capturePattern='^Failed first-start capture: retained=[0-9]+; omitted=[0-9]+; limitations=(none|self-report-write-unavailable)\.$'
+                    [[ "$captureLine" =~ $capturePattern ]] || refuseIndex
+                    printf '%s\n' "$indexPresentation" >> "$summaryPath"
+            -   name: Revalidate metadata before successor admission
+                id: postcheck
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_ASSESSMENT_METADATA_TOKEN: ${{ steps.pre-upload.outputs.metadata-token }}
+                run: node tests/smoke/first-start-assessment-ci.ts postcheck "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 3
+            -   name: Check failed slot current closed evidence ownership
+                id: partial-upload
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts partial-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 3
+            -   name: Upload incomplete failed-slot evidence
+                id: partial-artifact
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-partial-${{ inputs['assessment-round-id'] }}-slot-3-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index incomplete failed-slot evidence
+                id: partial-index
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-artifact.outcome == 'success' && steps.partial-artifact.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.partial-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID"
+
+    ubuntu-first-start-assessment-4:
+        name: Ubuntu first-start assessment (slot 4)
+        if: github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs['ubuntu-first-start-assessment'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-readahead-study'] != true && needs.quality.result == 'success' && needs['ubuntu-first-start-assessment-3'].result == 'success' && needs['ubuntu-first-start-assessment-3'].outputs.safe-to-continue == 'true'
+        needs: [quality, ubuntu-first-start-assessment-3]
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        outputs:
+            safe-to-continue: ${{ steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.postcheck.outcome == 'success' && steps.postcheck.conclusion == 'success' && steps.postcheck.outputs.safe-to-continue == 'true' && 'true' || 'false' }}
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+            DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+            DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+            DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+            DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+            DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current assessment collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"
+                    printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one qualified first-start assessment
+                id: assessment
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true'
+                shell: bash
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    set -euo pipefail
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$DCT_ASSESSMENT_COLLECTION_ID"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --first-start-assessment --assessment-slot 4 --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$DCT_ASSESSMENT_COLLECTION_ID"
+            -   name: Verify complete current five-file evidence
+                id: pre-upload
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts pre-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 4
+            -   name: Upload complete assessment evidence
+                id: fixture-artifact
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != ''
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-${{ inputs['assessment-round-id'] }}-slot-4-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index complete assessment evidence
+                id: fixture-index
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    summaryPath="$GITHUB_STEP_SUMMARY"
+                    indexPresentation="$(GITHUB_STEP_SUMMARY= node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID")"
+                    refuseIndex() { printf 'Assessment index unavailable; continuation is refused.\n' >&2; exit 1; }
+                    case "$indexPresentation" in
+                        'Controlled Chrome diagnostics'$'\n\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation" in
+                        *'current collection unavailable; prior evidence was preserved and is excluded.'*|*'Job index unavailable.'*|*'diagnostic file unavailable; not-run state unverified.'*) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nJob stage: official-server.\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nofficial-server: passed; official-server.summary.json; official-server.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nentry-recovery: not-run; entry-recovery.summary.json; entry-recovery.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nFiles: job-index.json, official-server.events.ndjson, official-server.summary.json, entry-recovery.events.ndjson, entry-recovery.summary.json\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    captureLine=
+                    while IFS= read -r line; do
+                        case "$line" in
+                            'Failed first-start capture: '*)
+                                [ -z "$captureLine" ] || refuseIndex
+                                captureLine="$line"
+                                ;;
+                        esac
+                    done <<< "$indexPresentation"
+                    capturePattern='^Failed first-start capture: retained=[0-9]+; omitted=[0-9]+; limitations=(none|self-report-write-unavailable)\.$'
+                    [[ "$captureLine" =~ $capturePattern ]] || refuseIndex
+                    printf '%s\n' "$indexPresentation" >> "$summaryPath"
+            -   name: Revalidate metadata before successor admission
+                id: postcheck
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_ASSESSMENT_METADATA_TOKEN: ${{ steps.pre-upload.outputs.metadata-token }}
+                run: node tests/smoke/first-start-assessment-ci.ts postcheck "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 4
+            -   name: Check failed slot current closed evidence ownership
+                id: partial-upload
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts partial-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 4
+            -   name: Upload incomplete failed-slot evidence
+                id: partial-artifact
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-partial-${{ inputs['assessment-round-id'] }}-slot-4-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index incomplete failed-slot evidence
+                id: partial-index
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-artifact.outcome == 'success' && steps.partial-artifact.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.partial-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID"
+
+    ubuntu-first-start-assessment-5:
+        name: Ubuntu first-start assessment (slot 5)
+        if: github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs['ubuntu-first-start-assessment'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-readahead-study'] != true && needs.quality.result == 'success' && needs['ubuntu-first-start-assessment-4'].result == 'success' && needs['ubuntu-first-start-assessment-4'].outputs.safe-to-continue == 'true'
+        needs: [quality, ubuntu-first-start-assessment-4]
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        outputs:
+            safe-to-continue: ${{ steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.postcheck.outcome == 'success' && steps.postcheck.conclusion == 'success' && steps.postcheck.outputs.safe-to-continue == 'true' && 'true' || 'false' }}
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+            DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+            DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+            DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+            DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+            DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current assessment collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"
+                    printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one qualified first-start assessment
+                id: assessment
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true'
+                shell: bash
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    set -euo pipefail
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$DCT_ASSESSMENT_COLLECTION_ID"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --first-start-assessment --assessment-slot 5 --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$DCT_ASSESSMENT_COLLECTION_ID"
+            -   name: Verify complete current five-file evidence
+                id: pre-upload
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts pre-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 5
+            -   name: Upload complete assessment evidence
+                id: fixture-artifact
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != ''
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-${{ inputs['assessment-round-id'] }}-slot-5-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index complete assessment evidence
+                id: fixture-index
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    summaryPath="$GITHUB_STEP_SUMMARY"
+                    indexPresentation="$(GITHUB_STEP_SUMMARY= node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID")"
+                    refuseIndex() { printf 'Assessment index unavailable; continuation is refused.\n' >&2; exit 1; }
+                    case "$indexPresentation" in
+                        'Controlled Chrome diagnostics'$'\n\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation" in
+                        *'current collection unavailable; prior evidence was preserved and is excluded.'*|*'Job index unavailable.'*|*'diagnostic file unavailable; not-run state unverified.'*) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nJob stage: official-server.\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nofficial-server: passed; official-server.summary.json; official-server.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nentry-recovery: not-run; entry-recovery.summary.json; entry-recovery.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nFiles: job-index.json, official-server.events.ndjson, official-server.summary.json, entry-recovery.events.ndjson, entry-recovery.summary.json\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    captureLine=
+                    while IFS= read -r line; do
+                        case "$line" in
+                            'Failed first-start capture: '*)
+                                [ -z "$captureLine" ] || refuseIndex
+                                captureLine="$line"
+                                ;;
+                        esac
+                    done <<< "$indexPresentation"
+                    capturePattern='^Failed first-start capture: retained=[0-9]+; omitted=[0-9]+; limitations=(none|self-report-write-unavailable)\.$'
+                    [[ "$captureLine" =~ $capturePattern ]] || refuseIndex
+                    printf '%s\n' "$indexPresentation" >> "$summaryPath"
+            -   name: Revalidate metadata before successor admission
+                id: postcheck
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_ASSESSMENT_METADATA_TOKEN: ${{ steps.pre-upload.outputs.metadata-token }}
+                run: node tests/smoke/first-start-assessment-ci.ts postcheck "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 5
+            -   name: Check failed slot current closed evidence ownership
+                id: partial-upload
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts partial-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 5
+            -   name: Upload incomplete failed-slot evidence
+                id: partial-artifact
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-partial-${{ inputs['assessment-round-id'] }}-slot-5-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index incomplete failed-slot evidence
+                id: partial-index
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-artifact.outcome == 'success' && steps.partial-artifact.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.partial-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID"
+
+    ubuntu-first-start-assessment-6:
+        name: Ubuntu first-start assessment (slot 6)
+        if: github.event_name == 'workflow_dispatch' && github.run_attempt == 1 && inputs['ubuntu-first-start-assessment'] == true && inputs['ubuntu-startup-study'] != true && inputs['ubuntu-readahead-study'] != true && needs.quality.result == 'success' && needs['ubuntu-first-start-assessment-5'].result == 'success' && needs['ubuntu-first-start-assessment-5'].outputs.safe-to-continue == 'true'
+        needs: [quality, ubuntu-first-start-assessment-5]
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        outputs:
+            safe-to-continue: ${{ steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.postcheck.outcome == 'success' && steps.postcheck.conclusion == 'success' && steps.postcheck.outputs.safe-to-continue == 'true' && 'true' || 'false' }}
+        env:
+            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
+            DCT_ASSESSMENT_ENABLED: ${{ toJSON(inputs['ubuntu-first-start-assessment'] == true) }}
+            DCT_ASSESSMENT_STARTUP_STUDY: ${{ toJSON(inputs['ubuntu-startup-study'] == true) }}
+            DCT_ASSESSMENT_READAHEAD_STUDY: ${{ toJSON(inputs['ubuntu-readahead-study'] == true) }}
+            DCT_ASSESSMENT_ROUND_ID: ${{ inputs['assessment-round-id'] }}
+            DCT_ASSESSMENT_SOURCE_SHA: ${{ inputs['assessment-source-sha'] }}
+            DCT_ASSESSMENT_SOURCE_TREE: ${{ inputs['assessment-source-tree'] }}
+        steps:
+            -   name: Check out repository
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+            -   name: Set up pnpm
+                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+                with:
+                    version: 12.4.2
+            -   name: Set up Node.js
+                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                with:
+                    node-version: 24.21.0
+                    cache: pnpm
+            -   name: Install dependencies
+                run: pnpm install --frozen-lockfile
+            -   name: Check TypeScript types
+                run: pnpm typecheck
+            -   name: Initialize current assessment collection
+                id: fixture-initialization
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"
+                    printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
+                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
+            -   name: Run one qualified first-start assessment
+                id: assessment
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true'
+                shell: bash
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    set -euo pipefail
+                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
+                    command -v lsof
+                    command -v getconf
+                    command -v Xvfb
+                    command -v xvfb-run
+                    command -v xauth
+                    node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$DCT_ASSESSMENT_COLLECTION_ID"
+                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --first-start-assessment --assessment-slot 6 --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$DCT_ASSESSMENT_COLLECTION_ID"
+            -   name: Verify complete current five-file evidence
+                id: pre-upload
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts pre-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 6
+            -   name: Upload complete assessment evidence
+                id: fixture-artifact
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != ''
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-${{ inputs['assessment-round-id'] }}-slot-6-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index complete assessment evidence
+                id: fixture-index
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
+                shell: bash
+                run: |
+                    set -euo pipefail
+                    summaryPath="$GITHUB_STEP_SUMMARY"
+                    indexPresentation="$(GITHUB_STEP_SUMMARY= node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID")"
+                    refuseIndex() { printf 'Assessment index unavailable; continuation is refused.\n' >&2; exit 1; }
+                    case "$indexPresentation" in
+                        'Controlled Chrome diagnostics'$'\n\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation" in
+                        *'current collection unavailable; prior evidence was preserved and is excluded.'*|*'Job index unavailable.'*|*'diagnostic file unavailable; not-run state unverified.'*) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nJob stage: official-server.\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nofficial-server: passed; official-server.summary.json; official-server.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nentry-recovery: not-run; entry-recovery.summary.json; entry-recovery.events.ndjson\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    case "$indexPresentation"$'\n' in
+                        *$'\nFiles: job-index.json, official-server.events.ndjson, official-server.summary.json, entry-recovery.events.ndjson, entry-recovery.summary.json\n'*) ;;
+                        *) refuseIndex ;;
+                    esac
+                    captureLine=
+                    while IFS= read -r line; do
+                        case "$line" in
+                            'Failed first-start capture: '*)
+                                [ -z "$captureLine" ] || refuseIndex
+                                captureLine="$line"
+                                ;;
+                        esac
+                    done <<< "$indexPresentation"
+                    capturePattern='^Failed first-start capture: retained=[0-9]+; omitted=[0-9]+; limitations=(none|self-report-write-unavailable)\.$'
+                    [[ "$captureLine" =~ $capturePattern ]] || refuseIndex
+                    printf '%s\n' "$indexPresentation" >> "$summaryPath"
+            -   name: Revalidate metadata before successor admission
+                id: postcheck
+                if: success() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'success' && steps.assessment.conclusion == 'success' && steps.pre-upload.outcome == 'success' && steps.pre-upload.conclusion == 'success' && steps.fixture-artifact.outcome == 'success' && steps.fixture-artifact.conclusion == 'success' && steps.fixture-index.outcome == 'success' && steps.fixture-index.conclusion == 'success' && steps.pre-upload.outputs.metadata-token != '' && steps.fixture-artifact.outputs.artifact-id != '' && steps.fixture-artifact.outputs.artifact-url != ''
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_ASSESSMENT_METADATA_TOKEN: ${{ steps.pre-upload.outputs.metadata-token }}
+                run: node tests/smoke/first-start-assessment-ci.ts postcheck "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 6
+            -   name: Check failed slot current closed evidence ownership
+                id: partial-upload
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: node tests/smoke/first-start-assessment-ci.ts partial-upload "$RUNNER_TEMP/dct-fixture-diagnostics" --assessment-slot 6
+            -   name: Upload incomplete failed-slot evidence
+                id: partial-artifact
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+                with:
+                    name: ubuntu-first-start-assessment-partial-${{ inputs['assessment-round-id'] }}-slot-6-${{ github.run_id }}-${{ github.run_attempt }}
+                    path: |
+                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
+                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
+                    retention-days: 7
+                    include-hidden-files: false
+                    overwrite: false
+                    if-no-files-found: error
+            -   name: Index incomplete failed-slot evidence
+                id: partial-index
+                if: failure() && !cancelled() && steps.fixture-initialization.outcome == 'success' && steps.fixture-initialization.conclusion == 'success' && steps.fixture-initialization.outputs.initialized == 'true' && steps.assessment.outcome == 'failure' && steps.assessment.conclusion == 'failure' && steps.pre-upload.outcome == 'skipped' && steps.pre-upload.conclusion == 'skipped' && steps.partial-upload.outcome == 'success' && steps.partial-upload.conclusion == 'success' && steps.partial-artifact.outcome == 'success' && steps.partial-artifact.conclusion == 'success' && steps.partial-upload.outputs.partial-eligible == 'true'
+                env:
+                    DCT_ASSESSMENT_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.partial-artifact.outputs.artifact-url }}
+                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "$DCT_ASSESSMENT_COLLECTION_ID"

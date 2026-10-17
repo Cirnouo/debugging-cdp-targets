@@ -8,7 +8,12 @@ import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateFixtureEvent } from '../src/adapters/fixture-diagnostics.ts';
-import { createFixtureArtifacts, readFixtureProgress } from './smoke/fixture-artifacts.ts';
+import {
+    createFixtureArtifacts,
+    createSmokeFailures,
+    fixtureGatewayEnvironment,
+    readFixtureProgress,
+} from './smoke/fixture-artifacts.ts';
 import { fixtureJobIndex, readFixtureIndex, readFixtureSummary } from './smoke/fixture-ci.ts';
 import {
     createArmedFixtureWriter,
@@ -34,6 +39,107 @@ const operation = {
     timestampMs: 0,
     durationMs: 0,
 };
+
+test('after-finish presentation sees persisted reconstruction once and cannot replace the original Error', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-finish-presentation-'));
+    try {
+        const artifacts = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const original = new Error('original acceptance failure');
+        const order: string[] = [];
+        let callbacks = 0;
+        let presented: unknown;
+        let persisted: unknown;
+        const failures = createSmokeFailures(artifacts, (summary) => {
+            callbacks++;
+            order.push('presentation');
+            presented = summary;
+            persisted = JSON.parse(fs.readFileSync(path.join(directory, 'official-server.summary.json'), 'utf8'));
+            throw new Error('presentation failure');
+        });
+        failures.primary(original);
+        await failures.cleanup('target-cleanup', async () => {
+            order.push('target');
+            throw new Error('retained target');
+        });
+        await failures.cleanup('gateway-close', async () => {
+            order.push('gateway');
+        });
+        await failures.cleanup('profile-cleanup', async () => {
+            order.push('profile');
+        });
+        fs.appendFileSync(path.join(directory, 'official-server.events.ndjson'), `${JSON.stringify(capture)}\n`);
+        assert.throws(
+            () => failures.finish(),
+            (error) => error === original,
+        );
+        assert.deepEqual(persisted, presented);
+        assert.deepEqual(presented, artifacts.snapshot());
+        assert.equal(artifacts.snapshot().state, 'failed');
+        assert.deepEqual(artifacts.snapshot().firstStartCapture, [capture]);
+        assert.throws(
+            () => failures.finish(),
+            (error) => error === original,
+        );
+        assert.equal(callbacks, 1);
+        assert.deepEqual(order, ['target', 'gateway', 'profile', 'presentation']);
+        const successful = createSmokeFailures(createFixtureArtifacts(undefined, 'official-server'), () => {
+            throw Error('contained');
+        });
+        assert.doesNotThrow(() => successful.finish());
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('gateway inheritance removes assessment controls case-insensitively while preserving ordinary environment', () => {
+    assert.deepEqual(
+        fixtureGatewayEnvironment({
+            PATH: 'preserved',
+            GITHUB_SHA: 'preserved-source',
+            NODE_OPTIONS: 'removed',
+            DCT_SMOKE_FAILED_FIRST_START_CAPTURE: '1',
+            DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION: 'admitted',
+            DCT_ASSESSMENT_ENABLED: 'true',
+            DCT_ASSESSMENT_STARTUP_STUDY: 'false',
+            DCT_ASSESSMENT_READAHEAD_STUDY: 'false',
+            DCT_ASSESSMENT_ROUND_ID: 'removed',
+            DCT_ASSESSMENT_SOURCE_SHA: 'removed',
+            DCT_ASSESSMENT_SOURCE_TREE: 'removed',
+            DCT_ASSESSMENT_COLLECTION_ID: 'removed',
+            dct_assessment_metadata_token: 'removed',
+        }),
+        { PATH: 'preserved', GITHUB_SHA: 'preserved-source' },
+    );
+});
+
+test('a failed finalization leaves presentation absent and preserves an already recorded original Error', (context) => {
+    const artifacts = createFixtureArtifacts(undefined, 'official-server');
+    const original = new Error('first smoke Error');
+    const finalizationError = new Error('finalization unavailable');
+    let callbacks = 0;
+    const failures = createSmokeFailures(artifacts, () => {
+        callbacks++;
+    });
+    failures.primary(original);
+    // The controller must tolerate a failed collaborator without manufacturing a finished snapshot.
+    context.mock.method(artifacts, 'finish', () => {
+        throw finalizationError;
+    });
+    assert.throws(
+        () => failures.finish(),
+        (error) => error === original,
+    );
+    assert.equal(callbacks, 0);
+    assert.equal(artifacts.snapshot().state, 'running');
+    const successful = createSmokeFailures(artifacts, () => {
+        callbacks++;
+    });
+    assert.throws(
+        () => successful.finish(),
+        (error) => error === finalizationError,
+    );
+    assert.equal(callbacks, 0);
+});
 
 test('four charged parent scans preserve observed capture in saved summary', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-preserved-summary-'));

@@ -810,9 +810,13 @@ export function fixtureReadaheadExitProof(
 }
 
 /** Each action is attempted once, in caller order; original first failure is rethrown. */
-export function createSmokeFailures(artifacts: FixtureArtifacts) {
+export function createSmokeFailures(
+    artifacts: FixtureArtifacts,
+    afterFinish?: (summary: ReturnType<FixtureArtifacts['snapshot']>) => void,
+) {
     let first: unknown;
     let failed = false;
+    let presented = false;
     return {
         hasFailure() {
             return failed;
@@ -837,7 +841,18 @@ export function createSmokeFailures(artifacts: FixtureArtifacts) {
             }
         },
         finish() {
-            artifacts.finish(failed);
+            try {
+                artifacts.finish(failed);
+            } catch (error) {
+                if (failed) throw first;
+                throw error;
+            }
+            if (!presented) {
+                presented = true;
+                try {
+                    afterFinish?.(artifacts.snapshot());
+                } catch {}
+            }
             if (failed) throw first;
         },
     };
@@ -884,7 +899,20 @@ export function fixtureGatewayArguments(
 export function fixtureGatewayEnvironment(inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
     return Object.fromEntries(
         Object.entries(inherited).filter(
-            ([name]) => !['NODE_OPTIONS', 'DCT_SMOKE_FAILED_FIRST_START_CAPTURE'].includes(name.toUpperCase()),
+            ([name]) =>
+                ![
+                    'NODE_OPTIONS',
+                    'DCT_SMOKE_FAILED_FIRST_START_CAPTURE',
+                    'DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION',
+                    'DCT_ASSESSMENT_ENABLED',
+                    'DCT_ASSESSMENT_STARTUP_STUDY',
+                    'DCT_ASSESSMENT_READAHEAD_STUDY',
+                    'DCT_ASSESSMENT_ROUND_ID',
+                    'DCT_ASSESSMENT_SOURCE_SHA',
+                    'DCT_ASSESSMENT_SOURCE_TREE',
+                    'DCT_ASSESSMENT_COLLECTION_ID',
+                    'DCT_ASSESSMENT_METADATA_TOKEN',
+                ].includes(name.toUpperCase()),
         ),
     );
 }
