@@ -8,6 +8,7 @@ export type Diagnostic = {
         | 'cdp-response'
         | 'cdp-screenshot'
         | 'upstream-processing'
+        | 'tool-catalog-refresh'
         | 'result-ready';
     outcome: 'completed' | 'failed' | 'interrupted';
     elapsedMs: number;

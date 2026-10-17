@@ -80,3 +80,49 @@ test('catalog recipes appear only for supported missing configuration and actual
     assert.equal(catalog.describe(['--slim'], undefined, ['evaluate_script'])[0]?.suggestedMcpArgs, undefined);
     assert.throws(() => catalog.describe([], [actual], ['unknown']), /Unknown official tool/);
 });
+
+test('catalog validates complete reviewed definitions canonically and rejects ambiguous routing', () => {
+    const reviewed = {
+        name: 'echo',
+        description: 'Reviewed echo',
+        inputSchema: { type: 'object' as const, properties: { value: { type: 'number' } }, required: ['value'] },
+        outputSchema: { type: 'object' as const, properties: { value: { type: 'number' } }, required: ['value'] },
+        annotations: { readOnlyHint: true },
+        _meta: { reviewed: true },
+    };
+    const catalog = createToolCatalog({
+        version: '1.11.0',
+        tools: [{ name: 'echo', requires: {}, variants: [reviewed] }],
+    });
+    assert.doesNotThrow(() =>
+        catalog.validate([
+            {
+                _meta: { reviewed: true },
+                annotations: { readOnlyHint: true },
+                outputSchema: { required: ['value'], properties: { value: { type: 'number' } }, type: 'object' },
+                inputSchema: { required: ['value'], properties: { value: { type: 'number' } }, type: 'object' },
+                description: 'Reviewed echo',
+                name: 'echo',
+            },
+        ]),
+    );
+    for (const changed of [
+        { ...reviewed, outputSchema: { type: 'object' as const } },
+        { ...reviewed, description: 'Unreviewed instructions' },
+        { ...reviewed, annotations: { readOnlyHint: false } },
+        { ...reviewed, _meta: { reviewed: false } },
+        { ...reviewed, name: 'unknown' },
+    ])
+        assert.throws(() => catalog.validate([changed]), /reviewed|catalog/);
+    assert.throws(() => catalog.validate([reviewed, reviewed]), /duplicate|catalog/i);
+    for (const collision of [
+        { name: 'dct_registration_register', inputSchema: { type: 'object' as const } },
+        { name: 'echo', inputSchema: { type: 'object' as const, properties: { _dct: {} } } },
+    ]) {
+        const ambiguous = createToolCatalog({
+            version: '1.11.0',
+            tools: [{ name: collision.name, requires: {}, variants: [collision] }],
+        });
+        assert.throws(() => ambiguous.validate([collision]), /reserved.*routing/i);
+    }
+});

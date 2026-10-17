@@ -8,6 +8,8 @@ const EXPLANATIONS = Object.freeze({
         'The originating client roots reader is unavailable. Use a client with an available roots facility.',
     FORM_ELICITATION_UNAVAILABLE:
         'The originating client does not support form-mode elicitation. Use a client with form-mode elicitation for this operation.',
+    OFFICIAL_CATALOG_UNAVAILABLE:
+        'The official tool catalog is unavailable. A later request may refresh its reviewed metadata; inspect selected connection status or explicitly restart the official Server if needed.',
 });
 
 /** Closed, path-free explanations for failures that authenticated clients can act on. */

@@ -20,7 +20,9 @@ import {
 } from '@modelcontextprotocol/client';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
 import { createOfficialExecution } from '../domains/official-execution.ts';
+import { RequestFailure } from '../domains/request-failure.ts';
 import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
+import { type Diagnose, measured } from '../shared/diagnostics.ts';
 import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from './official-server.ts';
 
 export type OfficialConnectionResource = {
@@ -30,7 +32,8 @@ export type OfficialConnectionResource = {
 };
 
 export type OfficialConnection = OfficialConnectionResource & {
-    tools: Tool[];
+    readonly tools: Tool[];
+    readonly toolCatalog?: Readonly<{ revision: number; state: 'current' | 'refreshing' | 'unavailable' }>;
     call(
         name: string,
         arguments_: Record<string, unknown>,
@@ -59,6 +62,8 @@ export async function createOfficialConnection(
         environment?: NodeJS.ProcessEnv;
         requestTimeoutMs?: number;
         signal?: AbortSignal;
+        validateTools?: (tools: Tool[]) => void;
+        diagnose?: Diagnose;
         onAcquired?: (resource: OfficialConnectionResource) => void;
         roots?: () => Promise<ListRootsResult>;
         elicitation?: {
@@ -85,6 +90,13 @@ export async function createOfficialConnection(
     let stdinEnded = false;
     let closing: Promise<void> | undefined;
     let execution: ReturnType<typeof createOfficialExecution> | undefined;
+    let tools: Tool[] = [];
+    let revision = 0;
+    let catalogState: 'current' | 'refreshing' | 'unavailable' = 'refreshing';
+    let dirty = true;
+    let connected = false;
+    let acquiring = true;
+    let refreshing: Promise<void> | undefined;
     const buffer = new ReadBuffer();
     let resolveExit: () => void = () => {};
     const exit = new Promise<void>((resolve) => {
@@ -256,6 +268,17 @@ export async function createOfficialConnection(
                 ...(options.roots ? { roots: { listChanged: true } } : {}),
                 ...(options.elicitation?.form ? { elicitation: { form: {} } } : {}),
             },
+            listChanged: {
+                tools: {
+                    autoRefresh: false,
+                    debounceMs: 0,
+                    onChanged() {
+                        if (closed) return;
+                        dirty = true;
+                        if (connected) void refreshCatalog().catch(() => {});
+                    },
+                },
+            },
         },
     );
     if (options.roots) client.setRequestHandler('roots/list', options.roots);
@@ -268,42 +291,96 @@ export async function createOfficialConnection(
             return forward(request.params, ctx.mcpReq.signal);
         });
     }
-    try {
-        options.onAcquired?.(resource);
-        if (options.signal?.aborted) abortAcquisition();
-        options.signal?.throwIfAborted();
-        await client.connect(transport);
-        options.signal?.throwIfAborted();
-        const tools: Tool[] = [];
+    function assertCatalogOpen() {
+        if (closed) throw new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed');
+        if (acquiring) options.signal?.throwIfAborted();
+    }
+    async function readCatalog() {
+        const candidate: Tool[] = [];
         const cursors = new Set<string>();
         let cursor: string | undefined;
         do {
-            options.signal?.throwIfAborted();
+            assertCatalogOpen();
             // Keep the gateway's uncapped walk; SDK listTools() aggregates at most 64 pages.
             const page = await client.request(
                 { method: 'tools/list', params: cursor ? { cursor } : {} },
                 ListToolsResultSchema,
             );
-            options.signal?.throwIfAborted();
-            tools.push(...page.tools);
+            assertCatalogOpen();
+            candidate.push(...page.tools);
             cursor = page.nextCursor;
             if (cursor !== undefined) {
                 if (cursors.has(cursor)) throw new Error('Official MCP returned a repeated tool catalog cursor.');
                 cursors.add(cursor);
             }
         } while (cursor !== undefined);
+        options.validateTools?.(candidate);
+        assertCatalogOpen();
+        return candidate;
+    }
+    function refreshCatalog(): Promise<void> {
+        if (refreshing) return refreshing;
+        if (closed) return Promise.resolve();
+        const drain = async () => {
+            while (dirty && !closed) {
+                dirty = false;
+                catalogState = 'refreshing';
+                const timing = measured(options.diagnose, 'tool-catalog-refresh');
+                try {
+                    const candidate = await readCatalog();
+                    assertCatalogOpen();
+                    tools = candidate;
+                    revision += 1;
+                    catalogState = 'current';
+                    timing();
+                } catch (error) {
+                    if (closed) return;
+                    catalogState = 'unavailable';
+                    dirty = false;
+                    timing('failed');
+                    if (acquiring) throw error;
+                    return;
+                }
+            }
+        };
+        refreshing = drain().finally(() => {
+            refreshing = undefined;
+        });
+        return refreshing;
+    }
+    try {
+        options.onAcquired?.(resource);
+        if (options.signal?.aborted) abortAcquisition();
+        options.signal?.throwIfAborted();
+        await client.connect(transport);
+        options.signal?.throwIfAborted();
+        connected = true;
+        await refreshCatalog();
+        assertCatalogOpen();
         options.signal?.throwIfAborted();
         options.signal?.removeEventListener('abort', abortAcquisition);
+        acquiring = false;
         return {
-            tools,
+            get tools() {
+                return structuredClone(tools);
+            },
+            get toolCatalog() {
+                return { revision, state: catalogState };
+            },
             ...(child.pid === undefined ? {} : { processId: child.pid }),
             call: async (name, arguments_, signal, onProgress) => {
                 if (execution) throw new Error('The official connection is busy with an owned execution.');
                 const actual = createOfficialExecution();
                 const terminal = actual.terminal;
                 execution = actual;
-                const toolDefinition = tools.findLast((tool) => tool.name === name);
                 try {
+                    assertCatalogOpen();
+                    if (catalogState === 'unavailable') dirty = true;
+                    if (dirty || refreshing) await refreshCatalog();
+                    assertCatalogOpen();
+                    if (catalogState === 'unavailable') throw new RequestFailure('OFFICIAL_CATALOG_UNAVAILABLE');
+                    const toolDefinition = tools.find((tool) => tool.name === name);
+                    if (!toolDefinition) throw new Error('The official tool is no longer enabled in this connection.');
                     return CallToolResultSchema.parse(
                         await client.callTool(
                             { name, arguments: arguments_ },
@@ -311,7 +388,7 @@ export async function createOfficialConnection(
                                 // The SDK has no public deadline-disable option. Its maximum safe
                                 // timer is independent of client waits; timeout retains accounting.
                                 timeout: options.requestTimeoutMs ?? 2_147_483_647,
-                                ...(toolDefinition ? { toolDefinition } : {}),
+                                toolDefinition,
                                 ...(signal ? { signal } : {}),
                                 ...(onProgress ? { onprogress: onProgress } : {}),
                             },
