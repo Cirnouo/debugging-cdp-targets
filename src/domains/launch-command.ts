@@ -24,6 +24,18 @@ export interface PreparedLaunchDefinition {
     readonly portPolicy: Readonly<{ kind: 'fixed'; port: number } | { kind: 'automatic'; basePort: number }>;
 }
 
+export function findEnvironmentKey(
+    environment: Readonly<Record<string, string | undefined>>,
+    name: string,
+    windows = false,
+): string | undefined {
+    return windows
+        ? Object.keys(environment).findLast((key) => key.toLowerCase() === name.toLowerCase())
+        : name in environment
+          ? name
+          : undefined;
+}
+
 export function mergeLaunchEnvironment(
     environment: Readonly<Record<string, string | undefined>>,
     overrides: Readonly<Record<string, string | undefined>>,
@@ -124,10 +136,8 @@ function expandEnvironment(
     windowsEnvironment = false,
 ) {
     function value(name: string) {
-        const key = windowsEnvironment
-            ? Object.keys(environment).findLast((key) => key.toLowerCase() === name.toLowerCase())
-            : name;
-        if (key === undefined || !(key in environment)) throw new Error(`Environment variable ${name} is undefined.`);
+        const key = findEnvironmentKey(environment, name, windowsEnvironment);
+        if (key === undefined) throw new Error(`Environment variable ${name} is undefined.`);
         return String(environment[key]);
     }
     const expanded = argument

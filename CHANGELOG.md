@@ -73,7 +73,9 @@ Version 0.1.0 remains under development; no release has been published.
   disposal remains in an internal in-memory cleanup ledger.
 - Reuse of kept live targets and resources with continued actual-exit observation.
   Ordinary exit retries use a new start; explicit live restart retains the connection
-  and exact port while replacing the owner, router, upstream and session.
+  and router while replacing the selected target, official Server, or both, and
+  refreshing the public session. Target-only restart retains the official Server;
+  fixed target ports remain fixed, while automatic ports may change before launch.
 - Lifecycle status and native process exit monitoring with automatic, reviewed
   Codex and Claude Code MCP Tool Hooks, independent compact events and fresh
   page identities after live restart. Expected exits are grouped by operation ID
