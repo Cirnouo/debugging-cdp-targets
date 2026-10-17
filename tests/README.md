@@ -272,6 +272,8 @@
   event-loop retention during EOF cleanup, independent waiter cancellation and
   reference release without target deadlines or process polling.
 - `structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
+- `official-server-environment.test.ts` checks Windows/POSIX environment lookup,
+    case-variant ordering, boolean defaults/validation and explicit mcpArgs precedence.
 - `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
   verify safe options, activation recipes, variants and independent configuration.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
