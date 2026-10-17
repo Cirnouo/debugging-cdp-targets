@@ -75,6 +75,8 @@ Git hook tests remain contributor-tooling regressions.
     roots/launch snapshots, scoped restart and retained cleanup failure/retry.
 - `client-context.test.ts`, `registrations.test.ts` and `official-execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
+- `software-version.test.ts` checks the runtime/tooling version owner's strict
+    input limits and SemVer precedence, including prerelease and build metadata.
 - `instructions-smoke-evidence.test.ts` rejects arbitrary request/user strings
   as MCP instruction evidence and validates semantic tool descriptions and the
   exact Claude host-generated reminder/deferred-discovery carrier.

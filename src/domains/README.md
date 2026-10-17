@@ -12,6 +12,9 @@
   explicit per-request registration routing without reflecting secret inputs.
 - `request-failure.ts` owns closed, path-free explanations for authenticated
   busy and originating-client facility failures across the HTTP boundary.
+- `software-version.ts` owns strict node-semver parsing and precedence comparison
+    for runtime decisions and the tooling facade; exact version-group agreement
+    remains a tooling responsibility.
 - `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.
