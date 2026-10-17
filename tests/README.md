@@ -41,6 +41,9 @@ Git hook tests remain contributor-tooling regressions.
 - `mcp-http-server.test.ts` covers actual SDK HTTP clients, originating roots,
   elicitation/progress, client cancellation versus owned work, boundary rejection
   and explicit shutdown over the real Core with controlled native/official I/O.
+- `mcp-http-modern.test.ts` covers the actual pinned 2026-07-28 SDK wire,
+  strict era routing, the fixed catalog and authenticated roots continuation
+  before resource acquisition, while retaining sessionful legacy behavior.
 - `mcp-http-fixture.test.ts` exercises the test-only Core/SDK HTTP child,
   explicit bearer calls and normal owned teardown.
 - `native-fixture-seal.test.ts` checks complete App-plus-fixture inventory,

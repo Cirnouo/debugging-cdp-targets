@@ -30,7 +30,10 @@
   closes its public transport independently of actual child exit, and owns
   bounded stdin/TERM/KILL disposal for that Server child.
 - `mcp-http-server.ts` composes the public SDK Node Streamable HTTP transport,
-  validates loopback HTTP boundaries and authenticates every owned tool call.
+  validates loopback HTTP boundaries and routes strict modern requests beside
+  sessionful legacy connections through one shared Core.
+- `mcp-request-handler.ts` owns the common fixed declarations, authenticated
+  dispatch and modern roots preflight before lifecycle acceptance.
 - `target-host.ts` launches and verifies a newly created target. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
   the debugging process and fixes Windows screenshots with one bare
