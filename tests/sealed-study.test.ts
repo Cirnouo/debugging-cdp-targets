@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -231,7 +231,7 @@ test('launcher awaits actual study close and cannot accept a failed or signalled
 });
 
 test('actual study CLIs skip without GUI permission and reject absent, dirty or incomplete seals before evidence acquisition', async () => {
-    const base = await mkdtemp(path.join(os.tmpdir(), 'dct-sealed-study-'));
+    const base = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-sealed-study-')));
     try {
         const stage = path.join(base, 'stage');
         const output = path.join(base, 'unacquired-evidence');
@@ -296,7 +296,7 @@ test('actual study CLIs skip without GUI permission and reject absent, dirty or 
             }
         }
     } finally {
-        assert.equal(path.dirname(base), path.resolve(os.tmpdir()));
+        assert.equal(path.dirname(base), await realpath(os.tmpdir()));
         assert.ok(path.basename(base).startsWith('dct-sealed-study-'));
         await rm(base, { recursive: true, force: true });
     }

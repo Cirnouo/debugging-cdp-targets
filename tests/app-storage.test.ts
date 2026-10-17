@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -37,7 +37,7 @@ test('installed and portable data roots are explicit and never merge', () => {
 });
 
 test('a later App cannot create its selected data root without owning the singleton', async () => {
-    const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-app-data-'));
+    const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-app-data-')));
     try {
         const selected = path.join(temporary, 'data');
         await assert.rejects(prepareAppDataDirectory(selected, { ownsSingleton: false }), /singleton/i);

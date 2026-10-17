@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { verifyAppArchive, verifyAppReleaseTree } from '../src/adapters/app-delivery.ts';
 
 test('App runtime evidence rejects changed, missing and extra files before executable use', async () => {
-    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-app-evidence-'));
+    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-app-evidence-')));
     const bytes = Buffer.from('synthetic-runtime-bytes');
     const file = { path: 'node', bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
     try {
