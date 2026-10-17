@@ -1,14 +1,25 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { CallToolResult, ListRootsResult, Tool } from '@modelcontextprotocol/client';
+import type {
+    CallToolResult,
+    ElicitRequestFormParams,
+    ElicitResult,
+    ListRootsResult,
+    Progress,
+    Tool,
+} from '@modelcontextprotocol/client';
 import { getSupportedElicitationModes } from '@modelcontextprotocol/client';
-import { ClientCapabilitiesSchema, ListRootsResultSchema } from '@modelcontextprotocol/core';
+import { ClientCapabilitiesSchema, ElicitResultSchema, ListRootsResultSchema } from '@modelcontextprotocol/core';
 import {
+    acceptedContent,
     CLIENT_CAPABILITIES_META_KEY,
     createRequestStateCodec,
+    fromJsonSchema,
     inputRequired,
+    type JsonSchemaType,
     ProtocolError,
     ProtocolErrorCode,
     Server,
+    type ServerContext,
 } from '@modelcontextprotocol/server';
 import { type CoreControlRequest, parseControlRequest } from '../domains/control-contract.ts';
 import { parseRegisteredArguments, parseRegisteredOfficialArguments } from '../domains/mcp-http.ts';
@@ -39,6 +50,50 @@ type RootsState = {
     fingerprint: string;
     expires: number;
 };
+type FormState = Omit<RootsState, 'phase'> & {
+    phase: 'form';
+    flowId: string;
+    round: number;
+    key: string;
+    route: string;
+};
+type PendingForm = {
+    key: string;
+    round: number;
+    params: ElicitRequestFormParams;
+    resolve: (answer: ElicitResult) => void;
+    reject: (error: unknown) => void;
+};
+type Channel = { context: ServerContext; token: string | number | undefined; detach(): void };
+type Flow = {
+    id: string;
+    registrationId: string;
+    name: string;
+    fingerprint: string;
+    route: string;
+    capabilities: ClientRequestFacilities['capabilities'];
+    lifetime: AbortController;
+    execution: Promise<CallToolResult>;
+    settled: boolean;
+    round: number;
+    expires?: number;
+    pending?: PendingForm;
+    channel?: Channel;
+    timer?: ReturnType<typeof setTimeout>;
+    changed: Promise<void>;
+    wake(): void;
+};
+
+function deferred<T>() {
+    let resolve: (value: T) => void = () => {};
+    let reject: (error: unknown) => void = () => {};
+    const promise = new Promise<T>((yes, no) => {
+        resolve = yes;
+        reject = no;
+    });
+    return { promise, resolve, reject };
+}
+
 function canonical(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(canonical);
     if (isRecord(value))
@@ -59,11 +114,138 @@ function fingerprint(value: unknown) {
 /** One declaration/dispatch owner shared by per-request modern and sessionful legacy SDK Servers. */
 export function createMcpRequestHandler(core: McpHttpCore) {
     const lifetime = new AbortController();
-    const codec = createRequestStateCodec<RootsState>({
+    const flows = new Map<string, Flow>();
+    const codec = createRequestStateCodec<RootsState | FormState>({
         key: randomBytes(32),
         ttlSeconds: 600,
         bind: (context) => context.mcpReq.method,
     });
+    function retire(flow: Flow, reason = new Error('The originating input context is unavailable.')) {
+        if (flows.get(flow.id) !== flow) return;
+        flows.delete(flow.id);
+        flow.channel?.detach();
+        if (flow.timer) clearTimeout(flow.timer);
+        flow.lifetime.abort(reason);
+        flow.pending?.reject(reason);
+        flow.wake();
+    }
+    function changed(flow: Flow) {
+        flow.wake();
+        const next = deferred<void>();
+        flow.changed = next.promise;
+        flow.wake = () => next.resolve();
+    }
+    function progress(flow: Flow, value: Progress) {
+        const channel = flow.channel;
+        if (channel && channel.token !== undefined && !flow.lifetime.signal.aborted)
+            void channel.context.mcpReq
+                .notify({ method: 'notifications/progress', params: { ...value, progressToken: channel.token } })
+                .catch(() => {});
+    }
+    function elicit(flow: Flow, params: ElicitRequestFormParams, signal?: AbortSignal) {
+        flow.lifetime.signal.throwIfAborted();
+        signal?.throwIfAborted();
+        if (!flow.capabilities.formElicitation) throw new RequestFailure('FORM_ELICITATION_UNAVAILABLE');
+        if (flow.pending || flow.round >= 8) throw new Error('The bounded form input context is unavailable.');
+        flow.expires ??= Date.now() + 600_000;
+        if (flow.expires <= Date.now()) throw new Error('The form input context expired.');
+        const answer = deferred<ElicitResult>();
+        const pending = {
+            key: `form${++flow.round}`,
+            round: flow.round,
+            params: structuredClone(params),
+            resolve: answer.resolve,
+            reject: answer.reject,
+        };
+        flow.pending = pending;
+        changed(flow);
+        const aborted = () => retire(flow);
+        signal?.addEventListener('abort', aborted, { once: true });
+        return answer.promise.finally(() => signal?.removeEventListener('abort', aborted));
+    }
+    async function exchange(flow: Flow, context: ServerContext, token: string | number | undefined, state?: FormState) {
+        if (flow.channel || flow.lifetime.signal.aborted) throw new Error('The input round is unavailable.');
+        const aborted = () => retire(flow);
+        const channel: Channel = {
+            context,
+            token,
+            detach() {
+                context.mcpReq.signal.removeEventListener('abort', aborted);
+                if (flow.channel === channel) delete flow.channel;
+            },
+        };
+        flow.channel = channel;
+        context.mcpReq.signal.addEventListener('abort', aborted, { once: true });
+        if (context.mcpReq.signal.aborted) aborted();
+        try {
+            if (state) {
+                const pending = flow.pending;
+                if (!pending || pending.round !== state.round || pending.key !== state.key)
+                    throw new Error('The input round was already consumed.');
+                const value = context.mcpReq.inputResponses?.[pending.key];
+                if (value !== undefined) {
+                    const checked = await ElicitResultSchema['~standard'].validate(value);
+                    if (checked.issues) throw new Error('Invalid form response.');
+                    if (
+                        checked.value.action === 'accept' &&
+                        acceptedContent(
+                            context.mcpReq.inputResponses,
+                            pending.key,
+                            fromJsonSchema(pending.params.requestedSchema as JsonSchemaType),
+                        ) === undefined
+                    )
+                        throw new Error('Invalid form content.');
+                    if (flow.timer) clearTimeout(flow.timer);
+                    delete flow.timer;
+                    delete flow.pending;
+                    pending.resolve(checked.value);
+                }
+            }
+            while (true) {
+                flow.lifetime.signal.throwIfAborted();
+                if (flow.pending) {
+                    const pending = flow.pending;
+                    const next: FormState = {
+                        version: 1,
+                        phase: 'form',
+                        registrationId: flow.registrationId,
+                        name: flow.name,
+                        fingerprint: flow.fingerprint,
+                        expires: flow.expires ?? Date.now(),
+                        flowId: flow.id,
+                        round: pending.round,
+                        key: pending.key,
+                        route: flow.route,
+                    };
+                    const requestState = await codec.mint(next, context);
+                    if (!flow.timer) {
+                        flow.timer = setTimeout(() => retire(flow), Math.max(0, next.expires - Date.now()));
+                        flow.timer.unref();
+                    }
+                    // SDK completion closes this Server. Remove that exchange's signal before returning input_required.
+                    channel.detach();
+                    return inputRequired({
+                        inputRequests: { [pending.key]: inputRequired.elicit(pending.params) },
+                        requestState,
+                    });
+                }
+                const result = await Promise.race([
+                    flow.execution.then((value) => ({ kind: 'result' as const, value })),
+                    flow.changed.then(() => ({ kind: 'changed' as const })),
+                ]);
+                if (result.kind === 'result') {
+                    channel.detach();
+                    retire(flow);
+                    return result.value;
+                }
+            }
+        } catch (error) {
+            // Invalid input can be corrected with the same unconsumed round; a true signal abort retires the holder.
+            channel.detach();
+            if (flow.settled || context.mcpReq.signal.aborted) retire(flow);
+            throw error;
+        }
+    }
     const lifecycle = lifecycleTools();
     const reserved = new Set(lifecycle.map((tool) => tool.name));
     const routeSchema = {
@@ -136,7 +318,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                 if (action && Object.hasOwn(parsed.arguments, 'action'))
                     throw new Error('Tool name selects its action.');
                 const principal = client.request({ requestId: context.mcpReq.id, capabilities: supported }).principal;
-                const state = context.mcpReq.requestState<RootsState>();
+                const state = context.mcpReq.requestState<RootsState | FormState>();
                 let roots: ListRootsResult = { roots: [] };
                 if (modern && control?.action === 'start') {
                     const hash = fingerprint(parsed.arguments);
@@ -176,8 +358,72 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                             });
                         }
                     }
-                } else if (state) throw new Error('Unexpected continuation.');
+                } else if (state && !(modern && !control && state.phase === 'form'))
+                    throw new Error('Unexpected continuation.');
                 const token = request.params._meta?.progressToken;
+                if (modern && !control) {
+                    if (!core.tools.some((tool) => tool.name === name)) throw new Error('Unknown tool.');
+                    const official = parseRegisteredOfficialArguments(arguments_);
+                    const hash = fingerprint({ arguments: official.arguments, route: official.route });
+                    const route = fingerprint(official.route);
+                    if (state) {
+                        if (
+                            state.phase !== 'form' ||
+                            state.version !== 1 ||
+                            state.registrationId !== principal.registrationId ||
+                            state.name !== name ||
+                            state.fingerprint !== hash ||
+                            state.route !== route ||
+                            state.expires <= Date.now()
+                        )
+                            throw new Error('Invalid form continuation.');
+                        const flow = flows.get(state.flowId);
+                        if (
+                            !flow ||
+                            flow.registrationId !== state.registrationId ||
+                            flow.name !== name ||
+                            flow.fingerprint !== hash ||
+                            flow.route !== route ||
+                            flow.expires !== state.expires ||
+                            !supported.formElicitation ||
+                            !flow.capabilities.formElicitation ||
+                            (flow.capabilities.roots && !supported.roots)
+                        )
+                            throw new Error('The originating input context is unavailable.');
+                        return await exchange(flow, context, token, state);
+                    }
+                    if (context.mcpReq.inputResponses) throw new Error('A signed continuation is required.');
+                    const wake = deferred<void>();
+                    const flow: Flow = {
+                        id: randomBytes(24).toString('base64url'),
+                        registrationId: principal.registrationId,
+                        name,
+                        fingerprint: hash,
+                        route,
+                        capabilities: supported,
+                        lifetime: new AbortController(),
+                        execution: Promise.resolve({ content: [] }),
+                        settled: false,
+                        round: 0,
+                        changed: wake.promise,
+                        wake: () => wake.resolve(),
+                    };
+                    flows.set(flow.id, flow);
+                    const logicalContext = client.request({
+                        requestId: context.mcpReq.id,
+                        capabilities: supported,
+                        waitSignal: flow.lifetime.signal,
+                        onProgress: (value) => progress(flow, value),
+                        elicit: (params, signal) => elicit(flow, params, signal),
+                    });
+                    flow.execution = Promise.resolve()
+                        .then(() => core.invoke(name, { ...official.arguments, _dct: official.route }, logicalContext))
+                        .finally(() => {
+                            flow.settled = true;
+                            if (!flow.channel) retire(flow);
+                        });
+                    return await exchange(flow, context, token);
+                }
                 let requestActive = true;
                 const startLifetime = new AbortController();
                 const startAborted = () => startLifetime.abort(context.mcpReq.signal.reason);
@@ -240,6 +486,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
         createServer,
         close() {
             lifetime.abort(new Error('The MCP service closed.'));
+            for (const flow of flows.values()) retire(flow);
         },
     };
 }
