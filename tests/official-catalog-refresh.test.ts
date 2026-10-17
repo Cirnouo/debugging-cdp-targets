@@ -399,8 +399,9 @@ test('a server without listChanged support keeps startup-only knowledge', async 
     }
 });
 
-async function coreFixture() {
+async function coreFixture(initialTools?: Tool[]) {
     const f = await fixture();
+    if (initialTools) f.list(async () => ({ tools: initialTools }));
     const upstreams: OfficialConnection[] = [];
     const diagnosticSinks: NonNullable<Parameters<typeof createOfficialConnection>[1]>['diagnose'][] = [];
     let health: () => Promise<void> = async () => {};
@@ -555,6 +556,147 @@ test('Core health await cannot forward a tool removed before actual SDK admissio
         assert.equal(f.counts().calls, 0);
     } finally {
         release.resolve();
+        await f.cleanup();
+    }
+});
+
+test('Core absent-tool admission awaits a held catalog refresh that enables the requested name', async () => {
+    const f = await coreFixture([other]);
+    const held = deferred<Page>();
+    let pending: Promise<unknown> | undefined;
+    try {
+        const upstream = f.upstreams[1];
+        assert.ok(upstream);
+        const baseline = f.counts().lists;
+        f.list(async () => held.promise);
+        await upstream.rootsChanged();
+        await until(() => f.counts().lists === baseline + 1, 'held catalog refresh must start');
+        let settled = false;
+        pending = f.core
+            .invoke(
+                'echo',
+                {
+                    _dct: { connectionId: f.target.connectionId, sessionId: f.target.sessionId },
+                },
+                f.context(),
+            )
+            .finally(() => {
+                settled = true;
+            });
+        void pending.catch(() => {});
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(settled, false, 'last-known absence cannot decide while metadata admission is pending');
+        assert.equal(f.counts().calls, 0);
+        assert.deepEqual(f.resources(), { launched: 1, closed: 0 });
+        held.resolve({ tools: [first, other] });
+        const result = await pending;
+        assert.ok(isRecord(result));
+        assert.deepEqual(result.structuredContent, { value: 1 });
+        assert.equal(f.counts().calls, 1);
+        assert.equal(f.counts().lists, baseline + 1);
+        assert.deepEqual(upstream.toolCatalog, { revision: 2, state: 'current' });
+    } finally {
+        held.resolve({ tools: [] });
+        await pending?.catch(() => {});
+        await f.cleanup();
+    }
+});
+
+test('Core absent-tool admission recovers unavailable metadata on that same requested tool', async () => {
+    const f = await coreFixture([other]);
+    try {
+        const upstream = f.upstreams[1];
+        assert.ok(upstream);
+        f.list(async () => ({ tools: [{ ...first, name: 'unreviewed' }] }));
+        await upstream.rootsChanged();
+        await until(() => upstream.toolCatalog?.state === 'unavailable', 'catalog failure must precede admission');
+        const baseline = f.counts().lists;
+        f.list(async () => ({ tools: [first, other] }));
+        const result = await f.core.invoke(
+            'echo',
+            {
+                _dct: { connectionId: f.target.connectionId, sessionId: f.target.sessionId },
+            },
+            f.context(),
+        );
+        assert.deepEqual(result.structuredContent, { value: 1 });
+        assert.equal(f.counts().calls, 1);
+        assert.equal(f.counts().lists, baseline + 1);
+        assert.deepEqual(upstream.toolCatalog, { revision: 2, state: 'current' });
+        assert.deepEqual(f.resources(), { launched: 1, closed: 0 });
+    } finally {
+        await f.cleanup();
+    }
+});
+
+test('Core absent-tool admission reports repeated unavailable validation without forwarding', async () => {
+    const f = await coreFixture([other]);
+    try {
+        const upstream = f.upstreams[1];
+        assert.ok(upstream);
+        f.list(async () => ({ tools: [{ ...first, name: 'unreviewed-private-fixture' }] }));
+        await upstream.rootsChanged();
+        await until(() => upstream.toolCatalog?.state === 'unavailable', 'invalid catalog must become unavailable');
+        const baseline = f.counts().lists;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            await assert.rejects(
+                f.core.invoke(
+                    'echo',
+                    {
+                        _dct: { connectionId: f.target.connectionId, sessionId: f.target.sessionId },
+                    },
+                    f.context(),
+                ),
+                (error: unknown) => {
+                    assert.ok(error instanceof Error && isRecord(error));
+                    assert.equal(error.code, 'OFFICIAL_CATALOG_UNAVAILABLE');
+                    assert.match(error.message, /catalog is unavailable/i);
+                    assert.doesNotMatch(error.message, /unreviewed-private-fixture/);
+                    return true;
+                },
+            );
+            assert.equal(f.counts().lists, baseline + attempt, 'one metadata walk per admission, with no retry loop');
+            assert.equal(f.counts().calls, 0);
+            assert.deepEqual(upstream.tools, [other]);
+            assert.deepEqual(upstream.toolCatalog, { revision: 1, state: 'unavailable' });
+            assert.deepEqual(f.resources(), { launched: 1, closed: 0 });
+        }
+    } finally {
+        await f.cleanup();
+    }
+});
+
+test('Core current absent-tool admission retains the complete existing disabled replacement recipe', async () => {
+    const f = await coreFixture();
+    try {
+        const upstream = f.upstreams[1];
+        assert.ok(upstream);
+        f.list(async () => ({ tools: [other] }));
+        await upstream.rootsChanged();
+        await until(() => upstream.toolCatalog?.revision === 2, 'current absence must be newly validated');
+        const result = await f.core.invoke(
+            'echo',
+            {
+                _dct: { connectionId: f.target.connectionId, sessionId: f.target.sessionId },
+            },
+            f.context(),
+        );
+        assert.equal(result.isError, true);
+        assert.deepEqual(result.structuredContent, {
+            code: 'TOOL_NOT_ENABLED',
+            connectionId: f.target.connectionId,
+            sessionId: f.target.sessionId,
+            name: 'echo',
+            supported: true,
+            conditions: [],
+            missingConditions: [],
+            suggestedMcpArgs: ['--categoryExtensions=true', '--no-usage-statistics', '--no-performance-crux'],
+            nextAction: 'close-and-new-start',
+        });
+        assert.equal(f.counts().calls, 0);
+        assert.deepEqual(upstream.toolCatalog, { revision: 2, state: 'current' });
+        assert.deepEqual(f.resources(), { launched: 1, closed: 0 });
+    } finally {
         await f.cleanup();
     }
 });

@@ -834,6 +834,10 @@ export async function createGatewayCore({
             connection.lastRealOperationAt = timestamp();
             if (client) connection.executionContext = client;
             const execution = (async () => {
+                // Last-known absence is not a current configuration fact until metadata admission settles.
+                await connection.upstream?.ensureToolCatalog?.();
+                owner.assertOpen();
+                routed(route);
                 if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
                     return lifecycleResult({
                         code: 'TOOL_NOT_ENABLED',

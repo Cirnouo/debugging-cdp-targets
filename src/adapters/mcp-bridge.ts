@@ -34,6 +34,7 @@ export type OfficialConnectionResource = {
 export type OfficialConnection = OfficialConnectionResource & {
     readonly tools: Tool[];
     readonly toolCatalog?: Readonly<{ revision: number; state: 'current' | 'refreshing' | 'unavailable' }>;
+    ensureToolCatalog?(): Promise<void>;
     call(
         name: string,
         arguments_: Record<string, unknown>,
@@ -348,6 +349,13 @@ export async function createOfficialConnection(
         });
         return refreshing;
     }
+    async function ensureToolCatalog() {
+        assertCatalogOpen();
+        if (catalogState === 'unavailable') dirty = true;
+        if (dirty || refreshing) await refreshCatalog();
+        assertCatalogOpen();
+        if (catalogState === 'unavailable') throw new RequestFailure('OFFICIAL_CATALOG_UNAVAILABLE');
+    }
     try {
         options.onAcquired?.(resource);
         if (options.signal?.aborted) abortAcquisition();
@@ -367,6 +375,7 @@ export async function createOfficialConnection(
             get toolCatalog() {
                 return { revision, state: catalogState };
             },
+            ensureToolCatalog,
             ...(child.pid === undefined ? {} : { processId: child.pid }),
             call: async (name, arguments_, signal, onProgress) => {
                 if (execution) throw new Error('The official connection is busy with an owned execution.');
@@ -374,11 +383,7 @@ export async function createOfficialConnection(
                 const terminal = actual.terminal;
                 execution = actual;
                 try {
-                    assertCatalogOpen();
-                    if (catalogState === 'unavailable') dirty = true;
-                    if (dirty || refreshing) await refreshCatalog();
-                    assertCatalogOpen();
-                    if (catalogState === 'unavailable') throw new RequestFailure('OFFICIAL_CATALOG_UNAVAILABLE');
+                    await ensureToolCatalog();
                     const toolDefinition = tools.find((tool) => tool.name === name);
                     if (!toolDefinition) throw new Error('The official tool is no longer enabled in this connection.');
                     return CallToolResultSchema.parse(
