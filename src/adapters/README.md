@@ -1,5 +1,17 @@
 # I/O adapters
 
+- `app-singleton.ts` holds the advisory kernel lock descriptor for the App's
+  lifetime in a native-account namespace independent of selected data roots.
+- `app-activation.ts` provides only a bounded fixed activation frame and reply;
+  it carries no management requests, credentials or settings.
+- `app-storage.ts` selects separate installed and portable data roots and admits
+  their creation only after singleton ownership.
+- `app-configuration.ts` validates the whole migration chain before a backup and
+  atomic settings replacement, keeping desired port separate from effective port.
+- `app-native.ts` verifies the complete original native loader closure before
+  loading its public advisory-lock API.
+- `app-delivery.ts` verifies immutable archive and regular-file evidence without
+  executing or repairing delivery inputs.
 - `fixture-diagnostics.ts` owns opt-in fixture observation, direct I/O scopes,
   closed safe event/error metadata and receiver-side exception containment.
 - `cdp-router.ts` forwards loopback HTTP/WebSocket CDP and tracks requests.

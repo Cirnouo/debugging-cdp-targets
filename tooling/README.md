@@ -1,5 +1,11 @@
 # Tooling
 
+- `app-release-inputs.json` records canonical Electron and ordinary Node archive
+  identities separately from npm signature evidence. File extraction and native
+  acceptance must be established for each distribution before delivery.
+- `app-native-release.json` records canonical registry tarball integrity and
+  every original regular file in the native advisory-lock loading closure,
+  including all original licenses and platform prebuilds.
 - `build-plugin.ts` assembles complete Codex and Claude Code payloads from
   `packaging/`, root `LICENSE` and one shared runtime map. It bundles runtime and
   helpers, derives all bundled package roots

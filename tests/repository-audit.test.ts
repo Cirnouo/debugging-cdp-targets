@@ -29,6 +29,37 @@ test('gateway imports only public split SDK entry points', () => {
     }
 });
 
+test('only the verified App native loader may load its reviewed advisory module', () => {
+    const source = "const extension = require('fs-native-extensions');";
+    assert.deepEqual(validateRuntimeSource('src/adapters/app-native.ts', source), []);
+    for (const file of ['src/interface/app-main.ts', 'src/adapters/platform-process.ts', 'src/domains/app-release.ts'])
+        assert.ok(validateRuntimeSource(file, source).length);
+    assert.ok(validateRuntimeSource('src/adapters/app-native.ts', "require('unreviewed-native-addon');").length);
+});
+
+test('Electron and React imports stay restricted to their explicit App interface surfaces', () => {
+    const surfaces = [
+        ['src/interface/app-bootstrap.ts', 'electron'],
+        ['src/interface/app-main.ts', 'electron'],
+        ['src/interface/app-window.ts', 'electron'],
+        ['src/interface/app-preload.ts', 'electron'],
+        ['src/interface/app-renderer.ts', 'react'],
+        ['src/interface/app-renderer.ts', 'react-dom/client'],
+    ];
+    for (const [file, dependency] of surfaces) {
+        if (!file || !dependency) throw new Error('Invalid literal interface fixture.');
+        assert.deepEqual(validateRuntimeSource(file, `import x from '${dependency}';`), []);
+        for (const outside of [
+            'src/domains/app-ui.ts',
+            'src/adapters/app-native.ts',
+            'src/application/plugin-runtime.ts',
+        ])
+            assert.ok(validateRuntimeSource(outside, `import x from '${dependency}';`).length);
+    }
+    assert.ok(validateRuntimeSource('src/interface/app-preload.ts', "import x from 'react-dom/client';").length);
+    assert.ok(validateRuntimeSource('src/interface/app-renderer.ts', "import x from 'electron';").length);
+});
+
 test('repository audit accepts the supported Node range and contributor entry point', async (context) => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-agents-')));
     try {

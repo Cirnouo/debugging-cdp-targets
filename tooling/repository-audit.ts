@@ -17,6 +17,15 @@ export function validateYamlFilename(file: string): string[] {
     return [`${file}: maintained YAML filenames must use lowercase .yaml.`];
 }
 
+const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
+    ['src/adapters/app-native.ts', ['fs-native-extensions']],
+    ['src/interface/app-bootstrap.ts', ['electron']],
+    ['src/interface/app-main.ts', ['electron']],
+    ['src/interface/app-window.ts', ['electron']],
+    ['src/interface/app-preload.ts', ['electron']],
+    ['src/interface/app-renderer.ts', ['react', 'react-dom/client']],
+]);
+
 export function validateTextStyle(file: string, source: string) {
     const errors = [];
     if (source.includes('\r')) errors.push(`${file}: use LF, not CRLF.`);
@@ -297,6 +306,7 @@ export function validateRuntimeSource(file: string, source: string) {
             !specifier.startsWith('.') &&
             !specifier.startsWith('node:') &&
             specifier !== 'ws' &&
+            !APP_RUNTIME_IMPORTS.get(file)?.includes(specifier) &&
             ![
                 '@modelcontextprotocol/client',
                 '@modelcontextprotocol/server',

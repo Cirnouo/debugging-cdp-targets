@@ -1,6 +1,13 @@
 # Pure domain rules
 
 - `official-execution.ts` tracks one matching wire identity until real response/close.
+- `app-configuration.ts` owns the initial App schema, sequential migration
+  validation and desired/effective settings. Unpublished legacy schemas have no
+  production migration promise.
+- `app-release.ts` validates independently maintained Electron, ordinary Node
+  and complete native loader release evidence.
+- `app-ui.ts` validates the fixed local asset routes and narrow management
+  requests/snapshots, including startup failure without invented settings.
 - `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.
