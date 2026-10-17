@@ -110,10 +110,10 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
         ),
         make(
             'dct_connection_restart',
-            'Explicitly restart this connection with the same application and port, optionally replacing all mcpArgs. Keeps connectionId and creates a new sessionId; old page IDs and routes expire. Never restart or replay tools automatically.',
+            'Explicitly restart the target, official Server or both using the immutable original launch, environment, roots and official options. Explicit fixed ports remain fixed; automatic port policy may select a new free port. Keeps connectionId and creates a new sessionId. Omitted scope means both only in this transitional stdio facade. Changed configuration requires Close and a new start. Never restart or replay tools automatically.',
             {
                 ...identity,
-                mcpArgs: stringList,
+                scope: { type: 'string', enum: ['target', 'official', 'both'] },
             },
             Object.keys(identity),
         ),

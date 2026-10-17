@@ -1,5 +1,6 @@
 # Pure domain rules
 
+- `official-execution.ts` tracks one matching wire identity until real response/close.
 - `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.

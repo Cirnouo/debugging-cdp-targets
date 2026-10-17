@@ -13,7 +13,7 @@ The Plugin manages targets directly through MCP:
 | --- | --- |
 | `dct_connection_status` | Discovery, connection/operation status, tool requirements and automatic Hooks. |
 | `dct_connection_start` | Accept a structured new launch with explicit isolation and return an operation immediately. |
-| `dct_connection_restart` | Explicitly replace a live session, optionally with new mcpArgs. |
+| `dct_connection_restart` | Restart target, official Server or both from the immutable start snapshot. |
 | `dct_connection_stop` | Apply the user's Close/Keep choice to one session. |
 | `dct_connection_end_task` | End work and retain a live target/upstream. |
 | `dct_operation_wait` | Wait for operation events/results using a replay cursor. |
@@ -107,8 +107,9 @@ Port selection starts at 9222; start's optional basePort selects another range.
 Each session reserves a candidate port before probing, preventing concurrent
 launches in the same gateway from selecting it. Occupied, privileged and
 OS-reserved ports are skipped. A collision after app creation fails clearly and
-does not trigger automatic relaunch. Explicit live restart refuses an occupied
-original port.
+does not trigger automatic relaunch. Scoped restart preserves its admitted port
+policy: an explicit fixed port refuses a collision, while automatic selection may
+choose another verified free port before the replacement is created.
 
 Chrome receives no implicit profile directory. Directory choices are presented
 as Agent chooses a suitable location, Chrome preset (Chrome only), user existing,
@@ -187,7 +188,7 @@ and parameter values are accepted. Other launch-field environment expansion
 continues to apply as described above.
 
 Composition copies caller arguments and is idempotent. Explicit live restart
-reuses the exact composed argv, profile and port. To change application args,
+retains composed launch bytes and profile; only recorded automatic port tokens may change. To change application args,
 complete normal Close and issue a new start with a fresh requestId and the new
 application args. Then use the returned connection/session identities and obtain
 fresh page IDs with `list_pages`. `generic-cdp` and Chrome on other platforms keep
@@ -197,15 +198,14 @@ Normal user window switching and minimizing require no screenshot foreground
 checklist or implicit window manipulation. The
 [dated Windows Chrome comparison](../mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
 records measured static states and their limits. Official screenshot arguments,
-routing, timeout quarantine and explicit recovery retain their existing behavior.
+routing and explicit recovery retain their contracts; cancelled client waits leave actual execution owned.
 
 ## Official Server settings
 
 Each connection has its own `mcpArgs: string[]`, separate from application
 args/env. The gateway reserves endpoint/browser-launch options and rejects
 configuration files or CLI mode overrides. Configuration changes require
-explicit live restart; changing application launch arguments requires normal
-Close followed by a new start.
+completed normal Close followed by a new start. Restart never accepts replacement mcpArgs.
 
 Server defaults enable extensions and disable usage statistics/CrUX.
 Per-connection mcpArgs can override them. Gateway environment defaults
@@ -216,7 +216,7 @@ The delivered official Server 1.11.0 supports automatic configuration discovery
 and live reloading. The gateway sets `CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY=1`
 only in each official child, so upstream Plugin/global configuration cannot
 change an explicitly configured connection. `--config` remains gateway-owned
-and is rejected in `mcpArgs`; change options through explicit start/restart.
+and is rejected in `mcpArgs`; change options through completed Close and a new start.
 See the [versioned upstream locator](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/a878bcad39584337e055778353246820deafa7c0/src/config/ConfigLocator.ts)
 and [parser](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/a878bcad39584337e055778353246820deafa7c0/src/config/ConfigParser.ts).
 
@@ -246,16 +246,18 @@ for managed CDP connections. Extension tools require
 
 Official calls carry `_dct: { connectionId, sessionId }`. Only that field is
 removed before forwarding original arguments; official names, execution and
-results stay unchanged. Restart preserves connectionId and the original port
-but creates a new session. Obtain fresh page IDs with `list_pages`.
+results stay unchanged. Restart preserves connectionId and its roots snapshot,
+retains explicit fixed ports or reselects an automatic port, and creates a new session. Obtain fresh page IDs with `list_pages`.
 
 ## Workspace access and diagnostics
 
 Use official `--workspace` for file access. Selected status with
 `include: ["configuration"]` exposes mcpArgs, isolation evidence and workspace
-sources: explicit directories, the system temporary-directory default and negotiated roots
-forwarding. cwd does not grant file access. Negotiation alone does not prove
-which roots a host supplied.
+sources: explicit directories, the admitted system temporary-directory default and
+immutable initiating-client roots. The roots request runs before connection
+acquisition; unsupported roots produce an empty list and negotiated failures abort
+start. Later host roots changes or ownership transfer cannot widen that snapshot.
+cwd does not grant file access.
 
 Official Server 1.11.0 adds `--no-file-navigations` to reject tool-initiated
 `file:` navigation, including `view-source:file:`. Its default remains permissive,

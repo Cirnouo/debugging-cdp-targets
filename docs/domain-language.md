@@ -7,8 +7,8 @@
 - **Static entry**: reusable host stdio configuration cdp-targets.
 - **Entry identity**: random UUID for one live MCP gateway.
 - **Connection identity**: random UUID for one independent target task and its official MCP connection.
-- **Session identity**: fresh UUID for one target lifetime, assigned before its launch begins.
-- **Session owner**: in-memory owner of one target lifetime and every resource acquired for it.
+- **Session identity**: fresh public route UUID changed after either target or official side restarts.
+- **Session owner**: in-memory resource-generation owner; logical router/directory and target/official generations have independent lifetimes.
 - **Isolation intent**: the user's choice between no data directory isolation and an explicitly selected isolation directory.
 - **Data directory**: the real filesystem directory selected for application state under the isolation contract.
 - **Directory selection**: Agent chooses a suitable location, the user selects the Chrome-only preset, an existing directory, or a new named/random child under a selected parent; the preset maps to an existing/new operation.
@@ -34,7 +34,7 @@
 - **Enabled tools**: one connection's actual official tools/list, with its exact input schemas.
 - **Connection summary**: identity and bounded target/upstream state without configuration, tool schemas or diagnostics.
 - **Configuration recipe**: complete explicit mcpArgs satisfying a tool's reviewed activation conditions.
-- **Quarantined connection**: session whose forwarding/transport is isolated after an incomplete timeout or cancellation.
+- **Detached official wait**: ended client response wait whose actual official execution remains owned until real response or definitive upstream termination.
 - **Disposition**: explicit Close or Keep choice without a default.
 - **Kept target**: application and upstream retained within its live connection.
 - **Active task**: dependent work activated by start, live restart or official use and ended by Keep/end-task or actual exit.
@@ -48,8 +48,8 @@
 - **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory, distinct from native profile ownership.
 - **Directory claim**: gateway-local ownership preventing concurrent equal or ancestor/descendant real data directory selections.
 - **Closed connection**: removed target connection after actual exit; the gateway remains reusable.
-- **Live restart**: user-authorized replacement of a still-live target with the same connection and port and a fresh session.
-- **Recovery**: explicit live restart of a quarantined or disconnected connection whose application has not exited.
+- **Live restart**: user-authorized target, official or both replacement using the same logical connection and immutable snapshot, with a fresh route session.
+- **Recovery**: explicit scoped restart or Close after diagnosed connection failure without automatic replay.
 - **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.
 - **Host distribution**: complete Plugin payload adapted to one Plugin host's installation interface.
 - **Packaging input**: maintained material used to assemble a host distribution.

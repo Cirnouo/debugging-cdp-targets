@@ -327,6 +327,32 @@ test('runtime audit permits TERM and KILL only for the official bridge owned Ser
     assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', maintained), []);
 });
 
+test('official owned-child proof accepts only the explicit ordinary-Node construction seam', () => {
+    const injected = ownedOfficialBridge.replace(
+        'spawn(process.execPath,',
+        'spawn(options.nodeExecutable ?? process.execPath,',
+    );
+    assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', injected), []);
+    for (const replacement of [
+        'options.targetExecutable ?? process.execPath',
+        'options.nodeExecutable || process.execPath',
+        'options.nodeExecutable ?? targetPath',
+        'options.nodeExecutable',
+    ])
+        assert.ok(
+            validateRuntimeSource(
+                'src/adapters/mcp-bridge.ts',
+                ownedOfficialBridge.replace('spawn(process.execPath,', `spawn(${replacement},`),
+            ).some((error) => error.includes('termination API')),
+        );
+    assert.ok(
+        validateRuntimeSource(
+            'src/adapters/mcp-bridge.ts',
+            injected.replace("child.kill('SIGTERM');", "{ const options = target; child.kill('SIGTERM'); }"),
+        ).some((error) => error.includes('termination API')),
+    );
+});
+
 test('owned Server reclamation cannot authorize arbitrary, Target or global process termination', () => {
     for (const file of ['src/adapters/target-host.ts', 'src/adapters/example.ts', 'src/adapters/platform-process.ts']) {
         assert.ok(

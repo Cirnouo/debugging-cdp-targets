@@ -5,18 +5,36 @@ import {
     type ControlRequest,
     connectionSummary,
 } from '../domains/control-contract.ts';
+import type { ClientPrincipal, ClientRequestContext } from '../shared/client-context.ts';
 import { createOperationRegistry } from './operations.ts';
 
-export function createLifecycleService({ entryId, handler }: { entryId: string; handler: ControlHandler }) {
+export function createLifecycleService({
+    entryId,
+    handler,
+    authorize,
+    beginJob,
+}: {
+    entryId: string;
+    handler: ControlHandler;
+    authorize?: (connectionId: string, principal: ClientPrincipal) => void;
+    beginJob?: (principal: ClientPrincipal) => () => void;
+}) {
     const operations = createOperationRegistry(entryId);
     const changing = new Set<string>();
     let closing = false;
-    async function control(request: ControlRequest, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    async function control(
+        request: ControlRequest,
+        signal?: AbortSignal,
+        client?: ClientRequestContext,
+    ): Promise<Record<string, unknown>> {
         if (request.entryId !== undefined && request.entryId !== entryId)
             throw new Error('This request identifies another entry.');
+        const ownerId = client?.principal.registrationId;
+        if (request.action === 'status' && request.connectionId && client)
+            authorize?.(request.connectionId, client.principal);
         if (request.action === 'status') {
             if (request.operationId) {
-                const result = operations.get(request.operationId);
+                const result = operations.get(request.operationId, ownerId);
                 signal?.throwIfAborted();
                 operations.markRead(request.operationId);
                 return { ...result };
@@ -24,24 +42,25 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
             return { ...handler.status(request.connectionId) };
         }
         if (request.action === 'wait') {
-            const result = await operations.wait(request.operationId, request.cursor, signal);
+            const result = await operations.wait(request.operationId, request.cursor, signal, ownerId);
             signal?.throwIfAborted();
             if (result.complete) operations.markRead(request.operationId);
             return result;
         }
         if (request.action === 'cancel') {
-            const result = operations.cancel(request.operationId);
+            const result = operations.cancel(request.operationId, ownerId);
             signal?.throwIfAborted();
             operations.markRead(request.operationId);
             return { ...result };
         }
-        const prior = operations.prior(request.requestId, request);
+        const prior = operations.prior(request.requestId, request, ownerId);
         if (prior) {
             signal?.throwIfAborted();
             operations.markRead(prior.operationId);
             return { ...prior };
         }
         if (closing) throw new Error('The gateway is closing.');
+        if (request.action !== 'start' && client) authorize?.(request.connectionId, client.principal);
         const connectionId = request.action === 'start' ? undefined : request.connectionId;
         if (request.action !== 'start') {
             const current = handler.status(request.connectionId);
@@ -52,11 +71,13 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
             changing.add(request.connectionId);
         }
         let boundConnection = connectionId;
+        const finishJob = client ? beginJob?.(client.principal) : undefined;
         const accepted = operations.submit(
             request.requestId,
             request,
             async (operation) => {
                 const context: ControlContext = {
+                    ...(client ? { client } : {}),
                     operationId: operation.operationId,
                     signal: operation.signal,
                     onPhase: operation.phase,
@@ -95,13 +116,18 @@ export function createLifecycleService({ entryId, handler }: { entryId: string; 
             },
             () => {
                 if (boundConnection) changing.delete(boundConnection);
+                finishJob?.();
             },
             request.action === 'start' ? undefined : request,
+            ownerId,
         );
         return { ...accepted };
     }
     return {
         control,
+        list: operations.list,
+        isBusy: (connectionId: string) => changing.has(connectionId),
+        forgetOwner: operations.forgetOwner,
         takeNotices: operations.takeNotices,
         cancelRoute: operations.cancelRoute,
         markRead: operations.markRead,

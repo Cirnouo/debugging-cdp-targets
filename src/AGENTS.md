@@ -11,7 +11,9 @@ use explicit adapters. Adapters never depend on application/interface. Domains
 contain no environment, file, process, network, or PowerShell I/O.
 
 Only interface/mcp-bootstrap.ts executes directly.
-The bootstrap owns host MCP stdin/stdout through the official SDK; the
+The transitional bootstrap owns host MCP stdin/stdout through the official SDK;
+transport-independent application core accepts explicit client request contexts.
+Client detach does not clean resources; stdio EOF explicitly requests cleanup. The
 gateway adds required _dct connection/session routing to compatible fixed official
 input schemas and removes it before forwarding. Validate each actual upstream's
 catalog against reviewed variants; preserve official names, arguments and results.
@@ -24,8 +26,9 @@ for cross-layer invariants. Never add persisted session state, plugin CLI or con
 The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolation.md)
 requires pure isolation/launch validation in domains,
 directory filesystem evidence and claims in adapters, and connection-level leases,
-release barriers and explicit operation evidence in application. Session resources
-remain session-owned. Start requires explicit isolation; no fixed profile fallback
+release barriers and explicit operation evidence in application. Target and official resources have independent generation owners alongside the
+logical connection/router owner. Public session identity changes after either side
+restarts and is distinct from those internal generations. Start requires explicit isolation; no fixed profile fallback
 or automatic path disclosure through Hooks/default summaries is permitted.
 
 Use strict, Node-erasable TypeScript with explicit `.ts` imports and owned types.

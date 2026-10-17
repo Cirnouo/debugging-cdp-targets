@@ -5,6 +5,7 @@ Without it they return a visible successful skip before app or resource acquisit
 all other arguments retain their existing order after that flag is removed.
 Neither CI/environment variables nor platform/display detection grant permission.
 This covers `official-server.ts`, `entry-recovery.ts`, `timeout-isolation.ts`,
+`retained-official.ts`,
 `screenshot-layers.ts`, `screenshot-timeout-probe.ts`, `application-screenshot-probe.ts`,
 `readest-native.ts`, `windows-elevation.ts` and `windows-elevated-mcp.ts`. Local
 development and verification of these tests may opt in explicitly; routine local
@@ -18,6 +19,16 @@ Linux/macOS CI explicitly opts in to real Chrome acceptance. Tauri/Electron
 application probes remain development verification with separately selected
 fixtures; this change adds no application acquisition or toolchain to CI. These
 forms of evidence remain distinct.
+
+`retained-official.ts --allow-gui <absolute-evidence-directory>` exercises the
+production shared core, verified unchanged official public bin, native target and
+stable router. It records each stage, bounds client response waits to 60 seconds,
+and explicitly normally cleans all owned resources after success or failure. It
+checks retained official PID/transport across target replacement, fresh public
+session and page evidence, old page/snapshot/network pair rejection, immutable
+roots and synthetic requests without replay. Bare network reqid reuse is recorded
+separately from complete page/reqid and gateway session identity. It currently
+requires Windows and remains an explicitly authorized local smoke.
 
 `codex-instructions.ts` and `claude-instructions.ts` install the production
 Plugin metadata and Skill into temporary host environments, substituting only
@@ -55,8 +66,9 @@ delivery to the substitute model, not real-model adherence, automatic Skill
 matching, Claude search execution or Desktop presentation.
 
 `timeout-isolation.ts` exercises an intentionally unfinished official handler on
-two isolated Chrome targets, validates timeout quarantine and peer availability,
-then explicitly restarts and normally closes them. It retains test profiles.
+two isolated Chrome targets, validates client response timeout with continued
+execution admission/busy state and peer availability, then explicitly normally
+closes them. It retains test profiles.
 
 - `official-server.ts` tests the bundled bootstrap against an isolated Chrome,
   including tool discovery, snapshot-based CSS style inspection, reusable entry

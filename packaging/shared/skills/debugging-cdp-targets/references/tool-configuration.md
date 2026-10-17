@@ -15,14 +15,16 @@ For example, click_at needs experimentalVision=true with its other conditions.
 Supported explicitly disabled tools and TOOL_NOT_ENABLED include missing
 conditions and complete replacement suggestedMcpArgs. Enabled tools have no
 activation recipe; unsupported tools provide a reason without a recipe.
-Use those only in an explicitly authorized start/restart; the gateway never
+Use those only in an explicitly authorized new start; the gateway never
 silently enables tools. Slim connections retain their actual slim tool names;
 the global catalog remains full. Working directory does not grant file access:
 use official `--workspace` directories and explicitly include status configuration
 when inspecting workspace sources.
 
 For an unresolved tool-enablement authorization, use `tools-start` before launch
-or `tools-restart` for a verified live connection. Display the complete proposed
-`mcpArgs` replacement, including workspace access; a request to inspect a page
+or `tools-restart` for a verified live connection. The live-connection template authorizes completed Close followed by a new start,
+not replacement options on scoped restart. Settle the complete successor start
+proposal, including isolation/directory/cleanup choices, before that Close.
+Display the complete proposed `mcpArgs`, including workspace access; a request to inspect a page
 does not itself authorize unrelated filesystem grants. Unsupported tools only
 receive their established reason, never an invented enablement question.

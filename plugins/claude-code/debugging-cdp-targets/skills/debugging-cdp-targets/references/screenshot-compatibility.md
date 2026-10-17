@@ -29,7 +29,7 @@ Restart keeps exact composed argv. To change it, use an existing Close choice or
 obtain the missing authorization through `replace-launch`, wait for normal Close,
 then start with updated args/fresh requestId
 and use new connection/session/page IDs. Official tools, transparent routing,
-the 60-second timeout, quarantine and explicit recovery remain unchanged.
+client response waits detach from owned execution; definitive failures require explicit recovery.
 Never focus, replay or restart implicitly. The
 [dated comparison](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
 records static-state evidence and its limits.

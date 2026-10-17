@@ -29,11 +29,20 @@ directory evidence.
 ## Live restart
 
 `dct_connection_restart` requires entryId, connectionId, sessionId and requestId;
-optional mcpArgs explicitly replaces configuration. Use it only for a still-live
-connection. It waits for old app exit and disposes old resources before creating
-fresh resources and session on the same connection and exact original port.
-It refuses a busy original port and invalidates old page IDs.
-Old operations cannot cancel a later session.
+pass explicit scope target, official or both. Every scope uses the immutable
+original effective launch/environment, official configuration and roots. Target
+scope replaces only the target after actual exit and native resource release;
+official scope retains that target; both replaces each side once. The logical
+router/directory stay stable and public session identity changes after either side.
+Explicit fixed ports refuse collisions; automatic port policy can select another
+verified free port without changing unrelated launch bytes. Obtain fresh page IDs
+with list_pages; old operations cannot cancel a successor session. Configuration
+changes require completed Close and a new start.
+
+Cancelling a client response wait does not cancel its actual official execution
+or make its connection idle. Keep original progress/elicitation context; never
+route a detached request to another client. A failed final cleanup retains live
+ownership and observation, denies new work and requires an explicit cleanup retry.
 
 ## Hooks and operation notices
 

@@ -13,15 +13,17 @@ never automatically restarts an application or replays a tool call.
     `dct_connection_status` and use the target's connection/current session UUIDs.
     Live restart changes session identity; actual exit removes the connection.
 - **The restart port is busy**: identify its owner and resolve the conflict before
-    retrying; live restart requires the exact original port. After ordinary app
+    retrying a fixed-port launch; automatic policy can select another verified free port. After ordinary app
     exit, use a new start with new connection/session identities.
 - **The application has no verified CDP endpoint**: check the executable path,
     debugging option, and browser-level endpoint support. A framework name alone
     does not establish compatibility.
-- **CONNECTION_RECOVERY_REQUIRED**: the affected upstream is isolated after timeout
-    or cancellation, transport pending state is cleared, and app identity remains
-    available for explicit live restart or normal Close. After actual app exit its
-    session is removed. Other connections remain usable.
+- **The connection is busy**: an actual official execution or lifecycle mutation
+    still owns it. Cancelling or timing out a client wait does not complete the
+    execution. Independent connections remain usable; never replay the call.
+- **Official connection failure**: inspect the selected connection and authorize
+    explicit scoped restart or normal Close. Client wait expiry alone never
+    closes a healthy target/upstream or fabricates a process exit.
 - **A directory is occupied or occupancy is unverifiable**: leave the requested
     application unlaunched. Known same-directory/shared-namespace use, uncertain
     attribution of a related running app and incomplete inspection block start.
@@ -140,8 +142,8 @@ and a fresh requestId. Use the new returned connection/session and page IDs.
 For a conditional application recipe, verify fresh image content in the intended
 native window state; request acceptance or a PNG alone does not prove compatible
 capture. The [2026-10-05 application matrices](../mcp-native-validation.md#minimized-screenshot-follow-up-2026-10-05)
-remain dated evidence for their specific environments. The 60-second timeout,
-quarantine and explicit recovery still apply to every route; never focus,
+remain dated evidence for their specific environments. Client response waits detach independently of owned execution;
+explicit recovery still applies to definitive connection failure; never focus,
 restart or replay implicitly after a failure.
 
 Return to the [user guide](README.md).

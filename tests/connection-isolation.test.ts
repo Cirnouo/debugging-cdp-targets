@@ -52,6 +52,7 @@ async function fixture(
         replacementRouter?: Promise<void>;
         profileAvailable?: (directory: string) => Promise<boolean>;
         resources?: (index: number) => Promise<void>;
+        expectCleanupFailure?: boolean;
     } = {},
 ) {
     const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-isolation-runtime-')));
@@ -172,7 +173,8 @@ async function fixture(
         failClose = false;
         failUpstreamClose = false;
         for (const child of applications) if (child.exitCode === null) child.exit();
-        await runtime.close();
+        if (options.expectCleanupFailure) await assert.rejects(runtime.close(), /cleanup failed/);
+        else await runtime.close();
         await rm(parent, { recursive: true, force: true });
     });
     const evidence: DataIsolationEvidence[] = [];
@@ -345,7 +347,7 @@ test('failed native resource observation preserves a dead route and the held dir
     const resources = new Promise<void>((_resolve, reject) => {
         rejectResources = reject;
     });
-    const f = await fixture(t, { resources: () => resources });
+    const f = await fixture(t, { resources: () => resources, expectCleanupFailure: true });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');

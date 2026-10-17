@@ -141,12 +141,12 @@ export async function loadOfficialToolCatalog(_defaults?: Tool[]) {
             : JSON.parse(await readFile(new URL('../../tooling/official-tool-catalog.json', import.meta.url), 'utf8'));
     return createToolCatalog(value);
 }
-export function workspaceSources(mcpArgs: string[], supportsRoots: boolean) {
+export function workspaceSources(mcpArgs: string[], supportsRoots: boolean, temporaryDirectory = os.tmpdir()) {
     const args = parseMcpArgs(mcpArgs);
     return {
-        officialDirectories: args.get('filesystemRoot')?.values ?? [os.tmpdir()],
+        officialDirectories: args.get('filesystemRoot')?.values ?? [temporaryDirectory],
         officialSource: args.has('filesystemRoot') ? 'explicit-workspace' : 'system-temporary-directory',
-        clientRoots: supportsRoots ? 'negotiated-forwarding-on-demand' : 'not-negotiated',
+        clientRoots: supportsRoots ? 'immutable-start-snapshot' : 'not-negotiated',
         unrestrictedPaths: args.get('allowUnrestrictedPaths')?.values[0] === true,
         cwdGrantsAccess: false,
     };

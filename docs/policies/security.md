@@ -20,8 +20,9 @@ without accepting same-name copies, missing identity or ambiguous aliases.
 Reserve each candidate port synchronously for its session owner before probing;
 skip occupied, privileged, and OS-excluded ports on new launches. Gateway-local
 reservations prevent peer launches from selecting the same port and remain held
-until actual app exit or evidence that no app was created. Explicit live restart
-must use the original port and refuse clearly when it is occupied. A foreign
+until actual app exit or evidence that no app was created. Explicit fixed-port restart
+must retain that port and refuse clearly when occupied; automatic port policy may
+select another free port using only the recorded validated binding template. A foreign
 listener found after app creation cannot authorize automatic relaunch or takeover.
 
 The official SDK gateway owns host stdio and preserves the official Server's tool
@@ -43,8 +44,9 @@ Diagnostics retain bounded identity/phase/error-category/elapsed metadata only.
 Do not log commands, page contents,
 cookies, network/console data, secrets, or tool calls.
 
-Create one session owner before acquiring target/router/upstream resources or
-pending work. Require explicit Close/Keep before ending a target's work. Keep
+Create logical connection ownership before acquiring its stable router/directory,
+with independently owned target and official generations and pending work.
+Require explicit Close/Keep before ending a target's work. Keep
 retains live application, upstream, router and observation. Close requests normal
 application shutdown and waits for actual exit without a target-close deadline.
 Cancelled or failed normal Close retains ownership, observation and retry identity
@@ -88,10 +90,11 @@ Plugin before enabling its code and Hooks. CDP/upstream or observation failure
 while an app lives reports a connection error, not process exit.
 
 Retry after ordinary exit requires start with new connection/session IDs.
-Explicit restart of a live connection retains argv/cwd/data directory/exact port and
-connection identity, waits for old exit and disposes old resources before creating
-a fresh owner/router/upstream and session. Require fresh list_pages evidence and
-page IDs. Never automatically restart or replay tools.
+Explicit scoped restart retains immutable launch/environment/official/roots,
+logical connection/router and directory lease; replace only target, official or
+both side generations once. Every scope issues a fresh session and requires fresh
+list_pages evidence. Fixed ports refuse collisions; automatic policy uses its
+recorded validated binding template to select another verified free port. Never automatically restart or replay tools.
 
 Official Server disposal immediately closes its public SDK transport and rejects
 pending calls, then proves the plugin-owned child exited. Allow two seconds after
@@ -174,14 +177,18 @@ Elevated normal-close helpers are allowed when needed. Native close reports
 request/actual-exit evidence; listener evidence is separate from application
 lifetime. Keep the actual-app observer until exit even if a Close wait is cancelled.
 
-After an interrupted official call, revoke that connection's forwarding, close
-its upstream normally and clear pending HTTP/CDP transports. Preserve app identity
-for explicit live restart or Close; never automatically restart or replay. Cancellation races
+Client cancellation, disconnect or response timeout detaches only that wait.
+Keep the healthy official execution, target and route, and refuse overlapping
+execution/transfer until its actual response or definitive upstream termination.
+Forward progress and form elicitation only to the originating available request
+context. The SDK deadline cannot prove actual completion: observe the matching
+wire response or definitive close without replay or private SDK patches. Cancellation races
 must normally close created apps or report accurate retained identity. Idempotent
 request IDs, current-session checks and bounded event cursors protect mutations.
 Cancelling a protocol wait leaves the operation running and queryable.
 
 Server defaults enable extensions and disable usage statistics and CrUX. Only
-compatible Chrome may use extension tools. mcpArgs overrides require an explicit
-start or restart with a fresh session. Do not permit upstream arguments to alter identity or
+compatible Chrome may use extension tools. mcpArgs are immutable after start; configuration changes require completed Close
+and a new start. Core restart requires target, official or both scope and retains
+connection roots and effective executable/argv/cwd/environment/official options. Do not permit upstream arguments to alter identity or
 inject a shell. See [supply-chain.md](supply-chain.md) for dependency requirements.

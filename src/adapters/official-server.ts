@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findEnvironmentKey } from '../domains/launch-command.ts';
 import { parseMcpArgs } from '../domains/official-options.ts';
 import { errorMessage } from '../shared/errors.ts';
 import { parseOfficialReleaseEvidence } from '../shared/official-package.ts';
@@ -8,22 +9,32 @@ import { verifyOfficialPackage } from './official-package.ts';
 
 declare const __DCT_OFFICIAL_RELEASE__: unknown;
 
-function booleanSetting(environment: NodeJS.ProcessEnv, name: string, fallback: boolean) {
-    const value = environment[name];
+export function snapshotOfficialEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+    return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1', CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1' };
+}
+
+function booleanSetting(environment: NodeJS.ProcessEnv, name: string, fallback: boolean, windows: boolean) {
+    const key = findEnvironmentKey(environment, name, windows);
+    const value = key === undefined ? undefined : environment[key];
     if (value === undefined) return fallback;
     if (value === 'true') return true;
     if (value === 'false') return false;
     throw new Error(`${name} must be a boolean: true or false.`);
 }
 
-export function buildServerArguments(browserUrl: string, environment = process.env, mcpArgs: string[] = []) {
+export function buildServerArguments(
+    browserUrl: string,
+    environment = process.env,
+    mcpArgs: string[] = [],
+    windowsEnvironment = process.platform === 'win32',
+) {
     const url = new URL(browserUrl);
     if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') {
         throw new Error('The official Server must connect to a local loopback browser URL.');
     }
-    const extensions = booleanSetting(environment, 'DCT_EXTENSIONS', true);
-    const statistics = booleanSetting(environment, 'DCT_USAGE_STATISTICS', false);
-    const crux = booleanSetting(environment, 'DCT_PERFORMANCE_CRUX', false);
+    const extensions = booleanSetting(environment, 'DCT_EXTENSIONS', true, windowsEnvironment);
+    const statistics = booleanSetting(environment, 'DCT_USAGE_STATISTICS', false, windowsEnvironment);
+    const crux = booleanSetting(environment, 'DCT_PERFORMANCE_CRUX', false, windowsEnvironment);
     const provided = parseMcpArgs(mcpArgs);
     if (provided.get('categoryPwa')?.values[0] === true)
         throw new Error(

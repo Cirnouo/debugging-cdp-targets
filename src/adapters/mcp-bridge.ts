@@ -19,10 +19,12 @@ import {
     serializeMessage,
 } from '@modelcontextprotocol/client';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
+import { createOfficialExecution } from '../domains/official-execution.ts';
 import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
-import { buildServerArguments, resolveServerBin } from './official-server.ts';
+import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from './official-server.ts';
 
 export type OfficialConnectionResource = {
+    readonly processId?: number;
     close(): Promise<void>;
     onExit(listener: () => void): void;
 };
@@ -51,7 +53,9 @@ export async function createOfficialConnection(
     browserUrl: string,
     options: {
         bin?: string;
+        nodeExecutable?: string;
         args?: string[];
+        environment?: NodeJS.ProcessEnv;
         requestTimeoutMs?: number;
         signal?: AbortSignal;
         onAcquired?: (resource: OfficialConnectionResource) => void;
@@ -66,15 +70,11 @@ export async function createOfficialConnection(
     const arguments_ = options.args ?? buildServerArguments(browserUrl);
     const bin = options.bin ?? (await resolveServerBin());
     options.signal?.throwIfAborted();
-    const child = spawn(process.execPath, [bin, ...arguments_], {
+    const child = spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
         shell: false,
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-            ...process.env,
-            CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1',
-            CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1',
-        },
+        env: snapshotOfficialEnvironment(options.environment),
     });
     const listeners = new Set<() => void>();
     let exited = false;
@@ -82,6 +82,7 @@ export async function createOfficialConnection(
     let closeNotified = false;
     let stdinEnded = false;
     let closing: Promise<void> | undefined;
+    let execution: ReturnType<typeof createOfficialExecution> | undefined;
     const buffer = new ReadBuffer();
     let resolveExit: () => void = () => {};
     const exit = new Promise<void>((resolve) => {
@@ -93,6 +94,7 @@ export async function createOfficialConnection(
     });
     function closeProtocol() {
         closed = true;
+        execution?.finish();
         buffer.clear();
         if (!closeNotified && transport.onclose) {
             closeNotified = true;
@@ -165,6 +167,7 @@ export async function createOfficialConnection(
         }
     }
     const resource: OfficialConnectionResource = {
+        ...(child.pid === undefined ? {} : { processId: child.pid }),
         close() {
             closeProtocol();
             if (exited) return Promise.resolve();
@@ -199,7 +202,20 @@ export async function createOfficialConnection(
         send(message: JSONRPCMessage) {
             if (closed) return Promise.reject(new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed'));
             return new Promise<void>((resolve, reject) => {
-                child.stdin.write(serializeMessage(message), (error) => (error ? reject(error) : resolve()));
+                try {
+                    const serialized = serializeMessage(message);
+                    if ('method' in message && message.method === 'tools/call' && 'id' in message && execution)
+                        execution.assign(message.id);
+                    child.stdin.write(serialized, (error) => {
+                        if (error) {
+                            void resource.close().catch(() => {});
+                            reject(error);
+                        } else resolve();
+                    });
+                } catch (error) {
+                    void resource.close().catch(() => {});
+                    reject(error);
+                }
             });
         },
         close() {
@@ -222,6 +238,7 @@ export async function createOfficialConnection(
             buffer.append(chunk);
             let message = buffer.readMessage();
             while (!closed && message !== null) {
+                execution?.observe(message);
                 transport.onmessage?.(message);
                 message = buffer.readMessage();
             }
@@ -273,21 +290,43 @@ export async function createOfficialConnection(
                 cursors.add(cursor);
             }
         } while (cursor !== undefined);
+        options.signal?.throwIfAborted();
+        options.signal?.removeEventListener('abort', abortAcquisition);
         return {
             tools,
+            ...(child.pid === undefined ? {} : { processId: child.pid }),
             call: async (name, arguments_, signal, onProgress) => {
+                if (execution) throw new Error('The official connection is busy with an owned execution.');
+                const actual = createOfficialExecution();
+                const terminal = actual.terminal;
+                execution = actual;
                 const toolDefinition = tools.findLast((tool) => tool.name === name);
-                return CallToolResultSchema.parse(
-                    await client.callTool(
-                        { name, arguments: arguments_ },
-                        {
-                            timeout: options.requestTimeoutMs ?? 60_000,
-                            ...(toolDefinition ? { toolDefinition } : {}),
-                            ...(signal ? { signal } : {}),
-                            ...(onProgress ? { onprogress: onProgress } : {}),
-                        },
-                    ),
-                );
+                try {
+                    return CallToolResultSchema.parse(
+                        await client.callTool(
+                            { name, arguments: arguments_ },
+                            {
+                                // The SDK has no public deadline-disable option. Its maximum safe
+                                // timer is independent of client waits; timeout retains accounting.
+                                timeout: options.requestTimeoutMs ?? 2_147_483_647,
+                                ...(toolDefinition ? { toolDefinition } : {}),
+                                ...(signal ? { signal } : {}),
+                                ...(onProgress ? { onprogress: onProgress } : {}),
+                            },
+                        ),
+                    );
+                } catch (error) {
+                    if (!signal?.aborted && interruptedOfficialCall(error) === 'upstream-timeout') await terminal;
+                    throw error;
+                } finally {
+                    if (actual.settled || actual.id === undefined) {
+                        actual.finish();
+                        if (execution === actual) execution = undefined;
+                    } else
+                        void terminal.then(() => {
+                            if (execution === actual) execution = undefined;
+                        });
+                }
             },
             close: resource.close,
             onExit: resource.onExit,

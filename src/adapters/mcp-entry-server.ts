@@ -11,6 +11,7 @@ import { getSupportedElicitationModes } from '@modelcontextprotocol/client';
 import { ProtocolError, ProtocolErrorCode, Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { type ControlRequest, parseConnectionRoute, parseControlRequest } from '../domains/control-contract.ts';
+import type { ClientRequestFacilities } from '../shared/client-context.ts';
 import { LIFECYCLE_ACTIONS, lifecycleTools } from './lifecycle-tools.ts';
 
 const INITIALIZATION_INSTRUCTIONS =
@@ -22,12 +23,17 @@ export type HookEventName = (typeof HOOK_EVENTS)[number];
 export function createMcpEntryServer(options: {
     tools: Tool[];
     status: (hookEventName?: HookEventName) => Record<string, unknown>;
-    control?: (request: ControlRequest, signal?: AbortSignal) => Promise<Record<string, unknown>>;
+    control?: (
+        request: ControlRequest,
+        signal?: AbortSignal,
+        facilities?: ClientRequestFacilities,
+    ) => Promise<Record<string, unknown>>;
     invoke: (
         name: string,
         arguments_: Record<string, unknown>,
         signal: AbortSignal,
         onProgress: (progress: Progress) => void,
+        facilities?: ClientRequestFacilities,
     ) => Promise<CallToolResult>;
     transport?: Transport;
     onRootsChanged?: () => Promise<void>;
@@ -56,6 +62,7 @@ export function createMcpEntryServer(options: {
         { name: 'debugging-cdp-targets', version: '0.1.0' },
         { capabilities: { tools: {} }, instructions: INITIALIZATION_INSTRUCTIONS },
     );
+    const disconnected = new AbortController();
     let resolveClosed: () => void = () => {};
     const closed = new Promise<void>((resolve) => {
         resolveClosed = resolve;
@@ -64,6 +71,7 @@ export function createMcpEntryServer(options: {
         void server.close().catch(() => resolveClosed());
     };
     server.onclose = () => {
+        disconnected.abort(new Error('The originating client is unavailable.'));
         process.stdin.off('end', onStdinEnd);
         resolveClosed();
     };
@@ -83,6 +91,22 @@ export function createMcpEntryServer(options: {
         tools: [...tools, ...lifecycleTools(HOOK_EVENTS)],
     }));
     server.setRequestHandler('tools/call', async (request, ctx) => {
+        const token = request.params._meta?.progressToken;
+        const progress = (value: Progress) => {
+            if (token !== undefined && !disconnected.signal.aborted && !ctx.mcpReq.signal.aborted)
+                void ctx.mcpReq
+                    .notify({ method: 'notifications/progress', params: { ...value, progressToken: token } })
+                    .catch(() => {});
+        };
+        const facilities: ClientRequestFacilities = {
+            requestId: ctx.mcpReq.id,
+            capabilities: { roots: supportsRoots(), formElicitation: supportsFormElicitation() },
+            waitSignal: AbortSignal.any([ctx.mcpReq.signal, disconnected.signal]),
+            readRoots: (signal) => ctx.mcpReq.send({ method: 'roots/list' }, signal ? { signal } : {}),
+            elicit: (params, signal) =>
+                ctx.mcpReq.send({ method: 'elicitation/create', params }, signal ? { signal } : {}),
+            onProgress: progress,
+        };
         const name = request.params.name;
         if (Object.hasOwn(LIFECYCLE_ACTIONS, name)) {
             const arguments_ = request.params.arguments ?? {};
@@ -101,7 +125,7 @@ export function createMcpEntryServer(options: {
                     if (Object.hasOwn(arguments_, 'action'))
                         throw new Error('The tool name selects its lifecycle action.');
                     const control = parseControlRequest({ ...arguments_, action: LIFECYCLE_ACTIONS[name] });
-                    if (options.control) result = await options.control(control, ctx.mcpReq.signal);
+                    if (options.control) result = await options.control(control, ctx.mcpReq.signal, facilities);
                     else if (control.action === 'status' && Object.keys(arguments_).length === 0)
                         result = options.status();
                     else throw new Error('Lifecycle control is unavailable.');
@@ -116,17 +140,7 @@ export function createMcpEntryServer(options: {
         }
         if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
         parseConnectionRoute(request.params.arguments?._dct);
-        const token = request.params._meta?.progressToken;
-        return options.invoke(name, request.params.arguments ?? {}, ctx.mcpReq.signal, (progress) => {
-            if (token !== undefined) {
-                void ctx.mcpReq
-                    .notify({
-                        method: 'notifications/progress',
-                        params: { ...progress, progressToken: token },
-                    })
-                    .catch(() => {});
-            }
-        });
+        return options.invoke(name, request.params.arguments ?? {}, ctx.mcpReq.signal, progress, facilities);
     });
     return {
         async connect() {

@@ -50,26 +50,32 @@ Version 0.1.0 remains under development; no release has been published.
   security and cross-platform CI gates. Arbitrary legal SemVer prerelease labels
   preserve the latest stable release as the comparison baseline and GitHub latest.
 - One reusable stdio gateway that creates independent official chrome-devtools-mcp
-  1.10.1 connections for new targets, without a fixed connection limit.
+  1.11.0 connections for new targets, without a fixed connection limit.
 - MCP support for stdio, roots, form elicitation, progress and cancellation.
-- Complete unchanged official chrome-devtools-mcp 1.10.1 bundled with each Plugin,
+- Complete unchanged official chrome-devtools-mcp 1.11.0 bundled with each Plugin,
   with integrity-verified startup and no runtime package downloads.
   Automatic update checks are disabled only for the official Server child.
-- Parallel official tool calls with explicit connection/session routing and
+- Parallel independent-connection official calls with explicit connection/session routing and
   independent progress, cancellation, actual-exit observation and lifecycle events.
 - Seven native MCP lifecycle/operation tools with idempotent asynchronous requests,
-  bounded event waits, explicit cancellation, Close/Keep and automatic Hook results.
+  bounded event waits, explicit lifecycle cancellation, Close/Keep and automatic Hook results.
+- A transport-independent shared core with bearer-scoped resource/operation ownership,
+    immutable roots and launch snapshots, explicit target/official/both restart,
+    per-connection execution admission and retryable final cleanup that retains failures.
 - Fixed complete official tool catalog with per-connection mcpArgs, explicit
   disabled-tool replacement recipes, actual enabled schemas and workspace sources.
 - Summary discovery/lifecycle results and selected status with opt-in configuration,
   diagnostics and tool details. Unavailable upstreams expose requirements only;
   enabled tools have no activation recipe and unsupported tools give their reason.
-- One session owner before resource acquisition, scoped cancellation and complete
+- Logical connection ownership with independent target/official generations,
+  scoped cancellation and complete
   exit cleanup. Actual exit removes active and inactive sessions; failed resource
   disposal remains in an internal in-memory cleanup ledger.
 - Reuse of kept live targets and resources with continued actual-exit observation.
   Ordinary exit retries use a new start; explicit live restart retains the connection
-  and exact port while replacing the owner, router, upstream and session.
+  and router while replacing the selected target, official Server, or both, and
+  refreshing the public session. Target-only restart retains the official Server;
+  fixed target ports remain fixed, while automatic ports may change before launch.
 - Lifecycle status and native process exit monitoring with automatic, reviewed
   Codex and Claude Code MCP Tool Hooks, independent compact events and fresh
   page identities after live restart. Expected exits are grouped by operation ID
@@ -89,7 +95,7 @@ Version 0.1.0 remains under development; no release has been published.
     application window, excluding child/tool windows while supporting minimized
     windows. Dated Tauri, Chrome, Electron and same-gateway Chrome-reuse controls
     verify normal lifecycle, native exit and whole-directory cleanup.
-- Timeout quarantine, pending transport cleanup and phase-only diagnostics;
+- Independent client response waits and owned official execution, phase-only diagnostics;
   normal close without a listener and explicit retries after native failures.
 - Required explicit no-isolation or data-directory start intent, with researched
     application bindings and Agent guidance for full/partial/unsupported/unknown

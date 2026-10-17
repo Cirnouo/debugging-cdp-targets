@@ -122,13 +122,25 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
     if (creation.type !== 'CallExpression' || creation.callee.type !== 'Identifier' || creation.callee.name !== 'spawn')
         return allowed;
     const [executable, arguments_, options] = creation.arguments;
+    const processNode = (value: Node | undefined) =>
+        value?.type === 'MemberExpression' &&
+        !value.computed &&
+        value.object.type === 'Identifier' &&
+        value.object.name === 'process' &&
+        propertyName(value.property) === 'execPath';
+    const ordinaryNode =
+        processNode(executable) ||
+        (executable?.type === 'LogicalExpression' &&
+            executable.operator === '??' &&
+            executable.left.type === 'MemberExpression' &&
+            !executable.left.computed &&
+            executable.left.object.type === 'Identifier' &&
+            executable.left.object.name === 'options' &&
+            propertyName(executable.left.property) === 'nodeExecutable' &&
+            processNode(executable.right));
     if (
         creation.arguments.length !== 3 ||
-        executable?.type !== 'MemberExpression' ||
-        executable.computed ||
-        executable.object.type !== 'Identifier' ||
-        executable.object.name !== 'process' ||
-        propertyName(executable.property) !== 'execPath' ||
+        !ordinaryNode ||
         arguments_?.type !== 'ArrayExpression' ||
         arguments_.elements.length !== 2 ||
         arguments_.elements[0]?.type !== 'Identifier' ||
@@ -157,6 +169,7 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
         ['child', 1],
         ['bin', 1],
         ['process', 0],
+        ['options', 1],
     ]);
     const mutators = new Map([
         ['Object', new Set(['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'])],

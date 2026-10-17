@@ -127,8 +127,7 @@ test('accepted native Close retains live root ownership after its listener disap
     const id = operationId(await f.close('close-root-alive'));
     await awaitingExit(f, id);
     await retainedLiveRoot(f);
-    const result = await f.invoke();
-    assert.equal(result.isError, true);
+    await assert.rejects(f.invoke(), /busy/);
     assert.equal(f.officialCalls(), 0);
     assert.deepEqual(f.hook(), {});
     await completeClose(f, id);

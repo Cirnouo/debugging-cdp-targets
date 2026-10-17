@@ -429,13 +429,15 @@ generic-cdp carrier, or replacing a launch to change screenshot argv, read
 
 ## Errors, native dialogs and task completion
 
-CONNECTION_RECOVERY_REQUIRED means the affected upstream is isolated after
-timeout/cancellation while the app remains owned. Preserve reported identities;
-explicitly restart the live connection or Close when authorized. After actual
-application exit its connection/session is removed; retry requires start with
-new connection/session identities. Use `live-recovery` or `exit-start` according to
-verified liveness when authorization is still missing. Never automatically start/restart, replay tools, extend timeouts or
-add a screenshot preflight/foreground checklist.
+A cancelled, disconnected or timed-out client wait leaves its actual official
+execution owned and the connection busy until the real result or definitive
+upstream close. Independent connections remain usable. Never replay the call or
+interpret wait expiry as target exit. For a diagnosed live connection failure,
+preserve reported identities and explicitly restart the selected side or Close
+when authorized. After actual application exit its connection/session is removed;
+retry requires a new start. Use `live-recovery` or `exit-start` according to verified
+liveness when authorization remains missing. Never automatically start/restart,
+replay tools, extend timeouts or add a screenshot foreground checklist.
 
 A Windows file picker is a native window. Locate it by the managed application's
 identity and handle that existing dialog with available native UI capabilities.
@@ -456,7 +458,8 @@ force-kill. `dct_connection_end_task` ends work while retaining live resources;
 their later actual exit still removes that connection and is reported.
 
 `dct_connection_restart` requires entryId, connectionId, sessionId and requestId;
-optional mcpArgs explicitly replaces configuration. Use it only for a still-live
+scope selects target, official or both from the immutable start snapshot.
+Pass scope explicitly; replacement mcpArgs requires completed Close/new start. Use it only for a still-live
 connection. Before restarting a live connection, read
 [recovery and events](references/recovery-and-events.md).
 

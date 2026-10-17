@@ -68,7 +68,7 @@ test('explicit restart and event wait retain the selected identities and cursors
             requestId: 'restart-1',
             connectionId,
             sessionId,
-            mcpArgs: ['--experimentalVision=true'],
+            scope: 'official',
         },
         { action: 'end-task', entryId, requestId: 'end-1', connectionId, sessionId },
         { action: 'stop', entryId, requestId: 'stop-1', connectionId, sessionId, disposition: 'Keep' },

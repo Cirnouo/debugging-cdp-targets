@@ -173,7 +173,7 @@ templates:
         options:
             - value: restart
               label: Restart：重启活连接
-              description: 正常关闭当前应用并等待实际退出，以相同参数、目录和原端口在同一连接创建新会话；不重放失败调用。
+              description: 正常关闭当前应用并等待实际退出，按原始配置、目录及既定固定/自动端口策略在同一连接创建新会话；不重放失败调用。
             - value: Close
               label: Close：正常关闭
               description: Agent 请求正常关闭当前应用并等待实际退出；既定目录清理策略继续生效。
@@ -208,7 +208,7 @@ templates:
               label: 暂不启用所需工具
               description: 不使用本次拟议配置启动目标。
     tools-restart:
-        title: 重启工具配置
+        title: 替换工具配置
         facts: |-
             应用：{application}
             entryId：{entry_id}
@@ -216,14 +216,14 @@ templates:
             sessionId：{session_id}
             所需工具：{tool_names}
             完整替换 mcpArgs：{mcp_args}
-        question: 用户是否授权 Agent 使用上述完整 MCP 配置重启该活连接？
+        question: 用户是否授权 Agent 正常 Close 当前应用并等待实际退出，再使用上述完整 MCP 配置 start 新连接？
         options:
             - value: restart
-              label: 授权替换配置并重启
-              description: 完整替换 MCP 配置及工作区访问范围，沿用应用参数、目录和原端口；新会话使旧页面 ID 失效。
+              label: 授权 Close 后重新 start
+              description: 正常 Close 并确认实际退出后，Agent 重新满足适用启动门槛，使用完整后继配置及其中的工作区访问范围；旧连接和页面身份失效。
             - value: decline
               label: 保持当前配置
-              description: 不执行本次重启或启用所需工具。
+              description: 不为启用这些工具 Close 当前应用或创建后继连接。
     replace-launch:
         title: 变更启动参数
         facts: |-

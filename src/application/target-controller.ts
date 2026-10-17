@@ -33,6 +33,7 @@ export interface ControllerHost {
 }
 export type TargetEvent = {
     sessionId: string;
+    generation?: string;
     reason: 'process-exited';
     taskActive: boolean;
     expected?: ConnectionOwner['expectedExit'];
@@ -46,6 +47,7 @@ export type TargetEvent = {
 };
 type Current = {
     owner: ConnectionOwner;
+    sessionId: string;
     options: LaunchOptions;
     unsubscribe?: () => void;
     closeFailure?: Record<string, unknown>;
@@ -108,7 +110,7 @@ export function createTargetController({
             entryId,
             status: state,
             taskActive,
-            ...(current ? { sessionId: current.owner.sessionId } : {}),
+            ...(current ? { sessionId: current.sessionId } : {}),
             ...(target ? { port: target.port, processId: target.processId, targetKind: target.targetKind } : {}),
             ...(reason ? { reason } : {}),
         };
@@ -123,7 +125,7 @@ export function createTargetController({
         }
     }
     function requireSession(sessionId: string) {
-        if (!current || current.owner.sessionId !== sessionId || current.owner.retired)
+        if (!current || current.sessionId !== sessionId || current.owner.retired)
             throw new Error('The target session is absent, closed or stale.');
         return current;
     }
@@ -142,7 +144,8 @@ export function createTargetController({
         }
         if (!target) return;
         onProcessExit?.({
-            sessionId: selected.owner.sessionId,
+            sessionId: selected.sessionId,
+            generation: selected.owner.sessionId,
             reason: 'process-exited',
             taskActive,
             ...(selected.owner.expectedExit ? { expected: selected.owner.expectedExit } : {}),
@@ -245,7 +248,7 @@ export function createTargetController({
             ...selected.closeFailure,
             ...errorDetails(cause),
             entryId,
-            sessionId: selected.owner.sessionId,
+            sessionId: selected.sessionId,
             ...(selected.owner.target
                 ? {
                       processId: selected.owner.target.processId,
@@ -281,7 +284,7 @@ export function createTargetController({
         context.signal?.throwIfAborted();
         const owner = createOwner ? await createOwner(sessionId) : createConnectionOwner(sessionId);
         owner.expectedOperationId = context.operationId;
-        const selected: Current = { owner, options };
+        const selected: Current = { owner, sessionId, options: structuredClone(options) };
         current = selected;
         state = 'starting';
         reason = undefined;
@@ -339,7 +342,7 @@ export function createTargetController({
                         ...errorDetails(error),
                         ...(errorCode(error) === undefined ? {} : { code: errorCode(error) }),
                         entryId,
-                        sessionId: owner.sessionId,
+                        sessionId: selected.sessionId,
                         processId: owner.target.processId,
                         port: owner.target.port,
                         retainedTargets: [{ processId: owner.target.processId, port: owner.target.port }],
@@ -372,7 +375,7 @@ export function createTargetController({
     }
     async function retireExited({ sessionId }: { sessionId: string }) {
         const selected = current;
-        if (selected?.owner.sessionId === sessionId && selected.owner.exited) await dispose(selected);
+        if (selected?.sessionId === sessionId && selected.owner.exited) await dispose(selected);
         return status();
     }
     function restart(
@@ -408,7 +411,9 @@ export function createTargetController({
                 ...(await attach(
                     {
                         ...previous.options,
-                        exactPort: target.port,
+                        ...(previous.options.preparedLaunch?.portPolicy.kind === 'automatic'
+                            ? {}
+                            : { exactPort: target.port }),
                         launchDefinition: target.launchDefinition,
                         ...(mcpArgs === undefined ? {} : { mcpArgs }),
                     },
@@ -490,23 +495,32 @@ export function createTargetController({
         checking = { owner: selected.owner, job };
         return job;
     }
-    async function cleanupOnDisconnect() {
+    async function cleanupOnDisconnect(expected: 'disconnect' | 'rollback' = 'disconnect') {
         const selected = current;
         gate();
         taskActive = false;
         if (!selected) return;
-        selected.owner.expectedExit = 'disconnect';
+        selected.owner.expectedExit = expected;
         selected.owner.abortWork(new Error('The gateway is closing.'));
         const resources = server.close(selected.owner);
         const results = await Promise.allSettled([normalClose(selected), resources]);
         if (selected.owner.exited) await dispose(selected);
         if (results.some((result) => result.status === 'rejected') && !selected.owner.exited) {
+            state = 'close-failed';
+            reason = 'normal-close-failed';
             const target = selected.owner.target;
             return target ? { processId: target.processId, port: target.port } : undefined;
         }
     }
     return {
         status,
+        configuration: () =>
+            current
+                ? structuredClone({
+                      effectiveLaunch: current.owner.target?.launchDefinition,
+                      portPolicy: current.options.preparedLaunch?.portPolicy,
+                  })
+                : undefined,
         start,
         restart,
         stop,
@@ -522,5 +536,14 @@ export function createTargetController({
             if (current) lose(current, why);
         },
         canInvoke: () => state === 'active' && !gated && !!current && !current.owner.retired,
+        replaceOfficialSession(sessionId: string) {
+            if (!current || current.owner.retired || !current.owner.target)
+                throw new Error('The target connection is absent or closed.');
+            current.sessionId = sessionId;
+            router.setTarget(current.owner.target);
+            gated = false;
+            state = 'active';
+            reason = undefined;
+        },
     };
 }

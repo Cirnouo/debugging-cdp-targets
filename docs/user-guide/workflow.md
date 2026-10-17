@@ -178,18 +178,18 @@ cannot be reused. A closed window or failed CDP listener does not by itself
 establish actual application exit.
 
 CDP, Server or native observation failure while an app remains alive reports a
-connection error. Explicit restart applies only to a still-live connection. It
-retains that connection, launch arguments, working directory, leased real data
-directory, cleanup policy and exact original port. It waits for old app exit and
-resource disposal before creating a fresh session, router and upstream;
-an occupied original port fails clearly.
-Obtain fresh page IDs with `list_pages` after restart. No launch/restart or tool
-replay happens automatically.
+connection error. Explicit restart selects target, official or both using the
+original immutable launch, resolved environment, official options and roots. The
+logical connection, router and leased directory stay stable. Target-only restart
+waits for actual old-target exit and native resources while retaining the same
+official Server. Official-only preserves the target. Both replaces each side once.
+Every scope issues a fresh session and requires fresh `list_pages` evidence.
+Fixed ports remain fixed and refuse collisions; automatic port policy may select
+another verified free port. No launch/restart or tool replay happens automatically.
 
-To change application launch arguments, choose normal Close, wait for it to
-complete, then start with the updated settings and a fresh requestId. Optional
-`mcpArgs` can replace official Server configuration during an explicitly
-authorized live restart; see [configuration](configuration.md).
+Changing application arguments, environment or mcpArgs requires completed normal
+Close and a new start with a fresh requestId. The transitional stdio facade accepts
+omitted scope as both; pass scope explicitly.
 
 The directory lease spans restart: the intermediate old-app exit does not
 release it. Final release waits for confirmed actual exit or evidence that no

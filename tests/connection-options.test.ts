@@ -138,7 +138,7 @@ test('connections keep independent actual catalogs and explicit restart invalida
         const restarted = await runtime.controller.restart({
             connectionId: first.connectionId,
             sessionId: first.sessionId,
-            mcpArgs: ['--pageIdRouting=false'],
+            scope: 'both',
         });
         assert.equal(restarted.connectionId, first.connectionId);
         assert.notEqual(restarted.sessionId, first.sessionId);
@@ -148,7 +148,7 @@ test('connections keep independent actual catalogs and explicit restart invalida
             connectionId: first.connectionId,
             toolNames: ['evaluate_script'],
         });
-        assert.ok(!JSON.stringify(actual).includes('"pageId"'));
+        assert.ok(JSON.stringify(actual).includes('"pageId"'));
         await assert.rejects(
             gateway.invoke(
                 'evaluate_script',
@@ -169,7 +169,7 @@ test('connections keep independent actual catalogs and explicit restart invalida
                 sessionId: restarted.sessionId ?? '',
                 mcpArgs: ['--browser-url=http://other'],
             }),
-            /gateway-owned/,
+            /cannot replace mcpArgs/,
         );
         const retained = runtime.controller.status(first.connectionId);
         assert.ok('status' in retained);

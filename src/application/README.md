@@ -1,7 +1,11 @@
 # Application orchestration
 
+- `client-context.ts` owns client availability and response-wait detachment.
+- `registrations.ts` authenticates memory-only bearer ownership and idle expiry.
 - `plugin-runtime.ts` owns the gateway registry, independent target connections,
-  MCP dispatch, timeout isolation, monitoring and official Server lifetimes.
+  transport-free MCP dispatch, monitoring and independent official Server lifetimes.
+    Its temporary stdio wrapper explicitly cleans up at EOF; detached core clients
+    retain resources. [Shared core contract](../../docs/shared-core.md) documents the seam.
 - `mcp-lifecycle.ts` validates current identities and serializes per-connection
   lifecycle mutations through idempotent asynchronous operations.
 - `operations.ts` owns memory-only requests, replayable bounded events, waits,

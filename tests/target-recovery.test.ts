@@ -3,9 +3,11 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
+import { prepareLaunchDefinition } from '../src/domains/launch-command.ts';
 
-function fixture({ busy = false, race = false } = {}) {
-    const launched: { port: number; args: string[]; cwd: string | undefined }[] = [];
+function fixture({ busy = false, race = false, busyPorts = [] as number[] } = {}) {
+    const launched: { port: number; args: string[]; cwd: string | undefined; env: NodeJS.ProcessEnv | undefined }[] =
+        [];
     const closed: number[] = [];
     const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null });
     const platform: PlatformAdapter = {
@@ -31,9 +33,9 @@ function fixture({ busy = false, race = false } = {}) {
     const host = createTargetHost({
         platformAdapter: platform,
         profileAvailable: async () => true,
-        probe: async () => !busy,
-        spawn: async (_exe, args, port, cwd) => {
-            launched.push({ port, args, cwd });
+        probe: async (port) => !busy && !busyPorts.includes(port),
+        spawn: async (_exe, args, port, cwd, env) => {
+            launched.push({ port, args, cwd, env });
             return child;
         },
         getVersion: async (port) => ({
@@ -50,6 +52,48 @@ test('exact-port recovery rejects a busy original port without spawning or advan
     const f = fixture({ busy: true });
     await assert.rejects(
         f.host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, exactPort: 9227 }),
+        /original CDP port/,
+    );
+    assert.deepEqual(f.launched, []);
+    assert.deepEqual(f.closed, []);
+});
+
+test('prepared automatic restart selects one free port while preserving opaque numeric arguments and effective env', async () => {
+    const f = fixture({ busyPorts: [9227] });
+    const launch = {
+        executable: process.execPath,
+        args: ['--remote-debugging-port={port}', '--literal=9227', '%DCT_SNAPSHOT%'],
+    };
+    const prepared = prepareLaunchDefinition(
+        launch,
+        9227,
+        { ...process.env, DCT_SNAPSHOT: 'admitted' },
+        process.platform === 'win32',
+    );
+    launch.args[2] = 'mutated';
+    const target = await f.host.launch({ isolation: { mode: 'none' }, launch, preparedLaunch: prepared });
+    try {
+        assert.deepEqual(
+            f.launched.map((item) => item.port),
+            [9228],
+        );
+        assert.ok(f.launched[0]?.args.includes('--literal=9227'));
+        assert.ok(f.launched[0]?.args.includes('admitted'));
+        assert.equal(f.launched[0]?.env?.DCT_SNAPSHOT, 'admitted');
+    } finally {
+        await f.host.close(target);
+    }
+});
+
+test('prepared fixed-port restart collision spawns nothing', async () => {
+    const f = fixture({ busyPorts: [9227] });
+    const launch = { executable: process.execPath, args: ['--remote-debugging-port=9227'] };
+    await assert.rejects(
+        f.host.launch({
+            isolation: { mode: 'none' },
+            launch,
+            preparedLaunch: prepareLaunchDefinition(launch, 9222, { ...process.env }),
+        }),
         /original CDP port/,
     );
     assert.deepEqual(f.launched, []);

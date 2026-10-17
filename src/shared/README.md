@@ -1,5 +1,7 @@
 # Shared invariants
 
+- `client-context.ts` defines the cross-layer originating-client contract using
+    erased public SDK types, with no runtime imports or I/O.
 - `constants.ts` owns cross-layer limits, target kinds, disposition values,
   loopback defaults, and the exact official Server package version.
 - `AGENTS.md` prevents this layer from becoming an unowned utility collection.

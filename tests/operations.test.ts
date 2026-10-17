@@ -6,6 +6,22 @@ import { DetailedError } from '../src/shared/errors.ts';
 const entryId = '11111111-1111-4111-8111-111111111111';
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+test('request deduplication and operation results remain scoped to immutable registration owners', async () => {
+    const registry = createOperationRegistry(entryId);
+    const a = registry.submit('shared', { action: 'start' }, async () => ({ owner: 'a' }), undefined, undefined, 'a');
+    const b = registry.submit('shared', { action: 'start' }, async () => ({ owner: 'b' }), undefined, undefined, 'b');
+    assert.notEqual(a.operationId, b.operationId);
+    assert.throws(() => registry.get(a.operationId, 'b'), /absent or unauthorized/);
+    assert.throws(() => registry.cancel(a.operationId, 'b'), /absent or unauthorized/);
+    await assert.rejects(registry.wait(a.operationId, 0, undefined, 'b'), /absent or unauthorized/);
+    assert.throws(() => registry.prior('shared', { action: 'stop' }, 'a'), /different request/);
+    await tick();
+    assert.equal(registry.get(a.operationId, 'a').result?.owner, 'a');
+    registry.forgetOwner('a');
+    assert.throws(() => registry.get(a.operationId, 'a'), /absent or unauthorized/);
+    assert.equal(registry.get(b.operationId, 'b').result?.owner, 'b');
+});
+
 test('isolation evidence clones input and updates after terminal completion without new events or notices', async () => {
     const registry = createOperationRegistry(entryId);
     let update: (value: { mode: 'data-dir'; path: string; cleanup: 'retain'; state: 'held' | 'retained' }) => void =

@@ -3,7 +3,8 @@
 This is the current protocol for unreleased 0.1.0. [ADR 0013](adr/0013-session-owned-exit-cleanup.md)
 records session ownership and actual exit; [ADR 0015](adr/0015-explicit-data-directory-isolation.md)
 records connection directory leases. [Domain language](domain-language.md)
-defines its terms. Runtime state, requests, events and disposal retries are
+defines its terms. The [shared core contract](shared-core.md) defines originating
+clients, registration ownership, immutable snapshots and actual execution. Runtime state, requests, events and disposal retries are
 gateway-local memory. There is no target takeover, persistent session or plugin
 CLI/control channel.
 
@@ -18,7 +19,7 @@ automatic Hook requests are the only requests without entryId.
 | --- | --- |
 | `dct_connection_status` | Empty discovery, or entryId with optional connectionId, operationId or toolNames. |
 | `dct_connection_start` | entryId, requestId, structured launch and required isolation; creates a new connection/session. |
-| `dct_connection_restart` | entryId, connectionId, sessionId and requestId; replace a still-live session on the original port. |
+| `dct_connection_restart` | entryId, connectionId, sessionId and requestId; explicit target/official/both replacement using the immutable start snapshot. |
 | `dct_connection_stop` | entryId, connectionId, sessionId, requestId and explicit Close/Keep disposition. |
 | `dct_connection_end_task` | entryId, connectionId, sessionId and requestId; end dependent work while retaining live resources. |
 | `dct_operation_wait` | entryId and operationId, optionally the previous cursor; wait for events or completion. |
@@ -39,7 +40,8 @@ session; stale or removed routes fail closed.
 | `{hookEventName}` | Automatic authorized Hook event delivery only. |
 
 include accepts unique `configuration` and `diagnostics` values and requires
-connectionId. Configuration contains mcpArgs, workspace sources and isolation evidence. operationId
+connectionId. Configuration contains mcpArgs, immutable roots/workspace sources, effective launch
+and port policy, official generation evidence and isolation evidence. operationId
 cannot combine with connectionId, toolNames or include. hookEventName must be the
 sole argument and one of PreToolUse, PostToolUse, UserPromptSubmit or Stop.
 
@@ -53,8 +55,8 @@ tools/list; disconnected or quarantined connections return requirements only.
 Enabled tools never contain suggestedMcpArgs. Supported explicitly disabled tools
 and TOOL_NOT_ENABLED failures provide complete replacement mcpArgs while retaining
 explicit existing configuration. Unsupported tools return their reason without
-an activation recipe. The caller must authorize a start/restart to change
-configuration; the gateway never enables a tool or restarts silently.
+an activation recipe. Configuration changes require completed Close and an
+explicitly authorized new start; the gateway never enables a tool or restarts silently.
 
 Every start requires the exact discriminated union below. Missing, unknown or
 mixed fields fail before acquisition; directory selection never falls back to
@@ -133,13 +135,13 @@ acknowledgement only suppresses redundant Hook delivery.
 
 ## Target and resource lifetime
 
-One owner exists for each session before launch or resource acquisition. It owns
-the actual target, router, official Server, subscriptions, reservations and
-pending work. Actual target exit immediately gates forwarding, ends task
-activity, cancels dependent pending work and attempts cleanup of every resource.
-Exit cleanup bypasses lifecycle admission, so blocked startup or tool work cannot
-delay it. The exited connection/session is removed even if a disposal fails;
-unclosed plugin-owned resources enter an internal retry ledger.
+Logical router/directory ownership and independent target/official generation
+owners exist before their acquisitions. Actual target exit immediately gates
+forwarding, ends task activity, cancels dependent pending work and attempts cleanup.
+An expected target-only restart exit disposes only the old target resources; its
+router and official Server remain owned. Exit cleanup bypasses lifecycle admission.
+An ordinary exited connection/session is removed even if disposal fails; unclosed
+owned resources remain in an internal retry ledger.
 
 Windows helpers are not applications. Native actual-app PID/time/handle
 wait/events establish exit without periodic process inspection. Helper exit,
@@ -154,11 +156,15 @@ nor couples application Close to official Server lifetime. Failed or cancelled
 Close retains ownership, observation and retry identity while the app remains
 alive. Keep/end-task retains live app/upstream/router resources and observation.
 
-After ordinary actual exit, retry uses a new start and new connection/session
-identities. Explicit live restart keeps connectionId and the exact original port,
-waits for old actual exit, disposes old resources and acquires a fresh owner,
-router/upstream and session. A busy original port fails clearly. There is no
-automatic restart, relaunch after a foreign-listener collision, or tool replay.
+After ordinary actual exit, retry uses a new start and fresh connection/session
+identities. Core restart requires target, official or both scope. The transitional
+stdio facade alone maps omitted scope to both. ConnectionId, router and directory
+lease remain stable; only requested sides are replaced, each once. Every scope
+invalidates the old public session. Fixed ports refuse collisions; automatic port
+policy may select another verified free port from the recorded binding template.
+Restart never accepts replacement mcpArgs or changed launch/environment/roots.
+Obtain fresh list_pages evidence. No automatic relaunch, scope escalation or tool
+replay occurs.
 
 Port reservation is gateway-local and synchronous before probing. It remains
 owned until actual exit or evidence that no app was created. Profile reservation
@@ -191,12 +197,12 @@ sequence permits two seconds after stdin EOF, two seconds after TERM and KILL
 within a total ten-second budget. Failure remains in the internal cleanup ledger.
 This bounded child disposal never force-kills the target application.
 
-Gateway disconnect first gates/cancels all owners, then attempts every official
-Server, catalog and router disposal in parallel with normal target shutdown.
-Peer cleanup continues after individual failures. Target shutdown gains no
-additional deadline from gateway disconnect.
-Directory retry follows settlement of starts, replacements, retirements and late
-resources; gateway disposal cannot interpret cancellation alone as final release.
+Core client detach leaves resources and jobs owned. Transitional stdio EOF
+explicitly requests final cleanup. Cleanup gates new work and attempts all peers
+with normal target shutdown; no target-close deadline is added. Failed cleanup
+rejects exit, retains live/pending ownership and observation and allows retry.
+Directory release still waits for starts, replacements, native permission/late
+acquisition, official/router disposal and every native resource user.
 
 ## Automatic Hooks
 

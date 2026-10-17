@@ -1,10 +1,17 @@
+import type { ClientRequestContext } from '../shared/client-context.ts';
 import type { Diagnostic } from '../shared/diagnostics.ts';
 import { isRecord } from '../shared/errors.ts';
 import { type DataIsolation, type DataIsolationEvidence, parseDataIsolation } from './data-isolation.ts';
-import { type ApplicationLaunch, type LaunchDefinition, parseApplicationLaunch } from './launch-command.ts';
+import {
+    type ApplicationLaunch,
+    type LaunchDefinition,
+    type PreparedLaunchDefinition,
+    parseApplicationLaunch,
+} from './launch-command.ts';
 
 export type TargetKind = 'chrome' | 'generic-cdp';
 export type Disposition = 'Close' | 'Keep';
+export type RestartScope = 'target' | 'official' | 'both';
 export type StatusInclude = 'configuration' | 'diagnostics';
 export type UpstreamStatus = 'connected' | 'disconnected' | 'quarantined';
 export interface LaunchOptions {
@@ -14,6 +21,7 @@ export interface LaunchOptions {
     basePort?: number;
     exactPort?: number;
     launchDefinition?: LaunchDefinition;
+    preparedLaunch?: PreparedLaunchDefinition;
     mcpArgs?: string[];
 }
 export interface LaunchContext {
@@ -22,6 +30,7 @@ export interface LaunchContext {
     dataDirectory?: string;
 }
 export interface ControlContext extends LaunchContext {
+    client?: ClientRequestContext;
     operationId?: string;
     onIdentity?: (identity: ConnectionRoute) => void;
     onIsolation?: (isolation: DataIsolationEvidence) => void;
@@ -39,11 +48,25 @@ export type ControlRequest =
           LaunchOptions,
           'launch' | 'isolation' | 'targetKind' | 'basePort' | 'mcpArgs'
       >)
-    | ({ action: 'restart'; entryId: string; requestId: string; mcpArgs?: string[] } & ConnectionRoute)
+    | ({
+          action: 'restart';
+          entryId: string;
+          requestId: string;
+          scope?: RestartScope;
+          mcpArgs?: string[];
+      } & ConnectionRoute)
     | ({ action: 'end-task'; entryId: string; requestId: string } & ConnectionRoute)
     | ({ action: 'stop'; entryId: string; requestId: string; disposition: Disposition } & ConnectionRoute)
     | { action: 'wait'; entryId: string; operationId: string; cursor?: number }
     | { action: 'cancel'; entryId: string; operationId: string };
+/** Core callers select a side explicitly; omitted scope exists only in the stdio facade. */
+export type CoreRestartRequest = ConnectionRoute & { scope: RestartScope };
+export type CoreControlRequest =
+    | Exclude<ControlRequest, { action: 'restart' }>
+    | (Omit<Extract<ControlRequest, { action: 'restart' }>, 'scope' | 'mcpArgs'> & { scope: RestartScope });
+export type CoreControlHandler = Omit<ControlHandler, 'restart'> & {
+    restart(options: CoreRestartRequest, context?: ControlContext): Promise<ConnectionStatus>;
+};
 export interface TargetStatus {
     entryId: string;
     status: 'idle' | 'starting' | 'active' | 'lost' | 'closing' | 'close-failed';
@@ -76,7 +99,10 @@ export type ControlResult = GatewayStatus | ConnectionStatus;
 export interface ControlHandler {
     status(connectionId?: string): ControlResult;
     start(options: LaunchOptions, context?: ControlContext): Promise<ConnectionStatus>;
-    restart(options: ConnectionRoute & { mcpArgs?: string[] }, context?: ControlContext): Promise<ConnectionStatus>;
+    restart(
+        options: ConnectionRoute & { scope?: RestartScope; mcpArgs?: string[] },
+        context?: ControlContext,
+    ): Promise<ConnectionStatus>;
     stop(options: ConnectionRoute & { disposition: Disposition }, context?: ControlContext): Promise<ConnectionStatus>;
     endTask(options: ConnectionRoute): Promise<ConnectionStatus>;
 }
@@ -267,20 +293,23 @@ export function parseControlRequest(value: unknown): ControlRequest {
         'connectionId',
         'sessionId',
         ...(action === 'stop' ? ['disposition'] : []),
-        ...(action === 'restart' ? ['mcpArgs'] : []),
+        ...(action === 'restart' ? ['scope'] : []),
     ]);
     const route = parseConnectionRoute({ connectionId: value.connectionId, sessionId: value.sessionId });
     if (action === 'stop') {
         if (value.disposition !== 'Close' && value.disposition !== 'Keep') throw new Error('Choose Close or Keep.');
         return { action, entryId, requestId, ...route, disposition: value.disposition };
     }
-    if (action === 'restart')
+    if (action === 'restart') {
+        if (value.scope !== undefined && !['target', 'official', 'both'].includes(String(value.scope)))
+            throw new Error('Unknown restart scope.');
         return {
             action,
             entryId,
             requestId,
             ...route,
-            ...(value.mcpArgs === undefined ? {} : { mcpArgs: strings(value.mcpArgs) }),
+            ...(value.scope === undefined ? {} : { scope: value.scope as RestartScope }),
         };
+    }
     return { action, entryId, requestId, ...route };
 }

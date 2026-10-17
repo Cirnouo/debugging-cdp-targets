@@ -50,8 +50,10 @@ remain supported until the atomic HTTP/Hook cutover in Task 4.
 - Launch through structured executable/args/cwd/env and native platform support.
   Windows privilege detection and one-shot elevation helpers belong to the
   plugin; manage the actual app PID/time/handle. Never force-kill applications.
-  Keep authorization waiting separate from CDP readiness. Quarantine timed-out
-  upstreams and clear pending transport state; never restart/replay automatically.
+  Keep authorization waiting separate from CDP readiness. Client wait cancellation
+  detaches only its response; retain actual execution accounting and original client
+  context until a real response or definitive upstream close. Never restart/replay
+  automatically.
 - Implement the accepted [isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
     with required start intent, researched application binding and no fixed Chrome
     profile fallback. Data directories have connection-level leases across restart;
