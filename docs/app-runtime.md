@@ -65,6 +65,10 @@ Core's existing lifecycle operation registry. It never reads back bearer tokens
 or starts a target. Selected connection details explicitly show launch/official
 configuration and directory evidence; environment override names are shown
 without their values. Summaries contain no launch paths or raw native output.
+Read status, Wait for change and Cancel expose a selected operation's actual
+state, bounded lifecycle result/failure and explicitly acquired-directory cleanup
+evidence, including failed starts without a current connection. The last explicit
+read stays separate from summary polling; its owner remains the original registration.
 Choose target, official Server or both for restart; each uses the old successful
 immutable snapshot. Close requests ordinary target shutdown. Per-row/batch Close
 and idle transfer retain independent outcomes, including busy and stale rows.
@@ -84,6 +88,9 @@ receipt and synchronizes its URL. Missing published candidates are ordinary in
 can synchronize with a null candidate, and a stale compatible candidate never
 downgrades it. Disk synchronization remains host reload pending; file readback
 does not prove an active host session.
+Inspect preserves that reload obligation for the same verified managed copy,
+while showing current restrictions or native-read failure. A changed selection,
+copy or provenance invalidates that pending-copy attribution.
 
 Host summaries preserve missing CLI/plugin, native failures, no candidate,
 disabled/pinned/read-only/shared restrictions and partial failure. Inspect host

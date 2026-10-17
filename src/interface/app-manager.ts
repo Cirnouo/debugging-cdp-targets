@@ -18,6 +18,7 @@ import {
     type AppConnectionSummary,
     type AppHostSummary,
     type AppManagementCommand,
+    type AppSelectedOperation,
     type AppUiBridge,
     type AppUiSnapshot,
     formatAppElapsed,
@@ -74,6 +75,59 @@ function SelectedConfiguration({
     );
 }
 
+export function SelectedOperationDetails({ operation }: { operation: AppSelectedOperation }) {
+    const entries: [string, string][] = [
+        ['Operation', operation.operationId],
+        ['Request', operation.requestId],
+        ['Original owner', operation.registrationId ?? 'App'],
+        ['State', label(operation.state)],
+        ['Phase', label(operation.phase)],
+        ['Elapsed', formatAppElapsed(0, operation.elapsedMs)],
+        ['Cursor', String(operation.cursor)],
+    ];
+    if (operation.connectionId) entries.push(['Connection', operation.connectionId]);
+    if (operation.sessionId) entries.push(['Session', operation.sessionId]);
+    for (const [key, value] of Object.entries(operation.result ?? {}))
+        entries.push([`Result · ${label(key)}`, String(value)]);
+    for (const [key, value] of Object.entries(operation.error ?? {}))
+        entries.push([`Failure · ${label(key)}`, String(value)]);
+    if (operation.isolation) {
+        entries.push(['Isolation', operation.isolation.mode]);
+        if (operation.isolation.mode === 'data-dir')
+            entries.push(
+                ['Directory', operation.isolation.path],
+                ['Directory cleanup', `${operation.isolation.cleanup} · ${operation.isolation.state}`],
+            );
+    }
+    if (operation.wait)
+        entries.push(
+            ['Wait', operation.wait.complete ? 'Terminal result' : 'Operation remains in progress'],
+            ['Wait cursor', String(operation.wait.cursor)],
+            [
+                'Event replay',
+                operation.wait.replayTruncated ? 'Earlier events truncated' : 'Complete from requested cursor',
+            ],
+        );
+    return h(
+        'aside',
+        { className: 'connection-detail', 'aria-label': 'Selected operation' },
+        h('h3', null, 'Last explicit operation read'),
+        h(
+            'p',
+            { className: 'muted' },
+            'Read status or wait again for current evidence. Directory information appears only for this selected operation.',
+        ),
+        h(
+            'dl',
+            { className: 'identity-grid selected-configuration' },
+            entries.flatMap(([name, value]) => [
+                h('dt', { key: `${name}-label` }, name),
+                h('dd', { key: name }, value),
+            ]),
+        ),
+    );
+}
+
 function HostState({ summary }: { summary: AppHostSummary }) {
     return h(
         'div',
@@ -86,11 +140,7 @@ function HostState({ summary }: { summary: AppHostSummary }) {
         summary.reason ? h('p', { className: 'muted' }, label(summary.reason)) : null,
         summary.version ? h('p', null, `Plugin ${summary.version}`) : null,
         summary.activation === 'reload-pending'
-            ? h(
-                  'p',
-                  { className: 'notice compact' },
-                  'Saved on disk. Reload the host to activate; active sessions are unverified.',
-              )
+            ? h('p', { className: 'notice compact' }, 'Host reload remains pending; active sessions are unverified.')
             : null,
         summary.candidate === 'no-candidate' || summary.state === 'no-candidate'
             ? h(
@@ -130,6 +180,7 @@ export function AppManager({ bridge, initialSnapshot }: { bridge: AppUiBridge; i
     const [destination, setDestination] = useState('');
     const [scope, setScope] = useState<RestartScope | ''>('');
     const [detail, setDetail] = useState<NonNullable<AppUiSnapshot['management']>['selected']>();
+    const [operationDetail, setOperationDetail] = useState<AppSelectedOperation>();
     const [outcomes, setOutcomes] = useState<NonNullable<AppUiSnapshot['management']>['outcomes']>();
     const [error, setError] = useState('');
     const [pending, setPending] = useState<string[]>([]);
@@ -142,6 +193,7 @@ export function AppManager({ bridge, initialSnapshot }: { bridge: AppUiBridge; i
         document.documentElement.dataset.appearance = value.configuration?.effective.appearance ?? 'system';
         if (value.management?.outcomes) setOutcomes(value.management.outcomes);
         if (value.management?.selected) setDetail(value.management.selected);
+        if (value.management?.selectedOperation) setOperationDetail(value.management.selectedOperation);
     }, []);
     const desiredKey = snapshot?.configuration === undefined ? '' : JSON.stringify(snapshot.configuration.desired);
     useEffect(() => {
@@ -629,6 +681,10 @@ export function AppManager({ bridge, initialSnapshot }: { bridge: AppUiBridge; i
                           ),
                       ),
                   ),
+            operationDetail &&
+                data?.operations.some((operation) => operation.operationId === operationDetail.operationId)
+                ? h(SelectedOperationDetails, { operation: operationDetail })
+                : null,
         );
     if (panel === 'hosts')
         content = h(

@@ -152,3 +152,56 @@ test('pending connection summaries preserve an unavailable public session instea
     };
     assert.deepEqual(parseAppUiSnapshot(snapshot), snapshot);
 });
+
+test('selected operation IPC permits only bounded evidence and keeps rich detail out of ordinary summaries', () => {
+    const summary = {
+        operationId: '11111111-1111-4111-8111-111111111111',
+        requestId: 'failed-start',
+        action: 'start',
+        state: 'failed',
+        phase: 'failed',
+        elapsedMs: 12,
+        cursor: 3,
+    };
+    const base = { registrations: [], connections: [], operations: [summary], hosts: [] };
+    const selectedOperation = {
+        ...summary,
+        error: { kind: 'start-failed', category: 'access-denied', nativeError: 5 },
+        isolation: {
+            mode: 'data-dir',
+            path: '/explicit-fixture',
+            cleanup: 'delete-on-release',
+            state: 'cleanup-failed',
+        },
+        wait: { cursor: 3, complete: true, replayTruncated: false },
+    };
+    assert.deepEqual(
+        management.parseAppManagementSnapshot({ ...base, selectedOperation }).selectedOperation,
+        selectedOperation,
+    );
+    for (const changed of [
+        { ...base, operations: [selectedOperation] },
+        { ...base, selectedOperation: { ...selectedOperation, payload: 'arbitrary' } },
+        ...[
+            { kind: 'start-failed', message: '/private raw error' },
+            { kind: 'start-failed', category: 'secret-token' },
+            { kind: 'start-failed', code: 'secret-token' },
+            { kind: 'start-failed', phase: '/private' },
+            { kind: 'start-failed', nativeError: NaN },
+            { kind: 'start-failed', processExited: 'yes' },
+            { kind: 'start-failed', listenerState: 'secret' },
+        ].map((error) => ({ ...base, selectedOperation: { ...selectedOperation, error } })),
+        { ...base, selectedOperation: { ...summary, result: { arbitrary: '/private' } } },
+        { ...base, selectedOperation: { ...summary, result: { status: '/private' } } },
+        { ...base, selectedOperation: { ...summary, result: { connectionId: 'secret' } } },
+        {
+            ...base,
+            selectedOperation: { ...selectedOperation, isolation: { ...selectedOperation.isolation, token: 'secret' } },
+        },
+        {
+            ...base,
+            selectedOperation: { ...selectedOperation, wait: { cursor: 3, complete: 'yes', replayTruncated: false } },
+        },
+    ])
+        assert.throws(() => management.parseAppManagementSnapshot(changed));
+});

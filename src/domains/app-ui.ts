@@ -68,6 +68,99 @@ export type AppOperationSummary = {
     elapsedMs: number;
     cursor: number;
 };
+export const APP_OPERATION_FAILURE_VALUES = {
+    kind: ['start-failed', 'restart-failed', 'close-failed', 'operation-failed'],
+    phase: [
+        'accepted',
+        'running',
+        'cancelling',
+        'failed',
+        'validating-official-server',
+        'acquiring-data-directory',
+        'creating-router',
+        'launching',
+        'waiting-cdp',
+        'starting-official-server',
+        'closing-resources',
+        'requesting-normal-close',
+        'awaiting-target-exit',
+        'cancelling-created-target',
+        'inspecting-permission',
+        'awaiting-permission',
+        'permission-handshake',
+        'native-operation',
+        'normal-close',
+        'wait-exit',
+        'wait-resources',
+        'native-helper',
+        'process-identity',
+        'executable-identity',
+        'rollback-request',
+        'rollback-exit',
+    ],
+    category: [
+        'authorization-cancelled',
+        'access-denied',
+        'native-monitor-failed',
+        'native-operation-failed',
+        'native-wait-failed',
+        'helper-start-failed',
+    ],
+    code: [
+        'EACCES',
+        'EPERM',
+        'ENOENT',
+        'EEXIST',
+        'ENOTDIR',
+        'ENOTEMPTY',
+        'EBUSY',
+        'EIO',
+        'EADDRINUSE',
+        'ECONNREFUSED',
+        'ETIMEDOUT',
+        'APP_CLOSING',
+        'CONNECTION_BUSY',
+        'CLIENT_CONTEXT_UNAVAILABLE',
+        'ROOTS_UNAVAILABLE',
+        'FORM_ELICITATION_UNAVAILABLE',
+        'directory-invalid',
+        'directory-missing',
+        'directory-exists',
+        'directory-not-directory',
+        'directory-overlap',
+        'directory-acquisition-failed',
+        'directory-inspection-failed',
+        'directory-identity-changed',
+        'directory-cleanup-failed',
+    ],
+} as const;
+export type AppSelectedOperation = AppOperationSummary & {
+    result?: {
+        connectionId?: string;
+        sessionId?: string;
+        status?: 'idle' | 'starting' | 'active' | 'lost' | 'closing' | 'close-failed';
+        disposition?: 'Close' | 'Keep';
+        upstreamStatus?: 'connected' | 'disconnected' | 'quarantined';
+        processId?: number;
+        port?: number;
+        enabledToolCount?: number;
+        pageIdsInvalidated?: boolean;
+    };
+    error?: {
+        kind: (typeof APP_OPERATION_FAILURE_VALUES.kind)[number];
+        phase?: (typeof APP_OPERATION_FAILURE_VALUES.phase)[number];
+        category?: (typeof APP_OPERATION_FAILURE_VALUES.category)[number];
+        code?: (typeof APP_OPERATION_FAILURE_VALUES.code)[number];
+        nativeError?: number;
+        closeRequested?: boolean;
+        processExited?: boolean;
+        closeConfirmed?: boolean;
+        catalogUpstreamRetained?: boolean;
+        listenerState?: 'owned' | 'foreign' | 'absent';
+    };
+    isolation?: DataIsolationEvidence;
+    wait?: { cursor: number; complete: boolean; replayTruncated: boolean };
+};
 export type AppHostSummary = {
     host: PluginHost;
     state:
@@ -99,6 +192,7 @@ export type AppManagementSnapshot = {
     connections: AppConnectionSummary[];
     operations: AppOperationSummary[];
     hosts: AppHostSummary[];
+    selectedOperation?: AppSelectedOperation;
     selected?: {
         connectionId: string;
         sessionId: string;
@@ -242,8 +336,44 @@ function collection(value: unknown, validate: (item: unknown) => void) {
     if (!Array.isArray(value)) throw new Error('Invalid management collection.');
     for (const item of value) validate(item);
 }
+function validateIsolation(isolation: unknown) {
+    if (!isRecord(isolation)) throw new Error('Invalid isolation evidence.');
+    if (isolation.mode === 'none') fields(isolation, ['mode']);
+    else {
+        fields(isolation, ['mode', 'path', 'cleanup', 'state'], ['nonempty']);
+        if (
+            isolation.mode !== 'data-dir' ||
+            !['retain', 'delete-on-release'].includes(text(isolation.cleanup)) ||
+            !['held', 'retained', 'deleted', 'cleanup-failed'].includes(text(isolation.state))
+        )
+            throw new Error('Invalid isolation evidence.');
+        text(isolation.path);
+        if (isolation.nonempty !== undefined && typeof isolation.nonempty !== 'boolean')
+            throw new Error('Invalid isolation evidence.');
+    }
+}
+function validateOperation(item: unknown, details: readonly string[] = []) {
+    fields(
+        item,
+        ['operationId', 'requestId', 'state', 'phase', 'elapsedMs', 'cursor'],
+        ['registrationId', 'connectionId', 'sessionId', 'action', ...details],
+    );
+    identities(item, ['operationId'], ['registrationId', 'connectionId', 'sessionId']);
+    text(item.requestId);
+    text(item.phase);
+    count(item.elapsedMs);
+    count(item.cursor);
+    if (!['accepted', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled'].includes(text(item.state)))
+        throw new Error('Invalid operation state.');
+    if (item.action !== undefined && !['start', 'restart', 'stop'].includes(text(item.action)))
+        throw new Error('Invalid operation action.');
+}
 export function parseAppManagementSnapshot(value: unknown): AppManagementSnapshot {
-    fields(value, ['registrations', 'connections', 'operations', 'hosts'], ['selected', 'outcomes']);
+    fields(
+        value,
+        ['registrations', 'connections', 'operations', 'hosts'],
+        ['selected', 'outcomes', 'selectedOperation'],
+    );
     collection(value.registrations, (item) => {
         fields(item, ['registrationId', 'resources', 'jobs']);
         identities(item, ['registrationId']);
@@ -275,22 +405,88 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
         for (const key of ['establishedAt', 'lastRealOperationAt', 'processId', 'port'])
             if (item[key] !== undefined) count(item[key]);
     });
-    collection(value.operations, (item) => {
-        fields(
-            item,
-            ['operationId', 'requestId', 'state', 'phase', 'elapsedMs', 'cursor'],
-            ['registrationId', 'connectionId', 'sessionId', 'action'],
-        );
-        identities(item, ['operationId'], ['registrationId', 'connectionId', 'sessionId']);
-        text(item.requestId);
-        text(item.phase);
-        count(item.elapsedMs);
-        count(item.cursor);
-        if (!['accepted', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled'].includes(text(item.state)))
-            throw new Error('Invalid operation state.');
-        if (item.action !== undefined && !['start', 'restart', 'stop'].includes(text(item.action)))
-            throw new Error('Invalid operation action.');
-    });
+    collection(value.operations, (item) => validateOperation(item));
+    if (value.selectedOperation !== undefined) {
+        const operation = value.selectedOperation;
+        validateOperation(operation, ['result', 'error', 'isolation', 'wait']);
+        if (!isRecord(operation)) throw new Error('Invalid selected operation.');
+        if (operation.result !== undefined) {
+            const result = operation.result;
+            fields(
+                result,
+                [],
+                [
+                    'connectionId',
+                    'sessionId',
+                    'status',
+                    'disposition',
+                    'upstreamStatus',
+                    'processId',
+                    'port',
+                    'enabledToolCount',
+                    'pageIdsInvalidated',
+                ],
+            );
+            identities(result, [], ['connectionId', 'sessionId']);
+            if (
+                result.status !== undefined &&
+                !['idle', 'starting', 'active', 'lost', 'closing', 'close-failed'].includes(text(result.status))
+            )
+                throw new Error('Invalid operation result status.');
+            if (result.disposition !== undefined && !['Close', 'Keep'].includes(text(result.disposition)))
+                throw new Error('Invalid disposition.');
+            if (
+                result.upstreamStatus !== undefined &&
+                !['connected', 'disconnected', 'quarantined'].includes(text(result.upstreamStatus))
+            )
+                throw new Error('Invalid upstream state.');
+            for (const key of ['processId', 'port', 'enabledToolCount'])
+                if (result[key] !== undefined) count(result[key]);
+            if (result.pageIdsInvalidated !== undefined && typeof result.pageIdsInvalidated !== 'boolean')
+                throw new Error('Invalid page identity evidence.');
+        }
+        if (operation.error !== undefined) {
+            const error = operation.error;
+            fields(
+                error,
+                ['kind'],
+                [
+                    'phase',
+                    'code',
+                    'category',
+                    'nativeError',
+                    'closeRequested',
+                    'processExited',
+                    'closeConfirmed',
+                    'catalogUpstreamRetained',
+                    'listenerState',
+                ],
+            );
+            for (const key of ['kind', 'phase', 'code', 'category'] as const)
+                if (
+                    (key === 'kind' || error[key] !== undefined) &&
+                    !(APP_OPERATION_FAILURE_VALUES[key] as readonly string[]).includes(text(error[key]))
+                )
+                    throw new Error('Invalid bounded failure evidence.');
+            if (error.nativeError !== undefined && !Number.isSafeInteger(error.nativeError))
+                throw new Error('Invalid native error.');
+            for (const key of ['closeRequested', 'processExited', 'closeConfirmed', 'catalogUpstreamRetained'])
+                if (error[key] !== undefined && typeof error[key] !== 'boolean')
+                    throw new Error('Invalid close evidence.');
+            if (
+                error.listenerState !== undefined &&
+                !['owned', 'foreign', 'absent'].includes(text(error.listenerState))
+            )
+                throw new Error('Invalid listener evidence.');
+        }
+        if (operation.isolation !== undefined) validateIsolation(operation.isolation);
+        if (operation.wait !== undefined) {
+            fields(operation.wait, ['cursor', 'complete', 'replayTruncated']);
+            count(operation.wait.cursor);
+            if (typeof operation.wait.complete !== 'boolean' || typeof operation.wait.replayTruncated !== 'boolean')
+                throw new Error('Invalid operation wait evidence.');
+        }
+    }
     collection(value.hosts, (item) => {
         fields(item, ['host', 'state', 'activation'], ['candidate', 'reason', 'version', 'installations']);
         if (
@@ -345,23 +541,7 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
             if (launch.portPolicy !== undefined && launch.portPolicy !== 'fixed' && launch.portPolicy !== 'automatic')
                 throw new Error('Invalid port policy.');
         }
-        if (value.selected.isolation !== undefined) {
-            const isolation = value.selected.isolation;
-            if (!isRecord(isolation)) throw new Error('Invalid isolation evidence.');
-            if (isolation.mode === 'none') fields(isolation, ['mode']);
-            else {
-                fields(isolation, ['mode', 'path', 'cleanup', 'state'], ['nonempty']);
-                if (
-                    isolation.mode !== 'data-dir' ||
-                    !['retain', 'delete-on-release'].includes(text(isolation.cleanup)) ||
-                    !['held', 'retained', 'deleted', 'cleanup-failed'].includes(text(isolation.state))
-                )
-                    throw new Error('Invalid isolation evidence.');
-                text(isolation.path);
-                if (isolation.nonempty !== undefined && typeof isolation.nonempty !== 'boolean')
-                    throw new Error('Invalid isolation evidence.');
-            }
-        }
+        if (value.selected.isolation !== undefined) validateIsolation(value.selected.isolation);
     }
     if (value.outcomes !== undefined)
         collection(value.outcomes, (item) => {

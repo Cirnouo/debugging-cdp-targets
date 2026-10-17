@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { defaultAppConfiguration } from '../src/domains/app-configuration.ts';
 import type { AppUiBridge, AppUiSnapshot } from '../src/domains/app-ui.ts';
-import { AppManager } from '../src/interface/app-manager.ts';
+import { AppManager, SelectedOperationDetails } from '../src/interface/app-manager.ts';
 
 function render(snapshot: AppUiSnapshot) {
     const bridge: AppUiBridge = {
@@ -63,4 +63,58 @@ test('component-only startup and failed cleanup rendering never advertise a nonb
         assert.match(html, /Ownership is retained/);
         if (phase === 'closing') assert.match(html, /Retry Quit/);
     }
+});
+
+test('selected operation rendering presents failure, acquired directory cleanup and terminal wait evidence', () => {
+    const html = renderToStaticMarkup(
+        createElement(SelectedOperationDetails, {
+            operation: {
+                operationId: '11111111-1111-4111-8111-111111111111',
+                requestId: 'failed-start',
+                registrationId: '33333333-3333-4333-8333-333333333333',
+                action: 'start',
+                state: 'failed',
+                phase: 'failed',
+                elapsedMs: 1234,
+                cursor: 4,
+                error: { kind: 'start-failed', phase: 'launching', category: 'access-denied', nativeError: 5 },
+                isolation: {
+                    mode: 'data-dir',
+                    path: '/explicit-fixture/acquired',
+                    cleanup: 'delete-on-release',
+                    state: 'cleanup-failed',
+                },
+                wait: { cursor: 4, complete: true, replayTruncated: false },
+            },
+        }),
+    );
+    for (const expected of [
+        'Last explicit operation read',
+        'Original owner',
+        '33333333-3333-4333-8333-333333333333',
+        'start-failed',
+        'access-denied',
+        'launching',
+        'nativeError',
+        '/explicit-fixture/acquired',
+        'cleanup-failed',
+        'Terminal result',
+    ])
+        assert.ok(html.includes(expected), expected);
+    const success = renderToStaticMarkup(
+        createElement(SelectedOperationDetails, {
+            operation: {
+                operationId: '11111111-1111-4111-8111-111111111111',
+                requestId: 'closed',
+                action: 'stop',
+                state: 'succeeded',
+                phase: 'succeeded',
+                elapsedMs: 2,
+                cursor: 3,
+                result: { status: 'idle', disposition: 'Close', pageIdsInvalidated: true },
+            },
+        }),
+    );
+    for (const expected of ['Result · status', 'idle', 'Close', 'pageIdsInvalidated', 'true'])
+        assert.ok(success.includes(expected), expected);
 });

@@ -4,10 +4,11 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createAppManagement } from '../src/application/app-management.ts';
+import { createOperationRegistry } from '../src/application/operations.ts';
 import { createGatewayCore, type GatewayCore } from '../src/application/plugin-runtime.ts';
 import type { AppManagementCommand, AppManagementSnapshot } from '../src/domains/app-ui.ts';
 import type { ManagedTarget } from '../src/domains/cdp-target.ts';
-import { isRecord } from '../src/shared/errors.ts';
+import { DetailedError, isRecord } from '../src/shared/errors.ts';
 
 type Controller = {
     snapshot(): AppManagementSnapshot;
@@ -185,6 +186,147 @@ test('empty registration cleanup unregisters only the selected public identity',
         );
         await assert.rejects(app.manage({ kind: 'unregister', registrationId: empty.principal.registrationId }));
     } finally {
+        await f.core.cleanup();
+    }
+});
+
+test('explicit operation reads expose bounded terminal evidence from the maintained registry with original ownership', async () => {
+    const f = await fixture();
+    const registry = createOperationRegistry(randomUUID());
+    let release: (() => void) | undefined;
+    const completed = async (operationId: string) => {
+        let cursor = 0;
+        for (let attempt = 0; attempt < 30; attempt++) {
+            const result = await registry.wait(operationId, cursor);
+            if (result.complete) return;
+            cursor = result.cursor;
+        }
+        assert.fail('Fixture operation did not settle.');
+    };
+    const app = controller({
+        ...f.core,
+        admin: {
+            ...f.core.admin,
+            operations: registry.list,
+            control: async (request) => {
+                if (request.action === 'wait') return registry.wait(request.operationId, request.cursor);
+                if (request.action === 'cancel') return { ...registry.cancel(request.operationId) };
+                if (request.action === 'status' && request.operationId) return { ...registry.get(request.operationId) };
+                return f.core.admin.control(request);
+            },
+        },
+    });
+    const isolation = {
+        mode: 'data-dir',
+        path: '/fixture-private/acquired',
+        cleanup: 'delete-on-release',
+        state: 'cleanup-failed',
+    } as const;
+    try {
+        const failedStart = registry.submit(
+            'failed-start',
+            { action: 'start' },
+            async (context) => {
+                context.isolation(isolation);
+                context.phase('launching');
+                const error = new DetailedError('raw secret /private/start');
+                error.details = {
+                    phase: 'launching',
+                    category: 'access-denied',
+                    nativeError: 5,
+                    cause: 'raw private cause',
+                };
+                throw error;
+            },
+            undefined,
+            undefined,
+            f.registration.principal.registrationId,
+        );
+        await completed(failedStart.operationId);
+        assert.equal(JSON.stringify(app.snapshot()).includes(isolation.path), false);
+        const start = await app.manage({ kind: 'operation-status', operationId: failedStart.operationId });
+        assert.deepEqual(start.selectedOperation?.isolation, isolation);
+        assert.deepEqual(start.selectedOperation?.error, {
+            kind: 'start-failed',
+            phase: 'launching',
+            category: 'access-denied',
+            nativeError: 5,
+        });
+        assert.equal(start.selectedOperation?.registrationId, f.registration.principal.registrationId);
+        assert.equal(JSON.stringify(start).includes('raw '), false);
+        const connection = await f.start();
+        assert.ok(connection.sessionId);
+        const route = { connectionId: connection.connectionId, sessionId: connection.sessionId };
+        const failedClose = registry.submit(
+            'failed-close',
+            { action: 'stop' },
+            async (context) => {
+                context.isolation(isolation);
+                const error = new DetailedError('raw secret /private/close');
+                error.details = {
+                    phase: 'normal-close',
+                    closeRequested: true,
+                    processExited: false,
+                    listenerState: 'owned',
+                    cleanupError: 'raw secret cleanup',
+                };
+                throw error;
+            },
+            undefined,
+            route,
+            f.registration.principal.registrationId,
+        );
+        await completed(failedClose.operationId);
+        const successor = f.core.register();
+        f.core.admin.transfer(route.connectionId, successor.principal.registrationId);
+        const close = await app.manage({ kind: 'operation-wait', operationId: failedClose.operationId, cursor: 0 });
+        assert.equal(close.selectedOperation?.state, 'failed');
+        assert.deepEqual(close.selectedOperation?.error, {
+            kind: 'close-failed',
+            phase: 'normal-close',
+            closeRequested: true,
+            processExited: false,
+            listenerState: 'owned',
+        });
+        assert.equal(close.selectedOperation?.wait?.complete, true);
+        assert.equal(close.selectedOperation?.registrationId, f.registration.principal.registrationId);
+        assert.notEqual(close.connections[0]?.registrationId, close.selectedOperation?.registrationId);
+        const success = registry.submit('success', { action: 'stop' }, async () => ({
+            ...route,
+            status: 'idle',
+            disposition: 'Close',
+            pageIdsInvalidated: true,
+            arbitrary: '/secret',
+        }));
+        await completed(success.operationId);
+        const successRead = await app.manage({ kind: 'operation-wait', operationId: success.operationId, cursor: 0 });
+        assert.deepEqual(successRead.selectedOperation?.result, {
+            ...route,
+            status: 'idle',
+            disposition: 'Close',
+            pageIdsInvalidated: true,
+        });
+        assert.equal(JSON.stringify(successRead).includes('/secret'), false);
+        const pending = registry.submit('pending', { action: 'start' }, async (context) => {
+            context.isolation(isolation);
+            await new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            context.signal.throwIfAborted();
+            return {};
+        });
+        await Promise.resolve();
+        const cancelled = await app.manage({ kind: 'operation-cancel', operationId: pending.operationId });
+        assert.equal(cancelled.selectedOperation?.state, 'cancelling');
+        assert.deepEqual(cancelled.selectedOperation?.isolation, isolation);
+        release?.();
+        await completed(pending.operationId);
+        const terminal = await app.manage({ kind: 'operation-wait', operationId: pending.operationId, cursor: 0 });
+        assert.equal(terminal.selectedOperation?.state, 'cancelled');
+        assert.equal(terminal.selectedOperation?.wait?.complete, true);
+    } finally {
+        release?.();
+        await registry.close();
         await f.core.cleanup();
     }
 });

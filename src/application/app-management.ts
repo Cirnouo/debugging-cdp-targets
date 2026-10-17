@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+    APP_OPERATION_FAILURE_VALUES,
     type AppHostSummary,
     type AppManagementCommand,
     type AppManagementSnapshot,
@@ -155,6 +156,90 @@ export function createAppManagement(options: {
                 ...(command.kind === 'operation-wait' ? { cursor: command.cursor } : {}),
             });
             if (!isRecord(result)) throw new Error('Invalid lifecycle result.');
+            const operation = command.kind === 'operation-wait' ? result.operation : result;
+            if (!isRecord(operation) || operation.operationId !== command.operationId)
+                throw new Error('Invalid selected lifecycle operation.');
+            const state = snapshot();
+            const summary = state.operations.find((item) => item.operationId === command.operationId);
+            if (!summary) throw new Error('The selected operation is no longer available.');
+            const projectedResult = isRecord(operation.result)
+                ? Object.fromEntries(
+                      Object.entries(operation.result).filter(([key]) =>
+                          [
+                              'connectionId',
+                              'sessionId',
+                              'status',
+                              'disposition',
+                              'upstreamStatus',
+                              'processId',
+                              'port',
+                              'enabledToolCount',
+                              'pageIdsInvalidated',
+                          ].includes(key),
+                      ),
+                  )
+                : undefined;
+            const error = isRecord(operation.error) ? operation.error : undefined;
+            const projectedError = error
+                ? {
+                      kind:
+                          summary.action === 'stop'
+                              ? 'close-failed'
+                              : summary.action === 'start'
+                                ? 'start-failed'
+                                : summary.action === 'restart'
+                                  ? 'restart-failed'
+                                  : 'operation-failed',
+                      ...Object.fromEntries(
+                          Object.entries(error).filter(([key, value]) => {
+                              if (key === 'phase' || key === 'category' || key === 'code')
+                                  return (
+                                      typeof value === 'string' &&
+                                      (APP_OPERATION_FAILURE_VALUES[key] as readonly string[]).includes(value)
+                                  );
+                              if (key === 'nativeError') return Number.isSafeInteger(value);
+                              if (key === 'listenerState')
+                                  return value === 'owned' || value === 'foreign' || value === 'absent';
+                              return (
+                                  [
+                                      'closeRequested',
+                                      'processExited',
+                                      'closeConfirmed',
+                                      'catalogUpstreamRetained',
+                                  ].includes(key) && typeof value === 'boolean'
+                              );
+                          }),
+                      ),
+                  }
+                : undefined;
+            return parseAppManagementSnapshot({
+                ...state,
+                selectedOperation: {
+                    // The registry owner is immutable; current connection ownership is unrelated.
+                    operationId: operation.operationId,
+                    requestId: operation.requestId,
+                    ...(summary.registrationId === undefined ? {} : { registrationId: summary.registrationId }),
+                    ...(operation.action === undefined ? {} : { action: operation.action }),
+                    ...(operation.connectionId === undefined ? {} : { connectionId: operation.connectionId }),
+                    ...(operation.sessionId === undefined ? {} : { sessionId: operation.sessionId }),
+                    state: operation.state,
+                    phase: operation.phase,
+                    elapsedMs: typeof operation.elapsedMs === 'number' ? Math.floor(operation.elapsedMs) : undefined,
+                    cursor: operation.cursor,
+                    ...(projectedResult === undefined ? {} : { result: projectedResult }),
+                    ...(projectedError === undefined ? {} : { error: projectedError }),
+                    ...(operation.isolation === undefined ? {} : { isolation: operation.isolation }),
+                    ...(command.kind === 'operation-wait'
+                        ? {
+                              wait: {
+                                  cursor: result.cursor,
+                                  complete: result.complete,
+                                  replayTruncated: result.replayTruncated,
+                              },
+                          }
+                        : {}),
+                },
+            });
         }
         return snapshot();
     }
