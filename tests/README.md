@@ -22,6 +22,14 @@ Git hook tests remain contributor-tooling regressions.
   failure retry and refusal to admit HTTP before successful startup.
 - `app-ui.test.ts` checks fixed local renderer resources and narrow management
   actions/snapshots without exposing secrets or general filesystem/IPC authority.
+- `app-management.test.ts` exercises the real Core admin closure with controlled
+  native/official I/O: scoped restart, timestamps, stale/busy routes, independent
+  transfer/Close outcomes, retained failure and original operation ownership.
+- `app-host-management.test.ts` checks cached two-host results, independent retry,
+  active-selection protection and normal native-work settlement.
+- `app-manager-rendering.test.ts` uses real React server rendering for component-only
+  ownership, clocks and nonbound endpoint states. This is not native interaction
+  or visual acceptance.
 - `app-window-boundary.test.ts` exercises management composition against foreign
   frames/senders, extra IPC payloads, navigation and external capabilities.
 - `app-release.test.ts`, `app-native-inputs.test.ts` and `app-delivery.test.ts`

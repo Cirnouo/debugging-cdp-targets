@@ -23,6 +23,7 @@ const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/interface/app-window.ts', ['electron']],
     ['src/interface/app-preload.ts', ['electron']],
     ['src/interface/app-renderer.ts', ['react', 'react-dom/client']],
+    ['src/interface/app-manager.ts', ['react']],
 ]);
 
 export function validateTextStyle(file: string, source: string) {

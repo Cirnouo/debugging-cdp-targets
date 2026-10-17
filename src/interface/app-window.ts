@@ -5,6 +5,7 @@ import type { AppConfiguration } from '../domains/app-configuration.ts';
 import {
     APP_MANAGEMENT_CHANNEL,
     APP_UI_URL,
+    type AppManagementCommand,
     type AppUiSnapshot,
     appAssetPath,
     parseAppUiRequest,
@@ -18,6 +19,7 @@ export async function createManagementWindow(options: {
     directory: string;
     inspect: () => AppUiSnapshot;
     configure: (configuration: AppConfiguration) => Promise<AppUiSnapshot>;
+    manage: (command: AppManagementCommand) => Promise<AppUiSnapshot>;
     quit: () => Promise<void>;
     restart: () => Promise<void>;
     canDestroy: () => boolean;
@@ -92,6 +94,8 @@ export async function createManagementWindow(options: {
                 return parseAppUiSnapshot(options.inspect());
             case 'configure':
                 return parseAppUiSnapshot(await options.configure(request.configuration));
+            case 'manage':
+                return parseAppUiSnapshot(await options.manage(request.command));
             case 'quit':
                 return options.quit();
             case 'restart':

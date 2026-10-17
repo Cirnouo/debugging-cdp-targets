@@ -10,8 +10,30 @@ Plugin launches a target and configures its official Server connection. Use
 The App manages targets through direct SDK HTTP. Thin Plugins declare the default
 `http://127.0.0.1:27637/mcp` endpoint; the App must already be running. Its management
 window changes desired HTTP port (cold, effective after restart) and appearance
-(hot). If changing the port, align the host native HTTP configuration. No secret
-is stored in that configuration.
+(hot). Save the port and choose Restart App: normal owned cleanup must complete,
+then the new App must bind successfully before it synchronizes each eligible
+user-level host plugin URL independently. Host plugins shows failures and
+Sync / retry per host. A disk-synchronized plugin still needs its host reloaded;
+readback does not establish activation. No secret is stored in host HTTP configuration.
+
+Connections shows public owner IDs, age and idle clocks. Select a connection to
+inspect its explicit configuration and choose target, official Server or both
+for restart using the original successful snapshot. Changing launch or official
+arguments requires Close and a new start through the host. Close and idle
+transfer support individual or selected rows; each row reports its own outcome.
+Registrations can unregister only empty owners. Operations uses the Core's
+existing status/wait/cancel behavior; cancelling a wait leaves its job running.
+
+Host plugins can inspect native installations and retry URL synchronization.
+Read-only project/local/managed, disabled, pinned and shared copies retain their
+restrictions. Expand Host paths and executable to select absolute configuration
+roots and native CLI paths when this desktop App has a different environment;
+Claude also offers a plugin cache root. Blank uses the App's user environment.
+Save before inspecting a changed selection, and wait for that host's active work
+to finish before replacing its selection. Missing stable updates are ordinary
+while 0.1.0 is Unreleased; known verified App-owned copies can still synchronize.
+See [App runtime](../app-runtime.md#management-and-host-synchronization) for the
+ownership, migration and acceptance boundaries.
 
 The seven tools are:
 

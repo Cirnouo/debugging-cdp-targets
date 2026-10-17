@@ -30,8 +30,10 @@ takeover or force kill participates.
 Only the winner creates App data. Installed builds use native App data; portable
 builds use `data` next to the executable (next to the `.app` bundle on macOS).
 Neither mode searches for or merges another root. Registrations, targets, jobs
-and launch snapshots remain memory-only. Configuration schema 1 stores desired
-port and appearance. Unknown, corrupt, noninteger or future versions refuse
+and launch snapshots remain memory-only. Configuration schema 2 stores desired
+port, appearance and optional explicit host configuration-root/executable/cache
+selections. Existing schema 1 port/appearance documents migrate through a real
+validated 1-to-2 step with exact original bytes backed up. Unknown, corrupt, noninteger or future versions refuse
 writes rather than resetting. A small sequential migration runner validates
 every source and destination; only a fully successful chain backs up original
 bytes and atomically replaces the file. Production promises no pre-schema-1
@@ -42,16 +44,68 @@ effective port stays fixed until normal restart. A bind conflict keeps the
 manager available and never silently chooses another port. The manager uses a
 fixed local asset protocol, sandbox, context isolation, no Node integration,
 denied external navigation/permissions and sender/main-frame checked management
-actions. Its bridge exposes only inspect, configure, Quit and Restart.
+actions. Its bridge exposes only inspect, configure, closed management commands,
+Quit and Restart. A nonbound endpoint is never displayed as effective.
 
 Quit stops new HTTP admission, waits for the entire startup promise, then invokes
-the trusted cleanup capability saved before first catalog acquisition. Core
+the trusted cleanup capability saved before first catalog acquisition. Admitted
+atomic configuration writes and all pending native host-management chains also
+settle before actual exit. Core
 cleanup cancels admission, normally closes owned targets, disposes official
 children/routers and proves release. Only success closes HTTP/activation and
 exits. Startup or cleanup failure keeps ownership and the manager for retry.
 Target normal Close has no artificial exit deadline. Host/socket/window
 disconnection never requests cleanup. The fixed activation channel has no admin
 request or credentials.
+
+## Management and host synchronization
+
+The dashboard shows public registration identities, owners, connections and the
+Core's existing lifecycle operation registry. It never reads back bearer tokens
+or starts a target. Selected connection details explicitly show launch/official
+configuration and directory evidence; environment override names are shown
+without their values. Summaries contain no launch paths or raw native output.
+Choose target, official Server or both for restart; each uses the old successful
+immutable snapshot. Close requests ordinary target shutdown. Per-row/batch Close
+and idle transfer retain independent outcomes, including busy and stale rows.
+Unregister is available only for registrations without resources or live jobs.
+
+Connection age begins at first successful logical establishment and survives
+side restarts. Idle begins at the last real operation, excluding status, wait,
+summary polling and GUI refresh. Both display HH:mm:ss with unbounded hours;
+missing/invalid evidence displays Unavailable. One local clock interval updates
+the view without touching Core activity or invoking host CLIs.
+
+The App constructs the concrete Codex/Claude Task5 manager, native adapters and
+secret-free receipt store only after singleton/data admission. After successful
+HTTP bind it independently restores/revalidates each selected host's owned
+receipt and synchronizes its URL. Missing published candidates are ordinary in
+0.1.0; no feed, polling URL or stable release is invented. A verified owned copy
+can synchronize with a null candidate, and a stale compatible candidate never
+downgrades it. Disk synchronization remains host reload pending; file readback
+does not prove an active host session.
+
+Host summaries preserve missing CLI/plugin, native failures, no candidate,
+disabled/pinned/read-only/shared restrictions and partial failure. Inspect host
+and Sync / retry explicitly perform native work; ordinary dashboard refreshes
+read cached host state. Hosts serialize independently. Explicit absolute
+configuration roots and executable selections support different desktop
+environments; Claude also supports a cache-root selection. Blank uses the App's
+admitted user environment and home as neutral cwd. Selection changes refuse
+while that host is busy and create a fresh idle adapter/manager. Receipts from
+another root/selection never authorize adoption.
+
+Save a desired port, restart normally through cleanup, bind the new endpoint,
+then synchronize eligible hosts independently. A failed bind keeps the manager
+available for a port correction and performs no host URL synchronization.
+One host's failure does not roll back the other; retry the affected host and
+reload it after successful disk synchronization. Quit denies new mutations and
+waits for actual native CLI completion as well as normal Core cleanup.
+
+Current source tests cover these contracts with real Core/Task5 services and
+controlled I/O. React server rendering is component-only evidence. Native
+management interaction/visual acceptance and all six delivery cells remain
+separate explicit acceptance gates.
 
 ## HTTP and authentication
 

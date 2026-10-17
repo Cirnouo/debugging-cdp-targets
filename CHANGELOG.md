@@ -17,6 +17,13 @@ Version 0.1.0 remains under development; no release has been published.
 - A consciously launched singleton Electron desktop App with a sandboxed React
     manager, tray/fallback window, separate installed/portable data, validated
     atomic settings, hot appearance, cold HTTP port and cleanup-gated normal exit.
+    The dashboard manages registration/connection ownership, unbounded age/idle
+    clocks, explicit scoped restart, per-row/batch Close and idle transfer, empty
+    registration cleanup and existing lifecycle operations. Validated schema-1
+    migration adds explicit host selections. After a successful cold-port bind,
+    independent native host synchronization preserves restrictions and reports
+    failure/retry or disk success with host reload pending. Pending configuration
+    writes and native host work settle before normal App exit.
     Verified local Windows staging precedes native installer delivery.
 
 - Stable Node >=24.21.0 <25 support, with Node 24.21.0 as the exact CI and

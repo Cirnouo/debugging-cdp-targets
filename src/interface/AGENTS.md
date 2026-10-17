@@ -11,7 +11,9 @@ Normal Quit/Restart denies new requests, awaits actual startup settlement and
 retained construction cleanup, then closes transports/windows and exits. Cleanup
 failure preserves management UI and the OS lease for retry; never force exit.
 
-Expose only inspect/configure/quit/restart through the sandboxed preload. Validate
+Expose only inspect/configure/manage/quit/restart through the sandboxed preload.
+Manage accepts only the closed domain-validated lifecycle/registration/host commands;
+never expose bearer readback, target creation or arbitrary channels. Validate
 unknown payloads and exact main-window/main-frame/fixed-URL sender identity before
 dispatch. No general filesystem, shell, process, URL navigation or unrestricted IPC.
 The renderer runs only fixed local assets, with context isolation, sandbox, no Node
