@@ -55,6 +55,7 @@ export interface OperationContext {
 type Event = Pick<OperationSnapshot, 'cursor' | 'state' | 'phase' | 'elapsedMs' | 'connectionId' | 'sessionId'>;
 type Operation = {
     snapshot: OperationSnapshot;
+    ownerId?: string;
     started: number;
     abort: AbortController;
     events: Event[];
@@ -78,13 +79,14 @@ export function createOperationRegistry(entryId: string) {
     const operations = new Map<string, Operation>();
     const requests = new Map<string, { fingerprint: string; operationId: string }>();
     const notices = new Set<string>();
-    function selected(operationId: string) {
+    function selected(operationId: string, ownerId?: string) {
         const operation = operations.get(operationId);
-        if (!operation) throw new Error('The operation is absent from this entry.');
+        if (!operation || (ownerId !== undefined && operation.ownerId !== ownerId))
+            throw new Error('The operation is absent or unauthorized.');
         return operation;
     }
-    function get(operationId: string): OperationSnapshot {
-        return structuredClone(selected(operationId).snapshot);
+    function get(operationId: string, ownerId?: string): OperationSnapshot {
+        return structuredClone(selected(operationId, ownerId).snapshot);
     }
     function emit(operation: Operation) {
         operation.snapshot.cursor += 1;
@@ -100,11 +102,11 @@ export function createOperationRegistry(entryId: string) {
         if (operation.events.length > 128) operation.events.shift();
         for (const listener of [...operation.listeners]) listener();
     }
-    function lookup(requestId: string, request: unknown) {
+    function lookup(requestId: string, request: unknown, ownerId?: string) {
         const fingerprint = createHash('sha256')
             .update(JSON.stringify(canonical(request)))
             .digest('hex');
-        const prior = requests.get(requestId);
+        const prior = requests.get(JSON.stringify([ownerId, requestId]));
         if (prior && prior.fingerprint !== fingerprint)
             throw new Error('This requestId already identifies a different request.');
         return { fingerprint, prior: prior ? get(prior.operationId) : undefined };
@@ -115,11 +117,13 @@ export function createOperationRegistry(entryId: string) {
         job: (context: OperationContext) => Promise<Record<string, unknown>>,
         onSettled?: () => void,
         initialIdentity?: ConnectionRoute,
+        ownerId?: string,
     ) {
-        const { fingerprint, prior } = lookup(requestId, request);
+        const { fingerprint, prior } = lookup(requestId, request, ownerId);
         if (prior) return prior;
         const operationId = randomUUID();
         const operation: Operation = {
+            ...(ownerId === undefined ? {} : { ownerId }),
             snapshot: {
                 entryId,
                 operationId,
@@ -139,7 +143,7 @@ export function createOperationRegistry(entryId: string) {
             listeners: new Set(),
         };
         operations.set(operationId, operation);
-        requests.set(requestId, { fingerprint, operationId });
+        requests.set(JSON.stringify([ownerId, requestId]), { fingerprint, operationId });
         emit(operation);
         const accepted = get(operationId);
         const observationIdentity = (): FixtureIdentity => ({
@@ -221,8 +225,8 @@ export function createOperationRegistry(entryId: string) {
         );
         return accepted;
     }
-    async function wait(operationId: string, cursor = 0, signal?: AbortSignal) {
-        const operation = selected(operationId);
+    async function wait(operationId: string, cursor = 0, signal?: AbortSignal, ownerId?: string) {
+        const operation = selected(operationId, ownerId);
         if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > operation.snapshot.cursor)
             throw new Error('Invalid event cursor for this operation.');
         signal?.throwIfAborted();
@@ -252,8 +256,8 @@ export function createOperationRegistry(entryId: string) {
             complete: terminal(operation.snapshot.state),
         };
     }
-    function cancel(operationId: string) {
-        const operation = selected(operationId);
+    function cancel(operationId: string, ownerId?: string) {
+        const operation = selected(operationId, ownerId);
         if (!terminal(operation.snapshot.state) && !operation.abort.signal.aborted) {
             operation.snapshot.state = 'cancelling';
             operation.abort.abort(new DOMException('Operation aborted; cleanup required.', 'AbortError'));
@@ -304,12 +308,25 @@ export function createOperationRegistry(entryId: string) {
     }
     return {
         get,
+        list: () =>
+            [...operations.values()].map((operation) => ({
+                ...structuredClone(operation.snapshot),
+                registrationId: operation.ownerId,
+            })),
         submit,
         wait,
         cancel,
         cancelRoute,
         markRead,
-        prior: (requestId: string, request: unknown) => lookup(requestId, request).prior,
+        prior: (requestId: string, request: unknown, ownerId?: string) => lookup(requestId, request, ownerId).prior,
+        forgetOwner(ownerId: string) {
+            for (const [id, operation] of operations)
+                if (operation.ownerId === ownerId && terminal(operation.snapshot.state)) {
+                    operations.delete(id);
+                    notices.delete(id);
+                }
+            for (const [key, request] of requests) if (!operations.has(request.operationId)) requests.delete(key);
+        },
         takeNotices: (predicate?: (notice: OperationNotice) => boolean) => {
             const result = [...notices].map(notice).filter((value) => predicate?.(value) ?? true);
             for (const value of result) notices.delete(value.operationId);

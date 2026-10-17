@@ -238,25 +238,27 @@ test('native cancellation that completed cleanup remains cancelled through the r
     }
 });
 
-test('an unfinished official timeout isolates only its connection and retains application identity for explicit recovery', async () => {
+test('a settled official error does not close a healthy connection or invent an application exit', async () => {
     const f = await fixture({ timeoutCall: true });
     try {
         const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
         const signal = new AbortController().signal;
-        const result = await f.callbacks.invoke(
-            'list_pages',
-            { _dct: { connectionId: first.connectionId, sessionId: first.sessionId } },
-            signal,
-            () => {},
+        await assert.rejects(
+            f.callbacks.invoke(
+                'list_pages',
+                { _dct: { connectionId: first.connectionId, sessionId: first.sessionId } },
+                signal,
+                () => {},
+            ),
+            /Request timed out/,
         );
-        assert.equal(result.isError, true);
-        assert.match(JSON.stringify(result.structuredContent), /CONNECTION_RECOVERY_REQUIRED/);
         const retained = connectionStatus(f.controller, first.connectionId);
-        assert.equal(retained.reason, 'upstream-timeout');
+        assert.equal(retained.status, 'active');
+        assert.equal(retained.reason, undefined);
         assert.equal(retained.processId, first.processId);
         assert.equal(retained.sessionId, first.sessionId);
-        assert.equal(f.counts().closes, 2);
+        assert.equal(f.counts().closes, 1);
         assert.ok(!JSON.stringify(f.callbacks.status('PostToolUse')).includes('process-exited'));
         await f.callbacks.invoke(
             'list_pages',
@@ -421,7 +423,7 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
         assert.ok(firstArguments && secondArguments);
         await assert.rejects(
             f.callbacks.invoke('list_pages', firstArguments, new AbortController().signal, () => {}),
-            /closed/,
+            /closed|absent/,
         );
         const next = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'next' } });
         assert.notEqual(next.connectionId, first.connectionId);
@@ -515,7 +517,8 @@ test('live restart preserves the selected connection and original profile across
         const restarted = await f.controller.restart({ connectionId: first.connectionId, sessionId: first.sessionId });
         assert.equal(restarted.connectionId, first.connectionId);
         assert.notEqual(restarted.sessionId, first.sessionId);
-        assert.equal(f.launches[2]?.exactPort, first.port);
+        assert.equal(f.launches[2]?.exactPort, undefined);
+        assert.equal(f.launches[2]?.preparedLaunch?.portPolicy.kind, 'automatic');
         assert.deepEqual(f.launches[2]?.launchDefinition, {
             executablePath: process.execPath,
             arguments: ['--port=9222'],
@@ -548,6 +551,7 @@ test('disconnect cleanup continues across a failed official Close', async () => 
             f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
         ),
     );
+    await assert.rejects(f.runtime.close(), /cleanup failed/);
     await f.runtime.close();
     assert.equal(f.counts().closes, 6, 'Gateway cleanup retries its failed official resource once.');
     assert.equal(f.routerCloses(), 5);
@@ -657,5 +661,5 @@ test('catalog cleanup reports a persistent official disposal failure after attem
     observing.mock.restore();
     assert.equal(closeAttempts, 2);
     assert.equal(routerCloses, 1);
-    assert.ok(diagnostics.some((message) => message.includes('Gateway cleanup failed: Catalog close still failed.')));
+    assert.deepEqual(diagnostics, []);
 });

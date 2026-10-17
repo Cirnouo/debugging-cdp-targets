@@ -8,7 +8,12 @@ import { RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.
 import { withChromeScreenshotFeature } from '../domains/chromium-features.ts';
 import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
 import { parseDataIsolation } from '../domains/data-isolation.ts';
-import { resolveLaunchDefinition, validateDataIsolationBinding } from '../domains/launch-command.ts';
+import {
+    bindPreparedLaunch,
+    mergeLaunchEnvironment,
+    resolveLaunchDefinition,
+    validateDataIsolationBinding,
+} from '../domains/launch-command.ts';
 import {
     DEFAULT_BASE_PORT,
     LOOPBACK,
@@ -168,14 +173,21 @@ export function validateTargetLaunch(options: LaunchOptions) {
     if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
     if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error('Invalid base port.');
     if (options.launchDefinition) return;
-    validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+    if (!options.preparedLaunch) validateDataIsolationBinding(options.launch, isolation.mode, process.env);
     const sample = process.platform === 'win32' ? 'C:/dct-preflight-data' : '/dct-preflight-data';
-    const parsed = resolveLaunchDefinition(
-        options.launch,
-        basePort,
-        process.env,
-        isolation.mode === 'data-dir' ? sample : undefined,
-    );
+    const prepared = options.preparedLaunch;
+    const parsed = prepared
+        ? bindPreparedLaunch(
+              prepared,
+              prepared.portPolicy.kind === 'fixed' ? prepared.portPolicy.port : prepared.portPolicy.basePort,
+              isolation.mode === 'data-dir' ? sample : undefined,
+          )
+        : resolveLaunchDefinition(
+              options.launch,
+              basePort,
+              process.env,
+              isolation.mode === 'data-dir' ? sample : undefined,
+          );
     if (!path.isAbsolute(parsed.executablePath) || (parsed.cwd !== undefined && !path.isAbsolute(parsed.cwd)))
         throw new Error('Application executable and working directory must be absolute.');
     if (targetKind === 'chrome') {
@@ -417,9 +429,13 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 isolation,
                 targetKind = 'generic-cdp',
                 basePort = DEFAULT_BASE_PORT,
-                exactPort,
+                exactPort: requestedExactPort,
                 launchDefinition,
             } = options;
+            const exactPort =
+                options.preparedLaunch?.portPolicy.kind === 'fixed'
+                    ? options.preparedLaunch.portPolicy.port
+                    : requestedExactPort;
             context.signal?.throwIfAborted();
             if (isolation.mode === 'data-dir' && context.dataDirectory === undefined)
                 throw new Error('A leased data directory binding is required.');
@@ -482,18 +498,19 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
             let readinessSignal = context.signal;
             try {
                 context.signal?.throwIfAborted();
-                const parsed =
-                    launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory);
+                const parsed = options.preparedLaunch
+                    ? bindPreparedLaunch(options.preparedLaunch, port, context.dataDirectory)
+                    : (launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory));
                 if (!path.isAbsolute(parsed.executablePath))
                     throw new Error('The application must use an absolute executable path.');
                 const executablePath = path.resolve(parsed.executablePath);
                 const args = targetKind === 'chrome' ? applyChromePreset(parsed.arguments) : parsed.arguments;
                 const cwd = parsed.cwd ?? path.dirname(executablePath);
                 if (!path.isAbsolute(cwd)) throw new Error('The application working directory must be absolute.');
-                const environment = new Map<string, [string, string | undefined]>();
-                for (const [name, value] of [...Object.entries(process.env), ...Object.entries(parsed.env ?? {})])
-                    environment.set(process.platform === 'win32' ? name.toLowerCase() : name, [name, value]);
-                const env = Object.fromEntries(environment.values());
+                const env =
+                    options.preparedLaunch || launchDefinition
+                        ? { ...parsed.env }
+                        : mergeLaunchEnvironment(process.env, parsed.env ?? {}, process.platform === 'win32');
                 const profile = targetKind === 'chrome' ? chromeProfileArgument(args) : undefined;
                 if (targetKind === 'chrome' && isolation.mode === 'data-dir') {
                     if (profile === undefined || context.dataDirectory === undefined)
@@ -532,9 +549,13 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             child: application,
                             launchDefinition: {
                                 executablePath,
-                                arguments: args,
+                                arguments: [...args],
                                 cwd,
-                                ...(parsed.env ? { env: { ...parsed.env } } : {}),
+                                env: Object.fromEntries(
+                                    Object.entries(env).filter(
+                                        (pair): pair is [string, string] => pair[1] !== undefined,
+                                    ),
+                                ),
                             },
                         };
                         created = target;

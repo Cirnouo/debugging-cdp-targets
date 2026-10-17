@@ -8,6 +8,10 @@ import { verifyOfficialPackage } from './official-package.ts';
 
 declare const __DCT_OFFICIAL_RELEASE__: unknown;
 
+export function snapshotOfficialEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+    return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1', CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1' };
+}
+
 function booleanSetting(environment: NodeJS.ProcessEnv, name: string, fallback: boolean) {
     const value = environment[name];
     if (value === undefined) return fallback;

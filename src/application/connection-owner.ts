@@ -10,6 +10,7 @@ export function createConnectionOwner(sessionId: string, onSettled?: () => void)
     const resources = new Map<string, OwnedResource>();
     const closing = new Map<string, Promise<void>>();
     const unsettled = new Set<string>();
+    const failedDisposals = new Set<string>();
     const pending = new Set<Promise<unknown>>();
     let cleanup: Promise<void> | undefined;
     let cleanupSettled = false;
@@ -32,6 +33,9 @@ export function createConnectionOwner(sessionId: string, onSettled?: () => void)
         },
         isCleaning() {
             return !!cleanup && !cleanupSettled;
+        },
+        hasFailedDisposal() {
+            return failedDisposals.size > 0;
         },
         assertOpen() {
             if (owner.retired) throw new Error('The target session has exited or retired.');
@@ -72,6 +76,9 @@ export function createConnectionOwner(sessionId: string, onSettled?: () => void)
         hasResource(name: string) {
             return resources.has(name);
         },
+        hasPendingWork() {
+            return pending.size > 0;
+        },
         hasPendingResources() {
             return resources.size > 0 || pending.size > 0;
         },
@@ -84,7 +91,11 @@ export function createConnectionOwner(sessionId: string, onSettled?: () => void)
             const result = (async () => {
                 try {
                     await resource.close();
+                    failedDisposals.delete(name);
                     if (resources.get(name) === resource) resources.delete(name);
+                } catch (error) {
+                    failedDisposals.add(name);
+                    throw error;
                 } finally {
                     unsettled.delete(name);
                     onSettled?.();

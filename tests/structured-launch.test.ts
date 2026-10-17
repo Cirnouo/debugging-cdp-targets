@@ -2,6 +2,33 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as launch from '../src/domains/launch-command.ts';
 
+test('prepared launch binds recorded tokens once and snapshots fixed versus automatic port policy', () => {
+    const ambient = { ROOT: '/old', Path: 'old-path', NUMBER: '9222' };
+    const input = {
+        executable: '%ROOT%/app',
+        args: ['--remote-debugging-port={port}', '--data={dataDir}', '9222'],
+        env: { PATH: 'override', VALUE: '%NUMBER%' },
+    };
+    const prepared = launch.prepareLaunchDefinition(input, 9222, ambient, true);
+    input.args[2] = 'changed';
+    ambient.ROOT = '/new';
+    ambient.NUMBER = '9999';
+    const first = launch.bindPreparedLaunch(prepared, 9223, '/opaque/{port}/%ROOT%');
+    assert.equal(first.executablePath, '/old/app');
+    assert.deepEqual(first.arguments, ['--remote-debugging-port=9223', '--data=/opaque/{port}/%ROOT%', '9222']);
+    assert.equal(first.env?.VALUE, '9222');
+    assert.equal(first.env?.PATH, 'override');
+    assert.equal(first.env?.Path, undefined);
+    assert.deepEqual(prepared.portPolicy, { kind: 'automatic', basePort: 9222 });
+    const fixed = launch.prepareLaunchDefinition(
+        { executable: '/app', args: ['--remote-debugging-port=9333'] },
+        9222,
+        {},
+    );
+    assert.deepEqual(fixed.portPolicy, { kind: 'fixed', port: 9333 });
+    assert.throws(() => launch.bindPreparedLaunch(fixed, 9334), /fixed/);
+});
+
 test('structured launch preserves literal argument boundaries and recognizes a port supplied through environment', () => {
     assert.ok('resolveLaunchDefinition' in launch && typeof launch.resolveLaunchDefinition === 'function');
     assert.deepEqual(

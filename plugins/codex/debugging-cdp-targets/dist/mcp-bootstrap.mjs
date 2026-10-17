@@ -2322,7 +2322,7 @@ var require_websocket = __commonJS({
     var http2 = __require("http");
     var net2 = __require("net");
     var tls = __require("tls");
-    var { randomBytes, createHash: createHash3 } = __require("crypto");
+    var { randomBytes: randomBytes2, createHash: createHash4 } = __require("crypto");
     var { Duplex, Readable } = __require("stream");
     var { URL: URL2 } = __require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
@@ -2873,7 +2873,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes(16).toString("base64");
+      const key = randomBytes2(16).toString("base64");
       const request = isSecure ? https.request : http2.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -3003,7 +3003,7 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash3("sha1").update(key + GUID).digest("base64");
+        const digest = createHash4("sha1").update(key + GUID).digest("base64");
         if (res.headers["sec-websocket-accept"] !== digest) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
@@ -3378,7 +3378,7 @@ var require_websocket_server = __commonJS({
     var EventEmitter2 = __require("events");
     var http2 = __require("http");
     var { Duplex } = __require("stream");
-    var { createHash: createHash3 } = __require("crypto");
+    var { createHash: createHash4 } = __require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -3685,7 +3685,7 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash3("sha1").update(key + GUID).digest("base64");
+        const digest = createHash4("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
@@ -3779,7 +3779,8 @@ init_define_DCT_TOOL_CATALOG();
 // src/application/plugin-runtime.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import os3 from "node:os";
 import path8 from "node:path";
 
 // src/adapters/cdp-router.ts
@@ -28105,6 +28106,44 @@ var SseError = class extends Error {
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
 
+// src/domains/official-execution.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function createOfficialExecution() {
+  let id;
+  let settled = false;
+  let resolve = () => {
+  };
+  const terminal2 = new Promise((done) => {
+    resolve = done;
+  });
+  function finish() {
+    if (settled) return false;
+    settled = true;
+    resolve();
+    return true;
+  }
+  return {
+    get id() {
+      return id;
+    },
+    get settled() {
+      return settled;
+    },
+    terminal: terminal2,
+    assign(value) {
+      if (id !== void 0) throw new Error("The official execution is already bound to a wire request.");
+      id = value;
+    },
+    observe(message) {
+      if (!isRecord(message) || id === void 0 || message.id !== id || "method" in message || Object.hasOwn(message, "result") === Object.hasOwn(message, "error"))
+        return false;
+      return finish();
+    },
+    finish
+  };
+}
+
 // src/adapters/official-server.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
@@ -28411,6 +28450,9 @@ async function verifyOfficialPackage(directory, input, options = {}) {
 }
 
 // src/adapters/official-server.ts
+function snapshotOfficialEnvironment(environment = process.env) {
+  return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1", CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: "1" };
+}
 function booleanSetting(environment, name, fallback) {
   const value = environment[name];
   if (value === void 0) return fallback;
@@ -28475,15 +28517,11 @@ async function createOfficialConnection(browserUrl, options = {}) {
   const arguments_ = options.args ?? buildServerArguments(browserUrl);
   const bin = options.bin ?? await resolveServerBin();
   options.signal?.throwIfAborted();
-  const child = spawn3(process.execPath, [bin, ...arguments_], {
+  const child = spawn3(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
     shell: false,
     windowsHide: true,
     stdio: ["pipe", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "1",
-      CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: "1"
-    }
+    env: snapshotOfficialEnvironment(options.environment)
   });
   const listeners = /* @__PURE__ */ new Set();
   let exited = false;
@@ -28491,6 +28529,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
   let closeNotified = false;
   let stdinEnded = false;
   let closing;
+  let execution;
   const buffer = new ReadBuffer();
   let resolveExit = () => {
   };
@@ -28503,6 +28542,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
   });
   function closeProtocol() {
     closed = true;
+    execution?.finish();
     buffer.clear();
     if (!closeNotified && transport.onclose) {
       closeNotified = true;
@@ -28575,6 +28615,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
     }
   }
   const resource = {
+    ...child.pid === void 0 ? {} : { processId: child.pid },
     close() {
       closeProtocol();
       if (exited) return Promise.resolve();
@@ -28610,7 +28651,22 @@ async function createOfficialConnection(browserUrl, options = {}) {
     send(message) {
       if (closed) return Promise.reject(new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed"));
       return new Promise((resolve, reject) => {
-        child.stdin.write(serializeMessage(message), (error2) => error2 ? reject(error2) : resolve());
+        try {
+          const serialized = serializeMessage(message);
+          if ("method" in message && message.method === "tools/call" && "id" in message && execution)
+            execution.assign(message.id);
+          child.stdin.write(serialized, (error2) => {
+            if (error2) {
+              void resource.close().catch(() => {
+              });
+              reject(error2);
+            } else resolve();
+          });
+        } catch (error2) {
+          void resource.close().catch(() => {
+          });
+          reject(error2);
+        }
       });
     },
     close() {
@@ -28634,6 +28690,7 @@ async function createOfficialConnection(browserUrl, options = {}) {
       buffer.append(chunk);
       let message = buffer.readMessage();
       while (!closed && message !== null) {
+        execution?.observe(message);
         transport.onmessage?.(message);
         message = buffer.readMessage();
       }
@@ -28684,21 +28741,43 @@ async function createOfficialConnection(browserUrl, options = {}) {
         cursors.add(cursor);
       }
     } while (cursor !== void 0);
+    options.signal?.throwIfAborted();
+    options.signal?.removeEventListener("abort", abortAcquisition);
     return {
       tools,
+      ...child.pid === void 0 ? {} : { processId: child.pid },
       call: async (name, arguments_2, signal, onProgress) => {
+        if (execution) throw new Error("The official connection is busy with an owned execution.");
+        const actual = createOfficialExecution();
+        const terminal2 = actual.terminal;
+        execution = actual;
         const toolDefinition = tools.findLast((tool) => tool.name === name);
-        return CallToolResultSchema.parse(
-          await client.callTool(
-            { name, arguments: arguments_2 },
-            {
-              timeout: options.requestTimeoutMs ?? 6e4,
-              ...toolDefinition ? { toolDefinition } : {},
-              ...signal ? { signal } : {},
-              ...onProgress ? { onprogress: onProgress } : {}
-            }
-          )
-        );
+        try {
+          return CallToolResultSchema.parse(
+            await client.callTool(
+              { name, arguments: arguments_2 },
+              {
+                // The SDK has no public deadline-disable option. Its maximum safe
+                // timer is independent of client waits; timeout retains accounting.
+                timeout: options.requestTimeoutMs ?? 2147483647,
+                ...toolDefinition ? { toolDefinition } : {},
+                ...signal ? { signal } : {},
+                ...onProgress ? { onprogress: onProgress } : {}
+              }
+            )
+          );
+        } catch (error2) {
+          if (!signal?.aborted && interruptedOfficialCall(error2) === "upstream-timeout") await terminal2;
+          throw error2;
+        } finally {
+          if (actual.settled || actual.id === void 0) {
+            actual.finish();
+            if (execution === actual) execution = void 0;
+          } else
+            void terminal2.then(() => {
+              if (execution === actual) execution = void 0;
+            });
+        }
       },
       close: resource.close,
       onExit: resource.onExit,
@@ -41097,6 +41176,63 @@ init_define_DCT_TOOL_CATALOG();
 // src/domains/launch-command.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
+function mergeLaunchEnvironment(environment, overrides, windows = false) {
+  const values = /* @__PURE__ */ new Map();
+  for (const [name, value] of [...Object.entries(environment), ...Object.entries(overrides)])
+    values.set(windows ? name.toLowerCase() : name, [name, value]);
+  return Object.fromEntries(values.values());
+}
+function prepareLaunchDefinition(value, basePort, environment, windowsEnvironment = false) {
+  const launch = parseApplicationLaunch(value);
+  const args = (launch.args ?? []).map((argument) => expandEnvironment(argument, environment));
+  const overrides = Object.fromEntries(
+    Object.entries(launch.env ?? {}).map(([name, setting]) => [name, expandEnvironment(setting, environment)])
+  );
+  const argumentPort = explicitDebuggingPort(args);
+  const environmentPorts = Object.values(overrides).flatMap(
+    (setting) => [...setting.matchAll(/(?:^|\s)--remote-debugging-port(?:[=:]|\s+|$)([^\s]*)/gi)].map((match) => match[1] ?? "")
+  );
+  const sources = [...argumentPort === null ? [] : [argumentPort], ...environmentPorts];
+  if (sources.length > 1) throw new Error("Duplicate remote debugging port sources conflict.");
+  const fixed = sources[0];
+  const portPolicy = fixed !== void 0 && !fixed.includes(PORT_PLACEHOLDER) ? { kind: "fixed", port: Number(fixed) } : { kind: "automatic", basePort };
+  const validationPort = portPolicy.kind === "fixed" ? portPolicy.port : basePort;
+  const validated = resolveLaunchDefinition(value, validationPort, environment, "/dct-prepared-data");
+  if (!sources.length && ![...args, ...Object.values(overrides)].some((argument) => argument.includes(PORT_PLACEHOLDER)))
+    args.push(`${DEFAULT_DEBUGGING_SWITCH}=${PORT_PLACEHOLDER}`);
+  return Object.freeze({
+    executablePath: validated.executablePath,
+    arguments: Object.freeze(args),
+    ...validated.cwd === void 0 ? {} : { cwd: validated.cwd },
+    overrides: Object.freeze(overrides),
+    environment: Object.freeze({ ...environment }),
+    windowsEnvironment,
+    portPolicy: Object.freeze(portPolicy)
+  });
+}
+function bindPreparedLaunch(prepared, port, dataDirectory) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("The CDP port is invalid.");
+  if (prepared.portPolicy.kind === "fixed" && prepared.portPolicy.port !== port)
+    throw new Error("The fixed CDP port cannot change.");
+  const bind = (value) => value.replace(/\{port\}|\{dataDir\}/g, (token) => {
+    if (token === PORT_PLACEHOLDER) return String(port);
+    if (dataDirectory === void 0) throw new Error("The launch command requires a data directory binding.");
+    return dataDirectory;
+  });
+  const environment = mergeLaunchEnvironment(
+    prepared.environment,
+    Object.fromEntries(Object.entries(prepared.overrides).map(([name, value]) => [name, bind(value)])),
+    prepared.windowsEnvironment
+  );
+  return {
+    executablePath: prepared.executablePath,
+    arguments: prepared.arguments.map(bind),
+    ...prepared.cwd === void 0 ? {} : { cwd: prepared.cwd },
+    env: Object.fromEntries(
+      Object.entries(environment).filter((pair) => pair[1] !== void 0)
+    )
+  };
+}
 var PORT_PLACEHOLDER = "{port}";
 var DATA_DIRECTORY_PLACEHOLDER = "{dataDir}";
 var DEFAULT_DEBUGGING_SWITCH = "--remote-debugging-port";
@@ -41376,21 +41512,24 @@ function parseControlRequest(value) {
     "connectionId",
     "sessionId",
     ...action === "stop" ? ["disposition"] : [],
-    ...action === "restart" ? ["mcpArgs"] : []
+    ...action === "restart" ? ["scope"] : []
   ]);
   const route = parseConnectionRoute({ connectionId: value.connectionId, sessionId: value.sessionId });
   if (action === "stop") {
     if (value.disposition !== "Close" && value.disposition !== "Keep") throw new Error("Choose Close or Keep.");
     return { action, entryId, requestId, ...route, disposition: value.disposition };
   }
-  if (action === "restart")
+  if (action === "restart") {
+    if (value.scope !== void 0 && !["target", "official", "both"].includes(String(value.scope)))
+      throw new Error("Unknown restart scope.");
     return {
       action,
       entryId,
       requestId,
       ...route,
-      ...value.mcpArgs === void 0 ? {} : { mcpArgs: strings(value.mcpArgs) }
+      ...value.scope === void 0 ? {} : { scope: value.scope }
     };
+  }
   return { action, entryId, requestId, ...route };
 }
 
@@ -41501,10 +41640,10 @@ function lifecycleTools(hookEvents) {
     ),
     make(
       "dct_connection_restart",
-      "Explicitly restart this connection with the same application and port, optionally replacing all mcpArgs. Keeps connectionId and creates a new sessionId; old page IDs and routes expire. Never restart or replay tools automatically.",
+      "Explicitly restart the target, official Server or both using the immutable original launch, environment, roots and official options. Explicit fixed ports remain fixed; automatic port policy may select a new free port. Keeps connectionId and creates a new sessionId. Omitted scope means both only in this transitional stdio facade. Changed configuration requires Close and a new start. Never restart or replay tools automatically.",
       {
         ...identity,
-        mcpArgs: stringList
+        scope: { type: "string", enum: ["target", "official", "both"] }
       },
       Object.keys(identity)
     ),
@@ -41573,6 +41712,7 @@ function createMcpEntryServer(options) {
     { name: "debugging-cdp-targets", version: "0.1.0" },
     { capabilities: { tools: {} }, instructions: INITIALIZATION_INSTRUCTIONS }
   );
+  const disconnected = new AbortController();
   let resolveClosed = () => {
   };
   const closed = new Promise((resolve) => {
@@ -41582,6 +41722,7 @@ function createMcpEntryServer(options) {
     void server.close().catch(() => resolveClosed());
   };
   server.onclose = () => {
+    disconnected.abort(new Error("The originating client is unavailable."));
     process.stdin.off("end", onStdinEnd);
     resolveClosed();
   };
@@ -41600,6 +41741,20 @@ function createMcpEntryServer(options) {
     tools: [...tools, ...lifecycleTools(HOOK_EVENTS)]
   }));
   server.setRequestHandler("tools/call", async (request, ctx) => {
+    const token = request.params._meta?.progressToken;
+    const progress = (value) => {
+      if (token !== void 0 && !disconnected.signal.aborted && !ctx.mcpReq.signal.aborted)
+        void ctx.mcpReq.notify({ method: "notifications/progress", params: { ...value, progressToken: token } }).catch(() => {
+        });
+    };
+    const facilities = {
+      requestId: ctx.mcpReq.id,
+      capabilities: { roots: supportsRoots(), formElicitation: supportsFormElicitation() },
+      waitSignal: AbortSignal.any([ctx.mcpReq.signal, disconnected.signal]),
+      readRoots: () => ctx.mcpReq.send({ method: "roots/list" }),
+      elicit: (params, signal) => ctx.mcpReq.send({ method: "elicitation/create", params }, signal ? { signal } : {}),
+      onProgress: progress
+    };
     const name = request.params.name;
     if (Object.hasOwn(LIFECYCLE_ACTIONS, name)) {
       const arguments_ = request.params.arguments ?? {};
@@ -41614,7 +41769,7 @@ function createMcpEntryServer(options) {
           if (Object.hasOwn(arguments_, "action"))
             throw new Error("The tool name selects its lifecycle action.");
           const control = parseControlRequest({ ...arguments_, action: LIFECYCLE_ACTIONS[name] });
-          if (options.control) result = await options.control(control, ctx.mcpReq.signal);
+          if (options.control) result = await options.control(control, ctx.mcpReq.signal, facilities);
           else if (control.action === "status" && Object.keys(arguments_).length === 0)
             result = options.status();
           else throw new Error("Lifecycle control is unavailable.");
@@ -41629,16 +41784,7 @@ function createMcpEntryServer(options) {
     }
     if (!options.tools.some((tool) => tool.name === name)) throw new Error(`Unknown tool: ${name}`);
     parseConnectionRoute(request.params.arguments?._dct);
-    const token = request.params._meta?.progressToken;
-    return options.invoke(name, request.params.arguments ?? {}, ctx.mcpReq.signal, (progress) => {
-      if (token !== void 0) {
-        void ctx.mcpReq.notify({
-          method: "notifications/progress",
-          params: { ...progress, progressToken: token }
-        }).catch(() => {
-        });
-      }
-    });
+    return options.invoke(name, request.params.arguments ?? {}, ctx.mcpReq.signal, progress, facilities);
   });
   return {
     async connect() {
@@ -41931,9 +42077,14 @@ function validateTargetLaunch(options) {
   if (!TARGET_KINDS.includes(targetKind)) throw new Error("Unknown target kind.");
   if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error("Invalid base port.");
   if (options.launchDefinition) return;
-  validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+  if (!options.preparedLaunch) validateDataIsolationBinding(options.launch, isolation.mode, process.env);
   const sample = process.platform === "win32" ? "C:/dct-preflight-data" : "/dct-preflight-data";
-  const parsed = resolveLaunchDefinition(
+  const prepared = options.preparedLaunch;
+  const parsed = prepared ? bindPreparedLaunch(
+    prepared,
+    prepared.portPolicy.kind === "fixed" ? prepared.portPolicy.port : prepared.portPolicy.basePort,
+    isolation.mode === "data-dir" ? sample : void 0
+  ) : resolveLaunchDefinition(
     options.launch,
     basePort,
     process.env,
@@ -42122,9 +42273,10 @@ function createTargetHost(dependencies = {}) {
         isolation,
         targetKind = "generic-cdp",
         basePort = DEFAULT_BASE_PORT,
-        exactPort,
+        exactPort: requestedExactPort,
         launchDefinition
       } = options;
+      const exactPort = options.preparedLaunch?.portPolicy.kind === "fixed" ? options.preparedLaunch.portPolicy.port : requestedExactPort;
       context.signal?.throwIfAborted();
       if (isolation.mode === "data-dir" && context.dataDirectory === void 0)
         throw new Error("A leased data directory binding is required.");
@@ -42177,17 +42329,14 @@ function createTargetHost(dependencies = {}) {
       let readinessSignal = context.signal;
       try {
         context.signal?.throwIfAborted();
-        const parsed = launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory);
+        const parsed = options.preparedLaunch ? bindPreparedLaunch(options.preparedLaunch, port, context.dataDirectory) : launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory);
         if (!path7.isAbsolute(parsed.executablePath))
           throw new Error("The application must use an absolute executable path.");
         const executablePath = path7.resolve(parsed.executablePath);
         const args = targetKind === "chrome" ? applyChromePreset(parsed.arguments) : parsed.arguments;
         const cwd = parsed.cwd ?? path7.dirname(executablePath);
         if (!path7.isAbsolute(cwd)) throw new Error("The application working directory must be absolute.");
-        const environment = /* @__PURE__ */ new Map();
-        for (const [name, value] of [...Object.entries(process.env), ...Object.entries(parsed.env ?? {})])
-          environment.set(process.platform === "win32" ? name.toLowerCase() : name, [name, value]);
-        const env = Object.fromEntries(environment.values());
+        const env = options.preparedLaunch || launchDefinition ? { ...parsed.env } : mergeLaunchEnvironment(process.env, parsed.env ?? {}, process.platform === "win32");
         const profile = targetKind === "chrome" ? chromeProfileArgument(args) : void 0;
         if (targetKind === "chrome" && isolation.mode === "data-dir") {
           if (profile === void 0 || context.dataDirectory === void 0)
@@ -42224,9 +42373,13 @@ function createTargetHost(dependencies = {}) {
               child: application,
               launchDefinition: {
                 executablePath,
-                arguments: args,
+                arguments: [...args],
                 cwd,
-                ...parsed.env ? { env: { ...parsed.env } } : {}
+                env: Object.fromEntries(
+                  Object.entries(env).filter(
+                    (pair) => pair[1] !== void 0
+                  )
+                )
               }
             };
             created = target2;
@@ -42638,14 +42791,81 @@ async function loadOfficialToolCatalog(_defaults) {
   const value = typeof define_DCT_TOOL_CATALOG_default !== "undefined" ? define_DCT_TOOL_CATALOG_default : JSON.parse(await readFile3(new URL("../../tooling/official-tool-catalog.json", import.meta.url), "utf8"));
   return createToolCatalog(value);
 }
-function workspaceSources(mcpArgs, supportsRoots) {
+function workspaceSources(mcpArgs, supportsRoots, temporaryDirectory = os2.tmpdir()) {
   const args = parseMcpArgs(mcpArgs);
   return {
-    officialDirectories: args.get("filesystemRoot")?.values ?? [os2.tmpdir()],
+    officialDirectories: args.get("filesystemRoot")?.values ?? [temporaryDirectory],
     officialSource: args.has("filesystemRoot") ? "explicit-workspace" : "system-temporary-directory",
-    clientRoots: supportsRoots ? "negotiated-forwarding-on-demand" : "not-negotiated",
+    clientRoots: supportsRoots ? "immutable-start-snapshot" : "not-negotiated",
     unrestrictedPaths: args.get("allowUnrestrictedPaths")?.values[0] === true,
     cwdGrantsAccess: false
+  };
+}
+
+// src/application/client-context.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+function waitForClient(execution, signal) {
+  return new Promise((resolve, reject) => {
+    const aborted2 = () => {
+      signal.removeEventListener("abort", aborted2);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", aborted2, { once: true });
+    void execution.then(
+      (value) => {
+        signal.removeEventListener("abort", aborted2);
+        resolve(value);
+      },
+      (error2) => {
+        signal.removeEventListener("abort", aborted2);
+        reject(error2);
+      }
+    );
+    if (signal.aborted) aborted2();
+  });
+}
+function createClientContext(principal) {
+  const disconnected = new AbortController();
+  return {
+    detach() {
+      disconnected.abort(new Error("The originating client is unavailable."));
+    },
+    request(facilities) {
+      const { requestId, readRoots, elicit, onProgress } = facilities;
+      const capabilities = Object.freeze({ ...facilities.capabilities });
+      const waitSignal = facilities.waitSignal ? AbortSignal.any([disconnected.signal, facilities.waitSignal]) : disconnected.signal;
+      const available = () => !waitSignal.aborted;
+      function requireAvailable() {
+        if (!available()) throw new Error("The originating client request context is unavailable.");
+      }
+      return {
+        principal,
+        requestId,
+        capabilities,
+        waitSignal,
+        available,
+        async readRoots() {
+          requireAvailable();
+          if (!capabilities.roots) return { roots: [] };
+          if (!readRoots) throw new Error("The originating client roots reader is unavailable.");
+          const result = await readRoots();
+          requireAvailable();
+          return structuredClone(result);
+        },
+        async elicit(params, signal) {
+          requireAvailable();
+          if (!capabilities.formElicitation || !elicit)
+            throw new Error("The originating client does not support form-mode elicitation.");
+          const result = await elicit(params, signal ? AbortSignal.any([waitSignal, signal]) : waitSignal);
+          requireAvailable();
+          return result;
+        },
+        progress(progress) {
+          if (available()) onProgress?.(progress);
+        }
+      };
+    }
   };
 }
 
@@ -42787,6 +43007,7 @@ function createConnectionOwner(sessionId, onSettled) {
   const resources = /* @__PURE__ */ new Map();
   const closing = /* @__PURE__ */ new Map();
   const unsettled = /* @__PURE__ */ new Set();
+  const failedDisposals = /* @__PURE__ */ new Set();
   const pending = /* @__PURE__ */ new Set();
   let cleanup;
   let cleanupSettled = false;
@@ -42810,6 +43031,9 @@ function createConnectionOwner(sessionId, onSettled) {
     },
     isCleaning() {
       return !!cleanup && !cleanupSettled;
+    },
+    hasFailedDisposal() {
+      return failedDisposals.size > 0;
     },
     assertOpen() {
       if (owner.retired) throw new Error("The target session has exited or retired.");
@@ -42850,6 +43074,9 @@ function createConnectionOwner(sessionId, onSettled) {
     hasResource(name) {
       return resources.has(name);
     },
+    hasPendingWork() {
+      return pending.size > 0;
+    },
     hasPendingResources() {
       return resources.size > 0 || pending.size > 0;
     },
@@ -42862,7 +43089,11 @@ function createConnectionOwner(sessionId, onSettled) {
       const result = (async () => {
         try {
           await resource.close();
+          failedDisposals.delete(name);
           if (resources.get(name) === resource) resources.delete(name);
+        } catch (error2) {
+          failedDisposals.add(name);
+          throw error2;
         } finally {
           unsettled.delete(name);
           onSettled?.();
@@ -42926,13 +43157,14 @@ function createOperationRegistry(entryId) {
   const operations = /* @__PURE__ */ new Map();
   const requests = /* @__PURE__ */ new Map();
   const notices = /* @__PURE__ */ new Set();
-  function selected(operationId) {
+  function selected(operationId, ownerId) {
     const operation = operations.get(operationId);
-    if (!operation) throw new Error("The operation is absent from this entry.");
+    if (!operation || ownerId !== void 0 && operation.ownerId !== ownerId)
+      throw new Error("The operation is absent or unauthorized.");
     return operation;
   }
-  function get(operationId) {
-    return structuredClone(selected(operationId).snapshot);
+  function get(operationId, ownerId) {
+    return structuredClone(selected(operationId, ownerId).snapshot);
   }
   function emit(operation) {
     operation.snapshot.cursor += 1;
@@ -42948,18 +43180,19 @@ function createOperationRegistry(entryId) {
     if (operation.events.length > 128) operation.events.shift();
     for (const listener of [...operation.listeners]) listener();
   }
-  function lookup(requestId, request) {
+  function lookup(requestId, request, ownerId) {
     const fingerprint = createHash2("sha256").update(JSON.stringify(canonical(request))).digest("hex");
-    const prior = requests.get(requestId);
+    const prior = requests.get(JSON.stringify([ownerId, requestId]));
     if (prior && prior.fingerprint !== fingerprint)
       throw new Error("This requestId already identifies a different request.");
     return { fingerprint, prior: prior ? get(prior.operationId) : void 0 };
   }
-  function submit(requestId, request, job, onSettled, initialIdentity) {
-    const { fingerprint, prior } = lookup(requestId, request);
+  function submit(requestId, request, job, onSettled, initialIdentity, ownerId) {
+    const { fingerprint, prior } = lookup(requestId, request, ownerId);
     if (prior) return prior;
     const operationId = randomUUID();
     const operation = {
+      ...ownerId === void 0 ? {} : { ownerId },
       snapshot: {
         entryId,
         operationId,
@@ -42977,7 +43210,7 @@ function createOperationRegistry(entryId) {
       listeners: /* @__PURE__ */ new Set()
     };
     operations.set(operationId, operation);
-    requests.set(requestId, { fingerprint, operationId });
+    requests.set(JSON.stringify([ownerId, requestId]), { fingerprint, operationId });
     emit(operation);
     const accepted = get(operationId);
     const observationIdentity = () => ({
@@ -43050,8 +43283,8 @@ function createOperationRegistry(entryId) {
     );
     return accepted;
   }
-  async function wait(operationId, cursor = 0, signal) {
-    const operation = selected(operationId);
+  async function wait(operationId, cursor = 0, signal, ownerId) {
+    const operation = selected(operationId, ownerId);
     if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > operation.snapshot.cursor)
       throw new Error("Invalid event cursor for this operation.");
     signal?.throwIfAborted();
@@ -43081,8 +43314,8 @@ function createOperationRegistry(entryId) {
       complete: terminal(operation.snapshot.state)
     };
   }
-  function cancel(operationId) {
-    const operation = selected(operationId);
+  function cancel(operationId, ownerId) {
+    const operation = selected(operationId, ownerId);
     if (!terminal(operation.snapshot.state) && !operation.abort.signal.aborted) {
       operation.snapshot.state = "cancelling";
       operation.abort.abort(new DOMException("Operation aborted; cleanup required.", "AbortError"));
@@ -43124,12 +43357,24 @@ function createOperationRegistry(entryId) {
   }
   return {
     get,
+    list: () => [...operations.values()].map((operation) => ({
+      ...structuredClone(operation.snapshot),
+      registrationId: operation.ownerId
+    })),
     submit,
     wait,
     cancel,
     cancelRoute,
     markRead,
-    prior: (requestId, request) => lookup(requestId, request).prior,
+    prior: (requestId, request, ownerId) => lookup(requestId, request, ownerId).prior,
+    forgetOwner(ownerId) {
+      for (const [id, operation] of operations)
+        if (operation.ownerId === ownerId && terminal(operation.snapshot.state)) {
+          operations.delete(id);
+          notices.delete(id);
+        }
+      for (const [key, request] of requests) if (!operations.has(request.operationId)) requests.delete(key);
+    },
     takeNotices: (predicate) => {
       const result = [...notices].map(notice).filter((value) => predicate?.(value) ?? true);
       for (const value of result) notices.delete(value.operationId);
@@ -43143,16 +43388,24 @@ function createOperationRegistry(entryId) {
 }
 
 // src/application/mcp-lifecycle.ts
-function createLifecycleService({ entryId, handler }) {
+function createLifecycleService({
+  entryId,
+  handler,
+  authorize,
+  beginJob
+}) {
   const operations = createOperationRegistry(entryId);
   const changing = /* @__PURE__ */ new Set();
   let closing = false;
-  async function control(request, signal) {
+  async function control(request, signal, client) {
     if (request.entryId !== void 0 && request.entryId !== entryId)
       throw new Error("This request identifies another entry.");
+    const ownerId = client?.principal.registrationId;
+    if (request.action === "status" && request.connectionId && client)
+      authorize?.(request.connectionId, client.principal);
     if (request.action === "status") {
       if (request.operationId) {
-        const result = operations.get(request.operationId);
+        const result = operations.get(request.operationId, ownerId);
         signal?.throwIfAborted();
         operations.markRead(request.operationId);
         return { ...result };
@@ -43160,24 +43413,25 @@ function createLifecycleService({ entryId, handler }) {
       return { ...handler.status(request.connectionId) };
     }
     if (request.action === "wait") {
-      const result = await operations.wait(request.operationId, request.cursor, signal);
+      const result = await operations.wait(request.operationId, request.cursor, signal, ownerId);
       signal?.throwIfAborted();
       if (result.complete) operations.markRead(request.operationId);
       return result;
     }
     if (request.action === "cancel") {
-      const result = operations.cancel(request.operationId);
+      const result = operations.cancel(request.operationId, ownerId);
       signal?.throwIfAborted();
       operations.markRead(request.operationId);
       return { ...result };
     }
-    const prior = operations.prior(request.requestId, request);
+    const prior = operations.prior(request.requestId, request, ownerId);
     if (prior) {
       signal?.throwIfAborted();
       operations.markRead(prior.operationId);
       return { ...prior };
     }
     if (closing) throw new Error("The gateway is closing.");
+    if (request.action !== "start" && client) authorize?.(request.connectionId, client.principal);
     const connectionId = request.action === "start" ? void 0 : request.connectionId;
     if (request.action !== "start") {
       const current2 = handler.status(request.connectionId);
@@ -43188,11 +43442,13 @@ function createLifecycleService({ entryId, handler }) {
       changing.add(request.connectionId);
     }
     let boundConnection = connectionId;
+    const finishJob = client ? beginJob?.(client.principal) : void 0;
     const accepted = operations.submit(
       request.requestId,
       request,
       async (operation) => {
         const context = {
+          ...client ? { client } : {},
           operationId: operation.operationId,
           signal: operation.signal,
           onPhase: operation.phase,
@@ -43231,13 +43487,18 @@ function createLifecycleService({ entryId, handler }) {
       },
       () => {
         if (boundConnection) changing.delete(boundConnection);
+        finishJob?.();
       },
-      request.action === "start" ? void 0 : request
+      request.action === "start" ? void 0 : request,
+      ownerId
     );
     return { ...accepted };
   }
   return {
     control,
+    list: operations.list,
+    isBusy: (connectionId) => changing.has(connectionId),
+    forgetOwner: operations.forgetOwner,
     takeNotices: operations.takeNotices,
     cancelRoute: operations.cancelRoute,
     markRead: operations.markRead,
@@ -43248,10 +43509,119 @@ function createLifecycleService({ entryId, handler }) {
   };
 }
 
+// src/application/registrations.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+import { createHash as createHash3, randomBytes, randomUUID as randomUUID2 } from "node:crypto";
+function createRegistrationRegistry({
+  now = Date.now,
+  onExpire
+} = {}) {
+  const entries = /* @__PURE__ */ new Map();
+  const bearers = /* @__PURE__ */ new Map();
+  const resourceOwners = /* @__PURE__ */ new Map();
+  const digest = (bearer) => createHash3("sha256").update(bearer).digest("hex");
+  function remove(registration) {
+    entries.delete(registration.principal.registrationId);
+    for (const [key, id] of bearers) if (id === registration.principal.registrationId) bearers.delete(key);
+    onExpire?.(registration.principal);
+  }
+  function check(principal) {
+    const registration = entries.get(principal.registrationId);
+    if (!registration || registration.principal !== principal)
+      throw new Error("The registration is absent or expired.");
+    if (!registration.trusted && !registration.resources.size && !registration.jobs && now() - registration.lastActivity >= 30 * 60 * 1e3) {
+      remove(registration);
+      throw new Error("The registration is absent or expired.");
+    }
+    return registration;
+  }
+  function authorize(resource, principal) {
+    check(principal);
+    if (resourceOwners.get(resource) !== principal) throw new Error("The connection is absent or unauthorized.");
+  }
+  function release(resource) {
+    const owner = resourceOwners.get(resource);
+    if (owner) entries.get(owner.registrationId)?.resources.delete(resource);
+    resourceOwners.delete(resource);
+  }
+  return {
+    create() {
+      const principal = Object.freeze({ registrationId: randomUUID2() });
+      const bearer = randomBytes(32).toString("base64url");
+      entries.set(principal.registrationId, { principal, lastActivity: now(), resources: /* @__PURE__ */ new Set(), jobs: 0 });
+      bearers.set(digest(bearer), principal.registrationId);
+      return { principal, bearer };
+    },
+    createTrusted() {
+      const principal = Object.freeze({ registrationId: randomUUID2() });
+      entries.set(principal.registrationId, {
+        principal,
+        lastActivity: now(),
+        resources: /* @__PURE__ */ new Set(),
+        jobs: 0,
+        trusted: true
+      });
+      return principal;
+    },
+    authenticate(bearer) {
+      const id = bearers.get(digest(bearer));
+      const registration = id ? entries.get(id) : void 0;
+      if (!registration) throw new Error("The registration is absent or expired.");
+      check(registration.principal);
+      return registration.principal;
+    },
+    check,
+    touch(principal) {
+      check(principal).lastActivity = now();
+    },
+    own(resource, principal) {
+      const registration = check(principal);
+      if (resourceOwners.has(resource)) throw new Error("The connection already has an owner.");
+      registration.resources.add(resource);
+      resourceOwners.set(resource, principal);
+    },
+    authorize,
+    release,
+    transfer(resource, successor, busy) {
+      const registration = check(successor);
+      if (!resourceOwners.has(resource)) throw new Error("The connection is absent.");
+      if (busy()) throw new Error("The connection is busy and cannot transfer.");
+      release(resource);
+      registration.resources.add(resource);
+      resourceOwners.set(resource, successor);
+    },
+    beginJob(principal) {
+      const registration = check(principal);
+      registration.jobs += 1;
+      let finished = false;
+      return () => {
+        if (!finished) {
+          finished = true;
+          registration.jobs -= 1;
+        }
+      };
+    },
+    unregister(principal) {
+      const registration = check(principal);
+      if (registration.resources.size || registration.jobs)
+        throw new Error("Registration still owns resources or jobs.");
+      remove(registration);
+    },
+    list() {
+      return [...entries.values()].filter((registration) => !registration.trusted).map(({ principal, resources, jobs }) => ({
+        registrationId: principal.registrationId,
+        resources: resources.size,
+        jobs
+      }));
+    }
+  };
+}
+
 // src/application/target-controller.ts
 init_define_DCT_OFFICIAL_RELEASE();
 init_define_DCT_TOOL_CATALOG();
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 function waitWithSignal(wait, signal) {
   if (!signal) return wait;
   signal.throwIfAborted();
@@ -43296,7 +43666,7 @@ function createTargetController({
       entryId,
       status: state,
       taskActive,
-      ...current2 ? { sessionId: current2.owner.sessionId } : {},
+      ...current2 ? { sessionId: current2.sessionId } : {},
       ...target ? { port: target.port, processId: target.processId, targetKind: target.targetKind } : {},
       ...reason ? { reason } : {}
     };
@@ -43311,7 +43681,7 @@ function createTargetController({
     }
   }
   function requireSession(sessionId) {
-    if (!current2 || current2.owner.sessionId !== sessionId || current2.owner.retired)
+    if (!current2 || current2.sessionId !== sessionId || current2.owner.retired)
       throw new Error("The target session is absent, closed or stale.");
     return current2;
   }
@@ -43330,7 +43700,8 @@ function createTargetController({
     }
     if (!target) return;
     onProcessExit?.({
-      sessionId: selected.owner.sessionId,
+      sessionId: selected.sessionId,
+      generation: selected.owner.sessionId,
       reason: "process-exited",
       taskActive,
       ...selected.owner.expectedExit ? { expected: selected.owner.expectedExit } : {},
@@ -43431,7 +43802,7 @@ function createTargetController({
       ...selected.closeFailure,
       ...errorDetails(cause),
       entryId,
-      sessionId: selected.owner.sessionId,
+      sessionId: selected.sessionId,
       ...selected.owner.target ? {
         processId: selected.owner.target.processId,
         port: selected.owner.target.port,
@@ -43465,7 +43836,7 @@ function createTargetController({
     context.signal?.throwIfAborted();
     const owner = createOwner ? await createOwner(sessionId) : createConnectionOwner(sessionId);
     owner.expectedOperationId = context.operationId;
-    const selected = { owner, options };
+    const selected = { owner, sessionId, options: structuredClone(options) };
     current2 = selected;
     state = "starting";
     reason = void 0;
@@ -43523,7 +43894,7 @@ function createTargetController({
             ...errorDetails(error2),
             ...errorCode(error2) === void 0 ? {} : { code: errorCode(error2) },
             entryId,
-            sessionId: owner.sessionId,
+            sessionId: selected.sessionId,
             processId: owner.target.processId,
             port: owner.target.port,
             retainedTargets: [{ processId: owner.target.processId, port: owner.target.port }],
@@ -43548,7 +43919,7 @@ function createTargetController({
       throw error2;
     }
   }
-  function start(options, sessionId = randomUUID2(), context = {}) {
+  function start(options, sessionId = randomUUID3(), context = {}) {
     return run2(async () => {
       if (current2) throw new Error("An existing target session must be closed before starting another.");
       return attach(options, sessionId, context);
@@ -43556,7 +43927,7 @@ function createTargetController({
   }
   async function retireExited({ sessionId }) {
     const selected = current2;
-    if (selected?.owner.sessionId === sessionId && selected.owner.exited) await dispose(selected);
+    if (selected?.sessionId === sessionId && selected.owner.exited) await dispose(selected);
     return status();
   }
   function restart({ sessionId, mcpArgs }, context = {}) {
@@ -43583,13 +43954,13 @@ function createTargetController({
       context.onPhase?.("closing-resources");
       await dispose(previous);
       context.signal?.throwIfAborted();
-      const nextSession = randomUUID2();
+      const nextSession = randomUUID3();
       context.onSession?.(nextSession);
       return {
         ...await attach(
           {
             ...previous.options,
-            exactPort: target.port,
+            ...previous.options.preparedLaunch?.portPolicy.kind === "automatic" ? {} : { exactPort: target.port },
             launchDefinition: target.launchDefinition,
             ...mcpArgs === void 0 ? {} : { mcpArgs }
           },
@@ -43668,23 +44039,29 @@ function createTargetController({
     checking = { owner: selected.owner, job };
     return job;
   }
-  async function cleanupOnDisconnect() {
+  async function cleanupOnDisconnect(expected = "disconnect") {
     const selected = current2;
     gate();
     taskActive = false;
     if (!selected) return;
-    selected.owner.expectedExit = "disconnect";
+    selected.owner.expectedExit = expected;
     selected.owner.abortWork(new Error("The gateway is closing."));
     const resources = server.close(selected.owner);
     const results = await Promise.allSettled([normalClose(selected), resources]);
     if (selected.owner.exited) await dispose(selected);
     if (results.some((result) => result.status === "rejected") && !selected.owner.exited) {
+      state = "close-failed";
+      reason = "normal-close-failed";
       const target = selected.owner.target;
       return target ? { processId: target.processId, port: target.port } : void 0;
     }
   }
   return {
     status,
+    configuration: () => current2 ? structuredClone({
+      effectiveLaunch: current2.owner.target?.launchDefinition,
+      portPolicy: current2.options.preparedLaunch?.portPolicy
+    }) : void 0,
     start,
     restart,
     stop,
@@ -43699,21 +44076,40 @@ function createTargetController({
     quarantine: (why) => {
       if (current2) lose(current2, why);
     },
-    canInvoke: () => state === "active" && !gated && !!current2 && !current2.owner.retired
+    canInvoke: () => state === "active" && !gated && !!current2 && !current2.owner.retired,
+    replaceOfficialSession(sessionId) {
+      if (!current2 || current2.owner.retired || !current2.owner.target)
+        throw new Error("The target connection is absent or closed.");
+      current2.sessionId = sessionId;
+      router.setTarget(current2.owner.target);
+      gated = false;
+      state = "active";
+      reason = void 0;
+    }
   };
 }
 
 // src/application/plugin-runtime.ts
-async function startPluginRuntime({
+async function createGatewayCore({
   dataDirectories = new DataDirectoryRegistry(),
   profileAvailable: profileAvailable2 = profileAvailable,
   createRouter = createCdpRouter,
   createHost,
   createConnection = createOfficialConnection,
-  createEntry = createMcpEntryServer,
-  loadCatalog = loadOfficialToolCatalog
+  loadCatalog = loadOfficialToolCatalog,
+  now,
+  officialRuntime
 } = {}) {
-  const entryId = randomUUID3();
+  const runtimeLocation = officialRuntime ? Object.freeze({ ...officialRuntime }) : void 0;
+  const timestamp = now ?? Date.now;
+  const entryId = randomUUID4();
+  const registrations = createRegistrationRegistry({
+    ...now ? { now } : {},
+    onExpire: (principal) => lifecycle.forgetOwner(principal.registrationId)
+  });
+  const internalRegistration = { principal: registrations.createTrusted() };
+  const internalClient = createClientContext(internalRegistration.principal);
+  const resourceRegistrations = /* @__PURE__ */ new Map();
   const connections = /* @__PURE__ */ new Map();
   const owners = /* @__PURE__ */ new Set();
   const directories = /* @__PURE__ */ new Set();
@@ -43724,15 +44120,22 @@ async function startPluginRuntime({
   const retirements = /* @__PURE__ */ new Set();
   const starts = /* @__PURE__ */ new Set();
   const replacements = /* @__PURE__ */ new Set();
-  let entry;
   let fullCatalog;
   let shuttingDown = false;
   let cleanupPromise;
+  let cleanupState = "open";
   async function retryDirectory(directory) {
     try {
       await directory.retry();
     } finally {
-      if (directory.released) directories.delete(directory);
+      if (directory.released) {
+        directories.delete(directory);
+        for (const [id, resource] of resourceRegistrations)
+          if (resource.directory === directory) {
+            registrations.release(id);
+            resourceRegistrations.delete(id);
+          }
+      }
     }
   }
   function newOwner(sessionId, directory) {
@@ -43758,7 +44161,7 @@ async function startPluginRuntime({
   }
   function routed(route) {
     const connection = selected(route.connectionId);
-    if (connection.owner.sessionId !== route.sessionId) throw new Error("The target session is absent or stale.");
+    if (connection.sessionId !== route.sessionId) throw new Error("The target session is absent or stale.");
     return connection;
   }
   function statusOf(connection) {
@@ -43787,12 +44190,12 @@ async function startPluginRuntime({
       if (!owner.hasPendingResources() && owner.retired) owners.delete(owner);
     }
   }
-  async function closeUpstream(connection, owner = connection.owner) {
-    if (connection.owner === owner) delete connection.upstream;
+  async function closeUpstream(connection, owner = connection.officialOwner) {
+    if (connection.officialOwner === owner) delete connection.upstream;
     try {
       await owner.closeResource("upstream");
     } finally {
-      if (connection.owner === owner) delete connection.upstream;
+      if (connection.officialOwner === owner) delete connection.upstream;
     }
   }
   function trackRetirement(job) {
@@ -43804,7 +44207,7 @@ async function startPluginRuntime({
   }
   function observeExit(connection, event) {
     const owner = connection.owner;
-    if (owner.sessionId !== event.sessionId) return;
+    if ((event.generation ?? event.sessionId) !== owner.sessionId) return;
     if (event.expected !== "restart") connection.directory.requestRelease();
     lifecycle.cancelRoute({ connectionId: connection.connectionId, sessionId: event.sessionId });
     const key = noticeKey(connection.connectionId, event.sessionId);
@@ -43845,41 +44248,34 @@ async function startPluginRuntime({
     })();
     trackRetirement(pending);
   }
-  async function ensureUpstream(connection, options, context = {}) {
-    const owner = connection.owner;
-    owner.assertOpen();
+  async function ensureUpstream(connection, context = {}) {
     if (connection.upstream) return;
-    const gateway = entry;
-    const args = buildServerArguments(connection.router.url, process.env, options.mcpArgs);
+    if (connection.officialOwner.retired) connection.officialOwner = newOwner(randomUUID4(), connection.directory);
+    const owner = connection.officialOwner;
+    owner.assertOpen();
+    const args = buildServerArguments(connection.router.url, connection.officialEnvironment, connection.mcpArgs);
     connection.mcpArgs = args.slice(1);
     const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
     const acquiring = createConnection(connection.router.url, {
+      ...runtimeLocation,
       args,
+      environment: connection.officialEnvironment,
       signal,
       onAcquired: (resource) => owner.register("upstream", resource),
-      ...gateway?.supportsRoots() ? {
-        roots: async () => {
+      roots: async () => structuredClone(connection.roots),
+      elicitation: {
+        form: true,
+        request: async (params, incoming) => {
           owner.assertOpen();
-          const roots = await gateway.roots();
-          owner.assertOpen();
-          return roots;
+          const origin = connection.executionContext;
+          if (!origin) throw new Error("The originating client request context is unavailable.");
+          return origin.elicit(params, AbortSignal.any([incoming, owner.signal]));
         }
-      } : {},
-      ...gateway?.supportsFormElicitation() ? {
-        elicitation: {
-          form: true,
-          request: async (params, incoming) => {
-            owner.assertOpen();
-            const result = await gateway.elicit(params, AbortSignal.any([incoming, owner.signal]));
-            owner.assertOpen();
-            return result;
-          }
-        }
-      } : {}
+      }
     });
     const upstream = await owner.track(acquiring);
     if (!owner.hasResource("upstream")) owner.register("upstream", upstream);
-    if (connection.owner !== owner || owner.retired || signal.aborted || shuttingDown) {
+    if (connection.officialOwner !== owner || owner.retired || signal.aborted || shuttingDown) {
       owner.retire(new Error("The official connection acquisition belongs to a retired session."));
       await owner.closeResource("upstream");
       throw new Error("The target exited or its official connection acquisition was cancelled.");
@@ -43894,14 +44290,14 @@ async function startPluginRuntime({
     owner.assertOpen();
     connection.upstream = upstream;
     upstream.onExit(() => {
-      if (connection.owner !== owner || owner.retired || connection.upstream !== upstream) return;
+      if (connection.officialOwner !== owner || owner.retired || connection.upstream !== upstream) return;
       delete connection.upstream;
       connection.controller.officialDisconnected();
-      failures.set(noticeKey(connection.connectionId, owner.sessionId), {
+      failures.set(noticeKey(connection.connectionId, connection.sessionId), {
         kind: "connection-failure",
         entryId,
         connectionId: connection.connectionId,
-        sessionId: owner.sessionId,
+        sessionId: connection.sessionId,
         code: "CONNECTION_RECOVERY_REQUIRED",
         reason: "official-disconnected"
       });
@@ -43949,23 +44345,34 @@ async function startPluginRuntime({
   async function start(options, context = {}) {
     if (shuttingDown) throw new Error("The gateway is closing.");
     context.signal?.throwIfAborted();
+    options = structuredClone(options);
+    const ambient = { ...process.env };
+    const officialEnvironment = snapshotOfficialEnvironment(ambient);
+    const temporaryDirectory = os3.tmpdir();
+    options.preparedLaunch = prepareLaunchDefinition(
+      options.launch,
+      options.basePort ?? DEFAULT_BASE_PORT,
+      ambient,
+      process.platform === "win32"
+    );
+    const roots = context.client ? await context.client.readRoots() : { roots: [] };
     const isolation = parseDataIsolation(options.isolation);
-    validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+    validateDataIsolationBinding(options.launch, isolation.mode, ambient);
     const host = makeHost();
     host.validateLaunch?.(options);
     if (isolation.mode === "data-dir") {
-      const parsed = resolveLaunchDefinition(
-        options.launch,
-        options.basePort ?? DEFAULT_BASE_PORT,
-        process.env,
+      const prepared = options.preparedLaunch;
+      const parsed = bindPreparedLaunch(
+        prepared,
+        prepared.portPolicy.kind === "fixed" ? prepared.portPolicy.port : prepared.portPolicy.basePort,
         "{dataDir}"
       );
       if (!path8.isAbsolute(parsed.executablePath) || parsed.cwd !== void 0 && !path8.isAbsolute(parsed.cwd))
         throw new Error("Application executable and working directory must be absolute.");
     }
-    const connectionId = randomUUID3();
-    const sessionId = randomUUID3();
-    const initialArgs = buildServerArguments("http://127.0.0.1:1", process.env, options.mcpArgs).slice(1);
+    const connectionId = randomUUID4();
+    const sessionId = randomUUID4();
+    const initialArgs = buildServerArguments("http://127.0.0.1:1", ambient, options.mcpArgs).slice(1);
     const directory = createConnectionDirectory(
       dataDirectories,
       isolation,
@@ -43973,7 +44380,12 @@ async function startPluginRuntime({
       options.targetKind === "chrome" ? profileAvailable2 : void 0
     );
     directories.add(directory);
-    const owner = newOwner(sessionId, directory);
+    const principal = context.client?.principal ?? internalRegistration.principal;
+    registrations.own(connectionId, principal);
+    resourceRegistrations.set(connectionId, { principal, directory });
+    const owner = newOwner(randomUUID4(), directory);
+    const logicalOwner = newOwner(randomUUID4(), directory);
+    const officialOwner = newOwner(randomUUID4(), directory);
     owner.expectedOperationId = context.operationId;
     let connection;
     const diagnostics = [];
@@ -43987,7 +44399,7 @@ async function startPluginRuntime({
     try {
       context.onIdentity?.({ connectionId, sessionId });
       context.onPhase?.("validating-official-server");
-      if (createConnection === createOfficialConnection) await resolveServerBin();
+      if (createConnection === createOfficialConnection && !runtimeLocation) await resolveServerBin();
       context.signal?.throwIfAborted();
       if (shuttingDown) throw new Error("The gateway is closing.");
       context.onPhase?.("acquiring-data-directory");
@@ -43997,17 +44409,28 @@ async function startPluginRuntime({
       const diagnose = diagnoseFor(owner);
       context.onPhase?.("creating-router");
       const router = await createRouter({ diagnose });
-      owner.register("router", router);
+      logicalOwner.register("router", router);
       context.signal?.throwIfAborted();
       if (shuttingDown) throw new Error("The gateway is closing.");
       const managed = {
         connectionId,
+        sessionId,
         owner,
+        logicalOwner,
+        officialOwner,
         directory,
         router,
         diagnostics,
         diagnose,
         mcpArgs: initialArgs,
+        roots: structuredClone(roots),
+        rootsNegotiated: context.client?.capabilities.roots ?? false,
+        officialEnvironment,
+        workspace: workspaceSources(
+          initialArgs,
+          context.client?.capabilities.roots ?? false,
+          temporaryDirectory
+        ),
         activeCalls: 0,
         quarantined: false,
         controller: createTargetController({
@@ -44020,18 +44443,13 @@ async function startPluginRuntime({
             pause: () => managed.router.pause?.(),
             resume: () => managed.router.resume?.()
           },
-          createOwner: async (id) => {
-            if (managed.owner.sessionId === id) return managed.owner;
-            const replacement = newOwner(id, directory);
+          createOwner: async () => {
+            if (!managed.owner.target && !managed.owner.retired) return managed.owner;
+            const replacement = newOwner(randomUUID4(), directory);
             managed.owner = replacement;
-            delete managed.upstream;
             delete managed.quarantine;
             managed.quarantined = false;
-            const diagnose2 = diagnoseFor(replacement);
-            const router2 = await createRouter({ diagnose: diagnose2 });
-            replacement.register("router", router2);
-            managed.router = router2;
-            managed.diagnose = diagnose2;
+            managed.diagnose = diagnoseFor(replacement);
             replacement.assertOpen();
             return replacement;
           },
@@ -44039,19 +44457,40 @@ async function startPluginRuntime({
           onObservationFailure: (id) => {
             if (managed.owner.sessionId !== id) return;
             managed.quarantined = true;
-            failures.set(noticeKey(connectionId, id), {
+            failures.set(noticeKey(connectionId, managed.sessionId), {
               kind: "connection-failure",
               entryId,
               connectionId,
-              sessionId: id,
+              sessionId: managed.sessionId,
               code: "PROCESS_OBSERVATION_UNAVAILABLE",
               reason: "process-monitor-lost"
             });
             trackRetirement(closeUpstream(managed));
           },
           server: {
-            ensure: (options2, context2) => ensureUpstream(managed, options2, context2),
-            close: (selectedOwner = managed.owner) => disposeResources(selectedOwner)
+            ensure: (_options, context2) => ensureUpstream(managed, context2),
+            close: async (selectedOwner = managed.owner) => {
+              const errors = [];
+              async function disposeSide(owner2) {
+                try {
+                  await disposeResources(owner2);
+                } catch (error2) {
+                  errors.push(error2);
+                }
+              }
+              if (managed.restartScope !== "target") {
+                managed.officialOwner.retire(new Error("The official generation is closing."));
+                delete managed.upstream;
+                await disposeSide(managed.officialOwner);
+              }
+              if (!managed.restartScope) {
+                managed.logicalOwner.retire(new Error("The connection is closing."));
+                await disposeSide(managed.logicalOwner);
+              }
+              await disposeSide(selectedOwner);
+              if (errors.length === 1) throw errors[0];
+              if (errors.length) throw new AggregateError(errors, "Connection resource disposal failed.");
+            }
           }
         })
       };
@@ -44062,6 +44501,8 @@ async function startPluginRuntime({
         ...directory.path === void 0 ? {} : { dataDirectory: directory.path }
       });
       managed.owner.assertOpen();
+      managed.establishedAt = timestamp();
+      managed.lastRealOperationAt = managed.establishedAt;
       return summary(managed);
     } catch (error2) {
       const primaryEvidence = {
@@ -44074,7 +44515,13 @@ async function startPluginRuntime({
       if (!failedOwner.target || failedOwner.exited) {
         failedOwner.retire(error2);
         try {
-          await disposeResources(failedOwner);
+          const cleanup2 = await Promise.allSettled([
+            disposeResources(failedOwner),
+            disposeResources(officialOwner),
+            disposeResources(logicalOwner)
+          ]);
+          const failure3 = cleanup2.find((result) => result.status === "rejected");
+          if (failure3?.status === "rejected") throw failure3.reason;
         } catch (cleanupError) {
           emitFixtureEvent("resource-disposal", "decision", { outcome: "failed" }, cleanupError);
           const failure3 = new DetailedError(errorMessage(error2), { cause: error2 });
@@ -44082,7 +44529,7 @@ async function startPluginRuntime({
             ...primaryEvidence,
             entryId,
             connectionId,
-            sessionId: failedOwner.sessionId,
+            sessionId: connection?.sessionId ?? sessionId,
             cleanupError: errorMessage(cleanupError)
           };
           connections.delete(connectionId);
@@ -44097,7 +44544,7 @@ async function startPluginRuntime({
         ...primaryEvidence,
         entryId,
         connectionId,
-        sessionId: failedOwner.sessionId,
+        sessionId: connection?.sessionId ?? sessionId,
         ...managed ? connectionSummary(statusOf(managed)) : {},
         processExited: failedOwner.exited
       };
@@ -44119,20 +44566,57 @@ async function startPluginRuntime({
     restart: (request, context = {}) => {
       const job = (async () => {
         const connection = routed(request);
+        if (connection.activeCalls > 0)
+          throw new Error("The connection is busy with an owned official execution.");
+        connection.lastRealOperationAt = timestamp();
         connection.owner.expectedOperationId = context.operationId;
-        buildServerArguments(connection.router.url, process.env, request.mcpArgs ?? connection.mcpArgs);
+        if (request.scope === void 0 || !["target", "official", "both"].includes(request.scope))
+          throw new Error("An explicit target, official or both restart scope is required.");
+        if (request.mcpArgs !== void 0)
+          throw new Error("Restart cannot replace mcpArgs; Close and start a new connection.");
         const releaseSuccessor = connection.directory.holdSuccessor();
+        connection.restartScope = request.scope;
         try {
+          if (connection.restartScope === "official") {
+            connection.router.pause?.();
+            connection.officialOwner.retire(new Error("The official generation is restarting."));
+            await closeUpstream(connection);
+            await ensureUpstream(connection, context);
+            const sessionId = randomUUID4();
+            connection.controller.replaceOfficialSession(sessionId);
+            connection.sessionId = sessionId;
+            context.onIdentity?.({ connectionId: request.connectionId, sessionId });
+            return { ...summary(connection), pageIdsInvalidated: true };
+          }
           const result = await connection.controller.restart(request, {
             ...context,
             ...connection.directory.path === void 0 ? {} : { dataDirectory: connection.directory.path },
-            onSession: (sessionId) => context.onIdentity?.({ connectionId: request.connectionId, sessionId })
+            onSession: (sessionId) => {
+              connection.sessionId = sessionId;
+              context.onIdentity?.({ connectionId: request.connectionId, sessionId });
+            }
           });
           if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
           return { ...summary(connection), ...result, connectionId: request.connectionId };
         } catch (error2) {
           connection.directory.requestRelease();
+          if (request.scope === "official") {
+            delete connection.restartScope;
+            try {
+              await connection.controller.cleanupOnDisconnect("rollback");
+            } catch {
+            }
+          }
           const owner = connection.owner;
+          if (!owner.target || owner.exited) {
+            connection.logicalOwner.retire(error2);
+            connection.officialOwner.retire(error2);
+            delete connection.upstream;
+            await Promise.allSettled([
+              disposeResources(connection.officialOwner),
+              disposeResources(connection.logicalOwner)
+            ]);
+          }
           if (!owner.target || owner.exited) {
             owner.retire(error2);
             try {
@@ -44144,6 +44628,7 @@ async function startPluginRuntime({
             connections.delete(request.connectionId);
           throw error2;
         } finally {
+          delete connection.restartScope;
           releaseSuccessor();
           await retryDirectory(connection.directory).catch(() => {
           });
@@ -44156,6 +44641,7 @@ async function startPluginRuntime({
     },
     stop: async (request, context = {}) => {
       const connection = routed(request);
+      connection.lastRealOperationAt = timestamp();
       connection.owner.expectedOperationId = context.operationId;
       if (request.disposition === "Close") connection.directory.requestRelease();
       const result = await connection.controller.stop(request, context);
@@ -44173,6 +44659,7 @@ async function startPluginRuntime({
     },
     endTask: async (request) => {
       const connection = routed(request);
+      connection.lastRealOperationAt = timestamp();
       return {
         ...await connection.controller.endTask(request),
         connectionId: connection.connectionId,
@@ -44181,7 +44668,12 @@ async function startPluginRuntime({
       };
     }
   };
-  const lifecycle = createLifecycleService({ entryId, handler });
+  const lifecycle = createLifecycleService({
+    entryId,
+    handler,
+    authorize: registrations.authorize,
+    beginJob: registrations.beginJob
+  });
   function lifecycleResult(details) {
     return {
       isError: true,
@@ -44189,7 +44681,7 @@ async function startPluginRuntime({
       structuredContent: details
     };
   }
-  const catalogOwner = newOwner(randomUUID3());
+  const catalogOwner = newOwner(randomUUID4());
   const catalogRouter = await createRouter();
   catalogOwner.register("router", catalogRouter);
   function cleanup() {
@@ -44197,50 +44689,69 @@ async function startPluginRuntime({
   }
   async function performCleanup() {
     if (cleanupPromise) return cleanupPromise;
+    if (cleanupState === "closed") return;
     const finishObservation = beginFixtureStage("gateway-cleanup");
     shuttingDown = true;
+    cleanupState = "closing";
     for (const directory of directories) directory.requestRelease();
     const closing = [];
     const cleaning = /* @__PURE__ */ new Map();
     for (const connection of connections.values()) {
-      connection.owner.retire(new Error("The gateway is closing."));
+      connection.owner.abortWork(new Error("The gateway is closing."));
       connection.router.clearTarget();
       closing.push(
         connection.controller.cleanupOnDisconnect().then((retained) => {
           if (retained)
-            process.stderr.write(
-              "Target did not close normally; inspect PID " + retained.processId + ", port " + retained.port + ".\n"
+            throw new Error(
+              "Gateway cleanup failed: the application did not close normally; live ownership is retained."
             );
         })
       );
     }
-    for (const owner of owners) {
-      owner.retire(new Error("The gateway is closing."));
+    for (const owner of [...owners].sort((a, b) => Number(!!a.target) - Number(!!b.target))) {
+      if (owner.target && !owner.exited) owner.abortWork(new Error("The gateway is closing."));
+      else owner.retire(new Error("The gateway is closing."));
       cleaning.set(owner, { version: owner.resourceVersion, joined: owner.isCleaning() });
-      closing.push(owner.retryResources());
+      if (!owner.target) closing.push(owner.retryResources());
     }
     closing.push(lifecycle.close());
-    cleanupPromise = (async () => {
+    const attempt = (async () => {
       const results = await Promise.allSettled(closing);
       await Promise.allSettled([...starts, ...replacements, ...retirements]);
-      await Promise.allSettled(
-        [...owners].filter((owner) => {
-          const initial = cleaning.get(owner);
-          return !initial || initial.joined || initial.version !== owner.resourceVersion;
-        }).map((owner) => owner.retryResources())
+      results.push(
+        ...await Promise.allSettled(
+          [...owners].filter((owner) => {
+            const initial = cleaning.get(owner);
+            return (!owner.target || owner.exited) && (!initial || initial.joined || initial.version !== owner.resourceVersion);
+          }).map((owner) => owner.retryResources())
+        )
       );
-      connections.clear();
-      await Promise.allSettled([...directories].map(retryDirectory));
-      for (const result of results)
-        if (result.status === "rejected")
-          process.stderr.write(`Gateway cleanup failed: ${errorMessage(result.reason)}
-`);
-      finishObservation(results.some((result) => result.status === "rejected") ? "failed" : "succeeded");
+      results.push(...await Promise.allSettled([...directories].map(retryDirectory)));
+      for (const [id, connection] of connections) {
+        if ((!connection.owner.target || connection.owner.exited) && !connection.owner.hasPendingResources())
+          connections.delete(id);
+      }
+      const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);
+      if ([...owners].some((owner) => owner.target && !owner.exited || owner.hasPendingResources()))
+        errors.push(new Error("Gateway cleanup failed: live or pending resource ownership remains."));
+      if ([...directories].some((directory) => !directory.released))
+        errors.push(new Error("Gateway cleanup failed: a directory lease remains owned."));
+      if (errors.length) {
+        cleanupState = "failed";
+        finishObservation("failed");
+        throw new AggregateError(errors, "Gateway cleanup failed; ownership is retained for retry.");
+      }
+      cleanupState = "closed";
+      finishObservation("succeeded");
     })();
+    cleanupPromise = attempt.finally(() => {
+      cleanupPromise = void 0;
+    });
     return cleanupPromise;
   }
   try {
     const catalogConnection = await createConnection(catalogRouter.url, {
+      ...runtimeLocation,
       signal: catalogOwner.signal,
       onAcquired: (resource) => catalogOwner.register("upstream", resource)
     });
@@ -44251,81 +44762,136 @@ async function startPluginRuntime({
     await disposeResources(catalogOwner);
     catalogOwner.retire(new Error("Catalog discovery completed."));
     owners.delete(catalogOwner);
-    entry = createEntry({
+    const callbacks = {
       tools: catalog,
       status: (hookEventName) => hookEventName ? hookStatus(hookEventName) : { ...status() },
-      control: async (request, signal) => {
-        const result = await lifecycle.control(request, signal);
-        const snapshot = isRecord(result.operation) ? result.operation : result;
-        if (snapshot.state === "succeeded" || snapshot.state === "failed" || snapshot.state === "cancelled") {
-          for (const [key, event] of notices) {
-            if (event.expected && event.operationId === snapshot.operationId) notices.delete(key);
+      control: async (request, signal, facilities) => control(
+        request.action === "restart" ? { ...request, scope: request.scope ?? "both" } : request,
+        signal,
+        internalClient.request(
+          facilities ?? {
+            requestId: 0,
+            capabilities: { roots: false, formElicitation: false },
+            ...signal ? { waitSignal: signal } : {}
           }
-          if (typeof snapshot.connectionId === "string" && typeof snapshot.sessionId === "string") {
-            const key = noticeKey(snapshot.connectionId, snapshot.sessionId);
-            const exit = notices.get(key);
-            const error2 = isRecord(snapshot.error) ? snapshot.error : void 0;
-            if (exit?.expected || error2?.processExited === true) notices.delete(key);
+        )
+      ),
+      invoke: async (name, arguments_, signal, onProgress, facilities) => invoke(
+        name,
+        arguments_,
+        signal,
+        onProgress,
+        internalClient.request(
+          facilities ?? {
+            requestId: 0,
+            capabilities: { roots: false, formElicitation: false },
+            ...signal ? { waitSignal: signal } : {}
           }
-        }
-        if (request.action !== "status" || request.operationId || !fullCatalog) return result;
-        const connection = request.connectionId ? selected(request.connectionId) : void 0;
-        if (!connection)
+        )
+      )
+    };
+    async function control(request, signal, client) {
+      if (client) registrations.check(client.principal);
+      const result = await performControl(request, signal, client);
+      if (client) {
+        registrations.touch(client.principal);
+        if (Array.isArray(result.connections))
           return {
             ...result,
-            ...request.toolNames ? {
-              toolAvailability: fullCatalog.describe(
-                buildServerArguments("http://127.0.0.1:1").slice(1),
-                void 0,
-                request.toolNames
-              )
-            } : {}
+            connections: result.connections.filter((item) => {
+              if (!isRecord(item) || typeof item.connectionId !== "string") return false;
+              try {
+                registrations.authorize(item.connectionId, client.principal);
+                return true;
+              } catch {
+                return false;
+              }
+            })
           };
+      }
+      return result;
+    }
+    async function performControl(request, signal, client) {
+      if (client) registrations.check(client.principal);
+      const result = await lifecycle.control(request, signal, client);
+      const snapshot = isRecord(result.operation) ? result.operation : result;
+      if (snapshot.state === "succeeded" || snapshot.state === "failed" || snapshot.state === "cancelled") {
+        for (const [key, event] of notices) {
+          if (event.expected && event.operationId === snapshot.operationId) notices.delete(key);
+        }
+        if (typeof snapshot.connectionId === "string" && typeof snapshot.sessionId === "string") {
+          const key = noticeKey(snapshot.connectionId, snapshot.sessionId);
+          const exit = notices.get(key);
+          const error2 = isRecord(snapshot.error) ? snapshot.error : void 0;
+          if (exit?.expected || error2?.processExited === true) notices.delete(key);
+        }
+      }
+      if (request.action !== "status" || request.operationId || !fullCatalog) return result;
+      const connection = request.connectionId ? selected(request.connectionId) : void 0;
+      if (!connection)
         return {
-          ...connectionSummary(statusOf(connection)),
-          ...request.toolNames ? {} : { enabledTools: statusOf(connection).enabledTools ?? [] },
+          ...result,
           ...request.toolNames ? {
             toolAvailability: fullCatalog.describe(
-              connection.mcpArgs,
-              !connection.quarantined ? connection.upstream?.tools : void 0,
+              buildServerArguments("http://127.0.0.1:1").slice(1),
+              void 0,
               request.toolNames
             )
-          } : {},
-          ...request.include?.includes("configuration") ? {
-            mcpArgs: [...connection.mcpArgs],
-            workspace: workspaceSources(connection.mcpArgs, entry?.supportsRoots() ?? false),
-            isolation: connection.directory.evidence()
-          } : {},
-          ...request.include?.includes("diagnostics") ? { diagnostics: [...connection.diagnostics] } : {}
+          } : {}
         };
-      },
-      onRootsChanged: async () => {
-        await Promise.allSettled(
-          [...connections.values()].filter((item) => !item.owner.retired).map(async (item) => {
-            const owner = item.owner;
-            owner.assertOpen();
-            await item.upstream?.rootsChanged();
-            owner.assertOpen();
-          })
-        );
-      },
-      invoke: async (name, arguments_, signal, onProgress) => {
-        const route = parseConnectionRoute(arguments_._dct);
-        signal.throwIfAborted();
-        const connection = routed(route);
-        const owner = connection.owner;
+      return {
+        ...connectionSummary(statusOf(connection)),
+        ...request.toolNames ? {} : { enabledTools: statusOf(connection).enabledTools ?? [] },
+        ...request.toolNames ? {
+          toolAvailability: fullCatalog.describe(
+            connection.mcpArgs,
+            !connection.quarantined ? connection.upstream?.tools : void 0,
+            request.toolNames
+          )
+        } : {},
+        ...request.include?.includes("configuration") ? {
+          mcpArgs: [...connection.mcpArgs],
+          workspace: structuredClone(connection.workspace),
+          roots: structuredClone(connection.roots),
+          launch: connection.controller.configuration(),
+          official: {
+            generation: connection.officialOwner.sessionId,
+            processId: connection.upstream?.processId
+          },
+          isolation: connection.directory.evidence()
+        } : {},
+        ...request.include?.includes("diagnostics") ? { diagnostics: [...connection.diagnostics] } : {}
+      };
+    }
+    async function invoke(name, arguments_, signal, onProgress, client) {
+      if (shuttingDown) throw new Error("The gateway is closing.");
+      signal.throwIfAborted();
+      const route = parseConnectionRoute(arguments_._dct);
+      if (client) {
+        registrations.check(client.principal);
+        registrations.authorize(route.connectionId, client.principal);
+      }
+      const connection = routed(route);
+      if (connection.activeCalls > 0 || lifecycle.isBusy(connection.connectionId))
+        throw new Error("The connection is busy with an owned execution or lifecycle operation.");
+      const owner = connection.owner;
+      connection.activeCalls += 1;
+      connection.lastRealOperationAt = timestamp();
+      if (client) connection.executionContext = client;
+      const execution = (async () => {
         if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
           return lifecycleResult({
             code: "TOOL_NOT_ENABLED",
             entryId,
             ...route,
             ...fullCatalog?.requirements(name, connection.mcpArgs, true),
-            nextAction: "explicit-start-or-restart"
+            nextAction: "close-and-new-start"
           });
         connection.controller.beginTask(route);
         const healthTiming = measured(connection.diagnose, "connection-health");
         await connection.controller.checkHealth();
         healthTiming();
+        owner.assertOpen();
         routed(route);
         const current2 = summary(connection);
         const upstream = connection.upstream;
@@ -44337,81 +44903,115 @@ async function startPluginRuntime({
           });
         const { _dct: routing, ...upstreamArguments } = arguments_;
         void routing;
-        const callSignal = AbortSignal.any([signal, owner.signal]);
-        callSignal.throwIfAborted();
-        connection.activeCalls += 1;
-        const upstreamTiming = measured(connection.diagnose, "upstream-processing");
+        const timing = measured(connection.diagnose, "upstream-processing");
         try {
-          const result = await upstream.call(name, upstreamArguments, callSignal, (progress) => {
-            if (connection.owner === owner && !owner.retired && !callSignal.aborted && connection.upstream === upstream)
+          const result = await upstream.call(name, upstreamArguments, owner.signal, (progress) => {
+            if (!signal.aborted && connection.owner === owner && !owner.retired && connection.upstream === upstream)
               onProgress(progress);
           });
           owner.assertOpen();
           routed(route);
-          callSignal.throwIfAborted();
-          upstreamTiming();
+          timing();
           measured(connection.diagnose, "result-ready")();
+          if (client) registrations.touch(client.principal);
           return result;
         } catch (error2) {
-          const reason = interruptedOfficialCall(error2, callSignal);
-          upstreamTiming(reason ? "interrupted" : "failed");
-          if (owner.retired || connection.owner !== owner)
-            throw new Error("The target session exited or closed during the official call.");
-          if (!reason) throw error2;
-          connection.quarantined = true;
-          connection.controller.quarantine(reason);
-          if (!connection.quarantine)
-            connection.quarantine = closeUpstream(connection, owner).then(
-              () => true,
-              () => false
-            );
-          const quarantine = connection.quarantine;
-          const upstreamClosed = await quarantine;
-          if (connection.quarantine === quarantine) delete connection.quarantine;
-          if (owner.retired || connection.owner !== owner)
-            throw new Error("The target session exited during upstream cleanup.");
-          const details = {
-            code: "CONNECTION_RECOVERY_REQUIRED",
-            ...summary(connection),
-            reason,
-            upstreamClosed,
-            nextAction: "explicit-restart-or-close"
-          };
-          failures.set(noticeKey(connection.connectionId, owner.sessionId), {
-            kind: "connection-failure",
-            entryId,
-            connectionId: connection.connectionId,
-            sessionId: owner.sessionId,
-            code: details.code,
-            reason,
-            upstreamClosed
-          });
-          return lifecycleResult(details);
-        } finally {
-          connection.activeCalls -= 1;
+          timing("failed");
+          throw error2;
         }
-      }
-    });
-    await entry.connect();
-    const selectedEntry = entry;
-    const closed = selectedEntry.closed.then(cleanup);
+      })().finally(() => {
+        connection.activeCalls -= 1;
+        delete connection.executionContext;
+      });
+      owner.track(execution);
+      return waitForClient(execution, signal);
+    }
     return {
       entryId,
       controller: handler,
-      closed,
-      async close() {
-        await selectedEntry.close();
-        await cleanup();
-      }
+      tools: catalog,
+      callbacks,
+      invoke: (name, args, client) => invoke(name, args, client.waitSignal, client.progress, client),
+      cleanup,
+      register() {
+        if (shuttingDown) throw new Error("The gateway is closing.");
+        return registrations.create();
+      },
+      control: (request, client) => control(request, client.waitSignal, client),
+      attachClient(bearer) {
+        return createClientContext(registrations.authenticate(bearer));
+      },
+      admin: {
+        registrations: registrations.list,
+        unregister: registrations.unregister,
+        transfer(connectionId, principal) {
+          const connection = selected(connectionId);
+          registrations.transfer(
+            connectionId,
+            principal,
+            () => cleanupState !== "open" || lifecycle.isBusy(connectionId) || connection.activeCalls > 0 || connection.owner.hasPendingWork() || [connection.owner, connection.officialOwner, connection.logicalOwner].some(
+              (owner) => owner.isCleaning() || owner.hasFailedDisposal()
+            )
+          );
+          const resource = resourceRegistrations.get(connectionId);
+          if (resource) resource.principal = principal;
+        },
+        status,
+        connections: () => [...connections.values()].map((connection) => ({
+          ...summary(connection),
+          registrationId: resourceRegistrations.get(connection.connectionId)?.principal.registrationId,
+          establishedAt: connection.establishedAt,
+          lastRealOperationAt: connection.lastRealOperationAt,
+          targetGeneration: connection.owner.sessionId,
+          officialGeneration: connection.officialOwner.sessionId
+        })),
+        operations: lifecycle.list,
+        control: (request) => {
+          if (request.action === "start")
+            return Promise.reject(new Error("Administration cannot create targets."));
+          return performControl(request);
+        },
+        cleanupState: () => cleanupState
+      },
+      internalClient
     };
   } catch (error2) {
     try {
-      await entry?.close();
-    } finally {
       await cleanup();
+    } catch (cleanupError) {
+      const failure2 = new DetailedError(errorMessage(error2), { cause: error2 });
+      failure2.details = { cleanupError: errorMessage(cleanupError) };
+      throw failure2;
     }
     throw error2;
   }
+}
+async function startPluginRuntime(dependencies = {}) {
+  const core = await createGatewayCore(dependencies);
+  const entry = (dependencies.createEntry ?? createMcpEntryServer)({
+    ...core.callbacks,
+    invoke: (name, args, signal, progress, facilities) => core.callbacks.invoke(name, args, signal, progress, facilities)
+  });
+  try {
+    await entry.connect();
+  } catch (error2) {
+    await entry.close();
+    await core.cleanup();
+    throw error2;
+  }
+  const closed = entry.closed.then(core.cleanup);
+  return {
+    entryId: core.entryId,
+    controller: {
+      ...core.controller,
+      restart: (request, context) => core.controller.restart({ ...request, scope: request.scope ?? "both" }, context)
+    },
+    closed,
+    async close() {
+      await core.cleanup();
+      await entry.close();
+    }
+  };
 }
 
 // src/interface/mcp-bootstrap.ts

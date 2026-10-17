@@ -5,8 +5,11 @@ Before implementing this layer’s singleton App migration, read
 [tracked plan](../../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
 These are forward requirements; current stdio rules apply until their planned cutover.
 
-Create one session owner before acquiring a target, router or upstream. Route
-every acquired resource and pending request through that owner. Never expose a
+Create logical, target-generation and official-generation owners before their
+respective acquisitions. The logical connection owns its stable router and
+directory lease; independently owned target and official generations can restart
+without disposing their healthy peer. Route every resource and pending request
+through its corresponding owner. Never expose a
 target before identity verification. Keep lifecycle admission per connection;
 actual-exit cleanup bypasses that admission gate and cannot wait behind blocked
 startup or official requests. Gate forwarding and cancel dependent work first,
@@ -30,9 +33,26 @@ bounds one protocol response only. Cancelling a wait never cancels its job.
 Keep/end-task retains live resources and observation. Actual exit ends task
 activity and invalidates the old route regardless of prior task activity or
 disposal errors. Retry after exit uses start with new connection/session IDs.
-Explicit live restart waits for old app exit and disposes old resources before
-creating a new owner/router/upstream on the same connection and exact port.
-Refuse a busy original port; never restart or replay automatically.
+Core restart requires an explicit target, official or both scope and uses only
+the admitted immutable launch/environment/official/roots snapshot. Preserve the
+logical connection/router/lease and issue a fresh public session after either
+side changes. Explicit fixed ports refuse collisions; automatic policy can select
+a new free port from its recorded binding template. Only the transitional stdio
+facade maps omitted scope to both. Never restart or replay automatically.
+
+Authenticate agent principals before reads or effects. Registration owns current
+resources; operation ownership is immutable across transfer. Keep bearers out of
+snapshots, diagnostics, fingerprints and results. Trusted administration is an
+in-process closure, never a caller-supplied field.
+
+Admit one actual official execution per connection. Detaching a client wait never
+cancels that execution or changes its originating roots, progress or elicitation
+context. Retain its slot until the actual response or definitive upstream close.
+Do not reach through a global entry for request facilities.
+
+Final cleanup denies new work, attempts all peers and rejects while live or pending
+resources/leases remain. Preserve failed disposal and live observation for retry;
+never clear ownership or cache a successful exit after failure.
 
 Official Server disposal immediately closes its public SDK transport and rejects
 pending calls, then proves the owned child exited. Its bounded EOF/TERM/KILL

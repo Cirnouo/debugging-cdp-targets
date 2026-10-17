@@ -32,6 +32,8 @@ async function fixture(
         callGate?: Promise<void>;
         healthGate?: Promise<void>;
         replacementRouterGate?: Promise<void>;
+        replacementConnectionGate?: Promise<void>;
+        failLateUpstreamClose?: boolean;
         failLateRouterClose?: boolean;
         disposalGate?: Promise<void>;
         busyRouter?: boolean;
@@ -50,6 +52,7 @@ async function fixture(
     let upstreamCloses = 0;
     let routerCount = 0;
     let lateRouterCloses = 0;
+    let lateUpstreamCloses = 0;
     let health: 'healthy' | 'gone' = 'healthy';
     let timeoutCall = false;
     let callSignal: AbortSignal | undefined;
@@ -119,6 +122,7 @@ async function fixture(
         },
         createConnection: async () => {
             const targetIndex = applications.length;
+            if (targetIndex === 2) await options.replacementConnectionGate;
             if (targetIndex === 2 && options.failReplacementConnection)
                 throw new Error('replacement initialize failed');
             let onExit = () => {};
@@ -141,6 +145,8 @@ async function fixture(
                 close: async () => {
                     upstreamCloses += 1;
                     order.push('upstream-close');
+                    if (targetIndex === 2 && ++lateUpstreamCloses === 1 && options.failLateUpstreamClose)
+                        throw new Error('late upstream disposal failed');
                     if (targetIndex === 1) await options.disposalGate;
                     if (options.exitOnUpstreamClose) onExit();
                     if (options.failUpstreamClose && upstreamCloses === 2) throw new Error('upstream cleanup failed');
@@ -199,6 +205,7 @@ async function fixture(
         },
         upstreamCloses: () => upstreamCloses,
         callSignal: () => callSignal,
+        lateUpstreamCloses: () => lateUpstreamCloses,
         lateRouterCloses: () => lateRouterCloses,
     };
 }
@@ -344,7 +351,7 @@ test('actual exit completes Close even while the normal-close request still awai
     }
 });
 
-test('normal Close starts while quarantine is still reclaiming the official child', async () => {
+test('normal Close remains available after a terminal official failure', async () => {
     let release = () => {};
     const disposalGate = new Promise<void>((resolve) => {
         release = resolve;
@@ -353,7 +360,7 @@ test('normal Close starts while quarantine is still reclaiming the official chil
     const current = await f.start();
     assert.ok(current.sessionId);
     f.timeout();
-    const rejected = assert.rejects(f.invoke(current), /exit|closed|retired/i);
+    const rejected = assert.rejects(f.invoke(current), /timed out/i);
     await tick();
     const close = f.runtime.controller.stop({
         connectionId: current.connectionId,
@@ -372,19 +379,17 @@ test('normal Close starts while quarantine is still reclaiming the official chil
     }
 });
 
-test('intentional quarantine disposal preserves its specific cause when the official child exits', async () => {
+test('a settled SDK failure does not dispose or quarantine a healthy official child', async () => {
     const f = await fixture({ exitOnUpstreamClose: true });
     try {
         const current = await f.start();
         f.timeout();
-        await f.invoke(current);
+        await assert.rejects(f.invoke(current), /timed out/);
         const state = f.runtime.controller.status(current.connectionId);
-        assert.ok('reason' in state);
-        assert.equal(state.reason, 'upstream-timeout');
-        assert.equal(state.upstreamStatus, 'quarantined');
-        const hook = JSON.stringify(f.callbacks.status('PostToolUse'));
-        assert.ok(hook.includes('upstream-timeout'));
-        assert.equal(hook.includes('official-disconnected'), false);
+        assert.ok('status' in state);
+        assert.equal(state.status, 'active');
+        assert.equal(state.upstreamStatus, 'connected');
+        assert.deepEqual(f.callbacks.status('PostToolUse'), {});
     } finally {
         await f.runtime.close();
     }
@@ -493,16 +498,16 @@ test('an expected exit waits for its operation terminal event and is delivered o
     await f.runtime.close();
 });
 
-test('gateway shutdown awaits a replacement router acquisition and retries its late failed disposal', async () => {
+test('gateway shutdown awaits replacement official acquisition and retries late failed disposal', async () => {
     let release = () => {};
     const replacementRouterGate = new Promise<void>((resolve) => {
         release = resolve;
     });
-    const f = await fixture({ replacementRouterGate, failLateRouterClose: true });
+    const f = await fixture({ replacementConnectionGate: replacementRouterGate, failLateUpstreamClose: true });
     const current = await f.start();
     assert.ok(current.sessionId);
     const restart = f.runtime.controller.restart({ connectionId: current.connectionId, sessionId: current.sessionId });
-    const failed = assert.rejects(restart, /closing|retired|exited/);
+    const failed = assert.rejects(restart, /closing|retired|exited|late upstream disposal failed/);
     await tick();
     let closed = false;
     const shutdown = f.runtime.close().then(() => {
@@ -510,13 +515,13 @@ test('gateway shutdown awaits a replacement router acquisition and retries its l
     });
     await tick();
     try {
-        assert.equal(closed, false, 'shutdown must account for the in-flight replacement router');
+        assert.equal(closed, false, 'shutdown must account for the in-flight replacement official child');
     } finally {
         release();
         await failed;
         await shutdown;
     }
-    assert.equal(f.lateRouterCloses(), 2, 'late failed disposal remains owned and receives the shutdown retry');
+    assert.equal(f.lateUpstreamCloses(), 2, 'late failed disposal remains owned and receives the shutdown retry');
 });
 
 test('actual exit aborts an in-flight official call and suppresses late progress and result while a peer stays usable', async () => {
@@ -560,7 +565,9 @@ test('gateway shutdown closes official resources before waiting on an already pe
     const shutdown = f.runtime.close();
     await tick();
     assert.equal(f.upstreamCloses(), 3);
-    assert.throws(() => f.runtime.controller.status(second.connectionId), /closed/);
+    const observed = f.runtime.controller.status(second.connectionId);
+    assert.ok('processId' in observed);
+    await assert.rejects(f.invoke(second), /closing/);
     f.applications[1]?.exit();
     f.applications[0]?.exit();
     await close;
@@ -736,7 +743,7 @@ test('Close waits for application exit before closing the upstream and router', 
     await f.runtime.close();
 });
 
-test('operation and quarantine Hooks contain compact evidence without status configuration or schemas', async () => {
+test('operation Hooks remain compact while settled official failures create no fabricated lifetime event', async () => {
     const f = await fixture();
     try {
         const accepted = await f.control({
@@ -762,9 +769,9 @@ test('operation and quarantine Hooks contain compact evidence without status con
         const status = f.runtime.controller.status();
         assert.ok('connections' in status && status.connections[0]);
         f.timeout();
-        await f.invoke(status.connections[0]);
+        await assert.rejects(f.invoke(status.connections[0]), /timed out/);
         const quarantined = JSON.stringify(f.callbacks.status('PostToolUse'));
-        assert.ok(quarantined.includes('CONNECTION_RECOVERY_REQUIRED'));
+        assert.equal(quarantined, '{}');
         for (const field of ['enabledTools', 'mcpArgs', 'workspace', 'diagnostics', 'inputSchema'])
             assert.equal(quarantined.includes(field), false, field);
     } finally {

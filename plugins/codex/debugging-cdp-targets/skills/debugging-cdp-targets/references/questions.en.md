@@ -173,7 +173,7 @@ templates:
         options:
             - value: restart
               label: Restart the live connection
-              description: Normally close the application, wait for actual exit, and create a new session on the same connection with the same arguments, directory and original port; do not replay the failed call.
+              description: Normally close the application, wait for actual exit, and create a new session on the same connection with the same admitted configuration and directory under its fixed/automatic port policy; do not replay the failed call.
             - value: Close
               label: "Close: normal shutdown"
               description: Agent requests normal shutdown of the current application and waits for actual exit; the established directory cleanup policy still applies.
@@ -208,7 +208,7 @@ templates:
               label: Do not enable these tools
               description: Do not start the target with this proposed configuration.
     tools-restart:
-        title: Tool restart
+        title: Tool replacement
         facts: |-
             Application: {application}
             entryId: {entry_id}
@@ -216,14 +216,14 @@ templates:
             sessionId: {session_id}
             Required tools: {tool_names}
             Complete replacement mcpArgs: {mcp_args}
-        question: Does User authorize Agent to restart this live connection with the complete MCP configuration above?
+        question: Does User authorize Agent to normally Close this application, wait for actual exit, then start a new connection with the complete MCP configuration above?
         options:
             - value: restart
-              label: Authorize replacement and restart
-              description: Replace the entire MCP configuration and workspace access, preserving application arguments, directory and original port; the new session invalidates old page IDs.
+              label: Authorize Close and new start
+              description: After normal Close and actual exit, Agent meets the applicable new-start gates and uses the complete successor configuration, including its workspace access; old connection and page identities expire.
             - value: decline
               label: Keep the current configuration
-              description: Do not perform this restart or enable the required tools.
+              description: Do not Close or create a successor to enable these tools.
     replace-launch:
         title: Launch args
         facts: |-

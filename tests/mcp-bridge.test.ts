@@ -51,7 +51,16 @@ server.setRequestHandler('tools/call', async (request, ctx) => {
         return { content: [], structuredContent: { result } };
     }
     if (request.params.arguments?.exit) process.exit(0);
+    if (request.params.arguments?.lateWire) {
+        await new Promise((resolve) => setTimeout(resolve, request.params.arguments.lateWire));
+        const response = request.params.arguments.protocolError
+            ? { error: { code: -32603, message: 'synthetic protocol failure' } }
+            : { result: { content: [], structuredContent: { arguments: {} } } };
+        process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: ctx.mcpReq.id, ...response }) + '\\n');
+        await new Promise(() => {});
+    }
     if (request.params.arguments?.ignoreCancel) await new Promise(() => {});
+    if (request.params.arguments?.delay) await new Promise((resolve) => setTimeout(resolve, request.params.arguments.delay));
     if (request.params.arguments?.wait) {
         await new Promise((resolve) => ctx.mcpReq.signal.addEventListener('abort', resolve, { once: true }));
         return { content: [{ type: 'text', text: 'cancelled' }] };
@@ -93,7 +102,7 @@ test('update checks and config discovery are suppressed only in the independent 
     }
 });
 
-test('real SDK timeout and cancellation are identified even when an upstream handler ignores cancellation', async () => {
+test('SDK execution timeout retains accounting until a cancellation-ignoring upstream definitively closes', async () => {
     const fixture = await fakeOfficial();
     const connection = await createOfficialConnection('http://127.0.0.1:9222', {
         bin: fixture.bin,
@@ -101,18 +110,96 @@ test('real SDK timeout and cancellation are identified even when an upstream han
         requestTimeoutMs: 40,
     });
     try {
-        await assert.rejects(connection.call('echo', { ignoreCancel: true }), (error) => {
+        let settled = false;
+        const actual = connection.call('echo', { ignoreCancel: true }).finally(() => {
+            settled = true;
+        });
+        void actual.catch(() => {});
+        await new Promise<void>((resolve) => setTimeout(resolve, 75));
+        assert.equal(settled, false);
+        await assert.rejects(connection.call('echo', {}), /busy/);
+        await connection.close();
+        await assert.rejects(actual, (error) => {
             assert.equal(interruptedOfficialCall(error), 'upstream-timeout');
             return true;
         });
-        const abort = new AbortController();
-        const pending = connection.call('echo', { ignoreCancel: true }, abort.signal);
-        abort.abort(new Error('Cancelled by client'));
-        await assert.rejects(pending, (error) => {
-            assert.equal(interruptedOfficialCall(error, abort.signal), 'upstream-cancelled');
-            return true;
-        });
         assert.equal(interruptedOfficialCall(new Error('Request timed out')), undefined);
+    } finally {
+        await connection.close();
+        await fixture.cleanup();
+    }
+});
+
+test('completed official acquisition is independent of the old target acquisition signal', async () => {
+    const fixture = await fakeOfficial();
+    const acquisition = new AbortController();
+    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+        bin: fixture.bin,
+        args: [],
+        signal: acquisition.signal,
+    });
+    try {
+        acquisition.abort(new Error('Old target generation retired.'));
+        const result = await connection.call('echo', { capabilities: true });
+        assert.ok(result.structuredContent);
+    } finally {
+        await connection.close();
+        await fixture.cleanup();
+    }
+});
+
+for (const protocolError of [false, true]) {
+    test(`late ${protocolError ? 'protocol error' : 'result'} after SDK timeout releases only its matching wire execution`, async () => {
+        const fixture = await fakeOfficial();
+        const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+            bin: fixture.bin,
+            args: [],
+            requestTimeoutMs: 20,
+        });
+        try {
+            await assert.rejects(
+                connection.call('echo', { lateWire: 60, protocolError }),
+                (error) => interruptedOfficialCall(error) === 'upstream-timeout',
+            );
+            const next = await connection.call('echo', { capabilities: true });
+            assert.ok(next.structuredContent);
+        } finally {
+            await connection.close();
+            await fixture.cleanup();
+        }
+    });
+}
+
+test('response racing its SDK deadline and explicit close never leaves a permanent execution slot', async () => {
+    const fixture = await fakeOfficial();
+    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+        bin: fixture.bin,
+        args: [],
+        requestTimeoutMs: 25,
+    });
+    try {
+        await connection.call('echo', { lateWire: 25 }).catch((error: unknown) => {
+            assert.equal(interruptedOfficialCall(error), 'upstream-timeout');
+        });
+        await connection.call('echo', { capabilities: true });
+        await connection.close();
+        await assert.rejects(connection.call('echo', { capabilities: true }), /connected|closed/i);
+        await assert.rejects(connection.call('echo', { capabilities: true }), /connected|closed/i);
+    } finally {
+        await connection.close();
+        await fixture.cleanup();
+    }
+});
+
+test('public transport serialization failure closes pending SDK state and cannot leave a false busy slot', async () => {
+    const fixture = await fakeOfficial();
+    const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+    try {
+        const arguments_: Record<string, unknown> = {};
+        arguments_.cycle = arguments_;
+        await assert.rejects(connection.call('echo', arguments_), /circular|closed|connected/i);
+        await assert.rejects(connection.call('echo', {}), /connected|closed/i);
+        await assert.rejects(connection.call('echo', {}), /connected|closed/i);
     } finally {
         await connection.close();
         await fixture.cleanup();
