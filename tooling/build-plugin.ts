@@ -17,6 +17,7 @@ import type { HostDescriptor } from './host-policy.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { SHARED_ASSET_FILES, validateIconPng } from './icon-policy.ts';
 import { validatePayloadFileInventory } from './payload-policy.ts';
+import { RUNTIME_LICENSE_INPUTS } from './runtime-license-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -182,10 +183,20 @@ export async function collectBundledLicenses(
                 if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
             }
             if (metadata !== undefined) {
-                if (!metadata || typeof metadata !== 'object')
-                    throw new Error(`Malformed bundled package metadata: ${directory}`);
+                if (!isRecord(metadata)) throw new Error(`Malformed bundled package metadata: ${directory}`);
                 if ('name' in metadata) {
                     if (typeof metadata.name !== 'string') throw new Error(`Malformed package name: ${directory}`);
+                    const canonical = RUNTIME_LICENSE_INPUTS.find(
+                        (item) => item.name === metadata.name || item.name === path.basename(directory),
+                    );
+                    if (
+                        canonical &&
+                        (metadata.name !== canonical.name ||
+                            Reflect.get(metadata, 'version') !== canonical.version ||
+                            Reflect.get(metadata, 'license') !== canonical.license ||
+                            sha256(await readRegularFile(path.join(directory, 'LICENSE'))) !== canonical.licenseSha256)
+                    )
+                        throw new Error('Canonical bundled package license or identity changed.');
                     packages.set(directory, metadata.name);
                     if (metadata.name.startsWith('@modelcontextprotocol/')) {
                         review ??= await readVendorReview(evidenceFile);

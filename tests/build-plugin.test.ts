@@ -45,6 +45,33 @@ function sha256(contents: string) {
     return createHash('sha256').update(contents).digest('hex');
 }
 
+test('actual-graph license collection rejects altered canonical semver and smol notices or identities', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-canonical-licenses-'));
+    try {
+        for (const [name, version, license] of [
+            ['semver', '7.8.5', 'ISC'],
+            ['smol-toml', '1.9.1', 'BSD-3-Clause'],
+        ]) {
+            assert.ok(name && version && license);
+            const directory = path.join(root, 'node_modules', name);
+            await mkdir(directory, { recursive: true });
+            const original = await readFile(new URL(`../node_modules/${name}/LICENSE`, import.meta.url));
+            await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name, version, license }));
+            await writeFile(path.join(directory, 'index.js'), '');
+            await writeFile(path.join(directory, 'LICENSE'), original);
+            const collect = () => collectBundledLicenses([`node_modules/${name}/index.js`], root);
+            assert.ok((await collect()).includes(original.toString().trim()));
+            await writeFile(path.join(directory, 'LICENSE'), 'altered notice');
+            await assert.rejects(collect(), /canonical.*license/i);
+            await writeFile(path.join(directory, 'LICENSE'), original);
+            await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name, version: '0.0.0', license }));
+            await assert.rejects(collect(), /canonical.*license/i);
+        }
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 async function vendorFixture() {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-vendor-licenses-'));
     const directory = path.join(root, 'node_modules', '@modelcontextprotocol', 'client');
