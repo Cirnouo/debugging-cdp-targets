@@ -14,9 +14,11 @@ import { createStdioClient } from './mcp-client.ts';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable = process.argv[2] ?? 'codex';
 const exercise = process.argv.includes('--exercise-lifecycle');
+const lifecycleNames = ['dct_registration_register', 'dct_connection_status'];
 let bearer: string | undefined;
 let registrationId: string | undefined;
 const lifecycleCalls: string[] = [];
+const routes = new Map<string, { name: string; namespace?: string }>();
 function toolRoute(value: unknown, name: string, namespace?: string): { name: string; namespace?: string } | undefined {
     if (Array.isArray(value)) {
         for (const item of value) {
@@ -68,7 +70,7 @@ const model = createServer(async (request, response) => {
         const value: unknown = JSON.parse(raw);
         assert.ok(isRecord(value));
         requests.push(value);
-        assert.ok(requests.length <= (exercise ? 4 : 2));
+        assert.ok(requests.length <= (exercise ? 5 : 2));
         let item: Record<string, unknown>;
         if (requests.length === 1) {
             assert.ok(
@@ -77,9 +79,12 @@ const model = createServer(async (request, response) => {
             );
             item = {
                 type: 'tool_search_call',
-                call_id: 'discover-instructions',
+                call_id: exercise ? 'discover-registration' : 'discover-instructions',
                 execution: 'client',
-                arguments: { query: 'dct_registration_register dct_connection_status', limit: 20 },
+                arguments: {
+                    query: exercise ? 'dct_registration_register' : 'dct_registration_register dct_connection_status',
+                    limit: 20,
+                },
             };
         } else {
             const production = await initializationEvidence(fixtureEvidence);
@@ -93,7 +98,13 @@ const model = createServer(async (request, response) => {
                         );
                 });
             assert.ok(locations.length > 0, 'Complete instructions must appear in actual namespace/search metadata.');
-            if (exercise && requests.length === 3) {
+            if (exercise && requests.length <= 3) {
+                const name = requests.length === 2 ? 'dct_registration_register' : 'dct_connection_status';
+                const route = toolRoute(value.tools, name) ?? toolRoute(value.input, name);
+                assert.ok(route, 'The exact requested tool must appear in actual discovery metadata.');
+                routes.set(name, route);
+            }
+            if (exercise && requests.length === 4) {
                 const registered = toolOutput(value, 'register-once');
                 assert.ok(
                     typeof registered.registrationBearer === 'string' && typeof registered.registrationId === 'string',
@@ -101,21 +112,28 @@ const model = createServer(async (request, response) => {
                 bearer = registered.registrationBearer;
                 registrationId = registered.registrationId;
             }
-            if (exercise && requests.length === 4) {
+            if (exercise && requests.length === 5) {
                 const status = toolOutput(value, 'owned-status');
                 assert.deepEqual(status.connections, []);
                 assert.equal(JSON.stringify(status).includes(bearer ?? 'missing-bearer'), false);
             }
-            if (exercise && requests.length < 4) {
-                const name = requests.length === 2 ? 'dct_registration_register' : 'dct_connection_status';
-                const route = toolRoute(value.tools, name) ?? toolRoute(value.input, name);
+            if (exercise && requests.length === 2) {
+                item = {
+                    type: 'tool_search_call',
+                    call_id: 'discover-status',
+                    execution: 'client',
+                    arguments: { query: 'dct_connection_status', limit: 20 },
+                };
+            } else if (exercise && requests.length < 5) {
+                const name = requests.length === 3 ? 'dct_registration_register' : 'dct_connection_status';
+                const route = routes.get(name);
                 assert.ok(route);
                 lifecycleCalls.push(name);
                 item = {
                     type: 'function_call',
-                    call_id: requests.length === 2 ? 'register-once' : 'owned-status',
+                    call_id: requests.length === 3 ? 'register-once' : 'owned-status',
                     ...route,
-                    arguments: JSON.stringify(requests.length === 2 ? {} : { registrationBearer: bearer }),
+                    arguments: JSON.stringify(requests.length === 3 ? {} : { registrationBearer: bearer }),
                 };
             } else {
                 item = {
@@ -193,7 +211,10 @@ try {
     );
     await writeFile(
         path.join(home, 'config.toml'),
-        `model = "gpt-5.5"\nmodel_provider = "dct-local"\napproval_policy = "never"\nsandbox_mode = "read-only"\n[features]\nplugins = true\nhooks = false\n[model_providers.dct-local]\nname = "Local instructions test"\nbase_url = "http://127.0.0.1:${address.port}/v1"\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = false\nrequest_max_retries = 0\nstream_max_retries = 0\n`,
+        `model = "gpt-5.5"\nmodel_provider = "dct-local"\napproval_policy = "never"\nsandbox_mode = "read-only"\n[features]\nplugins = true\nhooks = false\n[model_providers.dct-local]\nname = "Local instructions test"\nbase_url = "http://127.0.0.1:${address.port}/v1"\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = false\nrequest_max_retries = 0\nstream_max_retries = 0\n` +
+            (exercise
+                ? '\n[plugins."debugging-cdp-targets@dct-instructions-test".mcp_servers."cdp-targets"]\nenabled_tools = ["dct_registration_register", "dct_connection_status"]\n[plugins."debugging-cdp-targets@dct-instructions-test".mcp_servers."cdp-targets".tools."dct_registration_register"]\napproval_mode = "approve"\n[plugins."debugging-cdp-targets@dct-instructions-test".mcp_servers."cdp-targets".tools."dct_connection_status"]\napproval_mode = "approve"\n'
+                : ''),
     );
     codex(['plugin', 'marketplace', 'add', marketplace, '--json']);
     const installation: unknown = JSON.parse(
@@ -243,7 +264,10 @@ try {
     const server = servers.data.find((entry: unknown) => isRecord(entry) && entry.name === 'cdp-targets');
     assert.ok(isRecord(server) && isRecord(server.tools) && server.tools.dct_connection_status);
     assert.equal(server.pluginId, 'debugging-cdp-targets@dct-instructions-test');
-    assert.equal(Object.keys(server.tools).length, (await initializationEvidence(fixtureEvidence)).toolNames.length);
+    assert.deepEqual(
+        Object.keys(server.tools).sort(),
+        exercise ? [...lifecycleNames].sort() : (await initializationEvidence(fixtureEvidence)).toolNames,
+    );
     const finished = new Promise<void>((resolve, reject) => {
         turnTimer = setTimeout(
             () => reject(new Error(`Codex instructions turn timed out: ${String(failure)}`)),
@@ -279,7 +303,7 @@ try {
     );
     if (failure) throw failure;
     assert.ok(isRecord(complete?.turn) && complete.turn.status === 'completed');
-    assert.equal(requests.length, exercise ? 4 : 2);
+    assert.equal(requests.length, exercise ? 5 : 2);
     const context = requests.flatMap((request) =>
         Array.isArray(request.input)
             ? request.input

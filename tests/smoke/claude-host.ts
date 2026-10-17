@@ -95,6 +95,34 @@ export function claudeRequest(raw: string): ClaudeRequest {
     const tools = value.tools.filter(record);
     return { ...value, model: value.model, messages, tools };
 }
+/** Diagnostic projection only: raw model/tool context remains in process memory. */
+export function claudeToolFailureCategory(
+    messages: Record<string, unknown>[],
+    callId: string,
+): 'none' | 'missing-result' | 'permission-denied' | 'tool-error' {
+    for (const message of messages) {
+        if (!Array.isArray(message.content)) continue;
+        for (const item of message.content) {
+            if (!record(item) || item.type !== 'tool_result' || item.tool_use_id !== callId) continue;
+            if (item.is_error !== true) return 'none';
+            const text =
+                typeof item.content === 'string'
+                    ? item.content
+                    : Array.isArray(item.content)
+                      ? item.content
+                            .filter(record)
+                            .flatMap((part) =>
+                                part.type === 'text' && typeof part.text === 'string' ? [part.text] : [],
+                            )
+                            .join('\n')
+                      : '';
+            return /\bpermissions?\b[\s\S]{0,512}\b(?:denied|not (?:been )?granted|hasn't been granted)\b/i.test(text)
+                ? 'permission-denied'
+                : 'tool-error';
+        }
+    }
+    return 'missing-result';
+}
 export function claudeToolResult(messages: Record<string, unknown>[], callId: string): Record<string, unknown> {
     for (const message of messages) {
         if (!Array.isArray(message.content)) continue;

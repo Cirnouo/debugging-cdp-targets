@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { captureAppInitialization } from './app-http.ts';
-import { type ClaudeBlock, claudeSse, claudeToolResult, record } from './claude-host.ts';
+import { type ClaudeBlock, claudeSse, claudeToolFailureCategory, claudeToolResult, record } from './claude-host.ts';
 import { claudeCli, claudeHost, sandbox } from './claude-process.ts';
 import { claudeInstructionLocations, initializationEvidence, testedSource } from './instructions-evidence.ts';
 
@@ -17,6 +17,10 @@ const exercise = process.argv.includes('--exercise-lifecycle');
 let bearer: string | undefined;
 let registrationId: string | undefined;
 const lifecycleCalls: string[] = [];
+const allowedLifecycleTools = [
+    'mcp__plugin_debugging-cdp-targets_cdp-targets__dct_registration_register',
+    'mcp__plugin_debugging-cdp-targets_cdp-targets__dct_connection_status',
+];
 console.log(`Retained evidence: ${temporary}`);
 const fixtureEvidence = path.join(temporary, 'app-http-initialize.json');
 await captureAppInitialization(fixtureEvidence);
@@ -56,6 +60,13 @@ const model = createServer(async (request, response) => {
         let block: ClaudeBlock = { type: 'text', text: 'Instruction consumption fixture completed.' };
         if (exercise) {
             if (count === 2) {
+                const category = claudeToolFailureCategory(value.messages.filter(record), 'register-once');
+                if (category !== 'none') {
+                    await writeFile(
+                        path.join(temporary, 'tool-failure-category.json'),
+                        JSON.stringify({ category, lifecycleTool: 'dct_registration_register' }, null, 4),
+                    );
+                }
                 const registered = claudeToolResult(value.messages.filter(record), 'register-once');
                 assert.ok(
                     typeof registered.registrationBearer === 'string' && typeof registered.registrationId === 'string',
@@ -73,6 +84,10 @@ const model = createServer(async (request, response) => {
                     .filter(record)
                     .find((tool) => typeof tool.name === 'string' && tool.name.endsWith(`__${name}`));
                 assert.ok(tool && typeof tool.name === 'string');
+                assert.ok(
+                    allowedLifecycleTools.includes(tool.name),
+                    'Lifecycle routing must match the actual permitted host tool.',
+                );
                 lifecycleCalls.push(name);
                 block = {
                     type: 'tool_use',
@@ -121,7 +136,7 @@ try {
         executable,
         temporary,
         endpoint,
-        ['--settings', '{"disableAllHooks":true}'],
+        ['--settings', '{"disableAllHooks":true}', ...(exercise ? ['--allowedTools', ...allowedLifecycleTools] : [])],
         prompt,
         undefined,
         90_000,

@@ -1,6 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { claudeToolFailureCategory } from './smoke/claude-host.ts';
 import { claudeInstructionLocations, descriptionLocations } from './smoke/instructions-evidence.ts';
+
+test('Claude tool failure diagnosis emits only a closed category without result contents', () => {
+    const messages = (content: unknown, isError: boolean) => [
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'register-once', content, is_error: isError }] },
+    ];
+    assert.equal(claudeToolFailureCategory([], 'register-once'), 'missing-result');
+    assert.equal(claudeToolFailureCategory(messages('private bearer and path', false), 'register-once'), 'none');
+    assert.equal(
+        claudeToolFailureCategory(
+            messages('Permission to use the requested tool was denied. private bearer', true),
+            'register-once',
+        ),
+        'permission-denied',
+    );
+    assert.equal(
+        claudeToolFailureCategory(
+            messages([{ type: 'text', text: 'Permission has not been granted to use this tool. private path' }], true),
+            'register-once',
+        ),
+        'permission-denied',
+    );
+    assert.equal(
+        claudeToolFailureCategory(messages('Unknown private server failure', true), 'register-once'),
+        'tool-error',
+    );
+    assert.equal(claudeToolFailureCategory(messages({ private: 'token' }, true), 'register-once'), 'tool-error');
+});
 
 test('instructions qualify only at semantic tool descriptions, never arbitrary strings', () => {
     const text = 'production instructions';
