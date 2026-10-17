@@ -8,6 +8,8 @@
   and complete native loader release evidence.
 - `app-ui.ts` validates the fixed local asset routes and narrow management
   requests/snapshots, including startup failure without invented settings.
+- `mcp-http.ts` validates the exact loopback HTTP endpoint/body headers and
+  explicit per-request registration routing without reflecting secret inputs.
 - `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.
