@@ -146,6 +146,8 @@ async function closeFixture(target: ConnectionStatus) {
     assert.ok(target.processId && target.port);
     const fixture = owned.find((item) => item.processId === target.processId && item.port === target.port);
     assert.ok(fixture);
+    // The same exact-object guard also handles the retained-target finally path.
+    // Acceptance is only the external stimulus; gateway retirement proves exit.
     return requestChromeSmokeClose(fixture, platform);
 }
 async function start(index: number) {

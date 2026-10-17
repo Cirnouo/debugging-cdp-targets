@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory = $true)] [string] $Directory,
     [Parameter(Mandatory = $true)] [string] $NodePath,
+    [Parameter(Mandatory = $true)] [string] $NativeAssembly,
     [switch] $Creator,
     [switch] $ReceiverExit,
     [switch] $LostPacket,
@@ -12,7 +13,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
-Add-Type -Path (Join-Path $PSScriptRoot '../../src/adapters/windows-native-process.cs') -ReferencedAssemblies 'System.dll', 'System.Core.dll', 'System.Xml.dll'
+. (Join-Path $PSScriptRoot 'native-resource-dispose.ps1')
+Add-Type -LiteralPath $NativeAssembly
 $resources = $null
 $target = $null
 $reader = $null
@@ -20,6 +22,7 @@ $writer = $null
 $pipe = $null
 $helper = $null
 $creatorIdentity = $null
+$primary = $null
 try {
     if ($Creator) {
         $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', $PipeName, [IO.Pipes.PipeDirection]::InOut, [IO.Pipes.PipeOptions]::Asynchronous)
@@ -54,7 +57,7 @@ try {
         $connected = $pipe.WaitForConnectionAsync()
         $start = [Diagnostics.ProcessStartInfo]::new()
         $start.FileName = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::System)) 'WindowsPowerShell/v1.0/powershell.exe'
-        $start.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + [DctNative]::Quote($PSCommandPath) + ' -Creator -Directory ' + [DctNative]::Quote($Directory) + ' -NodePath ' + [DctNative]::Quote($NodePath) + ' -PipeName ' + $name + ' -MonitorPid ' + $PID + ' -MonitorTicks ' + $ticks
+        $start.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + [DctNative]::Quote($PSCommandPath) + ' -Creator -Directory ' + [DctNative]::Quote($Directory) + ' -NodePath ' + [DctNative]::Quote($NodePath) + ' -NativeAssembly ' + [DctNative]::Quote($NativeAssembly) + ' -PipeName ' + $name + ' -MonitorPid ' + $PID + ' -MonitorTicks ' + $ticks
         if ($ReceiverExit) { $start.Arguments += ' -ReceiverExit' }
         if ($LostPacket) { $start.Arguments += ' -LostPacket' }
         $start.UseShellExecute = $false
@@ -92,12 +95,23 @@ try {
         $closed = [DctNative]::WaitForResourcesClosed($target)
         [Console]::Out.WriteLine((@{ rootExit = $rootExit; closed = $closed; active = [DctNative]::QueryActiveProcesses($resources); creatorQueryError = $reply.queryError; creatorExit = $helper.ExitCode } | ConvertTo-Json -Compress))
     }
+} catch {
+    $primary = $_.Exception
+    throw
 } finally {
-    if ($null -ne $writer) { $writer.Dispose() }
-    if ($null -ne $reader) { $reader.Dispose() }
-    if ($null -ne $pipe) { $pipe.Dispose() }
-    if ($null -ne $target) { $target.Dispose() }
-    if ($null -ne $resources) { $resources.Dispose() }
-    if ($null -ne $helper) { $helper.Dispose() }
-    if ($null -ne $creatorIdentity) { $creatorIdentity.Dispose() }
+    Invoke-NativeResourceDisposal -Primary $primary -Actions @(
+        { if ($null -ne $writer) { $writer.Dispose() } },
+        { if ($null -ne $reader) { $reader.Dispose() } },
+        { if ($null -ne $pipe) { $pipe.Dispose() } },
+        { if ($null -ne $target) { $target.Dispose() } },
+        { if ($null -ne $resources) { $resources.Dispose() } },
+        {
+            # All pipe disposals are attempted before joining a creator awaiting acknowledgment.
+            # This protects DLL lifetime; independent app exit receipts remain required.
+            if ($null -ne $helper) {
+                try { $helper.WaitForExit() } finally { $helper.Dispose() }
+            }
+        },
+        { if ($null -ne $creatorIdentity) { $creatorIdentity.Dispose() } }
+    )
 }

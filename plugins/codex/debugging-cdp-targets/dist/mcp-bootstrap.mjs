@@ -4131,6 +4131,7 @@ import { channel } from "node:diagnostics_channel";
 import { performance as performance2 } from "node:perf_hooks";
 var FIXTURE_DIAGNOSTICS_CHANNEL = "debugging-cdp-targets.fixture";
 var observation = channel(FIXTURE_DIAGNOSTICS_CHANNEL);
+var creationRegistryObservation = channel("debugging-cdp-targets.fixture.creation-observation-registry");
 var stages = [
   "operation",
   "operation-phase",
@@ -4152,6 +4153,7 @@ var stages = [
   "native-command",
   "native-file",
   "native-snapshot",
+  "process-creation-identity",
   "data-directory-acquire",
   "data-directory-release",
   "data-directory-cleanup",
@@ -4383,6 +4385,12 @@ var rootProcessStates = [
   "idle",
   "unknown"
 ];
+var readinessExitReasons = [
+  "budget-exhausted",
+  "foreign-listener",
+  "terminal-condition",
+  "poll-interrupted"
+];
 var listenerOwnerRelations = [
   "root",
   "owned-descendant",
@@ -4435,6 +4443,262 @@ var signals = [
   "SIGLOST",
   "SIGINFO"
 ];
+var creationSourceKeys = [
+  "creationBootSeconds",
+  "creationStartTicks",
+  "creationClkTck",
+  "creationComputedNumberMs",
+  "creationStatReadStartedMs",
+  "creationStatReadEndedMs",
+  "creationBootReadStartedMs",
+  "creationBootReadEndedMs",
+  "creationClkReadStartedMs",
+  "creationClkReadEndedMs"
+];
+var creationKeys = [
+  ...creationSourceKeys,
+  "creationNewlyLaunched",
+  "creationBranch",
+  "creationToleranceMs",
+  "creationExpectedUtcMs",
+  "creationObservedUtcMs",
+  "creationUpperNowUtcMs",
+  "creationUpperNowStatus",
+  "creationSourceStatus",
+  "creationComparisonStatus"
+];
+function utc(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && Math.abs(value) <= 864e13;
+}
+function safeCreationField(key, value) {
+  if (key === "creationNewlyLaunched") return typeof value === "boolean";
+  if (key === "creationToleranceMs") return value === 1e3;
+  if (key === "creationBranch")
+    return member(
+      [
+        "new-lower-rejected",
+        "new-upper-rejected",
+        "new-accepted",
+        "established-delta-rejected",
+        "established-accepted",
+        "creation-unverifiable"
+      ],
+      value
+    );
+  if (key === "creationUpperNowStatus") return member(["read", "not-evaluated"], value);
+  if (key === "creationSourceStatus") return member(["complete", "missing", "unverifiable"], value);
+  if (key === "creationComparisonStatus") return member(["reached", "unverifiable", "not-reached"], value);
+  if (["creationExpectedUtcMs", "creationObservedUtcMs", "creationUpperNowUtcMs"].includes(key)) return utc(value);
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  if (key === "creationComputedNumberMs") return Math.abs(value) <= 864e13;
+  if (key.endsWith("Ms")) return value >= 0;
+  return Number.isSafeInteger(value) && value >= (key === "creationClkTck" ? 1 : 0);
+}
+var linuxIdentityDecisions = [
+  "no-launch",
+  "launch-check-threw",
+  "root-proof-rejected",
+  "established-changed",
+  "established-accepted",
+  "boot-missing",
+  "post-calibration-threw",
+  "post-launch-check-threw",
+  "clock-order-rejected",
+  "root-proof-changed",
+  "decision-clock-rejected",
+  "interval-rejected",
+  "readiness-check-threw",
+  "final-launch-check-threw",
+  "concurrent-changed",
+  "initial-accepted"
+];
+var linuxFactKeys = [
+  "pre",
+  "post",
+  "postFailure",
+  "raw",
+  "requestUtcMs",
+  "decisionUtcMs",
+  "offset",
+  "birth",
+  "absolute",
+  "public",
+  "selectedMs"
+];
+function decimal(value, kind = "N") {
+  if (typeof value !== "string" || value.length > 26 || !/^(?:0|-?[1-9][0-9]{0,24})$/.test(value)) return false;
+  if (kind === "N") return true;
+  if (value.startsWith("-") || value.length > 20) return false;
+  return BigInt(value) <= (kind === "U" ? 18446744073709551615n : 9007199254740991n);
+}
+function safeMs(value) {
+  return typeof value === "number" && Number.isSafeInteger(value);
+}
+function diagnosticInterval(value, unsigned = false) {
+  const v = detachedRecord(value, ["lowerNs", "upperNs"]);
+  if (!v || !decimal(v.lowerNs, unsigned ? "U" : "N") || !decimal(v.upperNs, unsigned ? "U" : "N") || BigInt(v.lowerNs) > BigInt(v.upperNs))
+    return;
+  return Object.freeze({ lowerNs: v.lowerNs, upperNs: v.upperNs });
+}
+function diagnosticCalibration(value) {
+  const v = detachedRecord(value, ["beforeUtcMs", "afterUtcMs", "uptimeUpperNs", "offset"]);
+  if (!v || !safeMs(v.beforeUtcMs) || !safeMs(v.afterUtcMs) || v.beforeUtcMs < 0 || v.afterUtcMs < v.beforeUtcMs || !decimal(v.uptimeUpperNs, "U"))
+    return;
+  const offset = diagnosticInterval(v.offset);
+  if (!offset) return;
+  return Object.freeze({
+    beforeUtcMs: v.beforeUtcMs,
+    afterUtcMs: v.afterUtcMs,
+    uptimeUpperNs: v.uptimeUpperNs,
+    offset
+  });
+}
+function validateLinuxIdentity(value) {
+  try {
+    const v = detachedRecord(value, ["model", "mode", "decision", "timeBasis", "facts"]);
+    if (v?.model !== "linux-private-interval-v1" || v.timeBasis !== "source-stat-read-ended" || !member(["unregistered", "unselected", "initial", "established"], v.mode) || !member(linuxIdentityDecisions, v.decision))
+      return;
+    const f = detachedRecord(v.facts, linuxFactKeys);
+    if (!f) return;
+    const facts = {};
+    for (const key of ["pre", "post"])
+      if (key in f) {
+        const item = diagnosticCalibration(f[key]);
+        if (!item) return;
+        facts[key] = item;
+      }
+    if ("raw" in f) {
+      const r = detachedRecord(f.raw, ["q", "H", "bootSeconds"]);
+      if (!r || !decimal(r.q, "S") || !decimal(r.H, "S") || r.H === "0" || "bootSeconds" in r && !decimal(r.bootSeconds, "S"))
+        return;
+      facts.raw = Object.freeze({
+        q: r.q,
+        H: r.H,
+        ...typeof r.bootSeconds === "string" ? { bootSeconds: r.bootSeconds } : {}
+      });
+    }
+    for (const key of ["requestUtcMs", "decisionUtcMs", "selectedMs"])
+      if (key in f) {
+        const item = f[key];
+        if (!safeMs(item) || key === "selectedMs" && !utc(item)) return;
+        facts[key] = item;
+      }
+    if ("postFailure" in f) {
+      const r = detachedRecord(f.postFailure, ["branch"]);
+      if (!r || !member(["read-or-abort", "bracket-or-text-invalid", "uptime-out-of-range"], r.branch)) return;
+      facts.postFailure = Object.freeze({ branch: r.branch });
+    }
+    if ("offset" in f) {
+      const r = detachedRecord(f.offset, ["status", "lowerNs", "upperNs"]);
+      if (!r || !member(["empty", "nonempty"], r.status) || !decimal(r.lowerNs) || !decimal(r.upperNs) || BigInt(r.lowerNs) <= BigInt(r.upperNs) !== (r.status === "nonempty"))
+        return;
+      facts.offset = Object.freeze({ status: r.status, lowerNs: r.lowerNs, upperNs: r.upperNs });
+    }
+    if ("birth" in f) {
+      const r = detachedRecord(f.birth, ["branch", "result", "readerUpperNs", "interval"]);
+      if (!r || !member(["divide", "multiply-512", "multiply-9", "input-rejected"], r.branch) || !member(["present", "input-rejected", "zero-divisor", "range-rejected", "empty"], r.result) || !decimal(r.readerUpperNs, "U"))
+        return;
+      const interval = "interval" in r ? diagnosticInterval(r.interval, true) : void 0;
+      if (r.result === "present" !== "interval" in r || "interval" in r && !interval || r.branch === "input-rejected" !== (r.result === "input-rejected") || r.result === "zero-divisor" && r.branch !== "multiply-9" || r.result === "range-rejected" && !member(["multiply-512", "multiply-9"], r.branch))
+        return;
+      facts.birth = Object.freeze({
+        branch: r.branch,
+        result: r.result,
+        readerUpperNs: r.readerUpperNs,
+        ...interval ? { interval } : {}
+      });
+    }
+    if ("absolute" in f) {
+      const r = diagnosticInterval(f.absolute);
+      if (!r) return;
+      facts.absolute = r;
+    }
+    if ("public" in f) {
+      const r = detachedRecord(f.public, ["branch", "pointMs"]);
+      if (!r || !member(
+        [
+          "invalid-clock",
+          "containment-or-order-rejected",
+          "point-or-date-range-rejected",
+          "date-roundtrip-rejected",
+          "accepted"
+        ],
+        r.branch
+      ))
+        return;
+      const pointReached = member(
+        ["point-or-date-range-rejected", "date-roundtrip-rejected", "accepted"],
+        r.branch
+      );
+      if (pointReached !== "pointMs" in r || "pointMs" in r && !decimal(r.pointMs)) return;
+      if (member(["accepted", "date-roundtrip-rejected"], r.branch) && typeof r.pointMs === "string" && (BigInt(r.pointMs) < -8640000000000000n || BigInt(r.pointMs) > 8640000000000000n))
+        return;
+      facts.public = Object.freeze({
+        branch: r.branch,
+        ...typeof r.pointMs === "string" ? { pointMs: r.pointMs } : {}
+      });
+    }
+    const d = v.decision;
+    let required2 = [];
+    let allowed = [];
+    if (d === "no-launch") {
+      if (v.mode !== "unregistered") return;
+    } else if (member(["launch-check-threw", "root-proof-rejected"], d)) {
+      if (v.mode !== "unselected") return;
+    } else if (member(["established-changed", "established-accepted"], d)) {
+      if (v.mode !== "established") return;
+      required2 = d === "established-accepted" ? ["raw", "selectedMs"] : ["raw"];
+      allowed = required2;
+    } else {
+      if (v.mode !== "initial") return;
+      required2 = ["raw", "pre", "requestUtcMs"];
+      allowed = [...required2];
+      if (d === "boot-missing") {
+        if (facts.raw?.bootSeconds !== void 0) return;
+      } else {
+        if (facts.raw?.bootSeconds === void 0) return;
+        if (d === "post-calibration-threw") {
+          required2.push("postFailure");
+          allowed.push("postFailure");
+        } else {
+          required2.push("post");
+          allowed.push("post");
+          if (!member(["post-launch-check-threw", "clock-order-rejected", "root-proof-changed"], d)) {
+            required2.push("offset", "birth");
+            allowed.push("offset", "birth", "decisionUtcMs");
+            if (d !== "decision-clock-rejected") {
+              const entered = facts.offset?.status === "nonempty" && facts.birth?.result === "present";
+              if (entered) {
+                required2.push("absolute", "public");
+                allowed.push("absolute", "public");
+              }
+              if (d !== "interval-rejected") {
+                if (!entered || facts.public?.branch !== "accepted") return;
+                required2.push("decisionUtcMs");
+                if (d === "initial-accepted") {
+                  required2.push("selectedMs");
+                  allowed.push("selectedMs");
+                }
+              } else if (facts.public?.branch === "accepted") return;
+            }
+          }
+        }
+      }
+    }
+    if (required2.some((key) => !(key in f)) || Object.keys(f).some((key) => !allowed.includes(key))) return;
+    const result = Object.freeze({
+      model: v.model,
+      mode: v.mode,
+      decision: d,
+      timeBasis: v.timeBasis,
+      facts: Object.freeze(facts)
+    });
+    if (Buffer.byteLength(JSON.stringify(result)) > 3e3) return;
+    return result;
+  } catch {
+    return;
+  }
+}
 var scopes = new AsyncLocalStorage();
 var identityKeys = [
   "entryId",
@@ -4449,7 +4713,9 @@ var identityKeys = [
   "trigger"
 ];
 var fieldKeys = [
+  "linuxIdentity",
   ...identityKeys,
+  ...creationKeys,
   "outcome",
   "durationMs",
   "elapsedMs",
@@ -4477,6 +4743,7 @@ var fieldKeys = [
   "signalCode",
   "exitObserved",
   "monitoringFailed",
+  "readinessExitReason",
   "rootProcessState",
   "rootStartTicks",
   "rootUserTicks",
@@ -4497,7 +4764,27 @@ var eventKeys = [...fieldKeys, "stage", "event", "timestampMs", "error"];
 function member(values, value) {
   return typeof value === "string" && values.some((selected) => selected === value);
 }
+function plain(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === null || prototype === Object.prototype;
+}
+function detachedRecord(value, keys2) {
+  if (!plain(value)) return;
+  const result = {};
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.length > keys2.length) return;
+  for (const key of ownKeys) {
+    if (typeof key !== "string" || !keys2.includes(key)) return;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) return;
+    result[key] = descriptor.value;
+  }
+  return result;
+}
 function safeField(key, value) {
+  if (key === "linuxIdentity") return validateLinuxIdentity(value) !== void 0;
+  if (creationKeys.some((selected) => selected === key)) return safeCreationField(key, value);
   if (["entryId", "operationId", "originOperationId", "requestId", "connectionId", "sessionId"].includes(key))
     return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
   if (key === "action") return member(actions, value);
@@ -4507,6 +4794,7 @@ function safeField(key, value) {
   if (key === "status") return member(statuses, value);
   if (key === "phase") return member(phases, value);
   if (key === "rootProcessState") return member(rootProcessStates, value);
+  if (key === "readinessExitReason") return member(readinessExitReasons, value);
   if (key === "listenerOwnerRelation") return member(listenerOwnerRelations, value);
   if (key === "signalCode") return value === null || member(signals, value);
   if (key === "trigger") return value === "gateway-disconnect";
@@ -4548,7 +4836,8 @@ function copyFields(value) {
   const result = {};
   for (const key of fieldKeys) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor && "value" in descriptor && safeField(key, descriptor.value)) result[key] = descriptor.value;
+    if (descriptor && "value" in descriptor && safeField(key, descriptor.value))
+      result[key] = key === "linuxIdentity" ? validateLinuxIdentity(descriptor.value) : descriptor.value;
   }
   return result;
 }
@@ -4619,24 +4908,37 @@ function runFixtureCleanup(identity, job) {
   return scopes.run({ ...selected, trigger: "gateway-disconnect" }, job);
 }
 function emitFixtureEvent(stage, event, fields3 = {}, error2) {
+  publishFixtureEvent(stage, event, fields3, error2);
+}
+function publishFixtureEvent(stage, event, fields3, error2, creationFrame, sourceStatEndedMs) {
   if (!observation.hasSubscribers) return;
   let payload;
   try {
     if (!member(stages, stage) || !member(["begin", "end", "decision"], event)) return;
-    const metadata = copyFields({ ...current(), ...fields3 });
+    const scoped = current();
+    if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
+    const metadata = copyFields({ ...scoped, ...fields3 });
+    if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
     payload = Object.freeze({
       ...metadata,
       stage,
       event,
       outcome: metadata.outcome ?? (event === "begin" ? "started" : event === "end" ? "succeeded" : "observed"),
-      timestampMs: performance2.now(),
+      timestampMs: sourceStatEndedMs ?? performance2.now(),
       durationMs: metadata.durationMs ?? 0,
       ...error2 === void 0 ? {} : { error: errorMetadata(error2) }
     });
   } catch {
     return;
   }
+  if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
   observation.publish(payload);
+}
+function emitFixtureCreationDecision(frame, fields3, sourceStatEndedMs) {
+  if (!fixtureCreationFrameActive(frame)) return;
+  if (sourceStatEndedMs !== void 0 && (!fields3.linuxIdentity || !Number.isFinite(sourceStatEndedMs) || sourceStatEndedMs < 0))
+    return;
+  publishFixtureEvent("process-creation-identity", "decision", fields3, void 0, frame, sourceStatEndedMs);
 }
 var unobservedFinish = () => {
 };
@@ -4666,6 +4968,126 @@ function beginFixtureStage(stage, fields3 = {}) {
     );
   };
 }
+var registryQueryKind = "creation-observation-registry";
+function isCreationRegistry(value) {
+  const record2 = detachedRecord(value, ["requests", "bookkeepingFailed", "responder"]);
+  return !!record2 && record2.requests instanceof Set && typeof record2.bookkeepingFailed === "boolean" && typeof record2.responder === "function";
+}
+function discoverCreationRegistry() {
+  if (!creationRegistryObservation.hasSubscribers) return;
+  const query = { kind: registryQueryKind, reply: void 0 };
+  try {
+    creationRegistryObservation.publish(query);
+    const reply = Object.getOwnPropertyDescriptor(query, "reply");
+    if (reply && "value" in reply && isCreationRegistry(reply.value)) return reply.value;
+  } catch {
+    const reply = Object.getOwnPropertyDescriptor(query, "reply");
+    if (reply && "value" in reply && isCreationRegistry(reply.value)) reply.value.bookkeepingFailed = true;
+  }
+}
+function isCreationRequest(value) {
+  const record2 = detachedRecord(value, [
+    "matches",
+    "active",
+    "sourceAttempts",
+    "comparisons",
+    "tokens",
+    "capped",
+    "disabled",
+    "revoked"
+  ]);
+  if (!record2 || typeof record2.matches !== "function") return false;
+  for (const key of ["active", "capped", "disabled", "revoked"]) if (typeof record2[key] !== "boolean") return false;
+  for (const key of ["sourceAttempts", "comparisons", "tokens"]) {
+    const count = record2[key];
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0 || count > 128) return false;
+  }
+  return true;
+}
+function captureCreationOrigin(resourceIdentity) {
+  const scope = scopes.getStore();
+  const raw = scope ? typeof scope === "function" ? scope() : scope : {};
+  const fallback = { ...resourceIdentity };
+  for (const key of ["pid", "port"]) {
+    const descriptor = Object.getOwnPropertyDescriptor(raw, key);
+    if (descriptor && (!("value" in descriptor) || descriptor.value !== void 0 && !safeField(key, descriptor.value)))
+      delete fallback[key];
+  }
+  const selected = { ...fallback, ...copyFields(raw) };
+  const { operationId, requestId: _requestId, action: _action, trigger: _trigger, ...identity } = selected;
+  return Object.freeze(copyFields({ ...identity, ...operationId ? { originOperationId: operationId } : {} }));
+}
+function reserveFixtureCreationObservation(source, previous, resourceIdentity, requireSourceOrigin = false) {
+  let registry2;
+  try {
+    registry2 = discoverCreationRegistry();
+    if (!registry2 || registry2.bookkeepingFailed) return;
+    let available = false;
+    for (const request of registry2.requests) {
+      if (!isCreationRequest(request)) {
+        registry2.bookkeepingFailed = true;
+        return;
+      }
+      if (!request.active || request.disabled) continue;
+      if (request.tokens < 128 || !source && previous?.registry === registry2 && previous.request === request && !previous.compared)
+        available = true;
+      else request.capped = true;
+    }
+    if (!available) return;
+    const origin = captureCreationOrigin(resourceIdentity);
+    if (requireSourceOrigin && (!previous || !sameFixtureOrigin(previous.origin, origin) || origin.pid !== resourceIdentity?.pid || origin.port !== resourceIdentity?.port))
+      return;
+    for (const request of registry2.requests) {
+      if (!isCreationRequest(request)) {
+        registry2.bookkeepingFailed = true;
+        return;
+      }
+      if (!request.active || request.disabled) continue;
+      try {
+        if (!request.matches(origin)) continue;
+        if (!request.active || request.disabled || registry2.bookkeepingFailed) continue;
+        const reuse = !source && previous?.registry === registry2 && previous.request === request && !previous.compared && sameFixtureOrigin(previous.origin, origin);
+        if (!reuse && request.tokens >= 128) {
+          request.capped = true;
+          continue;
+        }
+        if (!reuse) request.tokens++;
+        if (source) request.sourceAttempts++;
+        else request.comparisons++;
+        const frame = reuse ? previous : { origin, request, registry: registry2, compared: false };
+        if (!source) frame.compared = true;
+        return frame;
+      } catch {
+        request.disabled = true;
+      }
+    }
+  } catch {
+    if (registry2) registry2.bookkeepingFailed = true;
+  }
+}
+function fixtureCreationObservationEnabled() {
+  let registry2;
+  try {
+    registry2 = discoverCreationRegistry();
+    if (!registry2 || registry2.bookkeepingFailed) return false;
+    for (const request of registry2.requests) {
+      if (!isCreationRequest(request)) {
+        registry2.bookkeepingFailed = true;
+        return false;
+      }
+      if (request.active && !request.disabled) return true;
+    }
+  } catch {
+    if (registry2) registry2.bookkeepingFailed = true;
+  }
+  return false;
+}
+function sameFixtureOrigin(left, right) {
+  return identityKeys.every((key) => left[key] === right[key]);
+}
+function fixtureCreationFrameActive(frame) {
+  return !frame.registry.bookkeepingFailed && frame.request.active && !frame.request.disabled;
+}
 
 // src/adapters/platform-process.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -4673,7 +5095,133 @@ init_define_DCT_TOOL_CATALOG();
 import { spawn as spawn2 } from "node:child_process";
 import { readFile, readlink, stat } from "node:fs/promises";
 import path2 from "node:path";
+import { performance as performance3 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
+
+// src/adapters/linux-creation-identity.ts
+init_define_DCT_OFFICIAL_RELEASE();
+init_define_DCT_TOOL_CATALOG();
+var SECOND = 1000000000n;
+var MILLISECOND = 1000000n;
+var MODULUS = 1n << 64n;
+var SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+var DATE_LIMIT = 8640000000000000n;
+function trace(target, fields3) {
+  try {
+    if (target) Object.assign(target, fields3);
+  } catch {
+  }
+}
+function minimum(a, b) {
+  return a < b ? a : b;
+}
+function ceiling(a, b) {
+  return a / b + (a % b > 0n ? 1n : 0n);
+}
+function linuxBirthInterval({
+  rawTicks: q,
+  clkTck: h,
+  readerBirthUpperNs: x
+}, observation2) {
+  trace(observation2, { readerUpperNs: x });
+  if (q < 0n || q > SAFE || h <= 0n || h > SAFE || x < 0n || x >= MODULUS) {
+    trace(observation2, { branch: "input-rejected", result: "input-rejected" });
+    return;
+  }
+  if (SECOND % h === 0n) {
+    trace(observation2, { branch: "divide" });
+    const divisor2 = SECOND / h;
+    const lowerNs2 = q * divisor2;
+    const upperNs2 = minimum(x, (q + 1n) * divisor2 - 1n);
+    const interval2 = lowerNs2 <= upperNs2 ? { lowerNs: lowerNs2, upperNs: upperNs2 } : void 0;
+    trace(observation2, { result: interval2 ? "present" : "empty", ...interval2 ? { interval: interval2 } : {} });
+    return interval2;
+  }
+  const multiplier = h % 512n === 0n ? h : 9n;
+  const divisor = h % 512n === 0n ? SECOND : (9n * SECOND + h / 2n) / h;
+  trace(observation2, { branch: multiplier === 9n ? "multiply-9" : "multiply-512" });
+  if (divisor === 0n) {
+    trace(observation2, { result: "zero-divisor" });
+    return;
+  }
+  const left = q * divisor;
+  const right = minimum((q + 1n) * divisor - 1n, MODULUS - 1n);
+  if (left >= MODULUS || right < left || multiplier * x < left) {
+    trace(observation2, { result: "range-rejected" });
+    return;
+  }
+  const lastWrap = (multiplier * x - left) / MODULUS;
+  const lowerNs = ceiling(left, multiplier);
+  const upperNs = minimum(x, (lastWrap * MODULUS + right) / multiplier);
+  const interval = lowerNs <= upperNs ? { lowerNs, upperNs } : void 0;
+  trace(observation2, { result: interval ? "present" : "empty", ...interval ? { interval } : {} });
+  return interval;
+}
+async function readLinuxCalibration(readText, now, observation2) {
+  trace(observation2, { phase: "clock" });
+  const before = now();
+  trace(observation2, { phase: "reading" });
+  let text;
+  try {
+    text = await readText("/proc/uptime");
+  } catch (error2) {
+    trace(observation2, { failure: "read-or-abort" });
+    throw error2;
+  }
+  trace(observation2, { phase: "clock" });
+  const after = now();
+  const match = /^(\d+)\.(\d{2})[ \t]+\d+\.\d{2}\n?$/.exec(text);
+  if (!match || !Number.isSafeInteger(before) || !Number.isSafeInteger(after) || before < 0 || after < before) {
+    trace(observation2, { failure: "bracket-or-text-invalid" });
+    throw new Error("The Linux clock calibration is unverifiable.");
+  }
+  const uptimeNs = BigInt(match[1] ?? "") * SECOND + BigInt(match[2] ?? "") * 10000000n;
+  const uptimeUpperNs = uptimeNs + 9999999n;
+  if (uptimeUpperNs >= MODULUS) {
+    trace(observation2, { failure: "uptime-out-of-range" });
+    throw new Error("The Linux clock calibration is unverifiable.");
+  }
+  trace(observation2, { phase: "complete" });
+  return {
+    lowerNs: BigInt(before) * MILLISECOND - uptimeNs - 10000000n,
+    upperNs: (BigInt(after) + 1n) * MILLISECOND - uptimeNs,
+    uptimeUpperNs,
+    beforeUtcMs: before,
+    afterUtcMs: after
+  };
+}
+function tracedLinuxIntersection(observation2, ...intervals) {
+  let lowerNs = intervals[0]?.lowerNs;
+  let upperNs = intervals[0]?.upperNs;
+  if (lowerNs === void 0 || upperNs === void 0) return;
+  for (const interval of intervals) {
+    if (interval.lowerNs > lowerNs) lowerNs = interval.lowerNs;
+    if (interval.upperNs < upperNs) upperNs = interval.upperNs;
+  }
+  trace(observation2, { interval: { lowerNs, upperNs } });
+  return lowerNs <= upperNs ? { lowerNs, upperNs } : void 0;
+}
+function linuxPublicTime(interval, requestUtc, decisionUtc, observation2) {
+  trace(observation2, { absolute: interval });
+  if (!Number.isSafeInteger(requestUtc) || !Number.isSafeInteger(decisionUtc) || decisionUtc < requestUtc) {
+    trace(observation2, { branch: "invalid-clock" });
+    return;
+  }
+  if (interval.lowerNs > interval.upperNs || interval.lowerNs < (BigInt(requestUtc) - 1000n) * MILLISECOND || interval.upperNs > (BigInt(decisionUtc) + 1000n) * MILLISECOND) {
+    trace(observation2, { branch: "containment-or-order-rejected" });
+    return;
+  }
+  const point = ceiling(interval.lowerNs, MILLISECOND);
+  trace(observation2, { pointMs: point });
+  if (point < -DATE_LIMIT || point > DATE_LIMIT || point * MILLISECOND > interval.upperNs) {
+    trace(observation2, { branch: "point-or-date-range-rejected" });
+    return;
+  }
+  const date4 = new Date(Number(point));
+  const result = date4.getTime() === Number(point) ? date4.toISOString() : void 0;
+  trace(observation2, { branch: result ? "accepted" : "date-roundtrip-rejected" });
+  return result;
+}
 
 // src/adapters/windows-launch.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -5233,19 +5781,123 @@ function normalizePath(value) {
 }
 function validateProcessIdentity(evidence, target, { newlyLaunched = false } = {}) {
   const root = evidence.root;
-  if (!root?.exists) throw new Error("The target root process is absent.");
-  if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
-    throw new Error("The process executable identity changed.");
-  if (root.sessionId !== evidence.currentSessionId) throw new Error("The process user/session identity changed.");
-  const actual = Date.parse(root.startedAtUtc);
-  const recorded = Date.parse(target.startedAtUtc);
-  if (!Number.isFinite(actual) || !Number.isFinite(recorded))
-    throw new Error("The process creation time is unverifiable.");
-  if (newlyLaunched ? actual < recorded - 1e3 || actual > Date.now() + 1e3 : Math.abs(actual - recorded) > 1e3) {
-    throw new Error("The process creation time changed; the PID may have been reused.");
+  let actual;
+  let recorded;
+  let upperNow;
+  let branch;
+  let failed = true;
+  try {
+    if (!root?.exists) throw new Error("The target root process is absent.");
+    if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
+      throw new Error("The process executable identity changed.");
+    if (root.sessionId !== evidence.currentSessionId) throw new Error("The process user/session identity changed.");
+    actual = Date.parse(root.startedAtUtc);
+    recorded = Date.parse(target.startedAtUtc);
+    if (!Number.isFinite(actual) || !Number.isFinite(recorded)) {
+      branch = "creation-unverifiable";
+      throw new Error("The process creation time is unverifiable.");
+    }
+    let changed;
+    if (newlyLaunched) {
+      if (actual < recorded - 1e3) changed = true;
+      else {
+        upperNow = Date.now();
+        changed = actual > upperNow + 1e3;
+      }
+    } else changed = Math.abs(actual - recorded) > 1e3;
+    if (changed) {
+      branch = newlyLaunched ? upperNow === void 0 ? "new-lower-rejected" : "new-upper-rejected" : "established-delta-rejected";
+      throw new Error("The process creation time changed; the PID may have been reused.");
+    }
+    branch = newlyLaunched ? "new-accepted" : "established-accepted";
+    if (target.targetKind === "chrome" && process.platform === "win32" && (root.productName !== "Google Chrome" || root.companyName !== "Google LLC")) {
+      throw new Error("The target executable is not identified as Google Chrome.");
+    }
+    failed = false;
+  } finally {
+    if (fixtureCreationObservationEnabled()) {
+      try {
+        observeCreationDecision(root, newlyLaunched, actual, recorded, upperNow, branch, failed);
+      } catch {
+      }
+    }
   }
-  if (target.targetKind === "chrome" && process.platform === "win32" && (root.productName !== "Google Chrome" || root.companyName !== "Google LLC")) {
-    throw new Error("The target executable is not identified as Google Chrome.");
+}
+var linuxDiagnosticSources = /* @__PURE__ */ new WeakMap();
+var creationSources = /* @__PURE__ */ new WeakMap();
+function boundRootMatches(root, source) {
+  const prototype = Object.getPrototypeOf(root);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  for (const [key, value] of [
+    ["exists", true],
+    ["startedAtUtc", source.raw],
+    ["executablePath", source.executablePath],
+    ["sessionId", source.sessionId]
+  ]) {
+    if (typeof key !== "string") return false;
+    const descriptor = Object.getOwnPropertyDescriptor(root, key);
+    if (!descriptor || !("value" in descriptor) || descriptor.value !== value) return false;
+  }
+  return true;
+}
+function observeCreationDecision(root, newlyLaunched, actual, recorded, upperNow, branch, failed) {
+  const source = creationSources.get(root);
+  const frame = reserveFixtureCreationObservation(
+    false,
+    source?.frame,
+    source ? { pid: source.pid, port: source.port } : void 0
+  );
+  if (!frame) return;
+  const sameOrigin = source && sameFixtureOrigin(frame.origin, source.frame.origin);
+  let sourceStatus = source ? "unverifiable" : "missing";
+  if (source && sameOrigin && source.pid === frame.origin.pid && source.port === frame.origin.port && !source.invalid && source.fields && boundRootMatches(root, source) && (actual === void 0 || actual === source.clipped))
+    sourceStatus = "complete";
+  const comparisonStatus = branch === void 0 ? "not-reached" : branch === "creation-unverifiable" ? "unverifiable" : "reached";
+  if (!fixtureCreationFrameActive(frame)) return;
+  const fields3 = {
+    ...frame.origin,
+    phase: "process-identity",
+    outcome: failed ? "rejected" : "observed",
+    creationNewlyLaunched: newlyLaunched,
+    creationToleranceMs: 1e3,
+    creationSourceStatus: sourceStatus,
+    creationComparisonStatus: comparisonStatus,
+    creationUpperNowStatus: upperNow === void 0 ? "not-evaluated" : "read",
+    ...branch === void 0 ? {} : { creationBranch: branch },
+    ...comparisonStatus === "reached" && recorded !== void 0 && actual !== void 0 ? { creationExpectedUtcMs: recorded, creationObservedUtcMs: actual } : {},
+    ...upperNow === void 0 ? {} : { creationUpperNowUtcMs: upperNow },
+    ...sourceStatus === "complete" ? source?.fields : {}
+  };
+  emitFixtureCreationDecision(frame, fields3);
+}
+function creationClock(carrier) {
+  try {
+    return performance3.now();
+  } catch {
+    carrier.invalid = true;
+    return;
+  }
+}
+async function creationRead(carrier, prefix, job) {
+  if (!carrier) return job();
+  const started = creationClock(carrier);
+  try {
+    return await job();
+  } finally {
+    const ended = creationClock(carrier);
+    try {
+      if (prefix === "Stat" && ended !== void 0 && Number.isFinite(ended) && ended >= 0)
+        carrier.statEndedMs = ended;
+      if (started !== void 0 && ended !== void 0 && Number.isFinite(started) && Number.isFinite(ended) && started >= 0 && ended >= started) {
+        carrier.fields = {
+          ...carrier.fields,
+          [`creation${prefix}ReadStartedMs`]: started,
+          [`creation${prefix}ReadEndedMs`]: ended
+        };
+      } else carrier.invalid = true;
+    } catch {
+      carrier.invalid = true;
+    }
   }
 }
 async function resolveUnixExecutable({
@@ -5334,11 +5986,12 @@ async function resolveUnixExecutable({
   }
   return executable;
 }
-async function linuxCreationTime(pid, execute, readText) {
+var linuxRoots = /* @__PURE__ */ new WeakMap();
+async function linuxCreationTime(pid, execute, readText, carrier, knownTime) {
   const [stat2, boot, clock] = await Promise.all([
-    observeNativeFile("proc-stat", () => readText(`/proc/${pid}/stat`)),
-    observeNativeFile("proc-boot", () => readText("/proc/stat")),
-    observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"])
+    creationRead(carrier, "Stat", () => observeNativeFile("proc-stat", () => readText(`/proc/${pid}/stat`))),
+    knownTime === void 0 ? creationRead(carrier, "Boot", () => observeNativeFile("proc-boot", () => readText("/proc/stat"))) : Promise.resolve(""),
+    creationRead(carrier, "Clk", () => observeNativeCommand("getconf", execute, "getconf", ["CLK_TCK"]))
   ]);
   const processStat = stat2.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
   const processFields = processStat?.[2]?.split(/\s+/);
@@ -5348,12 +6001,27 @@ async function linuxCreationTime(pid, execute, readText) {
   const startTicks = Number(ticks);
   const bootSeconds = Number(bootTimes[0]?.[1]);
   const ticksPerSecond = Number(clockText);
-  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
+  if (Number(processStat?.[1]) !== pid || ticks === void 0 || !/^\d+$/.test(ticks) || !Number.isSafeInteger(startTicks) || knownTime === void 0 && (bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds)) || clock.code !== 0 || clock.stderr.trim() || !/^\d+$/.test(clockText) || !Number.isSafeInteger(ticksPerSecond) || ticksPerSecond <= 0) {
     emitFixtureEvent("native-file", "decision", { command: "proc-stat", pid, valid: false });
     throw new Error("The Linux process creation evidence is unverifiable.");
   }
-  const started = new Date(bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3);
+  const computedNumberMs = knownTime === void 0 ? bootSeconds * 1e3 + startTicks / ticksPerSecond * 1e3 : Date.parse(knownTime);
+  const started = new Date(computedNumberMs);
   if (!Number.isFinite(started.getTime())) throw new Error("The Linux process creation evidence is unverifiable.");
+  if (carrier && knownTime === void 0) {
+    try {
+      carrier.clipped = started.getTime();
+      carrier.fields = {
+        ...carrier.fields,
+        creationBootSeconds: bootSeconds,
+        creationStartTicks: startTicks,
+        creationClkTck: ticksPerSecond,
+        creationComputedNumberMs: computedNumberMs
+      };
+    } catch {
+      carrier.invalid = true;
+    }
+  }
   if (fixtureHasSubscribers()) {
     const states = {
       R: "running",
@@ -5387,7 +6055,13 @@ async function linuxCreationTime(pid, execute, readText) {
       ...counters
     });
   }
-  return started.toISOString();
+  if (carrier && knownTime !== void 0) carrier.invalid = true;
+  return {
+    startedAtUtc: started.toISOString(),
+    ticks: BigInt(startTicks),
+    h: BigInt(ticksPerSecond),
+    boot: knownTime === void 0 ? BigInt(bootSeconds) : void 0
+  };
 }
 function classifyListenerOwner(owner, root, rows) {
   if (!Number.isSafeInteger(owner) || owner <= 0) return "invalid-owner";
@@ -5445,7 +6119,7 @@ function emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned) {
     });
   }
 }
-async function unixSnapshot(pid, port, dependencies = {}) {
+async function snapshotUnix(pid, port, dependencies = {}, source) {
   const platform = dependencies.platform ?? process.platform;
   const execute = dependencies.run ?? run;
   const processes = await observeNativeCommand("ps", execute, "ps", ["-ww", "-axo", "pid=,ppid=,uid=,lstart=,comm="]);
@@ -5465,7 +6139,17 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     ] : [];
   });
   const root = rows.find((row) => row.pid === pid);
-  const rootStartedAt = root && platform === "linux" ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile(file, "utf8"))) : root?.started;
+  const frame = root && platform === "linux" && fixtureCreationObservationEnabled() ? reserveFixtureCreationObservation(true, void 0, { pid, port }) : void 0;
+  const carrier = frame ? { frame, pid, port } : void 0;
+  const sequence = source ? ++source.sequence : 0;
+  const previous = source?.targets.get(pid);
+  const linuxCreation = root && platform === "linux" ? await linuxCreationTime(
+    pid,
+    execute,
+    dependencies.readText ?? ((file) => readFile(file, "utf8")),
+    carrier,
+    previous?.port === port ? previous.time : void 0
+  ) : void 0;
   const owned = new Set(root ? [pid] : []);
   for (let changed = true; changed; ) {
     changed = false;
@@ -5495,7 +6179,7 @@ async function unixSnapshot(pid, port, dependencies = {}) {
       listeners.push({ localAddress: address.replace(/^\[|\]$/g, ""), owningProcess: owner });
   }
   if (platform === "darwin" && fixtureHasSubscribers()) emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned);
-  return {
+  const evidence = {
     root: root ? {
       exists: true,
       executablePath: await resolveUnixExecutable({
@@ -5506,7 +6190,7 @@ async function unixSnapshot(pid, port, dependencies = {}) {
         ...dependencies.readlink ? { readlink: dependencies.readlink } : {}
       }),
       sessionId: root.uid,
-      startedAtUtc: rootStartedAt ?? root.started
+      startedAtUtc: linuxCreation?.startedAtUtc ?? root.started
     } : { exists: false },
     currentSessionId: (dependencies.currentUser ?? process.getuid)?.() ?? (() => {
       throw new Error("Unix user identity unavailable.");
@@ -5514,14 +6198,321 @@ async function unixSnapshot(pid, port, dependencies = {}) {
     processIds: [...owned],
     listeners
   };
+  if (source && linuxCreation && evidence.root.exists)
+    linuxRoots.set(evidence.root, {
+      source,
+      sequence,
+      pid,
+      port,
+      ticks: linuxCreation.ticks,
+      h: linuxCreation.h,
+      boot: linuxCreation.boot,
+      raw: evidence.root.startedAtUtc,
+      executablePath: evidence.root.executablePath,
+      sessionId: evidence.root.sessionId
+    });
+  if (carrier?.statEndedMs !== void 0 && evidence.root.exists) {
+    try {
+      linuxDiagnosticSources.set(evidence, {
+        root: evidence.root,
+        frame: carrier.frame,
+        pid,
+        port,
+        statEndedMs: carrier.statEndedMs
+      });
+    } catch {
+    }
+  }
+  if (carrier && carrier.clipped !== void 0 && root && evidence.root.exists) {
+    try {
+      creationSources.set(evidence.root, {
+        ...carrier,
+        raw: evidence.root.startedAtUtc,
+        clipped: carrier.clipped,
+        executablePath: evidence.root.executablePath,
+        sessionId: evidence.root.sessionId
+      });
+    } catch {
+    }
+  }
+  return evidence;
+}
+function diagnosticSelectedMs(publicTime) {
+  try {
+    return Date.parse(publicTime);
+  } catch {
+    return;
+  }
+}
+function calibrationFacts(value) {
+  return value && {
+    beforeUtcMs: value.beforeUtcMs,
+    afterUtcMs: value.afterUtcMs,
+    uptimeUpperNs: value.uptimeUpperNs,
+    offset: { lowerNs: value.lowerNs, upperNs: value.upperNs }
+  };
+}
+function diagnosticNumbers(value) {
+  if (typeof value === "bigint") {
+    if (value <= -(10n ** 25n) || value >= 10n ** 25n) throw new Error("Diagnostic operand bound.");
+    return value.toString();
+  }
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, diagnosticNumbers(item)]));
+  return value;
 }
 function createPlatformAdapter(dependencies = {}) {
   const platform = dependencies.platform ?? process.platform;
+  const source = { sequence: 0, targets: /* @__PURE__ */ new Map() };
+  const now = dependencies.now ?? Date.now;
+  const readText = dependencies.unix?.readText ?? ((file) => readFile(file, "utf8"));
   const windows = createWindowsLauncher();
   const closeWindows = dependencies.closeWindows;
   const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, "SIGTERM"));
   if (!["win32", "linux", "darwin"].includes(platform)) throw new Error("Unsupported operating system.");
-  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : unixSnapshot);
+  const snapshot = dependencies.snapshot ?? (platform === "win32" ? async (pid, port) => parseSnapshot(await windowsHelper("Snapshot", { RootProcessId: pid, Port: port })) : (pid, port) => snapshotUnix(pid, port, { ...dependencies.unix, platform }, source));
+  const calibrations = /* @__PURE__ */ new WeakMap();
+  const launches = /* @__PURE__ */ new WeakMap();
+  const registeredChildren = /* @__PURE__ */ new WeakSet();
+  async function prepareLaunch(context = {}) {
+    context.signal?.throwIfAborted();
+    const value = platform === "linux" ? await abortable(readLinuxCalibration(readText, now), context.signal) : void 0;
+    context.signal?.throwIfAborted();
+    const token = {};
+    calibrations.set(token, { value });
+    return token;
+  }
+  function registerLaunch(target, token, requestedAt) {
+    if (platform !== "linux") return;
+    const prior = launches.get(target);
+    if (prior) {
+      if (prior.token === token && prior.child === target.child && prior.pid === target.processId && prior.requestedAt === requestedAt)
+        return;
+      throw new Error("The registered Linux child identity changed.");
+    }
+    const calibration = calibrations.get(token);
+    const child = target.child;
+    const pid = child && Object.getOwnPropertyDescriptor(child, "pid");
+    if (!calibration?.value || calibration.target || !child || !pid || !("value" in pid) || pid.value !== target.processId || !Number.isSafeInteger(target.processId) || target.processId <= 0 || !Number.isSafeInteger(requestedAt))
+      throw new Error("The Linux launch identity is unverifiable.");
+    observeTargetExit(target);
+    if (targetExitObserved(target) || child.monitoringFailure)
+      throw new Error("The Linux actual-child identity is unavailable.");
+    const registeredPid = target.processId;
+    if (source.targets.has(registeredPid) || registeredChildren.has(child))
+      throw new Error("The Linux child identity is already registered.");
+    registeredChildren.add(child);
+    source.targets.set(registeredPid, { target, port: target.port });
+    calibration.target = target;
+    launches.set(target, {
+      token,
+      calibration: calibration.value,
+      requestedAt,
+      sequence: source.sequence,
+      child,
+      pid: target.processId,
+      port: target.port,
+      path: target.executablePath,
+      kind: target.targetKind,
+      requestText: target.startedAtUtc
+    });
+    child.once("exit", () => {
+      if (source.targets.get(registeredPid)?.target === target) source.targets.delete(registeredPid);
+    });
+  }
+  function checkLaunch(target, proof, context) {
+    context.signal?.throwIfAborted();
+    const pid = Object.getOwnPropertyDescriptor(proof.child, "pid");
+    if (target.child !== proof.child || target.processId !== proof.pid || target.port !== proof.port || !pid || !("value" in pid) || pid.value !== proof.pid || target.executablePath !== proof.path || target.targetKind !== proof.kind || target.startedAtUtc !== (proof.bound?.publicTime ?? proof.requestText) || targetExitObserved(target) || proof.child.monitoringFailure)
+      throw new Error("The registered Linux child identity is unavailable or changed.");
+  }
+  async function validateIdentity2(evidence, target, context = {}) {
+    if (platform !== "linux") {
+      validateProcessIdentity(evidence, target, { newlyLaunched: context.newlyLaunched ?? false });
+      if (context.newlyLaunched && evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+      return;
+    }
+    let association = linuxDiagnosticSources.get(evidence);
+    const observing = association !== void 0;
+    const facts = {};
+    let mode = "unregistered";
+    let decision;
+    const calibrationTrace = observing ? {} : void 0;
+    const intersectionTrace = observing ? {} : void 0;
+    const birthTrace = observing ? {} : void 0;
+    const publicTrace = observing ? {} : void 0;
+    try {
+      const launch = launches.get(target);
+      if (!launch) {
+        decision = "no-launch";
+        throw new Error("The Linux target has no registered launch identity.");
+      }
+      mode = "unselected";
+      try {
+        checkLaunch(target, launch, context);
+      } catch (error2) {
+        decision = "launch-check-threw";
+        throw error2;
+      }
+      const root = evidence.root;
+      const raw = linuxRoots.get(root);
+      if (association && association.root !== root) association = void 0;
+      if (!raw || raw.source !== source || raw.sequence <= launch.sequence || raw.pid !== launch.pid || raw.port !== launch.port || !boundRootMatches(evidence.root, raw) || normalizePath(raw.executablePath) !== normalizePath(launch.path) || raw.sessionId !== evidence.currentSessionId) {
+        decision = "root-proof-rejected";
+        throw new Error("The Linux root identity proof is unverifiable.");
+      }
+      if (launch.bound) {
+        mode = "established";
+        if (observing)
+          facts.raw = {
+            q: raw.ticks,
+            H: raw.h,
+            ...raw.boot === void 0 ? {} : { bootSeconds: raw.boot }
+          };
+        if (raw.ticks !== launch.bound.ticks || raw.h !== launch.bound.h || raw.sessionId !== launch.bound.sessionId) {
+          decision = "established-changed";
+          throw new Error("The Linux process creation identity changed.");
+        }
+        if (observing) facts.selectedMs = diagnosticSelectedMs(launch.bound.publicTime);
+        decision = "established-accepted";
+        return;
+      }
+      mode = "initial";
+      if (observing) {
+        facts.raw = { q: raw.ticks, H: raw.h, ...raw.boot === void 0 ? {} : { bootSeconds: raw.boot } };
+        facts.pre = calibrationFacts(launch.calibration);
+        facts.requestUtcMs = launch.requestedAt;
+      }
+      if (raw.boot === void 0) {
+        decision = "boot-missing";
+        throw new Error("The Linux initial creation identity lacks boot evidence.");
+      }
+      let post;
+      try {
+        post = await abortable(readLinuxCalibration(readText, now, calibrationTrace), context.signal);
+      } catch (error2) {
+        const failure2 = calibrationTrace?.failure ?? (calibrationTrace?.phase === "reading" && context.signal?.aborted ? "read-or-abort" : void 0);
+        if (failure2) {
+          decision = "post-calibration-threw";
+          facts.postFailure = { branch: failure2 };
+        }
+        throw error2;
+      }
+      if (observing) facts.post = calibrationFacts(post);
+      try {
+        checkLaunch(target, launch, context);
+      } catch (error2) {
+        decision = "post-launch-check-threw";
+        throw error2;
+      }
+      if (!launch.calibration || post.uptimeUpperNs < launch.calibration.uptimeUpperNs || launch.calibration.beforeUtcMs < launch.requestedAt || post.beforeUtcMs < launch.calibration.afterUtcMs) {
+        decision = "clock-order-rejected";
+        throw new Error("The Linux process creation clock identity moved backwards.");
+      }
+      if (linuxRoots.get(evidence.root) !== raw || !boundRootMatches(evidence.root, raw) || evidence.currentSessionId !== raw.sessionId) {
+        decision = "root-proof-changed";
+        throw new Error("The Linux root identity proof changed.");
+      }
+      const offset = launch.calibration && tracedLinuxIntersection(intersectionTrace, launch.calibration, post, {
+        lowerNs: raw.boot * 1000000000n,
+        upperNs: (raw.boot + 1n) * 1000000000n
+      });
+      const birth = linuxBirthInterval(
+        {
+          rawTicks: raw.ticks,
+          clkTck: raw.h,
+          readerBirthUpperNs: post.uptimeUpperNs
+        },
+        birthTrace
+      );
+      if (observing) {
+        facts.offset = intersectionTrace?.interval && {
+          status: offset ? "nonempty" : "empty",
+          ...intersectionTrace.interval
+        };
+        facts.birth = birthTrace;
+      }
+      const decisionNow = now();
+      if (observing && Number.isSafeInteger(decisionNow)) facts.decisionUtcMs = decisionNow;
+      if (decisionNow < post.afterUtcMs) {
+        decision = "decision-clock-rejected";
+        throw new Error("The Linux process creation clock identity moved backwards.");
+      }
+      const publicTime = offset && birth && linuxPublicTime(
+        { lowerNs: offset.lowerNs + birth.lowerNs, upperNs: offset.upperNs + birth.upperNs },
+        launch.requestedAt,
+        decisionNow,
+        publicTrace
+      );
+      if (observing && publicTrace?.branch) {
+        facts.absolute = publicTrace.absolute;
+        facts.public = {
+          branch: publicTrace.branch,
+          ...publicTrace.pointMs === void 0 ? {} : { pointMs: publicTrace.pointMs }
+        };
+      }
+      if (!publicTime) {
+        decision = "interval-rejected";
+        throw new Error("The Linux process creation identity interval is unverifiable.");
+      }
+      try {
+        context.assertReadinessActive?.();
+      } catch (error2) {
+        decision = "readiness-check-threw";
+        throw error2;
+      }
+      try {
+        checkLaunch(target, launch, context);
+      } catch (error2) {
+        decision = "final-launch-check-threw";
+        throw error2;
+      }
+      const concurrent = launches.get(target)?.bound;
+      if (concurrent && (concurrent.ticks !== raw.ticks || concurrent.h !== raw.h || concurrent.sessionId !== raw.sessionId)) {
+        decision = "concurrent-changed";
+        throw new Error("The Linux process creation identity changed.");
+      }
+      if (!launch.bound) launch.bound = { ticks: raw.ticks, h: raw.h, sessionId: raw.sessionId, publicTime };
+      source.targets.set(launch.pid, { target, port: launch.port, time: launch.bound.publicTime });
+      target.startedAtUtc = launch.bound.publicTime;
+      if (observing) facts.selectedMs = diagnosticSelectedMs(launch.bound.publicTime);
+      decision = "initial-accepted";
+    } finally {
+      try {
+        if (association && decision) {
+          const frame = reserveFixtureCreationObservation(
+            false,
+            association.frame,
+            { pid: association.pid, port: association.port },
+            true
+          );
+          if (frame && fixtureCreationFrameActive(frame) && sameFixtureOrigin(frame.origin, association.frame.origin) && frame.origin.pid === association.pid && frame.origin.port === association.port) {
+            const payload = validateLinuxIdentity(
+              diagnosticNumbers({
+                model: "linux-private-interval-v1",
+                mode,
+                decision,
+                timeBasis: "source-stat-read-ended",
+                facts
+              })
+            );
+            if (payload && fixtureCreationFrameActive(frame))
+              emitFixtureCreationDecision(
+                frame,
+                {
+                  ...frame.origin,
+                  phase: "process-identity",
+                  outcome: decision.endsWith("-accepted") ? "observed" : "rejected",
+                  linuxIdentity: payload
+                },
+                association.statEndedMs
+              );
+          }
+        }
+      } catch {
+      }
+    }
+  }
   const nativeExit = /* @__PURE__ */ new WeakMap();
   async function requestNormalClose(target, context = {}) {
     observeTargetExit(target);
@@ -5536,7 +6527,14 @@ function createPlatformAdapter(dependencies = {}) {
       error2.details = { phase: "process-identity", listenerState, closeRequested: false, processExited: false };
       throw error2;
     }
-    validateProcessIdentity(evidence, target);
+    await validateIdentity2(evidence, target, context);
+    context.signal?.throwIfAborted();
+    if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+    if (platform === "linux") {
+      const launch = launches.get(target);
+      if (!launch) throw new Error("The Linux target has no registered launch identity.");
+      checkLaunch(target, launch, context);
+    }
     if (platform !== "win32") {
       requestUnixClose(target.processId);
       return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
@@ -5587,7 +6585,9 @@ function createPlatformAdapter(dependencies = {}) {
   }
   return {
     snapshot,
-    validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
+    prepareLaunch,
+    registerLaunch,
+    validateIdentity: validateIdentity2,
     async reservedRanges() {
       if (process.platform === "linux") {
         const value = await readFile("/proc/sys/net/ipv4/ip_local_reserved_ports", "utf8");
@@ -7552,7 +8552,7 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
   def.format = def.format || "float64";
   const isInt = def.format?.includes("int");
   const origin = isInt ? "int" : "number";
-  const [minimum, maximum] = NUMBER_FORMAT_RANGES[def.format];
+  const [minimum2, maximum] = NUMBER_FORMAT_RANGES[def.format];
   inst._zod.check = (payload) => {
     const input = payload.value;
     if (isInt) {
@@ -7594,12 +8594,12 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
         return;
       }
     }
-    if (input < minimum) {
+    if (input < minimum2) {
       payload.issues.push({
         origin: "number",
         input,
         code: "too_small",
-        minimum,
+        minimum: minimum2,
         inclusive: true,
         inst,
         continue: !def.abort
@@ -10415,11 +11415,11 @@ function _maxLength(maximum, params) {
   return ch;
 }
 // @__NO_SIDE_EFFECTS__
-function _minLength(minimum, params) {
+function _minLength(minimum2, params) {
   return new $ZodCheckMinLength({
     check: "min_length",
     ...normalizeParams(params),
-    minimum
+    minimum: minimum2
   });
 }
 // @__NO_SIDE_EFFECTS__
@@ -11130,8 +12130,8 @@ var minContributor = (agg, def) => narrowMin(agg, "minimum", def.minimum);
 var maxContributor = (agg, def) => narrowMax(agg, "maximum", def.maximum);
 var formatContributor = (ranges) => (agg, def) => {
   setFormat(agg, def.format);
-  const [minimum, maximum] = ranges[def.format];
-  narrowMin(agg, "minimum", minimum);
+  const [minimum2, maximum] = ranges[def.format];
+  narrowMin(agg, "minimum", minimum2);
   narrowMax(agg, "maximum", maximum);
 };
 var contributors = {
@@ -11201,9 +12201,9 @@ var exactPattern = (p) => exactPatterns.get(p) ?? p;
 var stringProcessor = (schema, ctx, _json, _params) => {
   const json = _json;
   json.type = "string";
-  const { minimum, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
-  if (typeof minimum === "number")
-    json.minLength = minimum;
+  const { minimum: minimum2, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
+  if (typeof minimum2 === "number")
+    json.minLength = minimum2;
   if (typeof maximum === "number")
     json.maxLength = maximum;
   if (format) {
@@ -11232,9 +12232,9 @@ var stringProcessor = (schema, ctx, _json, _params) => {
 };
 var numberProcessor = (schema, ctx, _json, params) => {
   const json = _json;
-  const { minimum, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
+  const { minimum: minimum2, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
   json.type = isInt ? "integer" : "number";
-  const exMin = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY);
+  const exMin = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum2 ?? Number.NEGATIVE_INFINITY);
   const exMax = typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY);
   const legacy = ctx.target === "draft-04" || ctx.target === "openapi-3.0";
   if (exMin) {
@@ -11244,8 +12244,8 @@ var numberProcessor = (schema, ctx, _json, params) => {
     } else {
       json.exclusiveMinimum = exclusiveMinimum;
     }
-  } else if (typeof minimum === "number") {
-    json.minimum = minimum;
+  } else if (typeof minimum2 === "number") {
+    json.minimum = minimum2;
   }
   if (exMax) {
     if (legacy) {
@@ -11375,9 +12375,9 @@ var fileProcessor = (schema, _ctx, json, _params) => {
   _json.type = "string";
   _json.format = "binary";
   _json.contentEncoding = "binary";
-  const { minimum, maximum, mime } = aggregateChecks(schema);
-  if (minimum !== void 0)
-    _json.minLength = minimum;
+  const { minimum: minimum2, maximum, mime } = aggregateChecks(schema);
+  if (minimum2 !== void 0)
+    _json.minLength = minimum2;
   if (maximum !== void 0)
     _json.maxLength = maximum;
   if (!mime)
@@ -11410,9 +12410,9 @@ var setProcessor = (schema, ctx, json, params) => {
 var arrayProcessor = (schema, ctx, _json, params) => {
   const json = _json;
   const def = schema._zod.def;
-  const { minimum, maximum } = aggregateChecks(schema);
-  if (typeof minimum === "number")
-    json.minItems = minimum;
+  const { minimum: minimum2, maximum } = aggregateChecks(schema);
+  if (typeof minimum2 === "number")
+    json.minItems = minimum2;
   if (typeof maximum === "number")
     json.maxItems = maximum;
   json.type = "array";
@@ -11558,9 +12558,9 @@ var tupleProcessor = (schema, ctx, _json, params) => {
     if (isClosed)
       json.maxItems = maxItems;
   }
-  const { minimum, maximum } = aggregateChecks(schema);
-  if (typeof minimum === "number")
-    json.minItems = minimum;
+  const { minimum: minimum2, maximum } = aggregateChecks(schema);
+  if (typeof minimum2 === "number")
+    json.minItems = minimum2;
   if (typeof maximum === "number")
     json.maxItems = maximum;
 };
@@ -11588,7 +12588,7 @@ function stringifyKeyNames(bySchema, json, visited) {
   const values = json.enum ?? (json.const !== void 0 ? [json.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+  const { minimum: minimum2, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -12358,8 +13358,8 @@ var ZodNumber = /* @__PURE__ */ $constructor(
   },
   /* @__PURE__ */ util_exports.derived({
     minValue: (inst) => {
-      const { minimum, exclusiveMinimum } = aggregateChecks(inst);
-      return Math.max(minimum ?? Number.NEGATIVE_INFINITY, exclusiveMinimum ?? Number.NEGATIVE_INFINITY);
+      const { minimum: minimum2, exclusiveMinimum } = aggregateChecks(inst);
+      return Math.max(minimum2 ?? Number.NEGATIVE_INFINITY, exclusiveMinimum ?? Number.NEGATIVE_INFINITY);
     },
     maxValue: (inst) => {
       const { maximum, exclusiveMaximum } = aggregateChecks(inst);
@@ -12526,8 +13526,8 @@ var ZodDate = /* @__PURE__ */ $constructor(
   },
   /* @__PURE__ */ util_exports.derived({
     minDate: (inst) => {
-      const { minimum } = aggregateChecks(inst);
-      return minimum ? new Date(minimum) : null;
+      const { minimum: minimum2 } = aggregateChecks(inst);
+      return minimum2 ? new Date(minimum2) : null;
     },
     maxDate: (inst) => {
       const { maximum } = aggregateChecks(inst);
@@ -41673,7 +42673,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { realpath as realpath4 } from "node:fs/promises";
 import net from "node:net";
 import path7 from "node:path";
-import { performance as performance3 } from "node:perf_hooks";
+import { performance as performance4 } from "node:perf_hooks";
 
 // src/domains/cdp-target.ts
 init_define_DCT_OFFICIAL_RELEASE();
@@ -41833,6 +42833,13 @@ function waitForWork(work, signal) {
     );
     if (signal.aborted) aborted2();
   });
+}
+function requireTargetObservation(target, signal) {
+  signal?.throwIfAborted();
+  if (targetExitObserved(target))
+    throw new Error("The target application exited before CDP readiness or verification.");
+  if (target.child?.monitoringFailure)
+    throw new Error("The native process observer failed; retaining application identity for cleanup.");
 }
 async function probeAddress(port, host) {
   const server = net.createServer();
@@ -42202,13 +43209,18 @@ function createTargetHost(dependencies = {}) {
         );
         context.signal?.throwIfAborted();
         const requestedAt = io.now();
+        const calibration = await waitForWork(() => platform.prepareLaunch(context), context.signal);
+        context.signal?.throwIfAborted();
         context.onPhase?.("launching");
         let child;
         const finishSpawn = beginFixtureStage("spawn", { port });
         try {
           context.signal?.throwIfAborted();
           const onCreated = (application) => {
-            if (created) return;
+            if (created) {
+              if (created.child === application && created.processId === application.pid) return;
+              throw new Error("The actual launched child identity changed.");
+            }
             if (application.pid === void 0) throw new Error("The target process has no PID.");
             const target2 = {
               port,
@@ -42255,6 +43267,8 @@ function createTargetHost(dependencies = {}) {
               exited();
               releaseResources();
             } else if (application.monitoringFailure) monitorFailed();
+            if (!context.signal?.aborted && !targetExitObserved(target2) && !application.monitoringFailure)
+              platform.registerLaunch(target2, calibration, requestedAt);
             context.onCreated?.(target2);
           };
           child = await io.spawn(executablePath, args, port, cwd, env, {
@@ -42302,6 +43316,10 @@ function createTargetHost(dependencies = {}) {
         let lastError;
         let foreignRace = false;
         const launchedAt = io.now();
+        const assertReadinessActive = () => {
+          if (io.now() - launchedAt >= STARTUP_TIMEOUT_MS)
+            throw new Error("The CDP readiness budget expired.");
+        };
         context.onPhase?.("waiting-cdp");
         const finishReadiness = beginFixtureStage("readiness", {
           phase: "waiting-cdp",
@@ -42309,11 +43327,12 @@ function createTargetHost(dependencies = {}) {
           port,
           budgetMs: STARTUP_TIMEOUT_MS
         });
-        const observedAt = fixtureHasSubscribers() ? performance3.now() : void 0;
+        const observedAt = fixtureHasSubscribers() ? performance4.now() : void 0;
         let attempt = 0;
+        let readinessExitReason = "budget-exhausted";
         for (let readinessElapsed = io.now() - launchedAt; readinessElapsed < STARTUP_TIMEOUT_MS; readinessElapsed = io.now() - launchedAt) {
           attempt += 1;
-          const elapsedMs = observedAt !== void 0 && fixtureHasSubscribers() ? Math.max(0, performance3.now() - observedAt) : void 0;
+          const elapsedMs = observedAt !== void 0 && fixtureHasSubscribers() ? Math.max(0, performance4.now() - observedAt) : void 0;
           const attemptFields = {
             phase: "attempt",
             pid: processId,
@@ -42335,7 +43354,21 @@ function createTargetHost(dependencies = {}) {
               () => observeSnapshot(processId, port, readinessSignal)
             );
             try {
-              platform.validateNewRoot(evidence, target);
+              const remaining = STARTUP_TIMEOUT_MS - (io.now() - launchedAt);
+              if (remaining <= 0) throw new Error("The CDP readiness budget expired.");
+              const identitySignal = AbortSignal.any([
+                ...readinessSignal ? [readinessSignal] : [],
+                AbortSignal.timeout(Math.ceil(remaining))
+              ]);
+              await waitForWork(
+                () => platform.validateIdentity(evidence, target, {
+                  signal: identitySignal,
+                  newlyLaunched: true,
+                  assertReadinessActive
+                }),
+                identitySignal
+              );
+              requireTargetObservation(target, identitySignal);
               emitFixtureEvent("native-snapshot", "decision", {
                 pid: processId,
                 port,
@@ -42357,7 +43390,6 @@ function createTargetHost(dependencies = {}) {
               throw error3;
             }
             if (!evidence.root.exists) throw new Error("The target root process is absent.");
-            target.startedAtUtc = evidence.root.startedAtUtc;
             if (evidence.listeners.some(({ localAddress }) => !["127.0.0.1", "::1"].includes(localAddress))) {
               emitFixtureEvent("listener-ownership", "decision", {
                 pid: processId,
@@ -42376,17 +43408,19 @@ function createTargetHost(dependencies = {}) {
               reason: foreignRace ? "listener-foreign" : evidence.listeners.length ? "listener-owned" : "listener-absent"
             });
             if (foreignRace) {
+              readinessExitReason = "foreign-listener";
               finishAttempt("rejected", {}, new Error("A foreign process won the CDP port race."));
               lastError = new Error("A foreign process won the CDP port race.");
               break;
             }
             const endpoint = await runFixtureResource(
               origins.get(target),
-              () => waitForWork(() => io.getVersion(port), readinessSignal)
+              () => waitForWork(() => {
+                assertReadinessActive();
+                return io.getVersion(port);
+              }, readinessSignal)
             );
-            context.signal?.throwIfAborted();
-            if (targetExitObserved(target))
-              throw new Error("The target application exited before CDP readiness.");
+            requireTargetObservation(target, readinessSignal);
             const identity = validateCdpIdentity({
               endpoint,
               port,
@@ -42397,8 +43431,12 @@ function createTargetHost(dependencies = {}) {
             Object.assign(target, identity);
             target.verify = () => runFixtureResource(origins.get(target), async () => {
               const current2 = await observeSnapshot(processId, port, readinessSignal);
-              validateProcessIdentity(current2, target);
+              await platform.validateIdentity(current2, target, {
+                ...readinessSignal ? { signal: readinessSignal } : {}
+              });
+              requireTargetObservation(target, readinessSignal);
               const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
+              requireTargetObservation(target, readinessSignal);
               const checked = validateCdpIdentity({
                 endpoint: endpointNow,
                 port,
@@ -42415,18 +43453,26 @@ function createTargetHost(dependencies = {}) {
           } catch (error3) {
             finishAttempt("failed", {}, error3);
             lastError = error3;
-            if (readinessSignal?.aborted || child.monitoringFailure || targetExitObserved(target) || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3)))
+            if (readinessSignal?.aborted || child.monitoringFailure || targetExitObserved(target) || child.exitCode !== null || typeof child.signalCode === "string" || /exposed|identity|Google Chrome|PID/.test(errorMessage(error3))) {
+              readinessExitReason = "terminal-condition";
               break;
+            }
             try {
               await waitForWork(() => io.sleep(POLL_INTERVAL_MS), readinessSignal);
             } catch (waitingError) {
+              readinessExitReason = "poll-interrupted";
               lastError = waitingError;
               break;
             }
           }
         }
         if (fixtureHasSubscribers()) {
-          const fields3 = { phase: "rollback-request", pid: processId, port };
+          const fields3 = {
+            phase: "rollback-request",
+            pid: processId,
+            port,
+            readinessExitReason
+          };
           try {
             fields3.exitObserved = targetExitObserved(target);
           } catch {
@@ -42498,7 +43544,7 @@ function createTargetHost(dependencies = {}) {
         const evidence = await observeSnapshot(target.processId, target.port);
         if (!evidence.root.exists) return targetExitObserved(target) ? "gone" : "unavailable";
         try {
-          validateProcessIdentity(evidence, target);
+          await platform.validateIdentity(evidence, target);
         } catch {
           return "identity-changed";
         }

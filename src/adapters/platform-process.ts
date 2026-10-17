@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import type {
     ListenerEvidence,
@@ -14,18 +15,49 @@ import type { LaunchContext } from '../domains/control-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import {
     beginFixtureStage,
+    type CreationIdentityFields,
+    emitFixtureCreationDecision,
     emitFixtureEvent,
+    type FixtureCreationFrame,
     type FixtureFields,
+    fixtureCreationFrameActive,
+    fixtureCreationObservationEnabled,
     fixtureHasSubscribers,
+    type LinuxPrivateIntervalV1,
+    reserveFixtureCreationObservation,
+    sameFixtureOrigin,
+    validateLinuxIdentity,
 } from './fixture-diagnostics.ts';
+import {
+    type LinuxBirthTrace,
+    type LinuxCalibration,
+    type LinuxCalibrationTrace,
+    type LinuxIntersectionTrace,
+    type LinuxPublicTrace,
+    linuxBirthInterval,
+    linuxPublicTime,
+    readLinuxCalibration,
+    tracedLinuxIntersection,
+} from './linux-creation-identity.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
 export type ProcessResult = { code: number | null; stdout: string; stderr: string };
 export type ProcessExecutor = (executable: string, arguments_: string[]) => Promise<ProcessResult>;
+export interface IdentityValidationContext extends LaunchContext {
+    newlyLaunched?: boolean;
+    /** Readiness owns this clock/deadline; independent normal cleanup has no such deadline. */
+    assertReadinessActive?: () => void;
+}
 type UnixFileIdentity = { dev: bigint; ino: bigint; regularFile: boolean };
 export interface PlatformAdapter {
     snapshot(pid: number, port: number): Promise<ProcessEvidence>;
-    validateNewRoot(evidence: ProcessEvidence, target: ProcessTarget): void;
+    prepareLaunch(context?: LaunchContext): Promise<object>;
+    registerLaunch(target: ManagedTarget, calibration: object, requestedAt: number): void;
+    validateIdentity(
+        evidence: ProcessEvidence,
+        target: ManagedTarget,
+        context?: IdentityValidationContext,
+    ): Promise<void>;
     reservedRanges(): Promise<PortRange[]>;
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
     requestNormalClose?(target: ManagedTarget, context?: LaunchContext): Promise<Record<string, unknown>>;
@@ -277,31 +309,194 @@ function normalizePath(value: string) {
     return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
+/** Scalar/native policy for non-Linux targets and the legacy diagnostic comparison harness.
+ * Production Linux consumers use their adapter's registered validateIdentity policy.
+ */
 export function validateProcessIdentity(
     evidence: Pick<ProcessEvidence, 'root' | 'currentSessionId'>,
     target: Pick<ProcessTarget, 'executablePath' | 'startedAtUtc' | 'targetKind'>,
     { newlyLaunched = false } = {},
 ) {
     const root = evidence.root;
-    if (!root?.exists) throw new Error('The target root process is absent.');
-    if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
-        throw new Error('The process executable identity changed.');
-    if (root.sessionId !== evidence.currentSessionId) throw new Error('The process user/session identity changed.');
-    const actual = Date.parse(root.startedAtUtc);
-    const recorded = Date.parse(target.startedAtUtc);
-    if (!Number.isFinite(actual) || !Number.isFinite(recorded))
-        throw new Error('The process creation time is unverifiable.');
-    if (
-        newlyLaunched ? actual < recorded - 1_000 || actual > Date.now() + 1_000 : Math.abs(actual - recorded) > 1_000
-    ) {
-        throw new Error('The process creation time changed; the PID may have been reused.');
+    let actual: number | undefined;
+    let recorded: number | undefined;
+    let upperNow: number | undefined;
+    let branch: CreationIdentityFields['creationBranch'];
+    let failed = true;
+    try {
+        if (!root?.exists) throw new Error('The target root process is absent.');
+        if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
+            throw new Error('The process executable identity changed.');
+        if (root.sessionId !== evidence.currentSessionId) throw new Error('The process user/session identity changed.');
+        actual = Date.parse(root.startedAtUtc);
+        recorded = Date.parse(target.startedAtUtc);
+        if (!Number.isFinite(actual) || !Number.isFinite(recorded)) {
+            branch = 'creation-unverifiable';
+            throw new Error('The process creation time is unverifiable.');
+        }
+        let changed: boolean;
+        if (newlyLaunched) {
+            if (actual < recorded - 1_000) changed = true;
+            else {
+                upperNow = Date.now();
+                changed = actual > upperNow + 1_000;
+            }
+        } else changed = Math.abs(actual - recorded) > 1_000;
+        if (changed) {
+            branch = newlyLaunched
+                ? upperNow === undefined
+                    ? 'new-lower-rejected'
+                    : 'new-upper-rejected'
+                : 'established-delta-rejected';
+            throw new Error('The process creation time changed; the PID may have been reused.');
+        }
+        branch = newlyLaunched ? 'new-accepted' : 'established-accepted';
+        if (
+            target.targetKind === 'chrome' &&
+            process.platform === 'win32' &&
+            (root.productName !== 'Google Chrome' || root.companyName !== 'Google LLC')
+        ) {
+            throw new Error('The target executable is not identified as Google Chrome.');
+        }
+        failed = false;
+    } finally {
+        if (fixtureCreationObservationEnabled()) {
+            try {
+                observeCreationDecision(root, newlyLaunched, actual, recorded, upperNow, branch, failed);
+            } catch {
+                /* Observation must never replace an identity decision. */
+            }
+        }
     }
+}
+
+type CreationCarrier = {
+    frame: FixtureCreationFrame;
+    pid: number;
+    port: number;
+    fields?: CreationIdentityFields;
+    invalid?: boolean;
+    clipped?: number;
+    statEndedMs?: number;
+};
+type BoundCreation = CreationCarrier & {
+    raw: string;
+    clipped: number;
+    executablePath: string;
+    sessionId: number;
+};
+const linuxDiagnosticSources = new WeakMap<
+    ProcessEvidence,
+    { root: RootEvidence; frame: FixtureCreationFrame; pid: number; port: number; statEndedMs: number }
+>();
+const creationSources = new WeakMap<RootEvidence, BoundCreation>();
+function boundRootMatches(
+    root: RootEvidence,
+    source: Pick<BoundCreation, 'raw' | 'executablePath' | 'sessionId'>,
+): boolean {
+    const prototype: unknown = Object.getPrototypeOf(root);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    for (const [key, value] of [
+        ['exists', true],
+        ['startedAtUtc', source.raw],
+        ['executablePath', source.executablePath],
+        ['sessionId', source.sessionId],
+    ]) {
+        if (typeof key !== 'string') return false;
+        const descriptor = Object.getOwnPropertyDescriptor(root, key);
+        if (!descriptor || !('value' in descriptor) || descriptor.value !== value) return false;
+    }
+    return true;
+}
+function observeCreationDecision(
+    root: RootEvidence,
+    newlyLaunched: boolean,
+    actual: number | undefined,
+    recorded: number | undefined,
+    upperNow: number | undefined,
+    branch: CreationIdentityFields['creationBranch'],
+    failed: boolean,
+) {
+    const source = creationSources.get(root);
+    const frame = reserveFixtureCreationObservation(
+        false,
+        source?.frame,
+        source ? { pid: source.pid, port: source.port } : undefined,
+    );
+    if (!frame) return;
+    const sameOrigin = source && sameFixtureOrigin(frame.origin, source.frame.origin);
+    let sourceStatus: CreationIdentityFields['creationSourceStatus'] = source ? 'unverifiable' : 'missing';
     if (
-        target.targetKind === 'chrome' &&
-        process.platform === 'win32' &&
-        (root.productName !== 'Google Chrome' || root.companyName !== 'Google LLC')
-    ) {
-        throw new Error('The target executable is not identified as Google Chrome.');
+        source &&
+        sameOrigin &&
+        source.pid === frame.origin.pid &&
+        source.port === frame.origin.port &&
+        !source.invalid &&
+        source.fields &&
+        boundRootMatches(root, source) &&
+        (actual === undefined || actual === source.clipped)
+    )
+        sourceStatus = 'complete';
+    const comparisonStatus =
+        branch === undefined ? 'not-reached' : branch === 'creation-unverifiable' ? 'unverifiable' : 'reached';
+    if (!fixtureCreationFrameActive(frame)) return;
+    const fields: FixtureFields = {
+        ...frame.origin,
+        phase: 'process-identity',
+        outcome: failed ? 'rejected' : 'observed',
+        creationNewlyLaunched: newlyLaunched,
+        creationToleranceMs: 1_000,
+        creationSourceStatus: sourceStatus,
+        creationComparisonStatus: comparisonStatus,
+        creationUpperNowStatus: upperNow === undefined ? 'not-evaluated' : 'read',
+        ...(branch === undefined ? {} : { creationBranch: branch }),
+        ...(comparisonStatus === 'reached' && recorded !== undefined && actual !== undefined
+            ? { creationExpectedUtcMs: recorded, creationObservedUtcMs: actual }
+            : {}),
+        ...(upperNow === undefined ? {} : { creationUpperNowUtcMs: upperNow }),
+        ...(sourceStatus === 'complete' ? source?.fields : {}),
+    };
+    emitFixtureCreationDecision(frame, fields);
+}
+function creationClock(carrier: CreationCarrier): number | undefined {
+    try {
+        return performance.now();
+    } catch {
+        carrier.invalid = true;
+        return;
+    }
+}
+async function creationRead<T>(
+    carrier: CreationCarrier | undefined,
+    prefix: 'Stat' | 'Boot' | 'Clk',
+    job: () => Promise<T>,
+): Promise<T> {
+    if (!carrier) return job();
+    const started = creationClock(carrier);
+    try {
+        return await job();
+    } finally {
+        const ended = creationClock(carrier);
+        try {
+            if (prefix === 'Stat' && ended !== undefined && Number.isFinite(ended) && ended >= 0)
+                carrier.statEndedMs = ended;
+            if (
+                started !== undefined &&
+                ended !== undefined &&
+                Number.isFinite(started) &&
+                Number.isFinite(ended) &&
+                started >= 0 &&
+                ended >= started
+            ) {
+                carrier.fields = {
+                    ...carrier.fields,
+                    [`creation${prefix}ReadStartedMs`]: started,
+                    [`creation${prefix}ReadEndedMs`]: ended,
+                };
+            } else carrier.invalid = true;
+        } catch {
+            carrier.invalid = true;
+        }
     }
 }
 
@@ -422,15 +617,34 @@ export async function resolveUnixExecutable({
     return executable;
 }
 
+type LinuxSource = { sequence: number; targets: Map<number, { target: ManagedTarget; port: number; time?: string }> };
+type LinuxRootProof = {
+    source: LinuxSource;
+    sequence: number;
+    pid: number;
+    port: number;
+    ticks: bigint;
+    h: bigint;
+    boot: bigint | undefined;
+    raw: string;
+    executablePath: string;
+    sessionId: number;
+};
+const linuxRoots = new WeakMap<RootEvidence, LinuxRootProof>();
+
 async function linuxCreationTime(
     pid: number,
     execute: ProcessExecutor,
     readText: (file: string) => Promise<string>,
-): Promise<string> {
+    carrier?: CreationCarrier,
+    knownTime?: string,
+): Promise<{ startedAtUtc: string; ticks: bigint; h: bigint; boot: bigint | undefined }> {
     const [stat, boot, clock] = await Promise.all([
-        observeNativeFile('proc-stat', () => readText(`/proc/${pid}/stat`)),
-        observeNativeFile('proc-boot', () => readText('/proc/stat')),
-        observeNativeCommand('getconf', execute, 'getconf', ['CLK_TCK']),
+        creationRead(carrier, 'Stat', () => observeNativeFile('proc-stat', () => readText(`/proc/${pid}/stat`))),
+        knownTime === undefined
+            ? creationRead(carrier, 'Boot', () => observeNativeFile('proc-boot', () => readText('/proc/stat')))
+            : Promise.resolve(''),
+        creationRead(carrier, 'Clk', () => observeNativeCommand('getconf', execute, 'getconf', ['CLK_TCK'])),
     ]);
     // comm may contain spaces and closing parentheses; fields resume after its last ') '.
     const processStat = stat.trim().match(/^(\d+) \([\s\S]*\) (.+)$/);
@@ -446,8 +660,7 @@ async function linuxCreationTime(
         ticks === undefined ||
         !/^\d+$/.test(ticks) ||
         !Number.isSafeInteger(startTicks) ||
-        bootTimes.length !== 1 ||
-        !Number.isSafeInteger(bootSeconds) ||
+        (knownTime === undefined && (bootTimes.length !== 1 || !Number.isSafeInteger(bootSeconds))) ||
         clock.code !== 0 ||
         clock.stderr.trim() ||
         !/^\d+$/.test(clockText) ||
@@ -457,9 +670,26 @@ async function linuxCreationTime(
         emitFixtureEvent('native-file', 'decision', { command: 'proc-stat', pid, valid: false });
         throw new Error('The Linux process creation evidence is unverifiable.');
     }
-    // ps lstart truncates startTicks / CLK_TCK; retain the kernel's fractional seconds.
-    const started = new Date(bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000);
+    // Preserve the legacy scalar for snapshot compatibility and closed diagnostics.
+    // Linux authorization uses private raw proof and calibrated intervals, never this estimate.
+    const computedNumberMs =
+        knownTime === undefined ? bootSeconds * 1_000 + (startTicks / ticksPerSecond) * 1_000 : Date.parse(knownTime);
+    const started = new Date(computedNumberMs);
     if (!Number.isFinite(started.getTime())) throw new Error('The Linux process creation evidence is unverifiable.');
+    if (carrier && knownTime === undefined) {
+        try {
+            carrier.clipped = started.getTime();
+            carrier.fields = {
+                ...carrier.fields,
+                creationBootSeconds: bootSeconds,
+                creationStartTicks: startTicks,
+                creationClkTck: ticksPerSecond,
+                creationComputedNumberMs: computedNumberMs,
+            };
+        } catch {
+            carrier.invalid = true;
+        }
+    }
     if (fixtureHasSubscribers()) {
         // The kernel's /proc stat field 3 reports a fixed task state:
         // https://docs.kernel.org/filesystems/proc.html#process-specific-subdirectories
@@ -498,7 +728,13 @@ async function linuxCreationTime(
             ...counters,
         });
     }
-    return started.toISOString();
+    if (carrier && knownTime !== undefined) carrier.invalid = true;
+    return {
+        startedAtUtc: started.toISOString(),
+        ticks: BigInt(startTicks),
+        h: BigInt(ticksPerSecond),
+        boot: knownTime === undefined ? BigInt(bootSeconds) : undefined,
+    };
 }
 
 type UnixProcessRow = { pid: number; parent: number; uid: number; started: string; executable: string };
@@ -577,16 +813,27 @@ function emitDarwinListenerOwnerEvidence(
     }
 }
 
+type UnixDependencies = {
+    platform?: NodeJS.Platform;
+    currentUser?: () => number;
+    readlink?: (file: string) => Promise<string>;
+    readText?: (file: string) => Promise<string>;
+    run?: ProcessExecutor;
+};
+
 export async function unixSnapshot(
     pid: number,
     port: number,
-    dependencies: {
-        platform?: NodeJS.Platform;
-        currentUser?: () => number;
-        readlink?: (file: string) => Promise<string>;
-        readText?: (file: string) => Promise<string>;
-        run?: ProcessExecutor;
-    } = {},
+    dependencies: UnixDependencies = {},
+): Promise<ProcessEvidence> {
+    return snapshotUnix(pid, port, dependencies);
+}
+
+async function snapshotUnix(
+    pid: number,
+    port: number,
+    dependencies: UnixDependencies = {},
+    source?: LinuxSource,
 ): Promise<ProcessEvidence> {
     const platform = dependencies.platform ?? process.platform;
     const execute = dependencies.run ?? run;
@@ -609,10 +856,23 @@ export async function unixSnapshot(
             : [];
     });
     const root = rows.find((row) => row.pid === pid);
-    const rootStartedAt =
+    const frame =
+        root && platform === 'linux' && fixtureCreationObservationEnabled()
+            ? reserveFixtureCreationObservation(true, undefined, { pid, port })
+            : undefined;
+    const carrier: CreationCarrier | undefined = frame ? { frame, pid, port } : undefined;
+    const sequence = source ? ++source.sequence : 0;
+    const previous = source?.targets.get(pid);
+    const linuxCreation =
         root && platform === 'linux'
-            ? await linuxCreationTime(pid, execute, dependencies.readText ?? ((file) => readFile(file, 'utf8')))
-            : root?.started;
+            ? await linuxCreationTime(
+                  pid,
+                  execute,
+                  dependencies.readText ?? ((file) => readFile(file, 'utf8')),
+                  carrier,
+                  previous?.port === port ? previous.time : undefined,
+              )
+            : undefined;
     const owned = new Set(root ? [pid] : []);
     for (let changed = true; changed; ) {
         changed = false;
@@ -649,7 +909,7 @@ export async function unixSnapshot(
             listeners.push({ localAddress: address.replace(/^\[|\]$/g, ''), owningProcess: owner });
     }
     if (platform === 'darwin' && fixtureHasSubscribers()) emitDarwinListenerOwnerEvidence(pid, rows, listeners, owned);
-    return {
+    const evidence: ProcessEvidence = {
         root: root
             ? {
                   exists: true,
@@ -661,7 +921,7 @@ export async function unixSnapshot(
                       ...(dependencies.readlink ? { readlink: dependencies.readlink } : {}),
                   }),
                   sessionId: root.uid,
-                  startedAtUtc: rootStartedAt ?? root.started,
+                  startedAtUtc: linuxCreation?.startedAtUtc ?? root.started,
               }
             : { exists: false },
         currentSessionId:
@@ -672,6 +932,73 @@ export async function unixSnapshot(
         processIds: [...owned],
         listeners,
     };
+    if (source && linuxCreation && evidence.root.exists)
+        linuxRoots.set(evidence.root, {
+            source,
+            sequence,
+            pid,
+            port,
+            ticks: linuxCreation.ticks,
+            h: linuxCreation.h,
+            boot: linuxCreation.boot,
+            raw: evidence.root.startedAtUtc,
+            executablePath: evidence.root.executablePath,
+            sessionId: evidence.root.sessionId,
+        });
+    if (carrier?.statEndedMs !== undefined && evidence.root.exists) {
+        try {
+            linuxDiagnosticSources.set(evidence, {
+                root: evidence.root,
+                frame: carrier.frame,
+                pid,
+                port,
+                statEndedMs: carrier.statEndedMs,
+            });
+        } catch {
+            /* Diagnostic association never replaces native proof. */
+        }
+    }
+    if (carrier && carrier.clipped !== undefined && root && evidence.root.exists) {
+        try {
+            creationSources.set(evidence.root, {
+                ...carrier,
+                raw: evidence.root.startedAtUtc,
+                clipped: carrier.clipped,
+                executablePath: evidence.root.executablePath,
+                sessionId: evidence.root.sessionId,
+            });
+        } catch {
+            /* Invalid diagnostic metadata cannot replace the snapshot. */
+        }
+    }
+    return evidence;
+}
+
+function diagnosticSelectedMs(publicTime: string): number | undefined {
+    try {
+        return Date.parse(publicTime);
+    } catch {
+        return;
+    }
+}
+function calibrationFacts(value: LinuxCalibration | undefined) {
+    return (
+        value && {
+            beforeUtcMs: value.beforeUtcMs,
+            afterUtcMs: value.afterUtcMs,
+            uptimeUpperNs: value.uptimeUpperNs,
+            offset: { lowerNs: value.lowerNs, upperNs: value.upperNs },
+        }
+    );
+}
+function diagnosticNumbers(value: unknown): unknown {
+    if (typeof value === 'bigint') {
+        if (value <= -(10n ** 25n) || value >= 10n ** 25n) throw new Error('Diagnostic operand bound.');
+        return value.toString();
+    }
+    if (value && typeof value === 'object')
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, diagnosticNumbers(item)]));
+    return value;
 }
 
 export function createPlatformAdapter(
@@ -683,9 +1010,14 @@ export function createPlatformAdapter(
         waitWindowsExit?: (target: ProcessTarget, signal?: AbortSignal) => Promise<Record<string, unknown>>;
         requestUnixClose?: (pid: number) => void;
         sleep?: (ms: number) => Promise<void>;
+        now?: () => number;
+        unix?: Omit<UnixDependencies, 'platform'>;
     } = {},
 ): PlatformAdapter {
     const platform = dependencies.platform ?? process.platform;
+    const source: LinuxSource = { sequence: 0, targets: new Map() };
+    const now = dependencies.now ?? Date.now;
+    const readText = dependencies.unix?.readText ?? ((file: string) => readFile(file, 'utf8'));
     const windows = createWindowsLauncher();
     const closeWindows = dependencies.closeWindows;
     const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, 'SIGTERM'));
@@ -694,7 +1026,338 @@ export function createPlatformAdapter(
         dependencies.snapshot ??
         (platform === 'win32'
             ? async (pid, port) => parseSnapshot(await windowsHelper('Snapshot', { RootProcessId: pid, Port: port }))
-            : unixSnapshot);
+            : (pid, port) => snapshotUnix(pid, port, { ...dependencies.unix, platform }, source));
+    const calibrations = new WeakMap<object, { value: LinuxCalibration | undefined; target?: ManagedTarget }>();
+    type LaunchProof = {
+        token: object;
+        calibration: LinuxCalibration | undefined;
+        requestedAt: number;
+        sequence: number;
+        child: NonNullable<ManagedTarget['child']>;
+        pid: number;
+        port: number;
+        path: string;
+        kind: ProcessTarget['targetKind'];
+        requestText: string;
+        bound?: { ticks: bigint; h: bigint; sessionId: number; publicTime: string };
+    };
+    const launches = new WeakMap<ManagedTarget, LaunchProof>();
+    const registeredChildren = new WeakSet<NonNullable<ManagedTarget['child']>>();
+    async function prepareLaunch(context: LaunchContext = {}): Promise<object> {
+        context.signal?.throwIfAborted();
+        const value =
+            platform === 'linux' ? await abortable(readLinuxCalibration(readText, now), context.signal) : undefined;
+        context.signal?.throwIfAborted();
+        const token = {};
+        calibrations.set(token, { value });
+        return token;
+    }
+    function registerLaunch(target: ManagedTarget, token: object, requestedAt: number) {
+        if (platform !== 'linux') return;
+        const prior = launches.get(target);
+        if (prior) {
+            if (
+                prior.token === token &&
+                prior.child === target.child &&
+                prior.pid === target.processId &&
+                prior.requestedAt === requestedAt
+            )
+                return;
+            throw new Error('The registered Linux child identity changed.');
+        }
+        const calibration = calibrations.get(token);
+        const child = target.child;
+        const pid = child && Object.getOwnPropertyDescriptor(child, 'pid');
+        if (
+            !calibration?.value ||
+            calibration.target ||
+            !child ||
+            !pid ||
+            !('value' in pid) ||
+            pid.value !== target.processId ||
+            !Number.isSafeInteger(target.processId) ||
+            target.processId <= 0 ||
+            !Number.isSafeInteger(requestedAt)
+        )
+            throw new Error('The Linux launch identity is unverifiable.');
+        observeTargetExit(target);
+        if (targetExitObserved(target) || child.monitoringFailure)
+            throw new Error('The Linux actual-child identity is unavailable.');
+        const registeredPid = target.processId;
+        if (source.targets.has(registeredPid) || registeredChildren.has(child))
+            throw new Error('The Linux child identity is already registered.');
+        registeredChildren.add(child);
+        source.targets.set(registeredPid, { target, port: target.port });
+        calibration.target = target;
+        launches.set(target, {
+            token,
+            calibration: calibration.value,
+            requestedAt,
+            sequence: source.sequence,
+            child,
+            pid: target.processId,
+            port: target.port,
+            path: target.executablePath,
+            kind: target.targetKind,
+            requestText: target.startedAtUtc,
+        });
+        child.once('exit', () => {
+            if (source.targets.get(registeredPid)?.target === target) source.targets.delete(registeredPid);
+        });
+    }
+    function checkLaunch(target: ManagedTarget, proof: LaunchProof, context: LaunchContext) {
+        context.signal?.throwIfAborted();
+        const pid = Object.getOwnPropertyDescriptor(proof.child, 'pid');
+        if (
+            target.child !== proof.child ||
+            target.processId !== proof.pid ||
+            target.port !== proof.port ||
+            !pid ||
+            !('value' in pid) ||
+            pid.value !== proof.pid ||
+            target.executablePath !== proof.path ||
+            target.targetKind !== proof.kind ||
+            target.startedAtUtc !== (proof.bound?.publicTime ?? proof.requestText) ||
+            targetExitObserved(target) ||
+            proof.child.monitoringFailure
+        )
+            throw new Error('The registered Linux child identity is unavailable or changed.');
+    }
+    async function validateIdentity(
+        evidence: ProcessEvidence,
+        target: ManagedTarget,
+        context: IdentityValidationContext = {},
+    ) {
+        if (platform !== 'linux') {
+            validateProcessIdentity(evidence, target, { newlyLaunched: context.newlyLaunched ?? false });
+            if (context.newlyLaunched && evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+            return;
+        }
+        let association = linuxDiagnosticSources.get(evidence);
+        const observing = association !== undefined;
+        const facts: Record<string, unknown> = {};
+        let mode: LinuxPrivateIntervalV1['mode'] = 'unregistered';
+        let decision: LinuxPrivateIntervalV1['decision'] | undefined;
+        const calibrationTrace: LinuxCalibrationTrace | undefined = observing ? {} : undefined;
+        const intersectionTrace: LinuxIntersectionTrace | undefined = observing ? {} : undefined;
+        const birthTrace: LinuxBirthTrace | undefined = observing ? {} : undefined;
+        const publicTrace: LinuxPublicTrace | undefined = observing ? {} : undefined;
+        try {
+            const launch = launches.get(target);
+            if (!launch) {
+                decision = 'no-launch';
+                throw new Error('The Linux target has no registered launch identity.');
+            }
+            mode = 'unselected';
+            try {
+                checkLaunch(target, launch, context);
+            } catch (error) {
+                decision = 'launch-check-threw';
+                throw error;
+            }
+            const root = evidence.root;
+            const raw = linuxRoots.get(root);
+            // Diagnose only the acquired evidence/root pair; this is the original native root access point.
+            if (association && association.root !== root) association = undefined;
+            if (
+                !raw ||
+                raw.source !== source ||
+                raw.sequence <= launch.sequence ||
+                raw.pid !== launch.pid ||
+                raw.port !== launch.port ||
+                !boundRootMatches(evidence.root, raw) ||
+                normalizePath(raw.executablePath) !== normalizePath(launch.path) ||
+                raw.sessionId !== evidence.currentSessionId
+            ) {
+                decision = 'root-proof-rejected';
+                throw new Error('The Linux root identity proof is unverifiable.');
+            }
+            if (launch.bound) {
+                mode = 'established';
+                if (observing)
+                    facts.raw = {
+                        q: raw.ticks,
+                        H: raw.h,
+                        ...(raw.boot === undefined ? {} : { bootSeconds: raw.boot }),
+                    };
+                if (
+                    raw.ticks !== launch.bound.ticks ||
+                    raw.h !== launch.bound.h ||
+                    raw.sessionId !== launch.bound.sessionId
+                ) {
+                    decision = 'established-changed';
+                    throw new Error('The Linux process creation identity changed.');
+                }
+                if (observing) facts.selectedMs = diagnosticSelectedMs(launch.bound.publicTime);
+                decision = 'established-accepted';
+                return;
+            }
+            mode = 'initial';
+            if (observing) {
+                facts.raw = { q: raw.ticks, H: raw.h, ...(raw.boot === undefined ? {} : { bootSeconds: raw.boot }) };
+                facts.pre = calibrationFacts(launch.calibration);
+                facts.requestUtcMs = launch.requestedAt;
+            }
+            if (raw.boot === undefined) {
+                decision = 'boot-missing';
+                throw new Error('The Linux initial creation identity lacks boot evidence.');
+            }
+            // This read occurs after the associated stat read, in this adapter's unchanged proc reader context.
+            let post: LinuxCalibration;
+            try {
+                post = await abortable(readLinuxCalibration(readText, now, calibrationTrace), context.signal);
+            } catch (error) {
+                // A clock exception also rejects abortable: only the actual traced read/guard classifies it.
+                const failure =
+                    calibrationTrace?.failure ??
+                    (calibrationTrace?.phase === 'reading' && context.signal?.aborted ? 'read-or-abort' : undefined);
+                if (failure) {
+                    decision = 'post-calibration-threw';
+                    facts.postFailure = { branch: failure };
+                }
+                throw error;
+            }
+            if (observing) facts.post = calibrationFacts(post);
+            try {
+                checkLaunch(target, launch, context);
+            } catch (error) {
+                decision = 'post-launch-check-threw';
+                throw error;
+            }
+            if (
+                !launch.calibration ||
+                post.uptimeUpperNs < launch.calibration.uptimeUpperNs ||
+                launch.calibration.beforeUtcMs < launch.requestedAt ||
+                post.beforeUtcMs < launch.calibration.afterUtcMs
+            ) {
+                decision = 'clock-order-rejected';
+                throw new Error('The Linux process creation clock identity moved backwards.');
+            }
+            if (
+                linuxRoots.get(evidence.root) !== raw ||
+                !boundRootMatches(evidence.root, raw) ||
+                evidence.currentSessionId !== raw.sessionId
+            ) {
+                decision = 'root-proof-changed';
+                throw new Error('The Linux root identity proof changed.');
+            }
+            const offset =
+                launch.calibration &&
+                tracedLinuxIntersection(intersectionTrace, launch.calibration, post, {
+                    lowerNs: raw.boot * 1_000_000_000n,
+                    upperNs: (raw.boot + 1n) * 1_000_000_000n,
+                });
+            const birth = linuxBirthInterval(
+                {
+                    rawTicks: raw.ticks,
+                    clkTck: raw.h,
+                    readerBirthUpperNs: post.uptimeUpperNs,
+                },
+                birthTrace,
+            );
+            if (observing) {
+                facts.offset = intersectionTrace?.interval && {
+                    status: offset ? 'nonempty' : 'empty',
+                    ...intersectionTrace.interval,
+                };
+                facts.birth = birthTrace;
+            }
+            const decisionNow = now();
+            if (observing && Number.isSafeInteger(decisionNow)) facts.decisionUtcMs = decisionNow;
+            if (decisionNow < post.afterUtcMs) {
+                decision = 'decision-clock-rejected';
+                throw new Error('The Linux process creation clock identity moved backwards.');
+            }
+            const publicTime =
+                offset &&
+                birth &&
+                linuxPublicTime(
+                    { lowerNs: offset.lowerNs + birth.lowerNs, upperNs: offset.upperNs + birth.upperNs },
+                    launch.requestedAt,
+                    decisionNow,
+                    publicTrace,
+                );
+            if (observing && publicTrace?.branch) {
+                facts.absolute = publicTrace.absolute;
+                facts.public = {
+                    branch: publicTrace.branch,
+                    ...(publicTrace.pointMs === undefined ? {} : { pointMs: publicTrace.pointMs }),
+                };
+            }
+            if (!publicTime) {
+                decision = 'interval-rejected';
+                throw new Error('The Linux process creation identity interval is unverifiable.');
+            }
+            try {
+                context.assertReadinessActive?.();
+            } catch (error) {
+                decision = 'readiness-check-threw';
+                throw error;
+            }
+            try {
+                checkLaunch(target, launch, context);
+            } catch (error) {
+                decision = 'final-launch-check-threw';
+                throw error;
+            }
+            // A concurrent first validation may already have bound the same child.
+            const concurrent = launches.get(target)?.bound;
+            if (
+                concurrent &&
+                (concurrent.ticks !== raw.ticks || concurrent.h !== raw.h || concurrent.sessionId !== raw.sessionId)
+            ) {
+                decision = 'concurrent-changed';
+                throw new Error('The Linux process creation identity changed.');
+            }
+            if (!launch.bound) launch.bound = { ticks: raw.ticks, h: raw.h, sessionId: raw.sessionId, publicTime };
+            source.targets.set(launch.pid, { target, port: launch.port, time: launch.bound.publicTime });
+            target.startedAtUtc = launch.bound.publicTime;
+            if (observing) facts.selectedMs = diagnosticSelectedMs(launch.bound.publicTime);
+            decision = 'initial-accepted';
+        } finally {
+            // Detach once, synchronously, after the actual terminal guard/bind. Late reads own only their old trace.
+            try {
+                if (association && decision) {
+                    const frame = reserveFixtureCreationObservation(
+                        false,
+                        association.frame,
+                        { pid: association.pid, port: association.port },
+                        true,
+                    );
+                    if (
+                        frame &&
+                        fixtureCreationFrameActive(frame) &&
+                        sameFixtureOrigin(frame.origin, association.frame.origin) &&
+                        frame.origin.pid === association.pid &&
+                        frame.origin.port === association.port
+                    ) {
+                        const payload = validateLinuxIdentity(
+                            diagnosticNumbers({
+                                model: 'linux-private-interval-v1',
+                                mode,
+                                decision,
+                                timeBasis: 'source-stat-read-ended',
+                                facts,
+                            }),
+                        );
+                        if (payload && fixtureCreationFrameActive(frame))
+                            emitFixtureCreationDecision(
+                                frame,
+                                {
+                                    ...frame.origin,
+                                    phase: 'process-identity',
+                                    outcome: decision.endsWith('-accepted') ? 'observed' : 'rejected',
+                                    linuxIdentity: payload,
+                                },
+                                association.statEndedMs,
+                            );
+                    }
+                }
+            } catch {
+                /* A trace, copy or publication failure cannot replace native success or its exact error. */
+            }
+        }
+    }
     const nativeExit = new WeakMap<ManagedTarget, Promise<Record<string, unknown>>>();
     async function requestNormalClose(
         target: ManagedTarget,
@@ -716,7 +1379,14 @@ export function createPlatformAdapter(
             error.details = { phase: 'process-identity', listenerState, closeRequested: false, processExited: false };
             throw error;
         }
-        validateProcessIdentity(evidence, target);
+        await validateIdentity(evidence, target, context);
+        context.signal?.throwIfAborted();
+        if (targetExitObserved(target)) return { closeRequested: false, processExited: true };
+        if (platform === 'linux') {
+            const launch = launches.get(target);
+            if (!launch) throw new Error('The Linux target has no registered launch identity.');
+            checkLaunch(target, launch, context);
+        }
         if (platform !== 'win32') {
             requestUnixClose(target.processId);
             return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
@@ -766,7 +1436,9 @@ export function createPlatformAdapter(
     }
     return {
         snapshot,
-        validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
+        prepareLaunch,
+        registerLaunch,
+        validateIdentity,
         async reservedRanges() {
             if (process.platform === 'linux') {
                 const value = await readFile('/proc/sys/net/ipv4/ip_local_reserved_ports', 'utf8');

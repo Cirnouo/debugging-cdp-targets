@@ -11,7 +11,7 @@ export type NativeResourceVariant =
     | 'receiver-before-witness'
     | 'lost-packet';
 export type WitnessRole = 'root' | 'middle' | 'late';
-export type WitnessPhase = 'compile' | 'inspect' | 'armed' | 'wait' | 'exit';
+export type WitnessPhase = 'compile' | 'load' | 'inspect' | 'armed' | 'wait' | 'exit';
 export type WitnessContext = 'initial-arming' | 'late-arming' | 'exit-join';
 export type NativeResourceStage =
     | 'fixture'
@@ -51,7 +51,7 @@ export interface WitnessDiagnostic {
     ownedPid: number | null;
     witnessPid: number | null;
     armed: boolean;
-    errorKind: 'invalid-pid' | 'spawn' | 'compile' | 'native' | 'protocol' | 'unexpected';
+    errorKind: 'invalid-pid' | 'spawn' | 'compile' | 'load' | 'native' | 'protocol' | 'unexpected';
     win32Code: number | null;
     hresult: number | null;
     closeCode: number | null;
@@ -174,7 +174,7 @@ function projectDiagnostic(value: Readonly<WitnessDiagnostic>): WitnessDiagnosti
     return {
         role: member(value.role, ['root', 'middle', 'late'], 'root'),
         context: member(value.context, ['initial-arming', 'late-arming', 'exit-join'], 'initial-arming'),
-        phase: member(value.phase, ['compile', 'inspect', 'armed', 'wait', 'exit'], 'compile'),
+        phase: member(value.phase, ['compile', 'load', 'inspect', 'armed', 'wait', 'exit'], 'compile'),
         phaseKnown: value.phaseKnown === true,
         spawned: value.spawned === true,
         pidState: member(
@@ -194,7 +194,7 @@ function projectDiagnostic(value: Readonly<WitnessDiagnostic>): WitnessDiagnosti
         armed: value.armed === true,
         errorKind: member(
             value.errorKind,
-            ['invalid-pid', 'spawn', 'compile', 'native', 'protocol', 'unexpected'],
+            ['invalid-pid', 'spawn', 'compile', 'load', 'native', 'protocol', 'unexpected'],
             'unexpected',
         ),
         win32Code: nativeCode(value.win32Code),
@@ -223,7 +223,7 @@ function projectDiagnostic(value: Readonly<WitnessDiagnostic>): WitnessDiagnosti
 function project(evidence: NativeResourceEvidence) {
     // Deliberately enumerate fields: callers cannot add arbitrary console content.
     return {
-        ...(evidence.phase && ['compile', 'inspect', 'armed', 'wait', 'exit'].includes(evidence.phase)
+        ...(evidence.phase && ['compile', 'load', 'inspect', 'armed', 'wait', 'exit'].includes(evidence.phase)
             ? { phase: evidence.phase }
             : {}),
         ...(typeof evidence.phaseKnown === 'boolean' ? { phaseKnown: evidence.phaseKnown } : {}),

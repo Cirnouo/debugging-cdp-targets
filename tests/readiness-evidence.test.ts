@@ -8,7 +8,7 @@ import {
     subscribeFixtureDiagnostics,
     validateFixtureEvent,
 } from '../src/adapters/fixture-diagnostics.ts';
-import { unixSnapshot } from '../src/adapters/platform-process.ts';
+import { unixSnapshot, validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { errorDetails } from '../src/shared/errors.ts';
 import { type BoundedLinuxRead, createLinuxStartupWaitSampler } from './smoke/linux-startup-wait.ts';
@@ -276,18 +276,28 @@ function readinessFixture({
     processIds = [42],
     listeners = false,
     nativeCloseResult,
+    foreignListener = false,
+    terminal = false,
+    interruptPoll = false,
 }: {
     processIds?: number[];
     listeners?: boolean;
     nativeCloseResult?: Record<string, unknown>;
+    foreignListener?: boolean;
+    terminal?: boolean;
+    interruptPoll?: boolean;
 } = {}) {
     const child = Object.assign(new EventEmitter(), {
         pid: 42,
         exitCode: null as number | null,
         signalCode: null as string | null,
     });
-    const failure = Object.assign(new Error('Controlled endpoint refusal'), { code: 'ECONNREFUSED' });
+    const failure = Object.assign(new Error(terminal ? 'Controlled identity refusal' : 'Controlled endpoint refusal'), {
+        code: 'ECONNREFUSED',
+    });
     let clock = 0;
+    let endpointCalls = 0;
+    let sleepCalls = 0;
     let beforeClose: (() => void) | undefined;
     let afterAttempt: (() => void) | undefined;
     let beforeSnapshot: (() => void) | undefined;
@@ -297,17 +307,27 @@ function readinessFixture({
         probe: async () => true,
         spawn: async () => child,
         getVersion: async () => {
+            endpointCalls++;
             throw failure;
         },
         now: () => clock,
         sleep: async (ms) => {
+            sleepCalls++;
             assert.equal(ms, 200);
-            clock += 25_000;
+            if (interruptPoll) throw failure;
+            // Delayed scheduling consumes the exact remaining readiness budget.
+            clock += 20_000;
             afterAttempt?.();
         },
         platformAdapter: {
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             ...(nativeCloseResult === undefined
                 ? {}
                 : {
@@ -331,7 +351,11 @@ function readinessFixture({
                     },
                     currentSessionId: 7,
                     processIds,
-                    listeners: listeners ? [{ localAddress: '127.0.0.1', owningProcess: 42 }] : [],
+                    listeners: foreignListener
+                        ? [{ localAddress: '127.0.0.1', owningProcess: 99 }]
+                        : listeners
+                          ? [{ localAddress: '127.0.0.1', owningProcess: 42 }]
+                          : [],
                 };
             },
             close: async () => {
@@ -349,6 +373,7 @@ function readinessFixture({
         launch: () =>
             host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
         calls: () => ({ snapshots: snapshotCalls, closes: closeCalls }),
+        readinessCalls: () => ({ elapsed: clock, endpointCalls, sleepCalls }),
         beforeClose: (job: () => void) => {
             beforeClose = job;
         },
@@ -359,6 +384,49 @@ function readinessFixture({
             beforeSnapshot = job;
         },
     };
+}
+
+test('readiness exit reason is a closed optional fixture field', () => {
+    for (const readinessExitReason of [
+        'budget-exhausted',
+        'foreign-listener',
+        'terminal-condition',
+        'poll-interrupted',
+    ]) {
+        assert.equal(validateFixtureEvent({ ...event, readinessExitReason })?.readinessExitReason, readinessExitReason);
+    }
+    for (const readinessExitReason of ['', '/private/error', null, 1, true]) {
+        assert.equal(validateFixtureEvent({ ...event, readinessExitReason }), undefined);
+    }
+    assert.equal(Object.hasOwn(validateFixtureEvent(event) ?? {}, 'readinessExitReason'), false);
+});
+
+for (const [reason, options, expected] of [
+    ['budget-exhausted', {}, { elapsed: 20_000, endpointCalls: 1, sleepCalls: 1 }],
+    ['foreign-listener', { foreignListener: true }, { elapsed: 0, endpointCalls: 0, sleepCalls: 0 }],
+    ['terminal-condition', { terminal: true }, { elapsed: 0, endpointCalls: 1, sleepCalls: 0 }],
+    ['poll-interrupted', { interruptPoll: true }, { elapsed: 0, endpointCalls: 1, sleepCalls: 1 }],
+] as const) {
+    test(`actual readiness branch reports ${reason} with unchanged clock/probe/Close effects`, async (t) => {
+        const records: FixtureEvent[] = [];
+        t.after(subscribeFixtureDiagnostics((record) => records.push(record)));
+        const fixture = readinessFixture(options);
+        const result = await fixture.launch().catch((error: unknown) => error);
+        assert.ok(result instanceof Error);
+        assert.equal(errorDetails(result)?.closeConfirmed, true);
+        if (reason !== 'foreign-listener') assert.equal(result.cause, fixture.failure);
+        assert.equal(records.find((record) => record.phase === 'rollback-request')?.readinessExitReason, reason);
+        assert.deepEqual(fixture.calls(), { snapshots: 1, closes: 1 });
+        assert.deepEqual(fixture.readinessCalls(), expected);
+    });
+    test(`default readiness branch ${reason} preserves literal clock/probe/Close effects`, async () => {
+        const fixture = readinessFixture(options);
+        const result = await fixture.launch().catch((error: unknown) => error);
+        assert.ok(result instanceof Error);
+        assert.equal(errorDetails(result)?.closeConfirmed, true);
+        assert.deepEqual(fixture.calls(), { snapshots: 1, closes: 1 });
+        assert.deepEqual(fixture.readinessCalls(), expected);
+    });
 }
 
 for (const status of ['owned', 'foreign', 'absent'] as const) {

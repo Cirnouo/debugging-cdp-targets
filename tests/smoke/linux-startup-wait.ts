@@ -1,6 +1,13 @@
 import { open } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import { type FixtureEvent, validateFixtureEvent } from '../../src/adapters/fixture-diagnostics.ts';
+import {
+    collectLinuxStartupResources,
+    type LinuxStartupResources,
+    type ResourceIo,
+    readPrivilegedKernelStack,
+    validateLinuxStartupResources,
+} from './linux-startup-resources.ts';
 
 export type LinuxReadLimitation = 'missing' | 'permission' | 'read-failed' | 'overlong' | 'timeout';
 export interface BoundedLinuxRead {
@@ -51,6 +58,7 @@ export interface LinuxStartupWaitRecord {
             >
         >
     >;
+    readonly resources?: LinuxStartupResources;
     readonly systemPsi?: Readonly<
         { scope: 'system' } & Partial<
             Record<
@@ -67,6 +75,8 @@ export interface LinuxStartupWaitRecord {
 }
 export interface LinuxStartupWaitDependencies {
     enabled?: boolean;
+    resources?: boolean;
+    resourceIo?: ResourceIo;
     platform?: NodeJS.Platform;
     now?: () => number;
     read?: (file: string, signal: AbortSignal) => Promise<BoundedLinuxRead>;
@@ -234,6 +244,7 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
             'ioWaitKind',
             'process',
             'systemPsi',
+            'resources',
         ]);
         if (
             selected?.kind !== 'linux-startup-wait' ||
@@ -249,7 +260,7 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
             !Number.isFinite(selected.elapsedMs) ||
             selected.elapsedMs < 0 ||
             !safeInteger(selected.reads) ||
-            selected.reads > 7 ||
+            selected.reads > 22 ||
             !safeInteger(selected.bytes) ||
             selected.bytes > selected.reads * fileBytes
         )
@@ -283,7 +294,10 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
                 return;
             systemPsi = Object.freeze({ ...fields, scope: 'system' });
         }
-        const hasMetrics = process !== undefined || systemPsi !== undefined || selected.wchan !== undefined;
+        const resources = 'resources' in selected ? validateLinuxStartupResources(selected.resources) : undefined;
+        if ('resources' in selected && !resources) return;
+        const hasMetrics =
+            resources !== undefined || process !== undefined || systemPsi !== undefined || selected.wchan !== undefined;
         if (
             (selected.outcome === 'sampled') !== (limits.length === 0) ||
             (selected.outcome === 'skipped' &&
@@ -313,6 +327,7 @@ export function validateLinuxStartupWaitRecord(value: unknown): LinuxStartupWait
             limitations: limits,
             ...(selected.wchan === undefined ? {} : { wchan: selected.wchan }),
             ...(ioWaitKind === undefined ? {} : { ioWaitKind }),
+            ...(resources === undefined ? {} : { resources }),
             ...(process === undefined ? {} : { process }),
             ...(systemPsi === undefined ? {} : { systemPsi }),
         });
@@ -477,7 +492,9 @@ export function createLinuxStartupWaitSampler(
         let published = false;
         let timer: unknown;
         const stale = () => connection.root !== root || connection.sessionId !== root.sessionId;
-        function publish(metrics: Pick<LinuxStartupWaitRecord, 'process' | 'systemPsi' | 'wchan' | 'ioWaitKind'> = {}) {
+        function publish(
+            metrics: Pick<LinuxStartupWaitRecord, 'process' | 'systemPsi' | 'wchan' | 'ioWaitKind' | 'resources'> = {},
+        ) {
             if (published) return;
             published = true;
             if (timer !== undefined) clearTimer(timer);
@@ -515,12 +532,12 @@ export function createLinuxStartupWaitSampler(
             }
             return false;
         }
-        async function readOne(file: string): Promise<string | undefined> {
+        async function readOne(file: string, override?: () => Promise<BoundedLinuxRead>): Promise<string | undefined> {
             if (expired()) return;
             reads++;
             let result: BoundedLinuxRead;
             try {
-                result = await read(file, controller.signal);
+                result = await (override ? override() : read(file, controller.signal));
             } catch {
                 result = { bytes: 0, limitation: 'read-failed' };
             }
@@ -568,6 +585,21 @@ export function createLinuxStartupWaitSampler(
             const memory = await readOne('/proc/pressure/memory');
             if (expired()) return;
             const pressureIo = await readOne('/proc/pressure/io');
+            if (expired()) return;
+            const resources =
+                dependencies.resources === true
+                    ? await collectLinuxStartupResources(root.pid, controller.signal, readOne, {
+                          ...dependencies.resourceIo,
+                          stack: async (pid, signal) => {
+                              const text = await readOne(`/proc/${pid}/stack`, () =>
+                                  (dependencies.resourceIo?.stack ?? readPrivilegedKernelStack)(pid, signal),
+                              );
+                              return text === undefined
+                                  ? { bytes: 0, limitation: 'read-failed' }
+                                  : { bytes: Buffer.byteLength(text), text };
+                          },
+                      })
+                    : undefined;
             if (expired()) return;
             const after = parseStat(await readOne(`/proc/${root.pid}/stat`), root.pid);
             if (expired()) return;
@@ -624,6 +656,7 @@ export function createLinuxStartupWaitSampler(
             const waitDetail = wait === undefined ? {} : classifyWchan(wait);
             if (waitDetail.wchan === 'unknown') limits.add('wchan-unknown');
             publish({
+                ...(resources === undefined ? {} : { resources }),
                 ...(Object.keys(process).length ? { process } : {}),
                 ...(Object.keys(systemPsi).length > 1 ? { systemPsi } : {}),
                 ...waitDetail,

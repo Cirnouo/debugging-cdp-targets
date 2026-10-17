@@ -307,8 +307,9 @@ Ordinary controlled real Chrome fixture jobs may upload diagnostic artifacts onl
 using the reviewed
 [official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
 The exact five collector/index filenames, failure condition, seven-day retention
-and separate directory are enforced by CI regressions. The sole success-upload
-exception is the explicitly opted-in manual Ubuntu startup study described below;
+and separate directory are enforced by CI regressions. The success-upload
+exceptions are the two explicitly opted-in manual Ubuntu studies and the bounded
+current-version first-start assessment described below;
 all other jobs remain artifact-free. These records contain closed safe stage/outcome metadata, UUIDs,
 numbers and bounded allowlisted error cause codes. They exclude raw errors,
 messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
@@ -331,7 +332,47 @@ changing the production readiness predicate or wall-clock deadline.
 Primary smoke failures remain primary while the existing cleanup and assertions
 run in order; diagnostic failure cannot replace runtime outcomes. Artifacts
 establish only the recorded direct checks, not complete lifecycle attribution
-or a root cause for historical failures. Synchronous instrumentation overhead
+or a root cause for historical failures. The controlled Linux preload enables
+optional verified-root resource diagnostics at the existing four one-shot
+triggers, within the shared 250 ms sample budget, 22 accounted reads and unchanged
+record/stream caps. A fixed bounded sudo/cat helper contributes only a closed
+kernel wait classification; no raw stack or path is retained. Executable device
+metadata, completed device I/O, actual queue readahead and visible cgroup
+reclaim/throttling/limits retain their distinct scopes and unavailable states.
+Pending reads/helpers retain sampler ownership after timeout; production
+readiness does not await them, and they never retry a trigger or signal Chrome.
+The additional failed-first-start observer is default-off and admits only the
+one reviewed ordinary push transition, attempt one, on the investigation branch.
+PR/manual/scheduled/retry events remain unarmed. It selects only the first
+official-server operation and samples baseline plus 4/8/12/16/19-second slots;
+each group has a 250 ms result limit, independent real pending ownership and
+strict EOF/identity validation. Success discards its detailed cache; a failure
+can flush only after the actual normal-Close request path ends or app exit is
+confirmed. No failure-edge flush, postfailure sample, new native wait or forced
+shutdown is permitted. All static record/metadata/read and writer budgets,
+closed projections and partial-evidence rules are documented in the
+[capture procedure](../../tests/smoke/README.md#failed-first-start-completed-io-capture).
+Only this armed preload requests the internal creation-identity observer.
+It binds numeric evidence from the actual creation-time inputs/comparison to
+the same root object and origin, without additional OS reads or changing the
+1,000 ms tolerance, wall-clock short-circuit or error priority. A shared 128-frame
+budget reserves before added source timing/metadata and charges failed source
+attempts; two existing auxiliary slots cache first/distinct-first-rejected
+comparisons. Diagnostic faults cannot replace native outcomes. A rollback decision
+stops new observation immediately; matching readiness END locks the outcome, and
+missing END remains incomplete. Operation terminal fallback applies only when
+readiness never began. Revocation preserves pending work and Close/exit receivers.
+Closed comparison records and optional producer statistics distinguish unavailable
+evidence from zero counts; producer CPU remains unmeasured. Its success discard
+does not suppress the parallel legacy wait
+sampler or turn an entire later failure artifact into failure-only sample data.
+Armed streams reserve capacity inside the same 2,000-record/1 MiB total and five
+filenames; ordinary quota exhaustion does not suppress the reserved classes,
+but always remains incomplete. Every marker and fallback counts against the
+hard caps. Ordinary upload remains failure-only with seven-day retention.
+Local design/implementation approval does not authorize the subsequent push
+and automatic CI collection; confirm those actions on the actual reviewed patch.
+Synchronous instrumentation overhead
 on real Linux/macOS Chrome fixtures has not been measured. Reproduction and interpretation belong in the
 [smoke inventory](../../tests/smoke/README.md#controlled-failure-diagnostics).
 
@@ -347,7 +388,7 @@ single-start study mode under Xvfb; it never substitutes for the ordinary two-sm
 real Chrome acceptance. No Chrome version/hash command, warmup, browser download
 or OS package installation is added before the first start.
 
-Only that study job uses `always()` plus the successful current-initialization
+Both study jobs use `always()` plus the successful current-initialization
 guard to upload and index the same five fixed files on either outcome. Artifact
 names include block, arm, run ID and attempt; retention stays seven days with
 hidden files and overwrite disabled. Entry-recovery remains explicitly not-run.
@@ -362,6 +403,122 @@ was not reproduced and its cause remains unknown. Missing terminal/cleanup or
 truncated evidence limits conclusions. See the
 [study procedure](../../tests/smoke/README.md#bounded-ubuntu-startup-study)
 for the fixed protocol, metrics and manual command.
+
+The separate `ubuntu-readahead-study` boolean manual input defaults to false and
+requires explicit `workflow_dispatch` selection. It is mutually exclusive with
+`ubuntu-startup-study` and `ubuntu-first-start-assessment`: selecting multiple
+research modes fails the first Quality step before any
+research job can start Chrome, and no selected research job runs. Both legacy opt-ins use
+run-ID-specific concurrency without cancelling ordinary CI. The new quality-gated
+job fixes file logging on and freezes six slot/block/RA KiB allocations:
+`1/1/128`, `2/1/1024`, `3/2/1024`, `4/2/128`, `5/3/128`, `6/3/1024`.
+Matrix order does not promise chronological execution. Blocks are organizational,
+not matched machines. An intervention-admission failure retains its assigned
+outcome with zero starts; an admitted slot has at most one Chrome start.
+No retry, replacement, warmup, pre-start version/hash/full-binary read, download
+or OS package installation is permitted. Original readiness/identity/normal Close
+and both ordinary acceptance smokes remain required and unchanged.
+
+Only the test fixture may change the executable's verified backing queue on its
+disposable research runner. It must derive canonical executable/device/partition
+and queue identity without a guessed device or fallback, retain the original RA,
+set and verify either assigned value, and verify identity before writes and restore.
+Unsupported mapping, permission or readback failure remains explicit unavailable
+admission. Partial/failed/timed-out writes retain restoration responsibility.
+Pending write helpers must actually settle, then actual owned application and
+resource exit must be proved before restoring and verifying the original RA.
+Gateway-child exit or smoke success alone cannot prove that barrier. Failed or
+pending cleanup/restoration stays explicit; Chrome must never be force-killed.
+
+Terminal device observations must not block or delay readiness, rollback or
+normal Close. Retain observation start/completion and cleanup overlap; a window
+not proved complete before cleanup is overlapped or unavailable, and cannot enter
+a clean-window comparison. Closed numeric/enum evidence stays within existing
+record/event/byte caps and the same five fixed artifacts, seven-day retention,
+hidden-files exclusion and disabled overwrite. New artifact names carry slot,
+block, assigned RA, run ID and attempt. Upload/index retain `always()` and accepted
+current initialization; admission failures cannot disappear from the outcome set.
+
+First report every assigned outcome, including missing, unavailable, timeout,
+no-CDP, cleanup and restore failures. Then compare only joint observed software,
+original RA and visible queue configuration strata supported in both arms.
+Visible queue classes are not proof of physical media, numeric device identities
+are local to each VM, and queue intervention affects other users of the guest
+device. Shared non-atomic counter windows and cumulative read time do not isolate
+Chrome latency or expose ancestor/host limits. Report completed request counts,
+read bytes and bytes per read together, including amplification/reclaim tradeoffs.
+Different configurations are explicit confounding. Fresh runners do not prove
+cold caches, and all success does not establish a repair or historical root cause.
+The separate [readahead study procedure](../../tests/smoke/README.md#bounded-ubuntu-readahead-study)
+does not replace the ordinary two-smoke real Chrome acceptance.
+
+The third narrow manual success-upload exception is the default-false
+`ubuntu-first-start-assessment` input. All three research selectors are mutually
+exclusive. Quality rejects conflicts and independently validates the exact
+manual source SHA/tree, round UUID, repository/ref/workflow/context and attempt
+one before Chrome-dependent jobs. Each fixture revalidates its native admission
+immediately before acquisition. Actual `GITHUB_WORKFLOW_REF` stays inherited;
+arbitrary input/context values travel through env/with as data, never shell source.
+This manual path does not reuse or broaden the consumed ordinary push gate.
+Ordinary Linux presentation forwards that gate's one already-acquired result
+through literal admitted/ineligible/unavailable values with source null; unknown
+or gate error becomes unavailable. It adds no native/Git probe or capture authority.
+
+The assessment consists of six explicit serial `ubuntu-24.04` jobs and literal
+slots, each with at most one assessment first start. Slot 1 needs Quality; each
+successor needs Quality and its predecessor's final successful job result plus
+exact `safe-to-continue=true`. There is no assessment matrix, controller, retry,
+ignored failure, YAML anchor or always-run job admission. Only this new mode
+uses a run-ID-specific group with `cancel-in-progress=false`; other concurrency
+semantics stay unchanged. Existing ordinary double-start official acceptance,
+entry recovery, both legacy studies and all eighteen Windows interactive cases
+retain their required checks.
+
+Continuation requires the original qualified assessment command's successful
+exit, complete current-five-file preflight with bounded opaque metadata token,
+exact-five upload, accepted existing index presentation and metadata-only stable
+postcheck, in that order. Each step's outcome and conclusion must succeed.
+Subsequent final job/post-job failure still stops the successor. Missing receipt,
+unqualified terminal evidence, cleanup failure, unstable metadata, refused budget,
+missing file, upload/index/provider failure or cancellation cannot be repaired by
+a partial upload. The complete-path index wrapper rejects explicit graceful
+fallback and missing fixed presentation markers. Its single held capture line
+allows only `none` or `self-report-write-unavailable` limitations, refusing missing
+selection/outcome/terminal/writer-cost evidence and unsupported limitations.
+Its fixed-format coupling can conservatively stop a round; it adds no body/event
+rescan or fixture API. The separate failure-only
+partial path requires original assessment failure, skipped complete preflight
+and independently proven current closed ownership. Any attempted complete
+preflight, including late output-write failure, refuses further partial
+acquisition/upload/index. This conservative loss of potential partial evidence
+preserves the aggregate per-slot JSON byte ceiling and one body read per JSON.
+Partial evidence preserves the original failure and never emits continuation.
+Ordinary success uploads remain forbidden. Assessment uploads use the reviewed
+action, seven-day retention,
+unique round/slot/run/attempt names, exact existing five paths, hidden-files and
+overwrite disabled, and `if-no-files-found: error`.
+
+One separately authorized round reserves all six positions, including zero-start,
+failed, cancelled, missing or skipped outcomes. No rerun, replacement, backfill,
+warmup or additional dispatch follows. Assessment roots total at most six, plus
+sixteen ordinary roots in the same dispatch: at most twenty-two. Separately
+authorized natural publication push/PR runs may add thirty-two, for a combined
+maximum of fifty-four only under that separate authorization. Windows native
+GUI activity is outside those Chrome-root counts. Six serial twenty-minute
+provider allowances total at most 120 execution minutes, excluding dependencies,
+queue time and cancellation grace; native readiness remains twenty seconds and
+normal Close has no new deadline. Provider cutoff can interrupt cleanup/flush,
+which stays unverified/incomplete or unknown without force-kill or automatic resume.
+
+Report startup, actual lifecycle cleanup, collection availability and CI/provider
+outcomes separately. Audit downloaded archive inventory/hashes after an authorized
+round; local pre/postflight and upload success alone are not remote-inventory proof.
+A finite green round can complete the bounded assessment without a failure
+witness: report no target failure observed in N executed qualified positions,
+record every skipped/incomplete position and actual conditions, and make no
+universal stability or historical-repair claim. Inputs and local preparation
+authorize no execution. The [assessment procedure](../../tests/smoke/README.md#bounded-current-version-first-start-assessment)
+owns the exact source/context, receipt, byte/call budgets and interpretation.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at

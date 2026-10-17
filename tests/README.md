@@ -1,5 +1,25 @@
 # Tests
 
+- `linux-creation-identity.test.ts` exercises the strict uptime provider, exact
+  conservative kernel inverse bounds, complete interval containment, private
+  actual-child registration, raw continuity and all lifecycle consumers through
+  injected OS I/O. Late calibration, cancellation, remaining readiness budget,
+  malformed sources, copied/mutated roots and observer failures cannot authorize
+  forwarding or signals. `platform-evidence.test.ts` retains the actual host/adapter
+  regression for combined boot-second and tick quantization at the original
+  1000-ms boundary. These deterministic tests do not establish the cause or repair
+  of the historical CI no-listener timeout or its unrecorded early identity failure.
+
+The closed Linux creation diagnostic fields describe the legacy scalar
+`btime + ticks / CLK_TCK` comparison. Their standalone/source-bundle regressions
+continue to check that exact behavior. Production Linux interval authorization
+does not emit a synthetic scalar comparison: `creationBranch`,
+`creationExpectedUtcMs`, `creationObservedUtcMs` and comparison completeness are
+unavailable for the new interval decision. Existing proc counter/root observations
+and collector admission/lifecycle limits remain diagnostic only. No current
+capture claims complete interval/calibration evidence; no new public fields were
+added. Security proof is unconditional with diagnostics disabled, enabled or failing.
+
 - `instructions-smoke-evidence.test.ts` rejects arbitrary request/user strings
   as MCP instruction evidence and validates semantic tool descriptions and the
   exact Claude host-generated reminder/deferred-discovery carrier.
@@ -15,6 +35,8 @@
   including closed fields, malformed observations and disabled-mode behavior.
   It also preserves existing native-Close listener states while rejecting unsafe
   diagnostic metadata without changing the primary startup cause or cleanup.
+  Literal failure branches verify readiness exit classification, elapsed budget,
+  retry spacing, getter, probe and normal-Close effects independently of clock-read count.
 - `fixture-cost.test.ts` checks monotonic collector callback costs on successful
   and failed writes, single counting of rejected events, closed timing records,
   default-off behavior and unchanged stream caps.
@@ -24,11 +46,38 @@
 - `linux-startup-wait.test.ts` checks verified snapshot association, four
   one-shot Linux sampling triggers, bounded proc reads, process/session reuse,
   late results, resource counters, privacy and disabled-platform behavior.
+- `linux-startup-resources.test.ts` checks exact kernel-frame classification,
+  fixed helper cancellation and settlement, device/partition queue evidence,
+  visible cgroup counters and limits, hostile input and closed-record consistency
+  through external I/O boundary replacements.
+- `linux-readahead-study.test.ts` checks unique executable/queue mapping, bounded
+  admission and association, single-start ownership, late writer settlement,
+  actual resource-release proof, original-value restoration, terminal overlap
+  and honest closed read-cost evidence through external I/O boundaries.
+- `linux-first-start-capture.test.ts` checks the separately armed observer's
+  bounded EOF reads, identity epochs, independent pending ownership, six fixed
+  slots and Close-gated failed-start cache through external I/O boundaries.
+- `fixture-first-start-artifacts.test.ts` checks reserved stream capacity,
+  marker/fallback accounting, retained summaries and honest incomplete output.
+- `fixture-first-start-integration.test.ts` checks the observer's failure flush
+  and success discard through the actual shared parent/preload artifact writer.
+- `first-start-capture-ci.test.ts` checks the push-only current-checkout admission
+  gate and rejects PR, rerun, malformed event and contradictory identity inputs.
+- `first-start-control.test.ts` checks closed admission/terminal projections,
+  first-request origin binding, qualification, privacy, once-only bounded writes
+  and partial-write/EPIPE containment without new native reads.
+- `first-start-assessment-ci.test.ts` checks manual source/tree/round/slot admission,
+  exact Quality CLI inputs, current five-file ownership, bounded stable acquisition,
+  cross-step metadata digest outputs and metadata-only continuation postchecks.
 - `chrome-startup.test.ts` checks bounded private Chrome log projections,
   source-specific reason categories, display responsiveness and safe diagnostic
   limitations without launching a browser or exposing raw log contents.
 - `official-startup-study.test.ts` exercises the real smoke CLI's single-launch
-  logging study and normal acceptance through external I/O boundary replacements.
+  logging and readahead studies and normal acceptance through external I/O
+  boundary replacements, including zero-start admission failures, successful
+  restoration and real Node preload settlement.
+  Assessment cases require one first start and qualified admission/terminal output;
+  ordinary Linux presentation retains two starts and performs no new admission read.
 - `application-screenshot-probe.test.ts` validates complete sealed payload
   receipts before acquisition, unique existing renderer/HWND selection, formal
   yellow/condition/green ordering, one capture without replay, opaque geometry
@@ -140,6 +189,24 @@
   check automation, package gates, exact lane commands and syntax plans. Parsed
   CI checks retain canonical versions and names, and require the latest-24
   Ubuntu lane's setup inputs, quality dependency and unconditional command order.
+  Research CI checks also retain both default-false manual inputs, reject a
+  conflicting dispatch before either research job starts, freeze the six queue
+  readahead allocations and single-start command, and enforce current collection
+  ownership and the five-file artifact boundary on success or failure. These
+  parsed configuration checks launch no Chrome and do not establish an RA effect;
+  the [readahead study procedure](smoke/README.md#bounded-ubuntu-readahead-study)
+  owns interpretation and cleanup requirements.
+  Assessment CI regressions evaluate the parsed six-job needs/step/output and
+  concurrency conditions under failed, cancelled, skipped and missing-output
+  cases. The complete index wrapper executes under Bash with only the existing
+  summary CLI I/O replaced; Windows uses Bash from its existing Git installation.
+  All six wrappers reject the exact unchanged CLI presentation from a transient
+  event-read failure and missing/unsupported capture limitations, while accepting
+  self-report-only or no limitations. Exit-zero fallback and append failure are
+  checked independently of fixture qualification and file postflight. Parsed
+  partial-route conditions reject every attempted complete preflight, including
+  late output-write failure, and preserve original-failure/skipped-preflight
+  partial evidence without a second per-slot JSON acquisition.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
   cleanup failures, prerequisite/not-run indexing and the original delivered
@@ -283,6 +350,17 @@
   explicit acquisition proof plus physical helper close, with late identity taking
   priority and never-spawned OS helper failure as the explicit exception.
 - `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
+- `native-resource-preparation.test.ts` gates one fresh Windows fixture DLL before
+    consumers and checks compiler failure/timeout retention, physical helper close,
+    pending case continuation and late cleanup witness barriers through external I/O.
+    Its compile-only Windows regression uses an owned 8.3 TEMP parent in a child
+    environment and preserves strict assembly identity checks. CodeDOM temporary files
+    remain in the canonical owned DLL directory until the existing physical-close and
+    case-continuation barriers allow owner cleanup; preparation failures retain them.
+    The regression checks real .tmp/.cmdline/.out/.err files before disposal and
+    verifies normal cleanup; unavailable filesystem aliases produce an explicit
+    prerequisite skip.
+    Real-directory resolution failure retains raw ownership without compilation or retry.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
   Hidden descendants outlive the root and spawn later descendants; native job

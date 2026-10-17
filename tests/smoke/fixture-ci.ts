@@ -1,9 +1,20 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+    appendFileSync,
+    closeSync,
+    fstatSync,
+    mkdirSync,
+    openSync,
+    readFileSync,
+    readSync,
+    statSync,
+    writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const labels = ['official-server', 'entry-recovery'] as const;
+const collectionUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const files = ['job-index.json', ...labels.flatMap((label) => [`${label}.events.ndjson`, `${label}.summary.json`])];
 const smokeStages = [
     'prerequisites',
@@ -45,6 +56,70 @@ export function readFixtureIndex(file: string): unknown {
     if (statSync(file).size > 65536) throw new Error('Controlled index exceeds its bound.');
     return JSON.parse(readFileSync(file, 'utf8'));
 }
+function currentCollection(value: unknown): string | undefined {
+    return object(value) && typeof value.collectionId === 'string' && collectionUuid.test(value.collectionId)
+        ? value.collectionId
+        : undefined;
+}
+/** Authority precedes body acquisition; JSON flags never upgrade a default read. */
+export function readFixtureSummary(file: string, authority: boolean | { collectionId: string } = false): unknown {
+    const headerAuthority = typeof authority === 'object' ? authority.collectionId : undefined;
+    const limit = authority === true || (headerAuthority && collectionUuid.test(headerAuthority)) ? 1024 * 1024 : 65536;
+    const handle = openSync(file, 'r');
+    try {
+        const initial = fstatSync(handle);
+        if (!initial.isFile() || !Number.isSafeInteger(initial.size) || initial.size < 0 || initial.size > limit)
+            throw new Error('Controlled summary exceeds its bound.');
+        const buffer = Buffer.alloc(initial.size);
+        let offset = 0;
+        function readThrough(end: number) {
+            while (offset < end) {
+                const count = readSync(handle, buffer, offset, end - offset, offset);
+                if (count === 0) throw new Error('Controlled summary changed during acquisition.');
+                offset += count;
+            }
+        }
+        if (initial.size > 65536 && authority !== true) {
+            readThrough(Math.min(initial.size, 256));
+            const prefix = buffer.subarray(0, offset).toString('utf8');
+            const match =
+                /^\{"schemaVersion":1,"fixture":"official-server","collectionId":"([a-fA-F0-9-]{36})","firstStartCaptureArmed":true,/.exec(
+                    prefix,
+                );
+            if (!match?.[1] || match[1] !== headerAuthority || !collectionUuid.test(match[1]))
+                throw new Error('Controlled summary header is unavailable.');
+        }
+        readThrough(initial.size);
+        const final = fstatSync(handle);
+        if (
+            !final.isFile() ||
+            final.dev !== initial.dev ||
+            final.ino !== initial.ino ||
+            final.size !== initial.size ||
+            final.mtimeMs !== initial.mtimeMs ||
+            final.ctimeMs !== initial.ctimeMs
+        )
+            throw new Error('Controlled summary changed during acquisition.');
+        const content = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+        const value: unknown = JSON.parse(content);
+        if (initial.size > 65536) {
+            const canonical = JSON.stringify(value);
+            if (
+                !object(value) ||
+                value.schemaVersion !== 1 ||
+                value.fixture !== 'official-server' ||
+                value.firstStartCaptureArmed !== true ||
+                !currentCollection(value) ||
+                (headerAuthority && value.collectionId !== headerAuthority) ||
+                (content !== canonical && content !== `${canonical}\n`)
+            )
+                throw new Error('Invalid claimed-armed summary.');
+        }
+        return value;
+    } finally {
+        closeSync(handle);
+    }
+}
 export function newFixtureEnvelope(fixture: 'official-server' | 'entry-recovery', collectionId: string) {
     const number = (value: string | undefined) => (value && /^\d{1,15}$/.test(value) ? Number(value) : null);
     return {
@@ -74,6 +149,12 @@ export function newFixtureEnvelope(fixture: 'official-server' | 'entry-recovery'
         collectorCost: null,
         linuxStartupWait: [],
         linuxStartupWaitOmitted: 0,
+        firstStartCapture: [],
+        firstStartCaptureArmed: false,
+        firstStartCaptureOmitted: 0,
+        firstStartCaptureLimitations: [],
+        firstStartCaptureWriter: null,
+        firstStartCaptureWriterChild: null,
     };
 }
 export function fixtureJobIndex(command: string, directory: string, label?: string) {
@@ -113,10 +194,14 @@ export function fixtureJobIndex(command: string, directory: string, label?: stri
         const value = readFixtureIndex(file);
         if (!object(value) || !object(value.fixtures)) throw new Error('Invalid controlled fixture job index.');
         const fixtures: Record<string, string> = {};
+        const selectedCollection = currentCollection(value);
         for (const fixture of labels) {
             fixtures[fixture] = value.fixtures[fixture] === 'running' ? 'running' : 'not-run';
             try {
-                const summary = readFixtureIndex(path.join(directory, `${fixture}.summary.json`));
+                const summary = readFixtureSummary(
+                    path.join(directory, `${fixture}.summary.json`),
+                    selectedCollection ? { collectionId: selectedCollection } : false,
+                );
                 if (object(summary) && (summary.state === 'passed' || summary.state === 'failed'))
                     fixtures[fixture] = summary.state;
             } catch {}
@@ -136,8 +221,10 @@ async function writeFixtureJobSummary(directory: string, file: string) {
     // Loaded only for presentation; dependency-free init/stage imports no project module.
     const { readFixtureProgress } = await import('./fixture-artifacts.ts');
     let text = 'Controlled Chrome diagnostics\n\n';
+    let selectedCollection: string | undefined;
     try {
         const value = readFixtureIndex(file);
+        selectedCollection = currentCollection(value);
         const stage =
             object(value) && (value.stage === 'prerequisites' || labels.some((label) => label === value.stage))
                 ? value.stage
@@ -148,14 +235,21 @@ async function writeFixtureJobSummary(directory: string, file: string) {
     }
     for (const label of labels) {
         try {
-            const value = readFixtureIndex(path.join(directory, `${label}.summary.json`));
+            const value = readFixtureSummary(
+                path.join(directory, `${label}.summary.json`),
+                selectedCollection ? { collectionId: selectedCollection } : false,
+            );
             const state =
                 object(value) && ['not-run', 'running', 'passed', 'failed'].includes(String(value.state))
                     ? String(value.state)
                     : 'unavailable';
             text += `${label}: ${state}; ${label}.summary.json; ${label}.events.ndjson\n\n`;
             if (state !== 'not-run') {
-                const progress = readFixtureProgress(directory, label);
+                const progress = readFixtureProgress(
+                    directory,
+                    label,
+                    object(value) && value.firstStartCaptureArmed === true,
+                );
                 text += `Runtime boundary: ${progress.lastStage ?? 'unavailable'}; operation: ${progress.lastOperationId ?? 'unavailable'}; gateway events: ${progress.gatewayEvents}.\n\n`;
                 if (progress.incomplete || progress.writeFailed || progress.truncated || progress.invalidEvents > 0)
                     text += 'Stream evidence is incomplete or limited.\n\n';
@@ -168,6 +262,14 @@ async function writeFixtureJobSummary(directory: string, file: string) {
                 }
                 if (progress.linuxStartupWaitOmitted > 0)
                     text += `Linux wait summary omitted ${progress.linuxStartupWaitOmitted} earlier records; consult the bounded stream.\n\n`;
+                if (progress.firstStartCaptureArmed) {
+                    text += `Failed first-start capture: retained=${progress.firstStartCapture.length}; omitted=${progress.firstStartCaptureOmitted}; limitations=${progress.firstStartCaptureLimitations.join(',') || 'none'}.\n\n`;
+                    text +=
+                        'This presentation rereads completed evidence; its analysis I/O is separate from startup collector cost.\n\n';
+                    const cost = progress.firstStartCaptureWriterChild;
+                    if (cost)
+                        text += `First-start writer receipt before terminal writes: attempts=${cost.attempts}; metadataReserved=${cost.metadataReserved}; scannedBytes=${cost.scannedBytes}; selfReportWriteUnavailable=${cost.selfReportWriteUnavailable}.\n\n`;
+                }
                 for (const startup of progress.browserStartup) {
                     if (startup.phase === 'log') {
                         text += `Chrome startup slot ${startup.launch}: categories=${startup.reasons.join(',') || 'unknown'}; INFO=${startup.info}; WARNING=${startup.warning}; ERROR=${startup.error}; FATAL=${startup.fatal}; absent=${startup.absent}; readFailed=${startup.readFailed}; truncated=${startup.truncated}; incomplete=${startup.incomplete}.\n\n`;
@@ -234,7 +336,10 @@ async function runFixtureCli() {
         } else if (command === 'stage') {
             requireCurrentCollection(directory, collectionId);
             if (!labels.some((label) => label === labelOrCollection)) throw new Error('Invalid fixture.');
-            const envelope = readFixtureIndex(path.join(directory, `${labelOrCollection}.summary.json`));
+            const envelope = readFixtureSummary(
+                path.join(directory, `${labelOrCollection}.summary.json`),
+                collectionId ? { collectionId } : false,
+            );
             if (
                 !object(envelope) ||
                 envelope.collectionId !== collectionId ||

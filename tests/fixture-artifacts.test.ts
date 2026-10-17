@@ -9,6 +9,35 @@ import { fileURLToPath } from 'node:url';
 
 const collectorUrl = new URL('./smoke/fixture-artifacts.ts', import.meta.url);
 
+test('readahead research collector has closed projection and bounded summary', async () => {
+    const { createFixtureArtifacts, readFixtureProgress } = await import('./smoke/fixture-artifacts.ts');
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-ra-artifacts-test-'));
+    try {
+        const collector = createFixtureArtifacts(directory, 'official-server');
+        const record = {
+            kind: 'linux-readahead-study',
+            phase: 'terminal',
+            outcome: 'sampled',
+            clock: 'parent',
+            assignedKb: 128,
+            startedMs: 0,
+            endedMs: 1,
+            reads: 3,
+            bytes: 40,
+        };
+        collector.readahead({ ...record, path: '/PRIVATE' });
+        for (let index = 0; index < 10; index++) collector.readahead(record);
+        const progress = readFixtureProgress(directory, 'official-server');
+        assert.equal(progress.readaheadStudy.length, 8);
+        assert.equal(progress.readaheadStudyOmitted, 2);
+        assert.equal(progress.invalidEvents, 1);
+        assert.equal(progress.incomplete, true);
+        assert.doesNotMatch(await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8'), /PRIVATE/);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('controlled fixture collector exists before smoke execution is changed', async () => {
     const implementation = await import(collectorUrl.href).catch(() => undefined);
     assert.ok(implementation?.createFixtureArtifacts, 'Missing bounded streaming fixture collector.');

@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
     type BoundedLinuxRead,
     createLinuxStartupWaitSampler,
+    type LinuxStartupWaitDependencies,
     type LinuxStartupWaitRecord,
     readLinuxStartupFile,
     validateLinuxStartupWaitRecord,
@@ -42,7 +43,7 @@ function bounded(text: string): BoundedLinuxRead {
 }
 function harness(
     read?: (file: string, signal: AbortSignal) => Promise<BoundedLinuxRead>,
-    options: { enabled?: boolean; platform?: NodeJS.Platform } = {},
+    options: Pick<LinuxStartupWaitDependencies, 'enabled' | 'platform' | 'resources' | 'resourceIo'> = {},
 ) {
     let time = 0;
     let nextTimer = 0;
@@ -50,6 +51,7 @@ function harness(
     const records: LinuxStartupWaitRecord[] = [];
     const paths: string[] = [];
     const sampler = createLinuxStartupWaitSampler((record) => records.push(record), {
+        ...options,
         enabled: options.enabled ?? true,
         platform: options.platform ?? 'linux',
         now: () => time,
@@ -696,7 +698,11 @@ test('the real bounded file reader caps bytes, conservatively rejects a full buf
 });
 
 test('default-off and non-Linux observers perform zero reads, timers, clocks and input access', () => {
-    for (const options of [{ enabled: false, platform: 'linux' }, { enabled: true, platform: 'darwin' }, {}] as const) {
+    for (const options of [
+        { enabled: false, platform: 'linux', resources: true },
+        { enabled: true, platform: 'darwin', resources: true },
+        {},
+    ] as const) {
         let work = 0;
         const sampler = createLinuxStartupWaitSampler(
             () => {
@@ -704,6 +710,20 @@ test('default-off and non-Linux observers perform zero reads, timers, clocks and
             },
             {
                 ...options,
+                resourceIo: {
+                    stack: async () => {
+                        work++;
+                        return bounded('');
+                    },
+                    statDevice: async () => {
+                        work++;
+                        return 0n;
+                    },
+                    realpath: async () => {
+                        work++;
+                        return '';
+                    },
+                },
                 now: () => {
                     work++;
                     return 0;
@@ -982,4 +1002,55 @@ test('a pending rollback diagnostic has no referenced deadline timer that keeps 
     const resources: unknown = JSON.parse(child.stdout);
     assert.ok(Array.isArray(resources));
     assert.equal(resources.includes('Timeout'), false, 'only unreferenced deadline timers may remain');
+});
+
+test('resource deadline retains pending helper ownership and emits a valid timeout after extra reads', async () => {
+    let settle: ((result: BoundedLinuxRead) => void) | undefined;
+    const h = harness(undefined, {
+        resources: true,
+        resourceIo: {
+            stack: () =>
+                new Promise((resolve) => {
+                    settle = resolve;
+                }),
+            statDevice: async () => 42n,
+        },
+    });
+    h.snapshot(0);
+    await tick();
+    assert.ok(settle);
+    h.advance(250);
+    assert.equal(h.records[0]?.outcome, 'limited');
+    assert.deepEqual(h.records[0]?.limitations, ['timeout']);
+    h.event('readiness', 'decision', 300, { phase: 'rollback-request' });
+    assert.deepEqual(h.records[1]?.limitations, ['busy']);
+    settle({ bytes: 0, limitation: 'timeout' });
+    await tick();
+    assert.equal(h.records.length, 2);
+    assert.equal(h.paths.length, 6);
+});
+
+test('resource evidence is discarded when the target start ticks change after resource reads', async () => {
+    let stats = 0;
+    const h = harness(
+        async (file) => {
+            if (file.endsWith('/stat')) return bounded(stat(123, ++stats === 1 ? '900' : '901'));
+            if (file.endsWith('/cgroup')) return bounded('0::/../../private\n');
+            if (file.endsWith('/mountinfo')) return bounded('29 23 0:28 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n');
+            if (file.endsWith('/wchan')) return bounded('folio_wait_bit_common');
+            if (file.endsWith('/io')) return bounded('read_bytes: 1\nwrite_bytes: 2\n');
+            return bounded('some avg10=0.00 avg60=0.00 avg300=0.00 total=1\n');
+        },
+        {
+            resources: true,
+            resourceIo: {
+                statDevice: async () => 42n,
+                stack: async () => bounded('[<deadbeef>] filemap_fault+0x1/0x20\n'),
+            },
+        },
+    );
+    h.snapshot(0);
+    await tick();
+    assert.deepEqual(h.records[0]?.limitations, ['identity-mismatch']);
+    assert.equal(h.records[0]?.resources, undefined);
 });

@@ -4,6 +4,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { type FixtureEvent, subscribeFixtureDiagnostics } from '../src/adapters/fixture-diagnostics.ts';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
+import { validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createPortReservations } from '../src/adapters/port-reservation.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { createTargetController, type TargetEvent } from '../src/application/target-controller.ts';
@@ -71,7 +72,13 @@ function fixture(
         platformAdapter: {
             ...(options.requestNormalClose ? { requestNormalClose: options.requestNormalClose } : {}),
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             snapshot: async (pid) => {
                 snapshotEntered?.();
                 await snapshotGate;
@@ -611,7 +618,13 @@ test('a successful legacy close request preserves ownership until actual exit is
         }),
         platformAdapter: {
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             close: async () => true,
             snapshot: async () => ({
                 root: {

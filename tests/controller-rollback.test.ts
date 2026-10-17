@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
+import { validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { createTargetController } from '../src/application/target-controller.ts';
 import { type ManagedTarget, RetainedTargetError } from '../src/domains/cdp-target.ts';
@@ -173,7 +174,13 @@ test('unverified host startup with failed normal cleanup retains typed identity 
                 processIds: [pid],
                 listeners: [{ localAddress: '127.0.0.1', owningProcess: pid }],
             }),
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             close: async () => {
                 if (!closeSucceeds) return false;
                 child.exitCode = 0;

@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
+import { validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { createTargetHost, spawnPortableApplication } from '../src/adapters/target-host.ts';
 
 test('portable direct launch keeps its GUI visible and detached without a shell or inherited stdio', async (context) => {
@@ -40,7 +41,13 @@ test('portable direct launch keeps its GUI visible and detached without a shell 
                     currentSessionId: 1,
                     listeners: [{ localAddress: '127.0.0.1', owningProcess: 42 }],
                 }),
-                validateNewRoot: () => {},
+                prepareLaunch: async () => ({}),
+                registerLaunch: () => {},
+                validateIdentity: async (evidence, target, context) => {
+                    if (context?.newlyLaunched) {
+                        if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                    } else validateProcessIdentity(evidence, target);
+                },
                 close: async () => true,
             },
             probe: async () => true,
@@ -112,7 +119,13 @@ test('permission waiting does not consume CDP startup time and pre-cancelled lau
                 processIds: [101],
                 listeners: [{ localAddress: '127.0.0.1', owningProcess: 101 }],
             }),
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             close: async (target) => {
                 closed.push(target.processId);
                 child.emit('exit', 0);
@@ -163,7 +176,13 @@ test('cancellation racing with endpoint readiness closes the newly created appli
                 processIds: [102],
                 listeners: [{ localAddress: '127.0.0.1', owningProcess: 102 }],
             }),
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             close: async (target) => {
                 closed.push(target.processId);
                 child.emit('exit', 0);

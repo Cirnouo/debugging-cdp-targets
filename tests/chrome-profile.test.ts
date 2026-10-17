@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { validateProcessIdentity } from '../src/adapters/platform-process.ts';
 import { applyChromePreset, createTargetHost } from '../src/adapters/target-host.ts';
 
 test('Chrome none never inserts an implicit data directory', () => {
@@ -60,7 +61,13 @@ function fixture(available: boolean | (() => Promise<boolean>) = true) {
                   },
         platformAdapter: {
             reservedRanges: async () => [],
-            validateNewRoot: () => {},
+            prepareLaunch: async () => ({}),
+            registerLaunch: () => {},
+            validateIdentity: async (evidence, target, context) => {
+                if (context?.newlyLaunched) {
+                    if (evidence.root.exists) target.startedAtUtc = evidence.root.startedAtUtc;
+                } else validateProcessIdentity(evidence, target);
+            },
             close: async (target) => {
                 children[target.processId - 40]?.emit('exit', 0);
                 return true;

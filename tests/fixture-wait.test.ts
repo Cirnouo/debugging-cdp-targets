@@ -131,3 +131,66 @@ test('wait summary stays bounded with explicit omitted evidence while the stream
         await rm(directory, { recursive: true, force: true });
     }
 });
+
+test('resource evidence roundtrips through the existing capped collector and summary', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-resource-'));
+    try {
+        const collector = createFixtureArtifacts(directory, 'official-server');
+        const detailed = {
+            ...wait,
+            reads: 21,
+            resources: {
+                kernel: 'filemap-fault',
+                storage: 'unavailable',
+                cgroup: 'visible-leaf-only',
+                memoryHighLimit: 'max',
+                memoryCounters: 'unavailable',
+            },
+        };
+        collector.linuxWait(detailed);
+        collector.finishStream();
+        collector.finish(false);
+        assert.deepEqual(collector.snapshot().linuxStartupWait, [detailed]);
+        assert.deepEqual(readFixtureProgress(directory, 'official-server').linuxStartupWait, [detailed]);
+        const summary: unknown = JSON.parse(
+            await readFile(path.join(directory, 'official-server.summary.json'), 'utf8'),
+        );
+        assert.ok(summary && typeof summary === 'object');
+        assert.deepEqual(Reflect.get(summary, 'linuxStartupWait'), [detailed]);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('collector rejects contradictory counter availability and io.max mapping records', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-resource-contradictions-'));
+    try {
+        const collector = createFixtureArtifacts(directory, 'official-server');
+        for (const resources of [
+            { kernel: 'other', storage: 'unavailable', cgroup: 'visible-leaf-only', cpuCounters: 'available' },
+            {
+                kernel: 'other',
+                storage: 'unavailable',
+                cgroup: 'visible-leaf-only',
+                memoryCounters: 'available',
+                pgscan: 1,
+            },
+            {
+                kernel: 'other',
+                storage: 'unavailable',
+                cgroup: 'visible-leaf-only',
+                ioMax: 'no-visible-entry',
+                ioLimitScope: 'visible-leaf-queue-device',
+            },
+        ])
+            collector.linuxWait({ ...wait, resources });
+        collector.linuxWait(wait);
+        collector.finishStream();
+        collector.finish(false);
+        assert.equal(collector.snapshot().invalidEvents, 3);
+        assert.deepEqual(collector.snapshot().linuxStartupWait, [wait]);
+        assert.deepEqual(readFixtureProgress(directory, 'official-server').linuxStartupWait, [wait]);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});

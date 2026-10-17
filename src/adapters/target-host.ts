@@ -28,13 +28,7 @@ import {
     runFixtureResource,
 } from './fixture-diagnostics.ts';
 import type { PlatformAdapter } from './platform-process.ts';
-import {
-    createPlatformAdapter,
-    observeTargetExit,
-    targetExitObserved,
-    validateProcessIdentity,
-    waitForTargetExit,
-} from './platform-process.ts';
+import { createPlatformAdapter, observeTargetExit, targetExitObserved, waitForTargetExit } from './platform-process.ts';
 import { createPortReservations, type PortReservations } from './port-reservation.ts';
 import { createWindowsLauncher } from './windows-launch.ts';
 
@@ -61,6 +55,14 @@ function waitForWork<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T
         );
         if (signal.aborted) aborted();
     });
+}
+
+function requireTargetObservation(target: ManagedTarget, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    if (targetExitObserved(target))
+        throw new Error('The target application exited before CDP readiness or verification.');
+    if (target.child?.monitoringFailure)
+        throw new Error('The native process observer failed; retaining application identity for cleanup.');
 }
 
 async function probeAddress(port: number, host: string): Promise<boolean | null> {
@@ -515,13 +517,18 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                           );
                 context.signal?.throwIfAborted();
                 const requestedAt = io.now();
+                const calibration = await waitForWork(() => platform.prepareLaunch(context), context.signal);
+                context.signal?.throwIfAborted();
                 context.onPhase?.('launching');
                 let child: LaunchProcess;
                 const finishSpawn = beginFixtureStage('spawn', { port });
                 try {
                     context.signal?.throwIfAborted();
                     const onCreated = (application: LaunchProcess) => {
-                        if (created) return;
+                        if (created) {
+                            if (created.child === application && created.processId === application.pid) return;
+                            throw new Error('The actual launched child identity changed.');
+                        }
                         if (application.pid === undefined) throw new Error('The target process has no PID.');
                         const target: ManagedTarget = {
                             port,
@@ -572,6 +579,8 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             exited();
                             releaseResources();
                         } else if (application.monitoringFailure) monitorFailed();
+                        if (!context.signal?.aborted && !targetExitObserved(target) && !application.monitoringFailure)
+                            platform.registerLaunch(target, calibration, requestedAt);
                         context.onCreated?.(target);
                     };
                     child = await io.spawn(executablePath, args, port, cwd, env, {
@@ -619,6 +628,10 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 let lastError: unknown;
                 let foreignRace = false;
                 const launchedAt = io.now();
+                const assertReadinessActive = () => {
+                    if (io.now() - launchedAt >= STARTUP_TIMEOUT_MS)
+                        throw new Error('The CDP readiness budget expired.');
+                };
                 context.onPhase?.('waiting-cdp');
                 const finishReadiness = beginFixtureStage('readiness', {
                     phase: 'waiting-cdp',
@@ -628,6 +641,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 });
                 const observedAt = fixtureHasSubscribers() ? performance.now() : undefined;
                 let attempt = 0;
+                let readinessExitReason: FixtureFields['readinessExitReason'] = 'budget-exhausted';
                 for (
                     let readinessElapsed = io.now() - launchedAt;
                     readinessElapsed < STARTUP_TIMEOUT_MS;
@@ -660,7 +674,22 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             observeSnapshot(processId, port, readinessSignal),
                         );
                         try {
-                            platform.validateNewRoot(evidence, target);
+                            const remaining = STARTUP_TIMEOUT_MS - (io.now() - launchedAt);
+                            if (remaining <= 0) throw new Error('The CDP readiness budget expired.');
+                            const identitySignal = AbortSignal.any([
+                                ...(readinessSignal ? [readinessSignal] : []),
+                                AbortSignal.timeout(Math.ceil(remaining)),
+                            ]);
+                            await waitForWork(
+                                () =>
+                                    platform.validateIdentity(evidence, target, {
+                                        signal: identitySignal,
+                                        newlyLaunched: true,
+                                        assertReadinessActive,
+                                    }),
+                                identitySignal,
+                            );
+                            requireTargetObservation(target, identitySignal);
                             emitFixtureEvent('native-snapshot', 'decision', {
                                 pid: processId,
                                 port,
@@ -682,7 +711,6 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             throw error;
                         }
                         if (!evidence.root.exists) throw new Error('The target root process is absent.');
-                        target.startedAtUtc = evidence.root.startedAtUtc;
                         if (
                             evidence.listeners.some(({ localAddress }) => !['127.0.0.1', '::1'].includes(localAddress))
                         ) {
@@ -707,16 +735,18 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                                   : 'listener-absent',
                         });
                         if (foreignRace) {
+                            readinessExitReason = 'foreign-listener';
                             finishAttempt('rejected', {}, new Error('A foreign process won the CDP port race.'));
                             lastError = new Error('A foreign process won the CDP port race.');
                             break;
                         }
                         const endpoint = await runFixtureResource(origins.get(target), () =>
-                            waitForWork(() => io.getVersion(port), readinessSignal),
+                            waitForWork(() => {
+                                assertReadinessActive();
+                                return io.getVersion(port);
+                            }, readinessSignal),
                         );
-                        context.signal?.throwIfAborted();
-                        if (targetExitObserved(target))
-                            throw new Error('The target application exited before CDP readiness.');
+                        requireTargetObservation(target, readinessSignal);
                         const identity = validateCdpIdentity({
                             endpoint,
                             port,
@@ -728,8 +758,12 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         target.verify = () =>
                             runFixtureResource(origins.get(target), async () => {
                                 const current = await observeSnapshot(processId, port, readinessSignal);
-                                validateProcessIdentity(current, target);
+                                await platform.validateIdentity(current, target, {
+                                    ...(readinessSignal ? { signal: readinessSignal } : {}),
+                                });
+                                requireTargetObservation(target, readinessSignal);
                                 const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
+                                requireTargetObservation(target, readinessSignal);
                                 const checked = validateCdpIdentity({
                                     endpoint: endpointNow,
                                     port,
@@ -756,18 +790,26 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                             child.exitCode !== null ||
                             typeof child.signalCode === 'string' ||
                             /exposed|identity|Google Chrome|PID/.test(errorMessage(error))
-                        )
+                        ) {
+                            readinessExitReason = 'terminal-condition';
                             break;
+                        }
                         try {
                             await waitForWork(() => io.sleep(POLL_INTERVAL_MS), readinessSignal);
                         } catch (waitingError) {
+                            readinessExitReason = 'poll-interrupted';
                             lastError = waitingError;
                             break;
                         }
                     }
                 }
                 if (fixtureHasSubscribers()) {
-                    const fields: FixtureFields = { phase: 'rollback-request', pid: processId, port };
+                    const fields: FixtureFields = {
+                        phase: 'rollback-request',
+                        pid: processId,
+                        port,
+                        readinessExitReason,
+                    };
                     try {
                         fields.exitObserved = targetExitObserved(target);
                     } catch {
@@ -845,7 +887,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 const evidence = await observeSnapshot(target.processId, target.port);
                 if (!evidence.root.exists) return targetExitObserved(target) ? 'gone' : 'unavailable';
                 try {
-                    validateProcessIdentity(evidence, target);
+                    await platform.validateIdentity(evidence, target);
                 } catch {
                     return 'identity-changed';
                 }

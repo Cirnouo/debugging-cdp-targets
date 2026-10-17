@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { writeSync } from 'node:fs';
 import { lstat, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,23 +21,44 @@ import {
     createChromeStartupCapture,
     validateBrowserStartupRecord,
 } from './chrome-startup.ts';
+import { readFirstStartAssessmentAdmission } from './first-start-assessment-ci.ts';
+import {
+    createFirstStartControlEmitter,
+    projectFirstStartAdmission,
+    projectFirstStartTerminal,
+    qualifyFirstStartTerminal,
+} from './first-start-control.ts';
 import {
     createFixtureArtifacts,
     createFixtureGatewayClient,
     createSmokeFailures,
     fixtureOutputCollectionId,
     fixtureOutputDirectory,
+    fixtureReadaheadExitProof,
+    readFixtureProgress,
 } from './fixture-artifacts.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
+import { createReadaheadLease, createReadaheadObserver } from './linux-readahead-study.ts';
 import { readMcpTools } from './mcp-client.ts';
 
 const authorizedArgs = requireGuiAuthorization();
 const args: string[] = [];
 let startupStudy = false;
 let chromeFileLogging: 'on' | 'off' | undefined;
+let readaheadKb: 128 | 1024 | undefined;
+let firstStartAssessment = false;
+let assessmentSlot: string | undefined;
 for (let index = 0; index < authorizedArgs.length; index++) {
     const argument = authorizedArgs[index];
-    if (argument === '--startup-study') {
+    if (argument === '--first-start-assessment') {
+        if (firstStartAssessment) throw new Error('Duplicate --first-start-assessment.');
+        firstStartAssessment = true;
+    } else if (argument === '--assessment-slot') {
+        if (assessmentSlot !== undefined) throw new Error('Duplicate --assessment-slot.');
+        const value = authorizedArgs[++index];
+        if (!value || !/^[1-6]$/.test(value)) throw new Error('Expected --assessment-slot 1..6.');
+        assessmentSlot = value;
+    } else if (argument === '--startup-study') {
         if (startupStudy) throw new Error('Duplicate --startup-study.');
         startupStudy = true;
     } else if (argument === '--chrome-file-logging') {
@@ -44,19 +66,113 @@ for (let index = 0; index < authorizedArgs.length; index++) {
         const arm = authorizedArgs[++index];
         if (arm !== 'on' && arm !== 'off') throw new Error('Expected --chrome-file-logging on|off.');
         chromeFileLogging = arm;
+    } else if (argument === '--readahead-kb') {
+        if (readaheadKb !== undefined) throw new Error('Duplicate --readahead-kb.');
+        const value = authorizedArgs[++index];
+        if (value !== '128' && value !== '1024') throw new Error('Expected --readahead-kb 128|1024.');
+        readaheadKb = value === '128' ? 128 : 1024;
     } else if (argument !== undefined) args.push(argument);
 }
+if (firstStartAssessment !== (assessmentSlot !== undefined))
+    throw new Error('First-start assessment requires both --first-start-assessment and --assessment-slot 1..6.');
+if (
+    firstStartAssessment &&
+    (process.platform !== 'linux' ||
+        startupStudy ||
+        chromeFileLogging !== undefined ||
+        readaheadKb !== undefined ||
+        process.env.DCT_SMOKE_FAILED_FIRST_START_CAPTURE === '1')
+)
+    throw new Error('First-start assessment requires Linux and excludes legacy capture, logging and other studies.');
+if (readaheadKb !== undefined && (!startupStudy || chromeFileLogging !== 'on' || process.platform !== 'linux'))
+    throw new Error('Readahead study requires Linux --startup-study --chrome-file-logging on.');
 if (startupStudy !== (chromeFileLogging !== undefined))
     throw new Error('Startup study requires both --startup-study and explicit --chrome-file-logging on|off.');
 if (startupStudy && process.platform !== 'linux') throw new Error('Startup study requires Linux.');
 const outputDirectory = fixtureOutputDirectory(args);
+const failedFirstStartCapture =
+    firstStartAssessment ||
+    (process.platform === 'linux' &&
+        !startupStudy &&
+        process.env.DCT_SMOKE_FAILED_FIRST_START_CAPTURE === '1' &&
+        outputDirectory !== undefined &&
+        fixtureOutputCollectionId(args) !== undefined);
 const artifacts = createFixtureArtifacts(outputDirectory, 'official-server', {
     collectionId: fixtureOutputCollectionId(args),
+    firstStartCapture: failedFirstStartCapture,
 });
-const failures = createSmokeFailures(artifacts);
+const assessmentAdmission = firstStartAssessment ? readFirstStartAssessmentAdmission(assessmentSlot) : undefined;
+const assessmentSource = assessmentAdmission?.source;
+const presentControl = firstStartAssessment || (process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true');
+const controlEmitter = createFirstStartControlEmitter((line) => writeSync(1, line));
+let admissionWriteOk = false;
+let terminalWriteOk = false;
+let terminalQualified = false;
+let expectedEntryId: string | undefined;
+let expectedRequestId: string | undefined;
+const controlCleanup: {
+    targetClosed: boolean | null;
+    gatewayExited: boolean | null;
+    profileDeleted: boolean | null;
+} = {
+    targetClosed: null,
+    gatewayExited: null,
+    profileDeleted: null,
+};
+const failures = createSmokeFailures(
+    artifacts,
+    presentControl
+        ? (summary) => {
+              const terminal = projectFirstStartTerminal(summary, {
+                  expected: {
+                      entryId: expectedEntryId ?? null,
+                      requestId: expectedRequestId ?? null,
+                      collectionId: fixtureOutputCollectionId(args) ?? null,
+                  },
+                  cleanup: controlCleanup,
+                  ...(assessmentSource ? { source: assessmentSource } : {}),
+              });
+              const qualified = qualifyFirstStartTerminal(terminal);
+              const emitted = controlEmitter.emit(terminal);
+              if (firstStartAssessment) {
+                  terminalQualified = qualified;
+                  terminalWriteOk = emitted.writeOk;
+              }
+          }
+        : undefined,
+);
 const currentCollection = artifacts.snapshot();
 const controlledDiagnostics =
     !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+if (firstStartAssessment) {
+    const admitted =
+        assessmentAdmission?.result === 'admitted' &&
+        assessmentSource !== null &&
+        assessmentSource !== undefined &&
+        controlledDiagnostics &&
+        currentCollection.collectionId === fixtureOutputCollectionId(args);
+    const admission = projectFirstStartAdmission(
+        admitted ? 'admitted' : assessmentAdmission?.result === 'unavailable' ? 'unavailable' : 'ineligible',
+        {
+            expected: { collectionId: fixtureOutputCollectionId(args) ?? null },
+            ...(assessmentSource ? { source: assessmentSource } : {}),
+        },
+    );
+    admissionWriteOk = controlEmitter.emit(admission).writeOk;
+    if (!admitted || !admissionWriteOk) {
+        failures.primary(
+            new Error('First-start assessment admission unavailable; no target was launched.'),
+            'prerequisites',
+        );
+        failures.finish();
+    }
+} else if (presentControl) {
+    // Presentation-only result from the existing CI gate; this never authorizes capture.
+    const acquired = process.env.DCT_SMOKE_FIRST_START_CAPTURE_ADMISSION;
+    const captureAdmission =
+        acquired === 'admitted' ? 'admitted' : acquired === 'ineligible' ? 'ineligible' : 'unavailable';
+    controlEmitter.emit(projectFirstStartAdmission(captureAdmission));
+}
 if (startupStudy && (!controlledDiagnostics || currentCollection.collectionId !== fixtureOutputCollectionId(args))) {
     const error = new Error('Startup study requires a current accepted diagnostics collection.');
     failures.primary(error, 'prerequisites');
@@ -65,7 +181,11 @@ if (startupStudy && (!controlledDiagnostics || currentCollection.collectionId !=
 if (startupStudy)
     console.log(
         JSON.stringify({
-            startupStudy: { chromeFileLogging, launch: 1, expectedLogAbsence: chromeFileLogging === 'off' },
+            startupStudy: {
+                chromeFileLogging,
+                ...(readaheadKb === undefined ? { launch: 1 } : { readaheadKb, launchLimit: 1 }),
+                expectedLogAbsence: chromeFileLogging === 'off',
+            },
         }),
     );
 function startupEvidence(record: Readonly<BrowserStartupRecord>, firstSample = true) {
@@ -130,7 +250,14 @@ const client = createFixtureGatewayClient(
     outputDirectory,
     'official-server',
     artifacts,
+    readaheadKb === undefined ? undefined : { executable: chrome, assignedKb: readaheadKb },
 );
+const readahead =
+    readaheadKb === undefined
+        ? undefined
+        : createReadaheadLease(chrome, readaheadKb, (record) => artifacts.readahead(record));
+let prelaunchObserver: ReturnType<typeof createReadaheadObserver> | undefined;
+let startRequestId: string | undefined;
 const tool = async (name: string, arguments_: Record<string, unknown> = {}) => {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
@@ -179,6 +306,7 @@ async function emptyGateway(id: string) {
 }
 try {
     artifacts.begin('acceptance');
+    await readahead?.admit();
     const initialized = await client.request('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
@@ -198,20 +326,35 @@ try {
     validateIdentity(entryId, 'entry ID');
     await emptyGateway(entryId);
     await assert.rejects(() => tool('list_pages'), /routing/);
-    const first = await control({
-        action: 'start',
-        requestId: randomUUID(),
+    if (readahead && readaheadKb !== undefined) {
+        prelaunchObserver = createReadaheadObserver(
+            readahead.identity(),
+            (record) => artifacts.readahead(record),
+            undefined,
+            readaheadKb,
+        );
+        await prelaunchObserver.prelaunch();
+    }
+    startRequestId = randomUUID();
+    expectedEntryId = entryId;
+    expectedRequestId = startRequestId;
+    const startRequest = {
+        action: 'start' as const,
+        requestId: startRequestId,
         entryId,
         basePort: 19222,
         ...launch('profile-one', 'FIRST'),
-    });
+    };
+    readahead?.launch();
+    const first = await control(startRequest);
     assert.ok(!('connections' in first) && first.sessionId);
     active = first;
+    if (first.processId !== undefined) await readahead?.verifyApplication(first.processId);
     const firstFixture = await inspectChromeSmokeTarget(first, chrome);
     const firstDirectory = await inspectChromeSmokeDirectory(tool, first, firstFixture);
     managedDirectories.add(firstDirectory);
     console.log(JSON.stringify({ first }));
-    if (!startupStudy) {
+    if (!startupStudy && !firstStartAssessment) {
         const pagesOne = await tool('list_pages', route(first));
         assert.notEqual(pagesOne.isError, true, JSON.stringify(pagesOne));
         assert.match(JSON.stringify(pagesOne), /FIRST/);
@@ -229,6 +372,7 @@ try {
         assert.ok(extensions);
         const extensionResult = await tool(extensions.name, route(first));
         assert.notEqual(extensionResult.isError, true, JSON.stringify(extensionResult));
+        if (presentControl) controlCleanup.targetClosed = false;
         await closeSmokeConnection(control, {
             action: 'stop',
             requestId: randomUUID(),
@@ -237,6 +381,7 @@ try {
             sessionId: first.sessionId,
             disposition: 'Close',
         });
+        if (presentControl) controlCleanup.targetClosed = true;
         active = undefined;
         await assert.rejects(lstat(firstDirectory), { code: 'ENOENT' });
         await emptyGateway(entryId);
@@ -259,6 +404,7 @@ try {
         assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
         assert.match(JSON.stringify(pagesTwo), /SECOND/);
         assert.doesNotMatch(JSON.stringify(pagesTwo), /FIRST/);
+        if (presentControl) controlCleanup.targetClosed = false;
         await closeSmokeConnection(control, {
             action: 'stop',
             requestId: randomUUID(),
@@ -267,6 +413,7 @@ try {
             sessionId: second.sessionId,
             disposition: 'Close',
         });
+        if (presentControl) controlCleanup.targetClosed = true;
         active = undefined;
         await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
         await emptyGateway(entryId);
@@ -280,23 +427,57 @@ try {
     if (entryId && active?.sessionId) {
         const cleanupEntryId = entryId;
         const { connectionId, sessionId } = active;
-        await failures.cleanup('target-cleanup', () =>
-            closeSmokeConnection(control, {
+        if (presentControl) controlCleanup.targetClosed = false;
+        await failures.cleanup('target-cleanup', async () => {
+            await closeSmokeConnection(control, {
                 action: 'stop',
                 requestId: randomUUID(),
                 entryId: cleanupEntryId,
                 connectionId,
                 sessionId,
                 disposition: 'Close',
-            }),
-        );
+            });
+            if (presentControl) controlCleanup.targetClosed = true;
+        });
     }
     await failures.cleanup('gateway-close', async () => {
+        if (presentControl) controlCleanup.gatewayExited = false;
         await client.close();
-        if (startupStudy) assert.equal(client.child.exitCode, 0, 'The study gateway must exit normally.');
+        if (startupStudy || firstStartAssessment)
+            assert.equal(client.child.exitCode, 0, 'The study gateway must exit normally.');
+        if (presentControl) controlCleanup.gatewayExited = client.child.exitCode === 0;
     });
+    if (readahead)
+        await failures.cleanup('gateway-close', async () => {
+            await prelaunchObserver?.settled();
+            let proof = readahead.launches() === 0;
+            if (!proof && outputDirectory && entryId && startRequestId) {
+                const progress = readFixtureProgress(outputDirectory, 'official-server');
+                proof =
+                    fixtureReadaheadExitProof(
+                        outputDirectory,
+                        { entryId, requestId: startRequestId },
+                        client.child.exitCode === 0,
+                    ) &&
+                    progress.readaheadStudy.some(
+                        (record) => record.phase === 'observer' && record.outcome === 'verified',
+                    );
+                const application = progress.readaheadStudy.filter((record) => record.phase === 'application');
+                if (application.some((record) => record.outcome !== 'verified'))
+                    failures.primary(new Error('Readahead launched application association unavailable.'));
+            }
+            await readahead.restore(proof);
+        });
+    if (presentControl && managedDirectories.size > 0) controlCleanup.profileDeleted = true;
     for (const directory of managedDirectories)
-        await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
+        await failures.cleanup('profile-cleanup', async () => {
+            try {
+                await assert.rejects(lstat(directory), { code: 'ENOENT' });
+            } catch (error) {
+                if (presentControl) controlCleanup.profileDeleted = false;
+                throw error;
+            }
+        });
     if (monitor) {
         await failures.cleanup('window-monitor', async () => {
             await writeFile(stopFile, 'stop');
@@ -316,6 +497,7 @@ try {
                 startupStudyResult: {
                     kind: 'single-launch study',
                     chromeFileLogging,
+                    ...(readahead ? { readaheadKb, launches: readahead.launches() } : {}),
                     expectedLogAbsence: chromeFileLogging === 'off',
                     result: failures.hasFailure() ? 'failed' : 'passed',
                 },
@@ -323,3 +505,5 @@ try {
         );
     failures.finish();
 }
+if (firstStartAssessment && !(admissionWriteOk && terminalWriteOk && terminalQualified))
+    throw new Error('First-start assessment evidence unavailable; actual smoke outcome is recorded separately.');

@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
+import type { NativeAssemblyScope } from './native-resource-assembly.ts';
 import {
     NativeFixtureFailure,
     type NativeResourceLog,
@@ -71,6 +72,7 @@ export async function retainWitnessFromPidText(
     context: WitnessContext,
     log: NativeResourceLog,
     create?: WitnessSpawn,
+    assembly?: NativeAssemblyScope,
 ) {
     const token = text?.trim();
     const state: PidState =
@@ -84,10 +86,10 @@ export async function retainWitnessFromPidText(
                   ? 'out-of-range'
                   : 'valid';
     if (state !== 'valid') throw pidInputFailure(role, context, state, log);
-    return retainExitWitness(Number(token), role, context, log, create);
+    return retainExitWitness(Number(token), role, context, log, create, assembly);
 }
 
-const phases: WitnessPhase[] = ['compile', 'inspect', 'armed', 'wait', 'exit'];
+const phases: WitnessPhase[] = ['compile', 'load', 'inspect', 'armed', 'wait', 'exit'];
 function int32(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647;
 }
@@ -98,11 +100,13 @@ export function retainExitWitness(
     context: WitnessContext,
     log: NativeResourceLog,
     create: WitnessSpawn = spawn,
+    assembly?: NativeAssemblyScope,
 ) {
     if (!Number.isInteger(pid) || pid <= 0 || pid > 2147483647)
         throw pidInputFailure(role, context, 'out-of-range', log);
+    assembly?.assertActive();
     const state = diagnostic(role, context, 'valid', pid);
-    state.phase = 'compile';
+    state.phase = assembly ? 'load' : 'compile';
     state.errorKind = 'unexpected';
     let resolveArmed = () => {};
     let rejectArmed: (error: unknown) => void = () => {};
@@ -175,7 +179,7 @@ export function retainExitWitness(
             if (
                 bad ||
                 state.armed ||
-                lastPhase > 2 ||
+                lastPhase > phases.indexOf('armed') ||
                 typeof value.executablePath !== 'string' ||
                 value.executablePath.length > 32768 ||
                 path.win32.resolve(value.executablePath).toLowerCase() !==
@@ -212,7 +216,7 @@ export function retainExitWitness(
             if (
                 !phases.some((phase) => phase === value.phase) ||
                 typeof value.errorKind !== 'string' ||
-                !['compile', 'native', 'unexpected'].includes(value.errorKind) ||
+                !['compile', 'load', 'native', 'unexpected'].includes(value.errorKind) ||
                 (value.win32Code !== null && !int32(value.win32Code)) ||
                 (value.hresult !== null && !int32(value.hresult))
             ) {
@@ -222,7 +226,7 @@ export function retainExitWitness(
             failed = true;
             state.phase = value.phase as WitnessPhase;
             state.phaseKnown = true;
-            state.errorKind = value.errorKind as 'compile' | 'native' | 'unexpected';
+            state.errorKind = value.errorKind as 'compile' | 'load' | 'native' | 'unexpected';
             state.win32Code = value.win32Code;
             state.hresult = value.hresult;
             state.failedReceipt = 'accepted';
@@ -265,9 +269,11 @@ export function retainExitWitness(
                 String(pid),
                 '-Role',
                 role,
+                ...(assembly ? ['-NativeAssembly', assembly.nativeAssembly] : []),
             ],
             { windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] },
         );
+        assembly?.trackChild(child);
         state.witnessPid = safeWitnessPid(child.pid);
         state.spawned = state.witnessPid !== null;
         log.event('SPAWN', context, role, { ownedPid: pid, witnessPid: state.witnessPid, spawned: state.spawned });
