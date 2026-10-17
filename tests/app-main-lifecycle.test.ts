@@ -29,6 +29,7 @@ type State = {
         windowDestroyed: number;
         activationClosed: number;
         cacheCleaned: number;
+        unavailableOwnerDialogs: number;
     };
 };
 type Harness = { state: State; run(): Promise<void> };
@@ -46,7 +47,7 @@ import { EventEmitter } from 'node:events';
 function deferred(){let release;const promise=new Promise(resolve=>{release=resolve});return{promise,release}}
 const native=deferred(),nativeEntered=deferred(),router=deferred(),routerEntered=deferred();
 export const state={mode:'router-pending',catalogFails:false,cleanupFails:false,
- counts:{exits:0,locks:0,data:0,http:0,closes:0,windowDestroyed:0,activationClosed:0,cacheCleaned:0},
+ counts:{exits:0,locks:0,data:0,http:0,closes:0,windowDestroyed:0,activationClosed:0,cacheCleaned:0,unavailableOwnerDialogs:0},
  nativeEntered:nativeEntered.promise,routerEntered:routerEntered.promise,
  releaseNative:()=>native.release(),releaseRouter:()=>router.release(),
  quit:()=>app.quit(),quitManagement:()=>state.management.quit(),inspect:()=>state.management.inspect(),
@@ -55,6 +56,7 @@ export const app=new EventEmitter();
 app.whenReady=async()=>{};app.relaunch=()=>{};
 app.quit=()=>{let prevented=false;app.emit('before-quit',{preventDefault(){prevented=true}});if(!prevented){state.counts.exits++;app.emit('will-quit')}};
 export const Menu={buildFromTemplate:()=>[]},nativeImage={createFromPath:()=>({setTemplateImage(){}})};
+export const dialog={showMessageBox:async(options)=>{if(options.type!=='warning'||!options.message.includes('already running'))throw Error('Expected visible unavailable-owner warning');state.counts.unavailableOwnerDialogs++}};
 export class Tray{constructor(){throw Error('No OS tray in this I/O fixture')}}
 `;
     const coreModule = `
@@ -68,11 +70,11 @@ loadCatalog:async()=>{if(state.catalogFails)throw Error('Catalog failed');return
 })}
 `;
     const modules: Record<string, string> = {
-        electron: `export { app, Menu, nativeImage, Tray } from 'app-test-state';`,
+        electron: `export { app, Menu, nativeImage, Tray, dialog } from 'app-test-state';`,
         'app-test-state': stateModule,
         '../application/plugin-runtime.ts': coreModule,
         '../adapters/app-native.ts': `import{state}from'app-test-state';export async function loadAppAdvisoryLock(){state.signalNative();if(state.mode==='native-pending')await state.native.promise;return()=>true}`,
-        '../adapters/app-singleton.ts': `import{state}from'app-test-state';export function acquireAppSingleton(){state.counts.locks++;return{ownsSingleton:true,paths:{activation:'fixture-only'}}}`,
+        '../adapters/app-singleton.ts': `import{state}from'app-test-state';export function acquireAppSingleton(){state.counts.locks++;return{ownsSingleton:state.mode!=='unavailable-owner',paths:{activation:'fixture-only'}}}`,
         '../adapters/app-activation.ts': `import{state}from'app-test-state';export async function activateExistingApp(){return false}export async function listenForAppActivation(){return{close:async()=>{state.counts.activationClosed++}}}`,
         '../adapters/app-storage.ts': `import{state}from'app-test-state';export function selectAppDataDirectory(){return'fixture-only'}export async function prepareAppDataDirectory(){state.counts.data++;return'fixture-only'}`,
         '../adapters/app-configuration.ts': `export async function openAppConfiguration(){const config={schemaVersion:1,port:27637,appearance:'system'};return{state:()=>({desired:config,effective:config,restartRequired:false}),save:async()=>{}}}`,
@@ -153,6 +155,21 @@ test('Quit during native verification waits the whole startup and acquires no si
         assert.equal(f.state.counts.locks, 0);
         assert.equal(f.state.counts.data, 0);
         assert.equal(f.state.counts.http, 0);
+    } finally {
+        await f.close();
+    }
+});
+
+test('losing App visibly reports an unavailable owner before normal exit without selected data or HTTP', async () => {
+    const f = await component();
+    try {
+        f.state.mode = 'unavailable-owner';
+        await f.run();
+        assert.equal(f.state.counts.unavailableOwnerDialogs, 1);
+        assert.equal(f.state.counts.data, 0);
+        assert.equal(f.state.counts.http, 0);
+        assert.equal(f.state.counts.exits, 1);
+        assert.ok(f.state.counts.cacheCleaned > 0);
     } finally {
         await f.close();
     }

@@ -47,7 +47,10 @@ task-activity fields fail strict parsing.
 
 A connection summary contains identities, target state, PID/port and other
 bounded lifetime metadata, enabledToolCount and upstreamStatus. upstreamStatus is
-`connected` or `disconnected`. Discovery, lifecycle success and
+`connected`, `disconnected` or `quarantined`. Failed native target observation can
+quarantine the connection while ownership remains retained; inspect selected
+diagnostics and retry normal cleanup. Cancelling or timing out a client wait does
+not quarantine a healthy official execution. Discovery, lifecycle success and
 ordinary selected status do not include tool schemas, configuration or diagnostics.
 Only explicit toolNames opts into tool details. Schemas require a valid actual
 tools/list; disconnected connections return requirements only.

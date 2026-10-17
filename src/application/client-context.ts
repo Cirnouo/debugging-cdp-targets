@@ -37,7 +37,7 @@ export function createClientContext(principal: ClientPrincipal) {
                 : disconnected.signal;
             const available = () => !waitSignal.aborted;
             function requireAvailable() {
-                if (!available()) throw new Error('The originating client request context is unavailable.');
+                if (!available()) throw new RequestFailure('CLIENT_CONTEXT_UNAVAILABLE');
             }
             return {
                 principal,
@@ -50,7 +50,7 @@ export function createClientContext(principal: ClientPrincipal) {
                     const admission = signal ? AbortSignal.any([waitSignal, signal]) : waitSignal;
                     admission.throwIfAborted();
                     if (!capabilities.roots) return { roots: [] };
-                    if (!readRoots) throw new Error('The originating client roots reader is unavailable.');
+                    if (!readRoots) throw new RequestFailure('ROOTS_UNAVAILABLE');
                     const result = await waitForClient(readRoots(admission), admission);
                     admission.throwIfAborted();
                     requireAvailable();
@@ -59,7 +59,7 @@ export function createClientContext(principal: ClientPrincipal) {
                 async elicit(params, signal) {
                     requireAvailable();
                     if (!capabilities.formElicitation || !elicit)
-                        throw new Error('The originating client does not support form-mode elicitation.');
+                        throw new RequestFailure('FORM_ELICITATION_UNAVAILABLE');
                     const result = await elicit(params, signal ? AbortSignal.any([waitSignal, signal]) : waitSignal);
                     requireAvailable();
                     return result;
@@ -71,3 +71,5 @@ export function createClientContext(principal: ClientPrincipal) {
         },
     };
 }
+
+import { RequestFailure } from '../domains/request-failure.ts';

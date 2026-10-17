@@ -45,7 +45,10 @@ Git hook tests remain contributor-tooling regressions.
   explicit bearer calls and normal owned teardown.
 - `native-fixture-seal.test.ts` checks complete App-plus-fixture inventory,
   source expectations, verified entry/ordinary Node paths, drift and extra/missing
-  files. Dirty development receipts require explicit opt-in; default acceptance
+  files, all original study-native assets and the actual bundled dependency graph.
+  `sealed-study.test.ts` covers guarded study launch, self-identity, complete seal
+  refusal before acquisition and actual launcher failure/exit behavior.
+  Dirty development receipts require explicit opt-in; default acceptance
   rejects them. Seal verification is distinct from actual App GUI acceptance.
 - `data-isolation.test.ts`, `data-directory.test.ts` and
   `data-directory-claims.test.ts` cover explicit isolation/binding validation,

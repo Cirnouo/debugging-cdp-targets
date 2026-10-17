@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, Menu, nativeImage, Tray } from 'electron';
+import { app, dialog, Menu, nativeImage, Tray } from 'electron';
 import { activateExistingApp, listenForAppActivation } from '../adapters/app-activation.ts';
 import type { createAppChromiumStorage } from '../adapters/app-chromium-storage.ts';
 import { openAppConfiguration } from '../adapters/app-configuration.ts';
@@ -103,8 +103,17 @@ export async function startDesktopApp(options: {
             const admission = acquireAppSingleton({ tryLock });
             if (!admission.ownsSingleton) {
                 const activated = await activateExistingApp(admission.paths.activation);
-                if (!activated)
-                    process.stderr.write('The existing App remains the owner; activation was unavailable.\n');
+                if (!activated) {
+                    await app.whenReady();
+                    await dialog.showMessageBox({
+                        type: 'warning',
+                        title: 'Debugging CDP Targets is already running',
+                        message: 'The App is already running, but its manager could not be activated.',
+                        detail: 'The existing App keeps ownership. Open its manager from the tray or Dock, or quit that instance normally before trying again.',
+                        buttons: ['OK'],
+                        noLink: true,
+                    });
+                }
                 allowExit = true;
                 await options.chromium.cleanup();
                 app.quit();

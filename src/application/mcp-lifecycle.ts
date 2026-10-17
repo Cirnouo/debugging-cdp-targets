@@ -5,6 +5,7 @@ import {
     type ControlRequest,
     connectionSummary,
 } from '../domains/control-contract.ts';
+import { RequestFailure } from '../domains/request-failure.ts';
 import type { ClientPrincipal, ClientRequestContext } from '../shared/client-context.ts';
 import { createOperationRegistry } from './operations.ts';
 
@@ -53,15 +54,14 @@ export function createLifecycleService({
             signal?.throwIfAborted();
             return { ...prior };
         }
-        if (closing) throw new Error('The gateway is closing.');
+        if (closing) throw new RequestFailure('APP_CLOSING');
         if (request.action !== 'start' && client) authorize?.(request.connectionId, client.principal);
         const connectionId = request.action === 'start' ? undefined : request.connectionId;
         if (request.action !== 'start') {
             const current = handler.status(request.connectionId);
             if (!('sessionId' in current) || current.sessionId !== request.sessionId)
                 throw new Error('The target session is absent or stale.');
-            if (changing.has(request.connectionId))
-                throw new Error('A lifecycle operation is already running for this connection.');
+            if (changing.has(request.connectionId)) throw new RequestFailure('CONNECTION_BUSY');
             changing.add(request.connectionId);
         }
         let boundConnection = connectionId;

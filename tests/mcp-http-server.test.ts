@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { request as httpRequest } from 'node:http';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { Client, ProtocolError, ProtocolErrorCode, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
 import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
@@ -16,6 +16,14 @@ async function fixture() {
     let launched = 0;
     let now = 0;
     const acquired = { directory: 0, router: 0, target: 0, official: 0 };
+    let releaseCall: () => void = () => {};
+    let enterCall: () => void = () => {};
+    const heldCall = new Promise<void>((resolve) => {
+        releaseCall = resolve;
+    });
+    const callEntered = new Promise<void>((resolve) => {
+        enterCall = resolve;
+    });
     const dataDirectories = new DataDirectoryRegistry();
     dataDirectories.acquire = async () => {
         acquired.directory++;
@@ -62,6 +70,11 @@ async function fixture() {
             return {
                 tools: [tool],
                 call: async (_name, arguments_, signal, onProgress) => {
+                    if (arguments_.hold === true) {
+                        enterCall();
+                        await heldCall;
+                    }
+                    if (arguments_.privateFailure === true) throw new Error('private-path-and-token-fixture');
                     const roots = await options?.roots?.();
                     if (arguments_.challenge === true) {
                         onProgress?.({ progress: 1, total: 2, message: 'Fixture progress' });
@@ -121,6 +134,8 @@ async function fixture() {
         inboundMethods,
         acquired,
         rootsReplied,
+        releaseCall,
+        callEntered,
         launched: () => launched,
         advance: (milliseconds: number) => {
             now += milliseconds;
@@ -165,6 +180,80 @@ async function terminal(client: Client, registrationBearer: string, operationId:
     }
     throw new Error('Fixture operation did not finish.');
 }
+
+test('authenticated HTTP errors preserve bounded busy and originating form-context guidance without raw upstream details', async () => {
+    const f = await fixture();
+    let pending: Promise<unknown> | undefined;
+    try {
+        const client = await f.client();
+        const registrationBearer = await register(client);
+        const accepted = structured(
+            await client.callTool({
+                name: 'dct_connection_start',
+                arguments: {
+                    registrationBearer,
+                    requestId: 'bounded-errors',
+                    isolation: { mode: 'none' },
+                    launch: { executable: process.execPath },
+                },
+            }),
+        );
+        const completed = await terminal(client, registrationBearer, accepted.operationId);
+        assert.ok(isRecord(completed.result));
+        const route = {
+            registrationBearer,
+            connectionId: completed.result.connectionId,
+            sessionId: completed.result.sessionId,
+        };
+        const call = (args: Record<string, unknown>) =>
+            client.callTool({ name: 'echo', arguments: { ...args, _dct: route } });
+        pending = call({ hold: true });
+        await f.callEntered;
+        await assert.rejects(call({}), (error: unknown) => {
+            assert.ok(error instanceof ProtocolError);
+            assert.equal(error.code, ProtocolErrorCode.InvalidParams);
+            assert.match(error.message, /busy.*owned.*execution/i);
+            assert.deepEqual(error.data, { code: 'CONNECTION_BUSY' });
+            return true;
+        });
+        f.releaseCall();
+        await pending;
+        await assert.rejects(call({ challenge: true }), (error: unknown) => {
+            assert.ok(error instanceof ProtocolError);
+            assert.match(error.message, /originating client.*form-mode elicitation/i);
+            assert.deepEqual(error.data, { code: 'FORM_ELICITATION_UNAVAILABLE' });
+            return true;
+        });
+        await assert.rejects(call({ privateFailure: true }), (error: unknown) => {
+            assert.ok(error instanceof ProtocolError);
+            assert.equal(error.data, undefined);
+            assert.doesNotMatch(error.message, /private-path-and-token-fixture/);
+            return true;
+        });
+        await f.core.cleanup();
+        await assert.rejects(
+            client.callTool({
+                name: 'dct_connection_start',
+                arguments: {
+                    registrationBearer,
+                    requestId: 'after-cleanup',
+                    isolation: { mode: 'none' },
+                    launch: { executable: process.execPath },
+                },
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof ProtocolError);
+                assert.match(error.message, /App is closing/);
+                assert.deepEqual(error.data, { code: 'APP_CLOSING' });
+                return true;
+            },
+        );
+    } finally {
+        f.releaseCall();
+        await pending?.catch(() => {});
+        await f.close();
+    }
+});
 
 test('actual SDK HTTP keeps delayed originating roots after an accepted start and survives client close', async () => {
     const selected = await fixture();

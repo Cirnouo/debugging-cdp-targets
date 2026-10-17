@@ -10,6 +10,8 @@
   requests/snapshots, including startup failure without invented settings.
 - `mcp-http.ts` validates the exact loopback HTTP endpoint/body headers and
   explicit per-request registration routing without reflecting secret inputs.
+- `request-failure.ts` owns closed, path-free explanations for authenticated
+  busy and originating-client facility failures across the HTTP boundary.
 - `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.

@@ -13,8 +13,10 @@
   renderer, collects actual graph licenses and stages verified original native
   archives without overwriting an existing stage. `extract-app-zip.ps1` rejects
   unsafe archive paths, duplicate destinations and link entries before extraction.
-- `native-fixture-seal.ts` binds a test-only real-core HTTP fixture, actual source
-  inputs and the complete App stage to independently checked file inventories.
+- `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
+  screenshot study subjects and original native assets to the same source inputs
+  and complete App stage. `native-fixture-verification.ts` checks the closed
+  inventories without importing builder dependencies into study execution.
   Dirty development receipts cannot establish final native acceptance.
 - `official-release.ts` owns the canonical official release evidence independently
   of thin Plugin delivery.

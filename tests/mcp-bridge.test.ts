@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import type { ClientCapabilities } from '@modelcontextprotocol/client';
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { Client, ProtocolError, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createOfficialConnection, interruptedOfficialCall } from '../src/adapters/mcp-bridge.ts';
 import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
@@ -417,6 +417,35 @@ test('HTTP real core preserves official tools, cached originating roots, progres
             },
         });
         assert.ok(isRecord(keep.structuredContent) && typeof keep.structuredContent.operationId === 'string');
+    } finally {
+        await f.close();
+        await fixture.cleanup();
+    }
+});
+
+test('HTTP explains original form facility refusal after the real official SDK round trip', async () => {
+    const fixture = await fakeOfficial();
+    const f = await httpBridge(fixture, {});
+    try {
+        const route = await f.start();
+        await assert.rejects(
+            f.client.callTool({ name: 'echo', arguments: { elicit: true, _dct: route } }),
+            (error: unknown) => {
+                assert.ok(error instanceof ProtocolError);
+                assert.match(error.message, /originating client.*form-mode elicitation/i);
+                assert.deepEqual(error.data, { code: 'FORM_ELICITATION_UNAVAILABLE' });
+                return true;
+            },
+        );
+        await assert.rejects(
+            f.client.callTool({ name: 'echo', arguments: { invalidOutput: true, _dct: route } }),
+            (error: unknown) => {
+                assert.ok(error instanceof ProtocolError);
+                assert.doesNotMatch(error.message, /form-mode elicitation|invalid.*output/i);
+                assert.equal(error.data, undefined);
+                return true;
+            },
+        );
     } finally {
         await f.close();
         await fixture.cleanup();

@@ -245,7 +245,11 @@ and presentation evidence remain in [host metadata](../../docs/host-metadata.md)
   retries of explicitly selected normal Close when pending CDP traffic is busy.
   It keeps explicit connection/session identity and does not retry other failures.
 - `screenshot-timeout-probe.ts` runs one explicitly supplied screenshot experiment
-  through the actual Core/SDK HTTP source fixture. `screenshot-timeout-fixture.ts`
+  through the sealed Core/SDK HTTP fixture. Its source entry only authorizes,
+  verifies `--stage` plus its adjacent `.receipt.json`, then launches the sealed
+  original ordinary Node. `screenshot-timeout-study.ts` contains the measured
+  subject and verifies its own sealed entry/runtime before acquisition.
+  `screenshot-timeout-fixture.ts`
   validates its fixture and owns the fail-fast sequence; neither runs in default
   tests. `windows-selected-tab-evidence.ps1` reads UIA/MSAA selection only within
   the verified owned HWND and samples the foreground HWND separately. Unsupported,
@@ -256,7 +260,11 @@ and presentation evidence remain in [host metadata](../../docs/host-metadata.md)
   identities, and normal Close/actual-exit cleanup. It is test-only and requires
   confirmed cleanup before another anchor acquisition.
 - `screenshot-layers.ts` accepts an explicit Windows application fixture JSON and
-  an absolute evidence parent directory. It creates independent baseline/candidate
+  an absolute evidence parent directory, plus `--stage` and its adjacent receipt.
+  `sealed-study.ts` supplies the narrow authorization/seal/child boundary shared
+  by both launchers. `screenshot-layers-study.ts` is the sealed measured subject;
+  its direct arm uses the same verified App Node/official/native resources.
+  It creates independent baseline/candidate
   targets for direct verified official and actual Core/SDK HTTP fixture routes,
   with native HWND/process/state evidence before and after every PNG. Candidate normal A and
   minimized B/C each exercise viewport, fullPage and element with new snapshot
@@ -354,8 +362,12 @@ private evidence. The current seal records source revision/digest and canonical
 byte/hash inventories for the complete App and separate fixture bundle. The
 [research builder](../../tooling/native-fixture-seal.ts) stages a fresh App from
 explicit verified native archives and bundles the test composition against its
-colocated resources. Verification returns exactly `http-fixture.mjs` and
-`resources/node/node.exe`; sealed execution uses no worktree module, old Plugin
+colocated resources. Verification returns fixed HTTP/layers/timeout entries and
+`resources/node/node.exe`. The strict thirteen-file research inventory includes
+the three bundled subjects, shared original notices and nine unmodified native
+asset destinations (eight unique source files); nested C# placement preserves
+the original PowerShell relative imports. These research files are separate from
+production App delivery. Sealed execution uses no worktree module, old Plugin
 dist or download. Default verification rejects dirty source receipts. Explicit
 dirty developer builds remain development evidence and cannot become clean final
 acceptance. Fixture normal exit proves its Core cleanup; GUI-only App lifecycle
@@ -424,12 +436,12 @@ without dependency download; sealed application probes use verified App resource
 The normal test suite never runs them. Codex tests create only disposable
 homes/configuration.
 
-For a one-shot screenshot timeout investigation, complete trusted setup and verify
-the source fixture's original official inputs, then supply a reviewed fixture
+For a one-shot screenshot timeout investigation, complete trusted setup and build
+a clean same-source App/research seal, then supply a reviewed fixture
 and evidence parent outside the worktree:
 
 ```powershell
-node tests/smoke/screenshot-timeout-probe.ts --allow-gui 'C:/Test/probe.json' 'C:/Test/evidence'
+node tests/smoke/screenshot-timeout-probe.ts --allow-gui 'C:/Test/probe.json' 'C:/Test/evidence' --stage 'C:/Test/sealed-stage'
 ```
 
 The JSON fields are `label`, `url`, structured `launch`, `background`, `fullPage`,
@@ -528,7 +540,7 @@ result. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 
 ```powershell
-node tests/smoke/screenshot-layers.ts --allow-gui 'C:/Test/fixture.json' 'C:/Test/evidence'
+node tests/smoke/screenshot-layers.ts --allow-gui 'C:/Test/fixture.json' 'C:/Test/evidence' --stage 'C:/Test/sealed-stage'
 ```
 
 The JSON has `label` (lowercase name), `targetKind: "generic-cdp"`, `launch` (structured

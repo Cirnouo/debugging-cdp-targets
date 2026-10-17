@@ -236,7 +236,10 @@ The official recording rate option is `--screencastFps`; the earlier
 The gateway advertises a fixed full official catalog because Codex does not
 refresh ordinary local MCP tools from list-changed notifications. Discovery and
 lifecycle successes return connection summaries. Selected status adds
-enabledTools names and upstreamStatus (`connected` or `disconnected`).
+enabledTools names and upstreamStatus (`connected`, `disconnected` or `quarantined`).
+Failed native target observation can quarantine the connection while the App
+retains ownership for inspection and normal cleanup. A client wait cancellation
+or timeout does not quarantine a healthy official execution.
 Explicit toolNames requests return configuration requirements
 and exact input schemas only when an actual upstream is valid.
 

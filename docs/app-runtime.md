@@ -21,7 +21,9 @@ its own cache; Chromium-held files may remain in OS temporary storage.
 The App verifies its native loading closure before holding a kernel advisory
 lock for the actual process lifetime. The lock namespace derives from the native
 OS account and is independent of installed/portable configuration. A losing
-process sends one fixed activation frame to the first owner and exits. It never
+process sends one fixed activation frame to the first owner and exits. If that
+channel cannot activate the owner, the loser displays a native warning before
+normal exit. It never
 creates or migrates selected data. No Electron singleton lock, heartbeat, PID
 takeover or force kill participates.
 
@@ -57,6 +59,10 @@ Public SDK Node Streamable HTTP binds only `127.0.0.1`, checks exact effective-p
 Host, fixed `/mcp`, bounded JSON body, methods, content type and Origin. Forwarded
 headers confer no authority. Missing, expired or unknown bearers fail before
 owned reads or effects. Rejections never include raw requests, tokens or paths.
+After authentication, known busy and originating-client facility failures carry
+a closed code and fixed actionable explanation. Unknown upstream errors remain
+generic; the App never projects arbitrary exception text. A locally known facility
+failure stays associated with its owned execution across the official SDK round trip.
 
 `dct_registration_register` returns public registrationId and private
 registrationBearer once. Every other lifecycle tool explicitly supplies that
@@ -115,10 +121,22 @@ installers, complete immutable version retention and managed uninstall remain
 separate deployment work. No background update service or rollback/pruning
 mechanism is introduced.
 
+Owned App/research bundles explicitly disable ws optional `bufferutil` and
+`utf-8-validate` loading through its supported compile-time opt-out switches.
+WebSocket masking uses the bundled JavaScript implementation; Node 24's built-in
+UTF-8 validation remains available. Optional native masking could be faster;
+this delivery makes no performance claim or implicit addon acquisition. Emitted
+imports must belong to Node builtins or the exact selected Electron/native App
+closure. The unchanged original official release is delivered independently.
+
 Test-only `tests/fixtures/http-gateway.ts` composes real Core and SDK HTTP and
 refuses native start/restart without `--allow-gui`. `native-fixture-seal.ts`
-binds that fixture and a complete App stage to actual source inputs/digest and
-independent whole-file inventories. Execution uses only this sealed closure.
+binds that fixture, both complete screenshot study subjects, original native
+helpers and a complete App stage to actual source inputs/digest and independent
+whole-file inventories. Study source launchers only verify and start the sealed
+ordinary Node; measured code verifies itself before native acquisition. The pure
+verification module imports no builder or esbuild runtime. Execution uses only
+this sealed closure.
 Dirty development seals cannot establish final acceptance; final native evidence
 requires a clean committed revision and fresh seal. Fixture cleanup/actual child
 exit, actual App GUI/singleton/exit, native target behavior, host HTTP execution,

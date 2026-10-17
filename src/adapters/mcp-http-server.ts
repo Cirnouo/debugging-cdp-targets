@@ -12,6 +12,7 @@ import {
     parseRegisteredArguments,
     parseRegisteredOfficialArguments,
 } from '../domains/mcp-http.ts';
+import { RequestFailure, requestFailureExplanation } from '../domains/request-failure.ts';
 import type { ClientRequestContext, ClientRequestFacilities } from '../shared/client-context.ts';
 import { LIFECYCLE_ACTIONS, lifecycleTools } from './lifecycle-tools.ts';
 
@@ -89,6 +90,7 @@ export async function createMcpHttpServer(options: { port: number; core: HttpCor
         server.setRequestHandler('tools/call', async (request, context) => {
             const name = request.params.name;
             const arguments_ = request.params.arguments ?? {};
+            let authenticated = false;
             try {
                 if (name === 'dct_registration_register') {
                     if (Object.keys(arguments_).length) throw new Error('Register takes no arguments.');
@@ -105,6 +107,7 @@ export async function createMcpHttpServer(options: { port: number; core: HttpCor
                     : parseRegisteredOfficialArguments(arguments_);
                 // Authentication precedes resource/result reads. No session contains an implicit registration.
                 const client = options.core.attachClient(parsed.registrationBearer);
+                authenticated = true;
                 const capabilities = server.getClientCapabilities();
                 const token = request.params._meta?.progressToken;
                 const lifetime = requestLifetime.getStore();
@@ -145,7 +148,11 @@ export async function createMcpHttpServer(options: { port: number; core: HttpCor
                 if (!options.core.tools.some((tool) => tool.name === name)) throw new Error('Unknown tool.');
                 const official = parseRegisteredOfficialArguments(arguments_);
                 return await options.core.invoke(name, { ...official.arguments, _dct: official.route }, requestContext);
-            } catch {
+            } catch (error) {
+                if (authenticated && error instanceof RequestFailure)
+                    throw new ProtocolError(ProtocolErrorCode.InvalidParams, requestFailureExplanation(error), {
+                        code: error.code,
+                    });
                 throw new ProtocolError(
                     ProtocolErrorCode.InvalidParams,
                     'Request rejected. Check the registration bearer, current route and validated tool arguments.',

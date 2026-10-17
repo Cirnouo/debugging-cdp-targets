@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { Tool } from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { createCoreFixture } from './fixtures/core-runtime.ts';
@@ -108,6 +110,30 @@ test('connections keep independent actual catalogs and explicit restart invalida
         const unavailable = await gateway.invoke('evaluate_script', args, signal, () => {});
         assert.ok(isRecord(unavailable.structuredContent));
         assert.equal(unavailable.structuredContent.code, 'TOOL_NOT_ENABLED');
+        assert.equal(Object.hasOwn(unavailable.structuredContent, 'entryId'), false);
+        assert.equal(JSON.stringify(unavailable).includes('entryId'), false);
+        const http = await createMcpHttpServer({ port: 0, core: runtime.core });
+        const client = new Client({ name: 'disabled-tool-projection', version: '1' }, { capabilities: {} });
+        try {
+            await client.connect(new StreamableHTTPClientTransport(new URL(http.url)));
+            const projected = await client.callTool({
+                name: 'evaluate_script',
+                arguments: {
+                    function: '() => 1',
+                    pageId: 1,
+                    _dct: {
+                        connectionId: second.connectionId,
+                        sessionId: second.sessionId,
+                        registrationBearer: runtime.registration.bearer,
+                    },
+                },
+            });
+            assert.deepEqual(projected, unavailable);
+            assert.equal(JSON.stringify(projected).includes('entryId'), false);
+        } finally {
+            await client.close();
+            await http.close();
+        }
         assert.ok(JSON.stringify(unavailable).includes('--slim=false'));
         assert.equal(launched, 2);
         assert.equal(calls.length, 0);

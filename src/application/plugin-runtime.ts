@@ -67,6 +67,7 @@ type ManagedConnection = {
     establishedAt?: number;
     lastRealOperationAt?: number;
     executionContext?: ClientRequestContext;
+    executionFacilityFailure?: RequestFailure;
     activeCalls: number;
     diagnostics: (Diagnostic & { sessionId: string })[];
     diagnose: Diagnose;
@@ -249,8 +250,17 @@ export async function createGatewayCore({
                 request: async (params, incoming) => {
                     owner.assertOpen();
                     const origin = connection.executionContext;
-                    if (!origin) throw new Error('The originating client request context is unavailable.');
-                    return origin.elicit(params, AbortSignal.any([incoming, owner.signal]));
+                    if (!origin) throw new RequestFailure('CLIENT_CONTEXT_UNAVAILABLE');
+                    try {
+                        return await origin.elicit(params, AbortSignal.any([incoming, owner.signal]));
+                    } catch (error) {
+                        // The official SDK round trip erases local error types. Retain only a
+                        // closed local facility reason on this same owned execution, never raw
+                        // upstream text/data or another request's context.
+                        if (error instanceof RequestFailure && connection.executionContext === origin)
+                            connection.executionFacilityFailure = error;
+                        throw error;
+                    }
                 },
             },
         });
@@ -506,8 +516,7 @@ export async function createGatewayCore({
             const job = (async () => {
                 if (shuttingDown) throw new Error('The gateway is closing.');
                 const connection = routed(request);
-                if (connection.activeCalls > 0)
-                    throw new Error('The connection is busy with an owned official execution.');
+                if (connection.activeCalls > 0) throw new RequestFailure('CONNECTION_BUSY');
                 connection.lastRealOperationAt = timestamp();
                 connection.owner.expectedOperationId = context.operationId;
                 if (request.scope === undefined || !['target', 'official', 'both'].includes(request.scope))
@@ -583,6 +592,7 @@ export async function createGatewayCore({
         stop: async (request, context = {}) => {
             const connection = routed(request);
             connection.lastRealOperationAt = timestamp();
+            delete connection.executionFacilityFailure;
             connection.owner.expectedOperationId = context.operationId;
             if (request.disposition === 'Close') connection.directory.requestRelease();
             const result = await connection.controller.stop(request, context);
@@ -799,7 +809,7 @@ export async function createGatewayCore({
             onProgress: (progress: import('@modelcontextprotocol/client').Progress) => void,
             client?: ClientRequestContext,
         ): Promise<CallToolResult> {
-            if (shuttingDown) throw new Error('The gateway is closing.');
+            if (shuttingDown) throw new RequestFailure('APP_CLOSING');
             signal.throwIfAborted();
             const route = parseConnectionRoute(arguments_._dct);
             if (client) {
@@ -808,7 +818,7 @@ export async function createGatewayCore({
             }
             const connection = routed(route);
             if (connection.activeCalls > 0 || lifecycle.isBusy(connection.connectionId))
-                throw new Error('The connection is busy with an owned execution or lifecycle operation.');
+                throw new RequestFailure('CONNECTION_BUSY');
             const owner = connection.owner;
             connection.activeCalls += 1;
             connection.lastRealOperationAt = timestamp();
@@ -817,7 +827,6 @@ export async function createGatewayCore({
                 if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
                     return lifecycleResult({
                         code: 'TOOL_NOT_ENABLED',
-                        entryId,
                         ...route,
                         ...fullCatalog?.requirements(name, connection.mcpArgs, true),
                         nextAction: 'close-and-new-start',
@@ -856,11 +865,12 @@ export async function createGatewayCore({
                     return result;
                 } catch (error) {
                     timing('failed');
-                    throw error;
+                    throw connection.executionFacilityFailure ?? error;
                 }
             })().finally(() => {
                 connection.activeCalls -= 1;
                 delete connection.executionContext;
+                delete connection.executionFacilityFailure;
             });
             owner.track(execution);
             return waitForClient(execution, signal);
@@ -934,3 +944,5 @@ export async function createGatewayCore({
 }
 
 export type GatewayCore = Awaited<ReturnType<typeof createGatewayCore>>;
+
+import { RequestFailure } from '../domains/request-failure.ts';

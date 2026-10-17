@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +63,8 @@ export async function generateAppFiles(options: AppBuild) {
                 __DCT_TOOL_CATALOG__: JSON.stringify(catalog),
                 __DCT_APP_VERSION__: JSON.stringify(version),
                 'process.env.NODE_ENV': '"production"',
+                'process.env.WS_NO_BUFFER_UTIL': '"1"',
+                'process.env.WS_NO_UTF_8_VALIDATE': '"1"',
             },
             plugins: [
                 {
@@ -87,6 +90,19 @@ export async function generateAppFiles(options: AppBuild) {
             logLevel: 'warning',
         });
         for (const file of result.outputFiles) files.set(path.basename(file.path), Buffer.from(file.contents));
+        const selectedExternals = new Set(
+            entry === 'app-main'
+                ? ['electron', 'fs-native-extensions']
+                : entry === 'app-bootstrap'
+                  ? ['electron', './app-main.mjs']
+                  : entry === 'app-preload'
+                    ? ['electron']
+                    : [],
+        );
+        for (const emitted of Object.values(result.metafile.outputs))
+            for (const imported of emitted.imports)
+                if (imported.external && !isBuiltin(imported.path) && !selectedExternals.has(imported.path))
+                    throw new Error(`App bundle has an undeclared external import: ${imported.path}`);
         for (const input of Object.keys(result.metafile.inputs)) inputs.add(input);
     }
     for (const file of ['app.html', 'app.css'])

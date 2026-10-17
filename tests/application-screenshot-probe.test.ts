@@ -49,7 +49,21 @@ const entries = (paths: string[]) =>
         .map((file) => ({ path: file, bytes: 4, sha256: sha('code') }))
         .sort((a, b) => a.path.localeCompare(b.path, 'en'));
 const appFiles = entries(appPaths);
-const fixtureFiles = entries(['http-fixture.mjs', 'http-fixture-NOTICES.txt']);
+const fixtureFiles = entries([
+    'http-fixture.mjs',
+    'http-fixture-NOTICES.txt',
+    'screenshot-layers-study.mjs',
+    'screenshot-timeout-study.mjs',
+    'windows-cdp-helper.ps1',
+    'windows-native-helper.ps1',
+    'windows-native-process.cs',
+    'src/adapters/windows-native-process.cs',
+    'tests/smoke/windows-window-evidence.ps1',
+    'tests/smoke/windows-selected-tab-evidence.ps1',
+    'tests/smoke/windows-png-evidence.ps1',
+    'tests/fixtures/compile-native-window.ps1',
+    'tests/fixtures/native-window.cs',
+]);
 const files = [...appFiles, ...fixtureFiles].sort((a, b) => a.path.localeCompare(b.path, 'en'));
 const inputs = [{ path: 'src/interface/app-main.ts', bytes: 4, sha256: sha('code') }];
 const receipt = {

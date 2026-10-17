@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createLifecycleService } from '../src/application/mcp-lifecycle.ts';
 import type { ConnectionStatus, ControlHandler } from '../src/domains/control-contract.ts';
+import { RequestFailure } from '../src/domains/request-failure.ts';
 
 const entryId = '11111111-1111-4111-8111-111111111111';
 const connectionId = '22222222-2222-4222-8222-222222222222';
@@ -252,7 +253,7 @@ test('stop forwards its cancellation signal and holds the connection admission g
     assert.equal(closeSignal?.aborted, true);
     await assert.rejects(
         service.control({ action: 'stop', connectionId, sessionId, requestId: 'blocked', disposition: 'Keep' }),
-        /already running/,
+        (error: unknown) => error instanceof RequestFailure && error.code === 'CONNECTION_BUSY',
     );
     finish();
     await tick();

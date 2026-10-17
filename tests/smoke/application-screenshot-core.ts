@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
-import { verifyNativeFixtureSeal } from '../../tooling/native-fixture-seal.ts';
+import { verifyNativeFixtureSeal } from '../../tooling/native-fixture-verification.ts';
 import {
     type ApplicationScreenshotFixture,
     type ApplicationScreenshotFixtureIO,

@@ -57,6 +57,10 @@ const verifiedPayload = {
     inventoryDigest: 'b'.repeat(64),
     entry: path.join(config.payload.root, 'http-fixture.mjs'),
     nodeExecutable: path.join(config.payload.root, 'resources/node/node.exe'),
+    studyEntries: {
+        layers: path.join(config.payload.root, 'screenshot-layers-study.mjs'),
+        timeout: path.join(config.payload.root, 'screenshot-timeout-study.mjs'),
+    },
 };
 const prepared: PreparedApplicationScreenshotFixture = {
     fixture: config.fixture,
