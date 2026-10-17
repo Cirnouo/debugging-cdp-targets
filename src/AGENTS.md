@@ -1,5 +1,11 @@
 # Runtime boundaries
 
+Before implementing the singleton desktop App migration, read
+[ADR 0017](../docs/adr/0017-singleton-desktop-app.md) and the
+[accepted implementation plan](../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+They govern forward implementation; the current stdio gateway and installed Skill
+remain supported until the atomic HTTP/Hook cutover in Task 4.
+
 Dependencies flow interface → application → domains/shared; application may
 use explicit adapters. Adapters never depend on application/interface. Domains
 contain no environment, file, process, network, or PowerShell I/O.

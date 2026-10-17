@@ -1,5 +1,10 @@
 # Lifecycle implementation
 
+Before implementing this layer’s singleton App migration, read
+[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) and the
+[tracked plan](../../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+These are forward requirements; current stdio rules apply until their planned cutover.
+
 Create one session owner before acquiring a target, router or upstream. Route
 every acquired resource and pending request through that owner. Never expose a
 target before identity verification. Keep lifecycle admission per connection;

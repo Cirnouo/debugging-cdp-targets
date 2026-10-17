@@ -1,5 +1,10 @@
 # Adapter implementation
 
+Before implementing this layer’s singleton App migration, read
+[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) and the
+[tracked plan](../../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+These are forward requirements; current stdio rules apply until their planned cutover.
+
 Node child processes use shell:false. Portable target launches use windowsHide:false,
 detached:true and ignored stdio. Windows native support preserves normal GUI show
 state while suppressing auxiliary consoles; fixed helpers remain hidden.

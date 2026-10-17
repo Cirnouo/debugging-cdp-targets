@@ -1,5 +1,10 @@
 # Domain implementation
 
+Before implementing this layer’s singleton App migration, read
+[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) and the
+[tracked plan](../../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+These are forward requirements; current stdio rules apply until their planned cutover.
+
 Do not import Node I/O, adapters, application, or environment globals. Inputs
 carry evidence and environment mappings; output rules are deterministic.
 Preserve structured argument boundaries, reject unresolved variables and conflicting

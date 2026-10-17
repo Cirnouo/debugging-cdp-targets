@@ -21,6 +21,12 @@ separately authorized annotated stable or prerelease tags.
 
 ## Boundaries
 
+Before implementing the singleton desktop App migration, read
+[ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
+[accepted implementation plan](docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+They govern forward implementation; the current stdio gateway and installed Skill
+remain supported until the atomic HTTP/Hook cutover in Task 4.
+
 - The reusable stdio gateway relays official MCP tools and results using
   the official SDK. Seven MCP lifecycle/operation tools extend it; status also
   carries automatic Hooks. Fixed official catalog variants and per-connection
