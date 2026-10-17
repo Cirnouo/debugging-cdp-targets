@@ -8,6 +8,12 @@ clients, registration ownership, immutable snapshots and actual execution. Runti
 gateway-local memory. There is no target takeover, persistent session or plugin
 CLI/control channel.
 
+The direct HTTP endpoint serves strict 2026-07-28 and sessionful legacy through
+the same Core and fixed declarations. [ADR 0018](adr/0018-mcp-protocol-compatibility.md)
+owns per-request capabilities, modern roots/form continuation, active-response
+progress and private upstream catalog freshness. Explicit registration ownership
+and the operation wait/result path apply to both eras.
+
 ## Requests and status selectors
 
 The gateway exposes seven lifecycle/operation tools alongside the fixed reviewed
@@ -53,7 +59,12 @@ diagnostics and retry normal cleanup. Cancelling or timing out a client wait doe
 not quarantine a healthy official execution. Discovery, lifecycle success and
 ordinary selected status do not include tool schemas, configuration or diagnostics.
 Only explicit toolNames opts into tool details. Schemas require a valid actual
-tools/list; disconnected connections return requirements only.
+tools/list; disconnected connections return requirements only. Selected `toolNames`
+details include `toolCatalog: {revision, state}` when supplied by the real
+upstream; selected configuration includes `official.toolCatalog`. A failed
+refresh retains last-known schema details marked `unavailable`, and new official
+forwarding fails `OFFICIAL_CATALOG_UNAVAILABLE` until a later validated refresh.
+Default summaries stay unchanged; the outward tool list remains fixed.
 
 Enabled tools never contain suggestedMcpArgs. Supported explicitly disabled tools
 and TOOL_NOT_ENABLED failures provide complete replacement mcpArgs while retaining

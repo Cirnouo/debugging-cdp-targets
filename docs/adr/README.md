@@ -53,5 +53,9 @@ Historical decision bodies and evidence remain intact.
     implemented in stages under the tracked singleton App plan. Its scoped
     supersession takes effect with each implemented interface, atomically in Task 4.
 
+- `0018-mcp-protocol-compatibility.md`: strict modern HTTP beside sessionful legacy,
+    authenticated roots/form continuation around one execution, active-request
+    progress and private actual upstream catalog refresh under fixed declarations.
+
 Old ADRs retain decision history, not current implementation rules. Add numbered
 records for durable decisions; keep local implementation rules beside code.
