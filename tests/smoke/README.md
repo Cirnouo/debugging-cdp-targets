@@ -66,8 +66,9 @@ delivery to the substitute model, not real-model adherence, automatic Skill
 matching, Claude search execution or Desktop presentation.
 
 `timeout-isolation.ts` exercises an intentionally unfinished official handler on
-two isolated Chrome targets, validates timeout quarantine and peer availability,
-then explicitly restarts and normally closes them. It retains test profiles.
+two isolated Chrome targets, validates client response timeout with continued
+execution admission/busy state and peer availability, then explicitly normally
+closes them. It retains test profiles.
 
 - `official-server.ts` tests the bundled bootstrap against an isolated Chrome,
   including tool discovery, snapshot-based CSS style inspection, reusable entry
