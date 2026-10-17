@@ -8,6 +8,25 @@ import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
 import { PLUGIN_ROOT } from '../tooling/payload-policy.ts';
 import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
 
+test('runtime parser approvals belong only to their exact reviewed consumers', () => {
+    assert.deepEqual(
+        validateRuntimeSource('src/domains/software-version.ts', "import parse from 'semver/functions/parse.js';"),
+        [],
+    );
+    assert.deepEqual(
+        validateRuntimeSource('src/adapters/host-user-intent.ts', "import { parse } from 'smol-toml';"),
+        [],
+    );
+    for (const [file, specifier] of [
+        ['src/domains/other.ts', 'semver/functions/parse.js'],
+        ['src/domains/software-version.ts', 'semver'],
+        ['src/domains/software-version.ts', 'node:fs'],
+        ['src/adapters/other.ts', 'smol-toml'],
+        ['src/domains/other.ts', 'smol-toml'],
+    ])
+        assert.ok(validateRuntimeSource(file ?? '', `import x from '${specifier}';`).length);
+});
+
 test('gateway imports only public split SDK entry points', () => {
     for (const specifier of [
         '@modelcontextprotocol/client',

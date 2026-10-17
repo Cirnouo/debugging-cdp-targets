@@ -1,5 +1,27 @@
 # Explicit integration smoke
 
+`native-host-management.ts` explicitly runs the selected installed stable Codex
+and Claude executables with temporary host homes, separate configuration/plugin
+roots, a neutral cwd and one loopback smart Git remote:
+
+```text
+node tests/smoke/native-host-management.ts <codex-executable> <claude-executable>
+```
+
+It installs immutable subdirectories from payload A1/catalog B1, advances only
+the fixture remote to A2/B2 with a different plugin version, and re-resolves both
+actual installation roots. A new manager, native adapters and receipt-store
+instance then sync a changed port with no published candidate or native mutation.
+The upgrade also injects a late URL-write failure and resumes its verified new
+root through a fresh manager without another native update. A stale compatible
+candidate then synchronizes the newer managed copy's URL without a downgrade.
+The harness also checks incompatible latest, disabled/pinned/shared copies,
+unrelated Codex catalog entries, source movement and independent host failure.
+It retains private temporary fixture evidence. No user/global host state or
+production catalogs are changed. The minimal fixture payloads define no tools;
+this proves native management and disk state, while real thin-payload App/tool
+calls, host reload and Desktop rendering remain separate integration evidence.
+
 Real GUI smoke entrypoints require the exact command-line flag `--allow-gui`.
 Without it they return a visible successful skip before app or resource acquisition;
 all other arguments retain their existing order after that flag is removed.

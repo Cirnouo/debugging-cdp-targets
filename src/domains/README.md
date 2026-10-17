@@ -12,6 +12,9 @@
   explicit per-request registration routing without reflecting secret inputs.
 - `request-failure.ts` owns closed, path-free explanations for authenticated
   busy and originating-client facility failures across the HTTP boundary.
+- `host-management.ts` validates the one latest stable plugin record and the
+    effective loopback endpoint, and decides compatibility without downgrade or
+    release-history lookup. No production stable record is advertised.
 - `software-version.ts` owns strict node-semver parsing and precedence comparison
     for runtime decisions and the tooling facade; exact version-group agreement
     remains a tooling responsibility.
