@@ -47,6 +47,11 @@ Git hook tests remain contributor-tooling regressions.
   also covers form continuation without replay, validated one-time rounds,
   active-response progress tokens, expiry, real Core cancellation/busy ownership
   and raw SSE socket disconnection without resource cleanup.
+- `official-catalog-refresh.test.ts` covers public SDK stdio catalog notification,
+  uncapped pagination, complete schema validation, atomic snapshot/admission and
+  Close/scoped-restart races with controlled target/native I/O, preserving fixed
+  outward HTTP declarations. `tool-catalog.test.ts` also covers canonical complete
+  Tool variants, duplicates and reserved routing collisions.
 - `mcp-http-fixture.test.ts` exercises the test-only Core/SDK HTTP child,
   explicit bearer calls and normal owned teardown.
 - `native-fixture-seal.test.ts` checks complete App-plus-fixture inventory,

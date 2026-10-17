@@ -21,14 +21,17 @@
 - `app-official-runtime.ts` verifies bundled ordinary Node and the complete
   unchanged official release before injecting both catalog and connection spawns.
 - `tool-catalog.ts` exposes the fixed official catalog, parameter variants,
-  actual connection enablement and configuration recipes/workspace sources.
+  complete reviewed Tool validation, actual connection enablement and configuration
+  recipes/workspace sources.
 - `official-server.ts` validates the delivered release before resolving its public Server bin and validates options.
 - `official-package.ts` verifies the complete official release tree and returns its original bytes.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
   path/metadata changes and closes the descriptor on success or failure.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client,
   closes its public transport independently of actual child exit, and owns
-  bounded stdin/TERM/KILL disposal for that Server child.
+  bounded stdin/TERM/KILL disposal for that Server child. Capability-gated native
+  SDK listChanged drives uncapped serialized private reviewed snapshots, freshness,
+  fail-closed admission and captured Tool output validation.
 - `mcp-http-server.ts` composes the public SDK Node Streamable HTTP transport,
   validates loopback HTTP boundaries and routes strict modern requests beside
   sessionful legacy connections through one shared Core.
