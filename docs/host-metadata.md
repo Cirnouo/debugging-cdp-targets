@@ -521,6 +521,12 @@ executable tools and does not establish App HTTP discovery or activation.
     `2692c8c7bb2cf8b0aefe638741fc90236f4b824c59578ce84994f9de58200993`.
 - Isolated native acceptance used separate temporary host homes/config roots,
     neutral cwd and loopback SMART HTTP Git remote with versions 0.1.11 → 0.1.12.
+    Executed repository HEAD was `874d1a5d6a84727afb54d6a3911bc0653911dfd5`,
+    with staged, uncommitted host-management changes at execution tree
+    `180b6b965a1c7a8e9824cc5f3fd0814b86d852f0`; index and worktree matched.
+    The later profile-fixture tree `40864bbadbbce6ea0369649338b1ecfe21fd4cc1`
+    and private App-combination tree `183970c19e1259350d765e7b74164546d696a517`
+    are separate source identities, not native reruns of those later trees.
     It proved actual installed-root replacement, preserved user intent,
     nondefault-port sync, disabled/ref/shared/unrelated-source refusal and
     independent host failure. A fresh manager with a null candidate resumed
