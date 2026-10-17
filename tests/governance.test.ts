@@ -10,7 +10,7 @@ const validScopes = [
     'target',
     'devtools',
     'windows',
-    'obsidian',
+    'app',
     'distribution',
     'testing',
     'tooling',
@@ -26,7 +26,7 @@ test('wires every approved Conventional Commit type and scope into commitlint', 
     assert.deepEqual(COMMIT_SCOPES, validScopes);
     assert.deepEqual(commitlintConfig.rules['type-enum'], [2, 'always', COMMIT_TYPES]);
     assert.deepEqual(commitlintConfig.rules['scope-enum'], [2, 'always', COMMIT_SCOPES]);
-    assert.deepEqual(validateCommitMessage('feat(skill): describe change'), []);
+    assert.deepEqual(validateCommitMessage('feat(app): describe change'), []);
 });
 
 test('accepts breaking commits by marker or footer', () => {
@@ -43,6 +43,7 @@ test('rejects malformed commit messages with actionable errors', () => {
         ['feat: add feature', 'scope'],
         ['feat(Skill): add feature', 'scope'],
         ['feat(not-approved): add feature', 'scope'],
+        ['feat(obsidian): add feature', 'scope'],
         ['feat(skill): ', 'subject'],
         ['feat(skill): add feature.', 'full stop'],
         [`feat(skill): ${'x'.repeat(88)}`, '100'],

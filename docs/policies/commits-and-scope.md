@@ -39,12 +39,13 @@ Every non-merge commit uses `<type>(<scope>)!: <subject>`, where `!` appears onl
 for a breaking change. Allowed types are `build`, `chore`, `ci`, `docs`, `feat`,
 `fix`, `perf`, `refactor`, `revert`, `style`, and `test`. The single required
 lowercase scope is one of `skill`, `session`, `target`, `devtools`, `windows`,
-`obsidian`, `distribution`, `testing`, `tooling`, `governance`, `dependencies`,
+`app`, `distribution`, `testing`, `tooling`, `governance`, `dependencies`,
 or `release`.
 
-`obsidian` is retained for historical validation only; new application-specific
-behavior is outside the current design. Plugin packaging uses `distribution`;
-official Server transport uses `devtools`.
+`app` owns desktop App lifecycle, management UI, configuration and OS integration.
+Plugin packaging and native delivery use `distribution`; official Server transport
+uses `devtools`; core connection lifecycle uses `session`. The App scope is a
+durable product responsibility, not a temporary migration label.
 
 Headers are at most 100 characters. Subjects are non-empty, begin in lowercase,
 and do not end with a period. A body or footer follows a blank line; a footer
