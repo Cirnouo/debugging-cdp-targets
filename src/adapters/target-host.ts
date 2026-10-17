@@ -173,7 +173,8 @@ export function validateTargetLaunch(options: LaunchOptions) {
     if (!TARGET_KINDS.includes(targetKind)) throw new Error('Unknown target kind.');
     if (!Number.isInteger(basePort) || basePort < 1 || basePort > 65535) throw new Error('Invalid base port.');
     if (options.launchDefinition) return;
-    if (!options.preparedLaunch) validateDataIsolationBinding(options.launch, isolation.mode, process.env);
+    if (!options.preparedLaunch)
+        validateDataIsolationBinding(options.launch, isolation.mode, process.env, process.platform === 'win32');
     const sample = process.platform === 'win32' ? 'C:/dct-preflight-data' : '/dct-preflight-data';
     const prepared = options.preparedLaunch;
     const parsed = prepared
@@ -187,6 +188,7 @@ export function validateTargetLaunch(options: LaunchOptions) {
               basePort,
               process.env,
               isolation.mode === 'data-dir' ? sample : undefined,
+              process.platform === 'win32',
           );
     if (!path.isAbsolute(parsed.executablePath) || (parsed.cwd !== undefined && !path.isAbsolute(parsed.cwd)))
         throw new Error('Application executable and working directory must be absolute.');
@@ -504,7 +506,14 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 context.signal?.throwIfAborted();
                 const parsed = options.preparedLaunch
                     ? bindPreparedLaunch(options.preparedLaunch, port, context.dataDirectory)
-                    : (launchDefinition ?? resolveLaunchDefinition(launch, port, process.env, context.dataDirectory));
+                    : (launchDefinition ??
+                      resolveLaunchDefinition(
+                          launch,
+                          port,
+                          process.env,
+                          context.dataDirectory,
+                          process.platform === 'win32',
+                      ));
                 if (!path.isAbsolute(parsed.executablePath))
                     throw new Error('The application must use an absolute executable path.');
                 const executablePath = path.resolve(parsed.executablePath);

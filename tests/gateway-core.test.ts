@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import path from 'node:path';
 import test from 'node:test';
+import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
+import { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createGatewayCore } from '../src/application/plugin-runtime.ts';
 import type { LaunchOptions } from '../src/domains/control-contract.ts';
 import type { ClientRequestContext } from '../src/shared/client-context.ts';
+import { isRecord } from '../src/shared/errors.ts';
 
 async function fixture(now?: () => number) {
     const tool = { name: 'echo', inputSchema: { type: 'object' as const, properties: {} } };
@@ -14,9 +19,16 @@ async function fixture(now?: () => number) {
     let closed = 0;
     let rejectClose = false;
     let rejectOfficial = false;
+    let closeWait: Promise<void> | undefined;
     let officialCreated = 0;
     let officialClosed = 0;
     let routersCreated = 0;
+    let directoryAcquisitions = 0;
+    const dataDirectories = new DataDirectoryRegistry();
+    dataDirectories.acquire = async () => {
+        directoryAcquisitions += 1;
+        throw new Error('This no-I/O fixture must not acquire a data directory.');
+    };
     const officialExits: (() => void)[] = [];
     const launchInputs: LaunchOptions[] = [];
     const officialInputs: { args: string[]; environment: NodeJS.ProcessEnv }[] = [];
@@ -26,6 +38,7 @@ async function fixture(now?: () => number) {
         entered = resolve;
     });
     const core = await createGatewayCore({
+        dataDirectories,
         ...(now ? { now } : {}),
         loadCatalog: async () => catalog,
         createRouter: async () => {
@@ -56,6 +69,7 @@ async function fixture(now?: () => number) {
             },
             close: async (target) => {
                 closed += 1;
+                if (closeWait) await closeWait;
                 if (rejectClose && target.processId === 1) throw new Error('Normal close refused.');
                 children.get(target.processId)?.emit('exit');
                 return true;
@@ -116,10 +130,18 @@ async function fixture(now?: () => number) {
         client,
         counts: () => ({ launched, closed }),
         generations: () => ({ officialCreated, officialClosed, routersCreated }),
+        directoryAcquisitions: () => directoryAcquisitions,
         officialExits,
         executing,
         settle: () => settle(),
         exit: (pid: number) => children.get(pid)?.emit('exit'),
+        blockClose() {
+            let release = () => {};
+            closeWait = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            return release;
+        },
         failClose: (value: boolean) => {
             rejectClose = value;
         },
@@ -129,6 +151,201 @@ async function fixture(now?: () => number) {
         launchInputs,
         officialInputs,
     };
+}
+
+async function bounded<T>(pending: Promise<T>, label: string) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        return await Promise.race([
+            pending,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error(label)), 1000);
+            }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+for (const phase of ['closing', 'failed'] as const) {
+    test(`all direct restart scopes reject before acquisition while final cleanup is ${phase}`, async () => {
+        const f = await fixture();
+        let releaseClose = () => {};
+        let cleaning: Promise<unknown> | undefined;
+        try {
+            const target = await f.core.controller.start({
+                isolation: { mode: 'none' },
+                launch: { executable: 'fixture' },
+            });
+            if (phase === 'closing') releaseClose = f.blockClose();
+            else f.failClose(true);
+            cleaning = f.core.cleanup().catch((error: unknown) => error);
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            if (phase === 'failed') await cleaning;
+            const counts = f.counts();
+            const generations = f.generations();
+            for (const scope of ['official', 'target', 'both'] as const) {
+                await assert.rejects(
+                    bounded(
+                        f.core.controller.restart({
+                            connectionId: target.connectionId,
+                            sessionId: target.sessionId ?? '',
+                            scope,
+                        }),
+                        'Direct restart did not reject while closing.',
+                    ),
+                    /closing/,
+                );
+                assert.deepEqual(f.counts(), counts);
+                assert.deepEqual(f.generations(), generations);
+            }
+        } finally {
+            releaseClose();
+            f.failClose(false);
+            await cleaning;
+            await f.core.cleanup();
+        }
+    });
+}
+
+for (const action of ['cancel', 'cleanup'] as const) {
+    for (const late of ['resolve', 'reject'] as const) {
+        test(`${action} stops pending roots admission and consumes late ${late} without acquisition`, async () => {
+            const f = await fixture();
+            const client = f.client('a');
+            let resolveRoots: (value: { roots: { uri: string }[] }) => void = () => {};
+            let rejectRoots: (reason: Error) => void = () => {};
+            const roots = new Promise<{ roots: { uri: string }[] }>((resolve, reject) => {
+                resolveRoots = resolve;
+                rejectRoots = reject;
+            });
+            let cleaning: Promise<void> | undefined;
+            try {
+                const context = client.handle.request({
+                    requestId: 0,
+                    capabilities: { roots: true, formElicitation: false },
+                    readRoots: () => roots,
+                });
+                const accepted = await f.core.control(
+                    {
+                        action: 'start',
+                        entryId: f.core.entryId,
+                        requestId: 'pending-roots',
+                        isolation: {
+                            mode: 'data-dir',
+                            directory: { kind: 'new', parent: path.dirname(process.execPath), name: 'never-acquired' },
+                            cleanup: 'retain',
+                        },
+                        launch: { executable: process.execPath, args: ['--profile={dataDir}'] },
+                    },
+                    context,
+                );
+                await new Promise<void>((resolve) => setImmediate(resolve));
+                if (action === 'cancel') {
+                    await f.core.control(
+                        { action: 'cancel', entryId: f.core.entryId, operationId: String(accepted.operationId) },
+                        client.context(),
+                    );
+                    await new Promise<void>((resolve) => setImmediate(resolve));
+                    const terminal = await bounded(
+                        f.core.control(
+                            { action: 'wait', entryId: f.core.entryId, operationId: String(accepted.operationId) },
+                            client.context(),
+                        ),
+                        'Roots cancellation did not settle.',
+                    );
+                    assert.equal(terminal.complete, true);
+                }
+                cleaning = f.core.cleanup();
+                await bounded(cleaning, 'Roots admission held final cleanup.');
+                assert.equal(f.core.admin.cleanupState(), 'closed');
+                if (late === 'resolve') resolveRoots({ roots: [{ uri: 'file:///late' }] });
+                else rejectRoots(new Error('Late ignored roots failure.'));
+                await new Promise<void>((resolve) => setImmediate(resolve));
+                assert.deepEqual(f.counts(), { launched: 0, closed: 0 });
+                assert.deepEqual(f.generations(), { officialCreated: 1, officialClosed: 1, routersCreated: 1 });
+                assert.equal(f.directoryAcquisitions(), 0);
+            } finally {
+                resolveRoots({ roots: [] });
+                await cleaning;
+                await f.core.cleanup();
+            }
+        });
+    }
+}
+
+for (const action of ['cancel', 'cleanup'] as const) {
+    test(`actual SDK reverse roots receives ${action} and final cleanup owns no late resources`, async () => {
+        const f = await fixture();
+        const [clientTransport, entryTransport] = InMemoryTransport.createLinkedPair();
+        const client = new Client({ name: 'roots-boundary', version: '1' }, { capabilities: { roots: {} } });
+        const entry = createMcpEntryServer({ ...f.core.callbacks, transport: entryTransport });
+        let rootsSignal: AbortSignal | undefined;
+        let entered = () => {};
+        let release = () => {};
+        const began = new Promise<void>((resolve) => {
+            entered = resolve;
+        });
+        client.setRequestHandler('roots/list', async (_request, ctx) => {
+            rootsSignal = ctx.mcpReq.signal;
+            entered();
+            await new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            return { roots: [{ uri: 'file:///original-sdk-client' }] };
+        });
+        let cleaning: Promise<void> | undefined;
+        try {
+            await entry.connect();
+            await client.connect(clientTransport);
+            const started = await client.callTool({
+                name: 'dct_connection_start',
+                arguments: {
+                    entryId: f.core.entryId,
+                    requestId: 'sdk-roots',
+                    isolation: {
+                        mode: 'data-dir',
+                        directory: { kind: 'new', parent: path.dirname(process.execPath), name: 'never-acquired' },
+                        cleanup: 'retain',
+                    },
+                    launch: { executable: process.execPath, args: ['--profile={dataDir}'] },
+                },
+            });
+            await bounded(began, 'SDK roots request did not enter.');
+            assert.ok(isRecord(started.structuredContent));
+            const operationId = started.structuredContent.operationId;
+            if (action === 'cancel') {
+                await client.callTool({
+                    name: 'dct_operation_cancel',
+                    arguments: { entryId: f.core.entryId, operationId },
+                });
+                await new Promise<void>((resolve) => setImmediate(resolve));
+                assert.equal(
+                    rootsSignal?.aborted,
+                    true,
+                    'Explicit operation cancellation reaches the SDK before cleanup.',
+                );
+                assert.equal(
+                    f.core.admin.operations().find((operation) => operation.operationId === operationId)?.state,
+                    'cancelled',
+                );
+            }
+            cleaning = f.core.cleanup();
+            await bounded(cleaning, 'SDK reverse roots held final cleanup.');
+            assert.equal(rootsSignal?.aborted, true);
+            release();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.deepEqual(f.counts(), { launched: 0, closed: 0 });
+            assert.deepEqual(f.generations(), { officialCreated: 1, officialClosed: 1, routersCreated: 1 });
+            assert.equal(f.directoryAcquisitions(), 0);
+        } finally {
+            release();
+            await cleaning;
+            await f.core.cleanup();
+            await entry.close();
+            await client.close();
+        }
+    });
 }
 
 test('final cleanup attempts peers, retains a failed live owner and retries without reporting successful exit', async () => {

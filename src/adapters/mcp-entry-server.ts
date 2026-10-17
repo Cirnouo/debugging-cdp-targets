@@ -102,7 +102,7 @@ export function createMcpEntryServer(options: {
             requestId: ctx.mcpReq.id,
             capabilities: { roots: supportsRoots(), formElicitation: supportsFormElicitation() },
             waitSignal: AbortSignal.any([ctx.mcpReq.signal, disconnected.signal]),
-            readRoots: () => ctx.mcpReq.send({ method: 'roots/list' }),
+            readRoots: (signal) => ctx.mcpReq.send({ method: 'roots/list' }, signal ? { signal } : {}),
             elicit: (params, signal) =>
                 ctx.mcpReq.send({ method: 'elicitation/create', params }, signal ? { signal } : {}),
             onProgress: progress,

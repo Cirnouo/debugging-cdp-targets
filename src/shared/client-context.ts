@@ -7,7 +7,7 @@ export interface ClientPrincipal {
 export interface ClientRequestFacilities {
     requestId: string | number;
     capabilities: { roots: boolean; formElicitation: boolean };
-    readRoots?: () => Promise<ListRootsResult>;
+    readRoots?: (signal?: AbortSignal) => Promise<ListRootsResult>;
     elicit?: (params: ElicitRequestFormParams, signal?: AbortSignal) => Promise<ElicitResult>;
     onProgress?: (progress: Progress) => void;
     waitSignal?: AbortSignal;
@@ -19,7 +19,7 @@ export interface ClientRequestContext {
     readonly capabilities: Readonly<ClientRequestFacilities['capabilities']>;
     readonly waitSignal: AbortSignal;
     available(): boolean;
-    readRoots(): Promise<ListRootsResult>;
+    readRoots(signal?: AbortSignal): Promise<ListRootsResult>;
     elicit(params: ElicitRequestFormParams, signal?: AbortSignal): Promise<ElicitResult>;
     progress(progress: Progress): void;
 }

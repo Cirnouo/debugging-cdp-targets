@@ -1,6 +1,6 @@
 import type { ClientPrincipal, ClientRequestContext, ClientRequestFacilities } from '../shared/client-context.ts';
 
-/** Detach only the client response; observing the original promise consumes every late outcome. */
+/** Detach a wait and consume late outcomes; owned executions retain their separate lifetime signal. */
 export function waitForClient<T>(execution: Promise<T>, signal: AbortSignal): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const aborted = () => {
@@ -45,11 +45,14 @@ export function createClientContext(principal: ClientPrincipal) {
                 capabilities,
                 waitSignal,
                 available,
-                async readRoots() {
+                async readRoots(signal) {
                     requireAvailable();
+                    const admission = signal ? AbortSignal.any([waitSignal, signal]) : waitSignal;
+                    admission.throwIfAborted();
                     if (!capabilities.roots) return { roots: [] };
                     if (!readRoots) throw new Error('The originating client roots reader is unavailable.');
-                    const result = await readRoots();
+                    const result = await waitForClient(readRoots(admission), admission);
+                    admission.throwIfAborted();
                     requireAvailable();
                     return structuredClone(result);
                 },

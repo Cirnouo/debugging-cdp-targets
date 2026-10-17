@@ -134,6 +134,7 @@ export async function createGatewayCore({
     const replacements = new Set<Promise<unknown>>();
     let fullCatalog: Awaited<ReturnType<typeof loadOfficialToolCatalog>> | undefined;
     let shuttingDown = false;
+    const admissionShutdown = new AbortController();
     let cleanupPromise: Promise<void> | undefined;
     let cleanupState: 'open' | 'closing' | 'failed' | 'closed' = 'open';
     async function retryDirectory(directory: ConnectionDirectory) {
@@ -386,6 +387,9 @@ export async function createGatewayCore({
     ): Promise<ConnectionStatus> {
         if (shuttingDown) throw new Error('The gateway is closing.');
         context.signal?.throwIfAborted();
+        const admissionSignal = context.signal
+            ? AbortSignal.any([admissionShutdown.signal, context.signal])
+            : admissionShutdown.signal;
         options = structuredClone(options);
         const ambient = { ...process.env };
         const officialEnvironment = snapshotOfficialEnvironment(ambient);
@@ -396,9 +400,12 @@ export async function createGatewayCore({
             ambient,
             process.platform === 'win32',
         );
-        const roots = context.client ? await context.client.readRoots() : { roots: [] };
+        const roots = context.client
+            ? await waitForClient(context.client.readRoots(admissionSignal), admissionSignal)
+            : { roots: [] };
+        admissionSignal.throwIfAborted();
         const isolation = parseDataIsolation(options.isolation);
-        validateDataIsolationBinding(options.launch, isolation.mode, ambient);
+        validateDataIsolationBinding(options.launch, isolation.mode, ambient, process.platform === 'win32');
         const host = makeHost();
         host.validateLaunch?.(options);
         if (isolation.mode === 'data-dir') {
@@ -608,6 +615,7 @@ export async function createGatewayCore({
         },
         restart: (request, context = {}) => {
             const job = (async () => {
+                if (shuttingDown) throw new Error('The gateway is closing.');
                 const connection = routed(request);
                 if (connection.activeCalls > 0)
                     throw new Error('The connection is busy with an owned official execution.');
@@ -740,6 +748,7 @@ export async function createGatewayCore({
         if (cleanupState === 'closed') return;
         const finishObservation = beginFixtureStage('gateway-cleanup');
         shuttingDown = true;
+        admissionShutdown.abort(new Error('The gateway is closing.'));
         cleanupState = 'closing';
         for (const directory of directories) directory.requestRelease();
         const closing: Promise<unknown>[] = [];

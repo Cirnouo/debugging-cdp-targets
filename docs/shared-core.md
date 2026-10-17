@@ -43,6 +43,9 @@ connection timestamp.
 Start reads initiating roots before connection directory/router/target/official
 acquisition. Unsupported roots produce `[]`; a negotiated read failure aborts
 start. Each official roots response returns a clone of the connection snapshot.
+Explicit lifecycle cancellation or final cleanup aborts roots admission before
+resources are acquired, including the request-scoped SDK reverse request. Readers
+that ignore abort have their late outcomes consumed without late acquisition.
 Roots notifications, ambient environment changes and ownership transfer cannot
 widen an existing connection's authorization.
 
@@ -50,6 +53,8 @@ The admitted snapshot preserves executable, argv/cwd, effective target and
 ordinary-Node official environments, official options and fixed/automatic port
 policy. Prepared templates expand ordinary environment variables once, then bind
 only recorded port/data-directory tokens. Inserted directory bytes stay opaque.
+Windows ordinary-variable lookup and override merging are case-insensitive;
+POSIX names remain case-sensitive in the immutable snapshot.
 Fixed ports refuse collisions. Automatic policy may select a new verified free
 port without changing unrelated decimal/path bytes or retrying after app creation.
 Changed application or official configuration requires completed Close/new start.

@@ -43,9 +43,12 @@ export function prepareLaunchDefinition(
     windowsEnvironment = false,
 ): PreparedLaunchDefinition {
     const launch = parseApplicationLaunch(value);
-    const args = (launch.args ?? []).map((argument) => expandEnvironment(argument, environment));
+    const args = (launch.args ?? []).map((argument) => expandEnvironment(argument, environment, windowsEnvironment));
     const overrides = Object.fromEntries(
-        Object.entries(launch.env ?? {}).map(([name, setting]) => [name, expandEnvironment(setting, environment)]),
+        Object.entries(launch.env ?? {}).map(([name, setting]) => [
+            name,
+            expandEnvironment(setting, environment, windowsEnvironment),
+        ]),
     );
     const argumentPort = explicitDebuggingPort(args);
     const environmentPorts = Object.values(overrides).flatMap((setting) =>
@@ -59,7 +62,13 @@ export function prepareLaunchDefinition(
             ? { kind: 'fixed' as const, port: Number(fixed) }
             : { kind: 'automatic' as const, basePort };
     const validationPort = portPolicy.kind === 'fixed' ? portPolicy.port : basePort;
-    const validated = resolveLaunchDefinition(value, validationPort, environment, '/dct-prepared-data');
+    const validated = resolveLaunchDefinition(
+        value,
+        validationPort,
+        environment,
+        '/dct-prepared-data',
+        windowsEnvironment,
+    );
     if (
         !sources.length &&
         ![...args, ...Object.values(overrides)].some((argument) => argument.includes(PORT_PLACEHOLDER))
@@ -109,16 +118,21 @@ const PORT_PLACEHOLDER = '{port}';
 const DATA_DIRECTORY_PLACEHOLDER = '{dataDir}';
 const DEFAULT_DEBUGGING_SWITCH = '--remote-debugging-port';
 
-function expandEnvironment(argument: string, environment: Record<string, string | undefined>) {
+function expandEnvironment(
+    argument: string,
+    environment: Record<string, string | undefined>,
+    windowsEnvironment = false,
+) {
+    function value(name: string) {
+        const key = windowsEnvironment
+            ? Object.keys(environment).findLast((key) => key.toLowerCase() === name.toLowerCase())
+            : name;
+        if (key === undefined || !(key in environment)) throw new Error(`Environment variable ${name} is undefined.`);
+        return String(environment[key]);
+    }
     const expanded = argument
-        .replace(/%([A-Za-z_][A-Za-z\d_]*)%/g, (_match: string, name: string) => {
-            if (!(name in environment)) throw new Error(`Environment variable ${name} is undefined.`);
-            return String(environment[name]);
-        })
-        .replace(/\$\{([A-Za-z_][A-Za-z\d_]*)\}/g, (_match: string, name: string) => {
-            if (!(name in environment)) throw new Error(`Environment variable ${name} is undefined.`);
-            return String(environment[name]);
-        });
+        .replace(/%([A-Za-z_][A-Za-z\d_]*)%/g, (_match: string, name: string) => value(name))
+        .replace(/\$\{([A-Za-z_][A-Za-z\d_]*)\}/g, (_match: string, name: string) => value(name));
     if (/%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/.test(expanded)) {
         throw new Error('The launch command contains an unresolved environment variable.');
     }
@@ -186,10 +200,11 @@ export function validateDataIsolationBinding(
     value: unknown,
     mode: 'none' | 'data-dir',
     environment: Record<string, string | undefined>,
+    windowsEnvironment = false,
 ): void {
     const launch = parseApplicationLaunch(value);
     const references = [...(launch.args ?? []), ...Object.values(launch.env ?? {})].some((argument) =>
-        expandEnvironment(argument, environment).includes(DATA_DIRECTORY_PLACEHOLDER),
+        expandEnvironment(argument, environment, windowsEnvironment).includes(DATA_DIRECTORY_PLACEHOLDER),
     );
     if (mode === 'data-dir' && !references)
         throw new Error('Data directory isolation requires an explicit {dataDir} binding.');
@@ -201,32 +216,30 @@ export function resolveLaunchDefinition(
     port: number,
     environment: Record<string, string | undefined>,
     dataDir?: string,
+    windowsEnvironment = false,
 ): LaunchDefinition {
     const launch = parseApplicationLaunch(value);
+    const expand = (argument: string) => expandEnvironment(argument, environment, windowsEnvironment);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('The CDP port is invalid.');
     if (dataDir !== undefined) stringValue(dataDir, 'data directory binding');
     const substitutePort = (argument: string) => argument.replaceAll(PORT_PLACEHOLDER, String(port));
     const substitute = (argument: string) =>
-        expandEnvironment(argument, environment).replace(/\{port\}|\{dataDir\}/g, (placeholder) => {
+        expand(argument).replace(/\{port\}|\{dataDir\}/g, (placeholder) => {
             if (placeholder === PORT_PLACEHOLDER) return String(port);
             if (dataDir === undefined) throw new Error('The launch command requires a data directory binding.');
             return dataDir;
         });
-    const raw = [...(launch.args ?? []), ...Object.values(launch.env ?? {})].map((argument) =>
-        expandEnvironment(argument, environment),
-    );
+    const raw = [...(launch.args ?? []), ...Object.values(launch.env ?? {})].map((argument) => expand(argument));
     const hasPlaceholder = raw.some((argument) => argument.includes(PORT_PLACEHOLDER));
     const args = (launch.args ?? []).map(substitute);
     const env =
         launch.env === undefined
             ? undefined
             : Object.fromEntries(Object.entries(launch.env).map(([key, setting]) => [key, substitute(setting)]));
-    const argumentPort = explicitDebuggingPort(
-        (launch.args ?? []).map((argument) => substitutePort(expandEnvironment(argument, environment))),
-    );
+    const argumentPort = explicitDebuggingPort((launch.args ?? []).map((argument) => substitutePort(expand(argument))));
     const environmentPorts: string[] = [];
     for (const template of Object.values(launch.env ?? {})) {
-        const setting = substitutePort(expandEnvironment(template, environment));
+        const setting = substitutePort(expand(template));
         if (/(?:^|\s)--remote-debugging-pipe(?:=|\s|$)/i.test(setting))
             throw new Error('Debugging pipe conflicts with a CDP port.');
         for (const match of setting.matchAll(/(?:^|\s)--remote-debugging-port(?:[=:]|\s+|$)([^\s]*)/gi)) {
@@ -238,8 +251,8 @@ export function resolveLaunchDefinition(
     if (ports.some((selected) => Number(selected) !== port))
         throw new Error('A conflicting remote debugging port was supplied.');
     if (!hasPlaceholder && ports.length === 0) args.push(`${DEFAULT_DEBUGGING_SWITCH}=${port}`);
-    const executablePath = expandEnvironment(launch.executable, environment);
-    const cwd = launch.cwd === undefined ? undefined : expandEnvironment(launch.cwd, environment);
+    const executablePath = expand(launch.executable);
+    const cwd = launch.cwd === undefined ? undefined : expand(launch.cwd);
     if (
         [executablePath, cwd].some(
             (value) => value?.includes(PORT_PLACEHOLDER) || value?.includes(DATA_DIRECTORY_PLACEHOLDER),

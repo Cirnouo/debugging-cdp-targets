@@ -2,6 +2,53 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as launch from '../src/domains/launch-command.ts';
 
+const braceVariable = (name: string) => `\${${name}}`;
+
+test('Windows preparation expands mixed-case immutable environment consistently before opaque binding', () => {
+    const environment = {
+        ProgramFiles: 'C:/Program Files',
+        WorkRoot: 'C:/Work',
+        Args: 'admitted',
+        ProfileArg: '--profile={dataDir}',
+    };
+    const input = {
+        executable: '%PROGRAMFILES%/app.exe',
+        cwd: braceVariable('workroot'),
+        args: ['--remote-debugging-port={port}', braceVariable('ARGS'), '%PROFILEARG%'],
+        env: { Label: '%args%' },
+    };
+    launch.validateDataIsolationBinding(input, 'data-dir', environment, true);
+    assert.throws(() => launch.validateDataIsolationBinding(input, 'none', environment, true), /No isolation/);
+    const prepared = launch.prepareLaunchDefinition(input, 9222, environment, true);
+    environment.ProgramFiles = 'changed';
+    environment.Args = 'changed';
+    const bound = launch.bindPreparedLaunch(prepared, 9333, 'C:/opaque/%PROGRAMFILES%/{port}');
+    assert.equal(bound.executablePath, 'C:/Program Files/app.exe');
+    assert.equal(bound.cwd, 'C:/Work');
+    assert.deepEqual(bound.arguments, [
+        '--remote-debugging-port=9333',
+        'admitted',
+        '--profile=C:/opaque/%PROGRAMFILES%/{port}',
+    ]);
+    assert.equal(bound.env?.Label, 'admitted');
+});
+
+test('POSIX preparation preserves distinct environment name cases and rejects missing case variants', () => {
+    const environment = { Root: '/upper', ROOT: '/lower' };
+    const prepared = launch.prepareLaunchDefinition(
+        { executable: '%Root%/app', args: [braceVariable('ROOT'), '--remote-debugging-port={port}'] },
+        9222,
+        environment,
+        false,
+    );
+    assert.equal(prepared.executablePath, '/upper/app');
+    assert.equal(prepared.arguments[0], '/lower');
+    assert.throws(
+        () => launch.prepareLaunchDefinition({ executable: '%root%/app' }, 9222, environment, false),
+        /undefined/,
+    );
+});
+
 test('prepared launch binds recorded tokens once and snapshots fixed versus automatic port policy', () => {
     const ambient = { ROOT: '/old', Path: 'old-path', NUMBER: '9222' };
     const input = {
