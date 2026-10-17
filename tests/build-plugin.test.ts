@@ -8,6 +8,7 @@ import { isRecord } from '../src/shared/errors.ts';
 import {
     assembleCodexPayload,
     collectBundledLicenses,
+    generateHostPayloads,
     generatePluginFiles,
     generateRuntimeFiles,
     syncPluginFiles,
@@ -359,6 +360,27 @@ test('payload assembly maps host user documentation without shipping source dire
         const files = await assembleCodexPayload(await generateRuntimeFiles(), root);
         assert.equal(files.get('README.md')?.toString(), '# Installed plugin\n');
         assert.equal(files.has('plugin-README.md'), false);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+test('host build accepts independent App version and rejects maintained plugin drift', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-version-build-')));
+    try {
+        await cp(new URL('../packaging', import.meta.url), path.join(root, 'packaging'), { recursive: true });
+        await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
+        await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.3.4' }));
+        assert.equal((await generateHostPayloads(root)).size, 2);
+        const manifest = path.join(root, 'packaging/claude-code/.claude-plugin/plugin.json');
+        const original = await readFile(manifest, 'utf8');
+        const data = JSON.parse(original);
+        await writeFile(manifest, JSON.stringify({ ...data, version: '0.2.0' }));
+        await assert.rejects(generateHostPayloads(root), /version/i);
+        await writeFile(manifest, original);
+        const skill = path.join(root, 'packaging/shared/skills/debugging-cdp-targets/SKILL.md');
+        await writeFile(skill, (await readFile(skill, 'utf8')).replace(/version:.*0\.1\.0.*/, 'version: 0.2.0'));
+        await assert.rejects(generateHostPayloads(root), /version/i);
     } finally {
         await rm(root, { recursive: true, force: true });
     }

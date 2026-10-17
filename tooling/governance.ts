@@ -24,7 +24,7 @@ export const COMMIT_SCOPES = Object.freeze([
     'target',
     'devtools',
     'windows',
-    'obsidian',
+    'app',
     'distribution',
     'testing',
     'tooling',

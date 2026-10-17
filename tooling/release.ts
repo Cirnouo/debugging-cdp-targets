@@ -285,7 +285,7 @@ export async function runRelease(input: ReleaseInput, io: ReleaseIO) {
         validateVersionAgreement(packageData.version, isRecord(plugin) ? plugin.version : undefined, skillVersion),
     );
     if (errors.length || packageData.version !== version)
-        throw new Error('Release tag and all metadata versions must agree.');
+        throw new Error('Release tag must match the App version and peer Plugin/Skill versions must agree.');
     const changes = extractChangelog(await io.readFile('CHANGELOG.md'), version);
     const base = `/repos/${input.repository}`;
     const existing = await findExistingRelease(io, base, input.tag);

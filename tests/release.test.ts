@@ -265,6 +265,18 @@ for (const [version, prerelease, makeLatest] of [
         return { io, calls, files, url };
     }
 
+    test(`App release accepts an unchanged independent peer plugin group (${version})`, async () => {
+        const f = fixture();
+        for (const file of f.files.keys()) {
+            if (file.endsWith('plugin.json')) f.files.set(file, JSON.stringify({ version: '0.7.0' }));
+        }
+        f.files.set(
+            'packaging/shared/skills/debugging-cdp-targets/SKILL.md',
+            '---\nmetadata:\n    version: "0.7.0"\n---\n',
+        );
+        assert.deepEqual(await runRelease(input, f.io), { status: 'published', url: f.url });
+    });
+
     test(`release orchestration creates a draft, then publishes with Changelog notes and no added assets (${version})`, async () => {
         const { io, calls, url } = fixture({ latest: true });
         assert.deepEqual(await runRelease(input, io), { status: 'published', url });

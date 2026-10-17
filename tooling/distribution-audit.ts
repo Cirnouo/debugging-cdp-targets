@@ -10,7 +10,7 @@ import type { HostDescriptor } from './host-policy.ts';
 import { CODEX_HOST, PLUGIN_HOSTS, PLUGIN_NAME, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { validateIconPng } from './icon-policy.ts';
 import { OFFICIAL_RELEASE, requiredPayloadFiles, validatePayloadFileInventory } from './payload-policy.ts';
-import { isSemVer } from './version-policy.ts';
+import { isSemVer, validateVersionAgreement } from './version-policy.ts';
 
 export function compareDistributionTrees(source: Map<string, Buffer>, installed: Map<string, Buffer>) {
     const errors = [];
@@ -263,6 +263,10 @@ export async function auditDistribution(root: string) {
     const packageData = parsePluginMetadata((await readMetadataFile(path.join(root, 'package.json'))).toString());
     const license = await readMetadataFile(path.join(root, 'LICENSE'));
     const sharedSkills = await readDistributionTree(path.join(root, SHARED_PACKAGING_ROOT, 'skills'));
+    const skill = sharedSkills.get('debugging-cdp-targets/SKILL.md')?.toString();
+    const frontmatter: unknown = parseYaml(skill?.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
+    const skillVersion =
+        isRecord(frontmatter) && isRecord(frontmatter.metadata) ? frontmatter.metadata.version : undefined;
     const approvedIcon = await readMetadataFile(path.join(root, SHARED_PACKAGING_ROOT, 'assets/icon.png'));
     for (const host of PLUGIN_HOSTS) {
         try {
@@ -311,8 +315,13 @@ export async function auditDistribution(root: string) {
                     host,
                 ),
             );
-            if (!isRecord(manifest) || !isRecord(packageData) || manifest.version !== packageData.version)
-                errors.push(`${host.id}: Plugin and repository versions must agree.`);
+            errors.push(
+                ...validateVersionAgreement(
+                    isRecord(packageData) ? packageData.version : undefined,
+                    isRecord(manifest) ? manifest.version : undefined,
+                    skillVersion,
+                ).map((error) => `${host.id}: ${error}`),
+            );
             if (!source.get('LICENSE')?.equals(license))
                 errors.push(`${host.id}: Root and Plugin licenses must match.`);
             const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-distribution-')));

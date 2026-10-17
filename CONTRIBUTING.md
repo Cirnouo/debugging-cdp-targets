@@ -4,6 +4,12 @@ Bug reports, documentation improvements, and focused code contributions are
 welcome. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report suspected
 vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 
+Before implementing the singleton desktop App migration, read
+[ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
+[accepted implementation plan](docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+They govern forward implementation; the current stdio gateway and installed Skill
+remain supported until the atomic HTTP/Hook cutover in Task 4.
+
 ## Prepare a checkout
 
 Fork the repository and clone your fork. Use stable Node >=24.21.0 <25 and

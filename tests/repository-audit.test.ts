@@ -40,7 +40,7 @@ test('repository audit accepts the supported Node range and contributor entry po
             LICENSE: license,
             '.gitignore': '.idea/\nnode_modules/\n.env*\n',
             'CHANGELOG.md': '## [Unreleased]\n',
-            'package.json': `${JSON.stringify({ version: '0.1.0', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' }, null, 4)}\n`,
+            'package.json': `${JSON.stringify({ version: '2.3.4', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' }, null, 4)}\n`,
             'docs/README.md': '# Documentation\n',
             'docs/domain-language.md': '# Domain language\n',
             'plugins/README.md': '# Plugins\n',
@@ -75,7 +75,21 @@ test('repository audit accepts the supported Node range and contributor entry po
             await writeFile(target, source);
         }
         assert.deepEqual(await auditRepository(root), []);
-        const manifest = { version: '0.1.0', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' };
+        for (const host of PLUGIN_HOSTS) {
+            for (const base of [host.inputRoot, host.payloadRoot]) {
+                const file = path.join(root, base, host.manifest);
+                const original = await readFile(file, 'utf8');
+                await writeFile(file, original.replace('0.1.0', '0.2.0'));
+                assert.ok((await auditRepository(root)).some((error) => /version/i.test(error)));
+                await writeFile(file, original);
+            }
+        }
+        const skillFile = path.join(root, 'packaging/shared/skills/debugging-cdp-targets/SKILL.md');
+        const originalSkill = await readFile(skillFile, 'utf8');
+        await writeFile(skillFile, originalSkill.replace('0.1.0', '0.2.0'));
+        assert.ok((await auditRepository(root)).some((error) => /version/i.test(error)));
+        await writeFile(skillFile, originalSkill);
+        const manifest = { version: '2.3.4', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' };
         async function auditManifest(value: unknown) {
             await writeFile(path.join(root, 'package.json'), `${JSON.stringify(value, null, 4)}\n`);
             return auditRepository(root);

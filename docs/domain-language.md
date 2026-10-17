@@ -53,3 +53,24 @@
 - **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.
 - **Host distribution**: complete Plugin payload adapted to one Plugin host's installation interface.
 - **Packaging input**: maintained material used to assemble a host distribution.
+
+## Accepted forward App terms
+
+[ADR 0017](adr/0017-singleton-desktop-app.md) owns the accepted design; these
+terms do not claim that its HTTP/App behavior is delivered. Current terms above
+remain applicable until the corresponding implementation cutover.
+
+- **App**: consciously launched desktop gateway and management UI, one per OS user.
+- **App version**: independent strict SemVer in root package.json.version.
+- **Plugin version**: one strict SemVer owned by shared Skill metadata and matched
+    by both maintained and generated host manifests, independently of App version.
+- **Registration**: bearer ownership of connections and jobs, independent of a
+    chat, socket or MCP session; GUI idle transfer provides lost-token recovery.
+- **Launch snapshot**: immutable successful launch, resolved environment, official
+    configuration and initiating roots used by every scoped restart.
+- **Latest stable plugin record**: future schema-versioned static record naming
+    one stable plugin version, minimumAppVersion and immutable verifiable source
+    for both host payloads. No record/feed is advertised for unreleased 0.1.0.
+- **App scope**: durable commit responsibility for desktop lifecycle, management
+    UI, configuration and OS integration; delivery remains distribution, official
+    transport devtools and connection lifecycle session.

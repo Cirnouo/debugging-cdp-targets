@@ -1,5 +1,11 @@
 # Runtime source
 
+Before implementing the singleton desktop App migration, read
+[ADR 0017](../docs/adr/0017-singleton-desktop-app.md) and the
+[accepted implementation plan](../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+They govern forward implementation; the current stdio gateway and installed Skill
+remain supported until the atomic HTTP/Hook cutover in Task 4.
+
 - `interface/`: MCP bootstrap composition.
 - `application/`: independent target lifecycles and connection registry orchestration.
 - `domains/`: pure launch and CDP identity/port rules.
