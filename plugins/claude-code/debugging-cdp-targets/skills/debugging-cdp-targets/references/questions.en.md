@@ -148,7 +148,7 @@ templates:
         title: End work
         facts: |-
             Application: {application}
-            entryId: {entry_id}
+            registrationId: {registration_id}
             connectionId: {connection_id}
             sessionId: {session_id}
             Established directory cleanup policy: {cleanup_policy}
@@ -159,12 +159,12 @@ templates:
               description: Agent requests normal application shutdown and waits for actual exit; the established directory cleanup policy still applies.
             - value: Keep
               label: "Keep: retain application"
-              description: Retain the live application and current upstream resources for later tasks; this does not recover quarantined tools or change directory cleanup policy.
+              description: Retain the live application and current upstream resources for later tasks; this does not cancel unfinished official execution or change directory cleanup policy.
     live-recovery:
         title: Recovery
         facts: |-
             Application: {application}
-            entryId: {entry_id}
+            registrationId: {registration_id}
             connectionId: {connection_id}
             sessionId: {session_id}
             Error code: {failure_code}
@@ -181,7 +181,7 @@ templates:
         title: Target exit
         facts: |-
             Application: {application}
-            Previous entryId: {entry_id}
+            Previous registrationId: {registration_id}
             Removed connectionId: {connection_id}
             Removed sessionId: {session_id}
             Verified state: actual application exit; old connection and session cannot be reused
@@ -211,7 +211,7 @@ templates:
         title: Tool replacement
         facts: |-
             Application: {application}
-            entryId: {entry_id}
+            registrationId: {registration_id}
             connectionId: {connection_id}
             sessionId: {session_id}
             Required tools: {tool_names}
@@ -228,7 +228,7 @@ templates:
         title: Launch args
         facts: |-
             Application: {application}
-            entryId: {entry_id}
+            registrationId: {registration_id}
             connectionId: {connection_id}
             sessionId: {session_id}
             Current application arguments: {old_args}
@@ -245,7 +245,7 @@ templates:
         title: File picker
         facts: |-
             Application: {application}
-            entryId: {entry_id}
+            registrationId: {registration_id}
             connectionId: {connection_id}
             sessionId: {session_id}
             Existing native file picker: {dialog_label}
@@ -296,7 +296,7 @@ templates:
     cancel-intent:
         title: Cancel scope
         facts: |-
-            entryId: {entry_id}
+            registrationId: {registration_id}
             operationId: {operation_id}
         question: Does User require cancellation of the current wait or of the operation itself?
         options:

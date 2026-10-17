@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { verifyNativeFixtureSeal } from '../../tooling/native-fixture-verification.ts';
 import {
     type ApplicationScreenshotFixture,
     type ApplicationScreenshotFixtureIO,
@@ -15,6 +16,8 @@ import { cancelledPassiveSample } from './screenshot-capture-observer.ts';
 import { assertPixels, closeEvery, readScreenshotGeometry, screenshotSize } from './screenshot-fixture.ts';
 import type { ScreenshotTimeoutRoute, WindowCondition } from './screenshot-timeout-fixture.ts';
 import { assertWindowState, readWindowSample, type WindowIdentity, type WindowSample } from './window-evidence.ts';
+
+export type VerifiedApplicationPayload = Awaited<ReturnType<typeof verifyNativeFixtureSeal>>;
 
 export interface PayloadIO {
     listFiles(root: string): Promise<string[]>;
@@ -46,7 +49,7 @@ export interface ApplicationProbeAdapter {
     record(kind: string, value: unknown): Promise<void>;
     acquire(
         prepared: PreparedApplicationScreenshotFixture,
-        payload: { root: string; inventoryDigest: string },
+        payload: VerifiedApplicationPayload,
     ): Promise<ApplicationProbeRoute>;
     cleanup(): Promise<{ ok: boolean; [key: string]: unknown }>;
 }
@@ -63,7 +66,6 @@ export interface ApplicationProbeResult {
     failures: { kind: string; error: string }[];
     cleanup?: { ok: boolean; [key: string]: unknown };
 }
-const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const absolute = (value: string) => path.isAbsolute(value) || path.win32.isAbsolute(value);
 const samePath = (left: string, right: string) =>
     path.win32.normalize(left).toLowerCase() === path.win32.normalize(right).toLowerCase();
@@ -72,7 +74,8 @@ export const tauriFixtureIdentityFunction =
 const captureErrorOutcome = (error: unknown) =>
     isRecord(error) && typeof error.captureOutcome === 'string'
         ? error.captureOutcome
-        : errorMessage(error).startsWith('MCP timeout:')
+        : (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) ||
+            errorMessage(error).startsWith('MCP timeout:')
           ? 'client-timeout'
           : /target session exited|target session exited or closed/.test(errorMessage(error))
             ? 'session-ended'
@@ -120,61 +123,8 @@ function rendererDataPaths(prepared: PreparedApplicationScreenshotFixture) {
 export async function verifySealedApplicationPayload(
     payload: { root: string; receipt: unknown },
     io: PayloadIO,
-): Promise<{ root: string; inventoryDigest: string }> {
-    assert.ok(absolute(payload.root), 'An explicit absolute sealed payload root is required.');
-    const value = payload.receipt;
-    assert.ok(isRecord(value));
-    assert.equal(value.source, 'eef90b4d974600c3a6697d40dc76e99037466315', 'Unexpected sealed source.');
-    assert.equal(value.subtree, 'plugins/codex/debugging-cdp-targets');
-    assert.ok(typeof value.createdAtUtc === 'string' && Number.isFinite(Date.parse(value.createdAtUtc)));
-    assert.ok(typeof value.archiveSha256 === 'string' && /^[a-f0-9]{64}$/.test(value.archiveSha256));
-    assert.ok(typeof value.inventoryDigest === 'string' && /^[a-f0-9]{64}$/.test(value.inventoryDigest));
-    assert.ok(Array.isArray(value.files) && value.files.length > 0);
-    const files = value.files.map((file: unknown) => {
-        assert.ok(isRecord(file));
-        assert.ok(
-            typeof file.path === 'string' && file.path.length > 0 && !file.path.includes('\\') && !absolute(file.path),
-        );
-        assert.ok(
-            file.path
-                .split('/')
-                .every(
-                    (part) =>
-                        part &&
-                        part !== '.' &&
-                        part !== '..' &&
-                        !/[<>:"|?*\x00-\x1f]/.test(part) &&
-                        !/[. ]$/.test(part),
-                ),
-        );
-        assert.ok(typeof file.bytes === 'number' && Number.isSafeInteger(file.bytes) && file.bytes >= 0);
-        assert.ok(typeof file.sha256 === 'string' && /^[a-f0-9]{64}$/.test(file.sha256));
-        assert.deepEqual(Object.keys(file).sort(), ['bytes', 'path', 'sha256']);
-        return { path: file.path, bytes: file.bytes, sha256: file.sha256 };
-    });
-    assert.equal(new Set(files.map((file) => file.path.toLowerCase())).size, files.length, 'Duplicate inventory path.');
-    assert.deepEqual(
-        files,
-        [...files].sort((a, b) => a.path.localeCompare(b.path, 'en')),
-        'Inventory must retain canonical order.',
-    );
-    assert.equal(hash(JSON.stringify(files)), value.inventoryDigest, 'Sealed inventory digest changed.');
-    assert.ok(
-        files.some((file) => file.path === 'dist/mcp-bootstrap.mjs'),
-        'Sealed bootstrap is missing.',
-    );
-    const observed = await io.listFiles(payload.root);
-    assert.deepEqual(
-        [...observed].sort((a, b) => a.localeCompare(b, 'en')),
-        files.map((file) => file.path),
-        'Complete sealed file inventory changed.',
-    );
-    for (const file of files) {
-        const bytes = await io.readFile(path.join(payload.root, file.path));
-        assert.equal(bytes.length, file.bytes, 'Sealed file size changed.');
-        assert.equal(hash(bytes), file.sha256, 'Sealed file bytes changed.');
-    }
-    return { root: payload.root, inventoryDigest: value.inventoryDigest };
+): Promise<VerifiedApplicationPayload> {
+    return verifyNativeFixtureSeal(payload.root, payload.receipt, io);
 }
 
 export function parseApplicationProbeConfig(
@@ -308,7 +258,7 @@ export async function runApplicationScreenshotProbe(
 ): Promise<ApplicationProbeResult> {
     const failures: ApplicationProbeResult['failures'] = [];
     let config: ApplicationProbeConfig;
-    let payload: { root: string; inventoryDigest: string };
+    let payload: VerifiedApplicationPayload;
     try {
         assert.ok(['baseline', 'candidate'].includes(options.arm));
         assert.ok(['foreground-normal', 'background-normal', 'minimized'].includes(options.condition));
@@ -336,7 +286,6 @@ export async function runApplicationScreenshotProbe(
     let captureRequestError: unknown;
     let cleanup: ApplicationProbeResult['cleanup'];
     let route: ApplicationProbeRoute | undefined;
-    let quarantine = false;
     const fail = async (kind: string, error: unknown) => {
         const failure = { kind, error: errorMessage(error) };
         failures.push(failure);
@@ -351,7 +300,7 @@ export async function runApplicationScreenshotProbe(
         }
     };
     const call = async (name: string, args: Record<string, unknown>, interval?: McpRequestInterval) => {
-        assert.ok(route && !quarantine, 'Quarantined routes cannot receive official requests.');
+        assert.ok(route);
         await adapter.record('official-request', { name, arguments: args });
         let raw: Record<string, unknown>;
         try {
@@ -370,22 +319,11 @@ export async function runApplicationScreenshotProbe(
         // Raw capture persistence precedes observation work, including observer completion.
         if (name === 'take_screenshot') {
             capture = {
-                outcome:
-                    isRecord(raw.structuredContent) && raw.structuredContent.code === 'CONNECTION_RECOVERY_REQUIRED'
-                        ? 'quarantine'
-                        : raw.isError === true
-                          ? 'tool-error'
-                          : 'success',
+                outcome: raw.isError === true ? 'tool-error' : 'success',
                 result: raw,
             };
             await adapter.record('capture-raw', capture);
         } else await adapter.record('official-result', { name, result: raw });
-        if (isRecord(raw.structuredContent) && raw.structuredContent.code === 'CONNECTION_RECOVERY_REQUIRED') {
-            quarantine = true;
-            const error = Object.assign(new Error('Gateway quarantined route.'), { captureOutcome: 'quarantine' });
-            if (name === 'take_screenshot') captureRequestError = error;
-            throw error;
-        }
         if (raw.isError === true) {
             const error = Object.assign(new Error(`Official ${name} returned isError:true.`), {
                 captureOutcome: 'tool-error',
@@ -605,8 +543,7 @@ export async function runApplicationScreenshotProbe(
                     );
                     assertPixels(png.decoded, { ...size, points, color: [0, 255, 0] });
                 });
-            if (!quarantine)
-                await observe('status-after', async () => adapter.record('status-after', await active.status()));
+            await observe('status-after', async () => adapter.record('status-after', await active.status()));
             await observe('native-after', async () =>
                 adapter.record('native-after', validate(await active.sample(selected.handle))),
             );
@@ -683,7 +620,7 @@ export async function cleanupApplicationResources<T>(io: {
             exit = await io.shutdown();
             assert.ok(
                 isRecord(exit) && exit.code === 0 && exit.signal === null,
-                'Gateway actual stdio exit was not zero.',
+                'HTTP fixture normal cleanup/exit was not zero.',
             );
         } catch (error) {
             failures.push(errorMessage(error));

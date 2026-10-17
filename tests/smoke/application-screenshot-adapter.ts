@@ -44,7 +44,10 @@ export interface ApplicationAdapterClient {
 export interface ApplicationAdapterIO {
     environment: Record<string, string | undefined>;
     now(): number;
-    client(entry: string, options: { cwd: string; env: Record<string, string> }): ApplicationAdapterClient;
+    client(
+        entry: string,
+        options: { cwd: string; env: Record<string, string>; nodeExecutable: string },
+    ): ApplicationAdapterClient;
     snapshot(pid: number, port: number): Promise<ProcessEvidence>;
     endpoint(port: number): Promise<unknown>;
     powershell(
@@ -130,7 +133,6 @@ export function createApplicationScreenshotAdapter(
     io = nativeIO(),
 ): ApplicationProbeAdapter {
     let client: ApplicationAdapterClient | undefined;
-    let entryId = '';
     let identity: ProcessTarget | undefined;
     let launchedAt = 0;
     let startAttempted = false;
@@ -160,7 +162,6 @@ export function createApplicationScreenshotAdapter(
             if (isRecord(raw.operation.result)) retain(raw.operation.result);
             if (typeof raw.operation.connectionId === 'string' && typeof raw.operation.sessionId === 'string') {
                 retain({
-                    entryId: raw.operation.entryId ?? entryId,
                     connectionId: raw.operation.connectionId,
                     sessionId: raw.operation.sessionId,
                     status: 'starting',
@@ -168,8 +169,7 @@ export function createApplicationScreenshotAdapter(
                 });
             }
         }
-        if (typeof raw.connectionId !== 'string' || typeof raw.entryId !== 'string' || typeof raw.status !== 'string')
-            return;
+        if (typeof raw.connectionId !== 'string' || typeof raw.status !== 'string') return;
         const connection = readConnection(raw);
         if (!connection.sessionId && !connection.processId) return;
         const key = `${connection.connectionId}/${connection.sessionId ?? 'unavailable'}`;
@@ -231,14 +231,12 @@ export function createApplicationScreenshotAdapter(
                         action: 'cancel existing operation; no authorization or readiness continuation',
                     });
                     try {
-                        const cancelled = (
-                            await tool('dct_operation_cancel', { entryId, operationId: operation.operationId })
-                        ).structuredContent;
+                        const cancelled = (await tool('dct_operation_cancel', { operationId: operation.operationId }))
+                            .structuredContent;
                         assert.ok(isRecord(cancelled));
                         if (!['succeeded', 'failed', 'cancelled'].includes(String(cancelled.state))) {
                             const settlement = (
                                 await tool('dct_operation_wait', {
-                                    entryId,
                                     operationId: operation.operationId,
                                     cursor: typeof cancelled.cursor === 'number' ? cancelled.cursor : 0,
                                 })
@@ -428,7 +426,7 @@ export function createApplicationScreenshotAdapter(
                 'Selected Readest candidate is blocked before acquisition.',
             );
             const env = applicationScreenshotGatewayEnvironment(io.environment);
-            client = io.client(path.join(payload.root, 'dist/mcp-bootstrap.mjs'), { cwd: prepared.directory, env });
+            client = io.client(payload.entry, { cwd: prepared.directory, env, nodeExecutable: payload.nodeExecutable });
             await record('gateway-process', { pid: client.child.pid, entry: client.child.spawnargs, payload });
             const initialization = {
                 protocolVersion: '2024-11-05',
@@ -439,7 +437,7 @@ export function createApplicationScreenshotAdapter(
             await record('mcp-initialize-result', await client.request('initialize', initialization));
             client.notify('notifications/initialized');
             const initial = readStatus((await lifecycleTool('dct_connection_status')).structuredContent);
-            entryId = initial.entryId;
+
             assert.ok(
                 'connections' in initial && initial.connections.length === 0,
                 'Fresh gateway has existing connections.',
@@ -451,7 +449,6 @@ export function createApplicationScreenshotAdapter(
             const connection = await control({
                 isolation: { mode: 'none' },
                 action: 'start',
-                entryId,
                 requestId: randomUUID(),
                 targetKind: 'generic-cdp',
                 launch: prepared.launch,
@@ -468,7 +465,6 @@ export function createApplicationScreenshotAdapter(
             const names = ['list_pages', 'evaluate_script', 'take_screenshot'];
             const schemas = (
                 await lifecycleTool('dct_connection_status', {
-                    entryId,
                     connectionId: connection.connectionId,
                     toolNames: names,
                 })
@@ -483,7 +479,7 @@ export function createApplicationScreenshotAdapter(
                     'Missing selected official tool schema.',
                 );
             const routing = { connectionId: connection.connectionId, sessionId: connection.sessionId };
-            await record('routing', { entryId, ...routing });
+            await record('routing', { ...routing });
             const selectedIdentity = identity;
             return {
                 identity,
@@ -561,7 +557,6 @@ export function createApplicationScreenshotAdapter(
                 call: (name, args, interval) => tool(name, { ...args, _dct: routing }, interval),
                 status: () =>
                     lifecycleTool('dct_connection_status', {
-                        entryId,
                         connectionId: connection.connectionId,
                         include: ['diagnostics'],
                     }),
@@ -608,10 +603,7 @@ export function createApplicationScreenshotAdapter(
             }
             const discoveryFailures: string[] = [...cancellationFailures];
             try {
-                const status = readStatus(
-                    (await lifecycleTool('dct_connection_status', entryId ? { entryId } : {})).structuredContent,
-                );
-                entryId = status.entryId;
+                const status = readStatus((await lifecycleTool('dct_connection_status', {})).structuredContent);
                 assert.ok('connections' in status);
                 for (const connection of status.connections) retain(connection);
             } catch (error) {
@@ -647,7 +639,6 @@ export function createApplicationScreenshotAdapter(
                     assert.ok(resource.connection.sessionId);
                     const receipt = await closeSmokeConnection(control, {
                         action: 'stop',
-                        entryId,
                         connectionId: resource.connection.connectionId,
                         sessionId: resource.connection.sessionId,
                         requestId: randomUUID(),
@@ -698,9 +689,7 @@ export function createApplicationScreenshotAdapter(
                 },
                 anchor: () => anchor.cleanup(),
                 async final() {
-                    const final = readStatus(
-                        (await lifecycleTool('dct_connection_status', { entryId })).structuredContent,
-                    );
+                    const final = readStatus((await lifecycleTool('dct_connection_status', {})).structuredContent);
                     await record('final-status', final);
                     if (discoveryFailures.length > 0) throw new Error(discoveryFailures.join('; '));
                     return final;
@@ -719,8 +708,7 @@ export function createApplicationScreenshotAdapter(
                     retained: {
                         gateway: {
                             pid: client.child.pid,
-                            entryId,
-                            stdioOpen: client.child.exitCode === null && client.child.signalCode === null,
+                            fixtureInputOpen: client.child.exitCode === null && client.child.signalCode === null,
                         },
                         connections: resources.map((resource) => resource.connection),
                         processes: [

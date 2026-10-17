@@ -4,10 +4,10 @@ Version 0.1.0 is under development and has not been released.
 
 ## Requirements
 
-- Codex with Plugin support, or Claude Code 2.1.283 or newer, and stable Node
-    >=24.21.0 <25 available on PATH. The Plugin includes the complete official
-    `chrome-devtools-mcp@1.11.0` release; creating connections needs no npm/npx,
-    pnpm, or dependency download.
+- Codex with Plugin support or Claude Code with native HTTP MCP support, plus
+    the separately running App. The App includes verified ordinary Node and the
+    complete original `chrome-devtools-mcp@1.11.0`; thin Plugins need no runtime
+    dependency installation. See [current build/platform limits](../app-runtime.md#building-and-evidence).
 - Internet access to obtain or update the Plugin. The installed Server can
     initialize its tool catalog offline; browser tools and visited pages may
     require network access.
@@ -29,7 +29,7 @@ target debugging endpoint must listen on loopback only. See
 [configuration](configuration.md) for launch settings and
 [privacy](privacy.md) for the security boundary.
 
-Node 24.21.0 is the exact CI and problem-reproduction baseline. Existing
+For contributors, Node 24.21.0 is the exact CI and problem-reproduction baseline. Existing
 stable Node 24 installations at or above that floor are supported; newer major
 versions and prereleases are outside the supported range. Contributors use
 exact pnpm 12.4.2; installed Plugin users do not need pnpm. See
@@ -67,13 +67,18 @@ effective-root/policy/environment and runtime enforcement limits.
 
 ## Plugin host acceptance
 
+The records below describe the dated stdio/Hook architecture and presentation
+checks before the HTTP cutover. They do not establish current HTTP execution,
+new App GUI or installer acceptance. Current HTTP contracts and evidence limits
+are owned by [host metadata](../host-metadata.md#direct-http-cutover).
+
 Actual Plugin installation, tool discovery and model-context Hooks were accepted
 on Windows on 2026-10-05 with Codex CLI 0.160.0 and Claude Code 2.1.283. Claude
 Code 2.1.283 is the first supported and accepted baseline. These explicit host
 smokes use disposable configuration and loopback model fixtures; see
 [the smoke instructions](../../tests/smoke/README.md) for commands and boundaries.
-Each host receives a complete independent payload from the same maintained
-runtime, Skill and verified official Server release.
+Those historical payloads each included runtime and the official release.
+Current payloads are thin and share the separately running App.
 
 The metadata follow-up on 2026-10-08 passed both Marketplace smokes and all eight
 Hook/Skill scenarios per host with actual Codex CLI 0.161.0 and Claude Code

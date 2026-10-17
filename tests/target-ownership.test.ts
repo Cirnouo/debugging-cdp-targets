@@ -310,7 +310,6 @@ test('actual exit before rollback remains unexpected and does not acquire a roll
     assert.equal(events.length, 1);
     assert.equal(events[0]?.expected, undefined);
     assert.equal(events[0]?.operationId, undefined);
-    assert.equal(events[0]?.taskActive, true);
     assert.deepEqual(f.closed, []);
     assert.equal(controller.status().status, 'idle');
 });
@@ -324,14 +323,12 @@ for (const failureAt of ['host-readiness', 'controller-routing'] as const) {
         const { controller, events } = controllerFixture(f, failureAt === 'controller-routing');
         await assert.rejects(controller.start(launch, sessionId, { operationId }));
         assert.equal(controller.status().status, 'close-failed');
-        assert.equal(controller.status().taskActive, false);
         assert.equal(reservations.claim(9222), undefined);
         assert.equal(events.length, 0);
         confirmExit(f);
         assert.equal(events.length, 1);
         assert.equal(events[0]?.expected, undefined);
         assert.equal(events[0]?.operationId, undefined);
-        assert.equal(events[0]?.taskActive, false);
         await controller.retireExited({ sessionId });
         assert.equal(controller.status().status, 'idle');
         const release = reservations.claim(9222);

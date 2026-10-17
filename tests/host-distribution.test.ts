@@ -4,25 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { buildServerArguments } from '../src/adapters/official-server.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import {
-    assembleClaudeCodePayload,
-    generateHostPayloads,
-    generateRuntimeFiles,
-    syncPluginFiles,
-} from '../tooling/build-plugin.ts';
+import { assembleClaudeCodePayload, generateHostPayloads, syncPluginFiles } from '../tooling/build-plugin.ts';
 import {
     auditDistribution,
     readDistributionTree,
-    validateHooks,
     validateHostManifest,
     validateMarketplace,
     validateMcpEntries,
 } from '../tooling/distribution-audit.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS } from '../tooling/host-policy.ts';
 import { requiredPayloadFiles, validatePayloadFileInventory } from '../tooling/payload-policy.ts';
-import { createClient, createStdioClient, readMcpTools } from './smoke/mcp-client.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
@@ -110,19 +102,16 @@ test('host metadata rejects wrong argv, discovery fields, hooks and marketplace 
             JSON.parse(await readFile(path.join(root, host.inputRoot, file), 'utf8'));
         const manifest = await read(host.manifest);
         const mcp = await read(host.mcp);
-        const hooks = await read(host.hooks);
         const marketplace: unknown = JSON.parse(await readFile(path.join(root, host.marketplace), 'utf8'));
         assert.deepEqual(validateHostManifest(manifest, host), []);
         assert.deepEqual(validateMcpEntries(mcp, host), []);
-        assert.deepEqual(validateHooks(hooks, host), []);
         assert.deepEqual(validateMarketplace(marketplace, host), []);
         const other = host === CODEX_HOST ? CLAUDE_CODE_HOST : CODEX_HOST;
         assert.ok(validateHostManifest(manifest, other).length);
         assert.ok(validateMcpEntries(mcp, other).length);
-        assert.ok(validateHooks(hooks, other).length);
         assert.ok(validateMarketplace(marketplace, other).length);
-        for (const invalid of [null, [], {}, { hooks: {} }, { hooks: { Stop: [] } }])
-            assert.ok(validateHooks(invalid, host).length);
+        assert.ok(isRecord(manifest));
+        assert.ok(validateHostManifest({ ...manifest, hooks: './hooks/hooks.json' }, host).length);
         for (const invalid of [
             null,
             [],
@@ -334,13 +323,12 @@ test('Claude assembly rejects competing, missing, linked and escaped inputs with
         await cp(path.join(root, 'packaging'), path.join(fixture, 'packaging'), { recursive: true });
         await cp(path.join(root, 'LICENSE'), path.join(fixture, 'LICENSE'));
         await cp(path.join(root, 'package.json'), path.join(fixture, 'package.json'));
-        const runtime = await generateRuntimeFiles();
-        const payload = await assembleClaudeCodePayload(runtime, fixture);
+        const payload = await assembleClaudeCodePayload(fixture);
         for (const file of ['LICENSE', 'dist/README.md', 'skills/competing/SKILL.md']) {
             const competing = path.join(fixture, CLAUDE_CODE_HOST.inputRoot, file);
             await mkdir(path.dirname(competing), { recursive: true });
             await writeFile(competing, 'competing');
-            await assert.rejects(assembleClaudeCodePayload(runtime, fixture), /Unexpected packaging input/);
+            await assert.rejects(assembleClaudeCodePayload(fixture), /Unexpected packaging input/);
             await rm(
                 file.includes('/')
                     ? path.join(fixture, CLAUDE_CODE_HOST.inputRoot, file.split('/')[0] ?? '')
@@ -350,9 +338,9 @@ test('Claude assembly rejects competing, missing, linked and escaped inputs with
         }
         const manifest = path.join(fixture, CLAUDE_CODE_HOST.inputRoot, CLAUDE_CODE_HOST.manifest);
         await rm(manifest);
-        await assert.rejects(assembleClaudeCodePayload(runtime, fixture), /Missing packaging input/);
+        await assert.rejects(assembleClaudeCodePayload(fixture), /Missing packaging input/);
         await symlink(path.join(root, CLAUDE_CODE_HOST.inputRoot, CLAUDE_CODE_HOST.manifest), manifest);
-        await assert.rejects(assembleClaudeCodePayload(runtime, fixture), /symlink|linked/);
+        await assert.rejects(assembleClaudeCodePayload(fixture), /symlink|linked/);
         await rm(manifest);
         await cp(path.join(root, CLAUDE_CODE_HOST.inputRoot, CLAUDE_CODE_HOST.manifest), manifest);
         const manifestBytes = await readFile(manifest);
@@ -361,14 +349,9 @@ test('Claude assembly rejects competing, missing, linked and escaped inputs with
         await writeFile(manifest, manifestBytes);
         const mcp = path.join(fixture, CLAUDE_CODE_HOST.inputRoot, CLAUDE_CODE_HOST.mcp);
         const mcpBytes = await readFile(mcp);
-        await writeFile(mcp, mcpBytes.toString().replace(`\${CLAUDE_PLUGIN_ROOT}/`, '../'));
-        await assert.rejects(assembleClaudeCodePayload(runtime, fixture), /gateway|MCP/);
+        await writeFile(mcp, mcpBytes.toString().replace('127.0.0.1', 'localhost'));
+        await assert.rejects(assembleClaudeCodePayload(fixture), /HTTP|MCP/);
         await writeFile(mcp, mcpBytes);
-        runtime.set('README.md', Buffer.from('competing'));
-        await assert.rejects(assembleClaudeCodePayload(runtime, fixture), /Duplicate packaging path/);
-        runtime.delete('README.md');
-        runtime.set('../escape', Buffer.from('escape'));
-        await assert.rejects(assembleClaudeCodePayload(runtime, fixture), /Unexpected|Unsafe/);
         const destination = path.join(fixture, 'output');
         await mkdir(destination);
         await syncPluginFiles(payload, destination);
@@ -393,7 +376,7 @@ test('distribution audit rejects either peer metadata, license or official resou
             await cp(path.join(root, file), path.join(fixture, file), { recursive: true });
         assert.deepEqual(await auditDistribution(fixture), []);
         for (const host of PLUGIN_HOSTS) {
-            for (const file of [host.manifest, 'LICENSE', 'dist/official-server/README.md']) {
+            for (const file of [host.manifest, 'LICENSE', host.mcp]) {
                 const target = path.join(fixture, host.payloadRoot, file);
                 const original = await readFile(target);
                 await writeFile(
@@ -439,88 +422,21 @@ test('physical inventory rejects linked roots and linked parent directories', as
     }
 });
 
-test('each copied peer initializes official and gateway catalogs from arbitrary cwd without repository dependencies', async () => {
-    const fixture = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-peer-protocol-')));
+test('copied thin peer payloads retain direct HTTP metadata without runnable payloads or cwd coupling', async () => {
+    const fixture = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-thin-peer-')));
     try {
-        const home = path.join(fixture, 'home');
-        const cwd = path.join(fixture, 'unrelated');
-        await mkdir(home);
-        await mkdir(cwd);
-        const environment = {
-            ...process.env,
-            PATH: '',
-            NODE_PATH: '',
-            NODE_OPTIONS: '',
-            HOME: home,
-            USERPROFILE: home,
-            LOCALAPPDATA: home,
-            APPDATA: home,
-            XDG_CONFIG_HOME: home,
-            XDG_CACHE_HOME: home,
-            TEMP: home,
-            TMP: home,
-            DCT_EXTENSIONS: 'true',
-            DCT_USAGE_STATISTICS: 'false',
-            DCT_PERFORMANCE_CRUX: 'false',
-        };
         for (const host of PLUGIN_HOSTS) {
             const plugin = path.join(fixture, host.id);
             await cp(path.join(root, host.payloadRoot), plugin, { recursive: true });
-            const official = createStdioClient(
-                process.execPath,
-                [
-                    path.join(plugin, 'dist/official-server/build/src/bin/chrome-devtools-mcp.js'),
-                    ...buildServerArguments('http://127.0.0.1:1', environment),
-                ],
-                { cwd, env: { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1' } },
+            const files = await readDistributionTree(plugin);
+            assert.deepEqual(validatePayloadFileInventory([...files.keys()], host), []);
+            assert.equal(
+                [...files.keys()].some((file) => /^(?:dist|hooks|node_modules)\//.test(file)),
+                false,
             );
-            const gateway = createClient(path.join(plugin, 'dist/mcp-bootstrap.mjs'), { cwd, env: environment });
-            try {
-                for (const client of [official, gateway]) {
-                    await client.request('initialize', {
-                        protocolVersion: '2024-11-05',
-                        capabilities: {},
-                        clientInfo: { name: 'peer-distribution-test', version: '0.1.0' },
-                    });
-                    client.notify('notifications/initialized');
-                }
-                const officialNames = readMcpTools(await official.request('tools/list')).map((tool) => tool.name);
-                const gatewayNames = readMcpTools(await gateway.request('tools/list')).map((tool) => tool.name);
-                const lifecycle = [
-                    'dct_connection_status',
-                    'dct_connection_start',
-                    'dct_connection_restart',
-                    'dct_connection_stop',
-                    'dct_connection_end_task',
-                    'dct_operation_wait',
-                    'dct_operation_cancel',
-                ];
-                assert.deepEqual(gatewayNames.filter((name) => name.startsWith('dct_')).sort(), lifecycle.sort());
-                assert.ok(officialNames.includes('list_pages') && officialNames.includes('evaluate_script'));
-                for (const name of officialNames) assert.ok(gatewayNames.includes(name), name);
-                const catalog: unknown = JSON.parse(
-                    await readFile(path.join(root, 'tooling/official-tool-catalog.json'), 'utf8'),
-                );
-                assert.ok(isRecord(catalog) && Array.isArray(catalog.tools));
-                const reviewedNames = catalog.tools.map((tool: unknown) => {
-                    assert.ok(isRecord(tool) && typeof tool.name === 'string');
-                    return tool.name;
-                });
-                assert.deepEqual(gatewayNames.filter((name) => !name.startsWith('dct_')).sort(), reviewedNames.sort());
-                const status = await gateway.request('tools/call', { name: 'dct_connection_status', arguments: {} });
-                assert.ok(isRecord(status) && isRecord(status.structuredContent));
-                assert.deepEqual(status.structuredContent.connections, []);
-                await assert.rejects(gateway.request('tools/call', { name: 'list_pages', arguments: {} }), /routing/);
-            } finally {
-                await gateway.close();
-                await official.close();
-                assert.equal(gateway.child.exitCode, 0);
-                assert.equal(gateway.child.signalCode, null);
-                assert.equal(official.child.exitCode, 0);
-                assert.equal(official.child.signalCode, null);
-            }
+            assert.deepEqual(validateMcpEntries(JSON.parse(files.get(host.mcp)?.toString() ?? 'null'), host), []);
         }
     } finally {
-        await rm(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+        await rm(fixture, { recursive: true, force: true });
     }
 });

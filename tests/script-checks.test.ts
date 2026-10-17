@@ -33,16 +33,16 @@ test('also parses PowerShell with Windows PowerShell 5.1 on Windows', () => {
 
 test('TypeScript uses a parser step rather than unsupported node --check', () => {
     const plan = buildScriptCheckPlan({
-        files: ['src/interface/mcp-bootstrap.ts', 'plugins/example/dist/mcp-bootstrap.mjs'],
+        files: ['src/interface/app-bootstrap.ts', 'generated/app-main.mjs'],
         platform: 'linux',
     });
     assert.deepEqual(
         plan.filter((step) => step.kind === 'typescript').map((step) => step.file),
-        ['src/interface/mcp-bootstrap.ts'],
+        ['src/interface/app-bootstrap.ts'],
     );
     assert.deepEqual(
         plan.filter((step) => step.kind === 'node').map((step) => step.file),
-        ['plugins/example/dist/mcp-bootstrap.mjs'],
+        ['generated/app-main.mjs'],
     );
 });
 

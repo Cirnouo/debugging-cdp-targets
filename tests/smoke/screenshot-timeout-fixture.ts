@@ -38,7 +38,7 @@ export interface ScreenshotTimeoutAdapter {
     cleanup(): Promise<unknown>;
     record(kind: string, value: unknown): Promise<void>;
 }
-type Outcome = 'success' | 'tool-error' | 'recovery-required' | 'client-error' | 'blocked-evidence';
+type Outcome = 'success' | 'tool-error' | 'client-error' | 'blocked-evidence';
 const environmentToken = /%[A-Za-z_][A-Za-z\d_]*%|\$\{[A-Za-z_][A-Za-z\d_]*\}/;
 // Chromium 154 base/strings/whitespace_constants.h: Windows outer whitespace, including NEL, excluding FEFF.
 const windowsOuterWhitespace =
@@ -236,10 +236,6 @@ export async function runScreenshotTimeoutProbe(value: unknown, filePath: string
         const result = await route.call(name, args, interval);
         if (name === 'take_screenshot') captureResult = result;
         await adapter.record('official-result', { name, result });
-        if (isRecord(result.structuredContent) && result.structuredContent.code === 'CONNECTION_RECOVERY_REQUIRED') {
-            outcome = 'recovery-required';
-            throw new Error('Gateway requires explicit recovery.');
-        }
         if (result.isError === true) {
             outcome = 'tool-error';
             throw new Error(`Official ${name} returned isError:true.`);

@@ -35,7 +35,7 @@ export type TargetEvent = {
     sessionId: string;
     generation?: string;
     reason: 'process-exited';
-    taskActive: boolean;
+
     expected?: ConnectionOwner['expectedExit'];
     operationId?: string;
     processId: number;
@@ -100,16 +100,15 @@ export function createTargetController({
     let current: Current | undefined;
     let state: TargetStatus['status'] = 'idle';
     let reason: string | undefined;
-    let taskActive = false;
+
     let gated = true;
     let changing = false;
     let checking: { owner: ConnectionOwner; job: Promise<void> } | undefined;
     function status(): TargetStatus {
         const target = current?.owner.target;
         return {
-            entryId,
             status: state,
-            taskActive,
+
             ...(current ? { sessionId: current.sessionId } : {}),
             ...(target ? { port: target.port, processId: target.processId, targetKind: target.targetKind } : {}),
             ...(reason ? { reason } : {}),
@@ -147,7 +146,7 @@ export function createTargetController({
             sessionId: selected.sessionId,
             generation: selected.owner.sessionId,
             reason: 'process-exited',
-            taskActive,
+
             ...(selected.owner.expectedExit ? { expected: selected.owner.expectedExit } : {}),
             ...(selected.owner.expectedExit && selected.owner.expectedOperationId
                 ? { operationId: selected.owner.expectedOperationId }
@@ -274,7 +273,7 @@ export function createTargetController({
             }
             if (current === selected) {
                 current = undefined;
-                taskActive = false;
+
                 state = 'idle';
                 reason = undefined;
             }
@@ -288,7 +287,7 @@ export function createTargetController({
         current = selected;
         state = 'starting';
         reason = undefined;
-        taskActive = true;
+
         const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
         try {
             const target = await owner.track(
@@ -320,7 +319,7 @@ export function createTargetController({
                 if (!owner.exited) {
                     owner.expectedExit = undefined;
                     state = 'close-failed';
-                    taskActive = false;
+
                     reason = 'target-rollback-failed';
                     gate();
                     throw error;
@@ -334,7 +333,7 @@ export function createTargetController({
                     emitFixtureEvent('target-close', 'decision', { outcome: 'failed' }, closeError);
                     owner.expectedExit = undefined;
                     state = 'close-failed';
-                    taskActive = false;
+
                     reason = 'target-rollback-failed';
                     gate();
                     const failure = failedClose(selected, closeError);
@@ -433,7 +432,6 @@ export function createTargetController({
             if (state === 'close-failed' && disposition !== 'Close')
                 throw new Error('The retained target requires Close retry.');
             if (disposition === 'Keep') {
-                taskActive = false;
                 return { ...status(), disposition };
             }
             if (disposition !== 'Close') throw new Error('Choose Close or Keep.');
@@ -455,20 +453,8 @@ export function createTargetController({
             }
             context.onPhase?.('closing-resources');
             await dispose(selected);
-            return { ...previous, status: 'idle' as const, taskActive: false, disposition, pageIdsInvalidated: true };
+            return { ...previous, status: 'idle' as const, disposition, pageIdsInvalidated: true };
         });
-    }
-    function endTask({ sessionId }: { sessionId: string }) {
-        return run(async () => {
-            requireSession(sessionId);
-            if (state === 'close-failed') throw new Error('The retained target requires Close retry.');
-            taskActive = false;
-            return status();
-        });
-    }
-    function beginTask({ sessionId }: { sessionId: string }) {
-        requireSession(sessionId);
-        if (state === 'active' || state === 'lost') taskActive = true;
     }
     async function checkHealth() {
         const selected = current;
@@ -498,7 +484,7 @@ export function createTargetController({
     async function cleanupOnDisconnect(expected: 'disconnect' | 'rollback' = 'disconnect') {
         const selected = current;
         gate();
-        taskActive = false;
+
         if (!selected) return;
         selected.owner.expectedExit = expected;
         selected.owner.abortWork(new Error('The gateway is closing.'));
@@ -524,8 +510,6 @@ export function createTargetController({
         start,
         restart,
         stop,
-        endTask,
-        beginTask,
         retireExited,
         checkHealth,
         cleanupOnDisconnect,

@@ -5,12 +5,15 @@ import { EventEmitter } from 'node:events';
 import { writeFileSync } from 'node:fs';
 import * as filesystem from 'node:fs/promises';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { registerHooks } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
+import { ProtocolError, ProtocolErrorCode, Server } from '@modelcontextprotocol/server';
 import { isRecord } from '../src/shared/errors.ts';
 import { fixtureJobIndex } from './smoke/fixture-ci.ts';
 
@@ -22,7 +25,9 @@ function installStudyBoundary() {
     assert.ok(traceFile);
     process.on('exit', () => writeFileSync(traceFile, JSON.stringify(trace)));
     Object.defineProperty(process, 'platform', { value: process.env.STUDY_PLATFORM ?? 'linux' });
-    const entryId = '11111111-1111-4111-8111-111111111111';
+    const registrationId = '11111111-1111-4111-8111-111111111111';
+    const registrationBearer = 'controlled-study-registration-bearer-00000001';
+    let gatewayUrl: string | undefined;
     let target: Record<string, unknown> | undefined;
     let directory: string | undefined;
     let launchCount = 0;
@@ -61,15 +66,28 @@ function installStudyBoundary() {
         },
     };
     function reply(request: Record<string, unknown>) {
-        note('request', { method: request.method, ...(isRecord(request.params) ? request.params : {}) });
-        if (request.method === 'initialize') return { serverInfo: { name: 'boundary-gateway', version: '0.1.0' } };
-        if (request.method === 'tools/list')
-            return { tools: ['list_pages', 'get_css_styles', 'list_extensions'].map((name) => ({ name })) };
-        if (request.method !== 'tools/call') return {};
         assert.ok(isRecord(request.params));
         const { name, arguments: args } = request.params;
         assert.ok(isRecord(args));
-        const text = (text: string) => ({ content: [{ type: 'text', text }] });
+        const { registrationBearer: supplied, _dct, ...publicArgs } = args;
+        const routed = isRecord(_dct) ? _dct : undefined;
+        const { registrationBearer: routedBearer, ...publicRoute } = routed ?? {};
+        const authenticated =
+            name === 'dct_registration_register' ||
+            supplied === registrationBearer ||
+            routedBearer === registrationBearer;
+        note('request', {
+            method: request.method,
+            name,
+            arguments: { ...publicArgs, ...(routed ? { _dct: publicRoute } : {}) },
+            registrationAuthenticated: authenticated,
+        });
+        if (name === 'dct_registration_register') {
+            assert.deepEqual(args, {});
+            return { structuredContent: { registrationId, registrationBearer } };
+        }
+        if (!authenticated) throw new Error('Explicit registration routing is required.');
+        const text = (text: string) => ({ content: [{ type: 'text' as const, text }] });
         if (name === 'dct_connection_status') {
             if (args.include)
                 return {
@@ -77,14 +95,13 @@ function installStudyBoundary() {
                         isolation: { mode: 'data-dir', path: directory, state: 'held', cleanup: 'delete-on-release' },
                     },
                 };
-            return { structuredContent: { entryId, connections: target ? [target] : [] } };
+            return { structuredContent: { connections: target ? [target] : [] } };
         }
         if (name === 'dct_connection_start') {
             launchCount++;
             assert.ok(isRecord(args.isolation) && isRecord(args.isolation.directory));
             directory = `/synthetic/smoke/${args.isolation.directory.name}`;
             target = {
-                entryId,
                 connectionId: `22222222-2222-4222-8222-${String(launchCount).padStart(12, '0')}`,
                 sessionId: `33333333-3333-4333-8333-${String(launchCount).padStart(12, '0')}`,
                 status: 'active',
@@ -119,43 +136,78 @@ function installStudyBoundary() {
         if (name === 'list_extensions') return text('[]');
         throw new Error(`Unexpected tool ${name}`);
     }
-    function spawn(executable: string, args: string[], options: unknown) {
-        note('spawn', { executable, args, options });
+    function spawn(executable: string, args: string[], _options: unknown) {
+        note('spawn', { executable, args });
+        const server = new Server({ name: 'boundary-http-fixture', version: '0.1.0' }, { capabilities: { tools: {} } });
+        const transport = new NodeStreamableHTTPServerTransport({ sessionIdGenerator: () => registrationId });
+        const connected = server.connect(transport);
+        server.setRequestHandler('tools/list', async () => {
+            note('request', { method: 'tools/list' });
+            return {
+                tools: ['list_pages', 'get_css_styles', 'list_extensions'].map((name) => ({
+                    name,
+                    inputSchema: { type: 'object' as const },
+                })),
+            };
+        });
+        server.setRequestHandler('tools/call', async (request) => {
+            try {
+                return { content: [], ...reply({ method: 'tools/call', params: request.params }) };
+            } catch (error) {
+                assert.ok(error instanceof Error);
+                throw new ProtocolError(ProtocolErrorCode.InvalidParams, error.message);
+            }
+        });
+        server.oninitialized = () => note('notify', 'notifications/initialized');
+        const listener = createServer((request, response) => {
+            void (async () => {
+                let body: unknown;
+                if (request.method === 'POST') {
+                    const chunks: Buffer[] = [];
+                    for await (const chunk of request) chunks.push(Buffer.from(chunk));
+                    body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+                    if (isRecord(body) && body.method === 'initialize') note('request', { method: 'initialize' });
+                }
+                await connected;
+                await transport.handleRequest(request, response, body);
+            })().catch((error) => {
+                response.writeHead(500).end();
+                note('http-failure', error instanceof Error ? error.name : 'unknown');
+            });
+        });
         const child = Object.assign(new EventEmitter(), {
             exitCode: null as number | null,
             signalCode: null,
             stdout: new PassThrough(),
             stderr: new PassThrough(),
             stdin: new Writable({
-                write(chunk, _encoding, done) {
-                    const request: unknown = JSON.parse(String(chunk));
-                    assert.ok(isRecord(request));
-                    if (request.id !== undefined) {
-                        let response: Record<string, unknown>;
-                        try {
-                            response = { result: reply(request) };
-                        } catch (error) {
-                            assert.ok(error instanceof Error);
-                            response = { error: { code: -32000, message: error.message } };
-                        }
-                        queueMicrotask(() =>
-                            child.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response })}\n`),
-                        );
-                    } else note('notify', request.method);
-                    done();
+                write(_chunk, _encoding, done) {
+                    done(new Error('HTTP fixture stdin only accepts EOF.'));
                 },
                 final(done) {
-                    const code = failure === 'gateway-exit' ? 7 : 0;
-                    note('gateway-exit', code);
-                    child.exitCode = code;
-                    child.stdout.end();
-                    queueMicrotask(() => {
+                    void (async () => {
+                        await connected;
+                        await server.close();
+                        await new Promise<void>((resolve, reject) =>
+                            listener.close((error) => (error ? reject(error) : resolve())),
+                        );
+                        const code = failure === 'gateway-exit' ? 7 : 0;
+                        note('gateway-exit', code);
+                        child.exitCode = code;
+                        child.stdout.end();
                         child.emit('exit', code);
                         child.emit('close', code);
-                    });
-                    done();
+                        done();
+                    })().catch(done);
                 },
             }),
+        });
+        listener.listen(0, '127.0.0.1', () => {
+            const address = listener.address();
+            assert.ok(address && typeof address !== 'string');
+            gatewayUrl = `http://127.0.0.1:${address.port}/mcp`;
+            note('http-readiness');
+            child.stdout.write(`${JSON.stringify({ fixture: 'http-gateway', url: gatewayUrl })}\n`);
         });
         return child;
     }
@@ -194,8 +246,12 @@ function installStudyBoundary() {
             },
         },
     });
-    globalThis.fetch = async (url) => {
-        note('endpoint', url);
+    const actualFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        const address = url instanceof Request ? url.url : String(url);
+        if (gatewayUrl && address === gatewayUrl) return actualFetch(url, init);
+        assert.equal(address, 'http://127.0.0.1:19222/json/version');
+        note('endpoint', address);
         return new Response(
             JSON.stringify({
                 Browser: failure === 'version' ? 'Chrome/148.0.0.0' : 'Chrome/154.0.8037.93',
@@ -402,6 +458,7 @@ if (process.env.STUDY_TRACE) {
                 [
                     'initialize',
                     'tools/list',
+                    'dct_registration_register',
                     'dct_connection_status',
                     'dct_connection_status',
                     'list_pages',
@@ -417,7 +474,9 @@ if (process.env.STUDY_TRACE) {
             const stopped = calls(result, 'dct_connection_stop')[0]?.detail;
             assert.ok(isRecord(stopped) && isRecord(stopped.arguments));
             assert.equal(stopped.arguments.disposition, 'Close');
-            assert.equal(stopped.arguments.entryId, '11111111-1111-4111-8111-111111111111');
+            assert.equal(stopped.registrationAuthenticated, true);
+            assert.equal(Object.hasOwn(stopped.arguments, 'entryId'), false);
+            assert.equal(JSON.stringify(result.trace).includes('controlled-study-registration-bearer-00000001'), false);
             assert.equal(stopped.arguments.connectionId, '22222222-2222-4222-8222-000000000001');
             assert.equal(stopped.arguments.sessionId, '33333333-3333-4333-8333-000000000001');
             const exited = result.trace.findIndex((item) => item.event === 'gateway-exit');

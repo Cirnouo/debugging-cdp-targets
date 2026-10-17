@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { assembleCodexPayload, generateRuntimeFiles, syncPluginFiles } from '../tooling/build-plugin.ts';
+import { assembleCodexPayload, syncPluginFiles } from '../tooling/build-plugin.ts';
 import { validateHostManifest } from '../tooling/distribution-audit.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST } from '../tooling/host-policy.ts';
 import { validateIconPng } from '../tooling/icon-policy.ts';
@@ -161,8 +161,7 @@ test('assembly copies only approved icons and rejects missing, unexpected and ma
     try {
         await cp(path.join(root, 'packaging'), path.join(fixture, 'packaging'), { recursive: true });
         await cp(path.join(root, 'LICENSE'), path.join(fixture, 'LICENSE'));
-        const runtime = await generateRuntimeFiles();
-        const payload = await assembleCodexPayload(runtime, fixture);
+        const payload = await assembleCodexPayload(fixture);
         assert.deepEqual([...payload.keys()].filter((file) => file.startsWith('assets/')).sort(), [
             'assets/README.md',
             'assets/icon-dark.png',
@@ -178,25 +177,25 @@ test('assembly copies only approved icons and rejects missing, unexpected and ma
         const bytes = await readFile(path.join(fixture, 'packaging/shared/assets/icon.png'));
         const extra = path.join(fixture, 'packaging/shared/assets/unknown.png');
         await writeFile(extra, bytes);
-        await assert.rejects(assembleCodexPayload(runtime, fixture), /Unexpected/);
+        await assert.rejects(assembleCodexPayload(fixture), /Unexpected/);
         await rm(extra);
         for (const file of ['icon.png', 'icon-dark.png', 'icon-light.png', 'icon-source.png']) {
             const icon = path.join(fixture, 'packaging/shared/assets', file);
             const original = await readFile(icon);
             await rm(icon);
-            await assert.rejects(assembleCodexPayload(runtime, fixture), /Missing|ENOENT/, file);
+            await assert.rejects(assembleCodexPayload(fixture), /Missing|ENOENT/, file);
             for (const invalid of [
                 original.subarray(0, 40),
                 Buffer.alloc(5 * 1024 * 1024 + 1),
                 Buffer.from('not a PNG'),
             ]) {
                 await writeFile(icon, invalid);
-                await assert.rejects(assembleCodexPayload(runtime, fixture), /PNG|icon/i, file);
+                await assert.rejects(assembleCodexPayload(fixture), /PNG|icon/i, file);
             }
             const nonSquare = Buffer.from(original);
             nonSquare.writeUInt32BE(1000, 20);
             await writeFile(icon, nonSquare);
-            await assert.rejects(assembleCodexPayload(runtime, fixture), /PNG|icon/i);
+            await assert.rejects(assembleCodexPayload(fixture), /PNG|icon/i);
             await writeFile(icon, original);
         }
         const destination = path.join(fixture, 'output');

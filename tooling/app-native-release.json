@@ -1,0 +1,413 @@
+{
+    "schemaVersion": 1,
+    "packages": [
+        {
+            "package": "fs-native-extensions",
+            "version": "1.5.1",
+            "tarball": "https://registry.npmjs.org/fs-native-extensions/-/fs-native-extensions-1.5.1.tgz",
+            "integrity": "sha512-abjiHKkYdcH5M9ikBEJb0MKb/fEpPtZx/yfLHzTptvUAoiFayX0tIe0BTLBU4SAoRyjZLzA0dP1Rn2p0+QRyVg==",
+            "files": [
+                {
+                    "path": "CMakeLists.txt",
+                    "bytes": 1943,
+                    "sha256": "96268b2cbd440091c8d06fde7defae939ff97e487b1556b9b0bb140ff3887a2c"
+                },
+                {
+                    "path": "LICENSE",
+                    "bytes": 11357,
+                    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+                },
+                {
+                    "path": "README.md",
+                    "bytes": 5029,
+                    "sha256": "5c290dcfe2530ec8757f960b61d12f4e10e76ce52d2fbdd1678b2552bcb9039f"
+                },
+                {
+                    "path": "binding.c",
+                    "bytes": 40238,
+                    "sha256": "62ed334889611c44dcff10d845f439dd33da84166e205ec18483d6ee4e7a074b"
+                },
+                {
+                    "path": "binding.js",
+                    "bytes": 90,
+                    "sha256": "f6610bfca5b4420ec3d8d061fb0a7b8093fb65daaa7c3b055ed49faa6152658b"
+                },
+                {
+                    "path": "include/fs-ext.h",
+                    "bytes": 4053,
+                    "sha256": "1250d96b83ee1adfc12ffadee6a08fe597034a867920c7080f2684b431df915b"
+                },
+                {
+                    "path": "index.js",
+                    "bytes": 7239,
+                    "sha256": "607e535d8f99cd601b172cdb4844519468e61a6101e36910bff959adcd7f663d"
+                },
+                {
+                    "path": "package.json",
+                    "bytes": 1790,
+                    "sha256": "d23dd712121d3d2faaf54b81c4e45c18d7cc273463d56dea521af4568b8e4c00"
+                },
+                {
+                    "path": "prebuilds/android-arm/fs-native-extensions.bare",
+                    "bytes": 29448,
+                    "sha256": "85bc986ef4301ac05c261623a521490770e365e98b99c3cb996ff91e5a2a012f"
+                },
+                {
+                    "path": "prebuilds/android-arm/fs-native-extensions.node",
+                    "bytes": 33088,
+                    "sha256": "5bc621f1528afebad0502b0ad911cebbe853f00e12dcfd360ba74b3fc0f30f59"
+                },
+                {
+                    "path": "prebuilds/android-arm64/fs-native-extensions.bare",
+                    "bytes": 37616,
+                    "sha256": "aa0131a1f1ec1010529e3f0d8dcd5991ee55c82274a53c972e6dde3a588a1840"
+                },
+                {
+                    "path": "prebuilds/android-arm64/fs-native-extensions.node",
+                    "bytes": 41024,
+                    "sha256": "502cbbf6fdc6dcd23f08e5d41f3c9eec5aab2d4320f6718df569bf4d8672d727"
+                },
+                {
+                    "path": "prebuilds/android-ia32/fs-native-extensions.bare",
+                    "bytes": 31468,
+                    "sha256": "3f99a7aab7b4c4a30ce3c601f3c599d6c94a1b690c27d771b24d996696d4592a"
+                },
+                {
+                    "path": "prebuilds/android-ia32/fs-native-extensions.node",
+                    "bytes": 33964,
+                    "sha256": "6823b0a8fa81d6a7115fc694ef948a18b4aef832587a83d67cc3a365df3193e6"
+                },
+                {
+                    "path": "prebuilds/android-x64/fs-native-extensions.bare",
+                    "bytes": 34456,
+                    "sha256": "9f5110c03aaee25890e8521433808fd634877b0e4de46a7531b4773bf74c8f8e"
+                },
+                {
+                    "path": "prebuilds/android-x64/fs-native-extensions.node",
+                    "bytes": 37800,
+                    "sha256": "9e59e652f7a52e6b0a49cf578ab18b3be646983987bb4e7d91e22965760c3d9a"
+                },
+                {
+                    "path": "prebuilds/darwin-arm64/fs-native-extensions.bare",
+                    "bytes": 73848,
+                    "sha256": "7c57d17c3852bc1baba45c8075a389dcf6c1f5a12a92147ae24ed6d9a1931aaf"
+                },
+                {
+                    "path": "prebuilds/darwin-arm64/fs-native-extensions.node",
+                    "bytes": 74072,
+                    "sha256": "1e93b74e556b7d1767d57fabb197d9d1df5641453967170537278f72ed46f018"
+                },
+                {
+                    "path": "prebuilds/darwin-x64/fs-native-extensions.bare",
+                    "bytes": 36280,
+                    "sha256": "3aff08c613f9c7a5cc9c91ea30259ad01ebfd23ce8b919f9a93d0a328888e3b6"
+                },
+                {
+                    "path": "prebuilds/darwin-x64/fs-native-extensions.node",
+                    "bytes": 36504,
+                    "sha256": "973e4b2addf30901b955c75626ac153d3a37cebcfa621375bcd490f199884c8e"
+                },
+                {
+                    "path": "prebuilds/ios-arm64-simulator/fs-native-extensions.bare",
+                    "bytes": 73784,
+                    "sha256": "41eb1a5e5989a28ec6afff6c4be2a002ca0ab6bdf5229431398d4281a8b366cf"
+                },
+                {
+                    "path": "prebuilds/ios-arm64/fs-native-extensions.bare",
+                    "bytes": 89520,
+                    "sha256": "dd95a3c3ad70190651743421af8d2cb5eec76356e5be5dbdbf263f36a05139ac"
+                },
+                {
+                    "path": "prebuilds/ios-x64-simulator/fs-native-extensions.bare",
+                    "bytes": 36200,
+                    "sha256": "ec4de63707c252449d0c8280cdd219654698a10014ed0ec3bdb46614b02d9893"
+                },
+                {
+                    "path": "prebuilds/linux-arm64/fs-native-extensions.bare",
+                    "bytes": 34008,
+                    "sha256": "d6ab9a6c2020e343cbd2da598dbcf86910dba16150e1b70047d0c3b1b96da3b5"
+                },
+                {
+                    "path": "prebuilds/linux-arm64/fs-native-extensions.node",
+                    "bytes": 37312,
+                    "sha256": "895dd0dca09438454f28bba250bcafa3e69c937fe97ea46b1b6212dc3a81315c"
+                },
+                {
+                    "path": "prebuilds/linux-x64/fs-native-extensions.bare",
+                    "bytes": 33736,
+                    "sha256": "3e2a3cca7ab68efda781ff7cc6ba975c3e6a6350b697fa08679dab58b9811f25"
+                },
+                {
+                    "path": "prebuilds/linux-x64/fs-native-extensions.node",
+                    "bytes": 37096,
+                    "sha256": "13657db7ce92f823ee8066cc7244f3a475340707fc065fd4f5aceeebbfa898c3"
+                },
+                {
+                    "path": "prebuilds/win32-arm64/fs-native-extensions.bare",
+                    "bytes": 128512,
+                    "sha256": "9a2fcd43fa4443e372e65bb76704b095ed2fce9f383461926f343cb8aa0784d8"
+                },
+                {
+                    "path": "prebuilds/win32-arm64/fs-native-extensions.node",
+                    "bytes": 127488,
+                    "sha256": "b39cecb92c210708b6f0848de9a054bf08d4dc35994db12aedca8bad91a96302"
+                },
+                {
+                    "path": "prebuilds/win32-x64/fs-native-extensions.bare",
+                    "bytes": 136704,
+                    "sha256": "013cda09ebbb158fa554ecf7fd2bc16f3ba45a0fd42b8eda595a529c24a70468"
+                },
+                {
+                    "path": "prebuilds/win32-x64/fs-native-extensions.node",
+                    "bytes": 135680,
+                    "sha256": "dd3f8eb1d53441f151551c84a1211c79524b1eab74ff83ab93e68037f3997ba4"
+                },
+                {
+                    "path": "src/apple.c",
+                    "bytes": 4239,
+                    "sha256": "836d091efa2784a6587316a840aa0f3583a8ba544fc90d1186d0f89532a59a5b"
+                },
+                {
+                    "path": "src/linux.c",
+                    "bytes": 3220,
+                    "sha256": "b8069d0c5040fafbcc618e85a4818864d4294001271faa7ef59e2025bd77d1a3"
+                },
+                {
+                    "path": "src/platform.h",
+                    "bytes": 1175,
+                    "sha256": "35e51e8e6c6346bd1431e6f3eca226f7d429141a68a3557c69bbeb5c45b60e49"
+                },
+                {
+                    "path": "src/posix.c",
+                    "bytes": 776,
+                    "sha256": "fc24da537026e59b591a0475a374902c661644f5615056c1998a2b3cc2c7f1d6"
+                },
+                {
+                    "path": "src/shared.c",
+                    "bytes": 8800,
+                    "sha256": "f59523867a06b4d1d81bc626213bb59f660804262b141e98f860e8222497f881"
+                },
+                {
+                    "path": "src/win32.c",
+                    "bytes": 10308,
+                    "sha256": "a45c7cddd0b05329c92fb304e68cd4c8814e5f3cf12896245bcd74524254c083"
+                },
+                {
+                    "path": "src/win32/nt.h",
+                    "bytes": 7723,
+                    "sha256": "8c92b0e378a2a1614b3793b6dcef37435a5567d89448941b5ebf76fc37f4d2d2"
+                }
+            ]
+        },
+        {
+            "package": "require-addon",
+            "version": "1.3.0",
+            "tarball": "https://registry.npmjs.org/require-addon/-/require-addon-1.3.0.tgz",
+            "integrity": "sha512-j8pifaPNZI7ShKY3ihXZwF0qaEjua8zmlqPvDil0a8SBnyRvjCbAiEQuzO0UcoXH1sqU5U/ilXSjYd1W5NYwAA==",
+            "files": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 11357,
+                    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+                },
+                {
+                    "path": "README.md",
+                    "bytes": 230,
+                    "sha256": "527e4e4763537a86deb45d64e1a2cb6a12338d92d7776fb5af91f3badb6ab093"
+                },
+                {
+                    "path": "lib/bare.js",
+                    "bytes": 45,
+                    "sha256": "5d16cff57836196016650252bb3ca38230a07fb04d48cf1a32b6b2254e109701"
+                },
+                {
+                    "path": "lib/default.js",
+                    "bytes": 248,
+                    "sha256": "74a617d99964b2523fa6dd1a0114c758c0e426ea464d39d69db877baf980fb87"
+                },
+                {
+                    "path": "lib/node.js",
+                    "bytes": 2020,
+                    "sha256": "348d94741c56de23e1c76764cc49950106a548c823f15b22e7b45cbfe33f99c3"
+                },
+                {
+                    "path": "package.json",
+                    "bytes": 1518,
+                    "sha256": "c0538d0e146100780251fd6c086458c3b85e529a2a45157341870f5b7e361811"
+                }
+            ]
+        },
+        {
+            "package": "which-runtime",
+            "version": "1.4.0",
+            "tarball": "https://registry.npmjs.org/which-runtime/-/which-runtime-1.4.0.tgz",
+            "integrity": "sha512-0ugbP4CJW4e2D20jvEcC4973dCgIaHI4Rw1PT+26U9zEve7FyYdWAIwUnoeOYvoCfn+wXHoHTKb1KhkYlb60Pw==",
+            "files": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 11357,
+                    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+                },
+                {
+                    "path": "README.md",
+                    "bytes": 406,
+                    "sha256": "25fe95fb95bfde33a06d6312d19e64d387b934661e55d9c667f1b20f6b32aa14"
+                },
+                {
+                    "path": "index.js",
+                    "bytes": 1469,
+                    "sha256": "cbc7a5f43ad5f669611d6adad71e4b85636bf1b5bf7f14ed6555084784dbce30"
+                },
+                {
+                    "path": "package.json",
+                    "bytes": 863,
+                    "sha256": "0f66f520c39af77fdc3ca898fcdc27c7c0cb90f5e9ee48c6c5a7dc4cec1cf2f3"
+                }
+            ]
+        },
+        {
+            "package": "bare-addon-resolve",
+            "version": "1.11.0",
+            "tarball": "https://registry.npmjs.org/bare-addon-resolve/-/bare-addon-resolve-1.11.0.tgz",
+            "integrity": "sha512-bTUBSqBjzQQzo2/iIk6KxAClZfahy38EPsJV2bPJ+p2+kS8h+hT5TE5QggpkFUrCnLL4HDTA4DDM+YiNdyol0w==",
+            "files": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 11357,
+                    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+                },
+                {
+                    "path": "README.md",
+                    "bytes": 10558,
+                    "sha256": "2c96b5f6e74343070281bf67873d891364cc41fb27d65f739cf7bb3bfd29483c"
+                },
+                {
+                    "path": "index.d.ts",
+                    "bytes": 3089,
+                    "sha256": "2025b27bbb209e098a06ee6fd7cdcbe45c2b53a66c7033a2117f9f93fa7ceff9"
+                },
+                {
+                    "path": "index.js",
+                    "bytes": 12288,
+                    "sha256": "8accdae73424fa4751de917f333fc4bb0ed382c65a0590ca95dbe9cfb121f1eb"
+                },
+                {
+                    "path": "lib/errors.d.ts",
+                    "bytes": 479,
+                    "sha256": "e7226424704581a772fbbe4127b8ae97e87c63ab0bd8e0282d0e5cfdb3c8d9c6"
+                },
+                {
+                    "path": "lib/errors.js",
+                    "bytes": 540,
+                    "sha256": "843a49cd9db0949dd7deb7f5f9f1664496890a01ad55b80cf0c2e48a0ec4dc01"
+                },
+                {
+                    "path": "package.json",
+                    "bytes": 1402,
+                    "sha256": "53443ee29150e35fecf5fb6dbe58755c35142b0ba884e219e872fb95c36af8b7"
+                }
+            ]
+        },
+        {
+            "package": "bare-module-resolve",
+            "version": "1.12.6",
+            "tarball": "https://registry.npmjs.org/bare-module-resolve/-/bare-module-resolve-1.12.6.tgz",
+            "integrity": "sha512-tsoOqHmtF6VmNX4LYDBZwvQVkSmEagnbykNjK31LMxz/amyKfjCs4K976n7uJd1bvWfxbpLQ3Fy7qq8an6jR6Q==",
+            "files": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 11357,
+                    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+                },
+                {
+                    "path": "README.md",
+                    "bytes": 16095,
+                    "sha256": "90a897d24b882d397943e2412eda4c71e0f6dc7aa23f1568bc24ac4c67a8b3a4"
+                },
+                {
+                    "path": "index.d.ts",
+                    "bytes": 5249,
+                    "sha256": "b4a3df90e1bc76bdd86a5a3d8a62d3f8f3c4d94cdfef76d95178d46a9409fbbd"
+                },
+                {
+                    "path": "index.js",
+                    "bytes": 22804,
+                    "sha256": "57ec0e12cdcb4dcbfc70e7f2b64f3be8c470cd29ba5097a91d4378468a903661"
+                },
+                {
+                    "path": "lib/errors.d.ts",
+                    "bytes": 1070,
+                    "sha256": "852d1149c86f9481f515e472d51ca74610bb0739b82250d05ab2c6a6cd52850f"
+                },
+                {
+                    "path": "lib/errors.js",
+                    "bytes": 1077,
+                    "sha256": "b9283888f7bcb6f59338e0f8aefb28f05d5e8456ae18bcccfdbd2400d0bd0d7d"
+                },
+                {
+                    "path": "package.json",
+                    "bytes": 1369,
+                    "sha256": "3efba0290e10d08356f76e9dd0e2668c30d05be6b01c3855530f9801824f57d5"
+                }
+            ]
+        },
+        {
+            "package": "bare-semver",
+            "version": "1.1.0",
+            "tarball": "https://registry.npmjs.org/bare-semver/-/bare-semver-1.1.0.tgz",
+            "integrity": "sha512-1Hw5qJ7hXdVt3uPUqjeFTuxyvBUJauvz5A1I2jk8gzjZMHp04n//6nV9MDbG9CMw78JHY2lGV0w6s//LrASm2w==",
+            "files": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 11357,
+                    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+                },
+                {
+                    "path": "README.md",
+                    "bytes": 4166,
+                    "sha256": "5652a8cf5f56a8bdcfc509beeeefeaeb38c9924535c81167260e9bca6721691f"
+                },
+                {
+                    "path": "index.d.ts",
+                    "bytes": 1191,
+                    "sha256": "be7e9ee60275e647586ad47eb17d4bd204af32053e2760b2c0a3c76ccdcf6982"
+                },
+                {
+                    "path": "index.js",
+                    "bytes": 472,
+                    "sha256": "73ebe914ad93e9757ed82e85eeae233c6b4f3fbe2f785eeb988f4d7c2c8b7d68"
+                },
+                {
+                    "path": "lib/comparator.js",
+                    "bytes": 742,
+                    "sha256": "752ed279262e488b2ef5dcffe5b516e91feb36eea8b941947e72832deab2e754"
+                },
+                {
+                    "path": "lib/constants.js",
+                    "bytes": 67,
+                    "sha256": "1cde6ca703fe8182791de80123ca90e2dba6fb8f19049672de9fe5504a6ebeb4"
+                },
+                {
+                    "path": "lib/errors.js",
+                    "bytes": 525,
+                    "sha256": "fdd5409b07d923eaaae948397828aca804243ddac6b4040e2e0df2acae631ea2"
+                },
+                {
+                    "path": "lib/range.js",
+                    "bytes": 7181,
+                    "sha256": "637cfa8a30e2806a8a2b615ba7ce104817b3ca087576ec4afcedd1e069fca887"
+                },
+                {
+                    "path": "lib/version.js",
+                    "bytes": 4764,
+                    "sha256": "65fe4455585dcccdd76f55c3456985ee2cbe87296f6b95dbcf8942a654cb2fe3"
+                },
+                {
+                    "path": "package.json",
+                    "bytes": 1108,
+                    "sha256": "bf5bc14deaa6aeff17ffc9295a3590af77fb6c1342226e42f36a0046074d872f"
+                }
+            ]
+        }
+    ]
+}

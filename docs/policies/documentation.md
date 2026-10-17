@@ -13,17 +13,16 @@ files and subdirectories. The `.github` directory uses `INDEX.md` instead:
 GitHub prioritizes a README there over the root README on the repository home
 page. Do not add a README directly under `.github`; its subdirectories still
 use `README.md`. Generated dependency, Git, coverage, and test-output
-directories are exempt. The committed Plugin dist directory includes a README
-because it is a supported installation surface, although its code is generated.
-Its `official-server/` subtree preserves upstream documentation unchanged only
-after complete release verification; it requires no repository README additions.
+directories are exempt. Thin Plugins have no dist directory. App-generated
+`official-server/` preserves upstream documentation unchanged after complete
+release verification; it requires no repository README additions.
 
 `packaging/shared/` owns the complete host-neutral Skill and shared distribution
 documentation; `packaging/codex/` and `packaging/claude-code/` own authored host
 configuration and installed guides. A host's source `README.md` documents its
 directory, while `plugin-README.md` supplies its installed guide. Update these
 inputs and regenerate both complete `plugins/<host>/debugging-cdp-targets/`
-payloads. Host-specific install and Hook controls belong in installed host guides
+payloads. Host-specific installation and HTTP connection controls belong in installed host guides
 and docs/user-guide/installation.md; the root README keeps each supported host's
 short quick start. Add supported hosts as additional sections and adapt to each
 host's documented interface; lifecycle instructions remain shared. Installed

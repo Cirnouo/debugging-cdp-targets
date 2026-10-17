@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
+import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { isRecord } from '../src/shared/errors.ts';
 import * as applicationCore from './smoke/application-screenshot-core.ts';
 import {
@@ -27,12 +28,52 @@ import {
 import { readScreenshotGeometry } from './smoke/screenshot-fixture.ts';
 
 const sha = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
-const files = [{ path: 'dist/mcp-bootstrap.mjs', bytes: 4, sha256: sha('code') }];
+const appPaths = [
+    'electron.exe',
+    'resources/app/app-bootstrap.mjs',
+    'resources/app/app-main.mjs',
+    'resources/app/app-preload.cjs',
+    'resources/app/app-renderer.js',
+    'resources/app/package.json',
+    'resources/app/delivery/app-release-inputs.json',
+    'resources/app/delivery/app-native-release.json',
+    'resources/app/delivery/official-server-release.json',
+    'resources/node/node.exe',
+    'resources/node/LICENSE',
+    'resources/official-server/package.json',
+    'resources/official-server/build/src/bin/chrome-devtools-mcp.js',
+    'resources/app/node_modules/fs-native-extensions/prebuilds/win32-x64/fs-native-extensions.node',
+];
+const entries = (paths: string[]) =>
+    paths
+        .map((file) => ({ path: file, bytes: 4, sha256: sha('code') }))
+        .sort((a, b) => a.path.localeCompare(b.path, 'en'));
+const appFiles = entries(appPaths);
+const fixtureFiles = entries([
+    'http-fixture.mjs',
+    'http-fixture-NOTICES.txt',
+    'screenshot-layers-study.mjs',
+    'screenshot-timeout-study.mjs',
+    'windows-cdp-helper.ps1',
+    'windows-native-helper.ps1',
+    'windows-native-process.cs',
+    'src/adapters/windows-native-process.cs',
+    'tests/smoke/windows-window-evidence.ps1',
+    'tests/smoke/windows-selected-tab-evidence.ps1',
+    'tests/smoke/windows-png-evidence.ps1',
+    'tests/fixtures/compile-native-window.ps1',
+    'tests/fixtures/native-window.cs',
+]);
+const files = [...appFiles, ...fixtureFiles].sort((a, b) => a.path.localeCompare(b.path, 'en'));
+const inputs = [{ path: 'src/interface/app-main.ts', bytes: 4, sha256: sha('code') }];
 const receipt = {
-    source: 'eef90b4d974600c3a6697d40dc76e99037466315',
-    subtree: 'plugins/codex/debugging-cdp-targets',
-    createdAtUtc: '2026-10-07T00:00:00.000Z',
-    archiveSha256: 'a'.repeat(64),
+    schemaVersion: 1,
+    platform: 'win32',
+    architecture: 'x64',
+    createdAtUtc: '2026-10-17T00:00:00.000Z',
+    source: { revision: '1'.repeat(40), dirty: false, inputs, digest: sha(JSON.stringify(inputs)) },
+    app: { files: appFiles, digest: sha(JSON.stringify(appFiles)) },
+    fixture: { files: fixtureFiles },
     inventoryDigest: sha(JSON.stringify(files)),
     files,
 };
@@ -64,7 +105,7 @@ const config: ApplicationProbeConfig = {
         },
         page: { url: 'app://obsidian.md/index.html', title: 'synthetic-vault', identity: 'synthetic-id' },
     },
-    payload: { root: 'C:/Evidence/sealed', receipt },
+    payload: { root: path.resolve('C:/Evidence/sealed'), receipt },
     mainWindow: { className: 'Chrome_WidgetWin_1', titleIncludes: 'synthetic-vault' },
     identityFunction:
         '(fixtureDirectory) => ({url:location.href,title:document.title,identity:"synthetic-id",userData:fixtureDirectory+"/profile",vaultPath:fixtureDirectory+"/synthetic-vault"})',
@@ -238,8 +279,9 @@ function boundary(
         pages?: number[];
         missing?: boolean;
         captureError?: boolean;
+        sdkTimeout?: boolean;
         sessionExit?: boolean;
-        quarantine?: boolean;
+        toolError?: boolean;
         fast?: boolean;
         postError?: boolean;
         badPixel?: boolean;
@@ -368,9 +410,10 @@ function boundary(
                             };
                     }
                     if (options.captureError) throw new Error('MCP timeout: tools/call');
+                    if (options.sdkTimeout) throw new SdkError(SdkErrorCode.RequestTimeout, 'Request timed out');
                     if (options.sessionExit) throw new Error('The target session exited during the official call.');
-                    if (options.quarantine)
-                        return { isError: true, structuredContent: { code: 'CONNECTION_RECOVERY_REQUIRED' } };
+                    if (options.toolError)
+                        return { isError: true, content: [{ type: 'text', text: 'Fixture screenshot tool failed.' }] };
                     return { content: [{ type: 'text', text: 'saved' }] };
                 },
                 async status() {
@@ -497,9 +540,9 @@ test('sealed receipt refuses duplicate case aliases and noncanonical inventory o
     };
     const entries = [
         { path: 'z', bytes: 0, sha256: sha('') },
-        { path: 'dist/mcp-bootstrap.mjs', bytes: 0, sha256: sha('') },
+        { path: 'http-fixture.mjs', bytes: 0, sha256: sha('') },
     ];
-    for (const selected of [entries, [files[0], { ...files[0], path: 'DIST/MCP-BOOTSTRAP.MJS' }]]) {
+    for (const selected of [entries, [files[0], { ...files[0], path: files[0]?.path.toUpperCase() ?? 'DUPLICATE' }]]) {
         await assert.rejects(
             verifySealedApplicationPayload(
                 {
@@ -666,15 +709,15 @@ test('Tauri viewport and fullPage retain marker condition screenshot and evidenc
     }
 });
 
-test('Tauri retains capture on pixel or observer failure and never replays a quarantined screenshot', async () => {
-    for (const options of [{ observerError: true }, { badPixel: true }, { quarantine: true }, { fast: true }]) {
+test('Tauri retains capture on pixel, observer or tool failure without replay', async () => {
+    for (const options of [{ observerError: true }, { badPixel: true }, { toolError: true }, { fast: true }]) {
         const io = boundary({ tauri: true, ...options });
         const result = await run(io, tauriConfig);
         assert.equal(io.counts().capture, 1);
         assert.ok(io.events.some((event) => event.kind === 'capture-raw'));
-        if (options.quarantine) {
-            assert.equal(result.outcome, 'quarantine');
-            assert.ok(!io.events.some((event) => event.kind === 'status-after'));
+        if (options.toolError) {
+            assert.equal(result.outcome, 'tool-error');
+            assert.ok(io.events.some((event) => event.kind === 'status-after'));
         } else assert.equal(result.outcome, 'evidence-insufficient');
     }
 });
@@ -916,16 +959,16 @@ test('wrong opaque pixels and fullPage dimensions remain distinct screenshot evi
         assert.equal(io.counts().capture, 1);
     }
 });
-test('capture error is never replayed and quarantine prevents subsequent official route calls', async () => {
-    for (const options of [{ captureError: true }, { quarantine: true }]) {
+test('capture errors are never replayed and preserve explicit status observations', async () => {
+    for (const options of [{ captureError: true }, { toolError: true }]) {
         const io = boundary(options);
         const result = await run(io);
         assert.equal(io.counts().capture, 1);
-        assert.equal(result.capture?.outcome, options.quarantine ? 'quarantine' : 'client-timeout');
+        assert.equal(result.capture?.outcome, options.toolError ? 'tool-error' : 'client-timeout');
         assert.equal(io.counts().closed, 1);
-        if (options.quarantine)
-            assert.ok(!io.sequence.slice(io.sequence.indexOf('take_screenshot') + 1).includes('status'));
-        if (options.quarantine) {
+        if (options.toolError)
+            assert.ok(io.sequence.slice(io.sequence.indexOf('take_screenshot') + 1).includes('status'));
+        if (options.toolError) {
             const rawCapture = io.events.find((event) => event.kind === 'capture-raw');
             assert.ok(
                 rawCapture &&
@@ -933,9 +976,20 @@ test('capture error is never replayed and quarantine prevents subsequent officia
                     rawCapture.value !== null &&
                     'outcome' in rawCapture.value,
             );
-            assert.equal(rawCapture.value.outcome, 'quarantine');
+            assert.equal(rawCapture.value.outcome, 'tool-error');
         }
     }
+});
+
+test('the actual SDK request deadline records a client timeout and preserves the raw capture error without replay', async () => {
+    const io = boundary({ sdkTimeout: true });
+    const result = await run(io);
+    assert.equal(result.capture?.outcome, 'client-timeout');
+    assert.equal(result.outcome, 'client-timeout');
+    assert.equal(io.counts().capture, 1);
+    assert.equal(io.counts().closed, 1);
+    assert.ok(io.events.some((event) => event.kind === 'capture-raw'));
+    assert.ok(io.events.some((event) => event.kind === 'status-after'));
 });
 
 test('a reported session exit stays distinct from the client receipt deadline', async () => {

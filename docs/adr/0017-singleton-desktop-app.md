@@ -1,10 +1,12 @@
 # 0017 — Singleton desktop App and independent host plugins
 
-Status: accepted forward design, 2026-10-17; implementation pending. Both App
-and plugins remain 0.1.0 Unreleased. The current per-chat stdio gateway, seven
-tools and installed Hook/Skill workflow remain supported until the atomic Task 4
-cutover. This decision and the [complete implementation plan](../superpowers/plans/2026-10-17-singleton-app-plan.md)
-govern future work, rather than describing delivered GUI or HTTP support.
+Status: accepted, 2026-10-17. Both App and plugins remain 0.1.0 Unreleased.
+The shared core and minimal App/direct HTTP/thin-plugin cutover are implemented
+in source; richer management, native deployment and all six distribution cells
+remain separate acceptance work. [App runtime](../app-runtime.md) documents the
+current boundary and evidence limits. This decision and the
+[implementation plan](../superpowers/plans/2026-10-17-singleton-app-plan.md)
+govern the remaining work; historical decisions below retain their design context.
 
 ## Decision and supersession
 

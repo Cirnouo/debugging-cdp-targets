@@ -1,5 +1,65 @@
 # Tests
 
+Default regressions exercise the singleton App's reusable Core and direct SDK
+HTTP boundary with explicit registrations and request facilities. Native/CDP
+effects are replaced only at controlled I/O boundaries unless a test explicitly
+owns a disposable native process. The retired per-chat stdio entry, automatic
+host Tool Hooks and task-activity model are not current runtime interfaces.
+Git hook tests remain contributor-tooling regressions.
+
+- `app-singleton.test.ts`, `app-activation.test.ts` and `app-storage.test.ts`
+  cover the account-wide advisory lease, bounded activation-only channel,
+  installed/portable data selection and refusal to acquire data without ownership.
+- `app-chromium-storage.test.ts` checks separate synchronous Chromium storage
+  roots for independent App processes.
+- `app-bootstrap.test.ts` exercises entry import completion before ready-dependent
+  startup, synchronous path redirection and observed asynchronous startup failure.
+- `app-configuration.test.ts` and `app-configuration-storage.test.ts` cover
+  validated migration chains, backup/atomic commit, invalid/future settings,
+  singleton admission before I/O and desired versus effective cold settings.
+- `app-main-lifecycle.test.ts` and `app-core-construction.test.ts` exercise
+  startup/Quit races, late catalog acquisition, retained construction cleanup,
+  failure retry and refusal to admit HTTP before successful startup.
+- `app-ui.test.ts` checks fixed local renderer resources and narrow management
+  actions/snapshots without exposing secrets or general filesystem/IPC authority.
+- `app-window-boundary.test.ts` exercises management composition against foreign
+  frames/senders, extra IPC payloads, navigation and external capabilities.
+- `app-release.test.ts`, `app-native-inputs.test.ts` and `app-delivery.test.ts`
+  check independently recorded native archive identities, complete loader/license
+  inputs and verified runtime files before executable use. These input checks
+  do not establish six-platform native acceptance.
+- `app-distribution.test.ts` and `build-app.test.ts` cover immutable delivery
+  metadata, sandboxed bundles, license closure and complete official-file copying.
+- `app-archive-extraction.test.ts` checks actual Windows ZIP extraction refusal
+  for traversal, aliases, duplicate destinations and nonregular entries before writing.
+- `thin-plugin-cutover.test.ts` checks host-native direct HTTP manifests and
+  excludes credentials, executable helpers and duplicated App runtime payloads.
+- `app-control-cutover.test.ts` checks the public lifecycle identities and actual
+  SDK schema validation of explicit bearer inputs versus missing or retired fields.
+- `mcp-http-policy.test.ts` checks exact loopback authority/Origin/path/method,
+  bounded unambiguous bodies and per-request bearer/official route extraction.
+- `mcp-http-server.test.ts` covers actual SDK HTTP clients, originating roots,
+  elicitation/progress, client cancellation versus owned work, boundary rejection
+  and explicit shutdown over the real Core with controlled native/official I/O.
+- `mcp-http-fixture.test.ts` exercises the test-only Core/SDK HTTP child,
+  explicit bearer calls and normal owned teardown.
+- `native-fixture-seal.test.ts` checks complete App-plus-fixture inventory,
+  source expectations, verified entry/ordinary Node paths, drift and extra/missing
+  files, all original study-native assets and the actual bundled dependency graph.
+  `sealed-study.test.ts` covers guarded study launch, self-identity, complete seal
+  refusal before acquisition and actual launcher failure/exit behavior.
+  Dirty development receipts require explicit opt-in; default acceptance
+  rejects them. Seal verification is distinct from actual App GUI acceptance.
+- `data-isolation.test.ts`, `data-directory.test.ts` and
+  `data-directory-claims.test.ts` cover explicit isolation/binding validation,
+  canonical root/ancestor claims, acquisition and release through controlled I/O.
+- `native-resource-ready.test.ts` checks the actual fixture PID-ready publisher's
+  complete-write/close/rename ordering and retains primary filesystem errors.
+- `native-resource-diagnostics.test.ts` covers bounded native lifecycle/witness
+  records, full identity, actual exit evidence and failure containment.
+- `codex-smoke-context.test.ts` checks temporary host Skill isolation against
+  disabled duplicate metadata and unrelated paths or summaries.
+
 - `gateway-core.test.ts` covers independent clients, registration authorization, immutable
     roots/launch snapshots, scoped restart and retained cleanup failure/retry.
 - `client-context.test.ts`, `registrations.test.ts` and `official-execution.test.ts`
@@ -40,10 +100,12 @@
   I/O. Closed Tauri fixture tests enforce its fixed metadata and native window
   contract. Its Windows native helper compile check parses argv without inspecting an app.
   Fractional geometry regressions execute the actual marker at the injected DOM
-  boundary and retain exact viewport/fullPage pixel acceptance.
-- `application-screenshot-adapter.test.ts` validates sealed gateway selection,
+  boundary and retain exact viewport/fullPage pixel assertions. Actual SDK client
+  deadlines remain distinct from ordinary tool errors and session exits; all
+  capture failures preserve the original receipt without replay.
+- `application-screenshot-adapter.test.ts` validates sealed HTTP fixture/ordinary Node selection,
   generic-cdp routing, unchanged receipt deadlines, partial-start identity recovery,
-  passive exit arming before normal Close and retained stdio after uncertain cleanup.
+  passive exit arming before normal Close and retained fixture input/identity after uncertain cleanup.
   Tauri tests distinguish host/browser roles, actual carrier adoption and fresh
   listener/session ownership, and preserve saved PNG receipts before decoding.
 
@@ -90,7 +152,7 @@
 - `icon-packaging.test.ts` checks exact host artwork metadata and delivery,
   rejects missing/unexpected assets, and exercises PNG size, dimensions, CRCs,
   truncated streams and row filters with independently constructed fixtures.
-- `host-distribution.test.ts` covers both complete host inventories, manifest/MCP/Hook
+- `host-distribution.test.ts` covers both complete thin host inventories, manifest/MCP
   and Marketplace routing, shared bytes, installed-relative Skill reference links,
   independent version/license/resource drift,
   duplicate metadata, linked inputs/roots and read-only build checks.
@@ -119,7 +181,7 @@
 - `repository-audit.test.ts` tests AST boundaries, text-style enforcement, YAML
   filenames including generated output and exact exceptions, and directory
   documentation that preserves the root README on GitHub.
-- `distribution-audit.test.ts` tests packaging comparisons, single-gateway manifests,
+- `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
   required portable MCP schema declarations, and allowlists.
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
   nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
@@ -146,18 +208,17 @@
   Ubuntu lane's setup inputs, quality dependency and unconditional command order.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
-  cleanup failures, prerequisite/not-run indexing and the original delivered
-  gateway with the source subscriber preload. The complete Codex payload is
-  copied outside the repository and its gateway entry bytes are checked before
-  launch, keeping delivered code outside maintained-source coverage. No browser
-  is launched.
+  cleanup failures, prerequisite/not-run indexing and the real Core/SDK HTTP
+  source fixture with subscriber preload. It preserves hostile inherited
+  NODE_OPTIONS isolation and normal fixture teardown. It launches no browser;
+  these source tests do not establish sealed delivery or App GUI acceptance.
 - `gui-authorization.ts` owns the shared command-line-only GUI authorization parser
   and early successful skip for launch-capable smoke entrypoints. It also derives
   `-AllowGui` only for explicitly authorized PowerShell window mutation calls.
 - `gui-authorization.test.ts` uses real private Node subprocesses and file markers
   to verify default denial, CI/environment refusal, exact flag removal, runner argv
   forwarding and failed-test exit propagation without opening GUI. It also checks
-  all nine real GUI smokes, eighteen direct interactive skips and the direct
+  maintained real GUI smokes, eighteen direct interactive skips and the direct
   PowerShell fixture guard. Direct window mutation checks deny all four states
   before identity/native acquisition while None still performs passive observation.
   Sampler subprocess and application adapter boundary tests retain mutation-only
@@ -221,11 +282,14 @@
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
-- `entry-lifecycle.test.ts` checks entry Keep/Close, confirmed exit retirement,
+- `entry-lifecycle.test.ts` checks target-controller Keep/Close, confirmed exit retirement,
   live same-port restart and independent child observation for each launch.
-- `entry-runtime.test.ts` checks gateway identity, independent connections and upstream lifetime.
+- `entry-runtime.test.ts` checks actual Core ownership, independent connections and upstream lifetime.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
-  output validation, legacy stdio ID-zero cancellation and gateway status.
+  output validation and independent subprocess disposal. Actual Core/SDK HTTP
+  tests preserve roots/form/progress, raw request/progress ID zero and unchanged
+  results. Cancelling a client wait retains the original busy execution and
+  healthy upstream until its real late response, without replacement or replay.
 - `official-child-lifecycle.test.ts` checks immediate logical transport close,
   actual child exit, EOF-resistant Server disposal, abort during initialization
   and tools/list, retained observation and retry after cleanup failure.
@@ -234,18 +298,19 @@
   with the listener absent retains the live root, observer, route identity and
   directory lease; actual matching exit revokes routing immediately, while
   upstream disposal and independent descendant-resource completion still gate
-  deletion and the single completion/exit Hook.
+  deletion and the explicit terminal operation result.
   Aborted protocol waits and cancelled-operation retries preserve native request
   ownership. Close-helper EOF and mismatched PID/creation time cannot prove exit.
 - `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
-  pending health/request cancellation, busy Close, immutable compact Hook facts,
-  replacement rollback, deleted routes and peer shutdown isolation.
+  pending health/request cancellation, busy Close, terminal operations and
+  owned-resource accounting, replacement rollback, retired routes and peer cleanup.
 - `connection-isolation.test.ts` checks connection leases across restart, pending
   native/directory acquisition, late cancellation, actual exit and failed cleanup;
-  terminal metadata preserves paths while summaries and Hooks omit them.
+  terminal metadata preserves paths while default summaries omit them.
   Independent native resource users hold the directory after immediate root route
-  revocation for Close, Keep, end-task, unexpected exit, restart, late rollback and
-  gateway EOF. Resource observation failure preserves the dead route and claim.
+  revocation for Close, Keep, unexpected exit, restart, late rollback and explicit
+  Core cleanup. Resource observation failure preserves retained ownership/claim
+  evidence without restoring a dead route.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks explicit same-port recovery, literal launch
   evidence and rejection of port races after an application is created.
@@ -255,17 +320,14 @@
   generation safety with injected processes.
 - `port-reservation.test.ts` checks synchronous exclusive port claims, independent
   gateway registries and owner-checked release without opening sockets.
-- `target-events.test.ts` checks silent exit monitoring, task resumption, Hook
-  deduplication and isolated cleanup with retained retry identity on failure.
+- `target-events.test.ts` checks silent native exit observation, callback
+  generation safety, terminal operations and isolated cleanup with retained
+  resource/retry identity on failure.
 - `chrome-profile.test.ts` checks explicit directories without a fallback, occupancy
   rejection, concurrent reservations, cancelled late acquisition and release
   generation safety with fake targets. Windows Chrome's fixed screenshot feature
   reaches spawned argv and exact recovery; conflicts precede profile/spawn and
   release the claimed port. Generic targets preserve their supplied feature choices.
-- `plugin-hooks.test.ts` checks the four automatic MCP Tool Hook declarations.
-- `hook-events.test.ts` parses actual Hook text through serialized model requests
-  and nested host wrappers, preserves native string escaping, and rejects leaked
-  payload fields, mismatched operation exits and pending cleanup delivery.
 - `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
   process options at the native child-process boundary without launching a target.
 - `target-exit-reference.test.ts` checks real private Node subprocess exit waits,
@@ -277,7 +339,8 @@
 - `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
   verify safe options, activation recipes, variants and independent configuration.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
-  cover asynchronous identity/deduplication/cursor/cancel behavior and real SDK tools.
+  cover asynchronous owner/identity/deduplication/cursor/cancel behavior,
+  terminal result/error snapshots and actual SDK HTTP lifecycle validation.
 - `close-diagnostics.test.ts`, `platform-close.test.ts` cover absent/foreign listeners,
   native failure causes through operation wrappers, retry identity and actual
   child/handle exit evidence without a target deadline or Unix process polling.
@@ -312,8 +375,10 @@
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `interactive/` owns eighteen explicit Windows GUI cases across four
   native/window/anchor test files; see its [inventory and prerequisites](interactive/README.md).
-- `smoke/` owns opt-in isolated Codex/Claude Hook, cross-platform Chrome, official Server, local Marketplace, and Windows visible
-  console tests; these do not run in the ordinary suite.
+- `smoke/` owns explicit host HTTP/metadata, cross-platform Chrome, official
+  Server, local Marketplace, screenshot and Windows native acceptance tools.
+  Its inventory distinguishes current entrypoints from historical stdio/Hook
+  evidence; these tools do not run in the ordinary suite.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
@@ -329,16 +394,18 @@ remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
 integration requires the same flag and must not touch existing user targets.
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
-on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Its normal frozen
-install precedes typecheck, default tests, both generated-build comparisons and
-the delivered official catalog smoke in that order. The catalog smoke uses normal
-stdio shutdown and launches no browser. This lane does not establish latest-24
-Windows, macOS or GUI acceptance; the canonical Node 24.21.0 jobs retain those
-checks. See the [toolchain policy](../docs/policies/quality.md#toolchain-compatibility).
+on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen
+installation precedes its source/type/build regressions. The separate original
+official catalog smoke now requires an explicitly supplied verified App stage:
+`pnpm smoke:official --stage <verified-App-stage>`. It normally closes the SDK
+stdio child and launches no browser. Source/build checks or a historical job
+pass do not establish current App delivery, latest-24 Windows/macOS or GUI
+acceptance; record those executed scopes separately. See the
+[toolchain policy](../docs/policies/quality.md#toolchain-compatibility).
 
-For the bounded application experiment and its actual results, see
+For the historical bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).
-The separate fixed-fixture follow-up is recorded in
+The separate historical fixed-fixture follow-up is recorded in
 [Tauri screenshot validation](../docs/tauri-screenshot-validation.md), including
 its two failed qualifications and separately authorized abnormal helper dispositions.
 

@@ -7,22 +7,30 @@ Plugin launches a target and configures its official Server connection. Use
 
 ## Lifecycle tools
 
-The Plugin manages targets directly through MCP:
+The App manages targets through direct SDK HTTP. Thin Plugins declare the default
+`http://127.0.0.1:27637/mcp` endpoint; the App must already be running. Its management
+window changes desired HTTP port (cold, effective after restart) and appearance
+(hot). If changing the port, align the host native HTTP configuration. No secret
+is stored in that configuration.
+
+The seven tools are:
 
 | Tool | Behavior |
 | --- | --- |
-| `dct_connection_status` | Discovery, connection/operation status, tool requirements and automatic Hooks. |
+| `dct_registration_register` | Create a registration and return its bearer once. |
+| `dct_connection_status` | Owned connection/operation status and tool requirements. |
 | `dct_connection_start` | Accept a structured new launch with explicit isolation and return an operation immediately. |
 | `dct_connection_restart` | Restart target, official Server or both from the immutable start snapshot. |
 | `dct_connection_stop` | Apply the user's Close/Keep choice to one session. |
-| `dct_connection_end_task` | End work and retain a live target/upstream. |
 | `dct_operation_wait` | Wait for operation events/results using a replay cursor. |
 | `dct_operation_cancel` | Cancel the selected operation and report actual cleanup. |
 
-Except initial empty status discovery and automatic Hooks, requests identify
-entryId. Restart, end-task and stop also require connectionId and sessionId;
-start accepts neither. Status and start forbid sessionId; only stop takes
-disposition. The [protocol](../lifecycle-protocol.md#requests-and-status-selectors)
+Every tool except register requires explicit registrationBearer. Register returns
+public registrationId and private registrationBearer once; never put the bearer
+in a user question or log. Restart and stop also require connectionId/sessionId;
+restart requires scope target, official or both. Start accepts neither connection
+nor session identity. Status/start forbid sessionId; only stop takes disposition.
+The [protocol](../lifecycle-protocol.md#requests-and-status-selectors)
 defines the allowed status combinations and exact identity requirements.
 
 ## Structured application launch
@@ -56,7 +64,7 @@ parent and retain policy, a Chrome start can use:
 
 ```json
 {
-    "entryId": "<entry-uuid>",
+    "registrationBearer": "<private-registration-bearer>",
     "requestId": "chrome-start-1",
     "targetKind": "chrome",
     "isolation": {
@@ -228,8 +236,11 @@ The official recording rate option is `--screencastFps`; the earlier
 The gateway advertises a fixed full official catalog because Codex does not
 refresh ordinary local MCP tools from list-changed notifications. Discovery and
 lifecycle successes return connection summaries. Selected status adds
-enabledTools names and upstreamStatus (`connected`, `disconnected` or
-`quarantined`). Explicit toolNames requests return configuration requirements
+enabledTools names and upstreamStatus (`connected`, `disconnected` or `quarantined`).
+Failed native target observation can quarantine the connection while the App
+retains ownership for inspection and normal cleanup. A client wait cancellation
+or timeout does not quarantine a healthy official execution.
+Explicit toolNames requests return configuration requirements
 and exact input schemas only when an actual upstream is valid.
 
 Supported explicitly disabled tools and `TOOL_NOT_ENABLED` provide complete
@@ -244,7 +255,7 @@ PWA tools require an official pipe-launched browser and are marked unsupported
 for managed CDP connections. Extension tools require
 [compatible Chrome](compatibility.md#chrome-extension-tools).
 
-Official calls carry `_dct: { connectionId, sessionId }`. Only that field is
+Official calls carry `_dct: { registrationBearer, connectionId, sessionId }`. That whole field is
 removed before forwarding original arguments; official names, execution and
 results stay unchanged. Restart preserves connectionId and its roots snapshot,
 retains explicit fixed ports or reselects an automatic port, and creates a new session. Obtain fresh page IDs with `list_pages`.
@@ -275,13 +286,12 @@ absolute directory; state is held, retained, deleted or cleanup-failed.
 Original start evidence remains available after failed/cancelled startup and
 route removal; selected configuration is available while its connection exists.
 Later cleanup updates original start metadata, not its terminal
-state/result/error/cursor or completion notice. Defaults/Hooks omit this evidence
+state/result/error/cursor. Default summaries omit this evidence
 and raw filesystem errors; read it explicitly before claiming cleanup.
 
 Request `include: ["diagnostics"]` only when bounded phase/outcome evidence is
 needed. Includes require connectionId and can combine with toolNames;
-operationId excludes those selectors. hookEventName is the sole argument
-reserved for automatic Hooks. See the
+operationId excludes those selectors. See the
 [lifecycle protocol](../lifecycle-protocol.md#requests-and-status-selectors)
 for complete selector rules.
 

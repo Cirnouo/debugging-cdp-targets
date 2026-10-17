@@ -4,13 +4,11 @@ import { cp, mkdir, mkdtemp, readFile, realpath, rm, rmdir, symlink, writeFile }
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { isRecord } from '../src/shared/errors.ts';
 import {
     assembleCodexPayload,
     collectBundledLicenses,
     generateHostPayloads,
     generatePluginFiles,
-    generateRuntimeFiles,
     syncPluginFiles,
 } from '../tooling/build-plugin.ts';
 
@@ -200,37 +198,6 @@ test('SDK vendor collection rejects unreviewed bundles and malformed map invento
     }
 });
 
-test('actual Node plugin bundles include all six reviewed SDK vendor notices and exclude unused browser vendor', async () => {
-    const files = await generateRuntimeFiles();
-    const notices = files.get('THIRD-PARTY-NOTICES.txt')?.toString();
-    assert.ok(notices);
-    for (const identity of [
-        'ajv@8.18.0',
-        'ajv-formats@3.0.1',
-        'content-type@1.0.5',
-        'fast-deep-equal@3.1.3',
-        'fast-uri@3.1.0',
-        'json-schema-traverse@1.0.0',
-    ]) {
-        assert.equal(notices.split(`${identity} — LICENSE (vendored)`).length - 1, 1, identity);
-    }
-    assert.doesNotMatch(notices, /@cfworker\/json-schema/);
-});
-
-test('Plugin generation copies every official published file at its complete relative path', async () => {
-    const release: unknown = JSON.parse(
-        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
-    );
-    assert.ok(isRecord(release) && Array.isArray(release.files));
-    const files = await generateRuntimeFiles();
-    for (const record of release.files) {
-        assert.ok(isRecord(record) && typeof record.path === 'string');
-        const bytes = await readFile(new URL(`../node_modules/chrome-devtools-mcp/${record.path}`, import.meta.url));
-        assert.ok(files.get(`official-server/${record.path}`)?.equals(bytes), record.path);
-    }
-    assert.equal([...files.keys()].filter((file) => file.startsWith('official-server/')).length, release.files.length);
-});
-
 test('build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-output-')));
     try {
@@ -269,7 +236,6 @@ test('Plugin generation assembles canonical packaging inputs and root license in
         ['README.md', '../packaging/codex/plugin-README.md'],
         ['.codex-plugin/plugin.json', '../packaging/codex/.codex-plugin/plugin.json'],
         ['mcp.json', '../packaging/codex/mcp.json'],
-        ['hooks/hooks.json', '../packaging/codex/hooks/hooks.json'],
         ['skills/debugging-cdp-targets/SKILL.md', '../packaging/shared/skills/debugging-cdp-targets/SKILL.md'],
         ...[
             'README.md',
@@ -283,7 +249,6 @@ test('Plugin generation assembles canonical packaging inputs and root license in
             `skills/debugging-cdp-targets/references/${file}`,
             `../packaging/shared/skills/debugging-cdp-targets/references/${file}`,
         ]),
-        ['dist/README.md', '../packaging/shared/dist/README.md'],
     ];
     for (const [destination, input] of mappings) {
         assert.ok(destination && input);
@@ -291,7 +256,7 @@ test('Plugin generation assembles canonical packaging inputs and root license in
         assert.ok(bytes, destination);
         assert.ok(bytes.equals(await readFile(new URL(input, import.meta.url))), destination);
     }
-    assert.ok(files.has('dist/mcp-bootstrap.mjs'));
+    assert.ok([...files.keys()].every((file) => !file.startsWith('dist/') && !file.startsWith('hooks/')));
 });
 
 test('payload assembly rejects unexpected host inputs that could compete with shared sources', async () => {
@@ -299,12 +264,11 @@ test('payload assembly rejects unexpected host inputs that could compete with sh
     try {
         await cp(new URL('../packaging', import.meta.url), path.join(root, 'packaging'), { recursive: true });
         await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
-        const runtime = await generateRuntimeFiles();
         for (const file of ['LICENSE', 'dist/README.md', 'skills/debugging-cdp-targets/SKILL.md']) {
             const competing = path.join(root, 'packaging/codex', file);
             await mkdir(path.dirname(competing), { recursive: true });
             await writeFile(competing, 'competing bytes');
-            await assert.rejects(assembleCodexPayload(runtime, root), /Unexpected packaging input/);
+            await assert.rejects(assembleCodexPayload(root), /Unexpected packaging input/);
             await rm(competing);
             if (file.startsWith('dist/')) await rmdir(path.dirname(competing));
             if (file.startsWith('skills/')) await rm(path.join(root, 'packaging/codex/skills'), { recursive: true });
@@ -321,14 +285,12 @@ test('payload assembly rejects unexpected host inputs that could compete with sh
             const reference = path.join(root, 'packaging/shared/skills/debugging-cdp-targets/references', file);
             const original = await readFile(reference);
             await rm(reference);
-            await assert.rejects(assembleCodexPayload(runtime, root), /Missing Plugin file/);
+            await assert.rejects(assembleCodexPayload(root), /Missing Plugin file/);
             await writeFile(`${reference}.renamed`, original);
-            await assert.rejects(assembleCodexPayload(runtime, root), /Unexpected Plugin file/);
+            await assert.rejects(assembleCodexPayload(root), /Unexpected Plugin file/);
             await rm(`${reference}.renamed`);
             await writeFile(reference, original);
         }
-        runtime.set('README.md', Buffer.from('competing runtime documentation'));
-        await assert.rejects(assembleCodexPayload(runtime, root), /Duplicate packaging path/);
     } finally {
         await rm(root, { recursive: true, force: true });
     }
@@ -342,9 +304,8 @@ test('payload assembly rejects a linked canonical input root', async () => {
             recursive: true,
         });
         await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
-        const runtime = await generateRuntimeFiles();
         await symlink(path.resolve('packaging/codex'), path.join(root, 'packaging/codex'), 'junction');
-        await assert.rejects(assembleCodexPayload(runtime, root), /Packaging input.*linked/);
+        await assert.rejects(assembleCodexPayload(root), /Packaging input.*linked/);
     } finally {
         await rm(root, { recursive: true, force: true });
     }
@@ -357,7 +318,7 @@ test('payload assembly maps host user documentation without shipping source dire
         await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
         await writeFile(path.join(root, 'packaging/codex/README.md'), '# Maintained inputs\n');
         await writeFile(path.join(root, 'packaging/codex/plugin-README.md'), '# Installed plugin\n');
-        const files = await assembleCodexPayload(await generateRuntimeFiles(), root);
+        const files = await assembleCodexPayload(root);
         assert.equal(files.get('README.md')?.toString(), '# Installed plugin\n');
         assert.equal(files.has('plugin-README.md'), false);
     } finally {

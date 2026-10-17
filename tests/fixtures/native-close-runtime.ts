@@ -6,16 +6,15 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { TestContext } from 'node:test';
 import { DataDirectoryRegistry } from '../../src/adapters/data-directory.ts';
-import type { createMcpEntryServer } from '../../src/adapters/mcp-entry-server.ts';
 import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createToolCatalog } from '../../src/adapters/tool-catalog.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
-import { startPluginRuntime } from '../../src/application/plugin-runtime.ts';
 import type { ConnectionStatus, ControlRequest } from '../../src/domains/control-contract.ts';
 import { parseControlRequest } from '../../src/domains/control-contract.ts';
 import type { DataIsolationEvidence } from '../../src/domains/data-isolation.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { createCoreFixture } from './core-runtime.ts';
 
 export function deferred() {
     let resolve = () => {};
@@ -34,7 +33,6 @@ export const nativeIdentity = {
 export async function nativeCloseRuntime(t: TestContext) {
     const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-native-close-runtime-')));
     const profile = path.join(parent, 'profile');
-    const closed = deferred();
     const accepted = deferred();
     const upstreamDisposing = deferred();
     const upstreamDisposal = deferred();
@@ -47,7 +45,6 @@ export async function nativeCloseRuntime(t: TestContext) {
     let officialCalls = 0;
     let connectionCount = 0;
     let routerCount = 0;
-    let callbacks: Parameters<typeof createMcpEntryServer>[0] | undefined;
 
     function makeHelper() {
         const child = Object.assign(new ChildProcess(), {
@@ -155,7 +152,7 @@ export async function nativeCloseRuntime(t: TestContext) {
     });
     const tools = [{ name: 'list_pages', inputSchema: { type: 'object' as const, properties: {} } }];
     const directories = new DataDirectoryRegistry();
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         dataDirectories: directories,
         profileAvailable: async () => true,
         createHost: () => host,
@@ -198,24 +195,10 @@ export async function nativeCloseRuntime(t: TestContext) {
             options?.onAcquired?.(upstream);
             return upstream;
         },
-        createEntry: (entry) => {
-            callbacks = entry;
-            return {
-                connect: async () => {},
-                closed: closed.promise,
-                close: async () => closed.resolve(),
-                roots: async () => ({ roots: [] }),
-                supportsRoots: () => false,
-                supportsFormElicitation: () => false,
-                elicit: async () => ({ action: 'cancel' }),
-            };
-        },
     });
-    assert.ok(callbacks?.control);
-    const entry = callbacks;
-    const control = (request: ControlRequest, signal?: AbortSignal) => entry.control?.(request, signal);
+    const control = (request: ControlRequest, signal?: AbortSignal) => runtime.control(request, signal);
     const readControl = async (request: Record<string, unknown>, signal?: AbortSignal) => {
-        const result = await control(parseControlRequest({ entryId: runtime.entryId, ...request }), signal);
+        const result = await control(parseControlRequest(request), signal);
         assert.ok(result);
         return result;
     };
@@ -229,7 +212,7 @@ export async function nativeCloseRuntime(t: TestContext) {
     t.after(async () => {
         upstreamDisposal.resolve();
         launchObserverExit();
-        await runtime.close();
+        await runtime.cleanup();
         for (const helper of helpers) {
             helper.child.stdin.end();
             helper.child.stdout.destroy();
@@ -278,13 +261,13 @@ export async function nativeCloseRuntime(t: TestContext) {
         deleted: deleted.promise,
         launchObserverExit,
         launchResourcesClosed,
-        hook: () => entry.status('PostToolUse'),
+        operations: runtime.core.admin.operations,
         isolation: () => isolation.at(-1),
         listenerPresent: () => listenerPresent,
         officialCalls: () => officialCalls,
         directoryExists: async () => (await lstat(profile)).isDirectory(),
         invoke: (connection: ConnectionStatus = current) =>
-            entry.invoke(
+            runtime.invoke(
                 'list_pages',
                 { _dct: { connectionId: connection.connectionId, sessionId: connection.sessionId } },
                 new AbortController().signal,

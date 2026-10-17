@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { assembleCodexPayload, generateRuntimeFiles } from '../tooling/build-plugin.ts';
+import { assembleCodexPayload } from '../tooling/build-plugin.ts';
 import {
     auditDistribution,
     readDistributionTree,
@@ -160,8 +160,7 @@ test('Codex assembly audits maintained presentation before copying and preserves
             await cp(path.join(root, file), path.join(fixture, file), { recursive: true });
         const input = path.join(fixture, 'packaging/codex/skill-openai.yaml');
         await writeFile(input, valid);
-        const runtime = await generateRuntimeFiles();
-        const payload = await assembleCodexPayload(runtime, fixture);
+        const payload = await assembleCodexPayload(fixture);
         assert.equal(payload.get(presentation)?.toString(), valid);
         assert.ok(
             payload
@@ -169,7 +168,7 @@ test('Codex assembly audits maintained presentation before copying and preserves
                 ?.equals(await readFile(path.join(root, 'packaging/shared/skills/debugging-cdp-targets/SKILL.md'))),
         );
         await writeFile(input, `${valid}    display_name: "duplicate"\n`);
-        await assert.rejects(assembleCodexPayload(runtime, fixture), /Skill presentation/);
+        await assert.rejects(assembleCodexPayload(fixture), /Skill presentation/);
         assert.match(await readFile(input, 'utf8'), /duplicate/);
     } finally {
         await rm(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });

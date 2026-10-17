@@ -3,7 +3,6 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
-import { hookResultEvents, waitForSmokeHookEvents } from './fixtures/hook-gateway-events.ts';
 import { type NativeCloseRuntime, nativeCloseRuntime } from './fixtures/native-close-runtime.ts';
 
 async function awaitingExit(f: NativeCloseRuntime, operationId: string) {
@@ -17,7 +16,6 @@ async function awaitingExit(f: NativeCloseRuntime, operationId: string) {
         snapshot = update.operation;
     }
     assert.equal(snapshot.state, 'running');
-    assert.equal(snapshot.entryId, f.runtime.entryId);
     assert.equal(snapshot.connectionId, f.current.connectionId);
     assert.equal(snapshot.sessionId, f.current.sessionId);
     return snapshot;
@@ -81,36 +79,12 @@ async function completeClose(f: NativeCloseRuntime, operationId: string) {
     });
     const pending = await f.operation(operationId);
     assert.equal(pending.state, 'running');
-    assert.deepEqual(f.hook(), {});
     f.allowDisposal();
     await f.deleted;
-    const events = await waitForSmokeHookEvents(async () => f.hook(), 2_000);
-    const notices = events.flatMap((event) => event.operations);
-    assert.equal(notices.length, 1);
-    const notice = notices[0];
-    assert.ok(notice);
-    assert.equal(notice.operationId, operationId);
-    assert.equal(notice.entryId, f.runtime.entryId);
-    assert.equal(notice.state, 'succeeded');
-    assert.equal(notice.connectionId, f.current.connectionId);
-    assert.equal(notice.sessionId, f.current.sessionId);
-    assert.ok(Array.isArray(notice.exits));
-    assert.equal(notice.exits.length, 1);
-    const exit: unknown = notice.exits[0];
-    assert.ok(isRecord(exit));
-    assert.equal(exit.expected, 'close');
-    assert.equal(exit.operationId, operationId);
-    assert.equal(exit.connectionId, f.current.connectionId);
-    assert.equal(exit.sessionId, f.current.sessionId);
-    assert.equal(exit.processId, 1601);
-    assert.equal(exit.exitCode, 0);
-    assert.equal(exit.cleanupStatus, 'succeeded');
-    assert.deepEqual(
-        events.flatMap((event) => event.exits),
-        [],
-    );
-    assert.deepEqual(f.hook(), {});
-    const result = await f.operation(operationId);
+    const result = await terminalOperation(f, operationId);
+    assert.equal(result.state, 'succeeded');
+    assert.equal(result.connectionId, f.current.connectionId);
+    assert.equal(result.sessionId, f.current.sessionId);
     assert.equal(result.state, 'succeeded');
     await assert.rejects(lstat(f.profile), { code: 'ENOENT' });
     assert.equal(f.order.filter((value) => value === 'application-exit').length, 1);
@@ -129,7 +103,6 @@ test('accepted native Close retains live root ownership after its listener disap
     await retainedLiveRoot(f);
     await assert.rejects(f.invoke(), /busy/);
     assert.equal(f.officialCalls(), 0);
-    assert.deepEqual(f.hook(), {});
     await completeClose(f, id);
 });
 
@@ -149,7 +122,6 @@ test('native root Close receipt cannot finish its operation before independent d
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.equal(await f.directoryExists(), true);
     assert.equal((await f.operation(id)).state, 'running');
-    assert.deepEqual(f.hook(), {});
     f.launchResourcesClosed();
     await f.deleted;
     assert.equal((await terminalOperation(f, id)).state, 'succeeded');
@@ -174,7 +146,6 @@ test('aborting operation_wait leaves the accepted native Close job and observer 
         f.requests.some((request) => request.cancel === true),
         false,
     );
-    assert.deepEqual(f.hook(), {});
     await completeClose(f, id);
 });
 
@@ -188,10 +159,8 @@ test('a new Close after operation cancellation reuses the accepted native reques
     const cancelled = await terminalOperation(f, cancelledId);
     assert.equal(cancelled.state, 'cancelled');
     await retainedLiveRoot(f);
-    const liveNotices = hookResultEvents(f.hook());
-    assert.equal(liveNotices.flatMap((event) => event.exits).length, 0);
     assert.equal(
-        liveNotices.flatMap((event) => event.operations).some((event) => event.state === 'succeeded'),
+        f.operations().some((operation) => operation.state === 'succeeded'),
         false,
     );
     const retryId = operationId(await f.close('retry-root-alive'));
@@ -222,10 +191,8 @@ for (const failure of ['helper-eof', 'wrong-pid', 'wrong-started-at'] as const) 
         const result = await f.invoke();
         assert.equal(result.isError, true);
         assert.equal(f.officialCalls(), 0);
-        const liveNotices = hookResultEvents(f.hook());
-        assert.equal(liveNotices.flatMap((event) => event.exits).length, 0);
         assert.equal(
-            liveNotices.flatMap((event) => event.operations).some((event) => event.state === 'succeeded'),
+            f.operations().some((operation) => operation.state === 'succeeded'),
             false,
         );
         f.launchObserverExit();
@@ -233,16 +200,11 @@ for (const failure of ['helper-eof', 'wrong-pid', 'wrong-started-at'] as const) 
         assert.throws(() => f.runtime.controller.status(f.current.connectionId), /absent|closed/);
         await f.upstreamDisposing;
         assert.equal(await f.directoryExists(), true);
-        assert.deepEqual(f.hook(), {});
         f.allowDisposal();
         await f.deleted;
-        const events = await waitForSmokeHookEvents(async () => f.hook(), 2_000);
-        const exits = events.flatMap((event) => event.exits);
-        assert.equal(exits.length, 1);
-        assert.equal(exits[0]?.processId, 1601);
-        assert.equal(exits[0]?.exitCode, 0);
-        assert.equal(exits[0]?.cleanupStatus, 'succeeded');
-        assert.deepEqual(f.hook(), {});
+        assert.equal(f.application.monitorDisposed, true);
+        assert.equal(f.order.filter((value) => value === 'application-exit').length, 1);
+        assert.equal(f.order.filter((value) => value === 'upstream-disposed').length, 1);
         assert.equal((await f.operation(id)).state, 'failed');
         await assert.rejects(lstat(f.profile), { code: 'ENOENT' });
     });

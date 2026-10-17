@@ -19,7 +19,7 @@ async function assertPortableRegistration(repositoryRoot: string) {
     assert.ok(isRecord(manifest) && isRecord(mcp) && isRecord(mcp.mcpServers));
     assert.equal(manifest.name, 'debugging-cdp-targets');
     assert.equal(manifest.mcpServers, './mcp.json');
-    assert.equal(manifest.hooks, './hooks/hooks.json');
+    assert.equal(Object.hasOwn(manifest, 'hooks'), false);
     const packageData: unknown = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
     assert.ok(isRecord(packageData) && isSemVer(packageData.version));
     const skill = await readFile(
@@ -42,14 +42,12 @@ async function assertPortableRegistration(repositoryRoot: string) {
     assert.equal(mcp.$schema, 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json');
     assert.deepEqual(Object.keys(mcp.mcpServers), ['cdp-targets']);
     assert.deepEqual(mcp.mcpServers['cdp-targets'], {
-        type: 'stdio',
-        command: 'node',
-        args: ['dist/mcp-bootstrap.mjs'],
-        cwd: '.',
+        type: 'streamable-http',
+        url: 'http://127.0.0.1:27637/mcp',
     });
 }
 
-test('portable plugin registers one stdio gateway for independent target connections', async () => {
+test('portable plugin registers one direct HTTP App connection for independent target connections', async () => {
     await assertPortableRegistration(root);
 });
 
@@ -88,30 +86,11 @@ test('portable registration accepts independent App version and rejects peer or 
     }
 });
 
-test('plugin payload has only manifests, artwork, one skill, license, and self-contained runtime', async () => {
+test('plugin payload has only manifests, artwork, one skill, license, and direct HTTP metadata', async () => {
     const topLevel = await readdir(pluginRoot);
-    assert.deepEqual(topLevel.sort(), [
-        '.codex-plugin',
-        'LICENSE',
-        'README.md',
-        'assets',
-        'dist',
-        'hooks',
-        'mcp.json',
-        'skills',
-    ]);
+    assert.deepEqual(topLevel.sort(), ['.codex-plugin', 'LICENSE', 'README.md', 'assets', 'mcp.json', 'skills']);
     const artwork = await readdir(path.join(pluginRoot, 'assets'));
     assert.deepEqual(artwork.sort(), ['README.md', 'icon-dark.png', 'icon.png']);
-    const distribution = await readdir(path.join(pluginRoot, 'dist'));
-    assert.deepEqual(distribution.sort(), [
-        'README.md',
-        'THIRD-PARTY-NOTICES.txt',
-        'mcp-bootstrap.mjs',
-        'official-server',
-        'windows-cdp-helper.ps1',
-        'windows-native-helper.ps1',
-        'windows-native-process.cs',
-    ]);
     const skill = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets'));
     assert.deepEqual(skill.sort(), ['README.md', 'SKILL.md', 'agents', 'references']);
     const references = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets', 'references'));
@@ -126,12 +105,6 @@ test('plugin payload has only manifests, artwork, one skill, license, and self-c
     ]);
     const presentation = await readdir(path.join(pluginRoot, 'skills', 'debugging-cdp-targets', 'agents'));
     assert.deepEqual(presentation.sort(), ['README.md', 'openai.yaml']);
-});
-
-test('bundled WebSocket code includes its original license', async () => {
-    const notice = await readFile(path.join(pluginRoot, 'dist', 'THIRD-PARTY-NOTICES.txt'), 'utf8');
-    assert.match(notice, /Copyright.*Einar Otto Stangvik/);
-    assert.match(notice, /Permission is hereby granted/);
 });
 
 test('repository marketplace points only at the local plugin', async () => {

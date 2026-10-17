@@ -3,12 +3,11 @@ import { EventEmitter } from 'node:events';
 import { mock, test } from 'node:test';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import type { OfficialConnection } from '../src/adapters/mcp-bridge.ts';
-import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import { RetainedTargetError } from '../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlHandler, LaunchOptions } from '../src/domains/control-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { createCoreFixture } from './fixtures/core-runtime.ts';
 
 function connectionStatus(controller: ControlHandler, connectionId: string): ConnectionStatus {
     const status = controller.status(connectionId);
@@ -26,7 +25,6 @@ async function fixture({
     waitForCancellation = false,
     timeoutCall = false,
 } = {}) {
-    let callbacks: Parameters<typeof createMcpEntryServer>[0] | undefined;
     let connections = 0;
     let closes = 0;
     let calls = 0;
@@ -39,11 +37,7 @@ async function fixture({
     let releaseLaunch: () => void = () => {};
     let targetCloses = 0;
     let targetCloseFails = failTargetClose;
-    let resolveClosed: () => void = () => {};
-    const gatewayClosed = new Promise<void>((resolve) => {
-        resolveClosed = resolve;
-    });
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         loadCatalog: async (tools = []) =>
             createToolCatalog({
                 version: '1.11.0',
@@ -133,27 +127,13 @@ async function fixture({
                 rootsChanged: async () => {},
             };
         },
-        createEntry: (options) => {
-            callbacks = options;
-            return {
-                connect: async () => {},
-                closed: gatewayClosed,
-                close: async () => {
-                    resolveClosed();
-                },
-                roots: async () => ({ roots: [] }),
-                supportsRoots: () => false,
-                supportsFormElicitation: () => false,
-                elicit: async () => ({ action: 'cancel' }),
-            };
-        },
     });
     const controller = runtime.controller;
-    assert.ok(callbacks);
+    assert.ok(runtime);
     return {
         runtime,
         controller,
-        callbacks,
+
         targets,
         exits,
         received,
@@ -182,25 +162,24 @@ test('Close ends upstream and later start reuses the entry without host reconnec
         assert.notEqual(first.sessionId, second.sessionId);
         assert.equal(f.counts().connections, 3);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
     assert.equal(f.counts().closes, 3);
-    await f.runtime.closed;
+    assert.equal(f.runtime.core.admin.cleanupState(), 'closed');
 });
 
 test('gateway disconnect begins cleanup of other connections while one permission operation still waits', async () => {
     const f = await fixture();
     await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'ready' } });
-    assert.ok(f.callbacks.control);
-    await f.callbacks.control({
+    assert.ok(f.runtime.control);
+    await f.runtime.control({
         isolation: { mode: 'none' },
         action: 'start',
-        entryId: f.runtime.entryId,
         requestId: 'waiting',
         launch: { executable: 'wait-cleanup' },
     });
     await new Promise<void>((resolve) => setImmediate(resolve));
-    const closed = f.runtime.close();
+    const closed = f.runtime.cleanup();
     try {
         await new Promise<void>((resolve) => setImmediate(resolve));
         assert.equal(f.targetCloses(), 1);
@@ -213,28 +192,26 @@ test('gateway disconnect begins cleanup of other connections while one permissio
 test('native cancellation that completed cleanup remains cancelled through the runtime boundary', async () => {
     const f = await fixture({ waitForCancellation: true });
     try {
-        assert.ok(f.callbacks.control);
-        const accepted = await f.callbacks.control({
+        assert.ok(f.runtime.control);
+        const accepted = await f.runtime.control({
             isolation: { mode: 'none' },
             action: 'start',
-            entryId: f.runtime.entryId,
             requestId: 'native-cancel',
             launch: { executable: 'fixture' },
         });
         assert.equal(typeof accepted.operationId, 'string');
         if (typeof accepted.operationId !== 'string') throw new Error('Missing operation ID');
         await new Promise<void>((resolve) => setImmediate(resolve));
-        await f.callbacks.control({ action: 'cancel', entryId: f.runtime.entryId, operationId: accepted.operationId });
+        await f.runtime.control({ action: 'cancel', operationId: accepted.operationId });
         await new Promise<void>((resolve) => setImmediate(resolve));
-        const state = await f.callbacks.control({
+        const state = await f.runtime.control({
             action: 'status',
-            entryId: f.runtime.entryId,
             operationId: accepted.operationId,
         });
         assert.equal(state.state, 'cancelled');
-        assert.deepEqual(f.controller.status(), { entryId: f.runtime.entryId, connections: [] });
+        assert.deepEqual(f.controller.status(), { connections: [] });
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -245,7 +222,7 @@ test('a settled official error does not close a healthy connection or invent an 
         const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
         const signal = new AbortController().signal;
         await assert.rejects(
-            f.callbacks.invoke(
+            f.runtime.invoke(
                 'list_pages',
                 { _dct: { connectionId: first.connectionId, sessionId: first.sessionId } },
                 signal,
@@ -259,8 +236,8 @@ test('a settled official error does not close a healthy connection or invent an 
         assert.equal(retained.processId, first.processId);
         assert.equal(retained.sessionId, first.sessionId);
         assert.equal(f.counts().closes, 1);
-        assert.ok(!JSON.stringify(f.callbacks.status('PostToolUse')).includes('process-exited'));
-        await f.callbacks.invoke(
+        assert.equal(f.runtime.core.admin.connections().length, 2);
+        await f.runtime.invoke(
             'list_pages',
             { _dct: { connectionId: second.connectionId, sessionId: second.sessionId } },
             signal,
@@ -269,10 +246,14 @@ test('a settled official error does not close a healthy connection or invent an 
         assert.equal(connectionStatus(f.controller, second.connectionId).status, 'active');
         assert.equal(f.launches.length, 2);
         assert.ok(first.sessionId);
-        const recovered = await f.controller.restart({ connectionId: first.connectionId, sessionId: first.sessionId });
+        const recovered = await f.controller.restart({
+            connectionId: first.connectionId,
+            sessionId: first.sessionId,
+            scope: 'both',
+        });
         assert.notEqual(recovered.sessionId, first.sessionId);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -302,10 +283,10 @@ test('an official cleanup failure after actual target exit removes routing and r
         );
         assert.equal(f.counts().closes, 2, 'Closed routes must not retry failed resources automatically.');
         assert.equal(connectionStatus(f.controller, other.connectionId).status, 'active');
-        await f.runtime.close();
+        await f.runtime.cleanup();
         assert.equal(f.counts().closes, 4);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -315,7 +296,7 @@ test('unexpected upstream exit gates calls without announcing process exit', asy
         const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         f.exits[0]?.();
         assert.equal(connectionStatus(f.controller, active.connectionId).reason, 'official-disconnected');
-        await f.callbacks.invoke(
+        await f.runtime.invoke(
             'list_pages',
             { _dct: { connectionId: active.connectionId, sessionId: active.sessionId } },
             new AbortController().signal,
@@ -323,16 +304,16 @@ test('unexpected upstream exit gates calls without announcing process exit', asy
         );
         assert.equal(f.counts().calls, 0);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
-test('bootstrap failure closes catalog connection and router without launching a target', async () => {
+test('catalog validation failure closes acquired resources without launching a target', async () => {
     let closes = 0;
     let routerCloses = 0;
     let launched = false;
     await assert.rejects(
-        startPluginRuntime({
+        createCoreFixture({
             createRouter: async () => ({
                 url: 'http://127.0.0.1:31000',
                 isBusy: () => false,
@@ -342,6 +323,9 @@ test('bootstrap failure closes catalog connection and router without launching a
                     routerCloses += 1;
                 },
             }),
+            loadCatalog: async () => {
+                throw new Error('Catalog validation failed.');
+            },
             createHost: () => ({
                 launch: async () => {
                     launched = true;
@@ -358,11 +342,8 @@ test('bootstrap failure closes catalog connection and router without launching a
                 onExit: () => {},
                 rootsChanged: async () => {},
             }),
-            createEntry: () => {
-                throw new Error('gateway failed');
-            },
         }),
-        /gateway failed/,
+        /Catalog validation failed/,
     );
     assert.equal(closes, 1);
     assert.equal(routerCloses, 1);
@@ -382,7 +363,7 @@ test('one gateway allocates at least four independent connections', async () => 
         assert.equal(status.connections.length, 4);
         assert.equal(new Set(started.map((item) => ('connectionId' in item ? item.connectionId : undefined))).size, 4);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -401,7 +382,7 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
         const before = structuredClone(argumentsList);
         await Promise.all(
             argumentsList.map((arguments_) =>
-                f.callbacks.invoke('list_pages', arguments_, new AbortController().signal, () => {}),
+                f.runtime.invoke('list_pages', arguments_, new AbortController().signal, () => {}),
             ),
         );
         assert.equal(new Set(f.received.map((call) => call.url)).size, 4);
@@ -422,14 +403,14 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
         const secondArguments = argumentsList[1];
         assert.ok(firstArguments && secondArguments);
         await assert.rejects(
-            f.callbacks.invoke('list_pages', firstArguments, new AbortController().signal, () => {}),
+            f.runtime.invoke('list_pages', firstArguments, new AbortController().signal, () => {}),
             /closed|absent/,
         );
         const next = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'next' } });
         assert.notEqual(next.connectionId, first.connectionId);
-        await f.callbacks.invoke('list_pages', secondArguments, new AbortController().signal, () => {});
+        await f.runtime.invoke('list_pages', secondArguments, new AbortController().signal, () => {});
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -447,12 +428,12 @@ test('malformed and stale routes fail before official tool invocation', async ()
             { connectionId: first.connectionId, sessionId: '22222222-2222-4222-8222-222222222222' },
         ]) {
             await assert.rejects(
-                f.callbacks.invoke('list_pages', { _dct: routing }, new AbortController().signal, () => {}),
+                f.runtime.invoke('list_pages', { _dct: routing }, new AbortController().signal, () => {}),
             );
         }
         assert.equal(f.counts().calls, 0);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -471,7 +452,7 @@ test('failed startup rolls back one provisional connection while retained startu
         assert.equal(f.counts().closes, 1, 'Target launch failure precedes official connection acquisition.');
         assert.equal(f.routerCloses(), 2);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
     const retained = await fixture({ failLaunch: 'bad', retainLaunch: true, failTargetClose: true });
     try {
@@ -504,7 +485,7 @@ test('failed startup rolls back one provisional connection while retained startu
         assert.ok(good);
         assert.equal(connectionStatus(retained.controller, good.connectionId).status, 'active');
     } finally {
-        await retained.runtime.close();
+        await retained.runtime.cleanup();
     }
 });
 
@@ -514,7 +495,11 @@ test('live restart preserves the selected connection and original profile across
         const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
         assert.ok(first.sessionId);
-        const restarted = await f.controller.restart({ connectionId: first.connectionId, sessionId: first.sessionId });
+        const restarted = await f.controller.restart({
+            connectionId: first.connectionId,
+            sessionId: first.sessionId,
+            scope: 'both',
+        });
         assert.equal(restarted.connectionId, first.connectionId);
         assert.notEqual(restarted.sessionId, first.sessionId);
         assert.equal(f.launches[2]?.exactPort, undefined);
@@ -525,12 +510,16 @@ test('live restart preserves the selected connection and original profile across
             cwd: process.cwd(),
         });
         assert.ok(restarted.sessionId);
-        await f.controller.restart({ connectionId: restarted.connectionId, sessionId: restarted.sessionId });
+        await f.controller.restart({
+            connectionId: restarted.connectionId,
+            sessionId: restarted.sessionId,
+            scope: 'both',
+        });
         f.targets[0]?.emit('exit');
         assert.equal(f.targets[0]?.listenerCount('exit'), 0);
         assert.equal(f.targets[2]?.listenerCount('exit'), 0);
         await assert.rejects(
-            f.callbacks.invoke(
+            f.runtime.invoke(
                 'list_pages',
                 { _dct: { connectionId: first.connectionId, sessionId: first.sessionId } },
                 new AbortController().signal,
@@ -540,7 +529,7 @@ test('live restart preserves the selected connection and original profile across
         );
         assert.equal(connectionStatus(f.controller, second.connectionId).sessionId, second.sessionId);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -551,8 +540,8 @@ test('disconnect cleanup continues across a failed official Close', async () => 
             f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
         ),
     );
-    await assert.rejects(f.runtime.close(), /cleanup failed/);
-    await f.runtime.close();
+    await assert.rejects(f.runtime.cleanup(), /cleanup failed/);
+    await f.runtime.cleanup();
     assert.equal(f.counts().closes, 6, 'Gateway cleanup retries its failed official resource once.');
     assert.equal(f.routerCloses(), 5);
 });
@@ -571,7 +560,7 @@ test('target launch failure never acquires an official child or retains a public
         assert.equal(f.launches.length, 1);
         assert.equal(f.routerCloses(), 2);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -588,10 +577,10 @@ test('a catalog mismatch retires its actual target and keeps failed upstream dis
         assert.ok('connections' in aggregate);
         assert.equal(aggregate.connections.length, 0);
         assert.equal(f.counts().closes, 2);
-        await f.runtime.close();
+        await f.runtime.cleanup();
         assert.equal(f.counts().closes, 3);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -599,7 +588,7 @@ test('catalog bootstrap attempts its router disposal even when official disposal
     const events: string[] = [];
     let closeAttempts = 0;
     await assert.rejects(
-        startPluginRuntime({
+        createCoreFixture({
             createRouter: async () => ({
                 url: 'http://127.0.0.1:31000',
                 isBusy: () => false,
@@ -635,7 +624,7 @@ test('catalog cleanup reports a persistent official disposal failure after attem
         return true;
     });
     await assert.rejects(
-        startPluginRuntime({
+        createCoreFixture({
             createRouter: async () => ({
                 url: 'http://127.0.0.1:31000',
                 isBusy: () => false,

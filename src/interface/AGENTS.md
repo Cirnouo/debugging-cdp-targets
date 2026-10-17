@@ -1,29 +1,29 @@
 # Interface implementation
 
-Before implementing this layer’s singleton App migration, read
-[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) and the
-[tracked plan](../../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
-These are forward requirements; current stdio rules apply until their planned cutover.
+Before changing this layer's singleton App architecture, read
+[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
+all resources; thin host plugins contain metadata, artwork and the shared Skill.
 
-Keep MCP stdout reserved for the official SDK stdio transport. Diagnostics use
-stderr. Lifecycle requests use MCP tools and structured output. Except initial
-empty status discovery, require entry identity. Status optionally selects a connection; start
-allocates one. Restart/end-task/stop require connection and current session
-identity; status/start prohibit session identity. Only stop accepts disposition. End-task
-ends task activity while retaining a live target and upstream; exited targets retire.
-Reject missing, unknown, or inapplicable fields. Launch receives structured
-executable/args/cwd/env and separate mcpArgs; never a shell command.
-Mutations return an idempotent operation immediately; wait replays bounded events,
-and explicit operation cancellation owns cleanup. Wait cancellation is independent.
-The gateway adds required _dct connection/session routing to official input
-schemas, rejects collisions, and strips it before forwarding original arguments.
-Results are unchanged; lifecycle/operation tools belong to this Plugin. Optional
-hookEventName accepts exactly the four packaged host events; empty status is read-only.
+The tiny Electron bootstrap assigns isolated temporary Chromium paths synchronously
+before any asynchronous initialization. Main owns singleton admission, winner-only
+data/configuration I/O, verified resource paths, trusted core closure and HTTP.
+Normal Quit/Restart denies new requests, awaits actual startup settlement and
+retained construction cleanup, then closes transports/windows and exits. Cleanup
+failure preserves management UI and the OS lease for retry; never force exit.
 
-The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)
-requires a start isolation union: none or data-dir with existing/new directory
-operation and retain/delete-on-release.
-Keep directory path/policy/state in explicit operation metadata and selected
-configuration, preserving failed/cancelled start evidence. Default summaries and
-automatic Hook projections contain no paths or raw filesystem errors. Later
-cleanup updates original start metadata without replacing its terminal result/state.
+Expose only inspect/configure/quit/restart through the sandboxed preload. Validate
+unknown payloads and exact main-window/main-frame/fixed-URL sender identity before
+dispatch. No general filesystem, shell, process, URL navigation or unrestricted IPC.
+The renderer runs only fixed local assets, with context isolation, sandbox, no Node
+integration and restrictive CSP. Linux keeps a visible manager fallback.
+
+MCP lives in the HTTP adapter, not the renderer. Every lifecycle request except
+register carries registrationBearer explicitly; official routing carries that
+bearer plus current connection/session. Never serialize trusted admin capabilities
+or keep a session-wide current principal. Mutations return idempotent operations
+immediately. A response ending normally does not detach a pending roots admission.
+Wait cancellation differs from explicit lifecycle-operation cancellation.
+
+Keep researched structured launch and explicit none/data-dir isolation boundaries.
+Directory paths/policy/state belong only to selected configuration and explicit
+operation evidence. Default summaries contain no paths or raw filesystem errors.

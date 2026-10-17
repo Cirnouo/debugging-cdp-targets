@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -262,26 +263,34 @@ test('installed pnpm bin shims are excluded only by the explicit build-input bou
     }
 });
 
-test('native Server resolution is independent of the caller working directory', async () => {
+test('Server resolution requires explicit verified input independent of caller cwd, without default discovery', async () => {
     const execute = promisify(execFile);
     const module = new URL('../src/adapters/official-server.ts', import.meta.url).href;
+    const directory = await realpath(
+        path.dirname(createRequire(import.meta.url).resolve('chrome-devtools-mcp/package.json')),
+    );
+    const releasePath = fileURLToPath(new URL('../tooling/official-server-release.json', import.meta.url));
     const result = await execute(
         process.execPath,
         [
             '--input-type=module',
             '--eval',
-            `import { resolveServerBin } from ${JSON.stringify(module)}; console.log(await resolveServerBin());`,
+            `import { readFile } from 'node:fs/promises'; import { resolveServerBin } from ${JSON.stringify(module)}; const release = JSON.parse(await readFile(${JSON.stringify(releasePath)}, 'utf8')); console.log(await resolveServerBin({directory:${JSON.stringify(directory)}, release, pnpmInstalled:true}));`,
         ],
         { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false },
     );
-    assert.equal(
-        result.stdout.trim(),
-        fileURLToPath(
-            new URL(
-                '../plugins/codex/debugging-cdp-targets/dist/official-server/build/src/bin/chrome-devtools-mcp.js',
-                import.meta.url,
-            ),
+    assert.equal(result.stdout.trim(), path.join(directory, 'build/src/bin/chrome-devtools-mcp.js'));
+    await assert.rejects(
+        execute(
+            process.execPath,
+            [
+                '--input-type=module',
+                '--eval',
+                `import { resolveServerBin } from ${JSON.stringify(module)}; await resolveServerBin();`,
+            ],
+            { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false },
         ),
+        /Explicit verified runtime location/,
     );
 });
 
@@ -293,7 +302,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
             await mkdir(path.dirname(path.join(fixture.root, 'official-server', name)), { recursive: true });
             await writeFile(path.join(fixture.root, 'official-server', name), bytes);
         }
-        const output = path.join(fixture.root, 'gateway.mjs');
+        const output = path.join(fixture.root, 'app/gateway.mjs');
         await build({
             stdin: {
                 contents:
@@ -305,16 +314,15 @@ test('packaged resolver verifies every call and rejects missing or changed conte
             platform: 'node',
             format: 'esm',
             target: 'node24',
-            define: { __DCT_OFFICIAL_RELEASE__: JSON.stringify(fixture.input) },
             banner: {
                 js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
             },
         });
-        const prelude = `const m = await import(${JSON.stringify(pathToFileURL(output).href)});`;
+        const prelude = `const m = await import(${JSON.stringify(pathToFileURL(output).href)}); const explicit = ${JSON.stringify({ directory: path.join(fixture.root, 'official-server'), release: fixture.input })};`;
         const options = { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false };
         const result = await execute(
             process.execPath,
-            ['--input-type=module', '--eval', `${prelude} console.log(await m.resolveServerBin());`],
+            ['--input-type=module', '--eval', `${prelude} console.log(await m.resolveServerBin(explicit));`],
             options,
         );
         assert.equal(
@@ -328,7 +336,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.resolveServerBin(); const fs = await import('node:fs/promises'); await fs.writeFile(${JSON.stringify(changed)}, 'changed'); await m.resolveServerBin();`,
+                    `${prelude} await m.resolveServerBin(explicit); const fs = await import('node:fs/promises'); await fs.writeFile(${JSON.stringify(changed)}, 'changed'); await m.resolveServerBin(explicit);`,
                 ],
                 options,
             ),
@@ -340,7 +348,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222');`,
+                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveServerBin(explicit)});`,
                 ],
                 options,
             ),
@@ -354,7 +362,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222');`,
+                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveServerBin(explicit)});`,
                 ],
                 options,
             ),

@@ -6,11 +6,14 @@ never automatically restarts an application or replays a tool call.
 
 ## Common failures
 
-- **Bundled official package verification failed**: reinstall the Plugin or run
-    `pnpm build:plugin` in a prepared contributor checkout. Runtime does not fetch
+- **Bundled official package verification failed**: replace the affected App
+    stage from independently verified inputs. Reinstalling a thin Plugin cannot
+    repair App runtime files. Runtime does not fetch
     replacements. See [package integrity](privacy.md#bundled-official-package-integrity).
 - **Missing, unknown or stale routing identity**: refresh
-    `dct_connection_status` and use the target's connection/current session UUIDs.
+    `dct_connection_status` with the original registrationBearer and use the
+    target's connection/current session UUIDs. A lost bearer cannot be read back;
+    a new registration does not authorize old resources.
     Live restart changes session identity; actual exit removes the connection.
 - **The restart port is busy**: identify its owner and resolve the conflict before
     retrying a fixed-port launch; automatic policy can select another verified free port. After ordinary app

@@ -1,0 +1,156 @@
+{
+    "schemaVersion": 1,
+    "sources": {
+        "electronChecksums": "https://github.com/electron/electron/releases/download/v44.8.0/SHASUMS256.txt",
+        "electronRelease": "https://api.github.com/repos/electron/electron/releases/tags/v44.8.0",
+        "nodeChecksums": "https://nodejs.org/dist/v24.21.0/SHASUMS256.txt"
+    },
+    "archives": [
+        {
+            "kind": "electron",
+            "version": "44.8.0",
+            "platform": "win32",
+            "architecture": "x64",
+            "filename": "electron-v44.8.0-win32-x64.zip",
+            "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-win32-x64.zip",
+            "bytes": 158524950,
+            "sha256": "1c9319bab793492715f7668e0be0e6a30bf2a8577275e40035bd33601bf6f573",
+            "licenses": [
+                {
+                    "path": "LICENSE",
+                    "bytes": 1096,
+                    "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
+                },
+                {
+                    "path": "LICENSES.chromium.html",
+                    "bytes": 20477229,
+                    "sha256": "e6e6b1f9cb0f32235412be113de7716333e88121f9159a0ea0ff3be652021af7"
+                }
+            ]
+        },
+        {
+            "kind": "node",
+            "version": "24.21.0",
+            "platform": "win32",
+            "architecture": "x64",
+            "filename": "node-v24.21.0-win-x64.zip",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip",
+            "bytes": 37618919,
+            "sha256": "158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541",
+            "runtimeFiles": [
+                {
+                    "path": "node-v24.21.0-win-x64/node.exe",
+                    "destination": "node.exe",
+                    "bytes": 93580104,
+                    "sha256": "ba4e6d110e8c1592a1ecd390f6b05f3da124b13871a5be62b341a07a853c6c32"
+                },
+                {
+                    "path": "node-v24.21.0-win-x64/LICENSE",
+                    "destination": "LICENSE",
+                    "bytes": 160555,
+                    "sha256": "ed34dd8e3f0a78dbaf00d0444ce8e285b015b765379c2e17880455f70370f8e9"
+                }
+            ]
+        },
+        {
+            "kind": "electron",
+            "version": "44.8.0",
+            "platform": "win32",
+            "architecture": "arm64",
+            "filename": "electron-v44.8.0-win32-arm64.zip",
+            "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-win32-arm64.zip",
+            "bytes": 156610637,
+            "sha256": "5b74b0c0a79bcda52fed73a6ded14d8690ba638fb30353ddfe9cb0d71ef2df6f"
+        },
+        {
+            "kind": "node",
+            "version": "24.21.0",
+            "platform": "win32",
+            "architecture": "arm64",
+            "filename": "node-v24.21.0-win-arm64.zip",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-arm64.zip",
+            "bytes": 33679608,
+            "sha256": "8779b1bde1d39f8d420e3b57aa657b39891af434d3de44a919044cec06785921"
+        },
+        {
+            "kind": "electron",
+            "version": "44.8.0",
+            "platform": "darwin",
+            "architecture": "x64",
+            "filename": "electron-v44.8.0-darwin-x64.zip",
+            "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-darwin-x64.zip",
+            "bytes": 134430771,
+            "sha256": "aea5da374201a2ddf97da12baf22d0dda66a5d034dfd38ed1e447250168fa5d3"
+        },
+        {
+            "kind": "node",
+            "version": "24.21.0",
+            "platform": "darwin",
+            "architecture": "x64",
+            "filename": "node-v24.21.0-darwin-x64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-x64.tar.gz",
+            "bytes": 54203979,
+            "sha256": "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097"
+        },
+        {
+            "kind": "electron",
+            "version": "44.8.0",
+            "platform": "darwin",
+            "architecture": "arm64",
+            "filename": "electron-v44.8.0-darwin-arm64.zip",
+            "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-darwin-arm64.zip",
+            "bytes": 130602344,
+            "sha256": "ccd9ba800d39d403375211d8f8da528469ebae3213cce4ec72b42e4dcc847513"
+        },
+        {
+            "kind": "node",
+            "version": "24.21.0",
+            "platform": "darwin",
+            "architecture": "arm64",
+            "filename": "node-v24.21.0-darwin-arm64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
+            "bytes": 52909993,
+            "sha256": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057"
+        },
+        {
+            "kind": "electron",
+            "version": "44.8.0",
+            "platform": "linux",
+            "architecture": "x64",
+            "filename": "electron-v44.8.0-linux-x64.zip",
+            "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-linux-x64.zip",
+            "bytes": 123362542,
+            "sha256": "926679355f8bf8d521fc6e1a2dc1c71f11cf176a3a1444f9afbd9e1cdfeddb11"
+        },
+        {
+            "kind": "node",
+            "version": "24.21.0",
+            "platform": "linux",
+            "architecture": "x64",
+            "filename": "node-v24.21.0-linux-x64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
+            "bytes": 58088022,
+            "sha256": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff"
+        },
+        {
+            "kind": "electron",
+            "version": "44.8.0",
+            "platform": "linux",
+            "architecture": "arm64",
+            "filename": "electron-v44.8.0-linux-arm64.zip",
+            "url": "https://github.com/electron/electron/releases/download/v44.8.0/electron-v44.8.0-linux-arm64.zip",
+            "bytes": 124393671,
+            "sha256": "502296281cab3c333bd5193e2eaed11c3bb28eabd7a451a49776a3e5a9468f8c"
+        },
+        {
+            "kind": "node",
+            "version": "24.21.0",
+            "platform": "linux",
+            "architecture": "arm64",
+            "filename": "node-v24.21.0-linux-arm64.tar.gz",
+            "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.gz",
+            "bytes": 57824078,
+            "sha256": "724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5"
+        }
+    ]
+}

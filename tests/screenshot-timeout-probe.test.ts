@@ -42,7 +42,7 @@ function boundary(
         windows?: unknown[];
         closeFails?: boolean;
         blockedIdentity?: boolean;
-        recoveryCapture?: boolean;
+        toolErrorCapture?: boolean;
         afterDiagnosticsFails?: boolean;
         conditionResult?: unknown;
         duringWindow?: unknown;
@@ -84,11 +84,10 @@ function boundary(
                         return { isError: true, content: [{ type: 'text', text: 'fixture handler failed' }] };
                     }
                     if (name === 'take_screenshot' && options.rejectCapture) throw new Error('MCP timeout: tools/call');
-                    if (name === 'take_screenshot' && options.recoveryCapture)
+                    if (name === 'take_screenshot' && options.toolErrorCapture)
                         return {
                             isError: true,
-                            structuredContent: { code: 'CONNECTION_RECOVERY_REQUIRED', reason: 'upstream-timeout' },
-                            content: [{ type: 'text', text: 'Gateway requires explicit recovery.' }],
+                            content: [{ type: 'text', text: 'Fixture screenshot tool failed.' }],
                         };
                     return {
                         content: [
@@ -327,12 +326,12 @@ for (const phase of ['before', 'during', 'after'] as const) {
     });
 }
 
-for (const recoveryCapture of [false, true]) {
-    test(`passive sampling failure invalidates observations while preserving ${recoveryCapture ? 'quarantine' : 'successful capture'}`, async () => {
-        const io = boundary({ duringFailure: true, recoveryCapture });
+for (const toolErrorCapture of [false, true]) {
+    test(`passive sampling failure invalidates observations while preserving ${toolErrorCapture ? 'tool error' : 'successful capture'}`, async () => {
+        const io = boundary({ duringFailure: true, toolErrorCapture });
         const result = await runScreenshotTimeoutProbe(fixture, 'C:/Evidence/shot.png', io.adapter);
-        assert.equal(result.outcome, recoveryCapture ? 'recovery-required' : 'blocked-evidence');
-        assert.equal(result.capture?.outcome, recoveryCapture ? 'recovery-required' : 'success');
+        assert.equal(result.outcome, toolErrorCapture ? 'tool-error' : 'blocked-evidence');
+        assert.equal(result.capture?.outcome, toolErrorCapture ? 'tool-error' : 'success');
         assert.ok(result.capture?.result);
         assert.equal(result.observations.ok, false);
         assert.deepEqual(result.observations.errors, [
@@ -687,7 +686,7 @@ test('replaced native HWND after capture cannot be reported as success', async (
 });
 
 for (const options of [
-    { recoveryCapture: true, expected: 'recovery-required', error: 'Gateway requires explicit recovery.' },
+    { toolErrorCapture: true, expected: 'tool-error', error: 'Official take_screenshot returned isError:true.' },
     { rejectCapture: true, expected: 'client-error', error: 'MCP timeout: tools/call' },
 ]) {
     test(`${options.expected} survives failed required after-window evidence`, async () => {
@@ -706,7 +705,7 @@ for (const options of [
 }
 
 for (const options of [
-    { recoveryCapture: true, expected: 'recovery-required' },
+    { toolErrorCapture: true, expected: 'tool-error' },
     { rejectCapture: true, expected: 'client-error' },
     { expected: 'blocked-evidence' },
 ]) {
@@ -718,8 +717,8 @@ for (const options of [
         if (options.expected !== 'blocked-evidence') {
             assert.equal(
                 result.error,
-                options.expected === 'recovery-required'
-                    ? 'Gateway requires explicit recovery.'
+                options.expected === 'tool-error'
+                    ? 'Official take_screenshot returned isError:true.'
                     : 'MCP timeout: tools/call',
             );
             assert.equal(result.capture?.error, result.error);

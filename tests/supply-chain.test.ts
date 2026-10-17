@@ -7,7 +7,7 @@ import test from 'node:test';
 import { parse, stringify } from 'yaml';
 import { isRecord } from '../src/shared/errors.ts';
 import { checkSecurity } from '../tooling/check-security.ts';
-import { OFFICIAL_RELEASE } from '../tooling/payload-policy.ts';
+import { OFFICIAL_RELEASE } from '../tooling/official-release.ts';
 import {
     assessAudit,
     evaluateFindings,

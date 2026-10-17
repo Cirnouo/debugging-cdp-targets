@@ -19,8 +19,9 @@ Variables are facts, never new questions, options or authorization:
 - `directory`: the selected existing directory's resolved actual absolute path.
 - `parent`: the verified existing absolute parent, not a future child path.
 - `name`: the explicitly requested new leaf name, not a guessed random name.
-- `entry_id`, `connection_id`, `session_id`: the verified affected route; for an
-    exit notice these identify the removed route, never a route to reuse.
+- `registration_id`, `connection_id`, `session_id`: the retained public registration ID and verified affected route. Never use the
+    private bearer as a question variable. For actual exit, connection/session
+    identify the removed route and cannot be reused.
 - `cleanup_policy`: the established `retain`, `delete-on-release`, or `none`
     when no isolation directory was acquired; this question does not change it.
 - `failure_code`: the bounded reported error code, not raw error/page content.
@@ -41,7 +42,7 @@ Variables are facts, never new questions, options or authorization:
     error code, raw error, new question or proposed remedy.
 - `template_id`, `quoted_answer`: the original catalogue ID and User's ambiguous
     answer as quoted data; repeat that original template unchanged if needed.
-- `candidates`: verified current target names and entry/connection/session IDs,
+- `candidates`: verified current target names and public registration/connection/session IDs,
     displayed with those fixed field labels, in status order; no invented targets.
 - `operation_id`: the operation actually implicated by an ambiguous cancel request.
 
@@ -130,21 +131,21 @@ templates:
     close-keep:
         variables:
             - application
-            - entry_id
+            - registration_id
             - connection_id
             - session_id
             - cleanup_policy
     live-recovery:
         variables:
             - application
-            - entry_id
+            - registration_id
             - connection_id
             - session_id
             - failure_code
     exit-start:
         variables:
             - application
-            - entry_id
+            - registration_id
             - connection_id
             - session_id
     tools-start:
@@ -155,7 +156,7 @@ templates:
     tools-restart:
         variables:
             - application
-            - entry_id
+            - registration_id
             - connection_id
             - session_id
             - tool_names
@@ -163,7 +164,7 @@ templates:
     replace-launch:
         variables:
             - application
-            - entry_id
+            - registration_id
             - connection_id
             - session_id
             - old_args
@@ -171,7 +172,7 @@ templates:
     native-picker:
         variables:
             - application
-            - entry_id
+            - registration_id
             - connection_id
             - session_id
             - dialog_label
@@ -196,7 +197,7 @@ templates:
             - candidates
     cancel-intent:
         variables:
-            - entry_id
+            - registration_id
             - operation_id
     cleanup-new-random:
         variables:

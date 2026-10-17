@@ -97,8 +97,8 @@ coverage boundary, not a claim that embedded code is vulnerability-free.
 
 ## Official release delivery and upgrades
 
-The official Server is a complete unchanged npm release delivered in each host's
-Plugin `dist/official-server/`. Preserve every original release file, including
+The official Server is a complete unchanged npm release delivered in the App
+`resources/official-server/`. Thin plugins contain no runtime dependencies. Preserve every original release file, including
 licenses and notices, resources, vendor inventory and published Skills. Do not
 compile, rewrite, prune, tree-shake or merge official code into the gateway, or
 omit files to solve payload-size or Windows path problems. The accepted
@@ -122,8 +122,10 @@ tree against maintained tarball/file evidence and agreement with both
 `pnpm-lock.yaml` and `tooling/security/upstream-pnpm-lock.yaml`. Only the reviewed
 installation-only pnpm bin shims may be excluded from installed input; delivery
 and runtime permit no shim exception. Copy verified release bytes unchanged into
-both host payloads. `pnpm check:build` checks the same evidence and complete
-output inventory without writing, networking, installing or executing the Server.
+the App. `pnpm check:app` verifies source bundles and complete original inputs
+without writing, networking, installing or executing the Server. Native staging
+additionally verifies supplied archives before extraction. `pnpm check:build`
+independently compares only the thin host payload inventories.
 A future official release requiring external runtime dependencies needs a new
 packaging design; the current design fails closed instead of omitting them.
 
@@ -141,6 +143,19 @@ evidence and launches its public bin. It must not acquire packages through
 npm/npx, fall back to caches or global installations, or import a private CLI.
 Preserve original upstream release content and the existing runtime contracts;
 dependency upgrades do not authorize a new acquisition or packaging design.
+
+Electron and ordinary Node archives have separate canonical input records in
+`tooling/app-release-inputs.json`; npm signatures do not authenticate these
+archives. Before native staging, independently check the complete archive length
+and digest and original extraction evidence. The native advisory-lock loading
+closure uses complete original package files/prebuilds/licenses recorded in
+`app-native-release.json`, verified before public addon loading. Do not rebuild
+or substitute native binaries on verification failure. Recorded archive identity,
+successful extraction, ordinary-Node loading, Electron loading and each actual
+platform/architecture acceptance are separate evidence; one does not imply the
+others. App bundles collect original licenses from the actual build graph and
+the reviewed SDK vendor source-map evidence. Unused installer tooling need not
+be installed before its delivery task.
 
 ## Vulnerabilities and bounded review exceptions
 
@@ -172,7 +187,7 @@ array. Each exception must contain exactly:
 
 Code hashes cover maintained runtime source/helpers, audit/build tooling and
 committed runtime bundles and every official delivery file, including resources,
-licenses and skills in both host payloads. Configuration hashes cover maintained release evidence,
+licenses and skills in the App delivery. Configuration hashes cover maintained release evidence,
 the isolated lock snapshot, package.json, workspace
 policy, the lockfile, optional .npmrc, reviewed vendored-license evidence, CI workflows, Plugin JSON/YAML configuration
 and both Codex/Claude Marketplace catalogs. Host path descriptors are pure data;

@@ -1,9 +1,8 @@
 {
     "mcpServers": {
         "cdp-targets": {
-            "type": "stdio",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mcp-bootstrap.mjs"]
+            "type": "http",
+            "url": "http://127.0.0.1:27637/mcp"
         }
     }
 }

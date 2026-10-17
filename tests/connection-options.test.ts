@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { Tool } from '@modelcontextprotocol/client';
-import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { createCoreFixture } from './fixtures/core-runtime.ts';
 
 test('connections keep independent actual catalogs and explicit restart invalidates only its old session', async () => {
     const routed: Tool = {
@@ -31,16 +32,12 @@ test('connections keep independent actual catalogs and explicit restart invalida
             { name: slim.name, requires: { slim: true }, variants: [slim] },
         ],
     });
-    let callbacks: Parameters<typeof createMcpEntryServer>[0] | undefined;
+
     const calls: { url: string; name: string; args: Record<string, unknown> }[] = [];
     let routers = 0;
     let launched = 0;
     const children = new Map<number, EventEmitter>();
-    let end: () => void = () => {};
-    const closed = new Promise<void>((resolve) => {
-        end = resolve;
-    });
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         loadCatalog: async () => catalog,
         createRouter: async () => ({
             url: `http://127.0.0.1:${30000 + routers++}`,
@@ -80,24 +77,12 @@ test('connections keep independent actual catalogs and explicit restart invalida
             rootsChanged: async () => {},
             onExit: () => {},
         }),
-        createEntry: (options) => {
-            callbacks = options;
-            return {
-                connect: async () => {},
-                closed,
-                close: async () => end(),
-                roots: async () => ({ roots: [] }),
-                supportsRoots: () => false,
-                supportsFormElicitation: () => false,
-                elicit: async () => ({ action: 'cancel' }),
-            };
-        },
     });
-    assert.ok(callbacks?.control);
-    const gateway = callbacks;
-    const control = callbacks.control;
+    assert.ok(runtime?.control);
+    const gateway = runtime;
+    const control = runtime.control;
     try {
-        const preflight = await control({ action: 'status', entryId: runtime.entryId, toolNames: ['evaluate'] });
+        const preflight = await control({ action: 'status', toolNames: ['evaluate'] });
         assert.match(JSON.stringify(preflight), /slim=true/);
         assert.equal(JSON.stringify(preflight).includes('suggestedMcpArgs'), false);
         const first = await runtime.controller.start({
@@ -111,12 +96,10 @@ test('connections keep independent actual catalogs and explicit restart invalida
         });
         const firstStatus = await control({
             action: 'status',
-            entryId: runtime.entryId,
             connectionId: first.connectionId,
         });
         const secondStatus = await control({
             action: 'status',
-            entryId: runtime.entryId,
             connectionId: second.connectionId,
         });
         assert.deepEqual(firstStatus.enabledTools, ['evaluate_script']);
@@ -127,6 +110,30 @@ test('connections keep independent actual catalogs and explicit restart invalida
         const unavailable = await gateway.invoke('evaluate_script', args, signal, () => {});
         assert.ok(isRecord(unavailable.structuredContent));
         assert.equal(unavailable.structuredContent.code, 'TOOL_NOT_ENABLED');
+        assert.equal(Object.hasOwn(unavailable.structuredContent, 'entryId'), false);
+        assert.equal(JSON.stringify(unavailable).includes('entryId'), false);
+        const http = await createMcpHttpServer({ port: 0, core: runtime.core });
+        const client = new Client({ name: 'disabled-tool-projection', version: '1' }, { capabilities: {} });
+        try {
+            await client.connect(new StreamableHTTPClientTransport(new URL(http.url)));
+            const projected = await client.callTool({
+                name: 'evaluate_script',
+                arguments: {
+                    function: '() => 1',
+                    pageId: 1,
+                    _dct: {
+                        connectionId: second.connectionId,
+                        sessionId: second.sessionId,
+                        registrationBearer: runtime.registration.bearer,
+                    },
+                },
+            });
+            assert.deepEqual(projected, unavailable);
+            assert.equal(JSON.stringify(projected).includes('entryId'), false);
+        } finally {
+            await client.close();
+            await http.close();
+        }
         assert.ok(JSON.stringify(unavailable).includes('--slim=false'));
         assert.equal(launched, 2);
         assert.equal(calls.length, 0);
@@ -144,7 +151,6 @@ test('connections keep independent actual catalogs and explicit restart invalida
         assert.notEqual(restarted.sessionId, first.sessionId);
         const actual = await control({
             action: 'status',
-            entryId: runtime.entryId,
             connectionId: first.connectionId,
             toolNames: ['evaluate_script'],
         });
@@ -163,18 +169,17 @@ test('connections keep independent actual catalogs and explicit restart invalida
             /stale/,
         );
         await gateway.invoke('evaluate', args, signal, () => {});
-        await assert.rejects(
-            runtime.controller.restart({
-                connectionId: restarted.connectionId,
-                sessionId: restarted.sessionId ?? '',
-                mcpArgs: ['--browser-url=http://other'],
-            }),
-            /cannot replace mcpArgs/,
-        );
+        const invalidReplacement = {
+            connectionId: restarted.connectionId,
+            sessionId: restarted.sessionId ?? '',
+            scope: 'both' as const,
+            mcpArgs: ['--browser-url=http://other'],
+        };
+        await assert.rejects(runtime.controller.restart(invalidReplacement), /cannot replace mcpArgs/);
         const retained = runtime.controller.status(first.connectionId);
         assert.ok('status' in retained);
         assert.equal(retained.status, 'active');
     } finally {
-        await runtime.close();
+        await runtime.cleanup();
     }
 });

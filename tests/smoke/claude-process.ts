@@ -143,7 +143,7 @@ export async function claudeHost(
     prompt: string,
     afterResult?: (index: number) => Promise<string | undefined>,
     timeoutMs = 90_000,
-    options: { toolSearch?: boolean } = {},
+    options: { toolSearch?: boolean; recordOutput?: boolean } = {},
 ) {
     const version = claudeVersion(await claudeCli(executable, ['--version'], temporary, endpoint));
     const args = [
@@ -163,9 +163,7 @@ export async function claudeHost(
         '--verbose',
         '--setting-sources',
         'user',
-        '--include-hook-events',
-        '--debug-file',
-        path.join(temporary, 'debug.log'),
+        ...(options.recordOutput === false ? [] : ['--debug-file', path.join(temporary, 'debug.log')]),
         ...extra,
     ];
     const env = claudeEnvironment(temporary, endpoint, process.env, options);
@@ -212,8 +210,12 @@ export async function claudeHost(
                     assert.ok(record(event));
                     events.push(event);
                     if (event.type === 'result') {
-                        assert.equal(event.is_error, false, JSON.stringify(event));
-                        assert.equal(event.subtype, 'success', JSON.stringify(event));
+                        const diagnostic =
+                            options.recordOutput === false
+                                ? 'Actual isolated Claude turn failed.'
+                                : JSON.stringify(event);
+                        assert.equal(event.is_error, false, diagnostic);
+                        assert.equal(event.subtype, 'success', diagnostic);
                         count++;
                         const next = await afterResult?.(count);
                         if (next) await send(next);
@@ -250,12 +252,18 @@ export async function claudeHost(
     } finally {
         deadline.dispose();
         await Promise.all([
-            writeFile(path.join(temporary, 'stdout.jsonl'), stdout),
-            writeFile(path.join(temporary, 'stderr.log'), stderr),
+            writeFile(
+                path.join(temporary, 'stdout.jsonl'),
+                options.recordOutput === false ? '[Private bearer protocol output omitted.]\n' : stdout,
+            ),
+            writeFile(
+                path.join(temporary, 'stderr.log'),
+                options.recordOutput === false ? '[Private bearer protocol output omitted.]\n' : stderr,
+            ),
         ]);
     }
     if (failure) throw failure;
-    assert.equal(code, 0, stderr);
+    assert.equal(code, 0, options.recordOutput === false ? 'Actual isolated Claude failed.' : stderr);
     assert.equal(stderr, '', 'Unexpected actual Claude stderr.');
     assert.ok(count > 0, 'Actual Claude omitted a successful turn result.');
     const init = events.find((event) => event.type === 'system' && event.subtype === 'init');

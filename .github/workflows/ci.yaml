@@ -115,6 +115,8 @@ jobs:
                 run: pnpm check:distribution
             -   name: Verify committed runtime build
                 run: pnpm check:build
+            -   name: Verify App bundle inputs and licenses
+                run: pnpm check:app
 
     node-compatibility:
         name: Node compatibility (24.x)
@@ -143,8 +145,10 @@ jobs:
                 run: pnpm check:build
             -   name: Verify standalone security checker matches its source
                 run: pnpm check:security:build
-            -   name: Smoke delivered official Server catalog
-                run: pnpm smoke:official
+            -   name: Verify App bundle inputs and licenses
+                run: pnpm check:app
+            -   name: Smoke reviewed installed official Server catalog
+                run: pnpm smoke:official --installed
 
     windows-tests:
         name: Windows tests

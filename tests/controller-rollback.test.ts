@@ -88,7 +88,6 @@ test('failed attachment and failed rollback retain a gated session until explici
     );
     await assert.rejects(f.controller.stop({ sessionId: retained.sessionId, disposition: 'Keep' }), /Close/);
     await assert.rejects(f.controller.restart({ sessionId: retained.sessionId }), /lost/);
-    await assert.rejects(f.controller.endTask({ sessionId: retained.sessionId }), /Close/);
     await assert.rejects(f.controller.stop({ sessionId: entryId, disposition: 'Close' }), /stale/);
     assert.equal(f.launches(), 1);
     f.allowClose();

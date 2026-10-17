@@ -3,9 +3,9 @@
 `createGatewayCore()` in `src/application/plugin-runtime.ts` constructs the
 transport-independent core and fixed official catalog. It attaches no client and
 launches no target. Catalog discovery owns a short-lived verified official child
-and router and disposes both before returning. The delivered stdio wrapper still
-owns entryId, seven lifecycle tools, task activity and Hooks; EOF explicitly asks
-for final cleanup. This seam does not deliver HTTP or a desktop App.
+and router and disposes both before returning. The separately composed Electron
+App owns direct SDK HTTP and final cleanup; thin Plugins never launch a core.
+See [App runtime](app-runtime.md) for bootstrap, storage and request lifetime.
 
 ## Client and registration boundary
 
@@ -16,8 +16,10 @@ request identity, negotiated capabilities, roots reader, request-scoped form
 elicitation/progress and response-wait signal. `detach()` makes those facilities
 unavailable without cleaning resources. `core.control(request, context)` and
 `core.invoke(name, arguments, context)` authorize that exact verified principal.
-The stdio facade uses a trusted in-process principal without bearer recovery or
-agent idle expiry; it is excluded from the agent-registration inventory.
+Each HTTP tool request explicitly authenticates its own bearer and builds its own
+request context. There is no anonymous/trusted stdio principal or session current
+owner. Accepted responses retain pending admission facilities until settlement or
+real originating client/session disconnect.
 
 Request deduplication is registration-scoped. Every lifecycle operation captures
 its owner on acceptance. Transfer changes future resource admission, preserves
@@ -59,8 +61,8 @@ Fixed ports refuse collisions. Automatic policy may select a new verified free
 port without changing unrelated decimal/path bytes or retrying after app creation.
 Changed application or official configuration requires completed Close/new start.
 
-Core restart requires explicit `target`, `official` or `both` scope. Only the old
-stdio facade maps omitted scope to `both`. Logical connectionId/router/directory
+Core restart requires explicit `target`, `official` or `both` scope.
+Logical connectionId/router/directory
 stay stable; independently owned target and official generations change only when
 their side is replaced. Any scope issues a fresh public sessionId. Expected target
 exits are registered before normal Close on the actual target owner, carrying its
@@ -101,5 +103,13 @@ Trusted construction may supply immutable `officialRuntime: {nodeExecutable, bin
 Both catalog discovery and per-connection children use that same location through
 `createConnection`; no agent request accepts it. The embedding application must
 first verify its ordinary Node and complete unchanged official package/evidence.
-The default stdio path uses `process.execPath` and module-relative complete-release
-verification. `OfficialConnection.processId` identifies the actual owned child.
+The App always injects verified bundled ordinary Node and the original public
+bin. Test composition supplies its verified development or sealed input explicitly.
+`OfficialConnection.processId` identifies the actual owned child.
+
+Trusted `onCleanupReady` receives a readonly cleanup/state capability synchronously
+before first catalog acquisition. Callback failure acquires nothing. The App
+retains this capability through constructor failure, waits for all startup to
+settle before cleanup, and keeps its manager/lease when cleanup fails. Catalog
+pending acquisitions use the same owner barrier; late resources cannot escape
+a successful cleanup.

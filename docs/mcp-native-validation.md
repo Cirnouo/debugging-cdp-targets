@@ -1,5 +1,13 @@
 # MCP native lifecycle delivery and validation
 
+App cutover follow-up, 2026-10-17: current composition uses a singleton desktop
+App, explicit registration bearer and direct HTTP thin Plugins. See
+[App runtime](app-runtime.md) and [current lifecycle protocol](lifecycle-protocol.md).
+The dated stdio/Hook/payload acceptance below remains evidence for its original
+revision only; it does not establish App GUI, current HTTP host or native installer
+acceptance. The maintained native research harness now has its own sealed
+Core/HTTP fixture identity, separate from production App exit.
+
 Current lifecycle follow-up: [ADR 0013](adr/0013-session-owned-exit-cleanup.md)
 and [the lifecycle protocol](lifecycle-protocol.md) replace the earlier retained
 dead-session recovery, target-close waiting and full-result Hook/status semantics.

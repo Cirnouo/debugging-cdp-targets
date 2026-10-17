@@ -1,9 +1,25 @@
 # I/O adapters
 
+- `app-singleton.ts` holds the advisory kernel lock descriptor for the App's
+  lifetime in a native-account namespace independent of selected data roots.
+- `app-activation.ts` provides only a bounded fixed activation frame and reply;
+  it carries no management requests, credentials or settings.
+- `app-storage.ts` selects separate installed and portable data roots and admits
+  their creation only after singleton ownership.
+- `app-chromium-storage.ts` creates per-process temporary Chromium roots
+  synchronously before asynchronous bootstrap work, separate from configuration.
+- `app-configuration.ts` validates the whole migration chain before a backup and
+  atomic settings replacement, keeping desired port separate from effective port.
+- `app-native.ts` verifies the complete original native loader closure before
+  loading its public advisory-lock API.
+- `app-delivery.ts` verifies immutable archive and regular-file evidence without
+  executing or repairing delivery inputs.
 - `fixture-diagnostics.ts` owns opt-in fixture observation, direct I/O scopes,
   closed safe event/error metadata and receiver-side exception containment.
 - `cdp-router.ts` forwards loopback HTTP/WebSocket CDP and tracks requests.
-- `lifecycle-tools.ts` declares the seven MCP lifecycle/operation interfaces.
+- `lifecycle-tools.ts` declares registration and six owned lifecycle/operation interfaces.
+- `app-official-runtime.ts` verifies bundled ordinary Node and the complete
+  unchanged official release before injecting both catalog and connection spawns.
 - `tool-catalog.ts` exposes the fixed official catalog, parameter variants,
   actual connection enablement and configuration recipes/workspace sources.
 - `official-server.ts` validates the delivered release before resolving its public Server bin and validates options.
@@ -13,8 +29,8 @@
 - `mcp-bridge.ts` connects the official Server through the public SDK Client,
   closes its public transport independently of actual child exit, and owns
   bounded stdin/TERM/KILL disposal for that Server child.
-- `mcp-entry-server.ts` exposes routed official and MCP lifecycle tools
-  through the SDK gateway on stdio.
+- `mcp-http-server.ts` composes the public SDK Node Streamable HTTP transport,
+  validates loopback HTTP boundaries and authenticates every owned tool call.
 - `target-host.ts` launches and verifies a newly created target. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
   the debugging process and fixes Windows screenshots with one bare
@@ -48,7 +64,9 @@ It checks explicit Chrome profiles in both isolation modes. Omitted default root
 and generic application occupancy require the Agent's read-only prelaunch gate;
 the runtime does not guess their identity or a universal lock convention.
 
-The bundled gateway uses the public `@modelcontextprotocol/client`, `server` and
-`core` SDK packages pinned to 2.2.0. It retains legacy stdio initialization, roots,
-form elicitation, progress and cancellation. Catalog pages are walked without the
-SDK aggregate page cap, and calls validate against the original output schemas.
+The App uses public `@modelcontextprotocol/client`, `server` and `core` SDK
+2.2.0 and Node HTTP transport 2.1.0. The original official child retains its
+public stdio interface. Host HTTP requests supply their own roots, form
+elicitation, progress and cancellation facilities. Catalog pages are walked
+without the SDK aggregate page cap; output schemas remain original. See the
+[HTTP cancellation boundary](../../docs/app-runtime.md#request-lifetime).

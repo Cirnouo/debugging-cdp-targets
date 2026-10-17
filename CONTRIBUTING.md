@@ -7,8 +7,9 @@ vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 Before implementing the singleton desktop App migration, read
 [ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
 [accepted implementation plan](docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
-They govern forward implementation; the current stdio gateway and installed Skill
-remain supported until the atomic HTTP/Hook cutover in Task 4.
+The singleton App owns direct HTTP and native resources; thin host Plugins load
+metadata, artwork and the shared Skill. [App runtime](docs/app-runtime.md) records
+current composition and separates local staging from installer acceptance.
 
 ## Prepare a checkout
 
@@ -131,8 +132,10 @@ pnpm verify:push
 
 Choose the focused test appropriate to your change. Dependency and build-input
 changes also require `pnpm check:security`. When runtime source changes,
-regenerate the committed distribution with `pnpm build:plugin`, then verify it
-with `pnpm check:build` and the complete verification suite.
+verify App bundles with `pnpm check:app`. For packaging/Skill changes regenerate
+thin distributions with `pnpm build:plugin`, then compare with `pnpm check:build`.
+Native App stages require independently verified original archives; see the
+[App build contract](docs/app-runtime.md#building-and-evidence).
 
 Real browser integration is separate from ordinary tests. Follow
 [the smoke instructions](tests/smoke/README.md); use only newly launched isolated
@@ -181,7 +184,7 @@ AGENTS.md and the [release policy](docs/policies/releases.md).
 
 Maintained packaging inputs live in `packaging/codex/`, `packaging/claude-code/`
 and `packaging/shared/`.
-Edit those inputs or `src/`, then run `pnpm build:plugin` to regenerate the complete
+Edit those inputs, then run `pnpm build:plugin` to regenerate the thin
 `plugins/codex/debugging-cdp-targets/` and
 `plugins/claude-code/debugging-cdp-targets/` payloads. Root `LICENSE` is canonical;
 `pnpm check:build` compares every generated payload file without writing.
@@ -189,9 +192,9 @@ Edit those inputs or `src/`, then run `pnpm build:plugin` to regenerate the comp
 The host-specific manifest and default component paths follow their respective
 host interfaces. The separate input/output trees are this repository's maintenance
 convention, recorded in [ADR 0012](docs/adr/0012-peer-host-distributions.md).
-Both hosts share one runtime build, complete Skill and official release evidence.
+Both hosts share the complete Skill and connect directly to the separate App.
 Declared host-only presentation overlays supplement the exact shared maintained
 Skill set; they do not replace shared instructions.
-Each delivered payload must work independently outside repository dependencies.
-Run the explicit Codex and Claude Marketplace/Hook smokes after changing host
+Each thin payload loads independently outside repository dependencies and requires
+the running App. Run explicit Codex and Claude Marketplace/instructions smokes after changing host
 configuration; ordinary tests and CI keep real host invocations opt-in.

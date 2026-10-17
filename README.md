@@ -14,8 +14,7 @@
 
 <p align="center">
     <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b" alt="Status: 0.1.0 unreleased"></a>
-    <a href="docs/user-guide/compatibility.md"><img src="https://img.shields.io/badge/Node-24.x%20%E2%89%A5%2024.21.0-07849e?style=flat&amp;labelColor=46545b" alt="Node: stable 24.x, at least 24.21.0"></a>
-    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp"><img src="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b" alt="Official Server: 1.10.1"></a>
+    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp"><img src="https://img.shields.io/badge/official%20Server-1.11.0-07849e?style=flat&amp;labelColor=46545b" alt="Official Server: 1.11.0"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b" alt="License: MIT"></a>
 </p>
 
@@ -35,13 +34,18 @@
 
 ## Requirements
 
-- **Stable Node 24.x, at least 24.21.0**, on PATH.
+- **The separate desktop App**, running before connecting the Plugin. It includes
+    verified ordinary Node and the original official Server.
 - **Codex with Plugin support**, or **Claude Code 2.1.283+**.
 - **Chrome**, or another application with a **browser-level CDP endpoint**.
 
 See [full requirements and tested platforms](docs/user-guide/compatibility.md).
 
 ## Quick start
+
+Start the App, then install either thin host Plugin below. Native installers are
+still in development; unreleased contributor builds use the
+[verified local App stage](docs/app-runtime.md#building-and-evidence).
 
 ### Codex
 
@@ -74,7 +78,7 @@ Inspect the page's network requests and console errors, and summarize what you f
 
 The Agent confirms your data directory isolation choice before launch. Before
 ending the task, it asks whether to **Close** the target or **Keep** it for later
-work. See the [detailed workflow](docs/user-guide/workflow.md) for directory
+work. Host disconnect leaves App-owned targets running. See the [detailed workflow](docs/user-guide/workflow.md) for directory
 selection, cleanup and target lifetime.
 
 ## Documentation

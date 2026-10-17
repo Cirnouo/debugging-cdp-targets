@@ -5,17 +5,25 @@ import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
 import type { Node } from '@babel/types';
 import { parse as parseYaml } from 'yaml';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { isApprovedIconPath, validateIconPng } from './icon-policy.ts';
-import { OFFICIAL_RELEASE } from './payload-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
 export function validateYamlFilename(file: string): string[] {
     if (!/\.ya?ml$/i.test(file) || file.endsWith('.yaml') || file === '.github/ISSUE_TEMPLATE/config.yml') return [];
     return [`${file}: maintained YAML filenames must use lowercase .yaml.`];
 }
+
+const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
+    ['src/adapters/app-native.ts', ['fs-native-extensions']],
+    ['src/adapters/mcp-http-server.ts', ['@modelcontextprotocol/node']],
+    ['src/interface/app-bootstrap.ts', ['electron']],
+    ['src/interface/app-main.ts', ['electron']],
+    ['src/interface/app-window.ts', ['electron']],
+    ['src/interface/app-preload.ts', ['electron']],
+    ['src/interface/app-renderer.ts', ['react', 'react-dom/client']],
+]);
 
 export function validateTextStyle(file: string, source: string) {
     const errors = [];
@@ -276,7 +284,7 @@ export function validateRuntimeSource(file: string, source: string) {
     }
     const layer = file.split('/')[1];
     const domain = layer === 'domains';
-    const entry = file === 'src/interface/mcp-bootstrap.ts';
+    const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
     function dependency(specifier: unknown) {
         if (typeof specifier !== 'string') {
@@ -297,6 +305,7 @@ export function validateRuntimeSource(file: string, source: string) {
             !specifier.startsWith('.') &&
             !specifier.startsWith('node:') &&
             specifier !== 'ws' &&
+            !APP_RUNTIME_IMPORTS.get(file)?.includes(specifier) &&
             ![
                 '@modelcontextprotocol/client',
                 '@modelcontextprotocol/server',
@@ -380,17 +389,6 @@ export async function auditRepository(root: string) {
     })
         .split('\0')
         .filter((file) => file && existsSync(path.join(root, file)));
-    const officialPrefixes = PLUGIN_HOSTS.map((host) => `${host.payloadRoot}/dist/official-server`);
-    const verifiedOfficial = new Set<string>();
-    for (const officialPrefix of officialPrefixes) {
-        if (!existsSync(path.join(root, officialPrefix))) continue;
-        try {
-            for (const file of (await verifyOfficialPackage(path.join(root, officialPrefix), OFFICIAL_RELEASE)).keys())
-                verifiedOfficial.add(`${officialPrefix}/${file}`);
-        } catch (error) {
-            errors.push(errorMessage(error));
-        }
-    }
     const files = new Map(
         paths.map((file) => {
             const bytes = readFileSync(path.join(root, file));
@@ -415,20 +413,11 @@ export async function auditRepository(root: string) {
         }),
     );
     for (const directory of directories) {
-        if (
-            officialPrefixes.some(
-                (prefix) =>
-                    verifiedOfficial.has(`${prefix}/package.json`) &&
-                    (directory === prefix || directory.startsWith(`${prefix}/`)),
-            )
-        )
-            continue;
         const documentation = directory === '.github' ? 'INDEX.md' : 'README.md';
         if (!files.has(`${directory}/${documentation}`))
             errors.push(`${directory}: add ${documentation} describing immediate contents.`);
     }
     for (const [file, source] of files) {
-        if (verifiedOfficial.has(file)) continue;
         errors.push(...validateYamlFilename(file));
         if (/^\.github\/readme(?:\.[^/]+)?$/i.test(file))
             errors.push(`${file}: GitHub displays this instead of the root README; use .github/INDEX.md.`);

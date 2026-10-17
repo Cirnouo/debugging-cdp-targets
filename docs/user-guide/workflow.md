@@ -38,8 +38,8 @@ the complete text rather than dropping options. A future random child is describ
 by its existing parent and allocation method before launch; its actual path is
 reported only after acquisition.
 
-The same verified event selects the same template whether received through a
-Hook, a tool error or a status query. Live connection recovery asks Restart or
+The same verified event selects the same template whether received through
+a tool error or an explicit status query. Live connection recovery asks Restart or
 Close; confirmed active target exit asks about a new start in the current chat.
 Inactive/expected exits, unsupported/unknown isolation, occupancy blocks and
 continued Close waits do not introduce extra decisions. Missing information,
@@ -134,7 +134,11 @@ Deletion covers the whole selected actual directory and all its contents,
 including pre-existing contents. The program performs the preauthorized cleanup.
 Close/Keep later decides application lifetime, not directory cleanup policy.
 
-The Plugin exposes one stdio MCP entry, `cdp-targets`. Each new target receives
+The thin Plugin connects one direct HTTP MCP entry, `cdp-targets`, to the running
+App. Register once and explicitly supply its private registrationBearer on every
+owned call. Official _dct also contains current connectionId/sessionId;
+reconnecting never creates a target or implicitly selects a registration.
+Each new target receives
 its own connection and official Server child. Multiple targets can be inspected
 concurrently: calls explicitly identify their connection and current session.
 Creating a target preserves existing connections. The host connection remains
@@ -172,7 +176,7 @@ See [storage and cleanup](privacy.md#data-directory-storage-and-cleanup).
 
 The gateway observes the actual application's native exit from launch. Any
 ordinary actual exit ends that session and removes its connection, including after
-Keep/end-task. If work needs to continue after ordinary exit, explicitly start a
+Keep. If work needs to continue after ordinary exit, explicitly start a
 new target with new connection/session identities. Old page IDs and routes
 cannot be reused. A closed window or failed CDP listener does not by itself
 establish actual application exit.
@@ -188,21 +192,21 @@ Fixed ports remain fixed and refuse collisions; automatic port policy may select
 another verified free port. No launch/restart or tool replay happens automatically.
 
 Changing application arguments, environment or mcpArgs requires completed normal
-Close and a new start with a fresh requestId. The transitional stdio facade accepts
-omitted scope as both; pass scope explicitly.
+Close and a new start with a fresh requestId. Restart scope is always required.
 
 The directory lease spans restart: the intermediate old-app exit does not
 release it. Final release waits for confirmed actual exit or evidence that no
 app was created, settled native acquisition/permission waits/late creation,
 no successor launch, and successful disposal of relevant resources.
-Keep/end-task holds the directory until actual exit. Failed Close or observation
+Keep holds the directory until actual exit. Failed Close or observation
 retains ownership. An acquired directory after failed/cancelled start or restart
 uses this same barrier; failure before acquisition does not delete a directory.
 
 Failed resource disposal after confirmed app exit is retained internally for
-gateway cleanup retries and does not keep the dead session routable. Gateway
-disconnect cancels dependent work and attempts resource disposal and normal
-target shutdown; Keep depends on the gateway remaining alive. Failed directory
+App cleanup retries and does not keep the dead session routable. Host or MCP
+disconnect never closes targets; normal App Quit cancels admission and attempts
+resource disposal and normal target shutdown. Keep depends on the App remaining
+alive. Failed directory
 cleanup remains in the in-memory retry ledger without restoring a dead route.
 External Chrome use detected before deletion retains the directory. A hard crash
 or disconnect without verified app exit cannot promise future deletion. See the
@@ -212,17 +216,15 @@ exact lifetime rules.
 ## Operations and waiting
 
 Start returns an operationId immediately. The Agent calls `dct_operation_wait`
-with entryId, operationId and cursor, continuing with the returned cursor until
+with registrationBearer, operationId and cursor, continuing with the returned cursor until
 complete. Each wait lasts up to 25 seconds and may return incomplete; this bounds
 one response, not the operation or application Close. Cancelling a wait leaves
 the operation running; `dct_operation_cancel` owns actual cancellation and cleanup.
 
 Mutations use a requestId. Identical retries return the original operation;
 different input cannot reuse that identifier. Cancel is idempotent for its
-operation and cannot affect a newer session. Successfully delivered terminal
-status/wait, terminal cancel or identical mutation retry acknowledges the
-operation notice, preventing redundant Hook delivery. Aborted requests and
-nonterminal responses leave the notice unread. The
+operation and cannot affect a newer session. Terminal results are read explicitly;
+there is no automatic notification queue or acknowledgment. The
 [lifecycle protocol](../lifecycle-protocol.md#operations-and-delivery) defines
 the complete replay and delivery rules.
 
@@ -235,30 +237,25 @@ when inspection succeeded. Evidence survives failed/cancelled startup and remova
 of a dead connection. The Agent always discloses a retained actual absolute path,
 including delegated locations, random children and resolved root links.
 Later release/retry updates that original start metadata without changing its
-terminal result/state/cursor or producing another completion notice.
-Default summaries and automatic Hooks omit directory paths and raw filesystem
+terminal result/state/cursor or producing another operation.
+Default summaries omit directory paths and raw filesystem
 errors. Do not infer deletion from Close, cancellation or route removal.
 
-## Automatic notifications
+## Reconnect and ownership
 
-Each current host distribution provides PreToolUse, PostToolUse, UserPromptSubmit
-and Stop Hooks with a three-second timeout. They call existing status and deliver
-pending exit, operation and quarantine context; no event means empty JSON.
-Review and enable the definitions with your
-[host's standard Hook controls](installation.md). Lifecycle events require Hooks
-to execute in the current host.
+A registration owns resources independently of a conversation, socket or MCP
+session. Retain its bearer in the authorized task context and reconnect with
+that same bearer; do not repeat start. Status cannot recover a lost bearer. A new
+registration does not acquire the old owner's targets. The App's normal Quit
+normally closes its owned resources; the minimal manager currently does not
+expose per-connection transfer controls.
 
-Enabled, authorized Hooks deliver compact events at task boundaries; idle chats
-receive them on the next turn and are not woken automatically. Inactive exit is
-informational; an active unexpected exit may suggest an explicitly authorized
-new start. A ready Stop event requests one continuation.
-
-Expected Close/restart exits are grouped by operationId in its operation notice,
-including any new Target rollback during restart. Delivery waits until all
-related cleanup results are ready. Hooks provide compact context; the full
-terminal result remains available through the operation tools. See
-[automatic Hook rules](../lifecycle-protocol.md#automatic-hooks) for exact output
-and acknowledgement behavior.
+Read status or the original operation for current facts. There are no automatic
+host Hooks, task-active flags or end-task tool. Accepted start responses can
+precede roots admission: original facilities remain until admission settles or
+the originating client/session disconnects. See
+[HTTP request lifetime](../app-runtime.md#request-lifetime), including best-effort
+remote roots cancellation after an SSE response has ended.
 
 For failures, read [troubleshooting](troubleshooting.md), or return to the
 [user guide](README.md).

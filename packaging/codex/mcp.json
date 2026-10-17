@@ -2,10 +2,8 @@
     "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
     "mcpServers": {
         "cdp-targets": {
-            "type": "stdio",
-            "command": "node",
-            "args": ["dist/mcp-bootstrap.mjs"],
-            "cwd": "."
+            "type": "streamable-http",
+            "url": "http://127.0.0.1:27637/mcp"
         }
     }
 }

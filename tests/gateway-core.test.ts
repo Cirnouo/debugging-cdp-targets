@@ -3,11 +3,11 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import test from 'node:test';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import { Server } from '@modelcontextprotocol/server';
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
-import { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createGatewayCore } from '../src/application/plugin-runtime.ts';
-import type { LaunchOptions } from '../src/domains/control-contract.ts';
+import { type LaunchOptions, parseControlRequest } from '../src/domains/control-contract.ts';
 import type { ClientRequestContext } from '../src/shared/client-context.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
@@ -173,10 +173,13 @@ for (const phase of ['closing', 'failed'] as const) {
         let releaseClose = () => {};
         let cleaning: Promise<unknown> | undefined;
         try {
-            const target = await f.core.controller.start({
-                isolation: { mode: 'none' },
-                launch: { executable: 'fixture' },
-            });
+            const target = await f.core.controller.start(
+                {
+                    isolation: { mode: 'none' },
+                    launch: { executable: 'fixture' },
+                },
+                { client: f.client('direct-controller').context() },
+            );
             if (phase === 'closing') releaseClose = f.blockClose();
             else f.failClose(true);
             cleaning = f.core.cleanup().catch((error: unknown) => error);
@@ -229,7 +232,6 @@ for (const action of ['cancel', 'cleanup'] as const) {
                 const accepted = await f.core.control(
                     {
                         action: 'start',
-                        entryId: f.core.entryId,
                         requestId: 'pending-roots',
                         isolation: {
                             mode: 'data-dir',
@@ -243,15 +245,12 @@ for (const action of ['cancel', 'cleanup'] as const) {
                 await new Promise<void>((resolve) => setImmediate(resolve));
                 if (action === 'cancel') {
                     await f.core.control(
-                        { action: 'cancel', entryId: f.core.entryId, operationId: String(accepted.operationId) },
+                        { action: 'cancel', operationId: String(accepted.operationId) },
                         client.context(),
                     );
                     await new Promise<void>((resolve) => setImmediate(resolve));
                     const terminal = await bounded(
-                        f.core.control(
-                            { action: 'wait', entryId: f.core.entryId, operationId: String(accepted.operationId) },
-                            client.context(),
-                        ),
+                        f.core.control({ action: 'wait', operationId: String(accepted.operationId) }, client.context()),
                         'Roots cancellation did not settle.',
                     );
                     assert.equal(terminal.complete, true);
@@ -279,7 +278,23 @@ for (const action of ['cancel', 'cleanup'] as const) {
         const f = await fixture();
         const [clientTransport, entryTransport] = InMemoryTransport.createLinkedPair();
         const client = new Client({ name: 'roots-boundary', version: '1' }, { capabilities: { roots: {} } });
-        const entry = createMcpEntryServer({ ...f.core.callbacks, transport: entryTransport });
+        const registration = f.core.register();
+        const attached = f.core.attachClient(registration.bearer);
+        const entry = new Server({ name: 'test-reverse-roots', version: '1' }, { capabilities: { tools: {} } });
+        entry.setRequestHandler('tools/call', async (request, context) => {
+            const action = request.params.name === 'dct_connection_start' ? 'start' : 'cancel';
+            const clientContext = attached.request({
+                requestId: context.mcpReq.id,
+                capabilities: { roots: true, formElicitation: false },
+                waitSignal: context.mcpReq.signal,
+                readRoots: (signal) => context.mcpReq.send({ method: 'roots/list' }, signal ? { signal } : {}),
+            });
+            const result = await f.core.control(
+                parseControlRequest({ ...request.params.arguments, action }),
+                clientContext,
+            );
+            return { content: [], structuredContent: result };
+        });
         let rootsSignal: AbortSignal | undefined;
         let entered = () => {};
         let release = () => {};
@@ -296,12 +311,11 @@ for (const action of ['cancel', 'cleanup'] as const) {
         });
         let cleaning: Promise<void> | undefined;
         try {
-            await entry.connect();
+            await entry.connect(entryTransport);
             await client.connect(clientTransport);
             const started = await client.callTool({
                 name: 'dct_connection_start',
                 arguments: {
-                    entryId: f.core.entryId,
                     requestId: 'sdk-roots',
                     isolation: {
                         mode: 'data-dir',
@@ -317,7 +331,7 @@ for (const action of ['cancel', 'cleanup'] as const) {
             if (action === 'cancel') {
                 await client.callTool({
                     name: 'dct_operation_cancel',
-                    arguments: { entryId: f.core.entryId, operationId },
+                    arguments: { operationId },
                 });
                 await new Promise<void>((resolve) => setImmediate(resolve));
                 assert.equal(
@@ -350,15 +364,25 @@ for (const action of ['cancel', 'cleanup'] as const) {
 
 test('final cleanup attempts peers, retains a failed live owner and retries without reporting successful exit', async () => {
     const f = await fixture();
+    const origin = f.client('cleanup-owner');
     try {
-        await f.core.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
-        await f.core.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
+        await f.core.controller.start(
+            { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+            { client: origin.context() },
+        );
+        await f.core.controller.start(
+            { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+            { client: origin.context() },
+        );
         f.failClose(true);
         await assert.rejects(f.core.cleanup(), /cleanup.*failed|did not close/);
         assert.equal(f.counts().closed, 2);
         assert.equal(f.core.admin.status().connections.length, 1);
         await assert.rejects(
-            f.core.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
+            f.core.controller.start(
+                { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+                { client: origin.context() },
+            ),
             /closing/,
         );
         f.failClose(false);
@@ -467,10 +491,13 @@ for (const scope of ['target', 'official', 'both'] as const) {
 test('failed official-only repair performs final normal cleanup without escalating or launching a target', async () => {
     const f = await fixture();
     try {
-        const target = await f.core.controller.start({
-            isolation: { mode: 'none' },
-            launch: { executable: 'fixture' },
-        });
+        const target = await f.core.controller.start(
+            {
+                isolation: { mode: 'none' },
+                launch: { executable: 'fixture' },
+            },
+            { client: f.client('direct-controller').context() },
+        );
         f.failOfficial();
         await assert.rejects(
             f.core.controller.restart({
@@ -718,10 +745,7 @@ test('authenticated reads refresh empty idle expiry without advancing last-real-
         const before = f.core.admin.connections()[0];
         now = 29 * 60 * 1000;
         await f.core.control({ action: 'status' }, empty.context());
-        await f.core.control(
-            { action: 'status', entryId: f.core.entryId, connectionId: connection.connectionId },
-            a.context(),
-        );
+        await f.core.control({ action: 'status', connectionId: connection.connectionId }, a.context());
         const after = f.core.admin.connections()[0];
         assert.equal(after?.lastRealOperationAt, before?.lastRealOperationAt);
         assert.equal(after?.establishedAt, before?.establishedAt);
@@ -729,10 +753,7 @@ test('authenticated reads refresh empty idle expiry without advancing last-real-
         await f.core.control({ action: 'status' }, empty.context());
         now += 30 * 60 * 1000;
         await assert.rejects(f.core.control({ action: 'status' }, empty.context()), /expired/);
-        await f.core.control(
-            { action: 'status', entryId: f.core.entryId, connectionId: connection.connectionId },
-            a.context(),
-        );
+        await f.core.control({ action: 'status', connectionId: connection.connectionId }, a.context());
     } finally {
         await f.core.cleanup();
     }
@@ -782,7 +803,6 @@ test('registrations authorize reads, calls and immutable operation ownership acr
         const b = client('b');
         const request = {
             action: 'start' as const,
-            entryId: core.entryId,
             requestId: 'same',
             isolation: { mode: 'none' as const },
             launch: { executable: 'fixture' },
@@ -791,31 +811,19 @@ test('registrations authorize reads, calls and immutable operation ownership acr
         const second = await core.control(request, b.context());
         assert.notEqual(first.operationId, second.operationId);
         await new Promise<void>((resolve) => setImmediate(resolve));
-        const own = await core.control(
-            { action: 'status', operationId: String(first.operationId), entryId: core.entryId },
-            a.context(),
-        );
+        const own = await core.control({ action: 'status', operationId: String(first.operationId) }, a.context());
         const connectionId = String(own.connectionId);
         const sessionId = String(own.sessionId);
         await assert.rejects(
-            core.control(
-                { action: 'status', operationId: String(first.operationId), entryId: core.entryId },
-                b.context(),
-            ),
+            core.control({ action: 'status', operationId: String(first.operationId) }, b.context()),
             /absent or unauthorized/,
         );
         await assert.rejects(
-            core.control(
-                { action: 'cancel', operationId: String(first.operationId), entryId: core.entryId },
-                b.context(),
-            ),
+            core.control({ action: 'cancel', operationId: String(first.operationId) }, b.context()),
             /absent or unauthorized/,
         );
         await assert.rejects(
-            core.control(
-                { action: 'status', connectionId, include: ['configuration'], entryId: core.entryId },
-                b.context(),
-            ),
+            core.control({ action: 'status', connectionId, include: ['configuration'] }, b.context()),
             /absent or unauthorized/,
         );
         const reconnect = core.attachClient(a.registration.bearer);
@@ -836,19 +844,11 @@ test('registrations authorize reads, calls and immutable operation ownership acr
         const result = await core.invoke('echo', { _dct: { connectionId, sessionId } }, b.context());
         assert.deepEqual(result.structuredContent, { roots: { roots: [{ uri: 'file:///a' }] } });
         assert.equal(
-            (
-                await core.control(
-                    { action: 'status', operationId: String(first.operationId), entryId: core.entryId },
-                    a.context(),
-                )
-            ).state,
+            (await core.control({ action: 'status', operationId: String(first.operationId) }, a.context())).state,
             'succeeded',
         );
         await assert.rejects(
-            core.control(
-                { action: 'status', operationId: String(first.operationId), entryId: core.entryId },
-                b.context(),
-            ),
+            core.control({ action: 'status', operationId: String(first.operationId) }, b.context()),
             /absent or unauthorized/,
         );
     } finally {

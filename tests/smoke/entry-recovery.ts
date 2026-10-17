@@ -4,11 +4,11 @@ import { lstat, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/client';
 import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
-import { assertSummary, waitForSmokeHookEvents } from '../fixtures/hook-gateway-events.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 import {
     createChromeSmokeLaunch,
@@ -73,9 +73,8 @@ const startup = await createChromeStartupCapture(controlledDiagnostics, folder, 
 const managedDirectories = new Map<string, string>();
 const platform = createPlatformAdapter();
 const owned: ProcessTarget[] = [];
-let entryId = '';
 const client = createFixtureGatewayClient(
-    path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
+    path.join(root, 'tests/fixtures/http-gateway.ts'),
     outputDirectory,
     'entry-recovery',
     artifacts,
@@ -83,15 +82,14 @@ const client = createFixtureGatewayClient(
 async function tool(name: string, arguments_: Record<string, unknown> = {}) {
     const result = await client.request('tools/call', { name, arguments: arguments_ });
     assert.ok(isRecord(result));
-    if (name === 'dct_connection_status' && !arguments_.hookEventName && !arguments_.include)
-        assertSummary(result.structuredContent, typeof arguments_.connectionId === 'string');
+    if (name === 'dct_connection_status' && !arguments_.include) readStatus(result.structuredContent);
     if (
         name === 'dct_operation_wait' &&
         isRecord(result.structuredContent) &&
         isRecord(result.structuredContent.operation) &&
         result.structuredContent.operation.state === 'succeeded'
     )
-        assertSummary(result.structuredContent.operation.result);
+        readStatus(result.structuredContent.operation.result);
     return result;
 }
 const executeControl = lifecycleClient(tool);
@@ -106,23 +104,18 @@ const control: typeof executeControl = (request) =>
           )
         : executeControl(request);
 async function status(connectionId?: string): Promise<ControlResult> {
-    return control({ action: 'status', entryId, ...(connectionId ? { connectionId } : {}) });
+    return control({ action: 'status', ...(connectionId ? { connectionId } : {}) });
 }
-async function selectedStatus(connectionId: string): Promise<ConnectionStatus> {
-    const result = await status(connectionId);
-    assert.ok(!('connections' in result));
-    return result;
-}
-async function mutate(
-    action: 'restart' | 'stop' | 'end-task',
-    target: ConnectionStatus,
-    disposition?: 'Close' | 'Keep',
-) {
-    const identity = { ...route(target), entryId, requestId: randomUUID() };
+async function mutate(action: 'restart' | 'stop', target: ConnectionStatus, disposition?: 'Close' | 'Keep') {
+    const identity = { ...route(target), requestId: randomUUID() };
     const result =
         action === 'stop' && disposition !== 'Keep'
             ? await closeSmokeConnection(control, { action, ...identity, disposition: 'Close' })
-            : await control(action === 'stop' ? { action, ...identity, disposition: 'Keep' } : { action, ...identity });
+            : await control(
+                  action === 'stop'
+                      ? { action, ...identity, disposition: 'Keep' }
+                      : { action, ...identity, scope: 'both' },
+              );
     assert.ok(!('connections' in result));
     return result;
 }
@@ -151,7 +144,6 @@ async function closeFixture(target: ConnectionStatus) {
 async function start(index: number) {
     const target = await control({
         action: 'start',
-        entryId,
         requestId: randomUUID(),
         basePort: 19422 + index * 10,
         ...createChromeSmokeLaunch(
@@ -189,7 +181,10 @@ async function pages(target: ConnectionStatus, index: number) {
     assert.match(JSON.stringify(result), new RegExp(`CONNECTION-${index}`));
 }
 async function rejectsRoute(target: ConnectionStatus) {
-    await assert.rejects(() => tool('list_pages', { _dct: route(target) }), /unknown|stale|closed|session|connection/i);
+    await assert.rejects(
+        () => tool('list_pages', { _dct: route(target) }),
+        (error: unknown) => error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams,
+    );
 }
 let normalCloseRequestStartedAt = 0;
 let normalCloseRequestedAt = 0;
@@ -207,7 +202,6 @@ try {
     const initial = readStatus(gateway.structuredContent);
     assert.ok('connections' in initial);
     assert.deepEqual(initial.connections, []);
-    entryId = initial.entryId;
     const [first, second, third] = await Promise.all([0, 1, 2].map(start));
     assert.ok(first && second && third);
     assert.equal(new Set([first.connectionId, second.connectionId, third.connectionId]).size, 3);
@@ -215,7 +209,6 @@ try {
     assert.ok('connections' in aggregate && aggregate.connections.length === 3);
     await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
     console.log('Three independent real targets passed concurrent official page calls in one gateway.');
-    await mutate('end-task', first);
     await mutate('stop', first, 'Keep');
     await Promise.all([pages(first, 0), pages(second, 1), pages(third, 2)]);
     await mutate('stop', second, 'Close');
@@ -226,12 +219,7 @@ try {
     assert.notEqual(fourth.connectionId, second.connectionId);
     await Promise.all([pages(first, 0), pages(third, 2), pages(fourth, 3)]);
     console.log('Keep/reuse, scoped Close and later new connection passed.');
-    assert.deepEqual(
-        (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
-        {},
-        'Delivered terminal operations must not be repeated by Hooks.',
-    );
-    await until(async () => (await selectedStatus(first.connectionId)).taskActive === true);
+
     normalCloseRequestStartedAt = Date.now();
     const [normalCloseRequested] = await Promise.all([
         closeFixture(first).then((accepted) => {
@@ -250,36 +238,22 @@ try {
         );
     });
     const connectionRetirementObservedAt = Date.now();
-    const events = await waitForSmokeHookEvents(
-        async () => (await tool('dct_connection_status', { hookEventName: 'PostToolUse' })).structuredContent,
-    );
-    assert.equal(events.length, 1);
-    assert.equal(events[0]?.exits.length, 1);
-    const exited = events[0]?.exits[0];
-    assert.ok(exited);
-    assert.equal(exited.connectionId, first.connectionId);
-    assert.equal(exited.sessionId, first.sessionId);
-    assert.equal(exited.processId, first.processId);
-    assert.equal(exited.port, first.port);
-    assert.equal(exited.taskActive, true);
-    assert.equal(exited.expected, undefined);
-    assert.equal(exited.cleanupError, undefined);
-    assert.equal(exited.cleanupCode, undefined);
-    assert.deepEqual(events[0]?.operations, []);
-    assert.deepEqual(events[0]?.connections, []);
-    const reminderReceived = Date.now();
-    assert.ok(reminderReceived - connectionRetirementObservedAt <= 5_000);
-    assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
+    assert.ok(first.processId && first.port);
+    const exited = await platform.snapshot(first.processId, first.port);
+    assert.equal(exited.root.exists, false);
     await rejectsRoute(first);
     await directoryDeleted(first);
-    await assert.rejects(() => mutate('restart', first), /absent|closed|session|connection/i);
+    const cleanupObservedAt = Date.now();
+    await assert.rejects(
+        () => mutate('restart', first),
+        (error: unknown) => error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams,
+    );
     const retried = await start(0);
     assert.notEqual(retried.connectionId, first.connectionId);
     assert.notEqual(retried.sessionId, first.sessionId);
     await pages(retried, 0);
     const restarted = await mutate('restart', retried);
     assert.equal(restarted.connectionId, retried.connectionId);
-    assert.equal(restarted.port, retried.port);
     assert.notEqual(restarted.processId, retried.processId);
     assert.notEqual(restarted.sessionId, retried.sessionId);
     assert.equal(restarted.pageIdsInvalidated, true);
@@ -289,13 +263,9 @@ try {
     assert.equal(await readFile(path.join(restartedDirectory, 'restart-evidence'), 'utf8'), retried.connectionId);
     await rejectsRoute(retried);
     await Promise.all([pages(restarted, 0), pages(third, 2), pages(fourth, 3)]);
-    assert.deepEqual(
-        (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
-        {},
-        'Expected restart belongs to its delivered operation, with no duplicate exit notice.',
-    );
+
     console.log(
-        'Ordinary exit used a new start; explicit live restart replaced its session/resources on the exact port while peers remained usable.',
+        'Ordinary exit used a new start; explicit live restart replaced its session/resources with its recorded launch policy while peers remained usable.',
     );
     await mutate('stop', fourth, 'Keep');
     assert.equal(await closeFixture(fourth), true);
@@ -305,19 +275,9 @@ try {
             'connections' in current && !current.connections.some((item) => item.connectionId === fourth.connectionId)
         );
     });
-    const keptExit = await waitForSmokeHookEvents(
-        async () => (await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent,
-    );
-    assert.equal(keptExit.length, 1);
-    assert.equal(keptExit[0]?.exits.length, 1);
-    assert.equal(keptExit[0]?.exits[0]?.connectionId, fourth.connectionId);
-    assert.equal(keptExit[0]?.exits[0]?.sessionId, fourth.sessionId);
-    assert.equal(keptExit[0]?.exits[0]?.taskActive, false);
-    assert.equal(keptExit[0]?.exits[0]?.cleanupError, undefined);
-    assert.equal(keptExit[0]?.exits[0]?.cleanupCode, undefined);
-    assert.deepEqual(keptExit[0]?.operations, []);
-    assert.deepEqual(keptExit[0]?.connections, []);
-    assert.deepEqual((await tool('dct_connection_status', { hookEventName: 'Stop' })).structuredContent, {});
+    assert.ok(fourth.processId && fourth.port);
+    const keptExit = await platform.snapshot(fourth.processId, fourth.port);
+    assert.equal(keptExit.root.exists, false);
     await rejectsRoute(fourth);
     await directoryDeleted(fourth);
     await Promise.all([pages(restarted, 0), pages(third, 2)]);
@@ -326,7 +286,6 @@ try {
     console.log(
         JSON.stringify({
             passed: true,
-            entryId,
             connectionIds: [
                 first.connectionId,
                 second.connectionId,
@@ -338,10 +297,10 @@ try {
                 normalCloseRequestStartedAt,
                 normalCloseRequestedAt,
                 connectionRetirementObservedAt,
-                reminderReceived,
-                millisecondsFromNormalCloseRequestStart: reminderReceived - normalCloseRequestStartedAt,
-                millisecondsFromNormalCloseRequestCompletion: reminderReceived - normalCloseRequestedAt,
-                millisecondsFromConnectionRetirementObservation: reminderReceived - connectionRetirementObservedAt,
+                cleanupObservedAt,
+                millisecondsFromNormalCloseRequestStart: cleanupObservedAt - normalCloseRequestStartedAt,
+                millisecondsFromNormalCloseRequestCompletion: cleanupObservedAt - normalCloseRequestedAt,
+                millisecondsFromConnectionRetirementObservation: cleanupObservedAt - connectionRetirementObservedAt,
                 measuresUiRendering: false,
             },
             managedProfileParent: folder,

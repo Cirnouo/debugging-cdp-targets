@@ -105,11 +105,9 @@ test('Keep preserves both sides across tasks; Close retires the session and reus
         launch: { executable: 'fixture' },
         targetKind: 'chrome',
     });
-    assert.equal(first.entryId, entryId);
     assert.ok(first.sessionId);
     assert.equal((await f.controller.stop({ sessionId: first.sessionId, disposition: 'Keep' })).status, 'active');
     assert.deepEqual(f.counts(), { closes: 0, serverCloses: 0, cleared: 0 });
-    await f.controller.endTask({ sessionId: first.sessionId });
     assert.equal(f.controller.status().status, 'active');
     assert.equal((await f.controller.stop({ sessionId: first.sessionId, disposition: 'Close' })).status, 'idle');
     assert.equal(f.counts().serverCloses, 1);
@@ -124,7 +122,6 @@ test('manual exit invalidates routes once, retires the dead session and permits 
     const f = fixture();
     const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
-    assert.equal(f.controller.status().taskActive, true);
     f.exit();
     f.setHealth('gone');
     await f.controller.checkHealth();
@@ -177,7 +174,6 @@ test('connection unavailability gates tools while process monitoring stays activ
     f.setHealth('unavailable');
     await f.controller.checkHealth();
     assert.equal(f.controller.status().status, 'lost');
-    assert.equal(f.controller.status().taskActive, true);
     assert.equal(f.controller.status().reason, 'target-unavailable');
     f.exit();
     assert.equal(f.controller.status().reason, 'process-exited');

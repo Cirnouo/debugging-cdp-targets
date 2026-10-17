@@ -14,8 +14,7 @@
 
 <p align="center">
     <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-0.1.0%20unreleased-07849e?style=flat&amp;labelColor=46545b" alt="状态：0.1.0 尚未发布"></a>
-    <a href="docs/user-guide/compatibility.md"><img src="https://img.shields.io/badge/Node-24.x%20%E2%89%A5%2024.21.0-07849e?style=flat&amp;labelColor=46545b" alt="Node：稳定版 24.x，至少为 24.21.0"></a>
-    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp"><img src="https://img.shields.io/badge/official%20Server-1.10.1-07849e?style=flat&amp;labelColor=46545b" alt="官方 Server：1.10.1"></a>
+    <a href="https://github.com/ChromeDevTools/chrome-devtools-mcp"><img src="https://img.shields.io/badge/official%20Server-1.11.0-07849e?style=flat&amp;labelColor=46545b" alt="官方 Server：1.11.0"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-07849e?style=flat&amp;labelColor=46545b" alt="许可证：MIT"></a>
 </p>
 
@@ -35,13 +34,16 @@
 
 ## 使用要求
 
-- PATH 中可用的 **Node 稳定版 24.x，至少为 24.21.0**。
+- 先运行独立的**桌面 App**；App 自带已验证的普通 Node 和原始官方 Server。
 - **支持 Plugin 的 Codex**，或 **Claude Code 2.1.283+**。
 - **Chrome**，或其他提供**浏览器级 CDP 端点**的应用。
 
 参阅[完整要求与已测试平台](docs/user-guide/compatibility.md)。
 
 ## 快速开始
+
+先启动 App，再安装下面任一宿主薄插件。原生安装器仍在开发；尚未发布的贡献者构建
+使用[已验证的本地 App 目录](docs/app-runtime.md#building-and-evidence)。
 
 ### Codex
 
@@ -74,7 +76,8 @@ claude plugin install debugging-cdp-targets@debugging-cdp-targets
 
 Agent 会在启动前确认你的数据目录隔离选择。在结束任务前，
 它会询问你是要<strong>关闭（Close）</strong>目标，还是<strong>保留（Keep）</strong>目标以便后续继续工作。
-有关目录选择、清理与目标存续时间，请参阅[详细工作流程](docs/user-guide/workflow.md)。
+宿主断开后，App 管理的目标仍继续运行。有关目录选择、清理与目标存续时间，
+请参阅[详细工作流程](docs/user-guide/workflow.md)。
 
 ## 文档
 

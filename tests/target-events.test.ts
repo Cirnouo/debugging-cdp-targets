@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
-import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import type { ControlHandler } from '../src/domains/control-contract.ts';
-import { isRecord } from '../src/shared/errors.ts';
+import { createCoreFixture } from './fixtures/core-runtime.ts';
 
 async function fixture(
     options: {
@@ -16,19 +14,14 @@ async function fixture(
         closeResult?: 'false' | 'throw';
     } = {},
 ) {
-    let entry: Parameters<typeof createMcpEntryServer>[0] | undefined;
     let closes = 0;
     let routerCloses = 0;
     let healthChecks = 0;
     let health: 'healthy' | 'unavailable' = 'healthy';
     let busy = false;
-    let resolveClosed = () => {};
-    const closed = new Promise<void>((resolve) => {
-        resolveClosed = resolve;
-    });
     const children: (EventEmitter & { exitCode: number | null; signalCode: string | null })[] = [];
     const upstreamExits: (() => void)[] = [];
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         loadCatalog: async (tools = []) =>
             createToolCatalog({
                 version: '1.11.0',
@@ -100,27 +93,13 @@ async function fixture(
                 if (options.failClose && closes === 2) throw new Error('cleanup failed');
             },
         }),
-        createEntry: (callbacks) => {
-            entry = callbacks;
-            return {
-                connect: async () => {},
-                closed,
-                close: async () => {
-                    resolveClosed();
-                },
-                roots: async () => ({ roots: [] }),
-                supportsRoots: () => false,
-                supportsFormElicitation: () => false,
-                elicit: async () => ({ action: 'cancel' }),
-            };
-        },
     });
     const control = runtime.controller;
-    assert.ok(entry);
+    assert.ok(runtime);
     return {
         runtime,
         control,
-        entry,
+
         children,
         upstreamExits,
         counts: () => ({ closes, routerCloses, healthChecks }),
@@ -147,39 +126,20 @@ function selected(control: ControlHandler, id: string) {
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-function hookExits(output: Record<string, unknown>) {
-    const context =
-        typeof output.reason === 'string'
-            ? output.reason
-            : isRecord(output.hookSpecificOutput)
-              ? output.hookSpecificOutput.additionalContext
-              : undefined;
-    assert.equal(typeof context, 'string');
-    if (typeof context !== 'string') throw new Error('Missing Hook context.');
-    const line = context.split('\n')[0];
-    assert.ok(line);
-    const payload: unknown = JSON.parse(line.slice(line.indexOf('{')));
-    assert.ok(isRecord(payload) && Array.isArray(payload.exits));
-    return payload.exits.map((event: unknown) => {
-        assert.ok(isRecord(event));
-        return event;
-    });
-}
-
 test('start monitors silently without watches or periodic health checks', async () => {
     const f = await fixture();
     try {
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
-        assert.equal(current.taskActive, true);
-        assert.deepEqual(f.entry.status('PostToolUse'), {});
+        assert.equal(current.status, 'active');
+        assert.equal(f.runtime.core.admin.registrations()[0]?.resources, 1);
         await tick();
         assert.equal(f.counts().healthChecks, 0);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
-test('process exit queues one model-visible Hook context and Stop continuation does not loop', async () => {
+test('process exit retires its route exactly once', async () => {
     const f = await fixture();
     try {
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
@@ -187,13 +147,8 @@ test('process exit queues one model-visible Hook context and Stop continuation d
         f.exit();
         assert.throws(() => f.control.status(current.connectionId), /closed/);
         await tick();
-        const output = f.entry.status('Stop');
-        assert.equal(output.decision, 'block');
-        assert.match(String(output.reason), /process-exited/);
-        assert.match(String(output.reason), new RegExp(current.connectionId));
-        assert.deepEqual(f.entry.status('Stop'), {});
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -204,15 +159,14 @@ test('exit already recorded during startup is not missed', async () => {
             f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
             /exited/,
         );
-        assert.deepEqual(f.control.status(), { entryId: f.runtime.entryId, connections: [] });
+        assert.deepEqual(f.control.status(), { connections: [] });
         assert.equal(f.counts().closes, 1, 'An already exited target must not acquire an official connection.');
-        assert.ok(f.entry.status('PreToolUse').hookSpecificOutput);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
-for (const end of ['Keep', 'end-task'] as const) {
+for (const end of ['Keep'] as const) {
     test(`${end} retains live target, then exit closes only its upstream and removes its record`, async () => {
         const f = await fixture();
         try {
@@ -220,8 +174,7 @@ for (const end of ['Keep', 'end-task'] as const) {
             const second = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'second' } });
             assert.ok(first.sessionId);
             const route = { connectionId: first.connectionId, sessionId: first.sessionId };
-            if (end === 'Keep') await f.control.stop({ ...route, disposition: 'Keep' });
-            else await f.control.endTask(route);
+            await f.control.stop({ ...route, disposition: 'Keep' });
             assert.equal(f.counts().closes, 1);
             f.exit();
             await tick();
@@ -232,57 +185,47 @@ for (const end of ['Keep', 'end-task'] as const) {
                 [second.connectionId],
             );
             assert.equal(f.counts().closes, 2);
-            const events = hookExits(f.entry.status('PostToolUse'));
-            assert.equal(events.length, 1);
-            assert.equal(events[0]?.connectionId, first.connectionId);
-            assert.equal(events[0]?.sessionId, first.sessionId);
-            assert.equal(events[0]?.taskActive, false);
-            assert.deepEqual(f.entry.status('PostToolUse'), {});
         } finally {
-            await f.runtime.close();
+            await f.runtime.cleanup();
         }
     });
 }
 
-test('end-task after exit rejects the closed route and preserves its immutable reminder', async () => {
+test('Keep after exit rejects the closed route', async () => {
     const f = await fixture();
     try {
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(current.sessionId);
         f.exit();
         await assert.rejects(
-            f.control.endTask({ connectionId: current.connectionId, sessionId: current.sessionId }),
+            f.control.stop({ connectionId: current.connectionId, sessionId: current.sessionId, disposition: 'Keep' }),
             /closed/,
         );
         assert.throws(() => f.control.status(current.connectionId), /closed/);
         await tick();
-        const events = hookExits(f.entry.status('Stop'));
-        assert.equal(events[0]?.connectionId, current.connectionId);
-        assert.equal(events[0]?.taskActive, true);
-        assert.deepEqual(f.entry.status('Stop'), {});
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
-test('first official use resumes a kept task and old-session exits cannot affect a restart', async () => {
+test('official use preserves a kept connection and old-session exits cannot affect a restart', async () => {
     const f = await fixture();
     try {
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(current.sessionId);
         const route = { connectionId: current.connectionId, sessionId: current.sessionId };
         await f.control.stop({ ...route, disposition: 'Keep' });
-        await f.entry.invoke('list_pages', { _dct: route }, new AbortController().signal, () => {});
-        assert.equal(selected(f.control, current.connectionId).taskActive, true);
-        const next = await f.control.restart(route);
+        await f.runtime.invoke('list_pages', { _dct: route }, new AbortController().signal, () => {});
+
+        const next = await f.control.restart({ ...route, scope: 'both' });
         f.exit();
         assert.equal(selected(f.control, current.connectionId).sessionId, next.sessionId);
         assert.equal(selected(f.control, current.connectionId).status, 'active');
         assert.notEqual(next.sessionId, current.sessionId);
-        assert.deepEqual(f.entry.status('PostToolUse'), {});
+
         assert.equal(f.children[0]?.listenerCount('exit'), 0);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -291,20 +234,19 @@ test('CDP and upstream errors do not announce process exit, but a later exit doe
     try {
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         f.unavailable();
-        const result = await f.entry.invoke(
+        const result = await f.runtime.invoke(
             'list_pages',
             { _dct: { connectionId: current.connectionId, sessionId: current.sessionId } },
             new AbortController().signal,
             () => {},
         );
         assert.equal(result.isError, true);
-        assert.deepEqual(f.entry.status('PostToolUse'), {});
+
         f.upstreamExits[0]?.();
         f.exit();
         await tick();
-        assert.ok(f.entry.status('UserPromptSubmit').hookSpecificOutput);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -314,17 +256,17 @@ test('failed retired-upstream cleanup closes its public route and retries only a
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(current.sessionId);
         const route = { connectionId: current.connectionId, sessionId: current.sessionId };
-        await f.control.endTask(route);
+        await f.control.stop({ ...route, disposition: 'Keep' });
         f.exit();
         await tick();
         assert.throws(() => f.control.status(current.connectionId), /closed/);
         await assert.rejects(f.control.stop({ ...route, disposition: 'Close' }), /closed/);
         assert.equal(f.counts().closes, 2);
-        await f.runtime.close();
+        await f.runtime.cleanup();
         assert.equal(f.counts().closes, 3);
         assert.throws(() => f.control.status(current.connectionId), /closed/);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -334,28 +276,22 @@ test('router cleanup failure retains internal ownership and retries after its ro
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(current.sessionId);
         const route = { connectionId: current.connectionId, sessionId: current.sessionId };
-        await f.control.endTask(route);
+        await f.control.stop({ ...route, disposition: 'Keep' });
         f.exit();
         await tick();
         assert.throws(() => f.control.status(current.connectionId), /closed/);
-        const events = hookExits(f.entry.status('Stop'));
-        assert.equal(events[0]?.processId, current.processId);
-        assert.equal(events[0]?.port, current.port);
-        assert.equal(events[0]?.sessionId, current.sessionId);
-        assert.equal(events[0]?.cleanupCode, 'RESOURCE_CLEANUP_FAILED');
-        assert.equal(events[0]?.cleanupError, undefined);
-        assert.ok(!JSON.stringify(events).includes('router cleanup failed'));
+
         assert.equal(f.counts().routerCloses, 2);
         await assert.rejects(f.control.stop({ ...route, disposition: 'Close' }), /closed/);
-        await f.runtime.close();
+        await f.runtime.cleanup();
         assert.equal(f.counts().routerCloses, 3);
         assert.throws(() => f.control.status(current.connectionId), /closed/);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
-test('normal Close suppresses its exit event while other concurrent exits remain pending', async () => {
+test('normal Close and concurrent peer exit retire their independent routes', async () => {
     const f = await fixture({ exitOnClose: true });
     try {
         const first = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'first' } });
@@ -363,12 +299,8 @@ test('normal Close suppresses its exit event while other concurrent exits remain
         assert.ok(first.sessionId && second.sessionId);
         f.exit();
         await f.control.stop({ connectionId: second.connectionId, sessionId: second.sessionId, disposition: 'Close' });
-        const output = JSON.stringify(f.entry.status('PostToolUse'));
-        assert.ok(output.includes(first.connectionId));
-        assert.ok(!output.includes(second.connectionId));
-        assert.deepEqual(f.entry.status('Stop'), {});
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -385,27 +317,21 @@ for (const operation of ['Close', 'restart'] as const) {
                 const route = { connectionId: current.connectionId, sessionId: current.sessionId };
                 if (operation === 'restart') {
                     f.unavailable();
-                    await f.entry.invoke('list_pages', { _dct: route }, new AbortController().signal, () => {});
-                    await assert.rejects(f.control.restart(route), /cleanup failed/);
+                    await f.runtime.invoke('list_pages', { _dct: route }, new AbortController().signal, () => {});
+                    await assert.rejects(f.control.restart({ ...route, scope: 'both' }), /cleanup failed/);
                 } else {
                     await assert.rejects(f.control.stop({ ...route, disposition: 'Close' }), /cleanup failed/);
                 }
                 await tick();
                 assert.throws(() => f.control.status(current.connectionId), /closed/);
                 assert.equal(f.counts().closes, 2);
-                const events = hookExits(f.entry.status('Stop'));
-                assert.equal(events.length, 1);
-                assert.equal(events[0]?.sessionId, current.sessionId);
-                assert.equal(events[0]?.processId, current.processId);
-                assert.equal(events[0]?.port, current.port);
-                assert.equal(events[0]?.expected, operation === 'Close' ? 'close' : 'restart');
-                assert.deepEqual(f.entry.status('Stop'), {});
+
                 await assert.rejects(f.control.stop({ ...route, disposition: 'Close' }), /closed/);
-                await f.runtime.close();
+                await f.runtime.cleanup();
                 assert.equal(f.counts().closes, 3);
                 assert.throws(() => f.control.status(current.connectionId), /closed/);
             } finally {
-                await f.runtime.close();
+                await f.runtime.cleanup();
             }
         });
     }
@@ -422,7 +348,7 @@ test('an unexpected target exit retires its route despite a busy router and a ne
         assert.throws(() => f.control.status(current.connectionId), /closed/);
         await assert.rejects(f.control.stop({ ...route, disposition: 'Close' }), /closed/);
         await assert.rejects(
-            f.entry.invoke('list_pages', { _dct: route }, new AbortController().signal, () => {}),
+            f.runtime.invoke('list_pages', { _dct: route }, new AbortController().signal, () => {}),
             /closed/,
         );
         await tick();
@@ -433,7 +359,7 @@ test('an unexpected target exit retires its route despite a busy router and a ne
         assert.notEqual(next.connectionId, current.connectionId);
         assert.notEqual(next.sessionId, current.sessionId);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -449,7 +375,7 @@ for (const operation of ['Close', 'restart'] as const) {
                 assert.ok(current.sessionId);
                 const route = { connectionId: current.connectionId, sessionId: current.sessionId };
                 if (operation === 'restart') {
-                    const next = await f.control.restart(route);
+                    const next = await f.control.restart({ ...route, scope: 'both' });
                     assert.equal(next.status, 'active');
                     assert.notEqual(next.sessionId, current.sessionId);
                 } else {
@@ -457,28 +383,27 @@ for (const operation of ['Close', 'restart'] as const) {
                     assert.equal(result.status, 'idle');
                     assert.throws(() => f.control.status(current.connectionId), /closed/);
                 }
-                assert.deepEqual(f.entry.status('Stop'), {});
             } finally {
-                await f.runtime.close();
+                await f.runtime.cleanup();
             }
         });
     }
 }
 
-test('end-task cannot restore an exited route when router cleanup fails', async () => {
+test('Keep cannot restore an exited route when router cleanup fails', async () => {
     const f = await fixture({ failRouter: true });
     try {
         const current = await f.control.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         assert.ok(current.sessionId);
         const route = { connectionId: current.connectionId, sessionId: current.sessionId };
         f.exit();
-        await assert.rejects(f.control.endTask(route), /closed/);
+        await assert.rejects(f.control.stop({ ...route, disposition: 'Keep' }), /closed/);
         assert.throws(() => f.control.status(current.connectionId), /closed/);
         await tick();
         assert.equal(f.counts().routerCloses, 2);
-        await f.runtime.close();
+        await f.runtime.cleanup();
         assert.equal(f.counts().routerCloses, 3);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });

@@ -9,7 +9,9 @@ This covers `official-server.ts`, `entry-recovery.ts`, `timeout-isolation.ts`,
 `screenshot-layers.ts`, `screenshot-timeout-probe.ts`, `application-screenshot-probe.ts`,
 `readest-native.ts`, `windows-elevation.ts` and `windows-elevated-mcp.ts`. Local
 development and verification of these tests may opt in explicitly; routine local
-hooks and scripts remain GUI-free. The pure `pnpm smoke:official` catalog smoke,
+hooks and scripts remain GUI-free. The pure
+`pnpm smoke:official --stage <verified-App-stage>` or explicit verified-package
+`pnpm smoke:official --installed` catalog smoke,
 compile-only PowerShell helpers and passive observers launch no GUI and remain
 ungated. Direct `windows-window-evidence.ps1` mutation modes require `-AllowGui`;
 its default None observation remains passive and ungated.
@@ -20,6 +22,18 @@ application probes remain development verification with separately selected
 fixtures; this change adds no application acquisition or toolchain to CI. These
 forms of evidence remain distinct.
 
+Current native regressions use the test-only
+[real Core/SDK HTTP fixture](../fixtures/http-gateway.ts), with an explicit
+registration bearer on every owned request. Source-fixture teardown uses stdin
+EOF to normally clean its Core and then close HTTP; this private test mechanism
+does not start, control or stand in for the GUI-only App. Client disconnect
+detaches its response wait and never owns target cleanup. The fixture itself
+requires `--allow-gui` for start/restart, even when called directly.
+Actual GUI App, actual host HTTP, source-fixture and sealed-fixture acceptance
+must name their own inputs, revision and executed scope; none implies the others.
+The HTTP migration alone establishes no new application screenshot matrix or
+six-platform native acceptance.
+
 `retained-official.ts --allow-gui <absolute-evidence-directory>` exercises the
 production shared core, verified unchanged official public bin, native target and
 stable router. It records each stage, bounds client response waits to 60 seconds,
@@ -28,19 +42,32 @@ checks retained official PID/transport across target replacement, fresh public
 session and page evidence, old page/snapshot/network pair rejection, immutable
 roots and synthetic requests without replay. Bare network reqid reuse is recorded
 separately from complete page/reqid and gateway session identity. It currently
-requires Windows and remains an explicitly authorized local smoke.
+requires Windows and remains an explicitly authorized local smoke. Its direct
+Core composition injects verified installed official bytes and supported ordinary
+Node; it does not prove the packaged App's GUI or bundled runtime launch.
 
 `codex-instructions.ts` and `claude-instructions.ts` install the production
-Plugin metadata and Skill into temporary host environments, substituting only
-the MCP command with `mcp-instructions-entry.ts`. Run them explicitly:
+thin Plugin metadata and Skill into temporary host environments and connect
+directly to an already running actual App. They do not substitute a stdio MCP
+entry. Consciously start the App before running them explicitly:
 
 ```text
 node tests/smoke/codex-instructions.ts [codex-executable]
 node tests/smoke/claude-instructions.ts [claude-executable]
 ```
 
-`instructions-evidence.ts` checks production initialization evidence, semantic
-request carriers and source fingerprints for these smokes.
+Append `--exercise-lifecycle` after an explicit host executable to test one
+actual host-native HTTP registration followed by status with that returned
+bearer. The substitute provider requests those tools, verifies their results
+and records lifecycle call names plus the registration ID without persisting
+the bearer in acceptance metadata. This mode starts no target and does not
+establish target-lifecycle or GUI acceptance. Both modes require their own
+completed actual host run before a pass is claimed.
+
+`app-http.ts` independently captures actual App initialization and tools/list
+through the public SDK HTTP client without registering or launching a target.
+`instructions-evidence.ts` checks that capture, semantic request carriers and
+tested source fingerprints for these smokes.
 
 The loopback substitute model captures real outbound requests and checks the
 complete production initialize paragraph at semantic metadata locations. Codex
@@ -52,12 +79,14 @@ Plugin scope, paragraph and separate seven-name deferred discovery block before
 the independently verified supplied prompt. It also checks the actual host
 system's reminder contract. This is a controlled-capture assertion, not a rule
 that arbitrary user reminder tags prove authorship.
-Both disable Hooks, invoke no Skill, forbid all MCP tool calls, and launch no
-target or official upstream. Existing Hook/Skill smokes retain their defaults
-and their separate fake process/CDP/upstream I/O boundary.
+The default instruction scenarios disable Hooks, invoke no Skill and execute no
+target tools. They neither start the App nor launch a target; the already running
+App owns its runtime. A registration/status tool round trip is a separate actual
+host execution check, not implied by metadata/discovery. New HTTP host acceptance
+requires a completed run; the dated stdio/Hook results below remain historical.
 
-Each new smoke prints and retains its temporary evidence directory, including
-raw requests, MCP initialize/discovery records and successful acceptance metadata.
+Each host instruction smoke prints and retains its temporary evidence directory,
+including raw requests, MCP initialize/discovery records and successful acceptance metadata.
 Failure captures remain available for diagnosis. Temporary configuration uses no
 account credentials; Codex may discover Windows known-folder Skills despite HOME
 relocation, so its existing isolation guard disables unrelated Skills only in
@@ -70,17 +99,18 @@ two isolated Chrome targets, validates client response timeout with continued
 execution admission/busy state and peer availability, then explicitly normally
 closes them. It retains test profiles.
 
-- `official-server.ts` tests the bundled bootstrap against an isolated Chrome,
-  including tool discovery, snapshot-based CSS style inspection, reusable entry
-  start/Close, and normal closure.
+- `official-server.ts` tests actual Core/SDK HTTP through the source fixture
+  against an isolated Chrome, including tool discovery, snapshot-based CSS style
+  inspection, repeated start/Close and normal owned-resource closure.
 - `entry-recovery.ts` launches at least three concurrent isolated Chrome targets
   through one gateway. It checks independent UUIDs and parallel tool routing,
-  Keep/reuse, scoped Close, later new connections, active-task recorded exit delivery,
-  new-connection retry after actual exit, live same-port restart, stale-session
-  rejection and informational exit delivery after a kept target exits. An actual
+  Keep/reuse, scoped Close, later new connections, native actual-exit observation,
+  new-connection retry after actual exit, explicit live restart, stale-session
+  rejection and cleanup after a kept target exits. Fixed-port retention and
+  automatic port selection follow the recorded launch policy. An actual
   exit removes the old connection; restart requires a still-live session. Default
   status and lifecycle success are checked as summaries before test adapters read
-  them, and compact Hook payloads must exclude tool schemas and configuration.
+  them, without task activity or automatic Hook delivery.
   Fixtures disable the first-run UI, background networking and background mode.
   On Windows, both browser smokes use the Chrome launch preset to disable the
   automatic updater scheduler for their newly launched targets, following Chromium's
@@ -92,33 +122,32 @@ closes them. It retains test profiles.
   External exit stimuli request identity-verified Windows CloseMainWindow or Unix
   SIGTERM. These inspect-only fixtures do not own an exit observer; request acceptance
   is recorded separately from the gateway's actual application exit and cleanup.
-  Bounded status checks require removal of the exited connection, and Hook facts
-  retain the original process and session identities. Route removal can precede
-  completion of upstream cleanup, so both exit cases separately wait for the
-  first nonempty Hook response using the existing 15-second/100ms readiness
-  polling budget; pending RPCs keep their existing timeout and responses arriving
-  after readiness expires cannot pass. They validate that first batch without
-  filtering identities or
-  discarding other events, then require the next Hook response to be empty.
-  A root that remains alive
-  after gateway EOF cleanup is reported as retained and fails the smoke, even if a
+  Bounded status checks require removal of the exited connection, independent
+  root-absence evidence and actual managed-directory deletion. Route removal can
+  precede upstream disposal; no Hook read serves as a completion receipt.
+  A root that remains alive after explicit HTTP fixture teardown is reported
+  as retained and fails the smoke, even if a
   fallback normal Close request is accepted.
-  Run `node tests/smoke/entry-recovery.ts --allow-gui` against a verified committed Plugin build.
+  Run `node tests/smoke/entry-recovery.ts --allow-gui` after trusted setup and
+  verified original official inputs.
   Recorded timing distinguishes normal Close request acceptance, connection
-  retirement observation, and Hook delivery. Connection retirement observation
-  does not establish that upstream cleanup has completed or measure Agent context
-  delivery. Cleanup uses
-  gateway stdin EOF and identity-verified normal target close. Managed profiles
-  must be deleted by the gateway; the parent container remains for evidence.
-- `mcp-client.ts` supplies test-only MCP and generic JSON-line stdio clients;
-  they are never shipped. Normal close waits for the owned child process and all
-  stdio to close before temporary-file cleanup; process exit alone is insufficient.
+  retirement observation and resource cleanup. Retirement alone does not establish
+  upstream disposal or measure Agent context/UI delivery. Explicit HTTP fixture
+  teardown normally cleans the Core and its targets. Managed profiles must be
+  deleted by the Core; the parent container remains for evidence.
+- `mcp-client.ts` supplies a test-owned Core/SDK HTTP child client and a separate
+  generic JSON-line stdio client for actual hosts/private responders. Its fixture
+  conveniences explicitly inject the saved test registration bearer. Sealed callers
+  supply the verified ordinary Node path; no old Plugin dist entry is adopted.
+  These helpers are never shipped. Normal close waits for the owned child
+  process and all stdio before temporary-file cleanup; process exit alone
+  is insufficient.
 - `fixture-artifacts.ts` supplies the opt-in bounded streaming collector and
   first-failure-preserving cleanup recorder for the two controlled Chrome smokes.
   `fixture-preload.ts` subscribes safely to the internal fixture channel through
-  `--import`; the original delivered `dist/mcp-bootstrap.mjs` remains the child
-  entry. Query parameters configure only that Node subscriber, without
-  `NODE_OPTIONS`, gateway environment switches or inherited browser configuration.
+  `--import` alongside the source HTTP fixture. Query parameters configure only
+  that Node subscriber without `NODE_OPTIONS`, runtime environment switches
+  or inherited browser configuration.
   `fixture-ci.ts` initializes the dependency-free job index before prerequisite
   checks and writes the diagnostic job summary using only fixed labels and safe IDs.
 - `linux-startup-wait.ts` supplies the test-only Linux verified-root wait sampler,
@@ -132,49 +161,18 @@ closes them. It retains test profiles.
   HTTP endpoint and one temporary page WebSocket. It is test-only and never shipped.
 - `windows-monitor.ps1` samples visible console windows every 20 ms and reports
   newly visible console/terminal windows, without reading application data.
-- `marketplace.ts` installs the local Plugin with a disposable Codex configuration,
-  compares the complete installed tree, discovers the marketplace path and Plugin
-  identity, and checks `plugin/read` project/display metadata and component inventory.
-  Scoped, reloaded `skills/list` must have no errors and expose the installed
-  namespaced Skill with the correct Plugin ID, enabled state, user scope, exact
-  presentation and absolute installed PNG paths. The PNG bytes must match the
-  approved shared asset. Homepage/repository are checked in the installed manifest;
-  the API exposes `interface.websiteUrl`. It also asks Codex's app server for the
-  installed MCP server and tool catalog before directly testing the bundled gateway.
-  Missing discovery fails even if directly launching the gateway would work. Run
-  `node tests/smoke/marketplace.ts` after `pnpm build:plugin`; an optional first
-  argument selects a Codex executable, including the Desktop app's binary.
+- `marketplace.ts` installs the thin local Codex Plugin in disposable
+  configuration, compares its complete installed tree and checks marketplace,
+  Plugin/Skill identity, component inventory and presentation. Scoped reloaded
+  skills/list must expose the enabled installed namespaced Skill and exact PNG
+  paths/bytes. Host MCP discovery must connect to an already running actual App;
+  a copied dist or private Core fixture cannot replace this check. Run
+  `node tests/smoke/marketplace.ts` after `pnpm build:plugin`; its optional first
+  argument selects Codex, including the Desktop app's binary. The HTTP path
+  requires its own completed acceptance run after migration.
 
-- `codex-hooks.ts` installs byte-identical Codex manifest, Hook, production Skill
-  and asset files in temporary configuration and runs the actual Codex app-server
-  against a local SSE model substitute and production gateway with fake
-  process/CDP/upstream I/O. It checks
-  actual outbound model requests for PreToolUse, PostToolUse, one Stop continuation,
-  idle-next-turn delivery, inactive-task exit and operation completion. Every event
-  is parsed at that model-request boundary and checked for exact identity, event
-  kind and operation action, with no full result, tool schema or configuration
-  leakage. The Post scenario checks successful original official content and
-  completed tool status before its separately observed exit, using an event-loop
-  milestone for exit before the immediate PostToolUse boundary. A controlled
-  second launch completes before the wait Hook, proving a
-  compact unread operation notice reaches the model independently of the wait
-  result. It checks the gateway tool catalog and verifies untrusted Hooks do not
-  run. Only temporary config is trusted; no real browser or account API is used.
-  Run `node tests/smoke/codex-hooks.ts`; an optional first argument selects a Codex
-  executable and an optional second selects one of `untrusted`, `pre`, `post`,
-  `stop`, `idle`, `inactive`, `lifecycle` or `skill`. The default runs all eight
-  scenarios.
-  Hooks are enabled only in the isolated test config.
-  The `skill` case sends a formal Skill input using its discovered name/path and
-  requires the complete installed body in the first actual outbound model request,
-  including the current isolation intent, none-mode, support classification,
-  occupancy and Close/Keep instructions. It then disables that Skill through
-  `skills/config/write`, reloads discovery, requires zero enabled Skills, and
-  creates a distinct new thread for a neutral text-only turn. That request must
-  omit the complete instructions and the distinctive isolation section. Captures
-  from the positive thread remain intact.
 - `codex-host.ts` supplies an allowlisted child environment and disposable
-  `CODEX_HOME` for both Codex smokes. Child-only `GIT_ALLOW_PROTOCOL=file` and
+  `CODEX_HOME` for the Codex smokes. Child-only `GIT_ALLOW_PROTOCOL=file` and
   `GIT_TERMINAL_PROMPT=0` keep Git local-only without editing any Git config.
   Codex's unrelated default remote marketplace Git probe therefore fails promptly;
   the selected real local marketplace must still load without errors. The
@@ -199,32 +197,16 @@ closes them. It retains test profiles.
   Explicit CLI invocation does not prove automatic Desktop starter-prompt injection
   or Desktop rendering, which retain a separate manual acceptance gate.
 
-- `claude-marketplace.ts` validates, adds and installs the actual Claude Marketplace
-  into an isolated home outside the repository. It compares the complete installed
-  cache and actual init source bytes, checks component inventory, namespaced Skill,
-  connected gateway and all 74 tools through real Claude discovery. A separate direct
-  gateway check supplements host discovery. Run `node tests/smoke/claude-marketplace.ts`
-  after `pnpm build:plugin`; an optional first argument selects a Claude executable.
-- `claude-hooks.ts` installs the committed Claude manifest, Hook and Skill bytes in
-  temporary homes and substitutes only process/CDP/upstream I/O with the production
-  gateway fixture. Actual Anthropic model requests prove PreToolUse, PostToolUse,
-  next-turn UserPromptSubmit, one Stop continuation, inactive-task exit, compact
-  operation completion and complete namespaced Skill instructions. The payload
-  checks use actual outbound request context and exact event identity/action;
-  operation notices cannot carry results, tool schemas or configuration. The
-  Post scenario verifies the original successful tool_result content in its
-  actual text-array format and exact PostToolUse delivery. Its fixture schedules
-  exit after the SDK success response through an event-loop milestone.
-  separately delivered successful wait result must be a connection summary.
-  `disableAllHooks` keeps MCP connected and suppresses Hooks. Run
-  `node tests/smoke/claude-hooks.ts`; an optional first argument selects Claude and
-  an optional second selects `pre`, `post`, `stop`, `idle`, `inactive`, `lifecycle`,
-  `skill` or `disabled`. The default runs all eight scenarios. An intentional
-  blocking Stop can emit Claude's `stop-hook-error`
-  notification while the Hook and final turn succeed; the script checks the actual
-  continuation and successful result.
+- `claude-marketplace.ts` validates/adds/installs the thin actual Claude
+  Marketplace into an isolated home, compares the complete installed cache and
+  checks actual host initialization, namespaced Skill and connected App tools.
+  Expected tools come from independent actual App discovery. Run
+  `node tests/smoke/claude-marketplace.ts` after `pnpm build:plugin` with the App
+  already running; its optional first argument selects Claude. A direct private
+  fixture check cannot establish installed App acceptance. The HTTP path must
+  be rerun before recording new host acceptance.
 - `claude-host.ts` owns tested allowlisted environments, explicit loopback model
-  endpoints, baseline versions, strict request/result parsing, Hook context and SSE.
+  endpoints, baseline versions, strict request/result parsing, host context and SSE.
 - `claude-process.ts` launches actual Claude with disposable config/home/workspace/TMP
   outside the repository, synthetic credentials and a loopback model. It checks actual
   init credentials/version/memory paths and records argv, environment, transcripts,
@@ -232,19 +214,42 @@ closes them. It retains test profiles.
   retain their printed temporary evidence directories, call no account model API,
   install no global Skill and launch no real target.
 
-On 2026-10-08, these Marketplace checks and all eight scenarios per host passed
+## Historical stdio and Hook host acceptance
+
+The following describes the removed per-chat runtime and old test inputs,
+not runnable HTTP commands or current plugin capabilities. The former
+`codex-hooks.ts`/`claude-hooks.ts` and
+`../fixtures/hook-gateway.ts`/`../fixtures/hook-gateway-events.ts` used actual
+hosts with production stdio/Skill bytes and fake process/CDP/upstream I/O.
+Actual outbound model requests proved PreToolUse, PostToolUse, one Stop
+continuation, idle-next-turn delivery, inactive exits and compact operation
+completion with exact identity/action and no full result/schema/configuration
+leaks. Original successful Post tool results preceded independently observed
+exit through an event-loop milestone. A controlled second launch completed
+before wait delivery, separating compact notice evidence from full wait results.
+Untrusted/disabled Hook negatives kept their host-specific boundaries.
+
+On 2026-10-08, the old Marketplace checks and all eight scenarios per host passed
 on Windows with Codex CLI 0.161.0 and Claude Code 2.1.294. Codex's dedicated Skill
-case captured two actual model requests: complete instructions after formal
-invocation, then no instructions in a distinct new thread after disable/reload.
-Claude's existing namespaced Skill case captured the complete installed body.
-These results do not establish Desktop rendering, automatic starter-prompt Skill
-injection, or acceptance on the earlier historical host baselines.
+case captured complete installed instructions after formal invocation and their
+absence in a distinct new thread after disable/reload. Claude's namespaced
+Skill case captured the complete installed body. Those disposable contexts used
+synthetic model endpoints and no real target/account model API. These results
+do not establish HTTP migration, Desktop rendering, automatic starter-prompt
+Skill injection or acceptance on earlier host baselines. Dated host research
+and presentation evidence remain in [host metadata](../../docs/host-metadata.md).
+
+## Native fixture and screenshot entrypoints
 
 - `lifecycle-client.ts` supplies a test-only MCP mutation/wait adapter and bounded
   retries of explicitly selected normal Close when pending CDP traffic is busy.
-  It keeps the entry/connection/session identity and does not retry other failures.
+  It keeps explicit connection/session identity and does not retry other failures.
 - `screenshot-timeout-probe.ts` runs one explicitly supplied screenshot experiment
-  through the complete committed Codex gateway. `screenshot-timeout-fixture.ts`
+  through the sealed Core/SDK HTTP fixture. Its source entry only authorizes,
+  verifies `--stage` plus its adjacent `.receipt.json`, then launches the sealed
+  original ordinary Node. `screenshot-timeout-study.ts` contains the measured
+  subject and verifies its own sealed entry/runtime before acquisition.
+  `screenshot-timeout-fixture.ts`
   validates its fixture and owns the fail-fast sequence; neither runs in default
   tests. `windows-selected-tab-evidence.ps1` reads UIA/MSAA selection only within
   the verified owned HWND and samples the foreground HWND separately. Unsupported,
@@ -255,16 +260,22 @@ injection, or acceptance on the earlier historical host baselines.
   identities, and normal Close/actual-exit cleanup. It is test-only and requires
   confirmed cleanup before another anchor acquisition.
 - `screenshot-layers.ts` accepts an explicit Windows application fixture JSON and
-  an absolute evidence parent directory. It creates independent baseline/candidate
-  targets for direct official and complete generated gateway routes, with native
-  HWND/process/state evidence before and after every PNG. Candidate normal A and
+  an absolute evidence parent directory, plus `--stage` and its adjacent receipt.
+  `sealed-study.ts` supplies the narrow authorization/seal/child boundary shared
+  by both launchers. `screenshot-layers-study.ts` is the sealed measured subject;
+  its direct arm uses the same verified App Node/official/native resources.
+  It creates independent baseline/candidate
+  targets for direct verified official and actual Core/SDK HTTP fixture routes,
+  with native HWND/process/state evidence before and after every PNG. Candidate normal A and
   minimized B/C each exercise viewport, fullPage and element with new snapshot
   selection, DOM readback, opaque updated pixels and a below-viewport color patch.
   Normal A must complete every mode. Only a confirmed minimized B/C baseline
   SDK timeout is diagnostic; a candidate timeout fails. Gateway baseline
-  timeout also checks a peer while pending and after quarantine. Normal Close is
+  timeout also checks a peer while pending and retains the healthy original
+  upstream while owned execution remains busy. A later call may succeed if the
+  original execution already settled; capture is never replayed. Normal Close is
   preselected for these newly created targets; all peers are attempted on failure,
-  with final empty gateway status and actual stdio exit checked. Blocked native
+  with final empty Core status and normal HTTP fixture cleanup/exit checked. Blocked native
   state cannot pass. Profiles, PNGs and evidence.json remain in the printed directory.
 - `application-screenshot-fixture.ts` validates complete test-only Obsidian/Readest/Tauri
   launch pairs, known existing-page selectors, confined synthetic text and fresh
@@ -276,9 +287,10 @@ injection, or acceptance on the earlier historical host baselines.
   sibling profile; its shared helper decodes the declared browser carrier.
 - `application-screenshot-probe.ts` accepts one explicit reviewed application
   experiment with absolute config/evidence paths, an arm, native condition and
-  qualification/viewport/fullPage mode. `application-screenshot-core.ts` verifies
-  the complete sealed payload receipt from source
-  `eef90b4d974600c3a6697d40dc76e99037466315` before fixture or gateway acquisition.
+  qualification/viewport/fullPage mode. `application-screenshot-core.ts` calls
+  the native-fixture seal validator before fixture or target acquisition.
+  The current receipt covers complete same-revision App resources plus a separate
+  test-only real Core/SDK HTTP bundle, rather than a historical Plugin payload.
   It selects a unique existing renderer by exact URL, declared title/identity and
   observed fresh userData/vault paths. It selects a unique owned main HWND by
   declared class/title and never creates pages.
@@ -293,15 +305,17 @@ injection, or acceptance on the earlier historical host baselines.
   the local MCP pending interval. This interval does not expose CDP method timing.
   An observer completion failure preserves the primary capture receipt and saved
   PNG evidence while recording a separate condition-evidence failure.
-- `application-screenshot-adapter.ts` reuses the stdio client, lifecycle Close,
-  screenshot observer, background anchor and native PNG decoder for those cells.
+- `application-screenshot-adapter.ts` uses the sealed HTTP fixture and verified
+  ordinary Node, lifecycle Close, screenshot observer, background anchor and native
+  PNG decoder for those cells.
   Its injectable boundaries also verify actual root/browser/listener/endpoint
   identity, runtime version/hash, ordinary token level and consumed profile/port
   argv. Observed feature argv must pass the existing strict effective grammar
   without altering the receipt. Cleanup attempts all owned resources and requires
   identity-bound actual process exits,
-  no owned listener, empty gateway status and actual stdio exit. Uncertain cleanup
-  retains gateway stdio and identities; the caller must stop subsequent acquisition.
+  no owned listener, empty Core status and normal fixture cleanup/exit. Uncertain
+  cleanup retains fixture input and identities; the caller must stop subsequent
+  acquisition.
   Close and witness failures retain separate resource/phase reasons in the ledger.
   Unexpected permission waiting, permission handshake or ERROR740 evidence blocks
   the attempt, cancels its existing operation and performs only bounded cancellation
@@ -316,9 +330,9 @@ injection, or acceptance on the earlier historical host baselines.
 
 The application config is an external JSON object with `fixture` (the complete
 application fixture pair), `payload: {root, receipt}` (the inline complete sealed
-receipt), `mainWindow: {className, titleIncludes}`, `identityFunction` and
-`preflight: {status, reason}`. The caller supplies a reviewed read-only identity
-function accepting the exact fresh directory as its `fixtureDirectory` parameter
+App-plus-fixture receipt), `mainWindow: {className, titleIncludes}`,
+`identityFunction` and `preflight: {status, reason}`. The caller supplies a reviewed
+read-only identity function accepting the exact fresh directory as its `fixtureDirectory` parameter
 and returning `{url, title, userData, vaultPath, identity?}` plus any runtime facts.
 The core safely encodes the directory as a JSON string argument; it does not
 replace placeholders in the function source. For Obsidian, observed `userData`
@@ -344,19 +358,35 @@ node tests/smoke/application-screenshot-probe.ts --allow-gui 'C:/Test/applicatio
 
 Each invocation retains its new fixture, PNG and raw evidence outside the repository.
 The runner hashes its Node executable, configuration and helper sources into that
-private evidence. The archived payload SHA256 is receipt provenance; extracted
-inventory verification does not independently rehash the archive. Normal Close
-is preselected only for these newly acquired test targets and related anchors.
+private evidence. The current seal records source revision/digest and canonical
+byte/hash inventories for the complete App and separate fixture bundle. The
+[research builder](../../tooling/native-fixture-seal.ts) stages a fresh App from
+explicit verified native archives and bundles the test composition against its
+colocated resources. Verification returns fixed HTTP/layers/timeout entries and
+`resources/node/node.exe`. The strict thirteen-file research inventory includes
+the three bundled subjects, shared original notices and nine unmodified native
+asset destinations (eight unique source files); nested C# placement preserves
+the original PowerShell relative imports. These research files are separate from
+production App delivery. Sealed execution uses no worktree module, old Plugin
+dist or download. Default verification rejects dirty source receipts. Explicit
+dirty developer builds remain development evidence and cannot become clean final
+acceptance. Fixture normal exit proves its Core cleanup; GUI-only App lifecycle
+requires separate acceptance. Normal Close is preselected only for these newly
+acquired test targets and related anchors.
 Root owns experiment ordering/caps and publication redaction. Do not run another
 cell until the previous invocation has confirmed cleanup.
 
-The bounded Windows results and qualification limits are recorded in
+Historical bounded Windows results and qualification limits are recorded in
 [application screenshot validation](../../docs/application-screenshot-validation.md).
+Those runs used the sealed old Codex payload from source
+`eef90b4d974600c3a6697d40dc76e99037466315`, not the current App-plus-fixture seal.
+Its archived SHA256 was provenance; extracted inventory verification did not
+independently rehash the archive.
 Its original geometry failures remain failed; later fake regression verification
 does not establish a new accepted real-application matrix.
-The separate closed `tauri-fixture` follow-up requires a reviewed external fixed
-build and existing renderer; its actual builds, two failed qualifications and
-separate abnormal helper dispositions are recorded in
+The separate historical closed `tauri-fixture` follow-up requires a reviewed
+external fixed build and existing renderer; its actual builds, two failed
+qualifications and separate abnormal helper dispositions are recorded in
 [Tauri screenshot validation](../../docs/tauri-screenshot-validation.md).
 
 - `screenshot-fixture.ts` validates explicit single-feature launch comparisons,
@@ -394,22 +424,24 @@ separate abnormal helper dispositions are recorded in
   Use a separate evidence directory for each mode. All modes wait for the actual
   application handle to exit after normal Close. UAC cancellation does not trigger
   another authorization request, and application targets are never force-killed.
-- `windows-elevated-mcp.ts` verifies the same elevation through the delivered
-  gateway's start/wait/status/Close tools, using the fixture's loopback discovery
+- `windows-elevated-mcp.ts` verifies the same elevation through the Core/SDK HTTP
+  source fixture's start/wait/status/Close tools, using its loopback discovery
   endpoint for real process/listener/readiness verification. The fixture does not
   implement browser tools; Chrome smokes verify those separately. Run from an
   ordinary process; launch and normal close may each require Windows authorization.
 
 These scripts are opt-in and may open dedicated test browser/application windows.
-They use the delivered official package without dependency download. The normal
-test suite never runs them. Codex tests create only disposable homes/configuration.
+Source-fixture/direct routes verify the installed original official package
+without dependency download; sealed application probes use verified App resources.
+The normal test suite never runs them. Codex tests create only disposable
+homes/configuration.
 
-For a one-shot screenshot timeout investigation, first verify the committed build
-with `pnpm check:build`, then supply an explicitly reviewed fixture and evidence
-parent outside the worktree:
+For a one-shot screenshot timeout investigation, complete trusted setup and build
+a clean same-source App/research seal, then supply a reviewed fixture
+and evidence parent outside the worktree:
 
 ```powershell
-node tests/smoke/screenshot-timeout-probe.ts --allow-gui 'C:/Test/probe.json' 'C:/Test/evidence'
+node tests/smoke/screenshot-timeout-probe.ts --allow-gui 'C:/Test/probe.json' 'C:/Test/evidence' --stage 'C:/Test/sealed-stage'
 ```
 
 The JSON fields are `label`, `url`, structured `launch`, `background`, `fullPage`,
@@ -464,8 +496,11 @@ One marked, read-only metadata evaluation records title, URL, focus, viewport an
 scroll dimensions identically across runs. Without an explicit native condition,
 no restore, minimize or extra native preparation is performed. No screenshot replay,
 restart or alternate profile is performed.
-The runner uses a 90-second MCP client deadline to receive the unchanged gateway
-60-second timeout/quarantine result. Tool errors stop dependent preparation.
+The runner uses a 90-second MCP client response deadline. Expiry detaches that
+wait; it does not complete owned execution, quarantine a healthy upstream,
+authorize restart or replay capture. The Core remains busy until a real terminal
+response or definitive upstream close. Tool errors stop dependent preparation.
+Explicit normal Close still owns cleanup.
 
 Each printed evidence directory retains the fixture/profile, individual evaluation
 results, timed requests/results/routing, independent process/listener/endpoint
@@ -478,17 +513,17 @@ is a diagnostic outcome and still triggers every discovered owned connection's
 preselected normal Close, final empty-connection check and gateway exit check.
 Cleanup failure reports retained identities. Evidence/profile files are retained.
 Final `capture` preserves the primary screenshot result/outcome/error separately
-from required post-capture `observations` and their errors. Recovery or client
-timeout retains its primary outcome even when after-evidence fails; a successful
+from required post-capture `observations` and their errors. Ordinary tool error
+or client timeout retains its primary outcome even when after-evidence fails; a successful
 capture with invalid required evidence reports an overall blocked outcome.
 Native correlation records reliability/reasons for both UIA and MSAA; either
 provider's ambiguity, incomplete traversal or disagreement makes it unknown.
 Passive sampling always uses `State None`. A sampling error or condition loss
 invalidates required observations while preserving the primary screenshot result
-and its recovery/client-error classification. Explicit controlled captures also
+and its tool-error/client-error classification. Explicit controlled captures also
 require a successful native sample that starts and finishes validation while the
 actual local MCP screenshot request is pending. `screenshot-capture-observer.ts`
-starts from the test stdio client's post-write dispatch hook and stops at its
+starts from the test client's dispatch callback and stops at its
 resolve-or-reject hook, including timeout or gateway exit. `capture-interval`
 records monotonic ordering/times and qualified counts. Pre-dispatch,
 post-settlement and crossing samples cannot qualify; official/MCP evidence writes
@@ -499,13 +534,13 @@ A capture that finishes too quickly for
 the native observer retains its actual result with an overall blocked-evidence
 outcome. Omitted conditions require no minimum count, while any actual passive
 failure still invalidates overall evidence; preservation refers to the official
-call sequence, passive normal-state validation and primary capture/quarantine
+call sequence, passive normal-state validation and primary capture/error
 result. Native PowerShell JSON stdout is BOM-free UTF-8, including Unicode paths.
 
 For the window screenshot acceptance, supply an explicitly reviewed fixture:
 
 ```powershell
-node tests/smoke/screenshot-layers.ts --allow-gui 'C:/Test/fixture.json' 'C:/Test/evidence'
+node tests/smoke/screenshot-layers.ts --allow-gui 'C:/Test/fixture.json' 'C:/Test/evidence' --stage 'C:/Test/sealed-stage'
 ```
 
 The JSON has `label` (lowercase name), `targetKind: "generic-cdp"`, `launch` (structured
@@ -536,17 +571,12 @@ the actual path for native samples. Synthetic or legacy parsed fixtures may
 omit the additional actual-path field. PID, exact creation ticks and selected
 HWND checks remain mandatory for native mutations.
 
-Build the shared delivered payload once with `pnpm build:plugin` before running
-host Hook smokes so their copied manifests, Hooks and Skill match maintained
-sources. Select the actual executable locally. These commands use fictional
-Windows paths:
+Build thin host payloads with `pnpm build:plugin` before host metadata/HTTP
+smokes and consciously start the separately verified App. Removed stdio/Hook
+commands are historical, not current entrypoints. Real host/GUI execution
+requires its own fresh evidence; a default regression pass or guarded skip
+does not establish it.
 
-```powershell
-node tests/smoke/codex-hooks.ts 'C:/Test/codex.exe'
-node tests/smoke/claude-hooks.ts 'C:/Test/claude.exe'
-```
-
-Append `lifecycle` or `inactive` to run those isolated scenarios separately.
 Keep actual executable paths, usernames, hostnames, private addresses and local
 experiment receipts in untracked configuration or external evidence directories.
 Tracked tests and documentation must use explicitly synthetic identities and
@@ -569,7 +599,9 @@ Chrome. It uses the runner's existing Chrome, `ps` and `lsof`; Linux additionall
 requires Xvfb, xvfb-run, xauth and getconf. It downloads no browser, starts no headless
 substitute and uploads no profiles or browser content. These jobs are also part
 of the reusable release CI. Both platform checks passed on GitHub before becoming
-required main checks; see the [compatibility guide](../../docs/user-guide/compatibility.md)
+required main checks on the earlier stdio implementation; that history does not
+establish current HTTP acceptance. Record new executed scope separately; see the
+[compatibility guide](../../docs/user-guide/compatibility.md)
 for tested systems and actual Chrome versions.
 
 Each target explicitly requests a new managed profile with delete-on-release
@@ -604,7 +636,7 @@ marks each smoke as running immediately before execution, so an earlier failure
 leaves the later smoke not-run. The existing acceptance scripts run once, with
 their original prerequisites, assertions and deadlines.
 
-After verifying the committed Plugin build and actual Chrome prerequisites,
+After trusted setup, original official verification and actual Chrome prerequisites,
 reproduce on Linux from the repository root with the explicit installed browser:
 
 ```sh
@@ -647,7 +679,7 @@ To index a failed run afterward, run
 `node tests/smoke/fixture-ci.ts summary "<absolute-artifact-directory>" "$collectionId"`.
 Without `--diagnostics`, the original child runs without a subscriber or files.
 Both smoke launch sites use a copied child environment that omits inherited
-`NODE_OPTIONS`; the shared stdio client's general environment contract is unchanged.
+`NODE_OPTIONS`; the generic test client's environment contract is unchanged.
 
 Each NDJSON record is at most 4,096 bytes; each fixture stream is limited to
 2,000 records plus one truncation marker and 1,048,576 total bytes. A test-only
@@ -702,7 +734,8 @@ Controlled launches add plain `--enable-logging` and an absolute `--log-file`
 in a canonical private scratch sibling outside profiles and the upload directory.
 The opt-in startup study's `off` arm omits only those two flags; its missing
 Chrome log projection is expected, while capture and display preflight remain enabled.
-Chrome stdio stays ignored, and the original delivered gateway remains the entry.
+Chrome stdio stays ignored; current controlled runs use the Core/SDK HTTP source
+fixture. Original delivered stdio gateway records remain historical evidence.
 Each startup settlement reads its own log; restart samples before reuse and
 after settlement because Chrome may overwrite the same file on restart.
 
@@ -734,7 +767,7 @@ Retained `exitObserved`, exit code, signal and `monitoringFailed` evidence is sa
 before rollback Close. These fields add no process scan, watcher or readiness deadline.
 
 For an accepted Linux diagnostics collection, the preload also enables the
-test-only `linux-startup-wait` sampler. It pins entry, connection, session, PID
+test-only `linux-startup-wait` sampler. It pins private diagnostic entry, connection, session, PID
 and creation ticks only after the proc-stat decision belongs to the same
 completed native snapshot and the following root identity validation succeeds.
 A successful proc-stat read or snapshot END alone does not authorize sampling.
@@ -842,6 +875,9 @@ evidence. Static or synthetic tests also do not establish real Chrome acceptance
 
 ### PR 32 first Ubuntu startup failure
 
+This is historical evidence from the pre-App stdio implementation. The recorded
+failure, passing reruns and unknown cause remain unchanged by the HTTP migration.
+
 The [first PR 32 Ubuntu job](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37915060872/job/113771178523)
 failed before connecting the official MCP Server. Its head was
 `85123e915dc77efa65c81f9d6ad5a1136de9cf27`; the job checked out virtual merge
@@ -925,6 +961,9 @@ producer's optional classification work or all native observation overhead.
 
 ### PR 33 macOS ownership rejection
 
+This records the prior stdio implementation; current HTTP fixtures do not
+retroactively establish its missing owner correlation or a causal fix.
+
 The [first push macOS job for PR 33](https://github.com/Cirnouo/debugging-cdp-targets/actions/runs/37925889399/job/113806384938)
 failed on attempt 7 at listener ownership, before any endpoint request on that
 attempt. The checked-out head was
@@ -980,7 +1019,7 @@ Linux sampler and cleanup. The closed study result in stdout identifies
 projection. Absence in that arm is not evidence of a Chrome logging failure.
 Raw Chrome logs remain excluded from uploads even when private scratch is retained.
 
-After verifying the committed Plugin build, run one explicitly authorized local
+After trusted setup and original official verification, run one explicitly authorized local
 Linux sample with a fresh collection, choosing exactly one arm:
 
 ```sh

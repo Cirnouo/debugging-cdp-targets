@@ -4,12 +4,12 @@ The [project README](../../README.md) provides an overview and quick start.
 These pages explain installation and operation in detail:
 
 - [installation.md](installation.md): Codex and Claude Code installation, Skill
-    entries, automatic Hook controls, updates, scopes and uninstallation.
+    entries, separately launched App, updates, scopes and uninstallation.
 - [compatibility.md](compatibility.md): host and application requirements, platform
     prerequisites, extension support and dated acceptance results.
 - [workflow.md](workflow.md): isolation intent/research, common occupancy checks,
     ordered directory/cleanup choices, inspection, independent connections,
-    Close/Keep, actual exit/restart, operation evidence and notifications.
+    Close/Keep, actual exit/restart, explicit operation evidence and reconnection.
 - [configuration.md](configuration.md): MCP lifecycle tools, structured application
     settings, explicit isolation/binding, ports, Chrome preset directory,
     evidence/enforcement limits, official tool enablement and workspace access.

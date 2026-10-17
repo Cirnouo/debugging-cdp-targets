@@ -54,6 +54,7 @@ export async function createOfficialConnection(
     options: {
         bin?: string;
         nodeExecutable?: string;
+        cwd?: string;
         args?: string[];
         environment?: NodeJS.ProcessEnv;
         requestTimeoutMs?: number;
@@ -73,6 +74,7 @@ export async function createOfficialConnection(
     const child = spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
         shell: false,
         windowsHide: true,
+        cwd: options.cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: snapshotOfficialEnvironment(options.environment),
     });
