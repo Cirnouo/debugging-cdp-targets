@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { validateFixtureEvent } from '../src/adapters/fixture-diagnostics.ts';
 import { createFixtureArtifacts, readFixtureProgress } from './smoke/fixture-artifacts.ts';
 import { fixtureJobIndex, readFixtureIndex, readFixtureSummary } from './smoke/fixture-ci.ts';
 import {
@@ -15,7 +16,7 @@ import {
     firstStartControlSlots,
     validateFirstStartWriterCost,
 } from './smoke/fixture-stream-quota.ts';
-import { captureMetricKeys } from './smoke/linux-first-start-capture-record.ts';
+import { captureMetricKeys, validateFirstStartCaptureRecord } from './smoke/linux-first-start-capture-record.ts';
 
 const capture = { kind: 'linux-first-start-capture', slot: 'selection', status: 'armed', atMs: 0 };
 const origin = {
@@ -34,6 +35,120 @@ const operation = {
     durationMs: 0,
 };
 
+test('four charged parent scans preserve observed capture in saved summary', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-preserved-summary-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const child = createFixtureArtifacts(directory, 'official-server', {
+            firstStartCapture: true,
+            streamOnly: true,
+            collectionId: parent.snapshot().collectionId,
+        });
+        const route = {
+            ...origin,
+            action: 'start',
+            stage: 'operation-route',
+            event: 'decision',
+            outcome: 'started',
+            timestampMs: 1,
+            durationMs: 0,
+            connectionId: '44444444-4444-4444-8444-444444444444',
+            sessionId: '55555555-5555-4555-8555-555555555555',
+        };
+        const ids = { ...origin, connectionId: route.connectionId, sessionId: route.sessionId };
+        const receipts = [
+            { ...capture, ...ids },
+            {
+                kind: 'linux-first-start-capture',
+                slot: 'root-binding',
+                status: 'bound',
+                atMs: 2,
+                ...ids,
+                pid: 27,
+                rootStartTicks: 123,
+            },
+            { kind: 'linux-first-start-capture', slot: 'first-start-outcome', status: 'succeeded', atMs: 3, ...ids },
+            {
+                kind: 'linux-first-start-capture',
+                slot: 'retention-decision',
+                status: 'discarded',
+                atMs: 4,
+                ...ids,
+                metrics: { discarded: 27 },
+            },
+            { kind: 'linux-first-start-capture', slot: 'observer-terminal', status: 'complete', atMs: 5, ...ids },
+        ];
+        for (const receipt of receipts) assert.ok(validateFirstStartCaptureRecord(receipt));
+        const { kind: _kind, ...begin } = operation;
+        assert.ok(validateFixtureEvent(begin));
+        assert.ok(validateFixtureEvent(route));
+        child.gateway(begin);
+        child.gateway(route);
+        child.firstStartCapture(receipts[0]);
+        parent.begin('acceptance');
+        child.firstStartCapture(receipts[1]);
+        child.firstStartCapture(receipts[2]);
+        parent.begin('acceptance');
+        child.firstStartCapture(receipts[3]);
+        child.rejected();
+        parent.begin('acceptance');
+        child.firstStartCapture(receipts[4]);
+        child.finishStream();
+        parent.begin('acceptance');
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.attempts, 4);
+        const raw = (await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8'))
+            .trim()
+            .split('\n')
+            .map((line) => JSON.parse(line));
+        assert.equal(raw.length, 14);
+        assert.deepEqual(
+            raw.filter((value) => value.kind === capture.kind),
+            receipts,
+        );
+        assert.deepEqual(
+            raw.find((value) => value.kind === 'first-start-writer-cost'),
+            {
+                kind: 'first-start-writer-cost',
+                attempts: 6,
+                dataAttempts: 5,
+                markerAttempts: 1,
+                metadataReserved: 36,
+                scannedBytes: 162,
+                exhausted: false,
+                releaseFailed: false,
+                writeFailed: false,
+                selfReportWriteUnavailable: true,
+            },
+        );
+        parent.finish(false);
+        const saved = JSON.parse(await readFile(path.join(directory, 'official-server.summary.json'), 'utf8'));
+        assert.deepEqual(saved.firstStartCapture, receipts);
+        assert.equal(saved.events, 14);
+        assert.equal(saved.gatewayEvents, 2);
+        assert.equal(saved.invalidEvents, 1);
+        assert.equal(saved.lastOperationId, '22222222-2222-4222-8222-222222222222');
+        assert.deepEqual(saved.firstStartCaptureWriterChild, {
+            kind: 'first-start-writer-cost',
+            attempts: 6,
+            dataAttempts: 5,
+            markerAttempts: 1,
+            metadataReserved: 36,
+            scannedBytes: 162,
+            exhausted: false,
+            releaseFailed: false,
+            writeFailed: false,
+            selfReportWriteUnavailable: true,
+        });
+        assert.equal(saved.diagnosticAbsent, false);
+        assert.equal(saved.incomplete, true);
+        assert.ok(saved.firstStartCaptureLimitations.includes('writer-scan-budget'));
+        for (const reason of ['selection-missing', 'outcome-missing', 'terminal-missing'])
+            assert.ok(!saved.firstStartCaptureLimitations.includes(reason));
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
 function probeSummaryReads(context: TestContext, mutate?: () => void) {
     let bytes = 0;
     let changed = false;
@@ -45,7 +160,7 @@ function probeSummaryReads(context: TestContext, mutate?: () => void) {
             mutate();
         }
     };
-    const read = context.mock.method(fs, 'readSync', (...args: Parameters<typeof fs.readSync>) => {
+    const read = context.mock.method(fs, 'readSync', (...args: unknown[]) => {
         mutation();
         const count: number = Reflect.apply(originalRead, fs, args);
         bytes += count;
@@ -618,6 +733,775 @@ test('observed same-size summary edits are rejected by the final handle metadata
         } finally {
             probe.restore();
         }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+function probeStreamIo(context: TestContext, seam?: (operation: string, args: unknown[]) => void) {
+    const metadata: string[] = [];
+    let inSeam = false;
+    function runSeam(operation: string, args: unknown[]) {
+        inSeam = true;
+        try {
+            seam?.(operation, args);
+        } finally {
+            inSeam = false;
+        }
+    }
+    const reads: { offset: number; requested: number; returned: number }[] = [];
+    const names = ['mkdirSync', 'statSync', 'openSync', 'fstatSync', 'closeSync', 'rmdirSync'] as const;
+    const spies = names.map((name) => {
+        const original = fs[name];
+        return context.mock.method(fs, name, (...args: unknown[]) => {
+            if (inSeam) return Reflect.apply(original, fs, args);
+            metadata.push(name);
+            runSeam(name, args);
+            return Reflect.apply(original, fs, args);
+        });
+    });
+    const originalRead = fs.readSync;
+    const read = context.mock.method(fs, 'readSync', (...args: unknown[]) => {
+        runSeam('readSync', args);
+        const returned: number = Reflect.apply(originalRead, fs, args);
+        reads.push({ offset: Number(args[4]), requested: Number(args[3]), returned });
+        return returned;
+    });
+    syncBuiltinESMExports();
+    return {
+        metadata,
+        reads,
+        restore() {
+            for (const spy of [...spies, read]) spy.mock.restore();
+            syncBuiltinESMExports();
+        },
+    };
+}
+const outcomeReceipt = { ...capture, slot: 'first-start-outcome', status: 'succeeded', atMs: 2, ...origin };
+const terminalReceipt = { ...capture, slot: 'observer-terminal', status: 'complete', atMs: 3, ...origin };
+function sizedOrdinary(bytes: number) {
+    const lines: string[] = [];
+    while (bytes > 0) {
+        const length = Math.min(4096, bytes);
+        assert.ok(length >= 28);
+        const line = `${JSON.stringify({ kind: 'smoke', text: 'x'.repeat(length - 27) })}\n`;
+        assert.equal(Buffer.byteLength(line), length);
+        lines.push(line);
+        bytes -= length;
+    }
+    return lines.join('');
+}
+
+test('refused final scan preserves only known prefix and performs zero stream I/O', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-known-prefix-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const child = createFixtureArtifacts(directory, 'official-server', {
+            firstStartCapture: true,
+            streamOnly: true,
+            collectionId: parent.snapshot().collectionId,
+        });
+        const { kind: _kind, ...begin } = operation;
+        child.gateway(begin);
+        for (let index = 0; index < 4; index++) {
+            child.firstStartCapture(
+                index === 1
+                    ? { ...capture, slot: 'root-binding', status: 'bound', pid: 27, rootStartTicks: 123 }
+                    : capture,
+            );
+            parent.begin('acceptance');
+        }
+        child.firstStartCapture(outcomeReceipt);
+        child.firstStartCapture(terminalReceipt);
+        const probe = probeStreamIo(context);
+        try {
+            parent.finish(false);
+            assert.deepEqual(probe.metadata, []);
+            assert.deepEqual(probe.reads, []);
+        } finally {
+            probe.restore();
+        }
+        const saved = JSON.parse(await readFile(path.join(directory, 'official-server.summary.json'), 'utf8'));
+        assert.equal(saved.events, 9);
+        assert.equal(saved.gatewayEvents, 1);
+        assert.equal(saved.firstStartCapture.length, 4);
+        assert.deepEqual(
+            saved.firstStartCapture.map((value: { slot: string }) => value.slot),
+            ['selection', 'root-binding', 'selection', 'selection'],
+        );
+        assert.equal(saved.diagnosticAbsent, false);
+        assert.ok(saved.firstStartCaptureLimitations.includes('outcome-missing'));
+        assert.ok(saved.firstStartCaptureLimitations.includes('terminal-missing'));
+        assert.equal(saved.firstStartCaptureWriter.metadataReserved, 24);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('final acquisition reads only a small suffix after a large paid prefix with six metadata operations', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-suffix-'));
+    const file = path.join(directory, 'official-server.events.ndjson');
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        fs.appendFileSync(file, `${sizedOrdinary(600 * 1024) + JSON.stringify(capture)}\n`);
+        parent.begin('acceptance');
+        const prefixSize = fs.statSync(file).size;
+        const suffix = `${JSON.stringify(outcomeReceipt)}\n${JSON.stringify(terminalReceipt)}\n`;
+        fs.appendFileSync(file, suffix);
+        assert.ok(prefixSize > 1024 * 1024 - (parent.snapshot().firstStartCaptureWriter?.scannedBytes ?? 0));
+        const probe = probeStreamIo(context);
+        try {
+            parent.finish(false);
+            assert.deepEqual(probe.metadata, [
+                'mkdirSync',
+                'statSync',
+                'openSync',
+                'fstatSync',
+                'closeSync',
+                'rmdirSync',
+            ]);
+            assert.deepEqual(probe.reads, [
+                { offset: prefixSize, requested: Buffer.byteLength(suffix), returned: Buffer.byteLength(suffix) },
+            ]);
+        } finally {
+            probe.restore();
+        }
+        assert.deepEqual(
+            parent.snapshot().firstStartCapture.map((value) => value.slot),
+            ['selection', 'first-start-outcome', 'observer-terminal'],
+        );
+        assert.equal(parent.snapshot().events, 154);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.attempts, 2);
+        assert.ok((parent.snapshot().firstStartCaptureWriter?.scannedBytes ?? Infinity) < 1024 * 1024);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('final scan exact allowance reads once while one byte over and zero allowance leave suffix unread', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-exact-suffix-'));
+    try {
+        for (const extra of [0, 1, -1]) {
+            const file = path.join(directory, `stream-${extra}.ndjson`);
+            fs.writeFileSync(file, sizedOrdinary(400 * 1024));
+            const seen: unknown[] = [];
+            const writer = createArmedFixtureWriter(file, false, { admitted: (value) => seen.push(value) });
+            assert.equal(writer.append(capture), true);
+            assert.ok(writer.reserveReconstruction());
+            // Exercise the existing paid reconstruction accounting with actual returned bytes.
+            const remaining = 1024 * 1024 - writer.snapshot().scannedBytes;
+            const charged = extra === -1 ? remaining : fs.statSync(file).size;
+            const descriptor = fs.openSync(file, 'r');
+            let acquired = 0;
+            try {
+                while (acquired < charged) {
+                    const buffer = Buffer.alloc(Math.min(charged - acquired, fs.statSync(file).size));
+                    acquired += fs.readSync(descriptor, buffer, 0, buffer.length, 0);
+                }
+            } finally {
+                fs.closeSync(descriptor);
+            }
+            writer.settleReconstruction(acquired);
+            const start = fs.statSync(file).size;
+            const allowance = 1024 * 1024 - writer.snapshot().scannedBytes;
+            const suffix = extra === -1 ? `${JSON.stringify(outcomeReceipt)}\n` : sizedOrdinary(allowance + extra);
+            fs.appendFileSync(file, suffix);
+            const probe = probeStreamIo(context);
+            try {
+                const result = writer.finishObservation();
+                assert.equal(result.acquired, extra === 0);
+                assert.equal(result.scanBudget, extra !== 0);
+                assert.deepEqual(
+                    probe.metadata,
+                    extra === 0
+                        ? ['mkdirSync', 'statSync', 'openSync', 'fstatSync', 'closeSync', 'rmdirSync']
+                        : ['mkdirSync', 'statSync', 'rmdirSync'],
+                );
+                assert.deepEqual(
+                    probe.reads,
+                    extra === 0 ? [{ offset: start, requested: allowance, returned: allowance }] : [],
+                );
+                assert.equal(
+                    writer.snapshot().scannedBytes,
+                    extra === 0 || extra === -1 ? 1024 * 1024 : acquired + 400 * 1024,
+                );
+                assert.equal(writer.snapshot().attempts, 3);
+                assert.equal(writer.snapshot().metadataReserved, 18);
+                assert.equal(seen.length, extra === 0 ? 157 : 101);
+            } finally {
+                probe.restore();
+            }
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('failed and throwing short own writes exclude optimistic evidence but keep independent failures', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-own-write-'));
+    try {
+        for (const short of [false, true]) {
+            const target = path.join(directory, String(short));
+            const parent = createFixtureArtifacts(target, 'official-server', {
+                firstStartCapture: true,
+                append: (file, line) => {
+                    if (short) fs.appendFileSync(file, line.slice(0, 9));
+                    throw new Error('controlled append failure');
+                },
+            });
+            parent.firstStartCapture(capture);
+            const { kind: _kind, ...begin } = operation;
+            parent.gateway(begin);
+            parent.failure('acceptance', new Error('primary'), true);
+            parent.failure('gateway-close', new Error('secondary'), false);
+            parent.finish(true);
+            const saved = parent.snapshot();
+            assert.deepEqual(saved.firstStartCapture, []);
+            assert.equal(saved.gatewayEvents, 0);
+            assert.equal(saved.lastOperationId, null);
+            assert.equal(saved.primary?.operationId, null);
+            assert.equal(saved.secondary.length, 1);
+            assert.equal(saved.writeFailed, true);
+            assert.equal(saved.incomplete, true);
+            assert.ok((saved.firstStartCaptureWriter?.attempts ?? Infinity) <= 4);
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('successful own append survives failed unlock and observer exceptions cannot change admission', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-observer-errors-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const original = fs.rmdirSync;
+        const release = context.mock.method(fs, 'rmdirSync', () => {
+            throw new Error('unlock');
+        });
+        syncBuiltinESMExports();
+        try {
+            parent.firstStartCapture(capture);
+        } finally {
+            release.mock.restore();
+            syncBuiltinESMExports();
+        }
+        parent.finish(true);
+        assert.equal(parent.snapshot().firstStartCapture.length, 1);
+        assert.equal(parent.snapshot().events, 1);
+        assert.equal(parent.snapshot().writeFailed, true);
+        original(path.join(directory, 'official-server.events.ndjson.lock'));
+        const file = path.join(directory, 'observer.ndjson');
+        fs.writeFileSync(file, '');
+        let limited = 0;
+        const writer = createArmedFixtureWriter(file, false, {
+            admitted: () => {
+                throw new Error('observer');
+            },
+            limited: () => {
+                limited++;
+                throw new Error('limitation observer');
+            },
+        });
+        assert.equal(writer.append(capture), true);
+        assert.equal(writer.snapshot().events, 1);
+        assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).slot, 'selection');
+        const result = writer.finishObservation();
+        assert.equal(result.incomplete, true);
+        assert.equal(result.discontinuity, true);
+        assert.equal(limited, 2);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('partial foreign scan fallback never reduces certified ranges twice or repairs quota', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-partial-fallback-'));
+    const file = path.join(directory, 'stream.ndjson');
+    try {
+        const first = `${JSON.stringify(capture)}\n`;
+        fs.writeFileSync(file, `${first}{bad}\n`);
+        const observed: { start: number; end: number; value: unknown }[] = [];
+        const writer = createArmedFixtureWriter(file, false, {
+            admitted: (value, start, end) => observed.push({ start, end, value }),
+        });
+        assert.equal(writer.append({ kind: 'smoke' }), false);
+        assert.deepEqual(observed, [{ start: 0, end: Buffer.byteLength(first), value: capture }]);
+        assert.equal(writer.snapshot().attempts, 2);
+        assert.equal(writer.snapshot().events, 2);
+        assert.equal(writer.snapshot().markerAttempts, 1);
+        assert.equal(writer.snapshot().scannedBytes, fs.statSync(file).size * 2);
+        assert.equal(writer.finishObservation().discontinuity, true);
+        assert.equal(observed.length, 1);
+        assert.equal(writer.snapshot().events, 2);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('unsafe suffixes never manufacture terminal receipts or lose known prefix', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-unsafe-suffix-'));
+    try {
+        for (const [name, suffix] of [
+            ['json', `{bad}\n${JSON.stringify(terminalReceipt)}\n`],
+            ['newline', JSON.stringify(terminalReceipt)],
+            ['utf8', Buffer.from([0xff, 10])],
+            [
+                'oversized',
+                JSON.stringify({ kind: 'smoke', text: 'x'.repeat(4096) }) +
+                    '\n' +
+                    JSON.stringify(terminalReceipt) +
+                    '\n',
+            ],
+            ['quota', `${`${JSON.stringify(capture)}\n`.repeat(64) + JSON.stringify(terminalReceipt)}\n`],
+        ] as const) {
+            const target = path.join(directory, name);
+            const parent = createFixtureArtifacts(target, 'official-server', { firstStartCapture: true });
+            parent.firstStartCapture(capture);
+            fs.appendFileSync(path.join(target, 'official-server.events.ndjson'), suffix);
+            parent.finish(false);
+            const saved = parent.snapshot();
+            assert.ok(saved.firstStartCapture.length >= 1);
+            assert.ok(saved.firstStartCapture.length <= 64);
+            assert.ok(!saved.firstStartCapture.some((value) => value.slot === 'observer-terminal'));
+            assert.equal(saved.incomplete, true);
+            assert.ok(saved.firstStartCaptureLimitations.includes('terminal-missing'));
+            assert.ok((saved.firstStartCaptureWriter?.scannedBytes ?? Infinity) <= 1024 * 1024);
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('final read failures charge returned bytes and always close and unlock without retry', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-final-read-'));
+    try {
+        for (const failure of ['throw', 'eof']) {
+            const file = path.join(directory, `${failure}.ndjson`);
+            fs.writeFileSync(file, '');
+            const observed: unknown[] = [];
+            const writer = createArmedFixtureWriter(file, false, { admitted: (value) => observed.push(value) });
+            writer.append(capture);
+            fs.appendFileSync(file, `${JSON.stringify(terminalReceipt)}\n`);
+            let calls = 0;
+            const probe = probeStreamIo(context, (operation, args) => {
+                if (operation !== 'readSync') return;
+                calls++;
+                if (calls === 2 && failure === 'throw') throw new Error('read failed');
+                args[3] = calls === 1 ? 7 : 0;
+            });
+            try {
+                const result = writer.finishObservation();
+                assert.equal(result.writeFailed, true);
+                assert.equal(result.acquired, false);
+                assert.equal(writer.snapshot().scannedBytes, 7);
+                assert.deepEqual(observed, [capture]);
+                assert.deepEqual(probe.metadata, ['mkdirSync', 'statSync', 'openSync', 'closeSync', 'rmdirSync']);
+                assert.equal(calls, 2);
+            } finally {
+                probe.restore();
+            }
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('observable final discontinuities reject suffix before merging with retained facts', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-discontinuity-'));
+    try {
+        for (const mode of [
+            'truncate-before',
+            'replace-before',
+            'replace-open',
+            'truncate-read',
+            'change-read',
+            'append-read',
+        ]) {
+            const file = path.join(directory, `${mode}.ndjson`);
+            fs.writeFileSync(file, '');
+            const observed: unknown[] = [];
+            const writer = createArmedFixtureWriter(file, false, { admitted: (value) => observed.push(value) });
+            writer.append(capture);
+            fs.appendFileSync(file, `${JSON.stringify(terminalReceipt)}\n`);
+            const replace = () => {
+                fs.renameSync(file, `${file}.prior`);
+                fs.writeFileSync(file, `${JSON.stringify(outcomeReceipt)}\n`);
+            };
+            if (mode === 'truncate-before') fs.truncateSync(file, 0);
+            if (mode === 'replace-before') replace();
+            let changed = false;
+            const probe = probeStreamIo(context, (operation) => {
+                if (changed) return;
+                if (mode === 'replace-open' && operation === 'openSync') {
+                    changed = true;
+                    replace();
+                }
+                if (operation !== 'readSync') return;
+                if (mode === 'truncate-read') {
+                    changed = true;
+                    fs.truncateSync(file, 0);
+                }
+                if (mode === 'change-read') {
+                    changed = true;
+                    const future = new Date(Date.now() + 2000);
+                    fs.utimesSync(file, future, future);
+                }
+                if (mode === 'append-read') {
+                    changed = true;
+                    fs.appendFileSync(file, `${JSON.stringify(outcomeReceipt)}\n`);
+                }
+            });
+            try {
+                const result = writer.finishObservation();
+                assert.equal(result.acquired, false, mode);
+                assert.equal(result.incomplete, true, mode);
+                assert.equal(result.discontinuity || result.writeFailed, true, mode);
+                assert.deepEqual(observed, [capture], mode);
+                assert.ok(probe.metadata.length <= 6, mode);
+                assert.equal(probe.metadata.at(-1), 'rmdirSync');
+                assert.equal(writer.snapshot().attempts, 2);
+            } finally {
+                probe.restore();
+            }
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('unchanged opened handle cannot authenticate an after-open pathname rebind', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-unobservable-rebind-'));
+    const file = path.join(directory, 'stream.ndjson');
+    try {
+        fs.writeFileSync(file, '');
+        const observed: unknown[] = [];
+        const writer = createArmedFixtureWriter(file, false, { admitted: (value) => observed.push(value) });
+        writer.append(capture);
+        fs.appendFileSync(file, `${JSON.stringify(terminalReceipt)}\n`);
+        let rebound = false;
+        const probe = probeStreamIo(context, (operation) => {
+            if (operation === 'readSync' && !rebound) {
+                rebound = true;
+                fs.renameSync(file, `${file}.opened`);
+                fs.writeFileSync(file, `${JSON.stringify(outcomeReceipt)}\n`);
+            }
+        });
+        try {
+            // Windows may report a ctime change on rename. Where metadata agrees,
+            // only the opened stream is observed; no replacement-path claim follows.
+            const result = writer.finishObservation();
+            if (result.acquired) assert.deepEqual(observed, [capture, terminalReceipt]);
+            else {
+                assert.equal(result.discontinuity, true);
+                assert.deepEqual(observed, [capture]);
+            }
+            assert.equal(probe.metadata.length, 6);
+            assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).slot, 'first-start-outcome');
+        } finally {
+            probe.restore();
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('foreign final lock is untouched and later cooperative appends remain outside one final snapshot', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-final-lock-'));
+    const file = path.join(directory, 'stream.ndjson');
+    try {
+        fs.writeFileSync(file, '');
+        const observed: unknown[] = [];
+        const writer = createArmedFixtureWriter(file, false, { admitted: (value) => observed.push(value) });
+        writer.append(capture);
+        fs.mkdirSync(`${file}.lock`);
+        const probe = probeStreamIo(context);
+        try {
+            assert.equal(writer.finishObservation().writeFailed, true);
+            assert.deepEqual(probe.metadata, ['mkdirSync']);
+            assert.deepEqual(probe.reads, []);
+        } finally {
+            probe.restore();
+        }
+        assert.equal(fs.existsSync(`${file}.lock`), true);
+        fs.rmdirSync(`${file}.lock`);
+        const second = createArmedFixtureWriter(file, false, { admitted: (value) => observed.push(value) });
+        second.append({ kind: 'smoke' });
+        const finalProbe = probeStreamIo(context);
+        try {
+            assert.equal(second.finishObservation().acquired, true);
+            assert.equal(finalProbe.metadata.length, 6);
+            assert.deepEqual(finalProbe.reads, []);
+        } finally {
+            finalProbe.restore();
+        }
+        fs.appendFileSync(file, `${JSON.stringify(terminalReceipt)}\n`);
+        assert.ok(
+            !observed.some(
+                (value) => value && typeof value === 'object' && 'slot' in value && value.slot === 'observer-terminal',
+            ),
+        );
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('independent route mutations and foreign terminal preserve literal evidence without creating binding', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-association-'));
+    try {
+        for (const field of ['entryId', 'operationId', 'requestId', 'connectionId', 'sessionId'] as const) {
+            const target = path.join(directory, field);
+            const parent = createFixtureArtifacts(target, 'official-server', { firstStartCapture: true });
+            const child = createFixtureArtifacts(target, 'official-server', {
+                firstStartCapture: true,
+                streamOnly: true,
+                collectionId: parent.snapshot().collectionId,
+            });
+            const { kind: _kind, ...begin } = operation;
+            const route = {
+                ...begin,
+                stage: 'operation-route',
+                event: 'decision',
+                connectionId: '44444444-4444-4444-8444-444444444444',
+                sessionId: '55555555-5555-4555-8555-555555555555',
+            };
+            child.gateway(begin);
+            child.gateway(route);
+            const mutated = {
+                ...route,
+                stage: 'native-close',
+                event: 'begin',
+                [field]: '66666666-6666-4666-8666-666666666666',
+            };
+            assert.ok(validateFixtureEvent(mutated));
+            child.gateway(mutated);
+            child.firstStartCapture({ ...capture, ...origin });
+            child.firstStartCapture({ ...terminalReceipt, operationId: '66666666-6666-4666-8666-666666666666' });
+            parent.finish(false);
+            const saved = parent.snapshot();
+            assert.equal(saved.gatewayEvents, 3);
+            assert.equal(saved.firstStartCapture.length, 2);
+            assert.equal(saved.firstStartCapture[1]?.operationId, '66666666-6666-4666-8666-666666666666');
+            assert.ok(saved.firstStartCaptureLimitations.includes('outcome-missing'));
+            assert.ok(!saved.firstStartCaptureWriter?.controlSlots.includes('root-binding'));
+            assert.ok(!saved.firstStartCaptureWriter?.controlSlots.includes('native-close-begin'));
+            assert.ok(!saved.firstStartCapture.some((value) => value.slot === 'root-binding'));
+            assert.equal(saved.incomplete, true);
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('duplicate captures and markers retain order while terminal never clears truncation', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-capture-order-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const file = path.join(directory, 'official-server.events.ndjson');
+        fs.appendFileSync(
+            file,
+            [capture, { kind: 'truncated' }, outcomeReceipt, capture, terminalReceipt, { kind: 'truncated' }]
+                .map((value) => `${JSON.stringify(value)}\n`)
+                .join(''),
+        );
+        parent.finish(false);
+        assert.deepEqual(
+            parent.snapshot().firstStartCapture.map((value) => value.slot),
+            ['selection', 'first-start-outcome', 'selection', 'observer-terminal'],
+        );
+        assert.equal(parent.snapshot().events, 6);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.counts.marker.events, 2);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.counts.capture.events, 4);
+        assert.equal(parent.snapshot().truncated, true);
+        assert.equal(parent.snapshot().incomplete, true);
+        assert.ok(Buffer.byteLength(JSON.stringify(parent.snapshot())) < 1024 * 1024);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('collection mismatch cannot create an admitted projection and failed refresh never uses cached attribution', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-collection-projection-'));
+    try {
+        fixtureJobIndex('init', directory);
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const before = fs.readFileSync(path.join(directory, 'official-server.summary.json'), 'utf8');
+        const foreign = createFixtureArtifacts(directory, 'official-server', {
+            firstStartCapture: true,
+            streamOnly: true,
+            collectionId: origin.requestId,
+        });
+        foreign.firstStartCapture(capture);
+        assert.equal(foreign.snapshot().collectionRejected, true);
+        assert.deepEqual(foreign.snapshot().firstStartCapture, []);
+        assert.equal(fs.readFileSync(path.join(directory, 'official-server.summary.json'), 'utf8'), before);
+        const { kind: _kind, ...begin } = operation;
+        parent.gateway(begin);
+        assert.equal(parent.snapshot().gatewayEvents, 1);
+        fs.mkdirSync(path.join(directory, 'official-server.events.ndjson.lock'));
+        parent.failure('acceptance', new Error('primary'), true);
+        assert.equal(parent.snapshot().primary?.operationId, null);
+        assert.equal(parent.snapshot().primary?.runtimeStage, null);
+        fs.rmdirSync(path.join(directory, 'official-server.events.ndjson.lock'));
+        parent.finish(true);
+        assert.equal(parent.snapshot().gatewayEvents, 1);
+        assert.equal(parent.snapshot().diagnosticAbsent, false);
+        assert.deepEqual(fs.readdirSync(directory).sort(), [
+            'entry-recovery.events.ndjson',
+            'entry-recovery.summary.json',
+            'job-index.json',
+            'official-server.events.ndjson',
+            'official-server.summary.json',
+        ]);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('rejected own records cannot survive as optimistic capture or gateway summary fields', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-own-rejection-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        for (let index = 0; index < 4; index++) parent.firstStartCapture(capture);
+        const { kind: _kind, ...begin } = operation;
+        parent.gateway(begin);
+        parent.firstStartCapture(outcomeReceipt);
+        parent.finish(false);
+        const saved = parent.snapshot();
+        assert.equal(saved.events, 4);
+        assert.equal(saved.gatewayEvents, 0);
+        assert.equal(saved.lastOperationId, null);
+        assert.deepEqual(
+            saved.firstStartCapture.map((value) => value.slot),
+            ['selection', 'selection', 'selection', 'selection'],
+        );
+        assert.equal(saved.firstStartCaptureWriter?.dataAttempts, 4);
+        assert.equal(saved.firstStartCaptureWriter?.attempts, 4);
+        assert.equal(saved.droppedEvents, 2);
+        assert.equal(saved.truncated, true);
+        assert.ok(saved.firstStartCaptureLimitations.includes('outcome-missing'));
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('invalid UTF8 during append limits observation while preserving original writer admission', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-utf8-admission-'));
+    const file = path.join(directory, 'stream.ndjson');
+    try {
+        fs.writeFileSync(
+            file,
+            Buffer.concat([Buffer.from('{"kind":"smoke","text":"'), Buffer.from([0xff]), Buffer.from('"}\n')]),
+        );
+        const observed: unknown[] = [];
+        const writer = createArmedFixtureWriter(file, false, { admitted: (value) => observed.push(value) });
+        assert.equal(writer.append(capture), true);
+        assert.equal(writer.snapshot().events, 2);
+        assert.deepEqual(observed, []);
+        assert.equal(writer.snapshot().attempts, 1);
+        assert.equal(writer.finishObservation().incomplete, true);
+        assert.equal(writer.snapshot().events, 2);
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('final handle failure and final unlock failure retain truth and consume no retry', async (context) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-final-metadata-failure-'));
+    try {
+        for (const failure of ['handle', 'unlock']) {
+            const file = path.join(directory, `${failure}.ndjson`);
+            fs.writeFileSync(file, '');
+            const observed: unknown[] = [];
+            let ending = false;
+            const writer = createArmedFixtureWriter(file, false, {
+                admitted: (value) => observed.push(value),
+                release: (lock) => {
+                    fs.rmdirSync(lock);
+                    if (ending && failure === 'unlock') throw new Error('unlock failed');
+                },
+            });
+            writer.append(capture);
+            fs.appendFileSync(file, `${JSON.stringify(terminalReceipt)}\n`);
+            ending = true;
+            const probe = probeStreamIo(context, (operation) => {
+                if (failure === 'handle' && operation === 'fstatSync') throw new Error('handle failed');
+            });
+            try {
+                const result = writer.finishObservation();
+                assert.equal(result.writeFailed, true);
+                assert.equal(result.incomplete, true);
+                assert.equal(result.acquired, failure === 'unlock');
+                assert.deepEqual(observed, failure === 'unlock' ? [capture, terminalReceipt] : [capture]);
+                assert.deepEqual(probe.metadata, [
+                    'mkdirSync',
+                    'statSync',
+                    'openSync',
+                    'fstatSync',
+                    'closeSync',
+                    'rmdirSync',
+                ]);
+                assert.equal(writer.snapshot().attempts, 2);
+                assert.equal(writer.snapshot().releaseFailed, failure === 'unlock');
+            } finally {
+                probe.restore();
+            }
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('independent root identity values stay literal and route never supplies a root receipt', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-root-literals-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+        const child = createFixtureArtifacts(directory, 'official-server', {
+            firstStartCapture: true,
+            streamOnly: true,
+            collectionId: parent.snapshot().collectionId,
+        });
+        const roots = [
+            { ...capture, slot: 'root-binding', status: 'bound', ...origin, pid: 27, rootStartTicks: 123 },
+            { ...capture, slot: 'root-binding', status: 'bound', ...origin, pid: 28, rootStartTicks: 123 },
+            { ...capture, slot: 'root-binding', status: 'bound', ...origin, pid: 27, rootStartTicks: 124 },
+        ];
+        for (const root of roots) {
+            assert.ok(validateFirstStartCaptureRecord(root));
+            child.firstStartCapture(root);
+        }
+        parent.finish(false);
+        assert.deepEqual(parent.snapshot().firstStartCapture, roots);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.counts.capture.events, 3);
+        assert.ok(!parent.snapshot().firstStartCaptureWriter?.controlSlots.includes('root-binding'));
+        assert.ok(parent.snapshot().firstStartCaptureLimitations.includes('outcome-missing'));
+        assert.ok(parent.snapshot().firstStartCaptureLimitations.includes('terminal-missing'));
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('independently scanned complete bytes after thrown own append can be retained once', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-independent-fallback-'));
+    try {
+        const parent = createFixtureArtifacts(directory, 'official-server', {
+            firstStartCapture: true,
+            append: (file, line) => {
+                fs.appendFileSync(file, line);
+                throw new Error('after full write');
+            },
+        });
+        parent.firstStartCapture(capture);
+        assert.equal(parent.snapshot().events, 2);
+        assert.deepEqual(parent.snapshot().firstStartCapture, [capture]);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.attempts, 2);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.dataAttempts, 1);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.markerAttempts, 1);
+        assert.equal(parent.snapshot().firstStartCaptureWriter?.counts.capture.events, 1);
+        parent.finish(true);
+        assert.equal(parent.snapshot().events, 2);
+        assert.deepEqual(parent.snapshot().firstStartCapture, [capture]);
+        assert.equal(parent.snapshot().writeFailed, true);
+        assert.equal(parent.snapshot().incomplete, true);
     } finally {
         await rm(directory, { recursive: true, force: true });
     }

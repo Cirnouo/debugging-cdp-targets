@@ -270,7 +270,8 @@ test('Chrome smoke records the owned browser version and fails unsupported produ
 });
 
 test('external Chrome smoke Close only requests normal close without inventing an exit observer', async () => {
-    const { requestChromeSmokeClose } = await host();
+    const { createChromeSmokeHost } = await host();
+    const { requestChromeSmokeClose } = createChromeSmokeHost({ operatingSystem: 'darwin' });
     const fixture: ProcessTarget = {
         processId: 4100,
         port: 19422,

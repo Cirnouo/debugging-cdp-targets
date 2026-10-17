@@ -199,7 +199,7 @@ export function createLinuxFirstStartCapture(
         if (cache.has(key) || finished) return false;
         const record = validateFirstStartCaptureRecord({
             kind: 'linux-first-start-capture',
-            atMs: now(),
+            atMs: value.atMs ?? now(),
             ...identity(),
             ...value,
         });
@@ -1200,9 +1200,11 @@ export function createLinuxFirstStartCapture(
             if (event.stage === 'process-creation-identity') {
                 if (!matchesCreationOrigin(event) || creationCalls >= 128) return;
                 const sequence = ++creationCalls;
-                const creation = Object.fromEntries(
-                    CREATION_IDENTITY_FIELD_KEYS.filter((key) => key in event).map((key) => [key, event[key]]),
-                );
+                const creation =
+                    event.linuxIdentity ??
+                    Object.fromEntries(
+                        CREATION_IDENTITY_FIELD_KEYS.filter((key) => key in event).map((key) => [key, event[key]]),
+                    );
                 // Invocation sequence, not timestamps, distinguishes equal-time comparisons.
                 const slot =
                     sequence === 1

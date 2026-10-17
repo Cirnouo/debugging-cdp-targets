@@ -11,6 +11,7 @@ import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-t
 import type { ConnectionStatus, LaunchOptions } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { readChromeSmokeProfile } from './chrome-profile-probe.ts';
+import { createLinuxChromeExternalClose, type LinuxExternalCloseIo } from './linux-chrome-external-close.ts';
 
 function absolutePath(value: string, platform: NodeJS.Platform) {
     if (platform !== 'win32') return path.posix.isAbsolute(value);
@@ -148,7 +149,7 @@ export function chromeSmokeVersion(endpoint: unknown): string {
 }
 
 /** External stimulus only; the gateway owns actual application exit observation. */
-export async function requestChromeSmokeClose(
+async function requestPortableChromeSmokeClose(
     fixture: ProcessTarget,
     platform: Pick<PlatformAdapter, 'requestNormalClose'>,
 ): Promise<boolean> {
@@ -157,7 +158,7 @@ export async function requestChromeSmokeClose(
     return receipt.closeRequested === true;
 }
 
-export async function inspectChromeSmokeTarget(
+async function inspectPortableChromeSmokeTarget(
     target: ConnectionStatus,
     executable: string,
     platform: PlatformAdapter = createPlatformAdapter(),
@@ -205,3 +206,39 @@ export async function inspectChromeSmokeTarget(
     );
     return fixture;
 }
+
+/** A test-only host factory injects OS I/O, never an existing-process capability. */
+export function createChromeSmokeHost({
+    operatingSystem = process.platform,
+    io = {},
+}: {
+    operatingSystem?: NodeJS.Platform;
+    io?: Partial<LinuxExternalCloseIo>;
+} = {}) {
+    const linux = createLinuxChromeExternalClose(io, chromeSmokeVersion);
+    return {
+        inspectChromeSmokeTarget(
+            target: ConnectionStatus,
+            executable: string,
+            platform?: PlatformAdapter,
+            signal?: AbortSignal,
+        ): Promise<ProcessTarget> {
+            return operatingSystem === 'linux'
+                ? linux.inspect(target, executable, signal)
+                : inspectPortableChromeSmokeTarget(target, executable, platform);
+        },
+        requestChromeSmokeClose(
+            fixture: ProcessTarget,
+            platform: Pick<PlatformAdapter, 'requestNormalClose'>,
+            signal?: AbortSignal,
+        ): Promise<boolean> {
+            return operatingSystem === 'linux'
+                ? linux.request(fixture, signal)
+                : requestPortableChromeSmokeClose(fixture, platform);
+        },
+    };
+}
+
+const host = createChromeSmokeHost();
+export const inspectChromeSmokeTarget = host.inspectChromeSmokeTarget;
+export const requestChromeSmokeClose = host.requestChromeSmokeClose;

@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 const repository = 'Cirnouo/debugging-cdp-targets';
 const ref = 'refs/heads/fix/chrome-startup-stall';
-const before = 'd3d0bde698f6b0654245a285144451cbfc928957';
+const before = '8ab83ae705a8988e4a122fa4f3fc71beb3a88229';
 const eventByteLimit = 262_144;
 export type FirstStartCaptureAdmission = 'admitted' | 'ineligible' | 'unavailable';
 

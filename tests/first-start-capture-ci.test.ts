@@ -22,7 +22,7 @@ function candidate() {
             runnerOs: 'Linux',
         },
         event: {
-            before: 'd3d0bde698f6b0654245a285144451cbfc928957',
+            before: '8ab83ae705a8988e4a122fa4f3fc71beb3a88229',
             after: sha,
             ref: 'refs/heads/fix/chrome-startup-stall',
             created: false,
@@ -38,11 +38,20 @@ test('the one ordinary push transition admits only exact current checkout identi
     assert.equal(evaluateFirstStartCaptureAdmission(candidate()), 'admitted');
 });
 
-test('the consumed historical push window is ineligible', () => {
-    const input = candidate();
-    input.event.before = '1a598a7ca01c4e17535c5c9c98cd4564d6369e77';
-    assert.equal(evaluateFirstStartCaptureAdmission(input), 'ineligible');
-});
+for (const before of ['d3d0bde698f6b0654245a285144451cbfc928957', '1a598a7ca01c4e17535c5c9c98cd4564d6369e77']) {
+    test(`the consumed ${before} push window is ineligible through evaluation and CI acquisition`, () => {
+        const input = candidate();
+        input.event.before = before;
+        assert.equal(evaluateFirstStartCaptureAdmission(input), 'ineligible');
+        assert.equal(
+            readFirstStartCaptureAdmission(environment(), {
+                readEvent: () => Buffer.from(JSON.stringify(input.event)),
+                checkout: () => input.checkout,
+            }),
+            'ineligible',
+        );
+    });
+}
 
 test('event type, repository, branch, attempt, SHA, tree and worktree mismatches close admission', () => {
     const cases: [string, string, unknown][] = [

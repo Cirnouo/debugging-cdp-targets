@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { subscribeFixtureDiagnostics } from '../src/adapters/fixture-diagnostics.ts';
+import {
+    type FixtureEvent,
+    type LinuxPrivateIntervalV1,
+    runFixtureObservation,
+    subscribeFixtureDiagnostics,
+} from '../src/adapters/fixture-diagnostics.ts';
 import { createPlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import type { ManagedTarget } from '../src/domains/cdp-target.ts';
 import { RetainedTargetError } from '../src/domains/cdp-target.ts';
+import { createFirstStartHarness, drainFirstStart, firstStartRoute } from './fixtures/first-start-capture-fake.ts';
+import { validateFirstStartCaptureRecord } from './smoke/linux-first-start-capture-record.ts';
 
 function identityFixture(onUptime?: () => Promise<void>, onNow?: () => void) {
     const state = {
@@ -724,3 +731,596 @@ test('UTC interval containment keeps the exact allowance and chooses an in-range
         undefined,
     );
 });
+
+test('current Linux owned adapter publishes accepted and rejected private intervals through capture receipts', async () => {
+    const h = createFirstStartHarness();
+    const events: FixtureEvent[] = [];
+    const stop = subscribeFixtureDiagnostics(
+        (event) => {
+            events.push(event);
+            h.observe(event);
+        },
+        undefined,
+        undefined,
+        { creationIdentity: { matches: h.matchesCreationOrigin } },
+    );
+    try {
+        h.event('spawn', 'begin', { pid: 42, port: 9222 });
+        h.event('spawn', 'decision', { reason: 'acquired', pid: 42, port: 9222 });
+        h.event('readiness', 'begin', { phase: 'waiting-cdp', pid: 42, port: 9222 });
+        await runFixtureObservation({ ...firstStartRoute, pid: 42, port: 9222 }, async () => {
+            const f = identityFixture();
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            const evidence = await f.adapter.snapshot(42, 9222);
+            await f.adapter.validateIdentity(evidence, f.target);
+            f.state.ticks = '100051';
+            await assert.rejects(
+                f.adapter.validateIdentity(await f.adapter.snapshot(42, 9222), f.target),
+                /identity changed/,
+            );
+            assert.equal(f.state.uptimeReads, 2);
+            assert.equal(f.state.statReads, 2);
+            assert.equal(f.target.startedAtUtc, '1970-01-01T00:16:40.500Z');
+        });
+        const decisions = events.filter((event) => event.stage === 'process-creation-identity');
+        assert.equal(decisions.length, 2, 'Actual registered Linux validation must publish both decisions.');
+        assert.deepEqual(
+            decisions.map((event) => Reflect.get(event, 'linuxIdentity')?.decision),
+            ['initial-accepted', 'established-changed'],
+        );
+        h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed', pid: 42 });
+        assert.equal(h.records.length, 0);
+        h.event('native-close', 'end', { pid: 42 });
+        await drainFirstStart(h);
+        const receipts = h.records.filter((record) => record.creation);
+        assert.equal(receipts.length, 2);
+        assert.deepEqual(
+            receipts.map((record) => record.status),
+            ['complete', 'identity-invalid'],
+        );
+        for (const record of receipts) {
+            assert.ok(validateFirstStartCaptureRecord(record));
+            assert.equal(Reflect.get(record.creation ?? {}, 'model'), 'linux-private-interval-v1');
+            assert.equal(Reflect.get(record.creation ?? {}, 'linuxIdentity'), undefined);
+        }
+    } finally {
+        stop();
+        h.finish();
+    }
+});
+async function observeOwned(
+    job: (events: LinuxPrivateIntervalV1[], stats: () => { comparisons: number; tokens: number }) => Promise<void>,
+) {
+    const events: LinuxPrivateIntervalV1[] = [];
+    const stop = subscribeFixtureDiagnostics(
+        (event) => {
+            if (event.linuxIdentity) events.push(event.linuxIdentity);
+        },
+        undefined,
+        undefined,
+        {
+            creationIdentity: { matches: (origin) => origin.pid === 42 && origin.port === 9222 },
+        },
+    );
+    try {
+        await runFixtureObservation({ ...firstStartRoute, pid: 42, port: 9222 }, () =>
+            job(events, stop.creationIdentityStats),
+        );
+    } finally {
+        stop();
+    }
+}
+for (const [h, q, branch] of [
+    ['100', '100050', 'divide'],
+    ['1024', '1024512', 'multiply-512'],
+    ['300', '300150', 'multiply-9'],
+] as const) {
+    test(`owned Linux interval records actual ${branch} and established reads omit calibration`, async () => {
+        await observeOwned(async (events) => {
+            let calls = 0;
+            const f = identityFixture(undefined, () => {
+                calls++;
+            });
+            f.state.h = h;
+            f.state.ticks = q;
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            await f.adapter.validateIdentity(await f.adapter.snapshot(42, 9222), f.target);
+            await f.adapter.validateIdentity(await f.adapter.snapshot(42, 9222), f.target);
+            assert.deepEqual(
+                events.map((event) => event.decision),
+                ['initial-accepted', 'established-accepted'],
+            );
+            assert.equal(events[0]?.facts.birth?.branch, branch);
+            assert.equal(events[0]?.facts.birth?.result, 'present');
+            assert.deepEqual(Object.keys(events[1]?.facts ?? {}).sort(), ['raw', 'selectedMs']);
+            assert.equal(calls, 5);
+            assert.equal(f.state.uptimeReads, 2);
+            assert.equal(f.state.statReads, 2);
+        });
+    });
+}
+for (const scenario of [
+    'no-launch',
+    'launch-check-threw',
+    'root-proof-rejected',
+    'clock-order-rejected',
+    'root-proof-changed',
+    'post-launch-check-threw',
+    'decision-clock-rejected',
+    'interval-rejected',
+    'readiness-check-threw',
+    'final-launch-check-threw',
+] as const) {
+    test(`owned Linux reached facts stop at ${scenario}`, async () => {
+        await observeOwned(async (events) => {
+            let calls = 0;
+            const native = new Error('exact readiness failure');
+            const f = identityFixture(
+                async () => {
+                    if (f.state.uptimeReads === 2) {
+                        if (scenario === 'root-proof-changed') evidence.root = { ...evidence.root };
+                        if (scenario === 'post-launch-check-threw') f.child.pid = 43;
+                        if (scenario === 'clock-order-rejected') f.state.uptime = '1000.49 0.00\n';
+                    }
+                },
+                () => {
+                    if (++calls === 5 && scenario === 'decision-clock-rejected') f.state.now--;
+                },
+            );
+            if (scenario !== 'no-launch')
+                f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            if (scenario === 'interval-rejected') f.state.boot = '1';
+            const evidence = await f.adapter.snapshot(42, 9222);
+            if (scenario === 'launch-check-threw') f.child.pid = 43;
+            if (scenario === 'root-proof-rejected' && evidence.root.exists) evidence.root.sessionId = 8;
+            await assert.rejects(
+                f.adapter.validateIdentity(evidence, f.target, {
+                    assertReadinessActive: () => {
+                        if (scenario === 'readiness-check-threw') throw native;
+                        if (scenario === 'final-launch-check-threw') f.child.pid = 43;
+                    },
+                }),
+                (error) => (scenario === 'readiness-check-threw' ? error === native : error instanceof Error),
+            );
+            assert.equal(events.length, 1);
+            assert.equal(events[0]?.decision, scenario);
+            const facts = events[0]?.facts;
+            assert.equal(facts?.selectedMs, undefined);
+            if (scenario === 'no-launch' || scenario === 'launch-check-threw' || scenario === 'root-proof-rejected')
+                assert.deepEqual(facts, {});
+            if (scenario === 'interval-rejected') {
+                assert.deepEqual(facts?.offset, { status: 'empty', lowerNs: '1000000000', upperNs: '1000000' });
+                assert.equal(facts?.birth?.result, 'present');
+                assert.equal(facts?.public, undefined);
+            }
+            if (scenario === 'decision-clock-rejected') {
+                assert.equal(facts?.birth?.result, 'present');
+                assert.equal(facts?.decisionUtcMs, 1000499);
+                assert.equal(facts?.public, undefined);
+            }
+            assert.equal(f.state.signals, 0);
+        });
+    });
+}
+for (const position of [3, 4, 5]) {
+    test(`owned Linux now exception at call ${position} remains exact and unclassified through abortable`, async () => {
+        await observeOwned(async (events, stats) => {
+            const original = { clock: position };
+            let calls = 0;
+            const f = identityFixture(undefined, () => {
+                if (++calls === position) throw original;
+            });
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            const evidence = await f.adapter.snapshot(42, 9222);
+            await assert.rejects(f.adapter.validateIdentity(evidence, f.target), (error) => error === original);
+            assert.equal(events.length, 0);
+            assert.equal(stats().comparisons, 0);
+            assert.equal(calls, position);
+        });
+    });
+}
+for (const failure of ['read-or-abort', 'bracket-or-text-invalid', 'uptime-out-of-range'] as const) {
+    test(`owned Linux post calibration traces ${failure} without parsing native errors`, async () => {
+        await observeOwned(async (events) => {
+            const original = { private: 'opaque read failure' };
+            const f = identityFixture(async () => {
+                if (f.state.uptimeReads === 2 && failure === 'read-or-abort') throw original;
+            });
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            const evidence = await f.adapter.snapshot(42, 9222);
+            if (failure === 'bracket-or-text-invalid') f.state.uptime = 'bad';
+            if (failure === 'uptime-out-of-range') f.state.uptime = '18446744074.00 0.00\n';
+            await assert.rejects(f.adapter.validateIdentity(evidence, f.target), (error) =>
+                failure === 'read-or-abort' ? error === original : error instanceof Error,
+            );
+            assert.equal(events[0]?.decision, 'post-calibration-threw');
+            assert.deepEqual(events[0]?.facts.postFailure, { branch: failure });
+            assert.equal(events[0]?.facts.post, undefined);
+        });
+    });
+}
+test('owned Linux abort snapshot remains frozen after late calibration and cannot bind or publish again', async () => {
+    await observeOwned(async (events) => {
+        const entered = gate(),
+            pending = gate();
+        const f = identityFixture(async () => {
+            if (f.state.uptimeReads === 2) {
+                entered.release();
+                await pending.pending;
+            }
+        });
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        const evidence = await f.adapter.snapshot(42, 9222);
+        const abort = new AbortController();
+        const original = new Error('cancel exact');
+        const operation = f.adapter.validateIdentity(evidence, f.target, { signal: abort.signal });
+        const rejection = assert.rejects(operation, (error) => error === original);
+        await entered.pending;
+        abort.abort(original);
+        await rejection;
+        assert.deepEqual(events[0]?.facts.postFailure, { branch: 'read-or-abort' });
+        const frozen = JSON.stringify(events);
+        pending.release();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(JSON.stringify(events), frozen);
+        assert.ok(Object.isFrozen(events[0]?.facts.pre?.offset));
+        await f.adapter.validateIdentity(evidence, f.target);
+        assert.equal(events[1]?.mode, 'initial');
+        assert.equal(f.state.uptimeReads, 3);
+    });
+});
+test('concurrent owned Linux initial decision retains its own candidate and the first bound point', async () => {
+    await observeOwned(async (events) => {
+        const entered = gate(),
+            pending = gate();
+        const f = identityFixture(async () => {
+            if (f.state.uptimeReads === 2) {
+                entered.release();
+                await pending.pending;
+            }
+        });
+        f.state.now = 1000501;
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        const evidence = await f.adapter.snapshot(42, 9222);
+        const first = f.adapter.validateIdentity(evidence, f.target);
+        await entered.pending;
+        f.state.now = 1000511;
+        await f.adapter.validateIdentity(evidence, f.target);
+        pending.release();
+        await first;
+        assert.deepEqual(
+            events.map((event) => event.mode),
+            ['initial', 'initial'],
+        );
+        assert.deepEqual(
+            events.map((event) => event.facts.public?.pointMs),
+            ['1000501', '1000500'],
+        );
+        assert.deepEqual(
+            events.map((event) => event.facts.selectedMs),
+            [1000501, 1000501],
+        );
+    });
+});
+test('owned Linux comparison consumes token128 unused frame once and refuses repeat admission', async () => {
+    await observeOwned(async (events, stats) => {
+        const f = identityFixture();
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        for (let index = 0; index < 127; index++) await f.adapter.snapshot(42, 9222);
+        const evidence = await f.adapter.snapshot(42, 9222);
+        await f.adapter.validateIdentity(evidence, f.target);
+        await f.adapter.validateIdentity(evidence, f.target);
+        assert.equal(events.length, 1);
+        assert.equal(stats().tokens, 128);
+        assert.equal(stats().comparisons, 1);
+    });
+});
+test('owned Linux reserves comparison before a failed serializer while native bind still succeeds', async (t) => {
+    await observeOwned(async (events, stats) => {
+        const f = identityFixture();
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        const evidence = await f.adapter.snapshot(42, 9222);
+        const broken = t.mock.method(JSON, 'stringify', () => {
+            throw new Error('diagnostic serialization');
+        });
+        await f.adapter.validateIdentity(evidence, f.target);
+        broken.mock.restore();
+        assert.equal(events.length, 0);
+        assert.equal(stats().comparisons, 1);
+        await f.adapter.validateIdentity(evidence, f.target);
+        assert.equal(events[0]?.decision, 'established-accepted');
+    });
+});
+for (const kind of [
+    'copied',
+    'foreign-origin',
+    'foreign-pid',
+    'foreign-port',
+    'foreign-adapter',
+    'stale-source',
+    'mutated-root',
+] as const) {
+    test(`owned Linux association respects ${kind} without inventing provenance`, async () => {
+        await observeOwned(async (events, stats) => {
+            const f = identityFixture();
+            const stale = kind === 'stale-source' ? await f.adapter.snapshot(42, 9222) : undefined;
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            const evidence = stale ?? (await f.adapter.snapshot(42, 9222));
+            if (kind === 'copied') evidence.root = { ...evidence.root };
+            if (kind === 'mutated-root' && evidence.root.exists)
+                evidence.root.startedAtUtc = '2000-01-01T00:00:00.000Z';
+            if (kind === 'foreign-adapter') {
+                const other = identityFixture();
+                other.adapter.registerLaunch(other.target, await other.adapter.prepareLaunch(), other.state.now);
+                await assert.rejects(other.adapter.validateIdentity(evidence, other.target));
+            } else {
+                const scope = {
+                    ...firstStartRoute,
+                    pid: kind === 'foreign-pid' ? 43 : 42,
+                    port: kind === 'foreign-port' ? 9223 : 9222,
+                    operationId:
+                        kind === 'foreign-origin'
+                            ? '66666666-6666-4666-8666-666666666666'
+                            : firstStartRoute.operationId,
+                };
+                const operation = runFixtureObservation(scope, () => f.adapter.validateIdentity(evidence, f.target));
+                if (['copied', 'mutated-root', 'stale-source'].includes(kind)) await assert.rejects(operation);
+                else await operation;
+            }
+            if (['foreign-adapter', 'stale-source', 'mutated-root'].includes(kind)) {
+                assert.equal(events[0]?.decision, 'root-proof-rejected');
+                assert.equal(stats().comparisons, 1);
+            } else {
+                assert.equal(events.length, 0);
+                assert.equal(stats().comparisons, 0);
+            }
+        });
+    });
+}
+test('owned Linux concurrent changed ticks reject the waiting initial call after the completed bind', async () => {
+    await observeOwned(async (events) => {
+        const entered = gate(),
+            pending = gate();
+        const f = identityFixture(async () => {
+            if (f.state.uptimeReads === 2) {
+                entered.release();
+                await pending.pending;
+            }
+        });
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        const evidence = await f.adapter.snapshot(42, 9222);
+        const first = f.adapter.validateIdentity(evidence, f.target);
+        const rejected = assert.rejects(first, /identity changed/);
+        await entered.pending;
+        f.state.ticks = '100049';
+        await f.adapter.validateIdentity(await f.adapter.snapshot(42, 9222), f.target);
+        pending.release();
+        await rejected;
+        assert.equal(events[1]?.decision, 'concurrent-changed');
+        assert.equal(events[1]?.mode, 'initial');
+        assert.equal(events[1]?.facts.public?.branch, 'accepted');
+        assert.equal(events[1]?.facts.selectedMs, undefined);
+    });
+});
+
+test('terminal diagnostic point conversion failure cannot replace completed native binding', async (t) => {
+    await observeOwned(async (events, stats) => {
+        const f = identityFixture();
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        const evidence = await f.adapter.snapshot(42, 9222);
+        const failed = t.mock.method(Date, 'parse', () => {
+            throw new Error('diagnostic conversion failed');
+        });
+        await f.adapter.validateIdentity(evidence, f.target);
+        failed.mock.restore();
+        assert.equal(events.length, 0);
+        assert.equal(stats().comparisons, 1);
+        await f.adapter.validateIdentity(evidence, f.target);
+        assert.equal(events[0]?.decision, 'established-accepted');
+    });
+});
+test('direct-helper traces distinguish invalid inputs and inverse guard exits without changing arithmetic', async () => {
+    const module = await import('../src/adapters/linux-creation-identity.ts');
+    for (const [q, h, x, branch, result] of [
+        [-1n, 100n, 1n, 'input-rejected', 'input-rejected'],
+        [1n, 9007199254740991n, 1n, 'multiply-9', 'zero-divisor'],
+        [9007199254740991n, 1024n, 1n, 'multiply-512', 'range-rejected'],
+        [2n, 100n, 0n, 'divide', 'empty'],
+    ] as const) {
+        const trace: import('../src/adapters/linux-creation-identity.ts').LinuxBirthTrace = {};
+        assert.equal(module.linuxBirthInterval({ rawTicks: q, clkTck: h, readerBirthUpperNs: x }, trace), undefined);
+        assert.deepEqual(trace, { branch, result, readerUpperNs: x });
+    }
+    const frozen = Object.freeze({});
+    assert.deepEqual(module.linuxBirthInterval({ rawTicks: 0n, clkTck: 100n, readerBirthUpperNs: 1n }, frozen), {
+        lowerNs: 0n,
+        upperNs: 1n,
+    });
+    assert.equal(module.linuxPublicTime({ lowerNs: 0n, upperNs: 1000000n }, 0, 0, frozen), '1970-01-01T00:00:00.000Z');
+});
+for (const fault of ['matcher-throw', 'matcher-revoke', 'observer-throw', 'missing-stat-time'] as const) {
+    test(`owned Linux supported diagnostic ${fault} cannot change native identity`, async (t) => {
+        const events: FixtureEvent[] = [];
+        let matches = 0;
+        const stop = subscribeFixtureDiagnostics(
+            (event) => {
+                if (event.stage === 'process-creation-identity') {
+                    events.push(event);
+                    if (fault === 'observer-throw') throw new Error('observer');
+                }
+            },
+            undefined,
+            undefined,
+            {
+                creationIdentity: {
+                    matches: () => {
+                        if (++matches === 2) {
+                            if (fault === 'matcher-throw') throw new Error('matcher');
+                            if (fault === 'matcher-revoke') stop.revokeCreationIdentity();
+                        }
+                        return true;
+                    },
+                },
+            },
+        );
+        try {
+            await runFixtureObservation({ ...firstStartRoute, pid: 42, port: 9222 }, async () => {
+                const f = identityFixture();
+                f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+                const clock = fault === 'missing-stat-time' ? t.mock.method(performance, 'now', () => NaN) : undefined;
+                const evidence = await f.adapter.snapshot(42, 9222);
+                clock?.mock.restore();
+                await f.adapter.validateIdentity(evidence, f.target);
+                assert.equal(events.length, fault === 'observer-throw' ? 1 : 0);
+                assert.equal(f.state.uptimeReads, 2);
+                assert.equal(f.target.startedAtUtc, '1970-01-01T00:16:40.500Z');
+            });
+        } finally {
+            stop();
+        }
+    });
+}
+test('prebranch diagnostics never evaluate a root accessor before native launch guards', async () => {
+    await observeOwned(async () => {
+        const f = identityFixture();
+        const evidence = await f.adapter.snapshot(42, 9222);
+        let accessed = 0;
+        Object.defineProperty(evidence, 'root', {
+            get() {
+                accessed++;
+                throw new Error('must not reach root');
+            },
+        });
+        await assert.rejects(f.adapter.validateIdentity(evidence, f.target), /no registered launch/);
+        f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+        f.child.pid = 43;
+        await assert.rejects(f.adapter.validateIdentity(evidence, f.target), /registered Linux child/);
+        assert.equal(accessed, 0);
+    });
+});
+
+test('current timestamp is the associated Stat completion with no decision-time monotonic probe', async (t) => {
+    const events: FixtureEvent[] = [];
+    const stop = subscribeFixtureDiagnostics(
+        (event) => {
+            if (event.stage === 'process-creation-identity') events.push(event);
+        },
+        undefined,
+        undefined,
+        { creationIdentity: { matches: () => true } },
+    );
+    try {
+        await runFixtureObservation({ ...firstStartRoute, pid: 42, port: 9222 }, async () => {
+            const f = identityFixture();
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            let probe = 42,
+                calls = 0;
+            t.mock.method(performance, 'now', () => {
+                calls++;
+                return probe;
+            });
+            const evidence = await f.adapter.snapshot(42, 9222);
+            const before = calls;
+            probe = 200;
+            await f.adapter.validateIdentity(evidence, f.target);
+            assert.equal(events[0]?.timestampMs, 42);
+            assert.equal(calls, before);
+            assert.equal(events[0]?.linuxIdentity?.timeBasis, 'source-stat-read-ended');
+        });
+    } finally {
+        stop();
+    }
+});
+
+for (const armed of [false, true]) {
+    test(`fix1 preserves exact first native reflection fault with observation ${armed}`, async (t) => {
+        const f = identityFixture();
+        const decisions: FixtureEvent[] = [];
+        const stop = armed
+            ? subscribeFixtureDiagnostics(
+                  (event) => {
+                      if (event.stage === 'process-creation-identity') decisions.push(event);
+                  },
+                  undefined,
+                  undefined,
+                  { creationIdentity: { matches: () => true } },
+              )
+            : undefined;
+        try {
+            await runFixtureObservation({ ...firstStartRoute, pid: 42, port: 9222 }, async () => {
+                f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+                const evidence = await f.adapter.snapshot(42, 9222);
+                const original = Object.getOwnPropertyDescriptor;
+                const sentinel = { reflection: 'original native error' };
+                let firstObject: unknown;
+                let firstKey: PropertyKey | undefined;
+                let pending = true;
+                const fault = t.mock.method(Object, 'getOwnPropertyDescriptor', (object: object, key: PropertyKey) => {
+                    if (pending) {
+                        pending = false;
+                        firstObject = object;
+                        firstKey = key;
+                        throw sentinel;
+                    }
+                    return original(object, key);
+                });
+                let result: unknown;
+                try {
+                    await f.adapter.validateIdentity(evidence, f.target);
+                } catch (error) {
+                    result = error;
+                }
+                fault.mock.restore();
+                assert.equal(result, sentinel);
+                assert.equal(firstObject, f.child);
+                assert.equal(firstKey, 'pid');
+                assert.equal(f.state.uptimeReads, 1, 'The native failure precedes post calibration and binding.');
+                assert.equal(
+                    decisions.some((event) => event.linuxIdentity?.decision.endsWith('accepted')),
+                    false,
+                );
+                await f.adapter.validateIdentity(evidence, f.target);
+                assert.equal(
+                    f.state.uptimeReads,
+                    2,
+                    'Retry still takes the initial branch because the failed call did not bind.',
+                );
+                if (armed)
+                    assert.deepEqual(
+                        decisions.map((event) => event.linuxIdentity?.decision),
+                        ['launch-check-threw', 'initial-accepted'],
+                    );
+            });
+        } finally {
+            stop?.();
+        }
+    });
+    test(`fix1 evidence descriptor Proxy does not execute before native guards with observation ${armed}`, async () => {
+        const f = identityFixture();
+        const stop = armed
+            ? subscribeFixtureDiagnostics(() => {}, undefined, undefined, { creationIdentity: { matches: () => true } })
+            : undefined;
+        try {
+            f.adapter.registerLaunch(f.target, await f.adapter.prepareLaunch(), f.state.now);
+            const evidence = await f.adapter.snapshot(42, 9222);
+            let traps = 0;
+            const proxy = new Proxy(evidence, {
+                getOwnPropertyDescriptor(target, key) {
+                    traps++;
+                    f.child.pid = 42;
+                    return Reflect.getOwnPropertyDescriptor(target, key);
+                },
+            });
+            f.child.pid = 43;
+            await assert.rejects(f.adapter.validateIdentity(proxy, f.target), /registered Linux child/);
+            assert.equal(traps, 0);
+            assert.equal(f.state.uptimeReads, 1);
+            f.child.pid = 42;
+            await f.adapter.validateIdentity(proxy, f.target);
+            assert.equal(traps, 0);
+            assert.equal(f.state.uptimeReads, 2);
+        } finally {
+            stop?.();
+        }
+    });
+}

@@ -132,13 +132,7 @@ function record(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Reconstruct child progress on demand, including interrupted BEGIN records. */
-export function readFixtureProgress(
-    directory: string,
-    fixture: FixtureLabel,
-    firstStartCaptureArmed = false,
-    scanBudget = maxBytes,
-) {
+function createProgressReduction(firstStartCaptureArmed: boolean) {
     const progress = {
         firstStartCapture: [] as Readonly<FirstStartCaptureRecord>[],
         firstStartCaptureArmed,
@@ -161,8 +155,133 @@ export function readFixtureProgress(
         linuxStartupWait: [] as Readonly<LinuxStartupWaitRecord>[],
         linuxStartupWaitOmitted: 0,
     };
-    const file = path.join(directory, `${fixture}.events.ndjson`);
     let cleanupEnded = false;
+    function consume(value: unknown, admitted = true) {
+        if (!record(value)) {
+            progress.invalidEvents++;
+            return;
+        }
+        progress.events++;
+        if (!admitted) {
+            progress.truncated = true;
+            progress.invalidEvents++;
+            return;
+        }
+        if (value.kind === 'gateway') {
+            const { kind: _kind, ...fields } = value;
+            const event = validateFixtureEvent(fields);
+            if (!event) {
+                progress.invalidEvents++;
+                return;
+            }
+            progress.gatewayEvents++;
+            progress.lastStage = event.stage;
+            progress.lastOperationId = event.operationId ?? null;
+            if (event.stage === 'gateway-cleanup' && event.event === 'end') cleanupEnded = true;
+        } else if (value.kind === 'linux-first-start-capture') {
+            const capture = validateFirstStartCaptureRecord(value);
+            if (!capture || !firstStartCaptureArmed) progress.invalidEvents++;
+            else {
+                progress.firstStartCapture.push(capture);
+                if (progress.firstStartCapture.length > 64) {
+                    progress.firstStartCapture.shift();
+                    progress.firstStartCaptureOmitted++;
+                }
+            }
+        } else if (value.kind === 'first-start-writer-cost') {
+            const cost = validateFirstStartWriterCost(value);
+            if (!cost || !firstStartCaptureArmed || progress.firstStartCaptureWriterChild) progress.invalidEvents++;
+            else progress.firstStartCaptureWriterChild = cost;
+        } else if (value.kind === 'browser-startup') {
+            const startup = validateBrowserStartupRecord(value);
+            if (!startup) progress.invalidEvents++;
+            else {
+                progress.browserStartup = progress.browserStartup.filter(
+                    (prior) =>
+                        prior.phase !== startup.phase ||
+                        (prior.phase === 'log' && startup.phase === 'log' && prior.launch !== startup.launch),
+                );
+                progress.browserStartup.push(startup);
+                progress.browserStartup = progress.browserStartup.slice(-66);
+            }
+        } else if (value.kind === 'collector-cost') {
+            const cost = validateCollectorCost(value);
+            if (cost) progress.collectorCost = cost;
+            else progress.invalidEvents++;
+        } else if (value.kind === 'linux-startup-wait') {
+            const wait = validateLinuxStartupWaitRecord(value);
+            if (!wait) progress.invalidEvents++;
+            else {
+                progress.linuxStartupWait.push(wait);
+                if (progress.linuxStartupWait.length > maxWaitSummary) {
+                    progress.linuxStartupWait.shift();
+                    progress.linuxStartupWaitOmitted++;
+                }
+            }
+        } else if (value.kind === 'linux-readahead-study') {
+            const study = validateReadaheadRecord(value);
+            if (!study) progress.invalidEvents++;
+            else {
+                progress.readaheadStudy.push(study);
+                if (progress.readaheadStudy.length > 8) {
+                    progress.readaheadStudy.shift();
+                    progress.readaheadStudyOmitted++;
+                }
+            }
+        } else if (value.kind === 'truncated') progress.truncated = true;
+        else if (value.kind === 'limitation') {
+            if (value.reason === 'validation-rejected') progress.invalidEvents++;
+            if (value.reason === 'write-failed') progress.writeFailed = true;
+        } else if (value.kind !== 'smoke' && value.kind !== 'failure') progress.invalidEvents++;
+    }
+    function project() {
+        const limitations = progress.firstStartCaptureLimitations;
+        progress.firstStartCaptureLimitations = limitations.filter(
+            (reason) =>
+                ![
+                    'selection-missing',
+                    'outcome-missing',
+                    'terminal-missing',
+                    'self-report-write-unavailable',
+                    'writer-cost-missing',
+                ].includes(reason),
+        );
+        if (firstStartCaptureArmed) {
+            for (const [slot, reason] of [
+                ['selection', 'selection-missing'],
+                ['first-start-outcome', 'outcome-missing'],
+                ['observer-terminal', 'terminal-missing'],
+            ]) {
+                if (!progress.firstStartCapture.some((capture) => capture.slot === slot))
+                    progress.firstStartCaptureLimitations.push(reason ?? 'receipt-missing');
+            }
+            progress.firstStartCaptureLimitations.push('self-report-write-unavailable');
+            if (!progress.firstStartCaptureWriterChild)
+                progress.firstStartCaptureLimitations.push('writer-cost-missing');
+        }
+        progress.incomplete ||=
+            progress.truncated ||
+            progress.writeFailed ||
+            progress.linuxStartupWaitOmitted > 0 ||
+            progress.readaheadStudyOmitted > 0 ||
+            progress.firstStartCaptureOmitted > 0 ||
+            progress.firstStartCaptureLimitations.length > 0 ||
+            (progress.gatewayEvents > 0 && !cleanupEnded);
+        return progress;
+    }
+    return { progress, consume, project };
+}
+
+/** Reconstruct child progress on demand, including interrupted BEGIN records. */
+export function readFixtureProgress(
+    directory: string,
+    fixture: FixtureLabel,
+    firstStartCaptureArmed = false,
+    scanBudget = maxBytes,
+) {
+    const reduction = createProgressReduction(firstStartCaptureArmed);
+    const { progress } = reduction;
+    const file = path.join(directory, `${fixture}.events.ndjson`);
     const quota = firstStartCaptureArmed ? createFixtureStreamQuota() : undefined;
     if (firstStartCaptureArmed && scanBudget <= 0) {
         progress.incomplete = true;
@@ -222,108 +341,16 @@ export function readFixtureProgress(
                 progress.writeFailed = true;
                 continue;
             }
-            if (!record(value)) {
-                progress.invalidEvents++;
-                continue;
-            }
-            progress.events++;
-            if (quota && !quota.accept(value, Buffer.byteLength(line) + 1).accepted) {
-                progress.truncated = true;
-                progress.invalidEvents++;
-                continue;
-            }
-            if (value.kind === 'gateway') {
-                const { kind: _kind, ...fields } = value;
-                const event = validateFixtureEvent(fields);
-                if (!event) {
-                    progress.invalidEvents++;
-                    continue;
-                }
-                progress.gatewayEvents++;
-                progress.lastStage = event.stage;
-                progress.lastOperationId = event.operationId ?? null;
-                if (event.stage === 'gateway-cleanup' && event.event === 'end') cleanupEnded = true;
-            } else if (value.kind === 'linux-first-start-capture') {
-                const capture = validateFirstStartCaptureRecord(value);
-                if (!capture || !firstStartCaptureArmed) progress.invalidEvents++;
-                else {
-                    progress.firstStartCapture.push(capture);
-                    if (progress.firstStartCapture.length > 64) {
-                        progress.firstStartCapture.shift();
-                        progress.firstStartCaptureOmitted++;
-                    }
-                }
-            } else if (value.kind === 'first-start-writer-cost') {
-                const cost = validateFirstStartWriterCost(value);
-                if (!cost || !firstStartCaptureArmed || progress.firstStartCaptureWriterChild) progress.invalidEvents++;
-                else progress.firstStartCaptureWriterChild = cost;
-            } else if (value.kind === 'browser-startup') {
-                const startup = validateBrowserStartupRecord(value);
-                if (!startup) progress.invalidEvents++;
-                else {
-                    progress.browserStartup = progress.browserStartup.filter(
-                        (prior) =>
-                            prior.phase !== startup.phase ||
-                            (prior.phase === 'log' && startup.phase === 'log' && prior.launch !== startup.launch),
-                    );
-                    progress.browserStartup.push(startup);
-                    progress.browserStartup = progress.browserStartup.slice(-66);
-                }
-            } else if (value.kind === 'collector-cost') {
-                const cost = validateCollectorCost(value);
-                if (cost) progress.collectorCost = cost;
-                else progress.invalidEvents++;
-            } else if (value.kind === 'linux-startup-wait') {
-                const wait = validateLinuxStartupWaitRecord(value);
-                if (!wait) progress.invalidEvents++;
-                else {
-                    progress.linuxStartupWait.push(wait);
-                    if (progress.linuxStartupWait.length > maxWaitSummary) {
-                        progress.linuxStartupWait.shift();
-                        progress.linuxStartupWaitOmitted++;
-                    }
-                }
-            } else if (value.kind === 'linux-readahead-study') {
-                const study = validateReadaheadRecord(value);
-                if (!study) progress.invalidEvents++;
-                else {
-                    progress.readaheadStudy.push(study);
-                    if (progress.readaheadStudy.length > 8) {
-                        progress.readaheadStudy.shift();
-                        progress.readaheadStudyOmitted++;
-                    }
-                }
-            } else if (value.kind === 'truncated') progress.truncated = true;
-            else if (value.kind === 'limitation') {
-                if (value.reason === 'validation-rejected') progress.invalidEvents++;
-                if (value.reason === 'write-failed') progress.writeFailed = true;
-            } else if (value.kind !== 'smoke' && value.kind !== 'failure') progress.invalidEvents++;
+            reduction.consume(
+                value,
+                !record(value) || !quota || quota.accept(value, Buffer.byteLength(line) + 1).accepted,
+            );
         }
         if (lines.length > maxEvents + 2) progress.truncated = true;
     } catch {
         progress.writeFailed = true;
     }
-    if (firstStartCaptureArmed) {
-        for (const [slot, reason] of [
-            ['selection', 'selection-missing'],
-            ['first-start-outcome', 'outcome-missing'],
-            ['observer-terminal', 'terminal-missing'],
-        ]) {
-            if (!progress.firstStartCapture.some((capture) => capture.slot === slot))
-                progress.firstStartCaptureLimitations.push(reason ?? 'receipt-missing');
-        }
-        progress.firstStartCaptureLimitations.push('self-report-write-unavailable');
-        if (!progress.firstStartCaptureWriterChild) progress.firstStartCaptureLimitations.push('writer-cost-missing');
-    }
-    progress.incomplete =
-        progress.truncated ||
-        progress.writeFailed ||
-        progress.linuxStartupWaitOmitted > 0 ||
-        progress.readaheadStudyOmitted > 0 ||
-        progress.firstStartCaptureOmitted > 0 ||
-        progress.firstStartCaptureLimitations.length > 0 ||
-        (progress.gatewayEvents > 0 && !cleanupEnded);
-    return progress;
+    return reduction.project();
 }
 
 /** Test-only streaming collector. No gateway stderr, tool content or raw Error is accepted. */
@@ -356,6 +383,29 @@ export function createFixtureArtifacts(
     let costUnavailable = false;
     let costFlushed = false;
     let armedWriter: ReturnType<typeof createArmedFixtureWriter> | undefined;
+    let reduction: ReturnType<typeof createProgressReduction> | undefined;
+    function applyProgress(final = false) {
+        if (!reduction) return;
+        const progress = final ? reduction.project() : reduction.progress;
+        const {
+            scannedBytes: _scanned,
+            firstStartCaptureArmed: _armed,
+            lastStage,
+            writeFailed,
+            truncated,
+            incomplete,
+            firstStartCaptureLimitations,
+            ...fields
+        } = progress;
+        Object.assign(summary, fields);
+        summary.firstStartCaptureLimitations = [
+            ...new Set([...summary.firstStartCaptureLimitations, ...firstStartCaptureLimitations]),
+        ];
+        summary.lastStage = lastStage ?? summary.smokeStage;
+        summary.writeFailed ||= writeFailed;
+        summary.truncated ||= truncated;
+        summary.incomplete ||= incomplete;
+    }
     function measure(action: () => void) {
         if (!eventsFile || measuring) {
             action();
@@ -406,8 +456,8 @@ export function createFixtureArtifacts(
             const written = create ? armedWriter.appendFromGateway(create) : armedWriter.append(value);
             const state = armedWriter.snapshot();
             summary.firstStartCaptureWriter = state;
-            if (written) summary.events++;
-            else summary.droppedEvents++;
+            if (written && !reduction) summary.events++;
+            else if (!written) summary.droppedEvents++;
             summary.truncated ||= state.exhausted;
             summary.writeFailed ||= state.writeFailed;
             summary.incomplete ||= state.exhausted || state.writeFailed;
@@ -415,6 +465,7 @@ export function createFixtureArtifacts(
                 summary.firstStartCaptureLimitations.push('writer-budget-or-capacity');
             if (state.releaseFailed && !summary.firstStartCaptureLimitations.includes('writer-release-failed'))
                 summary.firstStartCaptureLimitations.push('writer-release-failed');
+            applyProgress();
             return;
         }
         let ownsLock = false;
@@ -533,8 +584,20 @@ export function createFixtureArtifacts(
         }
         persist();
     }
-    if (eventsFile && summary.firstStartCaptureArmed)
-        armedWriter = createArmedFixtureWriter(eventsFile, io.streamOnly === true, io);
+    if (eventsFile && summary.firstStartCaptureArmed) {
+        if (!io.streamOnly) reduction = createProgressReduction(true);
+        armedWriter = createArmedFixtureWriter(eventsFile, io.streamOnly === true, {
+            ...io,
+            ...(reduction
+                ? {
+                      admitted: (value: unknown) => reduction?.consume(value),
+                      limited: () => {
+                          if (reduction) reduction.progress.incomplete = true;
+                      },
+                  }
+                : {}),
+        });
+    }
     if (!eventsFile && summary.firstStartCaptureArmed) {
         summary.incomplete = true;
         summary.firstStartCaptureLimitations.push('collection-unavailable');
@@ -548,7 +611,7 @@ export function createFixtureArtifacts(
                     collector.rejected();
                     return;
                 }
-                summary.firstStartCapture.push(safe);
+                if (!reduction) summary.firstStartCapture.push(safe);
                 if (summary.firstStartCapture.length > 64) {
                     summary.firstStartCapture.shift();
                     summary.firstStartCaptureOmitted++;
@@ -565,7 +628,7 @@ export function createFixtureArtifacts(
                 collector.rejected();
                 return;
             }
-            summary.readaheadStudy.push(safe);
+            if (!reduction) summary.readaheadStudy.push(safe);
             if (summary.readaheadStudy.length > 8) {
                 summary.readaheadStudy.shift();
                 summary.readaheadStudyOmitted++;
@@ -590,7 +653,7 @@ export function createFixtureArtifacts(
                     return;
                 }
                 summary.lastStage = event.stage;
-                summary.gatewayEvents++;
+                if (!reduction) summary.gatewayEvents++;
                 summary.lastOperationId = event.operationId ?? null;
                 append({ kind: 'gateway', ...event });
                 persist();
@@ -603,12 +666,13 @@ export function createFixtureArtifacts(
                 collector.rejected();
                 return;
             }
-            summary.browserStartup = summary.browserStartup.filter(
-                (prior) =>
-                    prior.phase !== safe.phase ||
-                    (prior.phase === 'log' && safe.phase === 'log' && prior.launch !== safe.launch),
-            );
-            summary.browserStartup.push(safe);
+            if (!reduction)
+                summary.browserStartup = summary.browserStartup.filter(
+                    (prior) =>
+                        prior.phase !== safe.phase ||
+                        (prior.phase === 'log' && safe.phase === 'log' && prior.launch !== safe.launch),
+                );
+            if (!reduction) summary.browserStartup.push(safe);
             summary.browserStartup = summary.browserStartup.slice(-66);
             append(safe);
             persist();
@@ -621,7 +685,7 @@ export function createFixtureArtifacts(
                     collector.rejected();
                     return;
                 }
-                summary.linuxStartupWait.push(wait);
+                if (!reduction) summary.linuxStartupWait.push(wait);
                 if (summary.linuxStartupWait.length > maxWaitSummary) {
                     summary.linuxStartupWait.shift();
                     summary.linuxStartupWaitOmitted++;
@@ -633,7 +697,7 @@ export function createFixtureArtifacts(
         },
         rejected() {
             measure(() => {
-                summary.invalidEvents++;
+                if (!reduction) summary.invalidEvents++;
                 append({ kind: 'limitation', reason: 'validation-rejected' });
                 persist();
             });
@@ -646,7 +710,7 @@ export function createFixtureArtifacts(
             const cost = validateCollectorCost({ kind: 'collector-cost', callbacks, totalMs, maxMs });
             if (costUnavailable || !cost) append({ kind: 'limitation', reason: 'collector-cost-unavailable' });
             else {
-                summary.collectorCost = cost;
+                if (!reduction) summary.collectorCost = cost;
                 append(cost);
             }
         },
@@ -675,7 +739,17 @@ export function createFixtureArtifacts(
         finish(failed: boolean) {
             summary.state = failed ? 'failed' : 'passed';
             // Child writes may have advanced the stream. Read only bounded safe records.
-            if (eventsFile && directory) {
+            if (armedWriter && reduction) {
+                const observation = armedWriter.finishObservation();
+                reduction.progress.writeFailed ||= observation.writeFailed;
+                reduction.progress.truncated ||= observation.truncated;
+                reduction.progress.incomplete ||= observation.incomplete;
+                if (observation.scanBudget) reduction.progress.firstStartCaptureLimitations.push('writer-scan-budget');
+                if (observation.discontinuity)
+                    reduction.progress.firstStartCaptureLimitations.push('writer-stream-discontinuity');
+                applyProgress(true);
+                summary.firstStartCaptureWriter = armedWriter.snapshot();
+            } else if (eventsFile && directory) {
                 const scanBudget = armedWriter ? (armedWriter.reserveReconstruction() ?? 0) : maxBytes;
                 const progress = readFixtureProgress(directory, fixture, summary.firstStartCaptureArmed, scanBudget);
                 armedWriter?.settleReconstruction(progress.scannedBytes);

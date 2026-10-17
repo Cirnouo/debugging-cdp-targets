@@ -1592,3 +1592,209 @@ test('unsafe observation bookkeeping preserves the original error and disables f
         stop();
     }
 });
+
+/** A conservative closed-grammar bound, deliberately including incompatible optional groups.
+ * JSON keys, delimiters and quotes are counted. N is at most sign+25 digits, U20,
+ * S16, M/D sign+16 digits. All permitted strings are ASCII and need no escaping.
+ * Nonnegative finite Number JSON uses <=17 significant digits: fixed notation is
+ * at most24 characters (0.00000 +17 digits); exponent notation is at most23
+ * (digit, dot,16 digits,e,sign,3 exponent digits). Thus atMs costs at most24.
+ * Every legal tree is a subset of these keys with no larger primitive encoding;
+ * including incompatible alternatives makes this an upper bound, not a fixture.
+ */
+function currentCreationWireBound() {
+    const objectBytes = (fields: Record<string, number>) => {
+        const entries = Object.entries(fields);
+        return (
+            2 +
+            entries.reduce((total, [key, value]) => total + JSON.stringify(key).length + 1 + value, 0) +
+            Math.max(0, entries.length - 1)
+        );
+    };
+    const longest = (...values: string[]) => Math.max(...values.map((value) => JSON.stringify(value).length));
+    const N = 28,
+        U = 22,
+        S = 18,
+        M = 17,
+        D = 17;
+    const interval = objectBytes({ lowerNs: N, upperNs: N });
+    const calibration = objectBytes({ beforeUtcMs: M, afterUtcMs: M, uptimeUpperNs: U, offset: interval });
+    const facts = objectBytes({
+        pre: calibration,
+        post: calibration,
+        postFailure: objectBytes({
+            branch: longest('read-or-abort', 'bracket-or-text-invalid', 'uptime-out-of-range'),
+        }),
+        raw: objectBytes({ q: S, H: S, bootSeconds: S }),
+        requestUtcMs: M,
+        decisionUtcMs: M,
+        offset: objectBytes({ status: longest('nonempty', 'empty'), lowerNs: N, upperNs: N }),
+        birth: objectBytes({
+            branch: longest('divide', 'multiply-512', 'multiply-9', 'input-rejected'),
+            result: longest('present', 'input-rejected', 'zero-divisor', 'range-rejected', 'empty'),
+            readerUpperNs: U,
+            interval: objectBytes({ lowerNs: U, upperNs: U }),
+        }),
+        absolute: interval,
+        public: objectBytes({
+            branch: longest(
+                'invalid-clock',
+                'containment-or-order-rejected',
+                'point-or-date-range-rejected',
+                'date-roundtrip-rejected',
+                'accepted',
+            ),
+            pointMs: N,
+        }),
+        selectedMs: D,
+    });
+    const nested = objectBytes({
+        model: longest('linux-private-interval-v1'),
+        mode: longest('unregistered', 'unselected', 'initial', 'established'),
+        decision: longest(
+            'no-launch',
+            'launch-check-threw',
+            'root-proof-rejected',
+            'established-changed',
+            'established-accepted',
+            'boot-missing',
+            'post-calibration-threw',
+            'post-launch-check-threw',
+            'clock-order-rejected',
+            'root-proof-changed',
+            'decision-clock-rejected',
+            'interval-rejected',
+            'readiness-check-threw',
+            'final-launch-check-threw',
+            'concurrent-changed',
+            'initial-accepted',
+        ),
+        timeBasis: longest('source-stat-read-ended'),
+        facts,
+    });
+    const lineWithNewline =
+        objectBytes({
+            kind: longest('linux-first-start-capture'),
+            slot: longest('creation-first-comparison', 'creation-first-rejected'),
+            status: longest('complete', 'identity-invalid'),
+            atMs: 24,
+            entryId: 38,
+            connectionId: 38,
+            sessionId: 38,
+            operationId: 38,
+            requestId: 38,
+            pid: 16,
+            rootStartTicks: 16,
+            creation: nested,
+        }) + 1;
+    return { nested, lineWithNewline };
+}
+test('derived current grammar bound covers longest operands and actual writer envelope alternatives', async (t) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-current-max-envelope-'));
+    try {
+        const signed = '-9999999999999999999999999',
+            high = '-9999999999999999999999998';
+        const unsigned = '18446744073709551615',
+            safe = '9007199254740991';
+        const interval = { lowerNs: signed, upperNs: high };
+        const calibration = {
+            beforeUtcMs: Number.MAX_SAFE_INTEGER,
+            afterUtcMs: Number.MAX_SAFE_INTEGER,
+            uptimeUpperNs: unsigned,
+            offset: interval,
+        };
+        const facts = {
+            pre: calibration,
+            post: calibration,
+            raw: { q: safe, H: safe, bootSeconds: safe },
+            requestUtcMs: -Number.MAX_SAFE_INTEGER,
+            decisionUtcMs: -Number.MAX_SAFE_INTEGER,
+            offset: { status: 'nonempty', ...interval },
+            birth: {
+                branch: 'multiply-512',
+                result: 'present',
+                readerUpperNs: unsigned,
+                interval: { lowerNs: unsigned, upperNs: unsigned },
+            },
+            absolute: interval,
+            public: { branch: 'accepted', pointMs: '-8640000000000000' },
+            selectedMs: -8640000000000000,
+        };
+        const { selectedMs: _selected, ...candidate } = facts;
+        const accepted = {
+            model: 'linux-private-interval-v1',
+            mode: 'initial',
+            decision: 'initial-accepted',
+            timeBasis: 'source-stat-read-ended',
+            facts,
+        };
+        const rejected = {
+            ...accepted,
+            decision: 'interval-rejected',
+            facts: { ...candidate, public: { branch: 'point-or-date-range-rejected', pointMs: signed } },
+        };
+        const calibrationFailed = {
+            ...accepted,
+            decision: 'post-calibration-threw',
+            facts: {
+                pre: calibration,
+                raw: facts.raw,
+                requestUtcMs: facts.requestUtcMs,
+                postFailure: { branch: 'bracket-or-text-invalid' },
+            },
+        };
+        const alternatives = [
+            { slot: 'creation-first-comparison', status: 'complete', creation: accepted },
+            { slot: 'creation-first-comparison', status: 'identity-invalid', creation: rejected },
+            { slot: 'creation-first-rejected', status: 'identity-invalid', creation: rejected },
+            { slot: 'creation-first-comparison', status: 'identity-invalid', creation: calibrationFailed },
+        ];
+        const bound = currentCreationWireBound();
+        assert.ok(bound.nested <= 3000, 'Every permitted payload is bounded by the closed grammar construction.');
+        assert.ok(bound.lineWithNewline <= 4096, 'Every creation receipt envelope is bounded including its newline.');
+        const sizes: { decision: string; slot: string; nested: number; lineWithNewline: number }[] = [];
+        for (const [index, alternative] of alternatives.entries()) {
+            const record = {
+                ...firstStartRoute,
+                pid: Number.MAX_SAFE_INTEGER,
+                rootStartTicks: Number.MAX_SAFE_INTEGER,
+                kind: 'linux-first-start-capture',
+                atMs: 0.0000012345678901234567,
+                ...alternative,
+            };
+            assert.equal(
+                JSON.stringify(record.atMs).length,
+                24,
+                'The fixture realizes the longest finite-number spelling bound.',
+            );
+            assert.ok(validateFirstStartCaptureRecord(record));
+            const folder = path.join(directory, String(index));
+            const parent = createFixtureArtifacts(folder, 'official-server', { firstStartCapture: true });
+            const child = createFixtureArtifacts(folder, 'official-server', {
+                firstStartCapture: true,
+                streamOnly: true,
+                collectionId: parent.snapshot().collectionId,
+            });
+            child.firstStartCapture(record);
+            const contents = await readFile(path.join(folder, 'official-server.events.ndjson'), 'utf8');
+            const line = contents
+                .split('\n')
+                .find((line) => line && JSON.parse(line).creation?.model === 'linux-private-interval-v1');
+            assert.ok(line, 'The actual writer must admit each complete envelope alternative.');
+            const nested = Buffer.byteLength(JSON.stringify(record.creation));
+            const lineWithNewline = Buffer.byteLength(`${line}\n`);
+            assert.ok(nested <= bound.nested);
+            assert.ok(lineWithNewline <= bound.lineWithNewline);
+            assert.deepEqual(
+                JSON.parse(line),
+                record,
+                'The written line includes the entire actual envelope; no hidden wrapper is omitted.',
+            );
+            sizes.push({ decision: record.creation.decision, slot: record.slot, nested, lineWithNewline });
+            child.finishStream();
+        }
+        t.diagnostic(JSON.stringify({ conservativeGrammarBound: bound, measuredWriterAlternatives: sizes }));
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});

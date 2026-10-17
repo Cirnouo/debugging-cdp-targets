@@ -80,6 +80,30 @@ then explicitly restarts and normally closes them. It retains test profiles.
   External exit stimuli request identity-verified Windows CloseMainWindow or Unix
   SIGTERM. These inspect-only fixtures do not own an exit observer; request acceptance
   is recorded separately from the gateway's actual application exit and cleanup.
+  On Linux, the smoke inspector privately binds the exact original fixture object
+  to its PID, port, Chrome kind, executable, public creation label, numeric UID,
+  directly parsed `/proc/PID/stat` field-22 `start_ticks`, positive safe `CLK_TCK`
+  and validated browser-level endpoint. Native inspection and endpoint work are
+  bracketed by complete raw identity reads. Each external stimulus repeats this
+  proof, checks own data descriptors without invoking getters, then synchronously
+  rechecks cancellation and the private capability before one SIGTERM to the
+  frozen PID. Copies and reconstructed objects cannot use that capability; the
+  production Linux adapter still rejects inspect-only objects without its own
+  private launch registration. The ordinary active/inactive exit cases and the
+  retained-target emergency attempt in `finally` use this same guard.
+  The test-only Linux I/O has a five-second operation result budget and one-second
+  budgets for each I/O operation and the complete native snapshot. Proc records
+  retain at most 16 KiB, `/proc/stat` boot evidence 256 KiB, command stdout 256 KiB,
+  command stderr 8 KiB, executable paths 4 KiB and streamed endpoint JSON 16 KiB.
+  The real proc reader reads at most its cap plus one overflow byte; the structured
+  command executor uses `shell: false`, bounded streams and cancellation of its
+  inspection child. Snapshot cancellation reaches nested I/O, so late evidence
+  cannot start another inspection command or signal Chrome. No fallback, force
+  kill, process-disappearance polling or automatic retry authorizes a stimulus.
+  An absent listener or unavailable endpoint also denies the emergency attempt
+  and remains a cleanup failure. These are point-in-time safeguards with a
+  residual read-to-signal race; they provide neither pidfd/actual-child ownership
+  nor proof of same-tick PID-generation uniqueness.
   Bounded status checks require removal of the exited connection, and Hook facts
   retain the original process and session identities. Route removal can precede
   completion of upstream cleanup, so both exit cases separately wait for the
@@ -126,6 +150,15 @@ then explicitly restarts and normally closes them. It retains test profiles.
   process/user/creation-time and loopback endpoint checks, and actual browser
   version evidence for the two cross-platform browser smokes. Its external normal
   Close helper reports request acceptance without claiming application exit.
+- `linux-chrome-external-close.ts` supplies the private inspect-only Linux fixture
+  capability and bounded I/O above. `linux-chrome-external-close.test.ts` composes
+  the real Linux adapter snapshot with OS I/O fakes on any host, preserves actual
+  production registration rejection, and checks denial, asynchronous mutation,
+  cancellation, late results, descriptors and default I/O caps without Chrome.
+  Offline regression success establishes the fixture mechanism only. Real Chrome
+  exit, Hooks and profile cleanup require separately authorized integration
+  acceptance; this local repair neither resolves the historical first-start
+  uncertainty nor establishes startup or lifecycle stability.
 - `chrome-profile-probe.ts` observes the actual Profile Path of those newly
   launched, independently verified fixtures through Chrome's native debugging
   HTTP endpoint and one temporary page WebSocket. It is test-only and never shipped.
@@ -990,10 +1023,11 @@ and unresolved; synthetic interleavings verify diagnostic behavior only.
 The additional first-start observer defaults off. The existing ordinary Linux
 job can admit it for one explicitly authorized, non-forced push transition on
 `fix/chrome-startup-stall` from
-`d3d0bde698f6b0654245a285144451cbfc928957`. The historical transition from
-`1a598a7ca01c4e17535c5c9c98cd4564d6369e77` to that `d3` commit has already
-consumed its opportunity. Before any separately authorized future publication,
-the actual remote branch ref must still equal that exact `d3` commit; mere
+`8ab83ae705a8988e4a122fa4f3fc71beb3a88229`. The historical windows beginning at
+`1a598a7ca01c4e17535c5c9c98cd4564d6369e77` and
+`d3d0bde698f6b0654245a285144451cbfc928957` have consumed their opportunities
+and are refused. Before any separately authorized future publication,
+the actual remote branch ref must still equal that exact `8ab` commit; mere
 fast-forward compatibility is insufficient. Any changed remote ref stops
 publication pending review and rebinding of the exact transition.
 Admission requires attempt one, the exact repository/ref, consistent event
@@ -1017,14 +1051,33 @@ foreign-listener, terminal-condition and interrupted-poll exits without a new
 clock read or native probe. A fixture failure alone is not proof of that symptom.
 
 The armed preload alone requests the internal creation-identity observer;
-ordinary diagnostic subscribers do not enable it. The standalone legacy scalar
-observer and its tests retain the creation-time comparison and source-association
-guarantees described below. Current production Linux child authorization uses
-conservative birth intervals and UTC/boot-clock calibration; this existing closed
-scalar diagnostic schema has no complete interval/calibration comparison fields.
-Complete comparison evidence for the current production interval decision is
-therefore unavailable, and legacy scalar records cannot represent that decision.
-This amendment adds no diagnostic fields or operating-system reads.
+ordinary diagnostic subscribers do not enable it. Current production Linux child
+authorization emits the closed `linux-private-interval-v1` variant when the
+observer is armed and associated with the acquired evidence/root pair. Its mode
+distinguishes unregistered, unselected, initial and established validation; its
+decision names the actual reached acceptance or rejection branch. The decoder
+also accepts the unchanged standalone legacy scalar variant, whose creation-time
+comparisons cannot represent current interval authorization. Neither variant
+replays authorization or adds identity probes, clock reads or helper calls.
+
+Current records contain only facts reached by the original validation: raw
+start ticks, `CLK_TCK` and available boot seconds; pre/post UTC-bracketed uptime
+calibrations; request and reached decision UTC; offset intersection status;
+birth-conversion branch/result and bounds; reached absolute interval and public
+point-selection branch; and the accepted selected millisecond, as applicable.
+Established checks retain raw continuity and the saved selected millisecond,
+without recalibrating. Classified post-calibration failures retain their closed
+read/abort, bracket/text or uptime-range branch. Earlier guards omit unreached
+facts. Prevalidation failures without associated source evidence and exceptions
+without a classified decision remain unavailable; no complete decision record is
+fabricated. Private association binds the actual evidence/root and saved origin;
+copied, mutated, mismatched or inconsistent evidence cannot supply it.
+
+The current event timestamp and record `atMs` use
+`timeBasis: source-stat-read-ended`: the associated stat read's monotonic end,
+even though emission follows validation. They are not validation-end or decision
+timestamps. A reached `decisionUtcMs` is a separate original wall-clock fact;
+it does not redefine the source timestamp or make the source reads atomic.
 
 In the standalone legacy scalar path, observation covers the selected first
 start's actual creation-time comparison and the same existing proc-stat,
@@ -1051,8 +1104,10 @@ Number, boot seconds/start ticks/clock ticks and read bounds. Unreached or
 unverifiable comparisons retain their status without fabricated comparison UTC. Records
 identify the actual branch and whether
 the original upper-bound wall-clock call ran. The standalone legacy path
-preserves its 1,000 ms tolerance, `Date.now()` short-circuit and error priority. Current production interval checks
-retain the 1,000 ms policy and 20-second readiness budget.
+preserves its 1,000 ms tolerance, `Date.now()` short-circuit and error priority.
+Current production interval checks retain the 1,000 ms policy and 20-second
+readiness budget. Their closed reached facts record the actual calculation,
+including rejected intervals, rather than replacing it with a scalar comparison.
 Added timing, metadata or subscriber failures only remove diagnostic evidence;
 they cannot replace the original I/O or comparison result. Producer CPU cost is
 explicitly unmeasured; existing subscriber count/total/max costs remain distinct
@@ -1095,15 +1150,22 @@ visible mount root excludes hidden ancestors or Azure host/backend throttling.
 
 The observer caches fixed closed records in memory, at most 64 records/256 KiB
 of serialized UTF-8 including newlines, with at most 4,096 bytes per record.
-Two existing auxiliary-capacity slots retain the first legacy scalar comparison
-and the first distinct rejected legacy scalar comparison; private invocation
-identity distinguishes them even when timestamps coincide. An initial rejected comparison occupies
+Two existing auxiliary-capacity slots retain the first creation decision
+and the first distinct rejected decision, for either supported variant; private
+invocation identity distinguishes them even when source timestamps coincide.
+An initial rejected decision occupies
 only the first slot. The 36 family, eight cost and 12 auxiliary slots allocate
 at most 56 records without increasing any stream or writer budget.
-Each legacy scalar comparison record carries a closed nested `creation` group;
-accepted comparisons use `complete`, while rejected comparisons use
-`identity-invalid`. These statuses do not establish complete current production
-interval/calibration evidence.
+Each decision record carries a closed nested `creation` group. Current
+`initial-accepted` and `established-accepted` decisions use `complete`; rejected
+decisions use `identity-invalid`. The legacy decoder retains its comparison
+status rules. A valid record establishes its represented reached facts, not
+complete sampling or retention of every decision. The existing per-payload
+3,000-byte and per-record 4,096-byte limits remain unchanged. A conservative
+closed-grammar calculation bounds the current nested payload at 1,250 UTF-8
+bytes and the full writer envelope including newline at 1,709 bytes. These
+bounds combine longest allowed alternatives and are not tight realizable maxima;
+the measured 1,601-byte writer example is one admitted envelope, not the bound.
 The existing `limitations` slot adds an optional closed `creationObservation`
 receipt. Available producer statistics report source attempts, comparisons,
 reserved tokens, cap refusal, diagnostic disable and normal revocation separately,
@@ -1123,6 +1185,13 @@ pending before normal shutdown is submitted. A failed Close END is retained as
 failed, never as proof that shutdown was submitted. There is no native lifecycle
 await on diagnostic flushing. A hung Close path or early process death may lose
 the cache and must remain incomplete.
+
+Existing EOF regressions exercise the armed child preload and its actual writer
+through native I/O fakes, including settled, rejected and missing Close END
+cases. They establish that boundary's stdin EOF/beforeExit behavior. They do not
+exercise full official SDK disconnect, real Chrome startup failure, or retention
+of real failed-sample device/cgroup evidence. Hosted qualification and those
+retention limits remain separate from the local regression results.
 
 The same five artifact files and failure-only ordinary upload are used. Armed
 streams reserve 100 records/400 KiB within the existing 2,000-record/1 MiB
@@ -1145,15 +1214,59 @@ Costs with pending work or an unmeasured final self-report write cannot be
 reported as complete. Raw stacks, symbols, cgroup/mount paths and private
 content never enter these artifacts.
 
-Report every authorized position, including cancellation, zero starts,
-identity rejection, missing artifacts and cleanup failures. For a useful
-budget-failed first start, seek two compatible device endpoints completed
-before Close, including one within 1.5 seconds before failure, and show the
-actual process/PSI and visible-policy windows alongside them. Missing evidence
-is not zero and post-Close work cannot replace the endpoint. If the single
-ordinary opportunity passes, report failure not reproduced and stop; do not
-repeat a success batch or claim a repair. Commit/push and the resulting real
-CI capture require separate authorization after local patch and code review.
+Report every authorized position with preparation, admission, startup/readiness,
+identity, native Close, cleanup and collection outcomes separately. Cancellation,
+zero starts, identity refusal, missing artifacts and a failed Close are outcomes;
+none is automatically a readiness-budget failure. Inspect evidence completeness
+before attributing a target failure. Missing, truncated or unpersisted records
+identify a collection gap. Complete but ambiguous records require named remaining
+hypotheses and a targeted next design, without invented historical attribution.
+For a useful budget-failed first start, seek two compatible device endpoints
+completed before Close, including one within 1.5 seconds before failure, and show
+the actual process/PSI and visible-policy windows alongside them. Missing evidence
+is not zero and post-Close work cannot replace the endpoint.
+
+This local preparation changes admission and documentation only. Commit/push
+and the resulting real CI capture require separate authorization after local
+patch and code review. A separately approved single ordinary push permits at
+most one enhanced push-Ubuntu first-selected startup opportunity at attempt one.
+Success, preparation failure, identity refusal, cancellation, zero starts,
+missing data or skipped admission consumes that position; there is no replacement,
+backfill, retry or warmup. Observe the authorized natural runs to terminal and
+stop at that limit. On success, report no failure observed in that opportunity
+and discard details under the existing policy. One opportunity is interim hosted
+qualification, not completion of repeated current-version stability assessment.
+
+An enhanced opportunity is distinct from a physical browser launch. A fully
+successful ordinary OS job can perform two official-server launches plus five
+entry-recovery new launches and one restart: up to eight physical launches,
+only its first official Linux operation enhanced-eligible. Conditional natural
+push/PR workflows across Ubuntu/macOS can produce four OS jobs and up to 32
+physical launches. These are static maxima, not observed launches or independent
+cold-start samples. Ordinary PR checks, both smoke flows and existing standard
+acceptance jobs retain their scope. At most two natural Ubuntu first official
+starts (push/PR) can be reported as separate observational positions if they run.
+Count them together only after actual checkout trees equal the approved candidate;
+a PR synthetic merge identity alone is insufficient. Record actual run, job,
+attempt, SHA/tree, environment versions and conditions, separating unlike cases.
+Later warm or entry-recovery starts do not increase first-start sample count,
+and an unarmed PR failure cannot replace the enhanced push position.
+
+A later finite repeated enhanced batch needs its own fixed tested bytes,
+environment, assigned positions/count, time and stop rules, evidence review and
+separate approval. An isolated Linux batch through the existing ordinary CLI
+would bypass this CI gate and needs trusted environment/toolchain/Chrome proof;
+each successful CLI also performs a second ordinary startup, up to two physical
+launches per enhanced position. Same-machine repeats may warm caches and do not
+establish hosted-Azure acceptance. A dedicated repeated hosted batch has no
+existing path and requires a separately reviewed admission/workflow/artifact/
+budget design. The six-slot logging/readahead studies disable enhanced capture
+under `startupStudy` and change conditions; they cannot substitute for repeated
+current private-interval/completed-I/O capture. No future batch or run is authorized
+by this preparation or by gate admission. A proven current defect fix can be
+accepted while the historical unique root cause remains unknown; finite success
+means only no failure observed in those recorded positions, never universal
+stability or proof of historical repair.
 
 ## Bounded Ubuntu startup study
 

@@ -13,6 +13,7 @@ import {
     runFixtureResource,
     subscribeFixtureDiagnostics,
     validateFixtureEvent,
+    validateLinuxIdentity,
 } from '../src/adapters/fixture-diagnostics.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createOperationRegistry } from '../src/application/operations.ts';
@@ -553,4 +554,187 @@ test('runtime EOF cleanup has independent scope even when gateway was born in an
     } finally {
         stop();
     }
+});
+
+function currentIntervalPayload() {
+    const calibration = {
+        beforeUtcMs: 1000500,
+        afterUtcMs: 1000500,
+        uptimeUpperNs: '1000509999999',
+        offset: { lowerNs: '-10000000', upperNs: '1000000' },
+    };
+    return {
+        model: 'linux-private-interval-v1',
+        mode: 'initial',
+        decision: 'initial-accepted',
+        timeBasis: 'source-stat-read-ended',
+        facts: {
+            pre: structuredClone(calibration),
+            post: structuredClone(calibration),
+            raw: { q: '100050', H: '100', bootSeconds: '0' },
+            requestUtcMs: 1000500,
+            decisionUtcMs: 1000500,
+            offset: { status: 'nonempty', lowerNs: '0', upperNs: '1000000' },
+            birth: {
+                branch: 'divide',
+                result: 'present',
+                readerUpperNs: '1000509999999',
+                interval: { lowerNs: '1000500000000', upperNs: '1000509999999' },
+            },
+            absolute: { lowerNs: '1000500000000', upperNs: '1000510999999' },
+            public: { branch: 'accepted', pointMs: '1000500' },
+            selectedMs: 1000500,
+        },
+    };
+}
+test('current interval nested decoder detaches recursively and accepted envelope bypasses legacy rejection', () => {
+    const payload = currentIntervalPayload();
+    const result = validateLinuxIdentity(payload);
+    assert.ok(result);
+    assert.notEqual(result.facts.pre, payload.facts.pre);
+    payload.facts.pre.offset.lowerNs = '42';
+    assert.equal(result.facts.pre?.offset.lowerNs, '-10000000');
+    assert.ok(Object.isFrozen(result.facts.pre?.offset));
+    const event = {
+        stage: 'process-creation-identity',
+        event: 'decision',
+        phase: 'process-identity',
+        outcome: 'observed',
+        timestampMs: 1,
+        durationMs: 0,
+        linuxIdentity: result,
+    };
+    assert.ok(validateFixtureEvent(event));
+    for (const change of [
+        { outcome: 'rejected' },
+        { stage: 'native-file' },
+        { creationToleranceMs: 1000 },
+        { error: { name: 'Error' } },
+        { phase: 'waiting-cdp' },
+    ])
+        assert.equal(validateFixtureEvent({ ...event, ...change }), undefined);
+});
+test('current interval validator rejects hostile descriptors, prototypes and canonical operand violations before conversion', () => {
+    let invoked = 0;
+    const good = currentIntervalPayload();
+    const hostile = [
+        null,
+        [],
+        Object.create({}),
+        { ...good, model: 'future' },
+        { ...good, extra: 1 },
+        { ...good, [Symbol('private')]: 1 },
+        { ...good, facts: { ...good.facts, path: '/private' } },
+        {
+            ...good,
+            facts: {
+                ...good.facts,
+                raw: {
+                    ...good.facts.raw,
+                    get uid() {
+                        invoked++;
+                        return 7;
+                    },
+                },
+            },
+        },
+        {
+            ...good,
+            facts: {
+                ...good.facts,
+                pre: Object.defineProperty({}, 'offset', {
+                    enumerable: true,
+                    get() {
+                        invoked++;
+                        return {};
+                    },
+                }),
+            },
+        },
+        { ...good, facts: { ...good.facts, birth: { ...good.facts.birth, interval: [] } } },
+    ];
+    for (const value of hostile) assert.equal(validateLinuxIdentity(value), undefined);
+    for (const value of ['-0', '+1', '01', ' 1', '1e3', '1.0', '9'.repeat(100000), '-1', '9007199254740992'])
+        assert.equal(
+            validateLinuxIdentity({ ...good, facts: { ...good.facts, raw: { q: value, H: '100', bootSeconds: '0' } } }),
+            undefined,
+        );
+    for (const value of ['18446744073709551616', '-1', '00'])
+        assert.equal(
+            validateLinuxIdentity({
+                ...good,
+                facts: { ...good.facts, birth: { ...good.facts.birth, readerUpperNs: value } },
+            }),
+            undefined,
+        );
+    for (const value of [NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '1000500'])
+        assert.equal(validateLinuxIdentity({ ...good, facts: { ...good.facts, requestUtcMs: value } }), undefined);
+    assert.equal(invoked, 0);
+});
+test('current interval validator enforces required and forbidden reached groups for every decision stage', () => {
+    const good = currentIntervalPayload();
+    const f = good.facts;
+    const initial = { pre: f.pre, raw: f.raw, requestUtcMs: f.requestUtcMs };
+    const post = { ...initial, post: f.post };
+    const derived = { ...post, offset: f.offset, birth: f.birth, decisionUtcMs: f.decisionUtcMs };
+    const candidate = { ...derived, absolute: f.absolute, public: f.public };
+    const cases = [
+        ['unregistered', 'no-launch', {}],
+        ['unselected', 'launch-check-threw', {}],
+        ['unselected', 'root-proof-rejected', {}],
+        ['established', 'established-changed', { raw: f.raw }],
+        ['established', 'established-accepted', { raw: f.raw, selectedMs: f.selectedMs }],
+        ['initial', 'boot-missing', { ...initial, raw: { q: '100050', H: '100' } }],
+        ['initial', 'post-calibration-threw', { ...initial, postFailure: { branch: 'read-or-abort' } }],
+        ...['post-launch-check-threw', 'clock-order-rejected', 'root-proof-changed'].map((d) => ['initial', d, post]),
+        ['initial', 'decision-clock-rejected', derived],
+        ['initial', 'interval-rejected', { ...derived, offset: { status: 'empty', lowerNs: '2', upperNs: '1' } }],
+        ...['readiness-check-threw', 'final-launch-check-threw', 'concurrent-changed'].map((d) => [
+            'initial',
+            d,
+            candidate,
+        ]),
+        ['initial', 'initial-accepted', f],
+    ];
+    for (const [mode, decision, facts] of cases) {
+        assert.ok(isRecord(facts));
+        const value = { ...good, mode, decision, facts };
+        assert.ok(validateLinuxIdentity(value), String(decision));
+        for (const key of Object.keys(facts)) {
+            const partial: Record<string, unknown> = { ...facts };
+            delete partial[key];
+            if (
+                key !== 'decisionUtcMs' ||
+                decision === 'initial-accepted' ||
+                String(decision).endsWith('check-threw') ||
+                decision === 'concurrent-changed'
+            )
+                assert.equal(
+                    validateLinuxIdentity({ ...value, facts: partial }),
+                    undefined,
+                    `${String(decision)} missing ${key}`,
+                );
+        }
+        for (const [key, item] of Object.entries(f)) {
+            if (!(key in facts))
+                assert.equal(validateLinuxIdentity({ ...value, facts: { ...facts, [key]: item } }), undefined);
+        }
+        assert.equal(validateLinuxIdentity({ ...value, facts: { ...facts, forbidden: 1 } }), undefined);
+        if (decision !== 'initial-accepted' && decision !== 'established-accepted')
+            assert.equal(validateLinuxIdentity({ ...value, facts: { ...facts, selectedMs: 1 } }), undefined);
+    }
+});
+
+test('current accepted public points retain Date range while a point rejection retains out-of-range N', () => {
+    const good = currentIntervalPayload();
+    const facts = { ...good.facts, public: { branch: 'accepted', pointMs: '8640000000000001' } };
+    assert.equal(validateLinuxIdentity({ ...good, facts }), undefined);
+    const { selectedMs: _selected, ...rejected } = facts;
+    assert.ok(
+        validateLinuxIdentity({
+            ...good,
+            decision: 'interval-rejected',
+            facts: { ...rejected, public: { branch: 'point-or-date-range-rejected', pointMs: '8640000000000001' } },
+        }),
+    );
 });

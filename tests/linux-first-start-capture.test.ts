@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import {
     drainFirstStart as drain,
@@ -8,6 +12,7 @@ import {
     createFirstStartHarness as harness,
     captureTick as tick,
 } from './fixtures/first-start-capture-fake.ts';
+import { createFixtureArtifacts, readFixtureProgress } from './smoke/fixture-artifacts.ts';
 import * as preload from './smoke/fixture-preload.ts';
 import { createLinuxFirstStartCapture } from './smoke/linux-first-start-capture.ts';
 import { createCaptureBudget, readFirstStartFile } from './smoke/linux-first-start-capture-io.ts';
@@ -1447,3 +1452,205 @@ test('parent queue time metrics require safe integers and independently reject c
         assert.equal(endpoint?.metrics, undefined, key);
     }
 });
+
+const privateAccepted = {
+    model: 'linux-private-interval-v1',
+    mode: 'established',
+    decision: 'established-accepted',
+    timeBasis: 'source-stat-read-ended',
+    facts: { raw: { q: '900', H: '100' }, selectedMs: 9000 },
+};
+const privateRejected = {
+    model: 'linux-private-interval-v1',
+    mode: 'unselected',
+    decision: 'root-proof-rejected',
+    timeBasis: 'source-stat-read-ended',
+    facts: {},
+};
+test('new receipt creation is direct, accepted status is exact, and mixed or wrapped models reject', () => {
+    const record = {
+        kind: 'linux-first-start-capture',
+        slot: 'creation-first-comparison',
+        status: 'complete',
+        atMs: 2,
+        creation: privateAccepted,
+    };
+    assert.ok(validateFirstStartCaptureRecord(record));
+    for (const change of [
+        { status: 'identity-invalid' },
+        { slot: 'creation-first-rejected' },
+        { creation: { linuxIdentity: privateAccepted } },
+        { creation: { ...privateAccepted, creationToleranceMs: 1000 } },
+        { creation: { ...privateAccepted, model: 'unknown' } },
+        { creation: { ...privateAccepted, facts: { ...privateAccepted.facts, post: {} } } },
+    ])
+        assert.equal(validateFirstStartCaptureRecord({ ...record, ...change }), undefined);
+    assert.ok(validateFirstStartCaptureRecord({ ...record, status: 'identity-invalid', creation: privateRejected }));
+});
+for (const outcome of ['failed', 'succeeded'] as const) {
+    test(`mixed variants share two sequence slots and ${outcome} retention policy`, async () => {
+        const h = harness();
+        h.begin();
+        h.event('process-creation-identity', 'decision', {
+            phase: 'process-identity',
+            outcome: 'observed',
+            timestampMs: 5,
+            linuxIdentity: privateAccepted,
+        });
+        h.event('process-creation-identity', 'decision', { ...creationReject, timestampMs: 5 });
+        h.event('process-creation-identity', 'decision', {
+            phase: 'process-identity',
+            outcome: 'rejected',
+            timestampMs: 1,
+            linuxIdentity: privateRejected,
+        });
+        h.event('readiness', 'end', { phase: 'waiting-cdp', outcome });
+        await tick();
+        assert.equal(h.records.filter((record) => record.creation).length, 0);
+        if (outcome === 'failed') {
+            h.event('native-close', 'end', { outcome: 'failed' });
+            await drain(h);
+        }
+        const records = h.records.filter((record) => record.creation);
+        assert.equal(records.length, outcome === 'failed' ? 2 : 0);
+        if (outcome === 'failed') {
+            assert.deepEqual(
+                records.map((record) => record.atMs),
+                [5, 5],
+            );
+            assert.deepEqual(
+                records.map((record) => record.status),
+                ['complete', 'identity-invalid'],
+            );
+            assert.deepEqual(records[0]?.creation, privateAccepted);
+        }
+        h.finish();
+    });
+}
+test('new failed capture without request END remains incomplete at finish', async () => {
+    const h = harness();
+    h.begin();
+    h.event('process-creation-identity', 'decision', {
+        phase: 'process-identity',
+        outcome: 'rejected',
+        linuxIdentity: privateRejected,
+    });
+    h.event('readiness', 'end', { phase: 'waiting-cdp', outcome: 'failed' });
+    h.event('native-close', 'begin');
+    h.finish();
+    await drain(h);
+    assert.equal(h.records.filter((record) => record.creation).length, 0);
+    assert.equal(
+        h.records.some((record) => record.slot === 'observer-terminal'),
+        false,
+    );
+});
+for (const close of ['settled', 'rejected', 'missing-end'] as const) {
+    test(`armed real preload persists failed owned readiness after ${close} and child stdin EOF/beforeExit`, async () => {
+        const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-current-preload-'));
+        try {
+            const parent = createFixtureArtifacts(directory, 'official-server', { firstStartCapture: true });
+            assert.equal(parent.snapshot().collectionRejected, false);
+            const preloadUrl = new URL('./smoke/fixture-preload.ts', import.meta.url);
+            preloadUrl.searchParams.set('directory', directory);
+            preloadUrl.searchParams.set('fixture', 'official-server');
+            preloadUrl.searchParams.set('collectionId', parent.snapshot().collectionId ?? '');
+            preloadUrl.searchParams.set('firstStartCapture', '1');
+            const urls = {
+                preload: preloadUrl.href,
+                adapter: new URL('../src/adapters/platform-process.ts', import.meta.url).href,
+                host: new URL('../src/adapters/target-host.ts', import.meta.url).href,
+                diagnostics: new URL('../src/adapters/fixture-diagnostics.ts', import.meta.url).href,
+            };
+            const script = `
+                import assert from 'node:assert/strict';
+                import { EventEmitter } from 'node:events';
+                import fs from 'node:fs/promises';
+                import { readFileSync } from 'node:fs';
+                import { syncBuiltinESMExports } from 'node:module';
+                Object.defineProperty(process, 'platform', { value: 'linux' });
+                const original = { open: fs.open, stat: fs.stat, realpath: fs.realpath };
+                for (const key of ['open', 'stat', 'realpath']) fs[key] = async (file, ...args) => {
+                    if (typeof file === 'string' && (file.startsWith('/proc/') || file.startsWith('/sys/'))) throw Object.assign(new Error('fake missing metadata'), { code: 'ENOENT' });
+                    return original[key](file, ...args);
+                };
+                syncBuiltinESMExports();
+                const config = ${JSON.stringify({ urls, directory, close, route: { ...firstStartRoute, pid: 42, port: 9222 } })};
+                await import(config.urls.preload);
+                const { createPlatformAdapter } = await import(config.urls.adapter);
+                const { createTargetHost } = await import(config.urls.host);
+                const { runFixtureObservation } = await import(config.urls.diagnostics);
+                let resolveEntered, releaseClose, rejectClose;
+                const entered = new Promise(resolve => { resolveEntered = resolve; });
+                const closeGate = new Promise((resolve, reject) => { releaseClose = resolve; rejectClose = reject; });
+                closeGate.catch(() => {});
+                let now = 1000500, closing = false, signals = 0, endpointCalls = 0, launchFailure;
+                const nativeCloseError = new Error('exact fake close read error');
+                const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null, monitoringFailure: '' });
+                const adapter = createPlatformAdapter({ platform: 'linux', now: () => now, unix: {
+                    currentUser: () => 7, readlink: async () => process.execPath,
+                    readText: async file => {
+                        if (closing && file === '/proc/42/stat') { resolveEntered(); await closeGate; }
+                        if (file === '/proc/uptime') return '1000.50 0.00\\n';
+                        if (file === '/proc/stat') return 'btime 0\\n';
+                        return '42 (chrome) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 100050\\n';
+                    },
+                    run: async command => ({ code: 0, stderr: '', stdout: command === 'getconf' ? '100' : command === 'ps' ? '42 1 7 Thu Jan  1 00:16:40 1970 chrome\\n' : 'p42\\nn127.0.0.1:9222\\n' }),
+                }, requestUnixClose: () => { signals++; child.exitCode = 0; child.emit('exit', 0); } });
+                const host = createTargetHost({ platformAdapter: { ...adapter, reservedRanges: async () => [] }, probe: async () => true,
+                    spawn: async (_exe, _args, _port, _cwd, _env, context) => { context?.onCreated?.(child); return child; },
+                    now: () => now, sleep: async () => { now += 20000; },
+                    getVersion: async () => { endpointCalls++; throw new Error('fake endpoint unavailable'); } });
+                const operation = runFixtureObservation({ ...config.route, action: 'start' }, () => host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }, {
+                    onRollback: () => { closing = true; },
+                })).catch(error => { launchFailure = error; });
+                await entered;
+                const lines = readFileSync(config.directory + '/official-server.events.ndjson', 'utf8').split('\\n').filter(Boolean).map(JSON.parse);
+                assert.equal(lines.some(record => record.creation), false, 'No retained payload before native request END.');
+                if (config.close === 'settled') { releaseClose(); await operation; assert.equal(signals, 1); }
+                if (config.close === 'rejected') { rejectClose(nativeCloseError); await operation; assert.equal(signals, 0); }
+                if (config.close !== 'missing-end') assert.ok(launchFailure instanceof Error);
+                assert.equal(endpointCalls, 1);
+                process.stdin.resume();
+                await new Promise(resolve => process.stdin.once('end', resolve));
+                console.log(JSON.stringify({ signals, endpointCalls, close: config.close }));
+            `;
+            const child = spawnSync(process.execPath, ['--input-type=module', '--eval', script], {
+                encoding: 'utf8',
+                input: '',
+                timeout: 8000,
+                env: { ...process.env, NODE_OPTIONS: '' },
+                windowsHide: true,
+            });
+            assert.ifError(child.error);
+            assert.equal(child.status, 0, child.stderr);
+            assert.ok(child.stdout.includes('"endpointCalls":1'));
+            const progress = readFixtureProgress(directory, 'official-server', true);
+            assert.equal(progress.invalidEvents, 0);
+            const creations = progress.firstStartCapture.filter((record) => record.creation);
+            assert.equal(creations.length, close === 'missing-end' ? 0 : 1);
+            if (close !== 'missing-end') {
+                assert.equal(Reflect.get(creations[0]?.creation ?? {}, 'decision'), 'initial-accepted');
+                assert.ok(
+                    progress.firstStartCapture.some(
+                        (record) => record.slot === 'first-start-outcome' && record.status === 'failed',
+                    ),
+                );
+                assert.ok(progress.firstStartCapture.some((record) => record.slot === 'observer-terminal'));
+            } else
+                assert.equal(
+                    progress.firstStartCapture.some((record) => record.slot === 'observer-terminal'),
+                    false,
+                );
+            const bytes = await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8');
+            assert.ok(
+                bytes
+                    .split('\n')
+                    .filter(Boolean)
+                    .every((line) => Buffer.byteLength(`${line}\n`) <= 4096),
+            );
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+}

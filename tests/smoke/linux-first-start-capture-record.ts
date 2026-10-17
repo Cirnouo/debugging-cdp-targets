@@ -1,4 +1,8 @@
-import { type CreationIdentityFields, validateCreationIdentityFields } from '../../src/adapters/fixture-diagnostics.ts';
+import {
+    type CreationIdentity,
+    linuxIdentityAccepted,
+    validateCreationIdentity,
+} from '../../src/adapters/fixture-diagnostics.ts';
 
 /** Closed, path-free test evidence. Slots are immutable and have one owner. */
 export const captureAuxiliarySlots = [
@@ -175,7 +179,7 @@ export interface FirstStartCaptureRecord {
     readonly limits?: Readonly<CaptureLimits>;
     readonly cost?: Readonly<Partial<Record<CaptureFamily, Readonly<CaptureCost>>>>;
     readonly slots?: readonly CaptureStatus[];
-    readonly creation?: Readonly<CreationIdentityFields>;
+    readonly creation?: CreationIdentity;
     readonly creationObservation?: Readonly<{
         stats: 'available' | 'unavailable';
         sourceAttempts?: number;
@@ -272,12 +276,14 @@ export function validateFirstStartCaptureRecord(value: unknown): FirstStartCaptu
                 )
             )
                 return;
-            const creation = validateCreationIdentityFields(fields.creation);
+            const creation = validateCreationIdentity(fields.creation);
             if (!creation) return;
             if (fields.slot === 'creation-first-rejected' && fields.status !== 'identity-invalid') return;
             if (
-                fields.status === 'complete' &&
-                (creation.creationComparisonStatus !== 'reached' || creation.creationBranch?.endsWith('rejected'))
+                'model' in creation
+                    ? (fields.status === 'complete') !== linuxIdentityAccepted(creation)
+                    : fields.status === 'complete' &&
+                      (creation.creationComparisonStatus !== 'reached' || creation.creationBranch?.endsWith('rejected'))
             )
                 return;
             fields.creation = creation;

@@ -1,4 +1,14 @@
-import { appendFileSync, closeSync, mkdirSync, openSync, readSync, rmdirSync, statSync } from 'node:fs';
+import {
+    appendFileSync,
+    closeSync,
+    fstatSync,
+    mkdirSync,
+    openSync,
+    readSync,
+    rmdirSync,
+    type Stats,
+    statSync,
+} from 'node:fs';
 import { validateFixtureEvent } from '../../src/adapters/fixture-diagnostics.ts';
 import { validateFirstStartCaptureRecord } from './linux-first-start-capture-record.ts';
 
@@ -253,7 +263,12 @@ export function createFixtureStreamQuota() {
 export function createArmedFixtureWriter(
     file: string,
     child: boolean,
-    io: { append?: (file: string, line: string) => void; release?: (directory: string) => void } = {},
+    io: {
+        append?: (file: string, line: string) => void;
+        release?: (directory: string) => void;
+        admitted?: (value: unknown, start: number, end: number) => void;
+        limited?: () => void;
+    } = {},
 ) {
     const quota = createFixtureStreamQuota();
     const attemptLimit = child ? 64 : 4;
@@ -263,6 +278,40 @@ export function createArmedFixtureWriter(
     let markerAttempts = 0;
     let scannedBytes = 0;
     let offset = 0;
+    let frontier = 0;
+    let observationLimited = false;
+    let identity: { dev: number; ino: number; birthtimeMs: number } | undefined;
+    function limitObservation() {
+        observationLimited = true;
+        try {
+            io.limited?.();
+        } catch {}
+    }
+    function observe(value: unknown, start: number, end: number) {
+        if (end <= frontier || observationLimited) return;
+        if (start !== frontier) {
+            limitObservation();
+            return;
+        }
+        try {
+            io.admitted?.(value, start, end);
+            frontier = end;
+        } catch {
+            limitObservation();
+        }
+    }
+    function continuous(metadata: Stats, minimum: number) {
+        if (metadata.size < minimum || !metadata.isFile()) return false;
+        if (
+            identity &&
+            (metadata.dev !== identity.dev ||
+                metadata.ino !== identity.ino ||
+                metadata.birthtimeMs !== identity.birthtimeMs)
+        )
+            return false;
+        identity ??= { dev: metadata.dev, ino: metadata.ino, birthtimeMs: metadata.birthtimeMs };
+        return true;
+    }
     let stopped = false;
     let exhausted = false;
     let ordinaryMarker = false;
@@ -313,7 +362,9 @@ export function createArmedFixtureWriter(
         try {
             mkdirSync(`${file}.lock`);
             ownsLock = true;
-            const size = statSync(file).size;
+            const metadata = statSync(file);
+            const size = metadata.size;
+            if (!continuous(metadata, Math.max(offset, frontier))) limitObservation();
             if (size < offset || size > 1024 * 1024) {
                 stopped = true;
                 exhausted = true;
@@ -341,8 +392,15 @@ export function createArmedFixtureWriter(
                 } finally {
                     closeSync(descriptor);
                 }
+                // Observation rejects undecodable bytes without changing writer admission.
+                try {
+                    new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+                } catch {
+                    limitObservation();
+                }
                 const tail = buffer.toString('utf8');
                 if (!tail.endsWith('\n')) throw new Error('Incomplete controlled stream.');
+                let lineOffset = offset;
                 for (const line of tail.slice(0, -1).split('\n')) {
                     const parsed: unknown = JSON.parse(line);
                     if (
@@ -355,9 +413,13 @@ export function createArmedFixtureWriter(
                     if (!quota.accept(parsed, Buffer.byteLength(line) + 1).accepted) {
                         stopped = true;
                         exhausted = true;
+                        limitObservation();
                         return false;
                     }
                     remember(parsed);
+                    const end = lineOffset + Buffer.byteLength(line) + 1;
+                    observe(parsed, lineOffset, end);
+                    lineOffset = end;
                 }
                 offset = size;
             }
@@ -376,6 +438,7 @@ export function createArmedFixtureWriter(
             (fallback ? appendFileSync : (io.append ?? appendFileSync))(file, line);
             quota.accept(value, Buffer.byteLength(line));
             remember(value);
+            observe(value, offset, offset + Buffer.byteLength(line));
             offset += Buffer.byteLength(line);
             return true;
         } catch {
@@ -409,6 +472,112 @@ export function createArmedFixtureWriter(
         },
         lastGateway() {
             return lastGateway;
+        },
+        finishObservation() {
+            const result = {
+                acquired: false,
+                incomplete: observationLimited,
+                writeFailed: false,
+                truncated: false,
+                scanBudget: false,
+                discontinuity: false,
+            };
+            if (stopped || attempts >= attemptLimit) {
+                exhausted = true;
+                result.incomplete = true;
+                result.scanBudget = true;
+                return result;
+            }
+            attempts++;
+            let ownsLock = false;
+            let descriptor: number | undefined;
+            try {
+                // One reservation: lock, path stat, open, handle stat, close, unlock.
+                // Cooperative append-only writers are required; an after-open pathname
+                // rebind with an unchanged opened handle is not observable here.
+                mkdirSync(`${file}.lock`);
+                ownsLock = true;
+                const metadata = statSync(file);
+                if (!continuous(metadata, Math.max(offset, frontier)) || offset !== frontier || observationLimited) {
+                    result.discontinuity = true;
+                    result.incomplete = true;
+                    limitObservation();
+                    return result;
+                }
+                const length = metadata.size - frontier;
+                if (metadata.size > 1024 * 1024 || length > 1024 * 1024 - scannedBytes) {
+                    result.scanBudget = true;
+                    result.truncated = true;
+                    result.incomplete = true;
+                    return result;
+                }
+                const buffer = Buffer.alloc(length);
+                descriptor = openSync(file, 'r');
+                let read = 0;
+                while (read < length) {
+                    const count = readSync(descriptor, buffer, read, length - read, frontier + read);
+                    scannedBytes += count;
+                    if (count === 0) throw new Error('Incomplete controlled stream.');
+                    read += count;
+                }
+                const handle = fstatSync(descriptor);
+                if (
+                    !continuous(handle, metadata.size) ||
+                    handle.size !== metadata.size ||
+                    handle.mtimeMs !== metadata.mtimeMs ||
+                    handle.ctimeMs !== metadata.ctimeMs
+                ) {
+                    result.discontinuity = true;
+                    result.incomplete = true;
+                    limitObservation();
+                    return result;
+                }
+                const tail = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+                if (tail && !tail.endsWith('\n')) throw new Error('Incomplete controlled stream.');
+                let lineOffset = frontier;
+                for (const line of tail ? tail.slice(0, -1).split('\n') : []) {
+                    const value: unknown = JSON.parse(line);
+                    const end = lineOffset + Buffer.byteLength(line) + 1;
+                    if (!quota.accept(value, end - lineOffset).accepted) {
+                        result.truncated = true;
+                        result.incomplete = true;
+                        limitObservation();
+                        return result;
+                    }
+                    remember(value);
+                    observe(value, lineOffset, end);
+                    lineOffset = end;
+                }
+                offset = metadata.size;
+                result.acquired = true;
+                result.incomplete ||= observationLimited;
+            } catch {
+                result.incomplete = true;
+                result.writeFailed = true;
+                writeFailed = true;
+            } finally {
+                if (descriptor !== undefined) {
+                    try {
+                        closeSync(descriptor);
+                    } catch {
+                        result.incomplete = true;
+                        result.writeFailed = true;
+                        writeFailed = true;
+                    }
+                }
+                if (ownsLock) {
+                    try {
+                        (io.release ?? rmdirSync)(`${file}.lock`);
+                    } catch {
+                        releaseFailed = true;
+                        writeFailed = true;
+                        result.incomplete = true;
+                        result.writeFailed = true;
+                        stopped = true;
+                    }
+                }
+            }
+            return result;
         },
         reserveReconstruction() {
             if (stopped || attempts >= attemptLimit) {

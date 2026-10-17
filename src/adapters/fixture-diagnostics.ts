@@ -411,7 +411,29 @@ function safeCreationField(key: string, value: unknown): boolean {
     return Number.isSafeInteger(value) && value >= (key === 'creationClkTck' ? 1 : 0);
 }
 function validCreation(selected: Record<string, unknown>): boolean {
-    if (selected.stage !== 'process-creation-identity') return creationKeys.every((key) => !(key in selected));
+    if (selected.stage !== 'process-creation-identity')
+        return !('linuxIdentity' in selected) && creationKeys.every((key) => !(key in selected));
+    if ('linuxIdentity' in selected) {
+        const value = validateLinuxIdentity(selected.linuxIdentity);
+        return (
+            !!value &&
+            selected.event === 'decision' &&
+            selected.phase === 'process-identity' &&
+            selected.outcome === (linuxIdentityAccepted(value) ? 'observed' : 'rejected') &&
+            Object.keys(selected).every((key) =>
+                [
+                    ...identityKeys,
+                    'linuxIdentity',
+                    'stage',
+                    'event',
+                    'phase',
+                    'outcome',
+                    'timestampMs',
+                    'durationMs',
+                ].includes(key),
+            )
+        );
+    }
     const allowed = [
         ...identityKeys,
         ...creationKeys,
@@ -538,7 +560,312 @@ export function validateCreationIdentityFields(value: unknown): Readonly<Creatio
     }
 }
 
+export type LinuxDiagnosticInterval = Readonly<{ lowerNs: string; upperNs: string }>;
+export type LinuxDiagnosticCalibration = Readonly<{
+    beforeUtcMs: number;
+    afterUtcMs: number;
+    uptimeUpperNs: string;
+    offset: LinuxDiagnosticInterval;
+}>;
+export const linuxIdentityDecisions = [
+    'no-launch',
+    'launch-check-threw',
+    'root-proof-rejected',
+    'established-changed',
+    'established-accepted',
+    'boot-missing',
+    'post-calibration-threw',
+    'post-launch-check-threw',
+    'clock-order-rejected',
+    'root-proof-changed',
+    'decision-clock-rejected',
+    'interval-rejected',
+    'readiness-check-threw',
+    'final-launch-check-threw',
+    'concurrent-changed',
+    'initial-accepted',
+] as const;
+export interface LinuxIdentityFacts {
+    pre?: LinuxDiagnosticCalibration;
+    post?: LinuxDiagnosticCalibration;
+    postFailure?: Readonly<{ branch: 'read-or-abort' | 'bracket-or-text-invalid' | 'uptime-out-of-range' }>;
+    raw?: Readonly<{ q: string; H: string; bootSeconds?: string }>;
+    requestUtcMs?: number;
+    decisionUtcMs?: number;
+    offset?: LinuxDiagnosticInterval & Readonly<{ status: 'nonempty' | 'empty' }>;
+    birth?: Readonly<{
+        branch: 'divide' | 'multiply-512' | 'multiply-9' | 'input-rejected';
+        result: 'present' | 'input-rejected' | 'zero-divisor' | 'range-rejected' | 'empty';
+        readerUpperNs: string;
+        interval?: LinuxDiagnosticInterval;
+    }>;
+    absolute?: LinuxDiagnosticInterval;
+    public?: Readonly<{
+        branch:
+            | 'invalid-clock'
+            | 'containment-or-order-rejected'
+            | 'point-or-date-range-rejected'
+            | 'date-roundtrip-rejected'
+            | 'accepted';
+        pointMs?: string;
+    }>;
+    selectedMs?: number;
+}
+export interface LinuxPrivateIntervalV1 {
+    readonly model: 'linux-private-interval-v1';
+    readonly mode: 'unregistered' | 'unselected' | 'initial' | 'established';
+    readonly decision: (typeof linuxIdentityDecisions)[number];
+    readonly timeBasis: 'source-stat-read-ended';
+    readonly facts: Readonly<LinuxIdentityFacts>;
+}
+export type CreationIdentity =
+    | Readonly<CreationIdentityFields>
+    | (LinuxPrivateIntervalV1 & { readonly [K in keyof CreationIdentityFields]?: never });
+const linuxFactKeys = [
+    'pre',
+    'post',
+    'postFailure',
+    'raw',
+    'requestUtcMs',
+    'decisionUtcMs',
+    'offset',
+    'birth',
+    'absolute',
+    'public',
+    'selectedMs',
+];
+function decimal(value: unknown, kind: 'N' | 'U' | 'S' = 'N'): value is string {
+    if (typeof value !== 'string' || value.length > 26 || !/^(?:0|-?[1-9][0-9]{0,24})$/.test(value)) return false;
+    if (kind === 'N') return true;
+    if (value.startsWith('-') || value.length > 20) return false;
+    return BigInt(value) <= (kind === 'U' ? 18446744073709551615n : 9007199254740991n);
+}
+function safeMs(value: unknown): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value);
+}
+function diagnosticInterval(value: unknown, unsigned = false): LinuxDiagnosticInterval | undefined {
+    const v = detachedRecord(value, ['lowerNs', 'upperNs']);
+    if (
+        !v ||
+        !decimal(v.lowerNs, unsigned ? 'U' : 'N') ||
+        !decimal(v.upperNs, unsigned ? 'U' : 'N') ||
+        BigInt(v.lowerNs) > BigInt(v.upperNs)
+    )
+        return;
+    return Object.freeze({ lowerNs: v.lowerNs, upperNs: v.upperNs });
+}
+function diagnosticCalibration(value: unknown): LinuxDiagnosticCalibration | undefined {
+    const v = detachedRecord(value, ['beforeUtcMs', 'afterUtcMs', 'uptimeUpperNs', 'offset']);
+    if (
+        !v ||
+        !safeMs(v.beforeUtcMs) ||
+        !safeMs(v.afterUtcMs) ||
+        v.beforeUtcMs < 0 ||
+        v.afterUtcMs < v.beforeUtcMs ||
+        !decimal(v.uptimeUpperNs, 'U')
+    )
+        return;
+    const offset = diagnosticInterval(v.offset);
+    if (!offset) return;
+    return Object.freeze({
+        beforeUtcMs: v.beforeUtcMs,
+        afterUtcMs: v.afterUtcMs,
+        uptimeUpperNs: v.uptimeUpperNs,
+        offset,
+    });
+}
+/** Closed reached facts, never a rerun of identity authorization. */
+export function validateLinuxIdentity(value: unknown): LinuxPrivateIntervalV1 | undefined {
+    try {
+        const v = detachedRecord(value, ['model', 'mode', 'decision', 'timeBasis', 'facts']);
+        if (
+            v?.model !== 'linux-private-interval-v1' ||
+            v.timeBasis !== 'source-stat-read-ended' ||
+            !member(['unregistered', 'unselected', 'initial', 'established'], v.mode) ||
+            !member(linuxIdentityDecisions, v.decision)
+        )
+            return;
+        const f = detachedRecord(v.facts, linuxFactKeys);
+        if (!f) return;
+        const facts: LinuxIdentityFacts = {};
+        for (const key of ['pre', 'post'] as const)
+            if (key in f) {
+                const item = diagnosticCalibration(f[key]);
+                if (!item) return;
+                facts[key] = item;
+            }
+        if ('raw' in f) {
+            const r = detachedRecord(f.raw, ['q', 'H', 'bootSeconds']);
+            if (
+                !r ||
+                !decimal(r.q, 'S') ||
+                !decimal(r.H, 'S') ||
+                r.H === '0' ||
+                ('bootSeconds' in r && !decimal(r.bootSeconds, 'S'))
+            )
+                return;
+            facts.raw = Object.freeze({
+                q: r.q,
+                H: r.H,
+                ...(typeof r.bootSeconds === 'string' ? { bootSeconds: r.bootSeconds } : {}),
+            });
+        }
+        for (const key of ['requestUtcMs', 'decisionUtcMs', 'selectedMs'] as const)
+            if (key in f) {
+                const item = f[key];
+                if (!safeMs(item) || (key === 'selectedMs' && !utc(item))) return;
+                facts[key] = item;
+            }
+        if ('postFailure' in f) {
+            const r = detachedRecord(f.postFailure, ['branch']);
+            if (!r || !member(['read-or-abort', 'bracket-or-text-invalid', 'uptime-out-of-range'], r.branch)) return;
+            facts.postFailure = Object.freeze({ branch: r.branch });
+        }
+        if ('offset' in f) {
+            const r = detachedRecord(f.offset, ['status', 'lowerNs', 'upperNs']);
+            if (
+                !r ||
+                !member(['empty', 'nonempty'], r.status) ||
+                !decimal(r.lowerNs) ||
+                !decimal(r.upperNs) ||
+                BigInt(r.lowerNs) <= BigInt(r.upperNs) !== (r.status === 'nonempty')
+            )
+                return;
+            facts.offset = Object.freeze({ status: r.status, lowerNs: r.lowerNs, upperNs: r.upperNs });
+        }
+        if ('birth' in f) {
+            const r = detachedRecord(f.birth, ['branch', 'result', 'readerUpperNs', 'interval']);
+            if (
+                !r ||
+                !member(['divide', 'multiply-512', 'multiply-9', 'input-rejected'], r.branch) ||
+                !member(['present', 'input-rejected', 'zero-divisor', 'range-rejected', 'empty'], r.result) ||
+                !decimal(r.readerUpperNs, 'U')
+            )
+                return;
+            const interval = 'interval' in r ? diagnosticInterval(r.interval, true) : undefined;
+            if (
+                (r.result === 'present') !== 'interval' in r ||
+                ('interval' in r && !interval) ||
+                (r.branch === 'input-rejected') !== (r.result === 'input-rejected') ||
+                (r.result === 'zero-divisor' && r.branch !== 'multiply-9') ||
+                (r.result === 'range-rejected' && !member(['multiply-512', 'multiply-9'], r.branch))
+            )
+                return;
+            facts.birth = Object.freeze({
+                branch: r.branch,
+                result: r.result,
+                readerUpperNs: r.readerUpperNs,
+                ...(interval ? { interval } : {}),
+            });
+        }
+        if ('absolute' in f) {
+            const r = diagnosticInterval(f.absolute);
+            if (!r) return;
+            facts.absolute = r;
+        }
+        if ('public' in f) {
+            const r = detachedRecord(f.public, ['branch', 'pointMs']);
+            if (
+                !r ||
+                !member(
+                    [
+                        'invalid-clock',
+                        'containment-or-order-rejected',
+                        'point-or-date-range-rejected',
+                        'date-roundtrip-rejected',
+                        'accepted',
+                    ],
+                    r.branch,
+                )
+            )
+                return;
+            const pointReached = member(
+                ['point-or-date-range-rejected', 'date-roundtrip-rejected', 'accepted'],
+                r.branch,
+            );
+            if (pointReached !== 'pointMs' in r || ('pointMs' in r && !decimal(r.pointMs))) return;
+            if (
+                member(['accepted', 'date-roundtrip-rejected'], r.branch) &&
+                typeof r.pointMs === 'string' &&
+                (BigInt(r.pointMs) < -8640000000000000n || BigInt(r.pointMs) > 8640000000000000n)
+            )
+                return;
+            facts.public = Object.freeze({
+                branch: r.branch,
+                ...(typeof r.pointMs === 'string' ? { pointMs: r.pointMs } : {}),
+            });
+        }
+        const d = v.decision;
+        let required: string[] = [];
+        let allowed: string[] = [];
+        if (d === 'no-launch') {
+            if (v.mode !== 'unregistered') return;
+        } else if (member(['launch-check-threw', 'root-proof-rejected'], d)) {
+            if (v.mode !== 'unselected') return;
+        } else if (member(['established-changed', 'established-accepted'], d)) {
+            if (v.mode !== 'established') return;
+            required = d === 'established-accepted' ? ['raw', 'selectedMs'] : ['raw'];
+            allowed = required;
+        } else {
+            if (v.mode !== 'initial') return;
+            required = ['raw', 'pre', 'requestUtcMs'];
+            allowed = [...required];
+            if (d === 'boot-missing') {
+                if (facts.raw?.bootSeconds !== undefined) return;
+            } else {
+                if (facts.raw?.bootSeconds === undefined) return;
+                if (d === 'post-calibration-threw') {
+                    required.push('postFailure');
+                    allowed.push('postFailure');
+                } else {
+                    required.push('post');
+                    allowed.push('post');
+                    if (!member(['post-launch-check-threw', 'clock-order-rejected', 'root-proof-changed'], d)) {
+                        required.push('offset', 'birth');
+                        allowed.push('offset', 'birth', 'decisionUtcMs');
+                        if (d !== 'decision-clock-rejected') {
+                            const entered = facts.offset?.status === 'nonempty' && facts.birth?.result === 'present';
+                            if (entered) {
+                                required.push('absolute', 'public');
+                                allowed.push('absolute', 'public');
+                            }
+                            if (d !== 'interval-rejected') {
+                                if (!entered || facts.public?.branch !== 'accepted') return;
+                                required.push('decisionUtcMs');
+                                if (d === 'initial-accepted') {
+                                    required.push('selectedMs');
+                                    allowed.push('selectedMs');
+                                }
+                            } else if (facts.public?.branch === 'accepted') return;
+                        }
+                    }
+                }
+            }
+        }
+        if (required.some((key) => !(key in f)) || Object.keys(f).some((key) => !allowed.includes(key))) return;
+        const result: LinuxPrivateIntervalV1 = Object.freeze({
+            model: v.model,
+            mode: v.mode,
+            decision: d,
+            timeBasis: v.timeBasis,
+            facts: Object.freeze(facts),
+        });
+        if (Buffer.byteLength(JSON.stringify(result)) > 3000) return;
+        return result;
+    } catch {
+        return;
+    }
+}
+export function linuxIdentityAccepted(value: LinuxPrivateIntervalV1): boolean {
+    return value.decision === 'initial-accepted' || value.decision === 'established-accepted';
+}
+export function validateCreationIdentity(value: unknown): CreationIdentity | undefined {
+    const current = validateLinuxIdentity(value);
+    return current ?? validateCreationIdentityFields(value);
+}
+
 export interface FixtureFields extends FixtureIdentity, CreationIdentityFields {
+    linuxIdentity?: LinuxPrivateIntervalV1;
     outcome?: FixtureOutcome;
     durationMs?: number | undefined;
     elapsedMs?: number;
@@ -615,6 +942,7 @@ const identityKeys = [
     'trigger',
 ] as const;
 const fieldKeys = [
+    'linuxIdentity',
     ...identityKeys,
     ...creationKeys,
     'outcome',
@@ -685,6 +1013,7 @@ function detachedRecord(value: unknown, keys: readonly string[]): Record<string,
     return result;
 }
 function safeField(key: string, value: unknown): boolean {
+    if (key === 'linuxIdentity') return validateLinuxIdentity(value) !== undefined;
     if (creationKeys.some((selected) => selected === key)) return safeCreationField(key, value);
     if (['entryId', 'operationId', 'originOperationId', 'requestId', 'connectionId', 'sessionId'].includes(key))
         return (
@@ -743,7 +1072,8 @@ function copyFields(value: FixtureFields): FixtureFields {
     const result: Record<string, unknown> = {};
     for (const key of fieldKeys) {
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
-        if (descriptor && 'value' in descriptor && safeField(key, descriptor.value)) result[key] = descriptor.value;
+        if (descriptor && 'value' in descriptor && safeField(key, descriptor.value))
+            result[key] = key === 'linuxIdentity' ? validateLinuxIdentity(descriptor.value) : descriptor.value;
     }
     return result;
 }
@@ -897,6 +1227,7 @@ function publishFixtureEvent(
     fields: FixtureFields,
     error?: unknown,
     creationFrame?: FixtureCreationFrame,
+    sourceStatEndedMs?: number,
 ): void {
     if (!observation.hasSubscribers) return;
     let payload: FixtureEvent;
@@ -911,7 +1242,7 @@ function publishFixtureEvent(
             stage,
             event,
             outcome: metadata.outcome ?? (event === 'begin' ? 'started' : event === 'end' ? 'succeeded' : 'observed'),
-            timestampMs: performance.now(),
+            timestampMs: sourceStatEndedMs ?? performance.now(),
             durationMs: metadata.durationMs ?? 0,
             ...(error === undefined ? {} : { error: errorMetadata(error) }),
         });
@@ -923,9 +1254,18 @@ function publishFixtureEvent(
     if (creationFrame && !fixtureCreationFrameActive(creationFrame)) return;
     observation.publish(payload);
 }
-export function emitFixtureCreationDecision(frame: FixtureCreationFrame, fields: FixtureFields): void {
+export function emitFixtureCreationDecision(
+    frame: FixtureCreationFrame,
+    fields: FixtureFields,
+    sourceStatEndedMs?: number,
+): void {
     if (!fixtureCreationFrameActive(frame)) return;
-    publishFixtureEvent('process-creation-identity', 'decision', fields, undefined, frame);
+    if (
+        sourceStatEndedMs !== undefined &&
+        (!fields.linuxIdentity || !Number.isFinite(sourceStatEndedMs) || sourceStatEndedMs < 0)
+    )
+        return;
+    publishFixtureEvent('process-creation-identity', 'decision', fields, undefined, frame, sourceStatEndedMs);
 }
 type Finish = (outcome: FixtureOutcome, fields?: FixtureFields, error?: unknown) => void;
 const unobservedFinish: Finish = () => {};
@@ -1144,6 +1484,7 @@ export function reserveFixtureCreationObservation(
     source: boolean,
     previous?: FixtureCreationFrame,
     resourceIdentity?: Pick<FixtureIdentity, 'pid' | 'port'>,
+    requireSourceOrigin = false,
 ): FixtureCreationFrame | undefined {
     let registry: CreationRegistry | undefined;
     try {
@@ -1165,6 +1506,14 @@ export function reserveFixtureCreationObservation(
         }
         if (!available) return;
         const origin = captureCreationOrigin(resourceIdentity);
+        if (
+            requireSourceOrigin &&
+            (!previous ||
+                !sameFixtureOrigin(previous.origin, origin) ||
+                origin.pid !== resourceIdentity?.pid ||
+                origin.port !== resourceIdentity?.port)
+        )
+            return;
         for (const request of registry.requests) {
             if (!isCreationRequest(request)) {
                 registry.bookkeepingFailed = true;

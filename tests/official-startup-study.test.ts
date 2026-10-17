@@ -22,6 +22,11 @@ async function installStudyBoundary() {
     assert.ok(traceFile);
     process.on('exit', () => writeFileSync(traceFile, JSON.stringify(trace)));
     Object.defineProperty(process, 'platform', { value: process.env.STUDY_PLATFORM ?? 'linux' });
+    Object.defineProperty(process, 'getuid', { value: () => 1000, configurable: true });
+    process.kill = (pid, signal) => {
+        note('native-signal', { pid, signal });
+        return true;
+    };
     const entryId = '11111111-1111-4111-8111-111111111111';
     let target: Record<string, unknown> | undefined;
     let directory: string | undefined;
@@ -29,6 +34,13 @@ async function installStudyBoundary() {
     let operation: Record<string, unknown> | undefined;
     const deleted = new Set<string>();
     const failure = process.env.STUDY_FAILURE;
+    let rawTicks = '12345';
+    const procText = (file: string) => {
+        assert.ok(target?.processId === 4100, 'Native proc reads require the current simulated owned target.');
+        if (file === '/proc/stat') return 'btime 1700000000\n';
+        assert.equal(file, '/proc/4100/stat');
+        return `4100 (chrome child ) name) S ${Array(18).fill('0').join(' ')} ${rawTicks} ${Array(30).fill('0').join(' ')}\n`;
+    };
     let readaheadValue = 256;
     let createArtifacts: typeof import('./smoke/fixture-artifacts.ts').createFixtureArtifacts | undefined;
     let gatewayArtifacts: ReturnType<typeof import('./smoke/fixture-artifacts.ts').createFixtureArtifacts> | undefined;
@@ -37,6 +49,33 @@ async function installStudyBoundary() {
     const scratchIdentity = { dev: 7, ino: 8, isDirectory: () => true, isSymbolicLink: () => false };
     const privateFs = {
         ...filesystem,
+        async open(file: string, flags: string) {
+            assert.equal(flags, 'r');
+            const text = Buffer.from(procText(file));
+            note('native-proc-open', file);
+            let position = 0;
+            let closed = false;
+            return {
+                async read(buffer: Buffer, offset: number, length: number, requestedPosition: null) {
+                    assert.equal(closed, false);
+                    assert.equal(requestedPosition, null);
+                    assert.ok(length > 0 && length <= (file === '/proc/stat' ? 262_145 : 16_385));
+                    const bytesRead = text.copy(buffer, offset, position, position + length);
+                    position += bytesRead;
+                    note('native-proc-read', { file, bytesRead });
+                    return { bytesRead, buffer };
+                },
+                async close() {
+                    closed = true;
+                    note('native-proc-close', file);
+                },
+            };
+        },
+        async readlink(file: string) {
+            assert.equal(file, '/proc/4100/exe');
+            note('native-readlink', file);
+            return '/synthetic/chrome';
+        },
         async access(file: string) {
             note('executable-access', file);
         },
@@ -173,6 +212,43 @@ async function installStudyBoundary() {
         throw new Error(`Unexpected tool ${name}`);
     }
     function spawn(executable: string, args: string[], options: unknown) {
+        if (['ps', 'lsof', 'getconf'].includes(executable)) {
+            assert.ok(target?.processId === 4100, 'Native commands require the current simulated owned target.');
+            note('native-command', { executable, args, options });
+            let output: string;
+            if (executable === 'ps') {
+                assert.deepEqual(args, ['-ww', '-axo', 'pid=,ppid=,uid=,lstart=,comm=']);
+                output = '4100 1 1000 Tue Nov 14 22:15:23 2023 /synthetic/chrome\n';
+            } else if (executable === 'getconf') {
+                assert.deepEqual(args, ['CLK_TCK']);
+                output = '100\n';
+            } else if (args.includes('txt')) {
+                assert.deepEqual(args, ['-a', '-p', '4100', '-d', 'txt', '-FfDin']);
+                output = 'p4100\nftxt\nD0x801\ni1\nn/synthetic/chrome\n';
+            } else {
+                assert.deepEqual(args, ['-nP', '-iTCP:19222', '-sTCP:LISTEN', '-Fpn']);
+                output = `p${failure === 'native-listener-foreign' ? 4200 : 4100}\nn127.0.0.1:19222\n`;
+            }
+            const child = Object.assign(new EventEmitter(), {
+                stdin: null,
+                stdout: new PassThrough(),
+                stderr: new PassThrough(),
+                exitCode: null as number | null,
+                signalCode: null,
+                kill: () => {
+                    assert.fail('The immediately completed native inspection child should not be killed.');
+                },
+                unref: () => {},
+            });
+            queueMicrotask(() => {
+                child.stdout.end(output);
+                child.stderr.end();
+                child.exitCode = 0;
+                child.emit('exit', 0, null);
+                child.emit('close', 0, null);
+            });
+            return child;
+        }
         note('spawn', { executable, args, options });
         if (executable === '/usr/bin/sudo') {
             const stdout = new PassThrough();
@@ -257,20 +333,6 @@ async function installStudyBoundary() {
         });
         return child;
     }
-    const snapshot = async (pid: number, port: number) => {
-        note('native-snapshot', { pid, port });
-        return {
-            root: {
-                exists: true,
-                executablePath: '/synthetic/chrome',
-                sessionId: 1000,
-                startedAtUtc: '2026-10-13T00:00:00.000Z',
-            },
-            currentSessionId: 1000,
-            processIds: [4100],
-            listeners: [{ localAddress: '127.0.0.1', owningProcess: 4100 }],
-        };
-    };
     Object.defineProperty(globalThis, '__studyBoundary', {
         value: {
             privateFs,
@@ -302,7 +364,6 @@ async function installStudyBoundary() {
                 },
             },
             path: path.posix,
-            createPlatformAdapter: () => ({ snapshot }),
             async readChromeSmokeProfile(fixture: unknown) {
                 note('profile-probe', fixture);
                 if (failure === 'profile' || failure === 'profile-and-cleanup')
@@ -313,6 +374,8 @@ async function installStudyBoundary() {
     });
     globalThis.fetch = async (url) => {
         note('endpoint', url);
+        assert.equal(String(url), 'http://127.0.0.1:19222/json/version');
+        if (failure === 'native-q-change') rawTicks = '12346';
         return new Response(
             JSON.stringify({
                 Browser: failure === 'version' ? 'Chrome/148.0.0.0' : 'Chrome/154.0.8037.93',
@@ -325,13 +388,14 @@ async function installStudyBoundary() {
     registerHooks({
         resolve(specifier, context, next) {
             const parent = context.parentURL ?? '';
-            const privateModule = /\/(?:official-server|chrome-host|chrome-startup|linux-readahead-study)\.ts$/.test(
-                parent,
-            );
+            const privateModule =
+                /\/(?:official-server|chrome-host|chrome-startup|linux-readahead-study|linux-chrome-external-close|platform-process)\.ts$/.test(
+                    parent,
+                );
             let source: string | undefined;
             if (privateModule && specifier === 'node:fs/promises')
                 source =
-                    "export * from 'node:fs/promises'; export const { access, stat, mkdtemp, realpath, readdir, lstat, rm } = globalThis.__studyBoundary.privateFs;";
+                    "export * from 'node:fs/promises'; export default globalThis.__studyBoundary.privateFs; export const { access, stat, mkdtemp, realpath, readdir, lstat, rm, open, readlink } = globalThis.__studyBoundary.privateFs;";
             if (parent.endsWith('/linux-readahead-study.ts') && specifier === './linux-startup-wait.ts') {
                 const actual = next(specifier, context).url;
                 source =
@@ -342,14 +406,7 @@ async function installStudyBoundary() {
             if (privateModule && specifier === 'node:path') source = 'export default globalThis.__studyBoundary.path;';
             if (specifier === 'node:child_process')
                 source =
-                    "export * from 'node:child_process'; export const { spawn, spawnSync } = globalThis.__studyBoundary.childProcess;";
-            if (parent.endsWith('/chrome-host.ts') && specifier.endsWith('/platform-process.ts')) {
-                const actual = next(specifier, context).url;
-                source =
-                    'export * from ' +
-                    JSON.stringify(actual) +
-                    '; export const createPlatformAdapter = globalThis.__studyBoundary.createPlatformAdapter;';
-            }
+                    "export * from 'node:child_process'; export default globalThis.__studyBoundary.childProcess; export const { spawn, spawnSync } = globalThis.__studyBoundary.childProcess;";
             if (parent.endsWith('/chrome-host.ts') && specifier === './chrome-profile-probe.ts')
                 source = 'export const readChromeSmokeProfile = globalThis.__studyBoundary.readChromeSmokeProfile;';
             if (source && !parent.startsWith('data:')) return { url: virtual(source), shortCircuit: true };
@@ -626,9 +683,24 @@ if (process.env.STUDY_TRACE) {
             assert.equal(calls(result, 'take_snapshot').length, 0);
             assert.deepEqual(
                 result.trace
-                    .filter((item) => ['native-snapshot', 'endpoint', 'profile-probe'].includes(item.event))
-                    .map((item) => item.event),
-                ['native-snapshot', 'endpoint', 'native-snapshot', 'profile-probe'],
+                    .filter((item) => ['native-proc-open', 'endpoint', 'profile-probe'].includes(item.event))
+                    .map((item) => (item.event === 'native-proc-open' ? item.detail : item.event)),
+                ['/proc/4100/stat', '/proc/4100/stat', '/proc/stat', 'endpoint', '/proc/4100/stat', 'profile-probe'],
+            );
+            const native = result.trace.filter((item) => item.event === 'native-command');
+            assert.deepEqual(
+                native.map((item) => isRecord(item.detail) && item.detail.executable),
+                ['ps', 'getconf', 'lsof', 'getconf', 'getconf'],
+            );
+            assert.ok(
+                native.every(
+                    (item) =>
+                        isRecord(item.detail) && isRecord(item.detail.options) && item.detail.options.shell === false,
+                ),
+            );
+            assert.deepEqual(
+                result.trace.filter((item) => item.event === 'native-signal'),
+                [],
             );
             assert.equal(result.trace.filter((item) => item.event === 'display-preflight').length, 1);
             assert.equal(result.trace.filter((item) => item.event === 'gateway-exit').length, 1);
@@ -735,6 +807,26 @@ if (process.env.STUDY_TRACE) {
                 assert.match(result.stderr, /Error: Profile observation failed/);
                 assert.ok(Array.isArray(result.summary.secondary) && result.summary.secondary.length > 0);
             }
+        }
+    });
+
+    test('Linux study uses actual raw identity and listener validators before profile acceptance', async () => {
+        for (const [failure, message] of [
+            ['native-q-change', /raw identity bracket changed/],
+            ['native-listener-foreign', /listener owner does not belong/],
+        ] as const) {
+            const result = await invoke(study('off'), { collection: 'valid', failure });
+            assert.notEqual(result.status, 0, result.stderr);
+            assert.match(result.stderr, message);
+            assert.equal(calls(result, 'dct_connection_start').length, 1);
+            assert.equal(calls(result, 'dct_connection_stop').length, 1);
+            assert.equal(result.trace.filter((item) => item.event === 'profile-probe').length, 0);
+            assert.equal(result.trace.filter((item) => item.event === 'endpoint').length, 1);
+            assert.deepEqual(
+                result.trace.filter((item) => item.event === 'native-signal'),
+                [],
+            );
+            assert.equal(result.summary?.state, 'failed');
         }
     });
 
