@@ -42,7 +42,7 @@ if (!address || typeof address === 'string') throw new Error('Missing fixture li
 const runtime = await startPluginRuntime({
     loadCatalog: async (tools = []) =>
         createToolCatalog({
-            version: '1.10.1',
+            version: '1.11.0',
             tools: tools.map((tool) => ({ name: tool.name, requires: {}, variants: [tool] })),
         }),
     createRouter: async () => {

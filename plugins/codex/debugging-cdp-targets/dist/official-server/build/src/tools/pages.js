@@ -46,6 +46,7 @@ export const selectPage = defineTool((args) => ({
     verifyFilesSchema: {},
     handler: async (request, response, context) => {
         const page = context.getPageById(request.params.pageId);
+        await page.init();
         context.selectPage(page);
         response.setIncludePages(true);
         response.setListThirdPartyDeveloperTools();
@@ -113,6 +114,7 @@ export const newPage = defineTool((args) => {
             validateUrl(request.params.url, {
                 javascriptEvaluation: args?.javascriptEvaluation,
                 categoryExtensions: args?.categoryExtensions,
+                fileNavigations: args?.fileNavigations,
             });
             const page = await context.newPage(request.params.background, request.params.isolatedContext);
             await page.waitForEventsAfterAction(async () => {
@@ -174,6 +176,7 @@ export const navigatePage = definePageTool((args) => {
                 validateUrl(request.params.url, {
                     javascriptEvaluation: args?.javascriptEvaluation,
                     categoryExtensions: args?.categoryExtensions,
+                    fileNavigations: args?.fileNavigations,
                 });
             }
             let initScriptId;
@@ -260,8 +263,8 @@ export const resizePage = definePageTool(() => ({
         readOnlyHint: false,
     },
     schema: {
-        width: zod.number().describe('Page width'),
-        height: zod.number().describe('Page height'),
+        width: zod.number().int().positive().describe('Page width'),
+        height: zod.number().int().positive().describe('Page height'),
     },
     blockedByDialog: false,
     verifyFilesSchema: {},

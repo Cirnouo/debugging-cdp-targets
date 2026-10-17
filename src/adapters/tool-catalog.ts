@@ -31,7 +31,7 @@ function distinct<T>(items: T[]): T[] {
     return [...new Map(items.map((item) => [JSON.stringify(item), item])).values()];
 }
 export function createToolCatalog(value: unknown) {
-    if (!isRecord(value) || value.version !== '1.10.1' || !Array.isArray(value.tools))
+    if (!isRecord(value) || value.version !== '1.11.0' || !Array.isArray(value.tools))
         throw new Error('Invalid fixed official tool catalog.');
     const entries = new Map<string, Entry>();
     for (const input of value.tools) {

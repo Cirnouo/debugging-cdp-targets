@@ -1,15 +1,15 @@
 {
     "schemaVersion": 1,
     "name": "chrome-devtools-mcp",
-    "version": "1.10.1",
+    "version": "1.11.0",
     "registry": "https://registry.npmjs.org",
-    "tarball": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.10.1.tgz",
-    "integrity": "sha512-Klw6HWDqHC/XS1JwZldd2r49aUhbUJN9m9Mvcx4SEueIPXtzuQX+QelxAViobv8YUkDZ7HWDrmViR6LeYK0wAw==",
+    "tarball": "https://registry.npmjs.org/chrome-devtools-mcp/-/chrome-devtools-mcp-1.11.0.tgz",
+    "integrity": "sha512-CytJ/5tnzrS+J/74be2P5aCOsS/mmGRHys/Si+IYC4ucrbnWAmES/dYdxGJjeUCECRcoFUilZAysdjlwqUjXIA==",
     "bin": "build/src/bin/chrome-devtools-mcp.js",
     "source": {
         "repository": "https://github.com/ChromeDevTools/chrome-devtools-mcp",
-        "tag": "chrome-devtools-mcp-v1.10.1",
-        "commit": "e52c6b59b476c5e04d8dd9fd4bd017ba3b3d65df"
+        "tag": "chrome-devtools-mcp-v1.11.0",
+        "commit": "a878bcad39584337e055778353246820deafa7c0"
     },
     "files": [
         {
@@ -24,38 +24,43 @@
         },
         {
             "path": "build/src/BrowserManager.js",
-            "sha256": "e8ad9ae18a6836a0e56771afbf453b4b9ea1d384b4b0db9fccca04300a9fa222",
-            "bytes": 16072
+            "sha256": "bd7e2f4b2ccf2f0f8b63b479c61b4d3faa3a80f250657b19ceb7ceb5cd8681c1",
+            "bytes": 21806
         },
         {
             "path": "build/src/McpContext.js",
-            "sha256": "853f5a06c6dca9fb2967a1350ceb7725cd7fb8f0d2a6d13f410143f3dba08a23",
-            "bytes": 25168
+            "sha256": "65c9ff0cafc217f69119a1c5aa6435a3d6309367987d601a2205cd12726e90e6",
+            "bytes": 27403
         },
         {
             "path": "build/src/McpPage.js",
-            "sha256": "d49b2666cb9c6c5b4d7b9130235c476cb8a3af580363ff224796d9dbde99538d",
-            "bytes": 34709
+            "sha256": "ad350b4b067b7c8e34706488d543869e71a7bcba73f2df45e35f7d518469f358",
+            "bytes": 43912
         },
         {
             "path": "build/src/McpResponse.js",
-            "sha256": "2e975bf142b12d292f7d43b2bd1453174c2b93b3913d255037abf0b31b2fc6ba",
-            "bytes": 46475
+            "sha256": "7d266ccf36b96b5f0801668d46d2fb57b88f4ec4e3ebe51820d4a82a24954100",
+            "bytes": 54889
+        },
+        {
+            "path": "build/src/McpWorker.js",
+            "sha256": "d3a983458613f5c4681cb46df91423d792d586fe7dd64d7a953c0b2b3b95b480",
+            "bytes": 2126
         },
         {
             "path": "build/src/SlimMcpResponse.js",
-            "sha256": "eb5be8144643e1aa3c3ab335c974fcd7dfd60088102bf90c9dca11d59ffe669c",
-            "bytes": 470
+            "sha256": "caa4638b3e5fb61d055f3f5b49aa575da4c3fa1a3df8a6ddc978c84daa7ad27e",
+            "bytes": 643
         },
         {
             "path": "build/src/TextSnapshot.js",
-            "sha256": "f3496989b93d174723fcf394628fabc36936b37e6a815fd85cbe20fba46d5ea0",
-            "bytes": 13258
+            "sha256": "c81a4b9d989524256d365e252c2610ec1e8d8883f976da18e4d6b115e274b83d",
+            "bytes": 13282
         },
         {
             "path": "build/src/ToolHandler.js",
-            "sha256": "c2b1000dabc7c3bebba97561402e5496d0317a48c893e8eae0582a8293f948ff",
-            "bytes": 12965
+            "sha256": "68866f08049958ada77eaafc850d65d7664f60cd370fdae5b56749caffa95e4f",
+            "bytes": 14819
         },
         {
             "path": "build/src/bin/check-latest-version.js",
@@ -64,18 +69,18 @@
         },
         {
             "path": "build/src/bin/chrome-devtools-mcp-main.js",
-            "sha256": "10603ea8c2ac9f69a42791100701795018ebfaa522a7c93d783ed583cce5cce4",
-            "bytes": 2972
+            "sha256": "68bffbf26cf0e8840409079456a7681c03e737cd977935c2e0c424c1b8a0700a",
+            "bytes": 2992
         },
         {
             "path": "build/src/bin/chrome-devtools-mcp.js",
-            "sha256": "9f380d06e1ac05b257e27e708c0cc4b4ba190e285ed6eb6c8aa50978d98a12c5",
+            "sha256": "e8b0290a8fe9a1edc31d595ccc870df926bfaaafe19fb14cd4d8d47bf6194979",
             "bytes": 942
         },
         {
             "path": "build/src/bin/chrome-devtools.js",
-            "sha256": "341d8676fc5de9977fba7871439aa02e284c0a674c0b2f6d1e71f7be27857842",
-            "bytes": 8814
+            "sha256": "dbdee4874170c238fe3da51e6f685ca495cb0a3671afccec2420667ef2ab7b9f",
+            "bytes": 9029
         },
         {
             "path": "build/src/collectors/PageCollector.js",
@@ -84,43 +89,68 @@
         },
         {
             "path": "build/src/collectors/ServiceWorkerCollector.js",
-            "sha256": "19b54696f20e20af47636beafe3c2d3ff2963ace13a0ffef1857ad9197ac1b29",
-            "bytes": 5796
+            "sha256": "b26bd92bc7af2b339831aa4b871081492bc432c23e5eae05b76e890bd43a2f3d",
+            "bytes": 6068
+        },
+        {
+            "path": "build/src/config/ConfigLocator.js",
+            "sha256": "f53857a8312728953793b78c7f5611fff5cf2b3cdd285afc1f5948eda8083635",
+            "bytes": 2532
+        },
+        {
+            "path": "build/src/config/ConfigParser.js",
+            "sha256": "783a1b1efac76623c0aada341922dc5c8de3d120805d7419ea5ff8679ebbb96f",
+            "bytes": 10466
+        },
+        {
+            "path": "build/src/config/ConfigWatcher.js",
+            "sha256": "eb1d1bbbf5c7fcf310aae2fdb6660cc861752050c3108dbd2e945e505050ae71",
+            "bytes": 3160
         },
         {
             "path": "build/src/config/browser-options.js",
-            "sha256": "b0ef484ea18c99bc7a025bb9f7961da003811c3bd2c323f2ac5b68081169f29e",
-            "bytes": 4813
+            "sha256": "5585088c69550b6dba3fb01c389e4c69e2cceeb5f575461e7ada47e53dd58304",
+            "bytes": 4405
         },
         {
             "path": "build/src/config/category-options.js",
-            "sha256": "bb7ad29cb271d3547ed2d8bffdf4a7c0b9ad135c3a6bae5146b514da1c78731c",
-            "bytes": 3083
+            "sha256": "a35a7a0f5339398cce469d383d0f92fb6ab8bc8f3c5c18442bca3e2cf750f966",
+            "bytes": 2933
         },
         {
             "path": "build/src/config/cli-commands.js",
-            "sha256": "ff371bf31b576a87e7dcb027df70e2242bbb158d882e4f914052d70c5d20be28",
-            "bytes": 806
+            "sha256": "44014787be92214d5bb806294bad33dfa1ba9ad4d89b2b21140b93a33dc6c0f9",
+            "bytes": 6114
         },
         {
             "path": "build/src/config/cli-options.js",
-            "sha256": "231e80f95a449bb09dc35dbb22a381a21ea30c90c251c10d97380477a951e206",
-            "bytes": 59705
+            "sha256": "ee4a8806bd0d9b02f6d8ba76b4c6393353d9d2eeb00644e9e77a0088000e486d",
+            "bytes": 74938
         },
         {
             "path": "build/src/config/mcp-options.js",
-            "sha256": "7f7f70ec0baf7006af6690ef7a5425b78ab311f40558d67cc78e5a95fde8c505",
-            "bytes": 18141
+            "sha256": "c7b81dba30c2dadd473ac88791877d26a0fa7926ca729b9abc95adbe812b6cda",
+            "bytes": 14575
+        },
+        {
+            "path": "build/src/config/puppeteer-options.js",
+            "sha256": "93aa39b9b08b2df78ed1ef1c1bb836cf0ace2331d20c3f705ec107d865d59d79",
+            "bytes": 3241
+        },
+        {
+            "path": "build/src/config/tool-options.js",
+            "sha256": "2aa58141dca7a3b3ec9791979aaa1bfa62ce2d686e26e737ad4a22213e26371b",
+            "bytes": 2718
         },
         {
             "path": "build/src/daemon/client.js",
-            "sha256": "fc6500be58f2de1c941d66171a43fa8bf796cbea9420575bd8b299ff4e66f1a1",
-            "bytes": 7754
+            "sha256": "2be47dd9e36ed35a164f3b5db5a37a748ee7a508b29a28384de3a34b06450d2a",
+            "bytes": 8816
         },
         {
             "path": "build/src/daemon/daemon.js",
-            "sha256": "eab00479391fece6afe0d45afe564bf0e9e8b4f461d7ec5c9f9bfe9aefacf7fa",
-            "bytes": 8630
+            "sha256": "f3e064c2b8bdfa2787d3f4067981f8731118c52d98e1e1b9e549b8814f728eff",
+            "bytes": 9313
         },
         {
             "path": "build/src/daemon/types.js",
@@ -129,23 +159,23 @@
         },
         {
             "path": "build/src/daemon/utils.js",
-            "sha256": "6769ad4523dfe5f65b7650117135393918146866ccb5f7d583afc271512e7f7b",
-            "bytes": 4796
+            "sha256": "f560c806e079a2c3758b280abaea21a44433580662db5ce1daad638828f4fc25",
+            "bytes": 5696
         },
         {
             "path": "build/src/devtools/DevToolsCommentBridge.js",
-            "sha256": "3b162d874b1cdb052cbc1b2da8d0f2d2b221e62ae016a70c68ceb2994c8eb01a",
-            "bytes": 3358
+            "sha256": "e463b2e6ef2ae7b38153fac576ac4f27f2227de2a03cefdd6f1874a7364241ac",
+            "bytes": 4865
         },
         {
             "path": "build/src/devtools/DevtoolsUtils.js",
-            "sha256": "de03730a2a94bc1bf43b7d17748e79490e74b145e31c607e91bf8e67b8c46fa5",
-            "bytes": 13188
+            "sha256": "5129ad8d9dcacfa8681bd8bc65459def45c5b3b02de87141202a25ce77e17a1c",
+            "bytes": 13206
         },
         {
             "path": "build/src/devtools/McpHostBindingAdapter.js",
-            "sha256": "ec6eba6406bd14745ab322c327c3fe4c6ba43e6b4b2383fe650c1d1f1b215c38",
-            "bytes": 4331
+            "sha256": "1b87a5bcb5eb5a2ba4a32a3559c888ee02efc05c3e6e6f7c45f75f8eb088930b",
+            "bytes": 4273
         },
         {
             "path": "build/src/devtools/issueDescriptions.js",
@@ -154,63 +184,63 @@
         },
         {
             "path": "build/src/formatters/CommentFormatter.js",
-            "sha256": "a80d28a185aaeaecaf7ebf51c72ad551cf1796e15c63797132fb83a9e40a5c71",
-            "bytes": 2587
+            "sha256": "f41a740b2dd71a59e2681dd866dd83e4126902db79824f404372605ea41d1000",
+            "bytes": 2238
         },
         {
             "path": "build/src/formatters/ConsoleFormatter.js",
-            "sha256": "971722391a311526ceb5c795a4979cec62c7069ed58d4d5cba0ea00b4509b4ae",
-            "bytes": 11251
+            "sha256": "ecc178207f1b7b927a15de327753deccd245a12f2222b140929c319125e6d8f7",
+            "bytes": 11264
         },
         {
             "path": "build/src/formatters/CssFormatter.js",
-            "sha256": "d2321ca8711bc16e8e16cefeda85dcb8aabe9488fecfc4834b89755389b1382b",
-            "bytes": 31462
+            "sha256": "1d50be52ff94d40dee21e5087474411e8d9a2b598e4bfcfc8ff13f26416d99e2",
+            "bytes": 31479
         },
         {
             "path": "build/src/formatters/HeapSnapshotFormatter.js",
-            "sha256": "84ba8b00985f3b9f4efe8af2554d7daf92238ce964461a7c59b2d59e7d144a26",
-            "bytes": 8114
+            "sha256": "615b44282f61be5eea75293b863d415d79e7efe52605aba0fba280684bd6ad98",
+            "bytes": 11464
         },
         {
             "path": "build/src/formatters/IssueFormatter.js",
-            "sha256": "296c785b043a02c2373ecdc4177bda931693fc3a8b882397591a6db941647d86",
-            "bytes": 7147
+            "sha256": "11f36c8e62e8846110436006e7310f9177f44e195731953130ac67fe491232cc",
+            "bytes": 7114
         },
         {
             "path": "build/src/formatters/NetworkFormatter.js",
-            "sha256": "8ae5d8987daa37172896a45675e5fdf9e3ac55773f8a759f93875c978defaa78",
-            "bytes": 9243
+            "sha256": "96f0fb76db11cfa4c5891586741faa73e97dce0b44c937db62b8e0aefb61fd08",
+            "bytes": 9211
         },
         {
             "path": "build/src/formatters/SnapshotFormatter.js",
-            "sha256": "2be8f74a70dc801dd077efc90c4dbf99d40cc7dc912ffe20873abca505644e78",
-            "bytes": 4458
+            "sha256": "725dfb481c6a4779cb480fbd3afdd8439fadf221b0d09154afa636cd00580669",
+            "bytes": 5478
         },
         {
             "path": "build/src/index.js",
-            "sha256": "2e706613182e3e366c0151ebb94e43d73a203be455d762256406cbe05bd8ec11",
-            "bytes": 9961
+            "sha256": "c7879755cfe9d2cc8b10b9bb1acd8345d5818213bd282a3d4bdeb4450935dcc1",
+            "bytes": 11908
         },
         {
             "path": "build/src/processors/ChunkedTraceParser.js",
-            "sha256": "24b4b35cad61e6aa638745a8a8e98927d95679f371db4d1c27b445287550ffc6",
-            "bytes": 14123
+            "sha256": "643241a76f3b6558975218a181e572849bc7097b6b89aab67cfec58a3d24db51",
+            "bytes": 14101
         },
         {
             "path": "build/src/processors/HeapSnapshotManager.js",
-            "sha256": "6f0a6878d4ca6eb203880fd2c2a7a9578a307241831b3d08ffd1c57ba54e3aa3",
-            "bytes": 11725
+            "sha256": "8775a184c5c2a143efec28fd6eb38c328115b36c7cec437c38e1d6a2bc85f23a",
+            "bytes": 13293
         },
         {
             "path": "build/src/processors/PerformanceTrace.js",
-            "sha256": "d2de8abdf020e4e771faa7d7da1cc0322834f7e441ae3521e078915420744c36",
-            "bytes": 5614
+            "sha256": "3066c2c8750dfefe101f51174426a4e9c2c529c225812c6c25dcfab078feff5f",
+            "bytes": 5596
         },
         {
             "path": "build/src/telemetry/ClearcutLogger.js",
-            "sha256": "2a802cc8d8669bf6e69881ac327242a82f9cef046d522507afc42f198f49b27a",
-            "bytes": 8872
+            "sha256": "fbec3d39cdf0081b7b5c3cf36da3e85030b992886fd07f45ca8a60e97c411025",
+            "bytes": 8855
         },
         {
             "path": "build/src/telemetry/WatchdogClient.js",
@@ -239,8 +269,8 @@
         },
         {
             "path": "build/src/telemetry/transformation.js",
-            "sha256": "9138a9bdd185b5170aad8edd2094359b4b82879ce06a1626314897fc0f1fe86b",
-            "bytes": 7238
+            "sha256": "26baaa8efc0d776b6cf4c565f5e5f0afca783cdb94fddef22da57450eb948e3e",
+            "bytes": 7171
         },
         {
             "path": "build/src/telemetry/types.js",
@@ -254,33 +284,33 @@
         },
         {
             "path": "build/src/telemetry/watchdog/main.js",
-            "sha256": "d1b11b6a6cf149a488a7c54e0a2585d2e358db6a4d0918e1f7acd92090ed79db",
-            "bytes": 4180
+            "sha256": "ffd8d941e5b49ab30887b45059bab3db6699d0db2aa5b42fb9d89c015486d633",
+            "bytes": 4172
         },
         {
             "path": "build/src/third_party/THIRD_PARTY_NOTICES",
-            "sha256": "6ae0ce181dbc9ba4217b6aad679d7503ed3ab56c45e6f3647e9ab753aa97b67b",
-            "bytes": 210169
+            "sha256": "6476ce17667202e92ea191d166050a3ab74f465f2f7a2b6b01dcb4e9477b6a0a",
+            "bytes": 189713
         },
         {
             "path": "build/src/third_party/bundled-packages.json",
-            "sha256": "7f17e0651d05b6ea1017a96fb891229b18b5ab6855a7b387092997ce0c3fec72",
-            "bytes": 370
+            "sha256": "f44d89e544186ec307e244756b91d9c153d95f6ccb3b062c6160c8d2dc26efde",
+            "bytes": 327
         },
         {
             "path": "build/src/third_party/devtools-formatter-worker.js",
-            "sha256": "6180b685f9ca6555b56215ad532bebdaca658aa58420edb7bb503a3f4a4a9980",
-            "bytes": 605645
+            "sha256": "9e65ab6bfe3134966d9d01726d3c4b54a9f66555549ebb1b04f883d55dfff8dd",
+            "bytes": 668371
         },
         {
             "path": "build/src/third_party/devtools-heap-snapshot-worker.js",
-            "sha256": "3315e31c329de21caad4508b71aafbf574782c0a17c346e34b594e0293343fbc",
-            "bytes": 428122
+            "sha256": "f15805ebd370baa94e1f7879739869b89b280c591c9685a8996c539cf4d92fa5",
+            "bytes": 490842
         },
         {
             "path": "build/src/third_party/index.js",
-            "sha256": "c988e0684584b75e87ae04b768c4f8ae7064401afe5187ec0d4878b2c6833f12",
-            "bytes": 8305782
+            "sha256": "b047499006b0027bd37165fa8197fa6fa5caa9b8c07d938992857659270ec493",
+            "bytes": 7906994
         },
         {
             "path": "build/src/third_party/issue-descriptions/CoepCoopSandboxedIframeCannotNavigateToCoopPage.md",
@@ -449,13 +479,23 @@
         },
         {
             "path": "build/src/third_party/issue-descriptions/cookieWarnMetadataGrantRead.md",
-            "sha256": "3f437c58f9d7019488ea67c5f4cfc355e38cd3bf1adffcb53470f8df2959529d",
-            "bytes": 378
+            "sha256": "fcf1576ad69fedbd0dbaf43690988c12738befd99d6d2edd9bac29dff562d5ba",
+            "bytes": 349
+        },
+        {
+            "path": "build/src/third_party/issue-descriptions/cookieWarnMetadataGrantReadOptOut.md",
+            "sha256": "b056042842a4a458aff3ad4279b5b6d9e0eb12325d82bbefa5c36468c857fb99",
+            "bytes": 458
         },
         {
             "path": "build/src/third_party/issue-descriptions/cookieWarnMetadataGrantSet.md",
-            "sha256": "2940e4345bad4a862983a9984bd417073b588c68ebbf16221315959c5a010d41",
-            "bytes": 375
+            "sha256": "2552affa22a9d0944a01d99f6110a67f1d425aaf802c2910f9ea43dd1016958f",
+            "bytes": 346
+        },
+        {
+            "path": "build/src/third_party/issue-descriptions/cookieWarnMetadataGrantSetOptOut.md",
+            "sha256": "466ec8ea0dfbc2865c7639b4441752cd7a729798e2ee645791ad8eaacfd6c65b",
+            "bytes": 455
         },
         {
             "path": "build/src/third_party/issue-descriptions/cookieWarnThirdPartyPhaseoutRead.md",
@@ -554,8 +594,8 @@
         },
         {
             "path": "build/src/third_party/issue-descriptions/deprecation.md",
-            "sha256": "d60bcd2546a8e3bb2df5882bcc358aecf439b23349269b5ef9d391f2e171c9a8",
-            "bytes": 45
+            "sha256": "5bcdeafc25172f39bc59d737884fb1fd533ffa71b1a9f68d878deeb08c99c161",
+            "bytes": 49
         },
         {
             "path": "build/src/third_party/issue-descriptions/emailVerificationRequestAccountsEmptyList.md",
@@ -1068,6 +1108,11 @@
             "bytes": 325
         },
         {
+            "path": "build/src/third_party/issue-descriptions/genericGeolocationPromptWithoutUserGesture.md",
+            "sha256": "e78575048a96f5d2de396f1deebd903d866e969b36e6f7af1fc5006e00cff339",
+            "bytes": 468
+        },
+        {
             "path": "build/src/third_party/issue-descriptions/genericNavigationEntryMarkedSkippable.md",
             "sha256": "58ce93cf354776a1f026bfc9d80d3d8c98a04cbd4310896edc8f79b1f6349230",
             "bytes": 404
@@ -1479,8 +1524,8 @@
         },
         {
             "path": "build/src/third_party/issue-descriptions/sriValidationFailedIntegrityMismatch.md",
-            "sha256": "f39a7ecf43a93acda191786073f1cb561da9eabd7b6764d0c9a31847095226e1",
-            "bytes": 434
+            "sha256": "39090a4e18861ff629f3f7285533db9853fb39663d4492a5e55e3606b25fa385",
+            "bytes": 442
         },
         {
             "path": "build/src/third_party/issue-descriptions/sriValidationFailedInvalidLength.md",
@@ -1559,13 +1604,13 @@
         },
         {
             "path": "build/src/third_party/lighthouse-devtools-mcp-bundle.js",
-            "sha256": "7682ff891dfa484a9fb1bec0bde5c0c19d9aeb90c22752e09bf2b22bad0ea651",
-            "bytes": 3892874
+            "sha256": "1494244b820277938f6eb41108701be2a7e3e76fb239820cff64de61dcdf3ce9",
+            "bytes": 3892922
         },
         {
             "path": "build/src/tools/ToolDefinition.js",
-            "sha256": "86520e119771f2fdf3b3961ae0b8843571ba1faa034f5ffe25bfe8607a5766a9",
-            "bytes": 2812
+            "sha256": "76a7723ff9c4615b1bdb3133624982a4cb9318463f859d33f6c03e4c9cd491d5",
+            "bytes": 3272
         },
         {
             "path": "build/src/tools/categories.js",
@@ -1574,8 +1619,8 @@
         },
         {
             "path": "build/src/tools/comments.js",
-            "sha256": "06f70d17e936fde481655a067877a6f3dd7a83ea71b0b2242bd8374cc2163eb3",
-            "bytes": 6723
+            "sha256": "4c0bc4f5fe217c690211738072e541eb7d7ef3127bf9eb9a8ee553bff9fc3bcc",
+            "bytes": 7709
         },
         {
             "path": "build/src/tools/console.js",
@@ -1584,13 +1629,13 @@
         },
         {
             "path": "build/src/tools/css.js",
-            "sha256": "6f225430ee048beef8f815815497248a9497bc73ee7859fa73b20f5d14bf040e",
-            "bytes": 1801
+            "sha256": "86dc5f5a0f19fa9d016c9978d70271bf4f5b4b331939bc1d6d14d20064a74b89",
+            "bytes": 2048
         },
         {
             "path": "build/src/tools/emulation.js",
-            "sha256": "6438cf37b1ec9e0c4adc027fba8f3b3657fc264bdda8fe48aa541cd7c3910d23",
-            "bytes": 3301
+            "sha256": "72238eaa38606178344fa2a9acfb91e2c90c8c63f368a897f6f1b9ea5fd436f0",
+            "bytes": 4283
         },
         {
             "path": "build/src/tools/extensions.js",
@@ -1599,18 +1644,18 @@
         },
         {
             "path": "build/src/tools/input.js",
-            "sha256": "7313138ff51cf7e6d38f7b9608774abb16143100b2da425d10ed4250b268304c",
-            "bytes": 26955
+            "sha256": "458d4647d4fdac63ed46706b5656fbe696875c674f77891c5a1a9438a7a32187",
+            "bytes": 27146
         },
         {
             "path": "build/src/tools/lighthouse.js",
-            "sha256": "f8c7d78eef28a02f0d99d53b122bf196a89c48900e99d62acc8ef04ff5403a1b",
-            "bytes": 5790
+            "sha256": "d0373b5c69a84964bc4c0b3b7fbf9c66bb1519d68d4cb269c960b3eeaffc216b",
+            "bytes": 9471
         },
         {
             "path": "build/src/tools/memory.js",
-            "sha256": "cd8ba2fe5b2fa16b263b40c848b7d37622dea060d1d46f8a87456efc62780dfc",
-            "bytes": 18426
+            "sha256": "2728892bb28a4d9fe5c8a1c52933c22289ff76e304f8e2684e1117ee19ce00e3",
+            "bytes": 22190
         },
         {
             "path": "build/src/tools/network.js",
@@ -1619,13 +1664,13 @@
         },
         {
             "path": "build/src/tools/pages.js",
-            "sha256": "13ec3920dec71060f03a89c8f9fb1f75a22aa19b7d2b720e0d0a7b76f2fb55d4",
-            "bytes": 14596
+            "sha256": "2a732a35127caf30b34836f3a358263922451fa6bf384f9057a53a0fc12f1462",
+            "bytes": 14773
         },
         {
             "path": "build/src/tools/performance.js",
-            "sha256": "dfea70166a9b906a94712ba52ba429df339c96d3b31520844710553ba941af8f",
-            "bytes": 9423
+            "sha256": "3aaddcb6e36a5fcd0d7ea81c9d8b9e3fcd2ef12e696072d7716a2fb9a0172833",
+            "bytes": 10318
         },
         {
             "path": "build/src/tools/pwa.js",
@@ -1634,23 +1679,23 @@
         },
         {
             "path": "build/src/tools/screencast.js",
-            "sha256": "076de2a165da7c831e9dfe943029845a769af36b93fa38bc0aeb9962dd703526",
-            "bytes": 5193
+            "sha256": "41a1db6dd790c89567595aaaacffe58b52996dcb271dd469d0db0ec22fc9e2b7",
+            "bytes": 6735
         },
         {
             "path": "build/src/tools/screenshot.js",
-            "sha256": "8d577186a2486bb9899f3580ea9061bd2acd4a4e71cb0c2644717fa516ba873a",
-            "bytes": 11941
+            "sha256": "6508b40122e8ea499d767f1fe48cc91ceab9d094e19bcf4aa7fe7d913a93172e",
+            "bytes": 12440
         },
         {
             "path": "build/src/tools/script.js",
-            "sha256": "d5bfe13d873cc6ff1192cd27078e3d0c535bf1dae9aef21951b38f0e6025a386",
-            "bytes": 10582
+            "sha256": "8e24d7b5f4141e3b41aad4997c6e97d68030bbc4d010af2fe9d3abc396f564d2",
+            "bytes": 13063
         },
         {
             "path": "build/src/tools/slim/tools.js",
-            "sha256": "8095d2f136e2639a55c46298fad2e2720ac039b313ce6cbbbc175c9ba0d361b1",
-            "bytes": 3284
+            "sha256": "d2dbed54a3cde4f9a2257f3c12c0fcad9f8f5df6ab6d3edb556310a44562579f",
+            "bytes": 3286
         },
         {
             "path": "build/src/tools/snapshot.js",
@@ -1659,28 +1704,28 @@
         },
         {
             "path": "build/src/tools/thirdPartyDeveloper.js",
-            "sha256": "45743b64d84ec0eef401685103571587a00549c5d6bac8ecdc6a7825631c5967",
-            "bytes": 3294
+            "sha256": "b49d898e1a883106de930c362ea8de89818927ad28fe99865aa73593710e1226",
+            "bytes": 3519
         },
         {
             "path": "build/src/tools/tools.js",
-            "sha256": "337ab947e5c3c53bc90bf8eb76aa16931c94305196e506fe560f1859cc3dc10d",
-            "bytes": 2167
+            "sha256": "d13798c22f9e8ececaba9d3a2ed9e0c1e0749cba3a9a394da44eb1e17214635d",
+            "bytes": 2488
         },
         {
             "path": "build/src/tools/webmcp.js",
-            "sha256": "85a1eb1d17fbe4154f7deaf492823db358428fbab42fa4a83c5413f41527b3a5",
-            "bytes": 2319
+            "sha256": "d2fa89ad06cc779d7dea0367dc1e751e4abbee3a8a094b411af8aefbb5ef30fc",
+            "bytes": 2596
         },
         {
             "path": "build/src/types.js",
-            "sha256": "43255f633e66bcf8e652b3938e12c30a53a811162bbbea19708214bfc9623d83",
-            "bytes": 305
+            "sha256": "71afb758bf49a02f64e873c702e3561e337393969f9e3908be4c19824c84262b",
+            "bytes": 549
         },
         {
             "path": "build/src/utils/WaitForHelper.js",
-            "sha256": "e4b82d7ba4d963410d6896c4232ef680eedf36059cbac08676f0cd5df8521abc",
-            "bytes": 12625
+            "sha256": "cc177b8d3ff89dc782d0978f4473995dd47d97f1479ef4cb11476e61cd91ac64",
+            "bytes": 13130
         },
         {
             "path": "build/src/utils/bytes.js",
@@ -1689,8 +1734,13 @@
         },
         {
             "path": "build/src/utils/check-for-updates.js",
-            "sha256": "e8d5efcf2dd02ec58a8f0352a90344c8fd12229d5f48b2822bea6ebb2017a9cb",
-            "bytes": 2443
+            "sha256": "2485631f801402485241464d334a7ac3beadad9a25650fab05766e4bf69104ba",
+            "bytes": 2416
+        },
+        {
+            "path": "build/src/utils/errorHandling.js",
+            "sha256": "0395d3d74bfe76600285f0588e6379b0a66dbb1ac4a9cbc870dcf16035cee20c",
+            "bytes": 675
         },
         {
             "path": "build/src/utils/files.js",
@@ -1709,8 +1759,8 @@
         },
         {
             "path": "build/src/utils/logger.js",
-            "sha256": "e3abbdea569035794afc3499cbf0119871f6e78283c720d95aab8c0d627b52f2",
-            "bytes": 1597
+            "sha256": "7841f12b73caf04c9946932d438fc27404644467bcefb9f1d6e05e10f47d927e",
+            "bytes": 2047
         },
         {
             "path": "build/src/utils/pagination.js",
@@ -1723,24 +1773,29 @@
             "bytes": 464
         },
         {
+            "path": "build/src/utils/text.js",
+            "sha256": "1cfa062c25905788bb081815aac7ac54fa95da6b1f9773df16ff417417869fde",
+            "bytes": 482
+        },
+        {
             "path": "build/src/utils/url.js",
-            "sha256": "251ef09ebce499f33e640b3a19b1602321738f4e9d6880e30747a8b4889547c7",
-            "bytes": 3974
+            "sha256": "f98285474fd793eb6c3092e0d6444b3a0d530c7fe5d06ba1da8391ab6ff35a84",
+            "bytes": 8180
         },
         {
             "path": "build/src/version.js",
-            "sha256": "031c4d7d341f4ab3d4c5be8a49d4c140ed552953ab32ae84bbfd5718bc4e19b4",
+            "sha256": "a99df815253860218f806af788b38aa8e763a6d1d9b99a2a6b8d6352febb0c4d",
             "bytes": 255
         },
         {
             "path": "package.json",
-            "sha256": "be1a2831f39d9075956984ccaaee52a2babdbddf8812e8f23e808d7432f9fdc7",
-            "bytes": 4668
+            "sha256": "8d4f1d071b3ce1a0029a608d71a68d1ea8685a4712a230b63e7df7f723c55385",
+            "bytes": 4899
         },
         {
             "path": "skills/a11y-debugging/SKILL.md",
-            "sha256": "159587fc580e6112528bedcd89d8c69a52d2fbb54602f10c71d7d5ec8fdbf299",
-            "bytes": 5888
+            "sha256": "dfe63deca05ad0d5f67a592453ae37d5e3ddba79842d3687083d65b5de70a7ae",
+            "bytes": 6119
         },
         {
             "path": "skills/a11y-debugging/references/a11y-snippets.md",
@@ -1749,8 +1804,8 @@
         },
         {
             "path": "skills/chrome-devtools-cli/SKILL.md",
-            "sha256": "c16bb00d0584614df93de4abe7c71a060fb0f9f75a97d2a05bcb13b10134e864",
-            "bytes": 11534
+            "sha256": "6e55a0a67f665c3e0b7774b8652d1bb7a45c4a8f784164eba06b5e7d80f1c5c1",
+            "bytes": 12031
         },
         {
             "path": "skills/chrome-devtools-cli/references/installation.md",
@@ -1759,17 +1814,17 @@
         },
         {
             "path": "skills/chrome-devtools/SKILL.md",
-            "sha256": "dc9b3cd25a8f05f366e2979d1d598bb0122d2e58431fd961e20cd68e7392e030",
-            "bytes": 4325
+            "sha256": "69a65d0276dd2b6a2fff9889d45be154754b7eb589ca019346cdc9319e6439bb",
+            "bytes": 4351
         },
         {
             "path": "skills/cookie-debugging/SKILL.md",
-            "sha256": "eeb526491ce5de6f3881301886ed9c5a7fe3bd3f328e81ab39ab63510ccb0c60",
-            "bytes": 9995
+            "sha256": "f0f0daa1d75def39492c7430ccd5d98e7ff54ba370f3677147dd3b93b0712e05",
+            "bytes": 10426
         },
         {
             "path": "skills/debug-optimize-lcp/SKILL.md",
-            "sha256": "8898b35108b12f73cef83a08964ffff0ebfad429389ffd42cb49a423025657ae",
+            "sha256": "d6486b728d7c891ed67280d05880dc396499242b02f3041d9e62c8e83c1ba5f3",
             "bytes": 6608
         },
         {
@@ -1804,8 +1859,8 @@
         },
         {
             "path": "skills/troubleshooting/SKILL.md",
-            "sha256": "e534a7845f71cd4c1843d92da3002716af917821b95877bc8e8555d17267e30e",
-            "bytes": 7031
+            "sha256": "80357d865f9604c12403b9754c1a513d4ee8afcfda84423c7a0e62a246c472f7",
+            "bytes": 6876
         }
     ]
 }

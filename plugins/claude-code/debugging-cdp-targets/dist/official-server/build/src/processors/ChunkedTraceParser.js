@@ -20,8 +20,8 @@ const BYTE_COMMA = 0x2c;
 /**
  * Advances past any RFC 8259 JSON whitespace bytes.
  *
- * @param buffer - The trace byte buffer to inspect.
- * @param start - The buffer index where scanning begins.
+ * @param buffer The trace byte buffer to inspect.
+ * @param start The buffer index where scanning begins.
  * @returns The index of the first non-whitespace byte, or the buffer length if the buffer ends.
  */
 function skipWhitespace(buffer, start) {
@@ -38,8 +38,8 @@ function skipWhitespace(buffer, start) {
 /**
  * Scans past a JSON string starting at the opening quotation mark.
  *
- * @param buffer - The trace byte buffer to scan.
- * @param startQuotePos - The buffer index of the opening quotation mark.
+ * @param buffer The trace byte buffer to scan.
+ * @param startQuotePos The buffer index of the opening quotation mark.
  * @returns The index immediately following the closing quotation mark.
  * @throws {SyntaxError} If the string is unterminated before the end of the buffer.
  */
@@ -65,8 +65,8 @@ function skipString(buffer, startQuotePos) {
  * Scans past a complete JSON value starting at the specified buffer position.
  * Skips strings, compound objects, arrays, and primitive values without parsing them into memory.
  *
- * @param buffer - The trace byte buffer to scan.
- * @param startPos - The buffer index where the value begins.
+ * @param buffer The trace byte buffer to scan.
+ * @param startPos The buffer index where the value begins.
  * @returns The index immediately following the skipped JSON value.
  * @throws {SyntaxError} If the value contains unbalanced delimiters, unterminated strings, or empty primitive tokens.
  */
@@ -131,9 +131,9 @@ function skipValue(buffer, startPos) {
 /**
  * Scans trace events from a JSON array in bounded batches to limit memory consumption.
  *
- * @param buffer - The raw byte buffer containing the events array.
- * @param startPos - The index immediately after the opening array bracket.
- * @param config - Configuration settings controlling batch sizes and text decoding.
+ * @param buffer The raw byte buffer containing the events array.
+ * @param startPos The index immediately after the opening array bracket.
+ * @param config Configuration settings controlling batch sizes and text decoding.
  * @returns An object containing the parsed events and the ending buffer position.
  * @throws {SyntaxError} If the event array contains malformed JSON, unbalanced delimiters, or unexpected tokens.
  */
@@ -244,8 +244,8 @@ function parseEventsArray(buffer, startPos, config) {
  * Supports both root array format ([...]) and object container format ({"traceEvents": [...]}).
  * Parses events in chunks to prevent V8 string length and memory exhaustion errors.
  *
- * @param buffer - The raw trace buffer to parse.
- * @param options - Optional configuration settings for batch processing.
+ * @param buffer The raw trace buffer to parse.
+ * @param options Optional configuration settings for batch processing.
  * @returns A {@link ParsedTraceBuffer} containing parsed trace events and optional file metadata, or an object with an empty events array if the buffer is empty or contains only whitespace.
  * @throws {Error} If the buffer contains non-whitespace data that does not begin with a valid JSON array or object.
  * @throws {SyntaxError} If the underlying JSON syntax within batches or metadata is invalid.

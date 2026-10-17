@@ -8,7 +8,7 @@ import { ToolCategory } from './categories.js';
 import { definePageTool } from './ToolDefinition.js';
 export const listWebMcpTools = definePageTool(() => ({
     name: 'list_webmcp_tools',
-    description: `Lists all WebMCP tools the page exposes.`,
+    description: `Lists all WebMCP tools the page exposes (excluding debugging tools, which are exposed via 'list_3p_developer_tools').`,
     annotations: {
         category: ToolCategory.WEBMCP,
         readOnlyHint: true,
@@ -22,7 +22,7 @@ export const listWebMcpTools = definePageTool(() => ({
 }));
 export const executeWebMcpTool = definePageTool(() => ({
     name: 'execute_webmcp_tool',
-    description: `Executes a WebMCP tool exposed by the page.`,
+    description: `Executes a WebMCP tool exposed by the page (for debugging tools, use 'execute_3p_developer_tool').`,
     annotations: {
         category: ToolCategory.WEBMCP,
         readOnlyHint: false,
@@ -42,7 +42,9 @@ export const executeWebMcpTool = definePageTool(() => ({
         if (request.params.input) {
             try {
                 const parsed = JSON.parse(request.params.input);
-                if (typeof parsed === 'object' && parsed !== null) {
+                if (typeof parsed === 'object' &&
+                    parsed !== null &&
+                    !Array.isArray(parsed)) {
                     input = parsed;
                 }
                 else {
@@ -54,13 +56,14 @@ export const executeWebMcpTool = definePageTool(() => ({
                 throw new Error(`Failed to parse input as JSON: ${errorMessage}`);
             }
         }
-        const tools = request.page.pptrPage.webmcp.tools();
+        const tools = request.page.getWebMcpTools();
         const tool = tools.find(t => t.name === toolName);
         if (!tool) {
             throw new Error(`Tool ${toolName} not found`);
         }
-        const { status, output, errorText } = await tool.execute(input);
-        response.appendResponseLine(JSON.stringify({ status, output, errorText }, null, 2));
+        const { status, output, errorText, exception } = await tool.execute(input);
+        const error = exception?.description ?? exception?.value ?? errorText;
+        response.appendResponseLine(JSON.stringify({ status, output, error }, null, 2));
     },
 }));
 //# sourceMappingURL=webmcp.js.map

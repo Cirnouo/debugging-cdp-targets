@@ -9,7 +9,7 @@ Keep all migrated regressions in strict TypeScript; typecheck includes tests,
 fixtures and opt-in smoke tools. Validate protocol/output JSON from `unknown`.
 Do not replace adversarial runtime tests with casts or type-error suppression.
 
-The delivered official Server 1.10.1 refuses `chrome://version/` through
+The delivered official Server 1.11.0 refuses `chrome://version/` through
 `new_page` and `navigate_page`, and filters that page from its page inventory even when
 opened at startup. Official-tool I/O fakes must model this restriction. The
 test-only native profile probe may inspect only a newly launched, independently

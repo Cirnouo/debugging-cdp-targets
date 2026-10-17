@@ -1,6 +1,63 @@
 {
-    "version": "1.10.1",
+    "version": "1.11.0",
     "tools": [
+        {
+            "name": "analyze_heapsnapshot_contexts",
+            "requires": {
+                "slim": false,
+                "categoryMemory": true,
+                "memoryDebugging": true
+            },
+            "variants": [
+                {
+                    "name": "analyze_heapsnapshot_contexts",
+                    "description": "Loads and caches a memory heapsnapshot to identify and rank closure contexts holding dead captured fields—variables no remaining live closure can read. Scopes are ranked globally by the retained size of these dead values to provide a prioritizing heuristic, rather than an exact measure of reclaimable bytes.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "filePath": {
+                                "type": "string",
+                                "description": "A path to a .heapsnapshot file to read."
+                            },
+                            "retainedSize": {
+                                "description": "Inclusive range for the dead-field score of a context (e.g. \"10KB\", \"1MB-2MB\", \"-1MB\", or \"1MB-\"). A single value is treated as a minimum.",
+                                "type": "string"
+                            },
+                            "scopeInfoNodeId": {
+                                "description": "Only return contexts declared by the scope with this ScopeInfo node id, as reported in the scope header of a previous call.",
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                            },
+                            "pageIdx": {
+                                "description": "The zero-based page index. Defaults to 0.",
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                            },
+                            "pageSize": {
+                                "description": "The number of contexts to return per page. Defaults to 20.",
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                            }
+                        },
+                        "required": ["filePath"],
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "additionalProperties": false
+                    },
+                    "annotations": {
+                        "readOnlyHint": true
+                    }
+                }
+            ]
+        },
         {
             "name": "click",
             "requires": {
@@ -33,7 +90,7 @@
                         },
                         "required": ["pageId", "uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -60,7 +117,7 @@
                         },
                         "required": ["uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -105,7 +162,7 @@
                         },
                         "required": ["pageId", "x", "y"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -136,7 +193,7 @@
                         },
                         "required": ["x", "y"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -154,7 +211,7 @@
             "variants": [
                 {
                     "name": "close_heapsnapshot",
-                    "description": "Closes a previously loaded memory heapsnapshot, freeing its memory.",
+                    "description": "Closes a previously loaded and cached memory heapsnapshot, freeing its memory.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -165,7 +222,7 @@
                         },
                         "required": ["filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -193,7 +250,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -211,7 +268,7 @@
             "variants": [
                 {
                     "name": "compare_heapsnapshots",
-                    "description": "Loads two memory heapsnapshots and returns the comparison. If classIndex is provided, returns detailed diff for that class, otherwise returns summary diff.",
+                    "description": "Loads and caches two memory heapsnapshots and returns the comparison. If classIndex is provided, returns detailed diff for that class, otherwise returns summary diff.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -226,11 +283,29 @@
                             "classIndex": {
                                 "description": "Optional 0-based index of the class in the summary list to filter results, showing individual objects.",
                                 "type": "number"
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                            },
+                            "pageIdx": {
+                                "description": "The page index for pagination.",
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                            },
+                            "pageSize": {
+                                "description": "The page size for pagination.",
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["baseFilePath", "currentFilePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -270,7 +345,7 @@
                         },
                         "required": ["pageId", "from_uid", "to_uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -297,7 +372,7 @@
                         },
                         "required": ["from_uid", "to_uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -314,7 +389,7 @@
             "variants": [
                 {
                     "name": "emulate",
-                    "description": "Emulates various features on the target page.",
+                    "description": "Emulates various features on the target page. Each call replaces all emulation settings (except extraHttpHeaders), so pass all desired settings in a single call.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -338,16 +413,31 @@
                                 "type": "string"
                             },
                             "userAgent": {
-                                "description": "User agent to emulate. Set to empty string to clear the user agent override.",
+                                "description": "User agent to emulate. Omit or set to empty string to clear the user agent override.",
                                 "type": "string"
                             },
                             "colorScheme": {
-                                "description": "Emulate the dark or the light mode. Set to \"auto\" to reset to the default.",
+                                "description": "Emulate the dark or the light mode. Omit or set to \"auto\" to reset to the default.",
                                 "type": "string",
                                 "enum": ["dark", "light", "auto"]
                             },
+                            "forcedColors": {
+                                "description": "Emulate the `forced-colors` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                                "type": "string",
+                                "enum": ["active", "none", "auto"]
+                            },
+                            "prefersContrast": {
+                                "description": "Emulate the `prefers-contrast` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                                "type": "string",
+                                "enum": ["more", "less", "custom", "no-preference", "auto"]
+                            },
+                            "prefersReducedMotion": {
+                                "description": "Emulate the `prefers-reduced-motion` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                                "type": "string",
+                                "enum": ["reduce", "no-preference", "auto"]
+                            },
                             "viewport": {
-                                "description": "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.",
+                                "description": "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode. Omit to clear the viewport override.",
                                 "type": "string"
                             },
                             "extraHttpHeaders": {
@@ -357,7 +447,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -365,7 +455,7 @@
                 },
                 {
                     "name": "emulate",
-                    "description": "Emulates various features on the target page.",
+                    "description": "Emulates various features on the target page. Each call replaces all emulation settings (except extraHttpHeaders), so pass all desired settings in a single call.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -385,16 +475,31 @@
                                 "type": "string"
                             },
                             "userAgent": {
-                                "description": "User agent to emulate. Set to empty string to clear the user agent override.",
+                                "description": "User agent to emulate. Omit or set to empty string to clear the user agent override.",
                                 "type": "string"
                             },
                             "colorScheme": {
-                                "description": "Emulate the dark or the light mode. Set to \"auto\" to reset to the default.",
+                                "description": "Emulate the dark or the light mode. Omit or set to \"auto\" to reset to the default.",
                                 "type": "string",
                                 "enum": ["dark", "light", "auto"]
                             },
+                            "forcedColors": {
+                                "description": "Emulate the `forced-colors` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                                "type": "string",
+                                "enum": ["active", "none", "auto"]
+                            },
+                            "prefersContrast": {
+                                "description": "Emulate the `prefers-contrast` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                                "type": "string",
+                                "enum": ["more", "less", "custom", "no-preference", "auto"]
+                            },
+                            "prefersReducedMotion": {
+                                "description": "Emulate the `prefers-reduced-motion` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                                "type": "string",
+                                "enum": ["reduce", "no-preference", "auto"]
+                            },
                             "viewport": {
-                                "description": "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.",
+                                "description": "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode. Omit to clear the viewport override.",
                                 "type": "string"
                             },
                             "extraHttpHeaders": {
@@ -403,7 +508,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -432,7 +537,7 @@
                         },
                         "required": ["script"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -450,7 +555,7 @@
             "variants": [
                 {
                     "name": "evaluate_script",
-                    "description": "Evaluate a JavaScript function inside the target page or service worker. Returns the response as JSON, so returned values have to be JSON-serializable.",
+                    "description": "Evaluate JavaScript inside the target page or service worker. The source can be provided inline or loaded from a local file. Returns the response as JSON, so returned values have to be JSON-serializable.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -459,11 +564,20 @@
                                 "type": "number"
                             },
                             "function": {
+                                "description": "JavaScript source to execute in the target page. Provide either this or sourcePath, but not both. The source is interpreted according to format.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n",
+                                "type": "string"
+                            },
+                            "sourcePath": {
+                                "description": "The absolute or relative path to a JavaScript file on the MCP server's local filesystem. Provide either this or function, but not both.",
+                                "type": "string"
+                            },
+                            "format": {
+                                "description": "How to interpret the source. \"function\" treats it as a function declaration and supports args. \"script\" evaluates it as classic JavaScript and does not support args. Defaults to \"function\". ECMAScript modules are not supported.",
                                 "type": "string",
-                                "description": "A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n"
+                                "enum": ["function", "script"]
                             },
                             "args": {
-                                "description": "An optional list of arguments to pass to the function.",
+                                "description": "An optional list of arguments (element uids from the page content snapshot) to pass to the function.",
                                 "type": "array",
                                 "items": {
                                     "type": "string",
@@ -487,9 +601,8 @@
                                 "type": "string"
                             }
                         },
-                        "required": ["function"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -497,7 +610,7 @@
                 },
                 {
                     "name": "evaluate_script",
-                    "description": "Evaluate a JavaScript function inside the target page. Returns the response as JSON, so returned values have to be JSON-serializable.",
+                    "description": "Evaluate JavaScript inside the target page. The source can be provided inline or loaded from a local file. Returns the response as JSON, so returned values have to be JSON-serializable.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -506,11 +619,20 @@
                                 "description": "Targets a specific page by ID."
                             },
                             "function": {
+                                "description": "JavaScript source to execute in the target page. Provide either this or sourcePath, but not both. The source is interpreted according to format.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n",
+                                "type": "string"
+                            },
+                            "sourcePath": {
+                                "description": "The absolute or relative path to a JavaScript file on the MCP server's local filesystem. Provide either this or function, but not both.",
+                                "type": "string"
+                            },
+                            "format": {
+                                "description": "How to interpret the source. \"function\" treats it as a function declaration and supports args. \"script\" evaluates it as classic JavaScript and does not support args. Defaults to \"function\". ECMAScript modules are not supported.",
                                 "type": "string",
-                                "description": "A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n"
+                                "enum": ["function", "script"]
                             },
                             "args": {
-                                "description": "An optional list of arguments to pass to the function.",
+                                "description": "An optional list of arguments (element uids from the page content snapshot) to pass to the function.",
                                 "type": "array",
                                 "items": {
                                     "type": "string",
@@ -530,9 +652,9 @@
                                 "type": "boolean"
                             }
                         },
-                        "required": ["pageId", "function"],
+                        "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -540,16 +662,25 @@
                 },
                 {
                     "name": "evaluate_script",
-                    "description": "Evaluate a JavaScript function inside the target page. Returns the response as JSON, so returned values have to be JSON-serializable.",
+                    "description": "Evaluate JavaScript inside the target page. The source can be provided inline or loaded from a local file. Returns the response as JSON, so returned values have to be JSON-serializable.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "function": {
+                                "description": "JavaScript source to execute in the target page. Provide either this or sourcePath, but not both. The source is interpreted according to format.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n",
+                                "type": "string"
+                            },
+                            "sourcePath": {
+                                "description": "The absolute or relative path to a JavaScript file on the MCP server's local filesystem. Provide either this or function, but not both.",
+                                "type": "string"
+                            },
+                            "format": {
+                                "description": "How to interpret the source. \"function\" treats it as a function declaration and supports args. \"script\" evaluates it as classic JavaScript and does not support args. Defaults to \"function\". ECMAScript modules are not supported.",
                                 "type": "string",
-                                "description": "A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n"
+                                "enum": ["function", "script"]
                             },
                             "args": {
-                                "description": "An optional list of arguments to pass to the function.",
+                                "description": "An optional list of arguments (element uids from the page content snapshot) to pass to the function.",
                                 "type": "array",
                                 "items": {
                                     "type": "string",
@@ -569,9 +700,8 @@
                                 "type": "boolean"
                             }
                         },
-                        "required": ["function"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -579,16 +709,25 @@
                 },
                 {
                     "name": "evaluate_script",
-                    "description": "Evaluate a JavaScript function inside the target page or service worker. Returns the response as JSON, so returned values have to be JSON-serializable.",
+                    "description": "Evaluate JavaScript inside the target page or service worker. The source can be provided inline or loaded from a local file. Returns the response as JSON, so returned values have to be JSON-serializable.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "function": {
+                                "description": "JavaScript source to execute in the target page. Provide either this or sourcePath, but not both. The source is interpreted according to format.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n",
+                                "type": "string"
+                            },
+                            "sourcePath": {
+                                "description": "The absolute or relative path to a JavaScript file on the MCP server's local filesystem. Provide either this or function, but not both.",
+                                "type": "string"
+                            },
+                            "format": {
+                                "description": "How to interpret the source. \"function\" treats it as a function declaration and supports args. \"script\" evaluates it as classic JavaScript and does not support args. Defaults to \"function\". ECMAScript modules are not supported.",
                                 "type": "string",
-                                "description": "A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n"
+                                "enum": ["function", "script"]
                             },
                             "args": {
-                                "description": "An optional list of arguments to pass to the function.",
+                                "description": "An optional list of arguments (element uids from the page content snapshot) to pass to the function.",
                                 "type": "array",
                                 "items": {
                                     "type": "string",
@@ -612,9 +751,8 @@
                                 "type": "string"
                             }
                         },
-                        "required": ["function"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -631,7 +769,7 @@
             "variants": [
                 {
                     "name": "execute_3p_developer_tool",
-                    "description": "Executes a tool exposed by the page.",
+                    "description": "Executes a third-party developer tool exposed by the page.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -650,7 +788,7 @@
                         },
                         "required": ["pageId", "toolName"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -658,7 +796,7 @@
                 },
                 {
                     "name": "execute_3p_developer_tool",
-                    "description": "Executes a tool exposed by the page.",
+                    "description": "Executes a third-party developer tool exposed by the page.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -673,7 +811,7 @@
                         },
                         "required": ["toolName"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -690,7 +828,7 @@
             "variants": [
                 {
                     "name": "execute_webmcp_tool",
-                    "description": "Executes a WebMCP tool exposed by the page.",
+                    "description": "Executes a WebMCP tool exposed by the page (for debugging tools, use 'execute_3p_developer_tool').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -709,7 +847,7 @@
                         },
                         "required": ["pageId", "toolName"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -717,7 +855,7 @@
                 },
                 {
                     "name": "execute_webmcp_tool",
-                    "description": "Executes a WebMCP tool exposed by the page.",
+                    "description": "Executes a WebMCP tool exposed by the page (for debugging tools, use 'execute_3p_developer_tool').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -732,7 +870,7 @@
                         },
                         "required": ["toolName"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -772,7 +910,7 @@
                         },
                         "required": ["pageId", "uid", "value"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -799,7 +937,7 @@
                         },
                         "required": ["uid", "value"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -850,7 +988,7 @@
                         },
                         "required": ["pageId", "elements"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -888,7 +1026,7 @@
                         },
                         "required": ["elements"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -920,7 +1058,7 @@
                         },
                         "required": ["pageId", "msgid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -939,7 +1077,7 @@
                         },
                         "required": ["msgid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -956,7 +1094,7 @@
             "variants": [
                 {
                     "name": "get_css_styles",
-                    "description": "Retrieve matched CSS rules, inline styles, inherited styles, and cascade information for an element identified by its UID.\nUse this tool to debug why specific CSS properties are applied, overridden, or conflicting. Results are paginated and return 10 rules per page by default; use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.",
+                    "description": "Retrieve matched CSS rules, inline styles (element.style), inherited styles, custom properties, and cascade wrappers (@layer, @media, @container, @scope) for an element identified by its UID.\nRules are ordered from highest to lowest cascade precedence and include source line numbers (e.g. index:196). Active (winning) declarations have no prefix tag, while (losing) overridden declarations are prefixed with [overloaded].\nTreat the output as authoritative and complete.\nResults are paginated (10 rules per page by default); use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -985,7 +1123,7 @@
                         },
                         "required": ["pageId", "uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -993,7 +1131,7 @@
                 },
                 {
                     "name": "get_css_styles",
-                    "description": "Retrieve matched CSS rules, inline styles, inherited styles, and cascade information for an element identified by its UID.\nUse this tool to debug why specific CSS properties are applied, overridden, or conflicting. Results are paginated and return 10 rules per page by default; use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.",
+                    "description": "Retrieve matched CSS rules, inline styles (element.style), inherited styles, custom properties, and cascade wrappers (@layer, @media, @container, @scope) for an element identified by its UID.\nRules are ordered from highest to lowest cascade precedence and include source line numbers (e.g. index:196). Active (winning) declarations have no prefix tag, while (losing) overridden declarations are prefixed with [overloaded].\nTreat the output as authoritative and complete.\nResults are paginated (10 rules per page by default); use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1018,7 +1156,7 @@
                         },
                         "required": ["uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1047,7 +1185,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1060,7 +1198,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1078,7 +1216,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_class_nodes",
-                    "description": "Loads a memory heapsnapshot and returns instances of a specific class with their IDs.",
+                    "description": "Loads and caches a memory heapsnapshot and returns instances of a specific class with their IDs.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1107,18 +1245,28 @@
                                 "description": "The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.",
                                 "type": "number"
                             },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                            },
                             "pageIdx": {
                                 "description": "The page index for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                             },
                             "pageSize": {
                                 "description": "The page size for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath", "id"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1136,7 +1284,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_details",
-                    "description": "Loads a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates.",
+                    "description": "Loads and caches a memory heapsnapshot and returns all available information including statistics, static data, and aggregated node information. Supports pagination for aggregates.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1161,18 +1309,28 @@
                                 "description": "The object ID (nodeId) of the specific native context to filter by when filterName is attributedToSpecificNativeContext.",
                                 "type": "number"
                             },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                            },
                             "pageIdx": {
                                 "description": "The page index for pagination of aggregates.",
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                             },
                             "pageSize": {
                                 "description": "The page size for pagination of aggregates.",
-                                "type": "number"
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1190,7 +1348,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_dominators",
-                    "description": "Loads a memory heapsnapshot and returns the dominator chain for a specific node ID. This helps to identify which objects are keeping the target node alive.",
+                    "description": "Loads and caches a memory heapsnapshot and returns the dominator chain for a specific node ID. This helps to identify which objects are keeping the target node alive.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1201,11 +1359,17 @@
                             "nodeId": {
                                 "type": "number",
                                 "description": "The node ID to get the dominator chain for."
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath", "nodeId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1223,7 +1387,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_duplicate_strings",
-                    "description": "Loads a memory heapsnapshot and returns duplicate strings grouped by their value.",
+                    "description": "Loads and caches a memory heapsnapshot and returns duplicate strings grouped by their value.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1233,16 +1397,26 @@
                             },
                             "pageIdx": {
                                 "description": "The page index for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                             },
                             "pageSize": {
                                 "description": "The page size for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1260,7 +1434,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_edges",
-                    "description": "Loads a memory heapsnapshot and returns outgoing edges (references) for a specific node ID.",
+                    "description": "Loads and caches a memory heapsnapshot and returns outgoing edges (references) for a specific node ID.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1285,18 +1459,28 @@
                                 "description": "Whether to exclude primitive target nodes. Default is true.",
                                 "type": "boolean"
                             },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                            },
                             "pageIdx": {
                                 "description": "The page index for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                             },
                             "pageSize": {
                                 "description": "The page size for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath", "nodeId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1314,7 +1498,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_object_details",
-                    "description": "Loads a memory heapsnapshot and returns detailed information about a specific object by its node ID, including size, type, distance, and DOM detachedness.",
+                    "description": "Loads and caches a memory heapsnapshot and returns detailed information about a specific object by its node ID, including size, type, distance, and DOM detachedness.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1325,11 +1509,17 @@
                             "nodeId": {
                                 "type": "number",
                                 "description": "The node ID to get object details for."
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath", "nodeId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1347,7 +1537,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_retainers",
-                    "description": "Loads a memory heapsnapshot and returns retainers for a specific node ID.",
+                    "description": "Loads and caches a memory heapsnapshot and returns retainers for a specific node ID.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1359,18 +1549,28 @@
                                 "type": "number",
                                 "description": "The node ID to get retainers for."
                             },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                            },
                             "pageIdx": {
                                 "description": "The page index for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                             },
                             "pageSize": {
                                 "description": "The page size for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath", "nodeId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1388,7 +1588,7 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_retaining_paths",
-                    "description": "Loads a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected.",
+                    "description": "Loads and caches a memory heapsnapshot and returns retaining paths for a specific node ID. This helps to understand why a node is not being garbage collected.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1411,11 +1611,17 @@
                             "maxSiblings": {
                                 "description": "The maximum number of siblings to return.",
                                 "type": "number"
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath", "nodeId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1433,18 +1639,24 @@
             "variants": [
                 {
                     "name": "get_heapsnapshot_summary",
-                    "description": "Loads a memory heapsnapshot and returns snapshot summary stats, including native contexts and their sizes, and retained by context summary.",
+                    "description": "Loads and caches a memory heapsnapshot and returns snapshot summary stats, including native contexts and their sizes, and retained by context summary.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "filePath": {
                                 "type": "string",
                                 "description": "A path to a .heapsnapshot file to read."
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1484,7 +1696,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1510,7 +1722,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1538,7 +1750,7 @@
                         },
                         "required": ["manifestId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1567,7 +1779,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1580,7 +1792,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1617,7 +1829,7 @@
                         },
                         "required": ["pageId", "action"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1641,7 +1853,7 @@
                         },
                         "required": ["action"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1677,7 +1889,7 @@
                         },
                         "required": ["pageId", "uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1700,7 +1912,7 @@
                         },
                         "required": ["uid"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1728,7 +1940,7 @@
                         },
                         "required": ["path"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1765,7 +1977,7 @@
                         },
                         "required": ["manifestId", "installUrlOrBundleUrl"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1797,7 +2009,7 @@
                         },
                         "required": ["manifestId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1814,7 +2026,7 @@
             "variants": [
                 {
                     "name": "lighthouse_audit",
-                    "description": "Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace",
+                    "description": "Get Lighthouse scores, failing audits, and the DOM nodes they flag for accessibility, SEO, best practices, and agentic browsing. Full reports are saved to disk. This excludes performance. For performance audits, run performance_start_trace",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1841,7 +2053,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1849,7 +2061,7 @@
                 },
                 {
                     "name": "lighthouse_audit",
-                    "description": "Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace",
+                    "description": "Get Lighthouse scores, failing audits, and the DOM nodes they flag for accessibility, SEO, best practices, and agentic browsing. Full reports are saved to disk. This excludes performance. For performance audits, run performance_start_trace",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1871,7 +2083,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -1888,7 +2100,7 @@
             "variants": [
                 {
                     "name": "list_3p_developer_tools",
-                    "description": "Lists all third-party developer tools the page exposes for providing runtime information.\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality.",
+                    "description": "Lists all third-party developer tools the page exposes for providing runtime information (including debugging WebMCP tools and tools exposed via the 'devtoolstooldiscovery' event).\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools exposed via the 'devtoolstooldiscovery' event can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -1899,7 +2111,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1907,12 +2119,12 @@
                 },
                 {
                     "name": "list_3p_developer_tools",
-                    "description": "Lists all third-party developer tools the page exposes for providing runtime information.\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality.",
+                    "description": "Lists all third-party developer tools the page exposes for providing runtime information (including debugging WebMCP tools and tools exposed via the 'devtoolstooldiscovery' event).\nThird-party developer tools can be called via the 'execute_3p_developer_tool()' MCP tool.\nAlternatively, third-party developer tools exposed via the 'devtoolstooldiscovery' event can be executed by calling 'evaluate_script' and adding the\nfollowing command to the script:\n`window.__dtmcp.executeTool(toolName, params)`\nThis might be helpful when the third-party developer tools return non-serializable values or when composing\nthird-party developer tools with additional functionality.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -1995,7 +2207,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2069,7 +2281,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2138,7 +2350,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2207,7 +2419,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2229,7 +2441,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2302,7 +2514,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2361,7 +2573,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2383,7 +2595,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2396,7 +2608,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2413,7 +2625,7 @@
             "variants": [
                 {
                     "name": "list_webmcp_tools",
-                    "description": "Lists all WebMCP tools the page exposes.",
+                    "description": "Lists all WebMCP tools the page exposes (excluding debugging tools, which are exposed via 'list_3p_developer_tools').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -2424,7 +2636,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2432,12 +2644,12 @@
                 },
                 {
                     "name": "list_webmcp_tools",
-                    "description": "Lists all WebMCP tools the page exposes.",
+                    "description": "Lists all WebMCP tools the page exposes (excluding debugging tools, which are exposed via 'list_3p_developer_tools').",
                     "inputSchema": {
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2465,7 +2677,7 @@
                         },
                         "required": ["url"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2521,7 +2733,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2564,7 +2776,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2602,7 +2814,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2644,7 +2856,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2686,7 +2898,7 @@
                         },
                         "required": ["url"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2715,7 +2927,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2728,7 +2940,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2764,7 +2976,7 @@
                         },
                         "required": ["pageId", "insightSetId", "insightName"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2787,7 +2999,7 @@
                         },
                         "required": ["insightSetId", "insightName"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -2822,6 +3034,10 @@
                                 "description": "Determines if the trace recording should be automatically stopped.",
                                 "type": "boolean"
                             },
+                            "ignoreCache": {
+                                "description": "Whether to bypass the HTTP cache when reloading the page, to measure a cold page load. Only applies if reload is true.",
+                                "type": "boolean"
+                            },
                             "filePath": {
                                 "description": "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).",
                                 "type": "string"
@@ -2829,7 +3045,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2851,13 +3067,17 @@
                                 "description": "Determines if the trace recording should be automatically stopped.",
                                 "type": "boolean"
                             },
+                            "ignoreCache": {
+                                "description": "Whether to bypass the HTTP cache when reloading the page, to measure a cold page load. Only applies if reload is true.",
+                                "type": "boolean"
+                            },
                             "filePath": {
                                 "description": "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).",
                                 "type": "string"
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2889,7 +3109,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2907,7 +3127,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2943,7 +3163,7 @@
                         },
                         "required": ["pageId", "key"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2966,7 +3186,7 @@
                         },
                         "required": ["key"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -2984,7 +3204,7 @@
             "variants": [
                 {
                     "name": "query_heapsnapshot_objects",
-                    "description": "Loads a memory heapsnapshot and queries objects matching specific filters (className, propertyName, nodeType, retainedSize, selfSize, isDetached, sortBy).",
+                    "description": "Loads and caches a memory heapsnapshot and queries objects matching specific filters (className, propertyName, nodeType, retainedSize, selfSize, isDetached, sortBy).",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -3023,16 +3243,26 @@
                             },
                             "pageIdx": {
                                 "description": "The page index for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
                             },
                             "pageSize": {
                                 "description": "The page size for pagination.",
-                                "type": "number"
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                            },
+                            "maxNameLength": {
+                                "description": "Maximum length of names before truncation. Defaults to 100.",
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
                             }
                         },
                         "required": ["filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -3060,7 +3290,7 @@
                         },
                         "required": ["id"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3086,17 +3316,21 @@
                                 "description": "Targets a specific page by ID."
                             },
                             "width": {
-                                "type": "number",
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991,
                                 "description": "Page width"
                             },
                             "height": {
-                                "type": "number",
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991,
                                 "description": "Page height"
                             }
                         },
                         "required": ["pageId", "width", "height"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3109,17 +3343,21 @@
                         "type": "object",
                         "properties": {
                             "width": {
-                                "type": "number",
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991,
                                 "description": "Page width"
                             },
                             "height": {
-                                "type": "number",
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991,
                                 "description": "Page height"
                             }
                         },
                         "required": ["width", "height"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3156,7 +3394,7 @@
                         },
                         "required": ["pageId", "threadId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3179,7 +3417,7 @@
                         },
                         "required": ["threadId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3220,7 +3458,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -3246,7 +3484,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -3258,13 +3496,12 @@
             "name": "screencast_start",
             "requires": {
                 "slim": false,
-                "categoryDebugging": true,
-                "experimentalScreencast": true
+                "categoryDebugging": true
             },
             "variants": [
                 {
                     "name": "screencast_start",
-                    "description": "Starts recording a screencast (video) of the target page in specified format.",
+                    "description": "Starts recording a screencast (video) of the target page.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -3279,7 +3516,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3287,7 +3524,30 @@
                 },
                 {
                     "name": "screencast_start",
-                    "description": "Starts recording a screencast (video) of the target page in specified format.",
+                    "description": "Starts recording a screencast (video) of the target page.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "pageId": {
+                                "type": "number",
+                                "description": "Targets a specific page by ID."
+                            },
+                            "filePath": {
+                                "description": "Output file path (.mp4). Uses mkdtemp to generate a unique path if not provided.",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["pageId"],
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "additionalProperties": false
+                    },
+                    "annotations": {
+                        "readOnlyHint": false
+                    }
+                },
+                {
+                    "name": "screencast_start",
+                    "description": "Starts recording a screencast (video) of the target page.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -3297,7 +3557,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3309,8 +3569,7 @@
             "name": "screencast_stop",
             "requires": {
                 "slim": false,
-                "categoryDebugging": true,
-                "experimentalScreencast": true
+                "categoryDebugging": true
             },
             "variants": [
                 {
@@ -3326,7 +3585,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3339,7 +3598,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3361,7 +3620,7 @@
                         "type": "object",
                         "properties": {},
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3393,7 +3652,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -3425,7 +3684,7 @@
                         },
                         "required": ["pageId", "filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3444,7 +3703,7 @@
                         },
                         "required": ["filePath"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3496,7 +3755,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3534,7 +3793,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3570,7 +3829,7 @@
                         },
                         "required": ["pageId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3592,7 +3851,7 @@
                             }
                         },
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3620,7 +3879,7 @@
                         },
                         "required": ["id"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3656,7 +3915,7 @@
                         },
                         "required": ["pageId", "text"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3679,7 +3938,7 @@
                         },
                         "required": ["text"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3707,7 +3966,7 @@
                         },
                         "required": ["id"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3735,7 +3994,7 @@
                         },
                         "required": ["manifestId"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3779,7 +4038,7 @@
                         },
                         "required": ["pageId", "uid", "filePaths"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3810,7 +4069,7 @@
                         },
                         "required": ["uid", "filePaths"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": false
@@ -3852,7 +4111,7 @@
                         },
                         "required": ["pageId", "text"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -3881,7 +4140,7 @@
                         },
                         "required": ["text"],
                         "$schema": "https://json-schema.org/draft/2020-12/schema",
-                        "additionalProperties": {}
+                        "additionalProperties": false
                     },
                     "annotations": {
                         "readOnlyHint": true
@@ -3914,7 +4173,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "de65a0fec543b3698e106e7aad43462cb03050f3700ddf411b346ab34f2d55c0"
+            "sha256": "ce2f19354b2748518db8db31f2c85fd8b359532702eb339b6b6d00803d641032"
         },
         {
             "mcpArgs": [
@@ -3939,7 +4198,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "3dc3e723c5e53749adc75ca23e8f83ffec5c75cbf4e06825bc58a2edea9df13a"
+            "sha256": "32474a41ec48bc131aa2377ca7e70c73840da7f7866a45eda6d19a7adbfb799d"
         },
         {
             "mcpArgs": [
@@ -3964,7 +4223,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "fcc12e8872990c79026d08920573e64efbe47c211c335c50c298dc2197a217c6"
+            "sha256": "f47223377fd66294f12e6e5076bdca9c9ebf5036e963ebbfbfa89c6f1c14f69d"
         },
         {
             "mcpArgs": [
@@ -3989,7 +4248,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "09fc6c4844653903ed41fda5dcf4253e85acdc0e01ca4f78c11542943256b049"
+            "sha256": "091802819505f1ca6e14aad749dbc334976854a790749605eff03224947d94d4"
         },
         {
             "mcpArgs": [
@@ -4014,7 +4273,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "5211b4563423b8ef5e8a95e566a9459036775320efb2b0cf70deb4fa1c3e8866"
+            "sha256": "b83d09253e6ebe202783a4a48cd3afeb07e23aa66a149a73176dc02244917022"
         },
         {
             "mcpArgs": [
@@ -4039,7 +4298,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "92836e518d1c0a9d220f685c941b0f4c11308f60e63728e3fd4eccb69b959252"
+            "sha256": "9ec5b90921c8ecc36100fc148fe598c504df5b896c593b876699f6683a9955ff"
         },
         {
             "mcpArgs": [
@@ -4064,7 +4323,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "bcf5066407e94439d5de025bd692f4c4ed0f9f978f35dad8df8049a331268c82"
+            "sha256": "92633fc2743df06c598ff3742703e298217dce654291297430c094e3c922d84d"
         },
         {
             "mcpArgs": [
@@ -4089,7 +4348,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "ee454dc6b5c312f7a36c063c91c8342789790416c0383851fad3c78f09c1d5c0"
+            "sha256": "82bda7b66edab3e70c2388cfc240f43c2197b5adc2b5f43443dc8499eafbbcfe"
         },
         {
             "mcpArgs": [
@@ -4114,7 +4373,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "b1aab55536efe122113ca314d02dc6a6f30b94d8aa49883ac62e77a69cc1feb8"
+            "sha256": "54179f382210ad09c7f46698e1d34ddb88b00db41a62f662f2ef98703bc69c1d"
         },
         {
             "mcpArgs": [
@@ -4139,7 +4398,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "24a630c123f054e228ce2eb56ccb17f80c7f84c1cb15689327005a3fed885732"
+            "sha256": "c1013e9c10789a3fd30ee471d82f62897312cefd31b6628aa3ed2f59f92b12c3"
         },
         {
             "mcpArgs": [
@@ -4164,7 +4423,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "5607dd57879c7241d5deb5e5b8e8f70743fb53dd6f57d2ad9fd3fbfc5c769a71"
+            "sha256": "80ada205c0a68049b43ff2ede302983efed4863c7403c76013084d8ba3f56482"
         },
         {
             "mcpArgs": [
@@ -4189,7 +4448,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "9d0c01fe110fe10a7dbb8555ee2a1cc103801c432a7e7f83973448e573f09821"
+            "sha256": "cc3010b256d8741f91e719544b6917b682ce9ed0be1b8566a2a95bb806e109fb"
         },
         {
             "mcpArgs": [
@@ -4214,7 +4473,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "d2bdd4edb07f999d84d830b5828c84d288be644a175c33b3e980c047d06163f2"
+            "sha256": "a8d678f7f24f152214299dce772d9bb0e944e4a5c4415ba51cd8498ecbd05d6e"
         },
         {
             "mcpArgs": [
@@ -4239,7 +4498,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "4cea3379a597bcef009e81d25f84a6a8712dbfc783112dbf1b4fe80de95311cb"
+            "sha256": "9633efe93cd787275e92fd8593ba33c89f748644a62e143303a9cba1d52e5d5c"
         },
         {
             "mcpArgs": [
@@ -4264,7 +4523,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "93b98b43afa77c50d5914f5540793117fcf1244375c0dce0249de0aba5957c50"
+            "sha256": "3dd2ac1469ddf3f3d5d95343b8ed61f5c71a1beeaa297e266b89122b8999a681"
         },
         {
             "mcpArgs": [
@@ -4289,7 +4548,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "0d375b46c15329c27130b5195f141e9b982db29f9a8303b796d16d2485d82ffc"
+            "sha256": "52b42c029f47b3ff27da5223fd91f1b0a9d6d5cf023188da2f0ff29a0808ef7e"
         },
         {
             "mcpArgs": [
@@ -4314,7 +4573,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f66b1405a648466176880ac07e477ec4c0893e643f0dd74d1ffb600a8db79ca3"
+            "sha256": "0f9b1c9d111be033b90f46da536656faa45d92d0b7da3d5350147cd8f3973233"
         },
         {
             "mcpArgs": [
@@ -4339,7 +4598,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "4a6e304fee287bf337aeeaf0fa64aabba74a606ae74f86733bb349b038d559f7"
+            "sha256": "74aa8c5d62be2de19a59b9336b4da4e1752677ced68704da43ddd6d565775392"
         },
         {
             "mcpArgs": [
@@ -4365,7 +4624,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "efb762b5b9ea343a793f3745bbf133d2a4e9b927ec65935f4c5e6b970212a717"
+            "sha256": "8f8171ecc5cef1041c19fd9c1dc8f5905312c2c786042b3f274cb998ad551843"
         },
         {
             "mcpArgs": [
@@ -4391,7 +4650,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "3d574ae5c0af9141eb75e53cf1ca5c86af2eef4b724ec50ed9eea02b58cde414"
+            "sha256": "2fa58850facebc7a8e7524d45a180b4ca2eb4424da2d8425e9ad040c4c0a174a"
         },
         {
             "mcpArgs": [
@@ -4417,7 +4676,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "ac2cd67f21e6ba4178fc55a1a13e36dae791ccdb198e4dc447fac98f3e61e2e9"
+            "sha256": "1afb7a4337cf5f786af6402065ebb9d9438de427367e7173f6856b48d40e34ca"
         },
         {
             "mcpArgs": [
@@ -4443,7 +4702,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "95f26c09e3cdf8a9a58c76bd5e549b4b72056355e320398bdf94c04ca0182bcd"
+            "sha256": "bc1a375f9eaae0410504a09c7f9837ae616f194bbcfc11551840564f7dfafc84"
         },
         {
             "mcpArgs": [
@@ -4469,7 +4728,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "18deeff651fc1259142acf50a1e150ce0d7e46d84308b53d612c6fc4503e991a"
+            "sha256": "bb1d217ceb705620cefb09342e80a6cb71cbdf8293f2bcf9448f98b9b33c9684"
         },
         {
             "mcpArgs": [
@@ -4495,7 +4754,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "ee454dc6b5c312f7a36c063c91c8342789790416c0383851fad3c78f09c1d5c0"
+            "sha256": "82bda7b66edab3e70c2388cfc240f43c2197b5adc2b5f43443dc8499eafbbcfe"
         },
         {
             "mcpArgs": [
@@ -4521,7 +4780,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "4a6e304fee287bf337aeeaf0fa64aabba74a606ae74f86733bb349b038d559f7"
+            "sha256": "74aa8c5d62be2de19a59b9336b4da4e1752677ced68704da43ddd6d565775392"
         },
         {
             "mcpArgs": [
@@ -4547,7 +4806,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "de65a0fec543b3698e106e7aad43462cb03050f3700ddf411b346ab34f2d55c0"
+            "sha256": "ce2f19354b2748518db8db31f2c85fd8b359532702eb339b6b6d00803d641032"
         },
         {
             "mcpArgs": [
@@ -4572,7 +4831,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4597,7 +4856,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4622,7 +4881,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "38fe214ab594d5335735d8ec2f246ef429808ed09e6d1ebd1bf11ec12c983652"
+            "sha256": "ae24e6fb60642ec2957e41da3306bdec0fcf3343bf23760ac79318b2ae50f7ce"
         },
         {
             "mcpArgs": [
@@ -4647,7 +4906,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4672,7 +4931,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4697,7 +4956,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4722,7 +4981,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "fad3c366b5907b6e0423feb456ee6fa01b173f8ce9efa88028a7d10b8d07b333"
+            "sha256": "62481f4adf9bf9f8402e419f3ddba4ed8240d471b1e0efe037fdab3baa80f03c"
         },
         {
             "mcpArgs": [
@@ -4747,7 +5006,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4772,7 +5031,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4797,7 +5056,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4822,7 +5081,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4847,7 +5106,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4872,7 +5131,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4897,7 +5156,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4922,7 +5181,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4947,7 +5206,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4972,7 +5231,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -4997,7 +5256,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997"
+            "sha256": "65a3c316056a793973fdd93f0b5a7dfb42cf7b508bcdf59d8605b48e59114880"
         },
         {
             "mcpArgs": [
@@ -5023,7 +5282,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997"
+            "sha256": "65a3c316056a793973fdd93f0b5a7dfb42cf7b508bcdf59d8605b48e59114880"
         },
         {
             "mcpArgs": [
@@ -5049,7 +5308,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -5075,7 +5334,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997"
+            "sha256": "65a3c316056a793973fdd93f0b5a7dfb42cf7b508bcdf59d8605b48e59114880"
         },
         {
             "mcpArgs": [
@@ -5101,7 +5360,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -5127,7 +5386,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997"
+            "sha256": "65a3c316056a793973fdd93f0b5a7dfb42cf7b508bcdf59d8605b48e59114880"
         },
         {
             "mcpArgs": [
@@ -5153,7 +5412,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": [
@@ -5179,7 +5438,7 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "cb8ba32db3636daab87f18b8da82bd2ef957b57735513f4d0e1da6fb49c99997"
+            "sha256": "65a3c316056a793973fdd93f0b5a7dfb42cf7b508bcdf59d8605b48e59114880"
         },
         {
             "mcpArgs": [
@@ -5205,11 +5464,11 @@
                 "--no-usage-statistics",
                 "--no-performance-crux"
             ],
-            "sha256": "f5d077f6c47c53c44a040c166ba0d32ff7ca9c5fa0482fda99ba95809a5ce1b0"
+            "sha256": "7304f84520854e6a3d71fc2b4263247cb1cca1eb04fe358e9cdac37857017f6a"
         },
         {
             "mcpArgs": ["--categoryExtensions=true", "--no-usage-statistics", "--no-performance-crux"],
-            "sha256": "bd47725c22e6a2665aea31778816c3be14120d4c39f96671ab439491c31c1d96"
+            "sha256": "e74533dd2704915fa37d6edf7c631dc68c584fd3fc95a4835533a8c87d7c1a33"
         }
     ],
     "defaults": [
@@ -5238,7 +5497,7 @@
                 },
                 "required": ["pageId", "uid"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5257,7 +5516,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5288,7 +5547,7 @@
                 },
                 "required": ["pageId", "from_uid", "to_uid"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5296,7 +5555,7 @@
         },
         {
             "name": "emulate",
-            "description": "Emulates various features on the target page.",
+            "description": "Emulates various features on the target page. Each call replaces all emulation settings (except extraHttpHeaders), so pass all desired settings in a single call.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -5320,16 +5579,31 @@
                         "type": "string"
                     },
                     "userAgent": {
-                        "description": "User agent to emulate. Set to empty string to clear the user agent override.",
+                        "description": "User agent to emulate. Omit or set to empty string to clear the user agent override.",
                         "type": "string"
                     },
                     "colorScheme": {
-                        "description": "Emulate the dark or the light mode. Set to \"auto\" to reset to the default.",
+                        "description": "Emulate the dark or the light mode. Omit or set to \"auto\" to reset to the default.",
                         "type": "string",
                         "enum": ["dark", "light", "auto"]
                     },
+                    "forcedColors": {
+                        "description": "Emulate the `forced-colors` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                        "type": "string",
+                        "enum": ["active", "none", "auto"]
+                    },
+                    "prefersContrast": {
+                        "description": "Emulate the `prefers-contrast` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                        "type": "string",
+                        "enum": ["more", "less", "custom", "no-preference", "auto"]
+                    },
+                    "prefersReducedMotion": {
+                        "description": "Emulate the `prefers-reduced-motion` CSS media feature. Omit or set to \"auto\" to reset to the default.",
+                        "type": "string",
+                        "enum": ["reduce", "no-preference", "auto"]
+                    },
                     "viewport": {
-                        "description": "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode.",
+                        "description": "Emulate device viewports '<width>x<height>x<devicePixelRatio>[,mobile][,touch][,landscape]'. 'touch' and 'mobile' to emulate mobile devices. 'landscape' to emulate landscape mode. Omit to clear the viewport override.",
                         "type": "string"
                     },
                     "extraHttpHeaders": {
@@ -5339,7 +5613,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5347,7 +5621,7 @@
         },
         {
             "name": "evaluate_script",
-            "description": "Evaluate a JavaScript function inside the target page or service worker. Returns the response as JSON, so returned values have to be JSON-serializable.",
+            "description": "Evaluate JavaScript inside the target page or service worker. The source can be provided inline or loaded from a local file. Returns the response as JSON, so returned values have to be JSON-serializable.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -5356,11 +5630,20 @@
                         "type": "number"
                     },
                     "function": {
+                        "description": "JavaScript source to execute in the target page. Provide either this or sourcePath, but not both. The source is interpreted according to format.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n",
+                        "type": "string"
+                    },
+                    "sourcePath": {
+                        "description": "The absolute or relative path to a JavaScript file on the MCP server's local filesystem. Provide either this or function, but not both.",
+                        "type": "string"
+                    },
+                    "format": {
+                        "description": "How to interpret the source. \"function\" treats it as a function declaration and supports args. \"script\" evaluates it as classic JavaScript and does not support args. Defaults to \"function\". ECMAScript modules are not supported.",
                         "type": "string",
-                        "description": "A JavaScript function declaration to be executed by the tool in the target page.\nExample without arguments: `() => document.title` or `async () => await fetch(\"example.com\")`.\nExample with arguments: `(el) => el.innerText`\n"
+                        "enum": ["function", "script"]
                     },
                     "args": {
-                        "description": "An optional list of arguments to pass to the function.",
+                        "description": "An optional list of arguments (element uids from the page content snapshot) to pass to the function.",
                         "type": "array",
                         "items": {
                             "type": "string",
@@ -5384,9 +5667,8 @@
                         "type": "string"
                     }
                 },
-                "required": ["function"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5417,7 +5699,7 @@
                 },
                 "required": ["pageId", "uid", "value"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5459,7 +5741,7 @@
                 },
                 "required": ["pageId", "elements"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5482,7 +5764,7 @@
                 },
                 "required": ["pageId", "msgid"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5490,7 +5772,7 @@
         },
         {
             "name": "get_css_styles",
-            "description": "Retrieve matched CSS rules, inline styles, inherited styles, and cascade information for an element identified by its UID.\nUse this tool to debug why specific CSS properties are applied, overridden, or conflicting. Results are paginated and return 10 rules per page by default; use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.",
+            "description": "Retrieve matched CSS rules, inline styles (element.style), inherited styles, custom properties, and cascade wrappers (@layer, @media, @container, @scope) for an element identified by its UID.\nRules are ordered from highest to lowest cascade precedence and include source line numbers (e.g. index:196). Active (winning) declarations have no prefix tag, while (losing) overridden declarations are prefixed with [overloaded].\nTreat the output as authoritative and complete.\nResults are paginated (10 rules per page by default); use pageIdx to page through the remaining rules. Requires a UID from take_snapshot.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -5519,7 +5801,7 @@
                 },
                 "required": ["pageId", "uid"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5550,7 +5832,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5578,7 +5860,7 @@
                 },
                 "required": ["pageId", "action"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5605,7 +5887,7 @@
                 },
                 "required": ["pageId", "uid"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5624,7 +5906,7 @@
                 },
                 "required": ["path"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5632,7 +5914,7 @@
         },
         {
             "name": "lighthouse_audit",
-            "description": "Get Lighthouse score and reports for accessibility, SEO, best practices, and agentic browsing. This excludes performance. For performance audits, run performance_start_trace",
+            "description": "Get Lighthouse scores, failing audits, and the DOM nodes they flag for accessibility, SEO, best practices, and agentic browsing. Full reports are saved to disk. This excludes performance. For performance audits, run performance_start_trace",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -5659,7 +5941,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5733,7 +6015,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5746,7 +6028,7 @@
                 "type": "object",
                 "properties": {},
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5810,7 +6092,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5823,7 +6105,7 @@
                 "type": "object",
                 "properties": {},
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5870,7 +6152,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5903,7 +6185,7 @@
                 },
                 "required": ["url"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5930,7 +6212,7 @@
                 },
                 "required": ["pageId", "insightSetId", "insightName"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -5956,6 +6238,10 @@
                         "description": "Determines if the trace recording should be automatically stopped.",
                         "type": "boolean"
                     },
+                    "ignoreCache": {
+                        "description": "Whether to bypass the HTTP cache when reloading the page, to measure a cold page load. Only applies if reload is true.",
+                        "type": "boolean"
+                    },
                     "filePath": {
                         "description": "The absolute file path, or a file path relative to the current working directory, to save the raw trace data. For example, trace.json.gz (compressed) or trace.json (uncompressed).",
                         "type": "string"
@@ -5963,7 +6249,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -5986,7 +6272,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6013,7 +6299,7 @@
                 },
                 "required": ["pageId", "key"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6032,7 +6318,7 @@
                 },
                 "required": ["id"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6049,17 +6335,63 @@
                         "description": "Targets a specific page by ID."
                     },
                     "width": {
-                        "type": "number",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
                         "description": "Page width"
                     },
                     "height": {
-                        "type": "number",
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
                         "description": "Page height"
                     }
                 },
                 "required": ["pageId", "width", "height"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
+            },
+            "annotations": {
+                "readOnlyHint": false
+            }
+        },
+        {
+            "name": "screencast_start",
+            "description": "Starts recording a screencast (video) of the target page.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "pageId": {
+                        "type": "number",
+                        "description": "Targets a specific page by ID."
+                    },
+                    "filePath": {
+                        "description": "Output file path (.mp4). Uses mkdtemp to generate a unique path if not provided.",
+                        "type": "string"
+                    }
+                },
+                "required": ["pageId"],
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "additionalProperties": false
+            },
+            "annotations": {
+                "readOnlyHint": false
+            }
+        },
+        {
+            "name": "screencast_stop",
+            "description": "Stops the active screencast recording on the target page.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "pageId": {
+                        "type": "number",
+                        "description": "Targets a specific page by ID."
+                    }
+                },
+                "required": ["pageId"],
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6082,7 +6414,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true
@@ -6105,7 +6437,7 @@
                 },
                 "required": ["pageId", "filePath"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6148,7 +6480,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6175,7 +6507,7 @@
                 },
                 "required": ["pageId"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6194,7 +6526,7 @@
                 },
                 "required": ["id"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6221,7 +6553,7 @@
                 },
                 "required": ["pageId", "text"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6240,7 +6572,7 @@
                 },
                 "required": ["id"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6275,7 +6607,7 @@
                 },
                 "required": ["pageId", "uid", "filePaths"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": false
@@ -6308,7 +6640,7 @@
                 },
                 "required": ["pageId", "text"],
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
-                "additionalProperties": {}
+                "additionalProperties": false
             },
             "annotations": {
                 "readOnlyHint": true

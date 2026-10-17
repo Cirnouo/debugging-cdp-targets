@@ -1,4 +1,4 @@
-// Explicitly reviewed options from the delivered official 1.10.1 public server.
+// Explicitly reviewed options from the delivered official 1.11.0 public server.
 // Browser creation/attachment, config files and CLI mode remain gateway-owned.
 export const CATALOG_FLAGS = [
     'categoryInput',
@@ -33,13 +33,14 @@ const booleans = [
     'slim',
     'redactNetworkHeaders',
     'allowUnrestrictedPaths',
+    'fileNavigations',
 ];
 const scalars = [
     'logFile',
     'viewport',
     'experimentalDataFormat',
     'experimentalFfmpegPath',
-    'experimentalScreencastFps',
+    'screencastFps',
     'screenshotFormat',
     'screenshotQuality',
     'screenshotMaxWidth',
@@ -48,7 +49,13 @@ const scalars = [
 const arrays = ['filesystemRoot', 'blockedUrlPattern', 'allowedUrlPattern'];
 const normalize = (name: string) => name.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
 const alias = (name: string) =>
-    name === 'workspace' ? 'filesystemRoot' : name === 'experimentalMemory' ? 'memoryDebugging' : name;
+    name === 'workspace'
+        ? 'filesystemRoot'
+        : name === 'experimentalMemory'
+          ? 'memoryDebugging'
+          : name === 'experimentalScreencastFps'
+            ? 'screencastFps'
+            : name;
 export type McpOption = { values: (string | boolean)[]; args: string[] };
 export function parseMcpArgs(args: readonly string[]) {
     const options = new Map<string, McpOption>();

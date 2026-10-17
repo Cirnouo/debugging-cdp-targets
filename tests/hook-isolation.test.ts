@@ -229,7 +229,7 @@ async function textHookFixture(host = 'codex') {
             'package.json',
             JSON.stringify({
                 name: 'chrome-devtools-mcp',
-                version: '1.10.1',
+                version: '1.11.0',
                 type: 'module',
                 bin: { 'chrome-devtools-mcp': './build/src/bin/chrome-devtools-mcp.js' },
             }),

@@ -34,10 +34,27 @@ Get a verbose snapshot to include all elements if you are interested in the sele
                 : '') +
             '\n';
         chunks.push(line);
-        for (const child of node.children) {
-            chunks.push(this.#formatNode(child, depth + 1));
+        if (!this.#hasRedundantTextChildren(node)) {
+            for (const child of node.children) {
+                chunks.push(this.#formatNode(child, depth + 1));
+            }
         }
         return chunks.join('');
+    }
+    #hasRedundantTextChildren(node) {
+        if (this.#snapshot.verbose || !node.name || node.children.length === 0) {
+            return false;
+        }
+        let text = '';
+        for (const child of node.children) {
+            if (child.role !== 'StaticText' ||
+                child.children.length !== 0 ||
+                child.id === this.#snapshot.selectedElementUid) {
+                return false;
+            }
+            text += child.name ?? '';
+        }
+        return stripWhitespace(text) === stripWhitespace(node.name);
     }
     #nodeToJSON(node) {
         const rawAttrs = this.#getAttributesMap(node);
@@ -50,7 +67,8 @@ Get a verbose snapshot to include all elements if you are interested in the sele
     }
     #getAttributes(serializedAXNodeRoot) {
         const attributes = [`uid=${serializedAXNodeRoot.id}`];
-        if (serializedAXNodeRoot.role) {
+        if (serializedAXNodeRoot.role &&
+            serializedAXNodeRoot.role !== 'StaticText') {
             attributes.push(serializedAXNodeRoot.role === 'none'
                 ? 'ignored'
                 : serializedAXNodeRoot.role);
@@ -60,15 +78,21 @@ Get a verbose snapshot to include all elements if you are interested in the sele
         }
         const simpleAttrs = this.#getAttributesMap(serializedAXNodeRoot, 
         /* excludeSpecial */ true);
+        const isOption = serializedAXNodeRoot.role === 'option';
         for (const attr of Object.keys(serializedAXNodeRoot).sort()) {
             if (excludedAttributes.has(attr)) {
                 continue;
             }
             const mapped = booleanPropertyMap[attr];
-            if (mapped && simpleAttrs[mapped]) {
+            if (mapped &&
+                simpleAttrs[mapped] &&
+                !(isOption && mapped === 'selectable')) {
                 attributes.push(mapped);
             }
             const val = simpleAttrs[attr];
+            if (isOption && attr === 'value' && val === serializedAXNodeRoot.name) {
+                continue;
+            }
             if (val === true) {
                 attributes.push(attr);
             }
@@ -132,4 +156,7 @@ const excludedAttributes = new Set([
     'backendNodeId',
     'loaderId',
 ]);
+function stripWhitespace(text) {
+    return text.replace(/\s+/g, '');
+}
 //# sourceMappingURL=SnapshotFormatter.js.map

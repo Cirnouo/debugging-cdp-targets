@@ -5,46 +5,28 @@
  */
 import { ToolCategory } from '../tools/categories.js';
 const categoryOverrides = {
-    [ToolCategory.INPUT]: {
-        hidden: false,
-    },
-    [ToolCategory.NAVIGATION]: {
-        hidden: false,
-    },
-    [ToolCategory.EMULATION]: {
-        hidden: false,
-    },
-    [ToolCategory.PERFORMANCE]: {
-        hidden: false,
-    },
-    [ToolCategory.NETWORK]: {
-        hidden: false,
-    },
-    [ToolCategory.DEBUGGING]: {
-        hidden: false,
-    },
-    [ToolCategory.MEMORY]: {
-        hidden: false,
-    },
+    [ToolCategory.INPUT]: {},
+    [ToolCategory.NAVIGATION]: {},
+    [ToolCategory.EMULATION]: {},
+    [ToolCategory.PERFORMANCE]: {},
+    [ToolCategory.NETWORK]: {},
+    [ToolCategory.DEBUGGING]: {},
+    [ToolCategory.MEMORY]: {},
     [ToolCategory.WEBMCP]: {
-        describe: 'Set to true to enable debugging WebMCP tools. Requires Chrome 150+ with the following flag: `--enable-features=WebMCP`',
+        describe: 'Set to true to enable WebMCP tools (excluding debugging tools, which are exposed under the third-party developer tools category). Requires Chrome 150+ with the following flag: `--enable-features=WebMCP`',
         offByDefault: true,
-        hidden: false,
     },
     [ToolCategory.EXTENSIONS]: {
-        describe: 'Set to true to include tools related to extensions. Note: This feature is currently only supported with a pipe connection. autoConnect, browserUrl, and wsEndpoint are not supported with this feature until 149 will be released.',
-        hidden: false,
+        describe: 'Set to true to include tools related to extensions.',
         offByDefault: true,
+        reloadable: false,
     },
     [ToolCategory.THIRD_PARTY]: {
-        describe: 'Set to true to enable third-party developer tools exposed by the inspected page itself',
-        hidden: false,
+        describe: 'Set to true to enable third-party developer tools exposed by the inspected page itself (via WebMCP or devtoolstooldiscovery)',
         offByDefault: true,
     },
     [ToolCategory.PWA]: {
         describe: 'Set to true to include tools for automating Progressive Web Apps (install, launch, uninstall, and OS state). This feature is only supported with a pipe connection; autoConnect, browserUrl, and wsEndpoint are not supported.',
-        conflicts: ['autoConnect', 'browserUrl', 'wsEndpoint'],
-        hidden: false,
         offByDefault: true,
     },
 };
@@ -56,8 +38,11 @@ function createOption(category) {
     return {
         type: 'boolean',
         describe,
-        hidden: true,
+        reloadable: true,
         ...overrides,
+        // Off-by-default categories have no default so that they stay unset unless
+        // passed explicitly. This keeps them out of conflict checks and lets
+        // --viaCli apply its own categoryExtensions default.
         ...(overrides.offByDefault ? {} : { default: true }),
     };
 }

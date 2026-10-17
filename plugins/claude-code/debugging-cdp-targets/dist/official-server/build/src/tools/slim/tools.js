@@ -14,6 +14,7 @@ export const screenshot = definePageTool(() => ({
         category: ToolCategory.DEBUGGING,
         // Not read-only due to filePath param.
         readOnlyHint: false,
+        conditions: ['slim'],
     },
     schema: {},
     blockedByDialog: true,
@@ -35,6 +36,7 @@ export const navigate = definePageTool((args) => {
         annotations: {
             category: ToolCategory.NAVIGATION,
             readOnlyHint: false,
+            conditions: ['slim'],
         },
         schema: {
             url: zod.string().describe('URL to navigate to'),
@@ -45,6 +47,7 @@ export const navigate = definePageTool((args) => {
             validateUrl(request.params.url, {
                 javascriptEvaluation: args?.javascriptEvaluation,
                 categoryExtensions: args?.categoryExtensions,
+                fileNavigations: args?.fileNavigations,
             });
             const page = request.page;
             const options = {
@@ -75,7 +78,7 @@ export const evaluate = definePageTool(() => ({
     annotations: {
         category: ToolCategory.DEBUGGING,
         readOnlyHint: false,
-        conditions: ['javascriptEvaluation'],
+        conditions: ['slim', 'javascriptEvaluation'],
     },
     schema: {
         script: zod.string().describe(`JS script to run on the page`),
@@ -84,13 +87,8 @@ export const evaluate = definePageTool(() => ({
     verifyFilesSchema: {},
     handler: async (request, response) => {
         const page = request.page;
-        try {
-            const result = await page.pptrPage.evaluate(request.params.script);
-            response.appendResponseLine(JSON.stringify(result));
-        }
-        catch (err) {
-            response.appendResponseLine(String(err.message));
-        }
+        const result = await page.pptrPage.evaluate(request.params.script);
+        response.appendResponseLine(JSON.stringify(result));
     },
 }));
 //# sourceMappingURL=tools.js.map

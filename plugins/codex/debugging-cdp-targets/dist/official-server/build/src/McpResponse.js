@@ -6,7 +6,7 @@
 import { CommentFormatter, } from './formatters/CommentFormatter.js';
 import { ConsoleFormatter } from './formatters/ConsoleFormatter.js';
 import { CssFormatter, resolveContainerQueries, } from './formatters/CssFormatter.js';
-import { HeapSnapshotFormatter, isEdgeLike, isNodeLike, } from './formatters/HeapSnapshotFormatter.js';
+import { collectRankedContexts, formatName, HeapSnapshotFormatter, isEdgeLike, isNodeLike, } from './formatters/HeapSnapshotFormatter.js';
 import { IssueFormatter } from './formatters/IssueFormatter.js';
 import { NetworkFormatter } from './formatters/NetworkFormatter.js';
 import { SnapshotFormatter } from './formatters/SnapshotFormatter.js';
@@ -78,6 +78,9 @@ export class McpResponse {
             this.#includeExtensionServiceWorkers = value;
             this.#includeExtensionPages = value;
         }
+    }
+    setIncludeExtensionServiceWorkers(value) {
+        this.#includeExtensionServiceWorkers = value;
     }
     includeSnapshot(params) {
         this.#snapshotParams = params ?? {
@@ -210,9 +213,10 @@ export class McpResponse {
             include: true,
             aggregateData,
             pagination: options,
+            formatOptions: options,
         };
     }
-    setHeapSnapshotStats(stats, staticData, nativeContextSizes, retainedByContextSummary) {
+    setHeapSnapshotStats(stats, staticData, nativeContextSizes, retainedByContextSummary, options) {
         this.#heapSnapshotOptions = {
             ...this.#heapSnapshotOptions,
             include: true,
@@ -220,6 +224,7 @@ export class McpResponse {
             staticData,
             nativeContextSizes,
             retainedByContextSummary,
+            formatOptions: options,
         };
     }
     setHeapSnapshotNodes(nodes, options) {
@@ -228,6 +233,7 @@ export class McpResponse {
             include: true,
             nodes,
             pagination: options,
+            formatOptions: options,
         };
     }
     setHeapSnapshotDuplicateStrings(duplicateStrings, options) {
@@ -236,41 +242,57 @@ export class McpResponse {
             include: true,
             duplicateStrings,
             pagination: options,
+            formatOptions: options,
         };
     }
-    setHeapSnapshotRetainingPaths(retainingPaths) {
+    setHeapSnapshotRetainingPaths(retainingPaths, options) {
         this.#heapSnapshotOptions = {
             ...this.#heapSnapshotOptions,
             include: true,
             retainingPaths,
+            formatOptions: options,
         };
     }
-    setHeapSnapshotDominators(dominators) {
+    setHeapSnapshotDominators(dominators, options) {
         this.#heapSnapshotOptions = {
             ...this.#heapSnapshotOptions,
             include: true,
             dominators,
+            formatOptions: options,
         };
     }
-    setHeapSnapshotClassDiffs(classDiffs) {
+    setHeapSnapshotClassDiffs(diff, options) {
         this.#heapSnapshotOptions = {
             ...this.#heapSnapshotOptions,
             include: true,
-            classDiffs,
+            diff,
+            pagination: options,
+            formatOptions: options,
         };
     }
-    setHeapSnapshotDetailedClassDiff(detailedClassDiff) {
+    setHeapSnapshotDetailedClassDiff(detailedClassDiff, options) {
         this.#heapSnapshotOptions = {
             ...this.#heapSnapshotOptions,
             include: true,
             detailedClassDiff,
+            formatOptions: options,
         };
     }
-    setHeapSnapshotObjectDetails(objectInfo) {
+    setHeapSnapshotObjectDetails(objectInfo, options) {
         this.#heapSnapshotOptions = {
             ...this.#heapSnapshotOptions,
             include: true,
             objectInfo,
+            formatOptions: options,
+        };
+    }
+    setHeapSnapshotContextAnalysis(contextAnalysis, options) {
+        this.#heapSnapshotOptions = {
+            ...this.#heapSnapshotOptions,
+            include: true,
+            contextAnalysis,
+            contextAnalysisOptions: options,
+            formatOptions: options,
         };
     }
     attachImage(value) {
@@ -307,9 +329,7 @@ export class McpResponse {
             const result = await context.saveFile(new TextEncoder().encode(formatter.toString()), this.#snapshotParams.filePath, '.txt');
             return result.filename;
         }
-        else {
-            return formatter;
-        }
+        return formatter;
     }
     async #handleAttachedNetworkRequest(context) {
         if (!this.#attachedNetworkRequestId) {
@@ -346,7 +366,7 @@ export class McpResponse {
                 devTools: this.#page.devtoolsUniverse,
             });
         }
-        else if (message instanceof DevTools.AggregatedIssue) {
+        if (message instanceof DevTools.AggregatedIssue) {
             const formatter = new IssueFormatter(message, {
                 id: consoleMessageStableId,
                 requestIdResolver: this.#page.resolveCdpRequestId.bind(this.#page),
@@ -357,9 +377,7 @@ export class McpResponse {
             }
             return formatter;
         }
-        else {
-            return undefined;
-        }
+        return undefined;
     }
     async #handleThirdPartyDevelopeTools() {
         if (this.#args.categoryExperimentalThirdParty &&
@@ -459,7 +477,8 @@ export class McpResponse {
             return undefined;
         }
         const page = this.#page;
-        return await CommentFormatter.from(comments, {
+        const initialSnapshot = page?.textSnapshot;
+        const formatter = await CommentFormatter.from(comments, {
             resolveBackendNodeId: page
                 ? (id) => page.resolveBackendNodeId(id)
                 : undefined,
@@ -467,9 +486,19 @@ export class McpResponse {
                 ? (id) => page.resolveCdpRequestId(id)
                 : undefined,
         });
+        let commentsSnapshotRegenerated;
+        if (page?.textSnapshot && page.textSnapshot !== initialSnapshot) {
+            commentsSnapshotRegenerated = page.textSnapshot.verbose
+                ? 'verbose'
+                : 'standard';
+        }
+        return { formatter, commentsSnapshotRegenerated };
     }
     async handle(context, dataFormat = 'default') {
-        const [snapshot, detailedNetworkRequest, detailedConsoleMessage, thirdPartyDeveloperTools, webmcpTools, consoleMessages, networkRequests, comments,] = await Promise.all([
+        if (this.#attachedWaitForResult?.openedPages && !this.#includePages) {
+            await context.createPagesSnapshot();
+        }
+        const [snapshot, detailedNetworkRequest, detailedConsoleMessage, thirdPartyDeveloperTools, webmcpTools, consoleMessages, networkRequests, commentsResult,] = await Promise.all([
             this.#handleSnapshot(context),
             this.#handleAttachedNetworkRequest(context),
             this.#handleAttachedConsoleMessage(),
@@ -480,13 +509,13 @@ export class McpResponse {
             this.#handleComments(),
         ]);
         if (this.#includeExtensionServiceWorkers) {
-            await context.createExtensionServiceWorkersSnapshot();
+            context.createWorkersSnapshot();
         }
         let extensions;
         if (this.#listExtensions) {
             extensions = await context.listExtensions();
         }
-        return this.format(context, {
+        return await this.format(context, {
             detailedConsoleMessage,
             consoleMessages,
             snapshot,
@@ -498,7 +527,8 @@ export class McpResponse {
             lighthouseResult: this.#attachedLighthouseResult,
             thirdPartyDeveloperTools,
             webmcpTools,
-            comments,
+            comments: commentsResult?.formatter,
+            commentsSnapshotRegenerated: commentsResult?.commentsSnapshotRegenerated,
             errorMessage: this.#error?.message,
         }, dataFormat);
     }
@@ -549,10 +579,28 @@ export class McpResponse {
                 structuredContent.navigatedToUrl =
                     this.#attachedWaitForResult.navigatedToUrl;
             }
+            if (this.#attachedWaitForResult.openedPages) {
+                const openedPages = this.#attachedWaitForResult.openedPages;
+                const openedMcpPages = context
+                    .getPages()
+                    .filter(mcpPage => openedPages.has(mcpPage.target));
+                if (openedMcpPages.length) {
+                    const targetInfos = await context.getTargetInfos();
+                    response.push('## Opened pages');
+                    const structuredPages = [];
+                    for (const mcpPage of openedMcpPages) {
+                        const page = formatPage(mcpPage, context, targetInfos.get(mcpPage.targetId));
+                        response.push(page.text);
+                        structuredPages.push(page.structured);
+                    }
+                    structuredContent.openedPages = structuredPages;
+                }
+            }
         }
-        const networkConditions = this.#page?.networkConditions;
-        if (networkConditions) {
-            const timeout = this.#page.pptrPage.getDefaultNavigationTimeout();
+        const page = this.#page;
+        const networkConditions = page?.networkConditions;
+        if (page && networkConditions) {
+            const timeout = page.pptrPage.getDefaultNavigationTimeout();
             response.push(`Emulating network conditions: ${networkConditions}`);
             response.push(`Default navigation timeout set to ${timeout} ms`);
             structuredContent.networkConditions = networkConditions;
@@ -583,6 +631,21 @@ export class McpResponse {
             response.push(`Emulating color scheme: ${colorScheme}`);
             structuredContent.colorScheme = colorScheme;
         }
+        const forcedColors = this.#page?.forcedColors;
+        if (forcedColors) {
+            response.push(`Emulating forced-colors: ${forcedColors}`);
+            structuredContent.forcedColors = forcedColors;
+        }
+        const prefersContrast = this.#page?.prefersContrast;
+        if (prefersContrast) {
+            response.push(`Emulating prefers-contrast: ${prefersContrast}`);
+            structuredContent.prefersContrast = prefersContrast;
+        }
+        const prefersReducedMotion = this.#page?.prefersReducedMotion;
+        if (prefersReducedMotion) {
+            response.push(`Emulating prefers-reduced-motion: ${prefersReducedMotion}`);
+            structuredContent.prefersReducedMotion = prefersReducedMotion;
+        }
         const dialog = this.#page?.getDialog();
         if (dialog) {
             const defaultValueIfNeeded = dialog.type() === 'prompt'
@@ -600,7 +663,7 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
         if (this.#includePages) {
             const allPages = context.getPages();
             const { regularPages, extensionPages } = allPages.reduce((acc, mcpPage) => {
-                if (mcpPage.pptrPage.url().startsWith('chrome-extension://')) {
+                if (mcpPage.url().startsWith('chrome-extension://')) {
                     acc.extensionPages.push(mcpPage);
                 }
                 else {
@@ -619,6 +682,10 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                 }
                 response.push(`Note: the previously selected page ${selectionFallback.wasClosed ? 'was closed' : 'is no longer listed'}.${selectedPageId !== undefined ? ` Page ${selectedPageId} is now selected.` : ''}`);
             }
+            const targetInfos = regularPages.length ||
+                (this.#includeExtensionPages && extensionPages.length)
+                ? await context.getTargetInfos()
+                : new Map();
             if (regularPages.length) {
                 const parts = [`## Pages`];
                 const structuredPages = [];
@@ -627,12 +694,9 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                     const contextLabel = isolatedContextName
                         ? ` isolatedContext=${isolatedContextName}`
                         : '';
-                    const title = await fetchPageTitle(mcpPage.pptrPage);
-                    const pageLabel = title
-                        ? `${truncateTitle(title)} (${mcpPage.pptrPage.url()})`
-                        : mcpPage.pptrPage.url();
-                    parts.push(`${mcpPage.id}: ${pageLabel}${context.isPageSelected(mcpPage) ? ' [selected]' : ''}${contextLabel}`);
-                    structuredPages.push(createStructuredPage(mcpPage, context, title));
+                    const page = formatPage(mcpPage, context, targetInfos.get(mcpPage.targetId));
+                    parts.push(`${page.text}${context.isPageSelected(mcpPage) ? ' [selected]' : ''}${contextLabel}`);
+                    structuredPages.push(page.structured);
                 }
                 response.push(...parts);
                 structuredContent.pages = structuredPages;
@@ -646,27 +710,25 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                         const contextLabel = isolatedContextName
                             ? ` isolatedContext=${isolatedContextName}`
                             : '';
-                        const title = await fetchPageTitle(mcpPage.pptrPage);
-                        const pageLabel = title
-                            ? `${truncateTitle(title)} (${mcpPage.pptrPage.url()})`
-                            : mcpPage.pptrPage.url();
-                        response.push(`${mcpPage.id}: ${pageLabel}${context.isPageSelected(mcpPage) ? ' [selected]' : ''}${contextLabel}`);
-                        structuredExtensionPages.push(createStructuredPage(mcpPage, context, title));
+                        const page = formatPage(mcpPage, context, targetInfos.get(mcpPage.targetId));
+                        response.push(`${page.text}${context.isPageSelected(mcpPage) ? ' [selected]' : ''}${contextLabel}`);
+                        structuredExtensionPages.push(page.structured);
                     }
                     structuredContent.extensionPages = structuredExtensionPages;
                 }
             }
         }
         if (this.#includeExtensionServiceWorkers) {
-            if (context.getExtensionServiceWorkers().length) {
+            const extensionServiceWorkers = context
+                .getWorkers()
+                .filter(worker => worker.type === 'service_worker');
+            if (extensionServiceWorkers.length) {
                 response.push(`## Extension Service Workers`);
             }
-            for (const extensionServiceWorker of context.getExtensionServiceWorkers()) {
+            for (const extensionServiceWorker of extensionServiceWorkers) {
                 response.push(`${extensionServiceWorker.id}: ${extensionServiceWorker.url}`);
             }
-            structuredContent.extensionServiceWorkers = context
-                .getExtensionServiceWorkers()
-                .map(extensionServiceWorker => {
+            structuredContent.extensionServiceWorkers = extensionServiceWorkers.map(extensionServiceWorker => {
                 return {
                     id: extensionServiceWorker.id,
                     url: extensionServiceWorker.url,
@@ -705,19 +767,61 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
         }
         if (data.lighthouseResult) {
             structuredContent.lighthouseResult = data.lighthouseResult;
-            const { summary, reports } = data.lighthouseResult;
-            response.push('## Lighthouse Audit Results');
+            const { summary, failedAudits, reports } = data.lighthouseResult;
+            response.push('## Lighthouse audit results');
             response.push(`Mode: ${summary.mode}`);
             response.push(`Device: ${summary.device}`);
             response.push(`URL: ${summary.url}`);
-            response.push('### Category Scores');
+            response.push('### Category scores');
             for (const score of summary.scores) {
-                response.push(`- ${score.title}: ${(score.score ?? 0) * 100} (${score.id})`);
+                // Lighthouse uses a null score for categories that could not be
+                // scored and renders scores as Math.round(score * 100).
+                const formattedScore = score.score === null ? 'n/a' : Math.round(score.score * 100);
+                response.push(`- ${score.title}: ${formattedScore} (${score.id})`);
             }
-            response.push('### Audit Summary');
+            response.push('### Audit summary');
             response.push(`Passed: ${summary.audits.passed}`);
             response.push(`Failed: ${summary.audits.failed}`);
-            response.push(`Total Timing: ${summary.timing.total}ms`);
+            response.push(`Total timing: ${summary.timing.total}ms`);
+            if (failedAudits.length) {
+                response.push('### Failed audits');
+                for (const audit of failedAudits) {
+                    const categories = audit.categories.length
+                        ? ` [${audit.categories.join(', ')}]`
+                        : '';
+                    const displayValue = audit.displayValue
+                        ? ` (${audit.displayValue})`
+                        : '';
+                    response.push(`- ${audit.id}${categories}: ${audit.title}${displayValue} (score: ${audit.score})`);
+                    if (audit.description) {
+                        response.push(`  ${collapseWhitespace(audit.description)}`);
+                    }
+                    if (audit.totalNodes) {
+                        const shown = audit.totalNodes > audit.nodes.length
+                            ? `, showing ${audit.nodes.length}`
+                            : '';
+                        response.push(`  Nodes (${audit.totalNodes}${shown}):`);
+                    }
+                    for (const node of audit.nodes) {
+                        // Values are JSON-encoded so that quotes or spaces within them
+                        // cannot be confused with the `key=value` delimiters.
+                        const parts = [];
+                        if (node.selector) {
+                            parts.push(`selector=${JSON.stringify(node.selector)}`);
+                        }
+                        if (node.nodeLabel) {
+                            parts.push(`label=${JSON.stringify(collapseWhitespace(node.nodeLabel))}`);
+                        }
+                        if (node.snippet) {
+                            parts.push(`snippet=${JSON.stringify(collapseWhitespace(node.snippet))}`);
+                        }
+                        response.push(`  - ${parts.join(' ')}`);
+                        if (node.explanation) {
+                            response.push(`    ${collapseWhitespace(node.explanation)}`);
+                        }
+                    }
+                }
+            }
             response.push('### Reports');
             for (const report of reports) {
                 response.push(`- ${report}`);
@@ -738,6 +842,7 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
         }
         if (this.#heapSnapshotOptions?.include) {
             response.push('## Heap Snapshot Data');
+            const formatOptions = this.#heapSnapshotOptions.formatOptions ?? {};
             const stats = this.#heapSnapshotOptions.stats;
             const staticData = this.#heapSnapshotOptions.staticData;
             if (stats) {
@@ -753,7 +858,7 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
             const nativeContextSizes = this.#heapSnapshotOptions.nativeContextSizes;
             if (nativeContextSizes) {
                 response.push('### Native Contexts');
-                response.push(HeapSnapshotFormatter.formatNativeContextSizes(nativeContextSizes));
+                response.push(HeapSnapshotFormatter.formatNativeContextSizes(nativeContextSizes, formatOptions));
                 structuredContent.heapSnapshot = structuredContent.heapSnapshot || {};
                 structuredContent.heapSnapshot.nativeContextSizes = nativeContextSizes;
             }
@@ -767,8 +872,7 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
             }
             const aggregateData = this.#heapSnapshotOptions.aggregateData;
             if (aggregateData) {
-                const sortedEntries = HeapSnapshotFormatter.sort(aggregateData.aggregates);
-                const paginationData = this.#dataWithPagination(sortedEntries, this.#heapSnapshotOptions.pagination);
+                const paginationData = this.#dataWithPagination(aggregateData.aggregates, this.#heapSnapshotOptions.pagination);
                 response.push(`Objects: ${aggregateData.objectCount}`);
                 response.push(`Total shallow size: ${formatBytesToKb(aggregateData.totalSelfSize)}`);
                 structuredContent.heapSnapshot = structuredContent.heapSnapshot || {};
@@ -778,12 +882,13 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                 };
                 structuredContent.pagination = paginationData.pagination;
                 response.push(...paginationData.info);
-                const paginatedRecord = Object.fromEntries(paginationData.items);
-                const formatter = new HeapSnapshotFormatter(paginatedRecord);
-                structuredContent.heapSnapshotData = formatter.toJSON();
+                structuredContent.heapSnapshotAggregates = paginationData.items;
                 response.push(compactEncode
-                    ? compactEncode(structuredContent.heapSnapshotData)
-                    : formatter.toString());
+                    ? compactEncode(paginationData.items.map(aggregate => ({
+                        ...aggregate,
+                        className: formatName(aggregate.className, formatOptions),
+                    })))
+                    : HeapSnapshotFormatter.formatAggregates(paginationData.items, formatOptions));
             }
             const nodes = this.#heapSnapshotOptions.nodes;
             if (nodes) {
@@ -800,7 +905,7 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                     }
                 }
                 const paginationData = this.#dataWithPagination(items, this.#heapSnapshotOptions.pagination);
-                response.push(HeapSnapshotFormatter.formatNodes(paginationData.items));
+                response.push(HeapSnapshotFormatter.formatNodes(paginationData.items, formatOptions));
                 structuredContent.pagination = paginationData.pagination;
                 response.push(...paginationData.info);
                 structuredContent.heapSnapshotNodes = paginationData.items;
@@ -813,7 +918,7 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                     response.push('No retaining paths found.');
                 }
                 else {
-                    response.push(HeapSnapshotFormatter.formatRetainingPaths(paths));
+                    response.push(HeapSnapshotFormatter.formatRetainingPaths(paths, formatOptions));
                 }
                 const reached = Object.entries(limitsReached)
                     .filter(([, hit]) => hit)
@@ -831,24 +936,36 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                     response.push('No dominators found.');
                 }
                 else {
-                    response.push(HeapSnapshotFormatter.formatDominators(dominators));
+                    response.push(HeapSnapshotFormatter.formatDominators(dominators, formatOptions));
                 }
                 structuredContent.heapSnapshotDominators = dominators;
             }
-            const classDiffs = this.#heapSnapshotOptions.classDiffs;
-            if (classDiffs) {
+            const diff = this.#heapSnapshotOptions.diff;
+            if (diff) {
                 response.push('### Heap Snapshot Diff');
+                response.push(HeapSnapshotFormatter.formatDiffTotals(diff.totals));
+                structuredContent.heapSnapshot = structuredContent.heapSnapshot || {};
+                structuredContent.heapSnapshot.classDiffStats = diff.totals;
+                const paginationData = this.#dataWithPagination(diff.classDiffs, this.#heapSnapshotOptions.pagination);
+                structuredContent.pagination = paginationData.pagination;
+                response.push(...paginationData.info);
                 response.push(compactEncode
-                    ? compactEncode(classDiffs)
-                    : HeapSnapshotFormatter.formatDiffSummary(classDiffs));
-                structuredContent.heapSnapshotClassDiffs = classDiffs;
+                    ? compactEncode(paginationData.items.map(diff => ({
+                        ...diff,
+                        className: formatName(diff.className, formatOptions),
+                    })))
+                    : HeapSnapshotFormatter.formatDiffSummary(paginationData.items, formatOptions));
+                structuredContent.heapSnapshotClassDiffs = paginationData.items;
             }
             const detailedClassDiff = this.#heapSnapshotOptions.detailedClassDiff;
             if (detailedClassDiff) {
                 response.push('### Heap Snapshot Detailed Diff');
                 response.push(compactEncode
-                    ? compactEncode(detailedClassDiff)
-                    : HeapSnapshotFormatter.formatDiffDetails(detailedClassDiff));
+                    ? compactEncode({
+                        ...detailedClassDiff,
+                        className: formatName(detailedClassDiff.className, formatOptions),
+                    })
+                    : HeapSnapshotFormatter.formatDiffDetails(detailedClassDiff, formatOptions));
                 structuredContent.heapSnapshotDetailedClassDiff = detailedClassDiff;
             }
             const duplicateStrings = this.#heapSnapshotOptions.duplicateStrings;
@@ -857,17 +974,46 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
                 const paginationData = this.#dataWithPagination(duplicateStrings, this.#heapSnapshotOptions.pagination);
                 structuredContent.pagination = paginationData.pagination;
                 response.push(...paginationData.info);
-                const formatted = HeapSnapshotFormatter.formatDuplicateStrings(paginationData.items);
+                const formatted = HeapSnapshotFormatter.formatDuplicateStrings(paginationData.items, formatOptions);
                 response.push(formatted);
                 structuredContent.heapSnapshotDuplicateStrings = paginationData.items;
             }
             const objectInfo = this.#heapSnapshotOptions.objectInfo;
             if (objectInfo) {
                 response.push('### Object Details');
-                response.push(compactEncode
-                    ? compactEncode(objectInfo)
-                    : HeapSnapshotFormatter.formatObjectInfo(objectInfo));
+                if (compactEncode) {
+                    response.push(compactEncode({
+                        ...objectInfo,
+                        name: formatName(objectInfo.name, formatOptions),
+                    }));
+                }
+                else {
+                    response.push(HeapSnapshotFormatter.formatObjectInfo(objectInfo, formatOptions));
+                }
                 structuredContent.heapSnapshotObjectDetails = objectInfo;
+            }
+            const contextAnalysis = this.#heapSnapshotOptions.contextAnalysis;
+            if (contextAnalysis) {
+                const contextAnalysisOptions = this.#heapSnapshotOptions.contextAnalysisOptions;
+                const rankedContexts = collectRankedContexts(contextAnalysis, {
+                    retainedSize: contextAnalysisOptions?.retainedSize,
+                    scopeInfoNodeId: contextAnalysisOptions?.scopeInfoNodeId,
+                });
+                const paginationData = this.#dataWithPagination(rankedContexts, {
+                    pageIdx: contextAnalysisOptions?.pageIdx ?? 0,
+                    pageSize: contextAnalysisOptions?.pageSize,
+                });
+                const report = {
+                    contexts: paginationData.items,
+                    scriptsWithoutScopes: contextAnalysis.scriptsWithoutScopes,
+                };
+                response.push('### Context Analysis');
+                structuredContent.pagination = paginationData.pagination;
+                response.push(...paginationData.info);
+                response.push(compactEncode
+                    ? compactEncode(report)
+                    : HeapSnapshotFormatter.formatContextAnalysis(report, formatOptions));
+                structuredContent.heapSnapshotContextAnalysis = report;
             }
         }
         if (data.detailedNetworkRequest) {
@@ -976,6 +1122,11 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
             const commentsJson = data.comments.toJSON();
             structuredContent.comments = commentsJson;
             response.push(compactEncode ? compactEncode(commentsJson) : data.comments.toString());
+            if (data.commentsSnapshotRegenerated) {
+                response.push(`Note: DevTools comments regenerated the ${data.commentsSnapshotRegenerated} text snapshot.`);
+                structuredContent.commentsSnapshotRegenerated =
+                    data.commentsSnapshotRegenerated;
+            }
         }
         if (this.#cssStylesData) {
             const resolveUid = (backendNodeId) => this.#page?.textSnapshot?.resolveCdpElementId(backendNodeId);
@@ -1030,7 +1181,8 @@ Call ${handleDialog(this.#args).name} to handle it before continuing.`);
             response.push('Invalid page number provided. Showing first page.');
         }
         const { startIndex, endIndex, currentPage, totalPages } = paginationResult;
-        response.push(`Showing ${startIndex + 1}-${endIndex} of ${data.length} (Page ${currentPage + 1} of ${totalPages}).`);
+        const displayStartIndex = data.length === 0 ? 0 : startIndex + 1;
+        response.push(`Showing ${displayStartIndex}-${endIndex} of ${data.length} (Page ${currentPage + 1} of ${totalPages}).`);
         if (pagination) {
             if (paginationResult.hasNextPage) {
                 response.push(`Next page: ${currentPage + 1}`);
@@ -1063,18 +1215,24 @@ function truncateTitle(title, maxLength = 50) {
     }
     return title.slice(0, maxLength - 3) + '...';
 }
-async function fetchPageTitle(page) {
-    return Promise.race([
-        page.title().catch(() => ''),
-        new Promise(resolve => setTimeout(() => resolve(''), 1000)),
-    ]);
+const collapseWhitespace = (value) => {
+    return value.replace(/\s+/g, ' ').trim();
+};
+function formatPage(mcpPage, context, targetInfo) {
+    const title = mcpPage.getTitle(targetInfo);
+    const url = mcpPage.url();
+    const pageLabel = title ? `${truncateTitle(title)} (${url})` : url;
+    return {
+        text: `${mcpPage.id}: ${pageLabel}`,
+        structured: createStructuredPage(mcpPage, context, title),
+    };
 }
 function createStructuredPage(mcpPage, context, rawTitle) {
     const isolatedContextName = mcpPage.isolatedContextName;
     const title = truncateTitle(rawTitle);
     const entry = {
         id: mcpPage.id,
-        url: mcpPage.pptrPage.url(),
+        url: mcpPage.url(),
         title,
         selected: context.isPageSelected(mcpPage),
     };

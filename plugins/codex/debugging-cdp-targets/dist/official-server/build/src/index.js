@@ -8,10 +8,12 @@ import { pathToFileURL } from 'node:url';
 import { BrowserManager } from './BrowserManager.js';
 import { loadIssueDescriptions } from './devtools/issueDescriptions.js';
 import { McpContext } from './McpContext.js';
+import { HeapSnapshotManager } from './processors/HeapSnapshotManager.js';
 import { ClearcutLogger } from './telemetry/ClearcutLogger.js';
 import { FilePersistence } from './telemetry/persistence.js';
 import { McpServer as SdkMcpServer, Mutex, puppeteer, } from './third_party/index.js';
 import { ToolHandler } from './ToolHandler.js';
+import { isAvailableInMode, } from './tools/ToolDefinition.js';
 import { createTools } from './tools/tools.js';
 import { logger } from './utils/logger.js';
 import { VERSION } from './version.js';
@@ -30,6 +32,7 @@ export class McpServer {
     #serverArgs;
     #browserManager;
     #context;
+    #heapSnapshotManager = new HeapSnapshotManager();
     /**
      * Client roots stay valid across browser reconnects and only the client can
      * invalidate them through a `roots/list_changed` notification. CLI-configured
@@ -37,6 +40,7 @@ export class McpServer {
      */
     #lastClientRoots;
     #toolMutex = new Mutex();
+    #tools = new Map();
     constructor(serverArgs, options) {
         this.#serverArgs = serverArgs;
         this.#browserManager = options.browserManager;
@@ -54,7 +58,11 @@ export class McpServer {
             name: 'chrome_devtools',
             title: 'Chrome DevTools MCP server',
             version: VERSION,
-        }, { capabilities: { logging: {} } });
+        }, {
+            capabilities: { logging: {}, tools: { listChanged: true } },
+            // Enabling or updating many tools at once sends a single notification.
+            debouncedNotificationMethods: ['notifications/tools/list_changed'],
+        });
         this.server.server.setRequestHandler('logging/setLevel', () => {
             return {};
         });
@@ -72,7 +80,7 @@ export class McpServer {
             else if (!this.#serverArgs.allowUnrestrictedPaths &&
                 (this.#serverArgs.filesystemRoot ?? []).length === 0) {
                 console.warn('[chrome-devtools-mcp] The connecting client did not negotiate the MCP roots ' +
-                    'capability. File-writing tools will be restricted to the OS temp directory. ' +
+                    'capability. Tools that read or write local files will be restricted to the OS temp directory. ' +
                     'To restore the previous unrestricted behavior, start the server with ' +
                     '--allow-unrestricted-paths.');
             }
@@ -80,6 +88,35 @@ export class McpServer {
     }
     async connect(transport) {
         return await this.server.connect(transport);
+    }
+    async callTool(name, args = {}) {
+        const toolHandler = this.#tools.get(name)?.handler;
+        if (!toolHandler) {
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `Tool ${name} not found`,
+                    },
+                ],
+                isError: true,
+            };
+        }
+        const parseResult = await toolHandler.registeredInputSchema.safeParseAsync(args);
+        if (!parseResult.success) {
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `Input validation error: Invalid arguments for tool ${name}: ${parseResult.error.issues
+                            .map(issue => `${issue.path.length > 0 ? `${issue.path.join('.')}: ` : ''}${issue.message}`)
+                            .join(', ')}`,
+                    },
+                ],
+                isError: true,
+            };
+        }
+        return await toolHandler.handle(parseResult.data);
     }
     /**
      * Closes the MCP connection and disposes internal context/listeners.
@@ -94,6 +131,7 @@ export class McpServer {
         finally {
             this.#context = undefined;
         }
+        this.#heapSnapshotManager.dispose();
         await Promise.allSettled([
             this.#browserManager.close(),
             this.server.close(),
@@ -113,9 +151,11 @@ export class McpServer {
         return server;
     }
     async #init() {
-        const tools = createTools(this.#serverArgs);
-        for (const tool of tools) {
-            this.#registerTool(tool);
+        for (const tool of createTools(this.#serverArgs)) {
+            // Slim and regular tools may share names, only register the current mode.
+            if (isAvailableInMode(tool, this.#serverArgs)) {
+                this.#registerTool(tool);
+            }
         }
         await loadIssueDescriptions();
     }
@@ -167,6 +207,7 @@ export class McpServer {
                 // Surfaces a one-time note in the next response after a reconnect.
                 reconnected: this.#context !== undefined,
                 categoryExtensions: this.#serverArgs.categoryExtensions,
+                heapSnapshotManager: this.#heapSnapshotManager,
                 onNotification: (message) => {
                     void this.server
                         .sendLoggingMessage({
@@ -192,16 +233,20 @@ export class McpServer {
         }
         return this.#context;
     }
+    #createToolHandler(tool) {
+        return new ToolHandler(tool, this.#serverArgs, () => this.#getContext(), this.#toolMutex, () => this.#browserManager.abandonPendingAttempt());
+    }
     #registerTool(tool) {
-        const toolHandler = new ToolHandler(tool, this.#serverArgs, () => this.#getContext(), this.#toolMutex);
+        const handler = this.#createToolHandler(tool);
         const registeredTool = this.server.registerTool(tool.name, {
             description: tool.description,
-            inputSchema: toolHandler.registeredInputSchema,
+            inputSchema: handler.registeredInputSchema,
             annotations: tool.annotations,
-        }, toolHandler.handle);
-        if (toolHandler.disabled) {
+        }, handler.handle);
+        if (handler.disabled) {
             registeredTool.disable();
         }
+        this.#tools.set(tool.name, { handler, registeredTool });
     }
 }
 /**

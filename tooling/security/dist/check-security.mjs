@@ -8242,7 +8242,7 @@ var MAX_HTTP_BYTES = 8 * 1024 * 1024;
 var TARGET_KINDS = Object.freeze(["chrome", "generic-cdp"]);
 var DISPOSITIONS = Object.freeze(["Close", "Keep"]);
 var PACKAGE_NAME = "chrome-devtools-mcp";
-var PACKAGE_VERSION = "1.10.1";
+var PACKAGE_VERSION = "1.11.0";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 

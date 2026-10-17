@@ -5,14 +5,19 @@ import { createToolCatalog, loadOfficialToolCatalog } from '../src/adapters/tool
 test('fixed catalog exposes configuration conditions and compatible official schema variants', async () => {
     const catalog = await loadOfficialToolCatalog();
     const names = catalog.tools.map((tool) => tool.name);
-    assert.equal(names.length, 66);
+    assert.equal(names.length, 67);
     assert.ok(names.includes('evaluate') && names.includes('evaluate_script') && names.includes('click_at'));
     const click = catalog.tools.find((tool) => tool.name === 'click_at');
     assert.match(click?.description ?? '', /experimentalVision=true/);
     const evaluate = catalog.tools.find((tool) => tool.name === 'evaluate_script');
     assert.ok(evaluate?.inputSchema.properties?.pageId);
     assert.ok(!evaluate?.inputSchema.required?.includes('pageId'));
-    assert.ok(evaluate?.inputSchema.required?.includes('function'));
+    assert.ok(evaluate?.inputSchema.properties?.function);
+    assert.ok(evaluate?.inputSchema.properties?.sourcePath);
+    assert.ok(!evaluate?.inputSchema.required?.includes('function'));
+    assert.ok(names.includes('analyze_heapsnapshot_contexts'));
+    const memory = catalog.requirements('analyze_heapsnapshot_contexts', []);
+    assert.ok(memory.missingConditions?.includes('--memoryDebugging=true'));
     const config = catalog.requirements('click_at', ['--workspace=C:/output', '--slim']);
     assert.ok(config.missingConditions?.includes('--experimentalVision=true'));
     assert.ok(config.missingConditions?.includes('--slim=false'));
@@ -37,7 +42,7 @@ test('catalog recipes appear only for supported missing configuration and actual
     };
     const actual = { name: 'evaluate_script', inputSchema: exactSchema };
     const catalog = createToolCatalog({
-        version: '1.10.1',
+        version: '1.11.0',
         tools: [
             { name: actual.name, requires: { slim: false }, variants: [actual] },
             {

@@ -8,12 +8,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { overrideDevToolsGlobals } from './devtools/DevtoolsUtils.js';
-import { HeapSnapshotManager } from './processors/HeapSnapshotManager.js';
 import { McpPage } from './McpPage.js';
 import { ServiceWorkerConsoleCollector } from './collectors/ServiceWorkerCollector.js';
 import { Locator, } from './third_party/index.js';
 import { CLOSE_PAGE_ERROR } from './tools/ToolDefinition.js';
+import { McpWorker } from './McpWorker.js';
 import { getTempFilePath, resolveCanonicalPath } from './utils/files.js';
+import { escapeForLog } from './utils/logger.js';
 import { isAllowedUrl } from './utils/url.js';
 // Page ids are handed out from a process-wide counter so they stay unique
 // across all contexts, in particular across browser reconnects. An id issued
@@ -27,21 +28,19 @@ export class McpContext {
     #isolatedContexts = new Map();
     // Auto-generated name counter for when no name is provided.
     #nextIsolatedContextId = 1;
-    #extensionServiceWorkers = [];
+    // Cached McpWorker per target, reused across snapshots (mirrors #mcpPages) so
+    // referential identity holds and workers can carry per-worker state later.
+    #workers = new Map();
     #mcpPages = new Map();
     #selectedPage;
     #selectedPageFallback;
     #serviceWorkerConsoleCollector;
     #isRunningTrace = false;
-    #screenRecorderData = null;
     #reconnectNotice = false;
-    #extensionPages = new WeakMap();
-    #extensionServiceWorkerMap = new WeakMap();
-    #nextExtensionServiceWorkerId = 1;
     #traceResults = [];
     #locatorClass;
     #options;
-    #heapSnapshotManager = new HeapSnapshotManager();
+    #heapSnapshotManager;
     #roots = undefined;
     #allowUnrestrictedPaths;
     constructor(browser, logger, options, locatorClass) {
@@ -54,13 +53,14 @@ export class McpContext {
         this.logger = logger;
         this.#locatorClass = locatorClass;
         this.#options = options;
+        this.#heapSnapshotManager = options.heapSnapshotManager;
         this.#allowUnrestrictedPaths = options.allowUnrestrictedPaths ?? false;
         this.#reconnectNotice = options.reconnected ?? false;
         this.#serviceWorkerConsoleCollector = new ServiceWorkerConsoleCollector(this.browser);
     }
     async #init() {
         await this.createPagesSnapshot();
-        const workers = await this.createExtensionServiceWorkersSnapshot();
+        const workers = this.createWorkersSnapshot();
         await this.#serviceWorkerConsoleCollector.init(workers);
         this.browser.on('targetcreated', this.#onTargetCreated);
         this.browser.on('targetdestroyed', this.#onTargetDestroyed);
@@ -69,29 +69,23 @@ export class McpContext {
         this.browser.off('targetcreated', this.#onTargetCreated);
         this.browser.off('targetdestroyed', this.#onTargetDestroyed);
         this.#serviceWorkerConsoleCollector.dispose();
-        this.#heapSnapshotManager.dispose();
         for (const mcpPage of this.#mcpPages.values()) {
             mcpPage.dispose();
         }
+        this.#selectedPage?.dispose();
         this.#mcpPages.clear();
+        this.#workers.clear();
         // Isolated contexts are intentionally not closed here.
         // Either the entire browser will be closed or we disconnect
         // without destroying browser state.
         this.#isolatedContexts.clear();
     }
-    #onTargetCreated = async (target) => {
+    #onTargetCreated = (target) => {
         try {
-            const url = target.url();
-            if (!isAllowedUrl(url, {
-                categoryExtensions: this.#options.categoryExtensions,
-            })) {
+            if (!this.#isPageTarget(target)) {
                 return;
             }
-            const page = await target.page();
-            if (!page) {
-                return;
-            }
-            void this.#createMcpPage(page);
+            this.#createMcpPage(target);
         }
         catch (err) {
             this.logger?.('Error handling targetcreated', err);
@@ -99,21 +93,12 @@ export class McpContext {
     };
     #onTargetDestroyed = (target) => {
         try {
-            let foundPage;
-            for (const page of this.#mcpPages.keys()) {
-                if (page.target() === target) {
-                    foundPage = page;
-                    break;
-                }
-            }
-            if (!foundPage) {
-                return;
-            }
-            const mcpPage = this.#mcpPages.get(foundPage);
+            const mcpPage = this.#mcpPages.get(target);
             if (mcpPage) {
                 mcpPage.dispose();
-                this.#mcpPages.delete(foundPage);
+                this.#mcpPages.delete(target);
             }
+            this.#workers.delete(target);
         }
         catch (err) {
             this.logger?.('Error handling targetdestroyed', err);
@@ -128,6 +113,9 @@ export class McpContext {
     }
     static resetPageIdsForTesting() {
         nextPageId = 1;
+    }
+    static resetWorkerIdsForTesting() {
+        McpWorker.resetIdsForTesting();
     }
     roots() {
         return [
@@ -151,8 +139,8 @@ export class McpContext {
         }
         catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
-            console.error(`[MCP Context] Error resolving real path for ${filePath}: ${errMsg}`);
-            throw new Error(`Access denied: Cannot resolve base path for ${filePath}.`);
+            console.error(`[MCP Context] Error resolving real path for ${escapeForLog(filePath)}: ${escapeForLog(errMsg)}`);
+            throw new Error(`Access denied: Cannot resolve base path for ${escapeForLog(filePath)}.`);
         }
         // If the client never negotiated roots and the operator has explicitly
         // opted into unrestricted access via --allow-unrestricted-paths, restore
@@ -187,12 +175,12 @@ export class McpContext {
             else {
                 const rootErr = result.reason;
                 const errMsg = rootErr instanceof Error ? rootErr.message : String(rootErr);
-                console.warn(`[MCP Context] Could not resolve configured root ${root.uri}: ${errMsg}`);
+                console.warn(`[MCP Context] Could not resolve configured root ${escapeForLog(root.uri)}: ${escapeForLog(errMsg)}`);
                 // Skip this root if it cannot be resolved.
             }
         }
         if (!allowed) {
-            throw new Error(`Access denied: path ${filePath} (canonical: ${canonicalPath}) is not within any of the configured workspace roots.`);
+            throw new Error(`Access denied: path ${escapeForLog(filePath)} (canonical: ${escapeForLog(canonicalPath)}) is not within any of the configured workspace roots.`);
         }
         return canonicalPath || path.resolve(filePath);
     }
@@ -215,33 +203,50 @@ export class McpContext {
         else {
             page = await this.browser.newPage({ background });
         }
-        const mcpPage = await this.#createMcpPage(page);
-        await this.createPagesSnapshot();
+        const mcpPage = this.#createMcpPage(page.target());
+        await mcpPage.init();
         this.selectPage(mcpPage);
+        await this.createPagesSnapshot();
         return mcpPage;
     }
     async closePage(pageId) {
+        const page = this.getPageById(pageId);
         if (this.#mcpPages.size === 1) {
             throw new Error(CLOSE_PAGE_ERROR);
         }
-        const page = this.getPageById(pageId);
-        if (page) {
-            page.dispose();
-            this.#mcpPages.delete(page.pptrPage);
-        }
-        await page.pptrPage.close({ runBeforeUnload: false });
+        this.#mcpPages.delete(page.target);
+        await page.close();
     }
     get #hasNetworkBlockOrAllowlist() {
         return !!(this.#options.allowlist || this.#options.blocklist);
     }
-    installPWA(options) {
-        return this.browser.installPWA(options);
+    async installPWA(options) {
+        try {
+            return await this.browser.installPWA(options);
+        }
+        catch (error) {
+            if (error instanceof Error &&
+                error.message.includes("Couldn't fetch install info")) {
+                return await this.browser.installPWA(options);
+            }
+            throw error;
+        }
     }
     uninstallPWA(options) {
         return this.browser.uninstallPWA(options);
     }
-    launchPWA(options) {
-        return this.browser.launchPWA(options);
+    async launchPWA(options) {
+        const page = await this.browser.launchPWA(options);
+        if (!page.url() || page.url() === 'about:blank') {
+            await page
+                .waitForNavigation({
+                timeout: this.#options.navigationTimeout ?? 10_000,
+            })
+                .catch(() => {
+                // Ignore timeout if navigation already completed or failed.
+            });
+        }
+        return page;
     }
     getPWAState(options) {
         return this.browser.getPWAState(options);
@@ -252,24 +257,36 @@ export class McpContext {
     isRunningPerformanceTrace() {
         return this.#isRunningTrace;
     }
-    getScreenRecorder() {
-        return this.#screenRecorderData;
-    }
-    setScreenRecorder(data) {
-        this.#screenRecorderData = data;
-    }
     isCruxEnabled() {
         return this.#options.performanceCrux;
     }
     getPages() {
         return Array.from(this.#mcpPages.values());
     }
+    /**
+     * Fetches current target info for all targets from the browser, keyed by
+     * target id. Unlike Puppeteer's cached target info, this reflects title
+     * changes, which Chrome does not report via `Target.targetInfoChanged`.
+     * Returns an empty map if the browser cannot be queried.
+     */
+    async getTargetInfos() {
+        try {
+            // @ts-expect-error use existing browser connection (internal Puppeteer API).
+            const connection = this.browser._connection;
+            const { targetInfos } = await connection.send('Target.getTargets');
+            return new Map(targetInfos.map(info => [info.targetId, info]));
+        }
+        catch (err) {
+            this.logger?.('Failed to fetch target infos', err);
+            return new Map();
+        }
+    }
     getSelectedMcpPage() {
         const page = this.#selectedPage;
         if (!page) {
             throw new Error('No page selected');
         }
-        if (page.pptrPage.isClosed()) {
+        if (page.isClosed()) {
             throw new Error('The selected page has been closed. Call list_pages to see open pages.');
         }
         return page;
@@ -284,8 +301,8 @@ export class McpContext {
                 return undefined;
             }
         }
-        if (targetPage?.pptrPage?.isClosed() === false) {
-            return targetPage.pptrPage.url();
+        if (targetPage && !targetPage.isClosed()) {
+            return targetPage.url();
         }
         return undefined;
     }
@@ -330,6 +347,11 @@ export class McpContext {
         return this.#selectedPage === page;
     }
     selectPage(newPage) {
+        if (this.#selectedPage &&
+            this.#selectedPage !== newPage &&
+            !this.#mcpPages.has(this.#selectedPage.target)) {
+            this.#selectedPage.dispose();
+        }
         this.#selectedPage = newPage;
         newPage.updateTimeouts();
     }
@@ -343,27 +365,30 @@ export class McpContext {
         return this.#selectedPageFallback;
     }
     /**
-     * Creates a snapshot of the extension service workers.
+     * Creates a snapshot of the tracked workers. Today this is limited to
+     * extension service workers; the McpWorker abstraction lets dedicated and
+     * shared workers join the same snapshot later without changing consumers.
      */
-    async createExtensionServiceWorkersSnapshot() {
-        const allTargets = this.browser.targets();
-        const serviceWorkers = allTargets.filter(target => {
+    createWorkersSnapshot() {
+        const serviceWorkers = this.browser.targets().filter(target => {
             return (target.type() === 'service_worker' &&
                 target.url().includes('chrome-extension://'));
         });
-        for (const serviceWorker of serviceWorkers) {
-            if (!this.#extensionServiceWorkerMap.has(serviceWorker)) {
-                this.#extensionServiceWorkerMap.set(serviceWorker, 'sw-' + this.#nextExtensionServiceWorkerId++);
+        // Reuse the existing McpWorker for a target; only mint one (and an id) for
+        // targets seen for the first time.
+        for (const target of serviceWorkers) {
+            if (!this.#workers.has(target)) {
+                this.#workers.set(target, McpWorker.create('service_worker', target));
             }
         }
-        this.#extensionServiceWorkers = serviceWorkers.map(serviceWorker => {
-            return {
-                target: serviceWorker,
-                id: this.#extensionServiceWorkerMap.get(serviceWorker),
-                url: serviceWorker.url(),
-            };
-        });
-        return this.#extensionServiceWorkers;
+        // Prune workers whose target is gone (mirrors #mcpPages pruning).
+        const currentTargets = new Set(serviceWorkers);
+        for (const target of this.#workers.keys()) {
+            if (!currentTargets.has(target)) {
+                this.#workers.delete(target);
+            }
+        }
+        return Array.from(this.#workers.values());
     }
     getServiceWorkerConsoleData(extensionId) {
         return this.#serviceWorkerConsoleCollector.getData(extensionId);
@@ -387,31 +412,35 @@ export class McpContext {
         }
         return contextToName;
     }
-    async #createMcpPage(page) {
-        let mcpPage = this.#mcpPages.get(page);
+    #createMcpPage(target) {
+        let mcpPage = this.#mcpPages.get(target) ??
+            (this.#selectedPage?.target === target ? this.#selectedPage : undefined);
         if (!mcpPage) {
-            mcpPage = new McpPage(page, nextPageId++, {
+            mcpPage = new McpPage(target, nextPageId++, {
                 locatorClass: this.#locatorClass,
                 hasNetworkBlockOrAllowlist: this.#hasNetworkBlockOrAllowlist,
-                isolatedContextName: this.#getBrowserContextToNameMap().get(page.browserContext()),
+                isolatedContextName: this.#getBrowserContextToNameMap().get(target.browserContext()),
                 navigationTimeout: this.#options.navigationTimeout,
                 sourceMaps: this.#options.sourceMaps,
                 onNotification: this.#options.onNotification,
             });
-            this.#mcpPages.set(page, mcpPage);
-            await mcpPage.init();
         }
+        this.#mcpPages.set(target, mcpPage);
         return mcpPage;
     }
     async createPagesSnapshot() {
-        const allPages = await this.#fetchBrowserPages();
-        await Promise.allSettled(allPages.map(page => this.#createMcpPage(page)));
-        // Prune orphaned #mcpPages entries (pages that no longer exist).
-        const currentPages = new Set(allPages);
-        for (const [page, mcpPage] of this.#mcpPages) {
-            if (!currentPages.has(page)) {
-                mcpPage.dispose();
-                this.#mcpPages.delete(page);
+        const allTargets = this.#fetchPageTargets();
+        for (const target of allTargets) {
+            this.#createMcpPage(target);
+        }
+        // Prune orphaned #mcpPages entries (targets that no longer exist).
+        const currentTargets = new Set(allTargets);
+        for (const [target, mcpPage] of this.#mcpPages) {
+            if (!currentTargets.has(target)) {
+                if (mcpPage !== this.#selectedPage || mcpPage.isClosed()) {
+                    mcpPage.dispose();
+                }
+                this.#mcpPages.delete(target);
             }
         }
         const pages = Array.from(this.#mcpPages.values());
@@ -419,60 +448,56 @@ export class McpContext {
         // `isClosed()` instead of `pages` membership avoids silently swapping a
         // live page that is momentarily missing from the snapshot.
         this.#selectedPageFallback = undefined;
-        if ((!this.#selectedPage || this.#selectedPage.pptrPage.isClosed()) &&
-            pages[0]) {
+        if ((!this.#selectedPage || this.#selectedPage.isClosed()) && pages[0]) {
             // Record the automatic change so the response can surface it. Skipped on
             // first connect, when there was no prior selection to replace.
             if (this.#selectedPage) {
                 this.#selectedPageFallback = {
-                    wasClosed: this.#selectedPage.pptrPage.isClosed(),
+                    wasClosed: this.#selectedPage.isClosed(),
                 };
             }
             this.selectPage(pages[0]);
         }
-        return pages.map(p => p.pptrPage);
-    }
-    async #fetchBrowserPages() {
-        const allPages = (await this.browser.pages(this.#options.experimentalIncludeAllPages)).filter(page => {
-            if (!this.#options.experimentalDevToolsDebugging &&
-                page.url().startsWith('devtools://')) {
-                return false;
-            }
-            return isAllowedUrl(page.url(), {
-                categoryExtensions: this.#options.categoryExtensions,
-            });
-        });
-        if (this.#options.categoryExtensions) {
-            const allTargets = this.browser.targets();
-            const extensionTargets = allTargets.filter(target => {
-                return (target.url().startsWith('chrome-extension://') &&
-                    target.type() === 'page');
-            });
-            await Promise.allSettled(extensionTargets.map(async (target) => {
-                try {
-                    let page = await target.page();
-                    if (!page) {
-                        page = await target.asPage();
-                    }
-                    this.#extensionPages.set(target, page);
-                    if (page &&
-                        isAllowedUrl(page.url(), { categoryExtensions: true }) &&
-                        !allPages.includes(page)) {
-                        allPages.push(page);
-                    }
-                }
-                catch (e) {
-                    this.logger?.('Failed to get page for extension target', e);
-                }
-            }));
+        if (this.#selectedPage && !this.#selectedPage.isClosed()) {
+            await this.#selectedPage.init();
         }
-        return allPages;
+        return pages;
     }
-    getExtensionServiceWorkers() {
-        return this.#extensionServiceWorkers;
+    #isPageTarget(target) {
+        const existingMcpPage = this.#mcpPages.get(target);
+        const url = existingMcpPage ? existingMcpPage.url() : target.url();
+        if (!this.#options.experimentalDevToolsDebugging &&
+            url.startsWith('devtools://')) {
+            return false;
+        }
+        if (!isAllowedUrl(url, {
+            categoryExtensions: this.#options.categoryExtensions,
+        })) {
+            return false;
+        }
+        const type = target.type();
+        if (type === 'page') {
+            return true;
+        }
+        if (this.#options.experimentalIncludeAllPages &&
+            (type === 'background_page' || type === 'webview')) {
+            return true;
+        }
+        if (this.#options.experimentalDevToolsDebugging &&
+            type === 'other' &&
+            url.startsWith('devtools://')) {
+            return true;
+        }
+        return false;
     }
-    getExtensionServiceWorkerId(extensionServiceWorker) {
-        return this.#extensionServiceWorkerMap.get(extensionServiceWorker.target);
+    #fetchPageTargets() {
+        return this.browser.targets().filter(target => this.#isPageTarget(target));
+    }
+    getWorkers() {
+        return Array.from(this.#workers.values());
+    }
+    getWorkerById(id) {
+        return this.#workers.values().find(worker => worker.id === id);
     }
     async #writeFile(filepath, data) {
         const resolved = await this.validatePath(filepath);
@@ -493,7 +518,9 @@ export class McpContext {
             });
         }
         catch (err) {
-            throw new Error(`Could not write ${filepath}`, { cause: err });
+            throw new Error(`Could not write ${escapeForLog(filepath)}`, {
+                cause: err,
+            });
         }
     }
     async saveTemporaryFile(data, filename) {
@@ -573,11 +600,11 @@ export class McpContext {
     async getHeapSnapshotObjectDetails(filePath, nodeId) {
         return await this.#heapSnapshotManager.getObjectInfo(filePath, nodeId);
     }
-    async closeHeapSnapshot(filePath) {
-        return this.#heapSnapshotManager.disposeSnapshot(filePath);
+    async analyzeHeapSnapshotContexts(filePath) {
+        return await this.#heapSnapshotManager.analyzeContexts(filePath);
     }
-    hasHeapSnapshots() {
-        return this.#heapSnapshotManager.hasSnapshots();
+    async closeHeapSnapshot(filePath) {
+        return await this.#heapSnapshotManager.disposeSnapshot(filePath);
     }
     async getHeapSnapshotRetainingPaths(filePath, nodeId, maxDepth, maxNodes, maxSiblings) {
         return await this.#heapSnapshotManager.getRetainingPaths(filePath, nodeId, maxDepth, maxNodes, maxSiblings);
@@ -608,18 +635,41 @@ export class McpContext {
         }
         throw new Error(`Not allowed by allowlist: ${url}`);
     }
+    async #loadNetworkResource(url) {
+        const redirectStatuses = new Set([301, 302, 303, 307, 308]);
+        const maxRedirects = 20;
+        let currentUrl = url;
+        for (let redirectCount = 0;; redirectCount++) {
+            this.#validateUrlNotBlocked(currentUrl);
+            this.#validateUrlAllowed(currentUrl);
+            const response = await fetch(currentUrl, { redirect: 'manual' });
+            if (!redirectStatuses.has(response.status)) {
+                if (!response.ok) {
+                    throw new Error(`Failed to load resource: ${currentUrl}`);
+                }
+                return await response.text();
+            }
+            const location = response.headers.get('location');
+            if (!location) {
+                throw new Error(`Failed to load resource: ${currentUrl}`);
+            }
+            if (redirectCount >= maxRedirects) {
+                throw new Error(`Too many redirects loading resource: ${url}`);
+            }
+            await response.body?.cancel();
+            currentUrl = new URL(location, currentUrl);
+            if (currentUrl.protocol !== 'https:' && currentUrl.protocol !== 'http:') {
+                throw new Error(`Unsupported protocol for: ${currentUrl}`);
+            }
+        }
+    }
     async loadResource(path) {
         const url = new URL(path);
         this.#validateUrlNotBlocked(url);
         switch (url.protocol) {
             case 'https:':
             case 'http:': {
-                this.#validateUrlAllowed(url);
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`Failed to load resource: ${url}`);
-                }
-                return response.text();
+                return await this.#loadNetworkResource(url);
             }
             case 'file:': {
                 const resolved = await this.validatePath(fileURLToPath(url));

@@ -13,7 +13,7 @@ export function definePageTool(definition) {
         return {
             ...tool,
             schema: {
-                ...(args.pageIdRouting && !args.slim ? pageIdSchema : {}),
+                ...(args.pageIdRouting && !isSlimTool(tool) ? pageIdSchema : {}),
                 ...tool.schema,
             },
             pageScoped: true,
@@ -56,9 +56,9 @@ export function viewportTransform(arg) {
         width,
         height,
         deviceScaleFactor: dpr,
-        isMobile: isMobile,
-        isLandscape: isLandscape,
-        hasTouch: hasTouch,
+        isMobile,
+        isLandscape,
+        hasTouch,
     };
 }
 export function geolocationTransform(arg) {
@@ -76,5 +76,17 @@ export function geolocationTransform(arg) {
         latitude,
         longitude,
     };
+}
+export function isSlimTool(tool) {
+    return Boolean(tool.annotations.conditions?.includes('slim'));
+}
+/**
+ * Slim mode replaces the regular tools with the slim tools. Only the tools of
+ * the current mode are registered, so a slim tool may share its name with a
+ * regular tool. `--slim` requires a restart, so the mode never changes while
+ * the server is running.
+ */
+export function isAvailableInMode(tool, serverArgs) {
+    return isSlimTool(tool) === Boolean(serverArgs.slim);
 }
 //# sourceMappingURL=ToolDefinition.js.map

@@ -486,7 +486,7 @@ async function runtimeFixture(primary?: Error, secondary?: Error) {
             onExit: () => {},
             close: async () => {},
         }),
-        loadCatalog: async () => createToolCatalog({ version: '1.10.1', tools: [] }),
+        loadCatalog: async () => createToolCatalog({ version: '1.11.0', tools: [] }),
         createEntry: () => ({
             connect: async () => {},
             closed,

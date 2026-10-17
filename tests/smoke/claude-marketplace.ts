@@ -116,7 +116,7 @@ try {
         (name: unknown) =>
             typeof name === 'string' && name.startsWith('mcp__plugin_debugging-cdp-targets_cdp-targets__'),
     );
-    assert.equal(tools.length, 73, 'Actual Claude discovery must expose 66 official and seven lifecycle tools.');
+    assert.equal(tools.length, 74, 'Actual Claude discovery must expose 67 official and seven lifecycle tools.');
     assert.ok(tools.some((name: unknown) => typeof name === 'string' && name.endsWith('__list_pages')));
     assert.ok(!JSON.stringify(tools).includes('dct_watch_target'));
     // Direct MCP verification supplements, and does not replace, the host discovery above.
@@ -131,7 +131,7 @@ try {
             clientInfo: { name: 'claude-installed-gateway-smoke', version: '0.1.0' },
         });
         client.notify('notifications/initialized');
-        assert.equal(readMcpTools(await client.request('tools/list')).length, 73);
+        assert.equal(readMcpTools(await client.request('tools/list')).length, 74);
         await assert.rejects(() => client.request('tools/call', { name: 'list_pages', arguments: {} }), /routing/);
         const status = await client.request('tools/call', { name: 'dct_connection_status', arguments: {} });
         assert.ok(record(status) && record(status.structuredContent));

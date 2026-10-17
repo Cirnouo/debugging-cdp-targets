@@ -55,6 +55,13 @@ var __disposeResources = (this && this.__disposeResources) || (function (Suppres
     var e = new Error(message);
     return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
+import { DevToolsCommentBridge } from './devtools/DevToolsCommentBridge.js';
+import { createTargetUniverse, } from './devtools/DevtoolsUtils.js';
+import { ConsoleCollector, NetworkCollector, } from './collectors/PageCollector.js';
+import { TextSnapshot } from './TextSnapshot.js';
+import { PredefinedNetworkConditions, DevTools, } from './third_party/index.js';
+import { logger } from './utils/logger.js';
+import { getNetworkMultiplierFromString, WaitForHelper, } from './utils/WaitForHelper.js';
 export function replaceHtmlElementsWithUids(schema) {
     if (typeof schema === 'boolean') {
         return;
@@ -101,15 +108,25 @@ export function replaceHtmlElementsWithUids(schema) {
         }
     }
 }
-import { DevToolsCommentBridge } from './devtools/DevToolsCommentBridge.js';
-import { createTargetUniverse, } from './devtools/DevtoolsUtils.js';
-import { ConsoleCollector, NetworkCollector, } from './collectors/PageCollector.js';
-import { TextSnapshot } from './TextSnapshot.js';
-import { PredefinedNetworkConditions, DevTools, } from './third_party/index.js';
+function isDebuggingWebMcpTool(tool) {
+    return Boolean(tool.annotations &&
+        'debugging' in tool.annotations &&
+        tool.annotations.debugging === true);
+}
 const DEFAULT_TIMEOUT = 5_000;
 const NAVIGATION_TIMEOUT = 10_000;
-import { logger } from './utils/logger.js';
-import { getNetworkMultiplierFromString, WaitForHelper, } from './utils/WaitForHelper.js';
+/**
+ * Chrome reports a URL-derived placeholder as the target title until the
+ * document provides one. The placeholder omits the `http://` / `https://`
+ * scheme and the trailing slash of a bare hostname.
+ */
+function isPlaceholderTitle(title, url) {
+    if (title === url) {
+        return true;
+    }
+    const withoutScheme = url.replace(/^https?:\/\//, '');
+    return title === withoutScheme || title === withoutScheme.replace(/\/$/, '');
+}
 function isBackendNodeId(id) {
     return typeof id === 'number';
 }
@@ -119,11 +136,15 @@ function isBackendNodeId(id) {
  *
  * Internal class consumed only by McpContext. Fields are public for direct
  * read/write access. The dialog field is private because it requires an
- * event listener lifecycle managed by the constructor/dispose pair.
+ * event listener lifecycle managed by the init/dispose pair.
  */
 export class McpPage {
-    pptrPage;
+    target;
     id;
+    #pptrPage;
+    #initPromise;
+    #disposed = false;
+    #closed = false;
     // Snapshot
     textSnapshot = null;
     uniqueBackendNodeIdToMcpId = new Map();
@@ -136,48 +157,141 @@ export class McpPage {
     // Dialog
     #dialog;
     #dialogHandler;
-    thirdPartyDeveloperTools = [];
-    networkCollector;
-    consoleCollector;
+    // Screencast
+    #screenRecorder = null;
+    eventBasedThirdPartyTools = [];
+    #networkCollector;
+    #consoleCollector;
     #hasNetworkBlockOrAllowlist;
     #locatorClass;
     #navigationTimeout;
     #sourceMaps;
     #commentBridge;
     #onNotification;
-    constructor(page, id, options) {
+    constructor(target, id, options) {
         this.#hasNetworkBlockOrAllowlist = options.hasNetworkBlockOrAllowlist;
         this.#locatorClass = options.locatorClass;
         this.#navigationTimeout = options.navigationTimeout ?? NAVIGATION_TIMEOUT;
         this.#sourceMaps = options.sourceMaps ?? true;
         this.#onNotification = options.onNotification;
-        this.pptrPage = page;
+        this.target = target;
         this.id = id;
         this.isolatedContextName = options.isolatedContextName;
         this.#dialogHandler = (dialog) => {
             this.#dialog = dialog;
         };
-        page.on('dialog', this.#dialogHandler);
-        this.networkCollector = new NetworkCollector(page);
-        this.consoleCollector = new ConsoleCollector(page, collect => {
-            return {
-                console: event => {
-                    collect(event);
-                },
-                uncaughtError: event => {
-                    collect(event);
-                },
-                devtoolsAggregatedIssue: event => {
-                    collect(event);
-                },
-            };
-        });
+    }
+    get pptrPage() {
+        if (!this.#pptrPage) {
+            throw new Error(`McpPage (id=${this.id}) is not initialized. Call init() first.`);
+        }
+        return this.#pptrPage;
+    }
+    get networkCollector() {
+        if (!this.#networkCollector) {
+            throw new Error(`McpPage (id=${this.id}) is not initialized. Call init() first.`);
+        }
+        return this.#networkCollector;
+    }
+    set networkCollector(collector) {
+        this.#networkCollector = collector;
+    }
+    get consoleCollector() {
+        if (!this.#consoleCollector) {
+            throw new Error(`McpPage (id=${this.id}) is not initialized. Call init() first.`);
+        }
+        return this.#consoleCollector;
+    }
+    url() {
+        return this.#pptrPage?.url() ?? this.target.url();
+    }
+    get targetId() {
+        // @ts-expect-error internal types
+        const info = this.target._getTargetInfo();
+        return info.targetId;
+    }
+    /**
+     * Returns the page title or an empty string if the target only has Chrome's
+     * URL-based placeholder title.
+     *
+     * Puppeteer's cached target info is only refreshed by
+     * `Target.targetInfoChanged`, which Chrome emits on navigation commit (before
+     * the document title is known) but not on title changes. Callers should pass
+     * fresh target info (e.g., from `Target.getTargets`) when available.
+     */
+    getTitle(freshTargetInfo) {
+        // @ts-expect-error internal types
+        const cachedInfo = this.target._getTargetInfo();
+        const info = freshTargetInfo ?? cachedInfo;
+        return isPlaceholderTitle(info.title, info.url) ? '' : info.title;
+    }
+    isClosed() {
+        if (this.#closed) {
+            return true;
+        }
+        if (this.#pptrPage) {
+            return this.#pptrPage.isClosed();
+        }
+        return this.#disposed;
+    }
+    async close() {
+        this.#closed = true;
+        const page = this.#pptrPage ??
+            (await this.target.page()) ??
+            (await this.target.asPage());
+        this.dispose();
+        await page?.close({ runBeforeUnload: false });
     }
     async init() {
+        if (this.#disposed) {
+            throw new Error(`McpPage (id=${this.id}) has already been disposed.`);
+        }
+        if (this.#initPromise) {
+            return await this.#initPromise;
+        }
+        this.#initPromise = this.#doInit();
+        try {
+            await this.#initPromise;
+        }
+        catch (err) {
+            this.#initPromise = undefined;
+            throw err;
+        }
+    }
+    async #doInit() {
+        if (!this.#pptrPage) {
+            const page = (await this.target.page()) ?? (await this.target.asPage());
+            if (!page) {
+                throw new Error(`Failed to initialize Puppeteer Page for target ${this.target.url()}`);
+            }
+            if (this.#disposed) {
+                return;
+            }
+            this.#pptrPage = page;
+            page.on('dialog', this.#dialogHandler);
+            this.#networkCollector = new NetworkCollector(page);
+            this.#consoleCollector = new ConsoleCollector(page, collect => {
+                return {
+                    console: event => {
+                        collect(event);
+                    },
+                    uncaughtError: event => {
+                        collect(event);
+                    },
+                    devtoolsAggregatedIssue: event => {
+                        collect(event);
+                    },
+                };
+            });
+        }
+        this.updateTimeouts();
         await Promise.allSettled([
             this.#initDevToolsUniverseNoThrow(),
             this.#initFocusEmulationNoThrow(),
         ]);
+        if (this.#disposed) {
+            this.dispose();
+        }
     }
     async #initFocusEmulationNoThrow() {
         // We emulate a focused page for all pages to support multi-agent workflows.
@@ -208,13 +322,41 @@ export class McpPage {
     clearDialog() {
         this.#dialog = undefined;
     }
+    getScreenRecorder() {
+        return this.#screenRecorder;
+    }
+    setScreenRecorder(data) {
+        this.#screenRecorder = data;
+    }
     throwIfDialogOpen() {
         if (this.#dialog && !this.#dialog.handled) {
             throw new Error(`A dialog is open (${this.#dialog.type()}: ${this.#dialog.message()}).`);
         }
     }
+    #getDebuggingWebMcpToolGroups() {
+        const webmcpTools = this.pptrPage.webmcp
+            .tools()
+            .filter(isDebuggingWebMcpTool);
+        if (webmcpTools.length === 0) {
+            return [];
+        }
+        return [
+            {
+                name: 'WebMCP Tools',
+                description: 'Tools exposed via WebMCP',
+                tools: webmcpTools.map(tool => ({
+                    name: tool.name,
+                    description: tool.description,
+                    inputSchema: structuredClone(tool.inputSchema ?? {}),
+                })),
+            },
+        ];
+    }
     getThirdPartyDeveloperTools() {
-        return this.thirdPartyDeveloperTools;
+        return [
+            ...this.#getDebuggingWebMcpToolGroups(),
+            ...this.eventBasedThirdPartyTools,
+        ];
     }
     async getToolGroups() {
         const env_1 = { stack: [], error: void 0, hasError: false };
@@ -223,13 +365,14 @@ export class McpPage {
             const windowHandle = __addDisposableResource(env_1, await this.pptrPage.evaluateHandle(() => window), false);
             // @ts-expect-error internal API
             const client = this.pptrPage._client();
-            const { listeners } = await client.send('DOMDebugger.getEventListeners', {
+            const { listeners = [] } = await client.send('DOMDebugger.getEventListeners', {
                 objectId: windowHandle.remoteObject().objectId,
             });
             if (listeners.find(l => l.type === 'devtoolstooldiscovery') === undefined) {
-                return [];
+                this.eventBasedThirdPartyTools = [];
+                return this.getThirdPartyDeveloperTools();
             }
-            const toolGroups = await this.pptrPage.evaluate(() => {
+            const eventToolGroups = await this.pptrPage.evaluate(() => {
                 if (window.__dtmcp) {
                     window.__dtmcp.toolGroups = [];
                 }
@@ -297,13 +440,13 @@ export class McpPage {
                     }
                 });
             });
-            for (const group of toolGroups) {
+            for (const group of eventToolGroups) {
                 for (const tool of group.tools ?? []) {
                     replaceHtmlElementsWithUids(tool.inputSchema);
                 }
             }
-            this.thirdPartyDeveloperTools = toolGroups;
-            return toolGroups;
+            this.eventBasedThirdPartyTools = eventToolGroups;
+            return this.getThirdPartyDeveloperTools();
         }
         catch (e_1) {
             env_1.error = e_1;
@@ -314,7 +457,9 @@ export class McpPage {
         }
     }
     getWebMcpTools() {
-        return this.pptrPage.webmcp.tools();
+        return this.pptrPage.webmcp
+            .tools()
+            .filter(tool => !isDebuggingWebMcpTool(tool));
     }
     resolveCdpRequestId(cdpRequestId) {
         if (!cdpRequestId) {
@@ -345,14 +490,18 @@ export class McpPage {
     get commentBridge() {
         return this.#commentBridge;
     }
+    /**
+     * Returns the comment bridge attached to the DevTools page, or undefined if
+     * the DevTools page does not support DevTools comments.
+     */
     async ensureDevToolsCommentBridge(devtoolsPage) {
         if (!this.#commentBridge) {
             this.#commentBridge = new DevToolsCommentBridge({
                 onNotification: this.#onNotification,
             });
         }
-        await this.#commentBridge.attach(devtoolsPage);
-        return this.#commentBridge;
+        const attached = await this.#commentBridge.attach(devtoolsPage);
+        return attached ? this.#commentBridge : undefined;
     }
     async getDevToolsPage() {
         try {
@@ -400,6 +549,15 @@ export class McpPage {
     get colorScheme() {
         return this.emulationSettings.colorScheme ?? null;
     }
+    get forcedColors() {
+        return this.emulationSettings.forcedColors ?? null;
+    }
+    get prefersContrast() {
+        return this.emulationSettings.prefersContrast ?? null;
+    }
+    get prefersReducedMotion() {
+        return this.emulationSettings.prefersReducedMotion ?? null;
+    }
     // Public for testability: tests spy on this method to verify throttle multipliers.
     createWaitForHelper(cpuMultiplier, networkMultiplier) {
         return new WaitForHelper(this.pptrPage, cpuMultiplier, networkMultiplier);
@@ -409,11 +567,12 @@ export class McpPage {
         return helper.waitForEventsAfterAction(action, options);
     }
     dispose() {
+        this.#disposed = true;
         this.#commentBridge?.dispose();
         this.#commentBridge = undefined;
-        this.pptrPage.off('dialog', this.#dialogHandler);
-        this.networkCollector.dispose();
-        this.consoleCollector.dispose();
+        this.#pptrPage?.off('dialog', this.#dialogHandler);
+        this.#networkCollector?.dispose();
+        this.#consoleCollector?.dispose();
         const devtoolsUniverse = this.#devtoolsUniverse;
         this.#devtoolsUniverse = undefined;
         devtoolsUniverse?.universe.dispose();
@@ -422,6 +581,23 @@ export class McpPage {
         });
     }
     async executeThirdPartyDeveloperTool(toolName, params, response) {
+        const webmcpTool = this.pptrPage.webmcp
+            .tools()
+            .find(t => t.name === toolName && isDebuggingWebMcpTool(t));
+        if (webmcpTool) {
+            const { status, output, errorText, exception } = await webmcpTool.execute(params);
+            if (status !== 'Completed') {
+                const error = exception?.description ?? exception?.value ?? errorText;
+                throw new Error(error ? String(error) : `Tool execution failed: ${status}`);
+            }
+            if (output !== undefined) {
+                response.appendResponseLine(JSON.stringify(output, null, 2));
+            }
+            else {
+                response.appendResponseLine('Tool returned no result.');
+            }
+            return;
+        }
         // Creates array of ElementHandles from the UIDs in the params.
         // We do not replace the uids with the ElementsHandles yet, because
         // the `evaluate` function only turns them into DOM elements if they
@@ -449,80 +625,111 @@ export class McpPage {
                 throw new Error('No tools found on the page');
             }
             const toolResult = await window.__dtmcp.executeTool(name, args);
+            const stashedElements = [];
             const stashDOMElement = (el) => {
-                if (!window.__dtmcp) {
-                    window.__dtmcp = {};
-                }
-                if (window.__dtmcp.stashedElements === undefined) {
-                    window.__dtmcp.stashedElements = [];
-                }
-                window.__dtmcp.stashedElements.push(el);
+                stashedElements.push(el);
                 return {
-                    stashedId: `stashed-${window.__dtmcp.stashedElements.length - 1}`,
+                    stashedId: `stashed-${stashedElements.length - 1}`,
                 };
             };
-            const ancestors = [];
+            const ancestors = new Set();
             // Recursively walks the tool result:
             // - Replaces DOM elements with an ID and stashes the DOM element on the window object
             // - Replaces non-plain objects with a string representation of the object
             // - Replaces circular references with the string '<Circular reference>'
             // - Replaces functions with the string '<Function object>'
-            const processToolResult = (data, parentEl) => {
+            // - Replaces symbols and bigints with their string representation
+            const processToolResult = (data) => {
                 // 1. Handle DOM Elements
                 if (data instanceof Element) {
                     return stashDOMElement(data);
                 }
                 // 2. Handle Arrays
                 if (Array.isArray(data)) {
-                    return data.map((item) => processToolResult(item, parentEl));
+                    if (ancestors.has(data)) {
+                        return '<Circular reference>';
+                    }
+                    ancestors.add(data);
+                    try {
+                        return data.map((item) => processToolResult(item));
+                    }
+                    finally {
+                        ancestors.delete(data);
+                    }
                 }
                 // 3. Handle Objects
                 if (data !== null && typeof data === 'object') {
-                    while (ancestors.length > 0 && ancestors.at(-1) !== parentEl) {
-                        ancestors.pop();
+                    const proto = Object.getPrototypeOf(data);
+                    // If not a plain object, return a string representation of the object
+                    if (proto !== null && proto !== Object.prototype) {
+                        return `<${data.constructor?.name || 'Object'} instance>`;
                     }
-                    if (ancestors.includes(data)) {
+                    if (ancestors.has(data)) {
                         return '<Circular reference>';
                     }
-                    ancestors.push(data);
-                    // If not a plain object, return a string representation of the object
-                    if (Object.getPrototypeOf(data) !== Object.prototype) {
-                        return `<${data.constructor.name} instance>`;
+                    ancestors.add(data);
+                    try {
+                        const processedObj = {};
+                        for (const [key, value] of Object.entries(data)) {
+                            processedObj[key] = processToolResult(value);
+                        }
+                        return processedObj;
                     }
-                    const processedObj = {};
-                    for (const [key, value] of Object.entries(data)) {
-                        processedObj[key] = processToolResult(value, data);
+                    finally {
+                        ancestors.delete(data);
                     }
-                    return processedObj;
                 }
                 // 4. Handle Functions
                 if (typeof data === 'function') {
                     return '<Function object>';
                 }
-                // 5. Return primitives (strings, numbers, booleans) as-is
+                // 5. Handle Symbols and BigInts (not JSON/CDP-by-value serializable)
+                if (typeof data === 'symbol') {
+                    return data.toString();
+                }
+                if (typeof data === 'bigint') {
+                    return `${data.toString()}n`;
+                }
+                // 6. Return primitives (strings, numbers, booleans, undefined, null) as-is
                 return data;
             };
+            const processed = processToolResult(toolResult);
+            const serialized = processed !== undefined ? JSON.stringify(processed) : undefined;
+            if (stashedElements.length > 0) {
+                window.__dtmcp.stashedElements = stashedElements;
+            }
             return {
-                result: processToolResult(toolResult),
-                stashed: window.__dtmcp?.stashedElements?.length ?? 0,
+                result: serialized,
+                stashed: stashedElements.length,
             };
         }, toolName, params, ...handles);
         const elementHandles = [];
-        for (let i = 0; i < (result.stashed ?? 0); i++) {
-            const elementHandle = await this.pptrPage.evaluateHandle(index => {
-                const el = window.__dtmcp?.stashedElements?.[index];
-                if (!el) {
-                    throw new Error(`Stashed element at index ${index} not found`);
+        if (result.stashed > 0) {
+            try {
+                for (let i = 0; i < result.stashed; i++) {
+                    const elementHandle = await this.pptrPage.evaluateHandle(index => {
+                        const el = window.__dtmcp?.stashedElements?.[index];
+                        if (!el) {
+                            throw new Error(`Stashed element at index ${index} not found`);
+                        }
+                        return el;
+                    }, i);
+                    elementHandles.push(elementHandle);
                 }
-                return el;
-            }, i);
-            elementHandles.push(elementHandle);
-        }
-        await this.pptrPage.evaluate(() => {
-            if (window.__dtmcp) {
-                window.__dtmcp.stashedElements = undefined;
             }
-        });
+            finally {
+                try {
+                    await this.pptrPage.evaluate(() => {
+                        if (window.__dtmcp) {
+                            window.__dtmcp.stashedElements = undefined;
+                        }
+                    });
+                }
+                catch (error) {
+                    logger?.('Failed to clean up stashed elements', error);
+                }
+            }
+        }
         if (elementHandles.length) {
             const env_2 = { stack: [], error: void 0, hasError: false };
             try {
@@ -565,7 +772,7 @@ export class McpPage {
                     typeof node.stashedId === 'string' &&
                     node.stashedId.startsWith('stashed-') &&
                     Object.keys(node).length === 1) {
-                    const index = parseInt(node.stashedId.split('-')[1]);
+                    const index = parseInt(node.stashedId.split('-')[1], 10);
                     return { uid: cdpElementIds[index] };
                 }
                 const resultObj = {};
@@ -576,8 +783,14 @@ export class McpPage {
             }
             return node;
         };
-        const resultWithUids = recursivelyReplaceStashedElements(result.result);
-        response.appendResponseLine(JSON.stringify(resultWithUids, null, 2));
+        if (result.result !== undefined) {
+            const parsedResult = JSON.parse(result.result);
+            const resultWithUids = recursivelyReplaceStashedElements(parsedResult);
+            response.appendResponseLine(JSON.stringify(resultWithUids, null, 2));
+        }
+        else {
+            response.appendResponseLine('Tool returned no result.');
+        }
     }
     async getElementByUid(uid) {
         if (!this.textSnapshot) {
@@ -587,7 +800,7 @@ export class McpPage {
         if (!node) {
             throw new Error(`Element uid "${uid}" not found on page ${this.id}.`);
         }
-        return this.#resolveElementHandle(node, uid);
+        return await this.#resolveElementHandle(node, uid);
     }
     async #resolveElementHandle(node, uid) {
         const message = `Element with uid ${uid} no longer exists on the page.`;
@@ -608,18 +821,24 @@ export class McpPage {
         return this.textSnapshot?.idToNode.get(uid);
     }
     async resolveBackendNodeId(backendNodeId) {
-        if (!this.textSnapshot) {
-            this.textSnapshot = await TextSnapshot.create(this);
+        let id = this.textSnapshot?.resolveCdpElementId(backendNodeId);
+        if (id) {
+            return id;
         }
-        let id = this.textSnapshot.resolveCdpElementId(backendNodeId);
-        if (!id) {
-            this.textSnapshot = await TextSnapshot.create(this);
+        this.textSnapshot = await TextSnapshot.create(this, {
+            verbose: this.textSnapshot?.verbose ?? false,
+        });
+        id = this.textSnapshot.resolveCdpElementId(backendNodeId);
+        if (!id && !this.textSnapshot.verbose) {
+            this.textSnapshot = await TextSnapshot.create(this, {
+                verbose: true,
+            });
             id = this.textSnapshot.resolveCdpElementId(backendNodeId);
         }
         return id;
     }
     async resolveUidToBackendNodeId(uid) {
-        const target = this.pptrPage.target();
+        const target = this.target;
         const targetId = Boolean(target) &&
             '_targetId' in target &&
             typeof target._targetId === 'string'
@@ -686,7 +905,9 @@ export class McpPage {
                 logger?.('No DevTools page detected');
                 return {};
             }
+            await this.ensureDevToolsCommentBridge(devtoolsPage);
             const { cdpRequestId, cdpBackendNodeId } = await devtoolsPage.evaluate(async () => {
+                window.universe?.cd4aBridge?.setAgentAttached(true);
                 // @ts-expect-error no types
                 const UI = await import('/bundled/ui/legacy/legacy.js');
                 // @ts-expect-error no types
@@ -708,6 +929,20 @@ export class McpPage {
     async restoreEmulation() {
         const currentSetting = this.emulationSettings;
         await this.emulate(currentSetting);
+    }
+    async #emulateMediaFeatures(settings) {
+        // `page.emulateMediaFeatures` replaces all previously emulated media
+        // features, so every supported feature is sent on each call. An empty
+        // value disables the override for that feature.
+        await this.pptrPage.emulateMediaFeatures([
+            { name: 'prefers-color-scheme', value: settings.colorScheme ?? '' },
+            { name: 'forced-colors', value: settings.forcedColors ?? '' },
+            { name: 'prefers-contrast', value: settings.prefersContrast ?? '' },
+            {
+                name: 'prefers-reduced-motion',
+                value: settings.prefersReducedMotion ?? '',
+            },
+        ]);
     }
     async emulate(options) {
         const page = this.pptrPage;
@@ -772,17 +1007,31 @@ export class McpPage {
             newSettings.userAgent = options.userAgent;
         }
         if (!options.colorScheme || options.colorScheme === 'auto') {
-            await page.emulateMediaFeatures([
-                { name: 'prefers-color-scheme', value: '' },
-            ]);
             delete newSettings.colorScheme;
         }
         else {
-            await page.emulateMediaFeatures([
-                { name: 'prefers-color-scheme', value: options.colorScheme },
-            ]);
             newSettings.colorScheme = options.colorScheme;
         }
+        if (!options.forcedColors || options.forcedColors === 'auto') {
+            delete newSettings.forcedColors;
+        }
+        else {
+            newSettings.forcedColors = options.forcedColors;
+        }
+        if (!options.prefersContrast || options.prefersContrast === 'auto') {
+            delete newSettings.prefersContrast;
+        }
+        else {
+            newSettings.prefersContrast = options.prefersContrast;
+        }
+        if (!options.prefersReducedMotion ||
+            options.prefersReducedMotion === 'auto') {
+            delete newSettings.prefersReducedMotion;
+        }
+        else {
+            newSettings.prefersReducedMotion = options.prefersReducedMotion;
+        }
+        await this.#emulateMediaFeatures(newSettings);
         if (!options.viewport) {
             delete newSettings.viewport;
         }
@@ -809,6 +1058,9 @@ export class McpPage {
         await page.setViewport(newSettings.viewport ?? null);
     }
     updateTimeouts() {
+        if (!this.#pptrPage) {
+            return;
+        }
         // For waiters 5sec timeout should be sufficient.
         // Increased in case we throttle the CPU
         const cpuMultiplier = this.cpuThrottlingRate;

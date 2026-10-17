@@ -88,20 +88,20 @@ const inventory = [
 ];
 const upstreamLock = lock
     .replaceAll('ws', 'chrome-devtools-mcp')
-    .replaceAll('8.22.0', '1.10.1')
+    .replaceAll('8.22.0', '1.11.0')
     .replace('devDependencies:', 'dependencies:')
     .replace('sha512-d3M=', OFFICIAL_RELEASE.integrity);
 const upstreamInputs = { release: OFFICIAL_RELEASE, snapshot: upstreamLock };
 const releaseRootLock = lock
     .replace(
         'ws: {specifier: 8.22.0, version: 8.22.0}',
-        'ws: {specifier: 8.22.0, version: 8.22.0}\n      chrome-devtools-mcp: {specifier: 1.10.1, version: 1.10.1}',
+        'ws: {specifier: 8.22.0, version: 8.22.0}\n      chrome-devtools-mcp: {specifier: 1.11.0, version: 1.11.0}',
     )
     .replace(
         'packages:\n  ws@8.22.0:',
-        `packages:\n  chrome-devtools-mcp@1.10.1:\n    resolution: {integrity: ${OFFICIAL_RELEASE.integrity}}\n  ws@8.22.0:`,
+        `packages:\n  chrome-devtools-mcp@1.11.0:\n    resolution: {integrity: ${OFFICIAL_RELEASE.integrity}}\n  ws@8.22.0:`,
     )
-    .replace('snapshots:\n  ws@8.22.0:', 'snapshots:\n  chrome-devtools-mcp@1.10.1: {}\n  ws@8.22.0:');
+    .replace('snapshots:\n  ws@8.22.0:', 'snapshots:\n  chrome-devtools-mcp@1.11.0: {}\n  ws@8.22.0:');
 const ghsa = 'GHSA-35jh-r3h4-6jhm';
 const now = new Date('2026-09-30T00:00:00.000Z');
 const fingerprints = { code: 'a'.repeat(64), configuration: 'b'.repeat(64), dependencies: 'c'.repeat(64) };
@@ -186,7 +186,7 @@ function isolatedExecutor(calls: CommandCall[], severity = 'high', failure?: str
                     invalid: [],
                 }),
             };
-        const report = audit(severity, '1.10.1');
+        const report = audit(severity, '1.11.0');
         required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
         if (failure === 'coverage') report.metadata.totalDependencies = 0;
         return { exitCode: 1, stdout: JSON.stringify(report) };
@@ -578,7 +578,7 @@ test('upstream reviews the isolated lock before installation and never runs its 
                         await readFile(path.join(options.cwd, 'package.json'), 'utf8'),
                     );
                     assert.ok(isRecord(manifest));
-                    assert.deepEqual(manifest.dependencies, { 'chrome-devtools-mcp': '1.10.1' });
+                    assert.deepEqual(manifest.dependencies, { 'chrome-devtools-mcp': '1.11.0' });
                     const settings: unknown = parse(
                         await readFile(path.join(options.cwd, 'pnpm-workspace.yaml'), 'utf8'),
                     );
@@ -615,7 +615,7 @@ test('upstream reviews the isolated lock before installation and never runs its 
                         ),
                         exitCode: 0,
                     };
-                const report = audit('moderate', '1.10.1');
+                const report = audit('moderate', '1.11.0');
                 required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
                 return args.includes('signatures')
                     ? { stdout: '{"audited":3,"verified":3,"invalid":[],"missing":[]}', exitCode: 0 }
@@ -654,7 +654,7 @@ test('frozen upstream validation rejects identity drift and lock mutation before
         return { exitCode: 0, stdout: '' };
     };
     await assert.rejects(
-        scanUpstream({ inputs: { ...upstreamInputs, snapshot: upstreamLock.replaceAll('1.10.1', '1.10.0') }, execute }),
+        scanUpstream({ inputs: { ...upstreamInputs, snapshot: upstreamLock.replaceAll('1.11.0', '1.10.0') }, execute }),
         /identity|version/i,
     );
     await assert.rejects(scanUpstream({ inputs: upstreamInputs, execute }), /changed/i);
@@ -790,7 +790,7 @@ test('public gate reports both full trees and rejects evidence changing during a
         );
         await writeFile(
             path.join(root, 'package.json'),
-            '{"devDependencies":{"ws":"8.22.0","chrome-devtools-mcp":"1.10.1"}}',
+            '{"devDependencies":{"ws":"8.22.0","chrome-devtools-mcp":"1.11.0"}}',
         );
         const { INSTALL_POLICY } = await import('../tooling/security/security-evidence.ts');
         await writeFile(
@@ -825,7 +825,7 @@ test('public gate reports both full trees and rejects evidence changing during a
             }
             const report = audit(
                 cwd === root ? 'high' : upstreamSeverity,
-                cwd === root ? '8.22.0' : '1.10.1',
+                cwd === root ? '8.22.0' : '1.11.0',
                 cwd === root ? 4 : 3,
             );
             if (cwd !== root) required(report.advisories[1]).module_name = 'chrome-devtools-mcp';
@@ -872,7 +872,7 @@ test('public gate reports both full trees and rejects evidence changing during a
         approvedReview.exceptions.push({
             ...waiver(),
             package: 'chrome-devtools-mcp',
-            version: '1.10.1',
+            version: '1.11.0',
             scope: 'upstream',
             evidence: ['src/evidence.ts'],
             fingerprints: blockedUpstream.scopes.upstream.fingerprints,

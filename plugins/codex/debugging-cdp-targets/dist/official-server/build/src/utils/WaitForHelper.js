@@ -59,6 +59,7 @@ import { logger } from './logger.js';
 export class WaitForHelper {
     #abortController = new AbortController();
     #page;
+    #publicPage;
     #stableDomTimeout;
     #stableDomFor;
     #expectNavigationIn;
@@ -67,12 +68,14 @@ export class WaitForHelper {
     /** Track all dialogs as they pause the renderer. */
     #dialogDetected = false;
     #initialUrl;
+    #openedPages = new Set();
     constructor(page, cpuTimeoutMultiplier, networkTimeoutMultiplier) {
         this.#stableDomTimeout = 3000 * cpuTimeoutMultiplier;
         this.#stableDomFor = 100 * cpuTimeoutMultiplier;
         this.#expectNavigationIn = 100 * cpuTimeoutMultiplier;
         this.#navigationTimeout = 3000 * networkTimeoutMultiplier;
         this.#page = page;
+        this.#publicPage = page;
         this.#initialUrl = page.url();
     }
     /**
@@ -126,7 +129,7 @@ export class WaitForHelper {
                     // Ignored cleanup errors
                 }
             });
-            return Promise.race([
+            return await Promise.race([
                 stableDomObserver.evaluate(async (observer) => {
                     return await observer.resolver.promise;
                 }),
@@ -187,6 +190,15 @@ export class WaitForHelper {
         this.#page.on('dialog', dialogHandler);
         this.#abortController.signal.addEventListener('abort', () => {
             this.#page.off('dialog', dialogHandler);
+        });
+        const popupHandler = (page) => {
+            if (page) {
+                this.#openedPages.add(page.target());
+            }
+        };
+        this.#publicPage.on('popup', popupHandler);
+        this.#abortController.signal.addEventListener('abort', () => {
+            this.#publicPage.off('popup', popupHandler);
         });
         // A scoped AbortController used to clean up navigation probe listeners.
         // When aborted (either after navigation detection finishes or if this.#abortController
@@ -296,6 +308,7 @@ export class WaitForHelper {
                 ? { navigatedToUrl: urlAfterAction }
                 : {}),
             dialogHandled: this.#dialogHandled,
+            ...(this.#openedPages.size ? { openedPages: this.#openedPages } : {}),
         };
     }
 }

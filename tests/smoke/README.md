@@ -190,7 +190,7 @@ then explicitly restarts and normally closes them. It retains test profiles.
 - `claude-marketplace.ts` validates, adds and installs the actual Claude Marketplace
   into an isolated home outside the repository. It compares the complete installed
   cache and actual init source bytes, checks component inventory, namespaced Skill,
-  connected gateway and all 73 tools through real Claude discovery. A separate direct
+  connected gateway and all 74 tools through real Claude discovery. A separate direct
   gateway check supplements host discovery. Run `node tests/smoke/claude-marketplace.ts`
   after `pnpm build:plugin`; an optional first argument selects a Claude executable.
 - `claude-hooks.ts` installs the committed Claude manifest, Hook and Skill bytes in
