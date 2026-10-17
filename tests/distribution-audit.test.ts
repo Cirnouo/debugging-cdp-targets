@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
-import { compareDistributionTrees, readDistributionTree, validateMcpEntries } from '../tooling/distribution-audit.ts';
+import {
+    auditDistribution,
+    compareDistributionTrees,
+    readDistributionTree,
+    validateMcpEntries,
+} from '../tooling/distribution-audit.ts';
 import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
 import {
     REQUIRED_PAYLOAD_FILES,
@@ -116,4 +121,25 @@ test('installation comparison reports missing, changed, and extra bytes', () => 
         ).length,
         3,
     );
+});
+
+test('distribution audit accepts independent App version and rejects stale peer versions', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-version-distribution-')));
+    try {
+        for (const file of ['packaging', 'plugins', '.agents', '.claude-plugin', 'LICENSE']) {
+            await cp(new URL(`../${file}`, import.meta.url), path.join(root, file), { recursive: true });
+        }
+        await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.3.4' }));
+        assert.deepEqual(await auditDistribution(root), []);
+        for (const host of PLUGIN_HOSTS) {
+            const manifest = path.join(root, host.payloadRoot, host.manifest);
+            const original = await readFile(manifest, 'utf8');
+            const data = JSON.parse(original);
+            await writeFile(manifest, JSON.stringify({ ...data, version: '0.2.0' }));
+            assert.ok((await auditDistribution(root)).some((error) => /version|Changed/.test(error)));
+            await writeFile(manifest, original);
+        }
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });

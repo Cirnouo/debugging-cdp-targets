@@ -20,8 +20,8 @@ export function isStableVersion(value: unknown): value is string {
     return parsed !== null && parsed.prerelease.length === 0 && parsed.build.length === 0;
 }
 
-export function validateVersionAgreement(packageVersion: unknown, pluginVersion: unknown, skillVersion: unknown) {
-    return isSemVer(packageVersion) && pluginVersion === packageVersion && skillVersion === packageVersion
+export function validateVersionAgreement(appVersion: unknown, pluginVersion: unknown, skillVersion: unknown) {
+    return isSemVer(appVersion) && isSemVer(skillVersion) && pluginVersion === skillVersion
         ? []
-        : ['Package, Plugin, and Skill versions must agree on a valid SemVer version.'];
+        : ['App version must be valid SemVer; Plugin and Skill versions must agree on a valid SemVer version.'];
 }

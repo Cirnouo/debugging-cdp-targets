@@ -17,7 +17,10 @@ leading zero.
 first, dated releases newest first, ISO dates, and
 Added/Changed/Deprecated/Removed/Fixed/Security groups containing meaningful
 user changes. Finalize a dated snapshot only when preparing an authorized
-publication. Package, both host Plugin/Skill metadata, and release tag must agree.
+publication. The release tag must match the App version in package.json. Both
+maintained/generated host Plugin manifests must match the shared Skill metadata
+version as one independent plugin group; an App release need not bump plugins.
+All versions use strict SemVer, including exact build/prerelease identity.
 
 Unreleased, each prerelease snapshot, and the final stable release record meaningful
 cumulative net changes relative to the latest published stable/full release, not
@@ -76,7 +79,8 @@ the unreleased pin adjustment is development history, not a Changed entry.
 
 Preparing and pushing an explicitly authorized, annotated `v<semver>` tag without
 build metadata triggers automatic publication for stable versions and prereleases.
-Before creating it, finalize matching Package, Plugin and Skill versions and exactly
+Before creating it, finalize the matching App package/tag identity, validate the
+independent peer Plugin/Skill version group, and finalize exactly
 one nonempty `## [<version>] - YYYY-MM-DD` Changelog entry with a valid ISO date,
 and complete installation acceptance from the actual distribution source.
 The tagged commit must already be merged into main. Enabling the workflow
@@ -90,7 +94,8 @@ agreement. The workflow admits stable three-component tags and prerelease
 candidates; the publisher strictly validates SemVer before release API operations.
 Core and numeric prerelease identifiers have no leading zeros. Build metadata,
 updated/deleted/forced tags and manual runs do not publish. Generic metadata audits
-accept agreeing SemVer versions rather than pinning future development to 0.1.0.
+accept valid independent App and agreeing peer Plugin/Skill SemVer versions rather
+than pinning future development to 0.1.0.
 
 Release titles equal their tags. English notes display What's Changed using
 the corresponding Changelog entry's original categories and Markdown, followed
@@ -136,3 +141,30 @@ CI intentionally neither reads nor validates this setting and uses only its
 built-in GITHUB_TOKEN, with no additional secret. GitHub immutability locks
 published tags and assets; titles and release notes remain editable on GitHub.
 Changing the repository setting still requires explicit user authorization.
+
+## Accepted forward App and plugin delivery
+
+[ADR 0017](../adr/0017-singleton-desktop-app.md) and the
+[tracked implementation plan](../superpowers/plans/2026-10-17-singleton-app-plan.md)
+own the accepted forward delivery design. Native App artifacts, updater and thin
+HTTP plugins are not delivered by this policy change. The current source-only
+publisher above is not evidence of native App delivery. Task 7 must replace its
+source-only final contract with independently inventoried native installer/portable
+artifacts for Windows 11, macOS 15 and Ubuntu 24.04, x64/arm64, including ordinary
+Node, unchanged official Server, licenses/notices and verifiable integrity.
+
+Root package.json.version owns App Releases independently of the one plugin version
+owned by shared Skill metadata and validated against both maintained/generated
+host manifests. Do not create independent plugin tags or require App-aligned
+plugin channels. Future compatible stable updates use a schema-versioned static
+latest-plugin record: latest stable plugin version, minimumAppVersion, immutable
+git-subdir payload source with lowercase 40-character commit SHA and verifiable
+integrity for both host payloads. No compatibility history/solver/backend.
+
+Payload commit A must exist before separately authorized catalog/feed commit B;
+both host catalog entries and the latest record pin A while retaining configured
+marketplace main/ref. Publication remains separately authorized. No stable record,
+feed, real release URL, digest or updater poll target is advertised while 0.1.0
+remains Unreleased. Missing published record is an ordinary unavailable-update
+state, never permission to install unreleased main as stable. App tag identity,
+main ancestry, draft/classification, CI and publication permissions above remain.
