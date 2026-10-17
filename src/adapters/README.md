@@ -6,6 +6,8 @@
   it carries no management requests, credentials or settings.
 - `app-storage.ts` selects separate installed and portable data roots and admits
   their creation only after singleton ownership.
+- `app-chromium-storage.ts` creates per-process temporary Chromium roots
+  synchronously before asynchronous bootstrap work, separate from configuration.
 - `app-configuration.ts` validates the whole migration chain before a backup and
   atomic settings replacement, keeping desired port separate from effective port.
 - `app-native.ts` verifies the complete original native loader closure before
