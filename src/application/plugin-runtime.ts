@@ -592,7 +592,6 @@ export async function createGatewayCore({
         stop: async (request, context = {}) => {
             const connection = routed(request);
             connection.lastRealOperationAt = timestamp();
-            delete connection.executionFacilityFailure;
             connection.owner.expectedOperationId = context.operationId;
             if (request.disposition === 'Close') connection.directory.requestRelease();
             const result = await connection.controller.stop(request, context);

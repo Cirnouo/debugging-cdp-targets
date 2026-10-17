@@ -14,6 +14,7 @@ async function fixture() {
     const tool = { name: 'echo', inputSchema: { type: 'object' as const, properties: {} } };
     const catalog = createToolCatalog({ version: '1.11.0', tools: [{ name: 'echo', requires: {}, variants: [tool] }] });
     let launched = 0;
+    let officialCalls = 0;
     let now = 0;
     const acquired = { directory: 0, router: 0, target: 0, official: 0 };
     let releaseCall: () => void = () => {};
@@ -70,11 +71,25 @@ async function fixture() {
             return {
                 tools: [tool],
                 call: async (_name, arguments_, signal, onProgress) => {
+                    officialCalls++;
                     if (arguments_.hold === true) {
                         enterCall();
                         await heldCall;
                     }
                     if (arguments_.privateFailure === true) throw new Error('private-path-and-token-fixture');
+                    if (arguments_.holdFormFailure === true) {
+                        try {
+                            await options?.elicitation?.request(
+                                { message: 'Original held form', requestedSchema: { type: 'object', properties: {} } },
+                                signal ?? new AbortController().signal,
+                            );
+                        } catch {
+                            enterCall();
+                            await heldCall;
+                            throw new Error('Translated upstream SDK rejection');
+                        }
+                        throw new Error('Expected originating form facility refusal.');
+                    }
                     const roots = await options?.roots?.();
                     if (arguments_.challenge === true) {
                         onProgress?.({ progress: 1, total: 2, message: 'Fixture progress' });
@@ -137,6 +152,7 @@ async function fixture() {
         releaseCall,
         callEntered,
         launched: () => launched,
+        officialCalls: () => officialCalls,
         advance: (milliseconds: number) => {
             now += milliseconds;
         },
@@ -252,6 +268,103 @@ test('authenticated HTTP errors preserve bounded busy and originating form-conte
         f.releaseCall();
         await pending?.catch(() => {});
         await f.close();
+    }
+});
+
+test('public HTTP Keep preserves the original held facility failure until execution settles without stale reasons or replay', async () => {
+    const f = await fixture();
+    let pending: Promise<unknown> | undefined;
+    try {
+        const client = await f.client();
+        const registrationBearer = await register(client);
+        const start = structured(
+            await client.callTool({
+                name: 'dct_connection_start',
+                arguments: {
+                    registrationBearer,
+                    requestId: 'keep-race-start',
+                    isolation: { mode: 'none' },
+                    launch: { executable: process.execPath },
+                },
+            }),
+        );
+        const completed = await terminal(client, registrationBearer, start.operationId);
+        assert.ok(isRecord(completed.result));
+        const route = {
+            registrationBearer,
+            connectionId: completed.result.connectionId,
+            sessionId: completed.result.sessionId,
+        };
+        const call = (arguments_: Record<string, unknown>) =>
+            client.callTool({ name: 'echo', arguments: { ...arguments_, _dct: route } });
+        const acquired = { ...f.acquired };
+        pending = call({ holdFormFailure: true }).then(
+            (result) => ({ result }),
+            (error: unknown) => ({ error }),
+        );
+        await Promise.race([
+            f.callEntered,
+            delay(2000, undefined, { ref: false }).then(() => {
+                throw new Error('Original local form refusal did not reach the explicit barrier.');
+            }),
+        ]);
+        const assertBusy = (error: unknown) => {
+            assert.ok(error instanceof ProtocolError);
+            assert.deepEqual(error.data, { code: 'CONNECTION_BUSY' });
+            return true;
+        };
+        await assert.rejects(call({}), assertBusy);
+        const accepted = structured(
+            await client.callTool({
+                name: 'dct_connection_stop',
+                arguments: {
+                    ...route,
+                    requestId: 'keep-held-execution',
+                    disposition: 'Keep',
+                },
+            }),
+        );
+        const kept = await terminal(client, registrationBearer, accepted.operationId);
+        assert.equal(kept.state, 'succeeded');
+        await assert.rejects(call({}), assertBusy);
+        assert.deepEqual(f.acquired, acquired);
+        assert.equal(f.officialCalls(), 1);
+        const selected = structured(
+            await client.callTool({
+                name: 'dct_connection_status',
+                arguments: {
+                    registrationBearer,
+                    connectionId: route.connectionId,
+                },
+            }),
+        );
+        assert.equal(selected.sessionId, route.sessionId);
+        assert.equal(selected.upstreamStatus, 'connected');
+        f.releaseCall();
+        const original = await pending;
+        assert.ok(isRecord(original) && original.error instanceof ProtocolError);
+        assert.deepEqual(original.error.data, { code: 'FORM_ELICITATION_UNAVAILABLE' });
+        assert.match(original.error.message, /originating client.*form-mode elicitation/i);
+        await assert.rejects(call({ privateFailure: true }), (error: unknown) => {
+            assert.ok(error instanceof ProtocolError);
+            assert.equal(error.data, undefined);
+            assert.doesNotMatch(
+                error.message,
+                /form-mode elicitation|private-path-and-token-fixture|Translated upstream/,
+            );
+            return true;
+        });
+        assert.deepEqual(structured(await call({ value: 'unchanged-success' })), {
+            arguments_: { value: 'unchanged-success' },
+            roots: { roots: [] },
+        });
+        assert.equal(f.officialCalls(), 3);
+        assert.deepEqual(f.acquired, acquired);
+    } finally {
+        f.releaseCall();
+        await pending;
+        await f.close();
+        assert.equal(f.core.admin.cleanupState(), 'closed');
     }
 });
 
