@@ -464,6 +464,7 @@ test('modern form replies require the original principal, route, arguments, capa
                 requestState: second.requestState,
                 inputResponses: { form2: { action: 'accept', content: { answer: 'late' } } },
             }),
+            /input.*unavailable|expired/i,
         );
         assert.equal(f.invokes(), 1);
         assert.equal(f.effects(), 1);
@@ -496,7 +497,7 @@ test('form decline and cancellation are forwarded as outcomes and a ninth round 
                 requestState: result.requestState,
                 inputResponses: { [`form${round}`]: { action: 'decline' } },
             });
-            if (round === 8) await assert.rejects(request);
+            if (round === 8) await assert.rejects(request, /eight.*form|form.*eight/i);
             else result = await request;
         }
         assert.equal(f.invokes(), 3);

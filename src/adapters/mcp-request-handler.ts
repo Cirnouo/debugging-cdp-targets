@@ -120,7 +120,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
         ttlSeconds: 600,
         bind: (context) => context.mcpReq.method,
     });
-    function retire(flow: Flow, reason = new Error('The originating input context is unavailable.')) {
+    function retire(flow: Flow, reason: unknown = new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE')) {
         if (flows.get(flow.id) !== flow) return;
         flows.delete(flow.id);
         flow.channel?.detach();
@@ -146,9 +146,10 @@ export function createMcpRequestHandler(core: McpHttpCore) {
         flow.lifetime.signal.throwIfAborted();
         signal?.throwIfAborted();
         if (!flow.capabilities.formElicitation) throw new RequestFailure('FORM_ELICITATION_UNAVAILABLE');
-        if (flow.pending || flow.round >= 8) throw new Error('The bounded form input context is unavailable.');
+        if (flow.pending) throw new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE');
+        if (flow.round >= 8) throw new RequestFailure('FORM_ROUND_LIMIT');
         flow.expires ??= Date.now() + 600_000;
-        if (flow.expires <= Date.now()) throw new Error('The form input context expired.');
+        if (flow.expires <= Date.now()) throw new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE');
         const answer = deferred<ElicitResult>();
         const pending = {
             key: `form${++flow.round}`,
@@ -164,7 +165,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
         return answer.promise.finally(() => signal?.removeEventListener('abort', aborted));
     }
     async function exchange(flow: Flow, context: ServerContext, token: string | number | undefined, state?: FormState) {
-        if (flow.channel || flow.lifetime.signal.aborted) throw new Error('The input round is unavailable.');
+        if (flow.channel || flow.lifetime.signal.aborted) throw new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE');
         const aborted = () => retire(flow);
         const channel: Channel = {
             context,
@@ -181,7 +182,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
             if (state) {
                 const pending = flow.pending;
                 if (!pending || pending.round !== state.round || pending.key !== state.key)
-                    throw new Error('The input round was already consumed.');
+                    throw new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE');
                 const value = context.mcpReq.inputResponses?.[pending.key];
                 if (value !== undefined) {
                     const checked = await ElicitResultSchema['~standard'].validate(value);
@@ -373,10 +374,10 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                             state.registrationId !== principal.registrationId ||
                             state.name !== name ||
                             state.fingerprint !== hash ||
-                            state.route !== route ||
-                            state.expires <= Date.now()
+                            state.route !== route
                         )
                             throw new Error('Invalid form continuation.');
+                        if (state.expires <= Date.now()) throw new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE');
                         const flow = flows.get(state.flowId);
                         if (
                             !flow ||
@@ -389,7 +390,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                             !flow.capabilities.formElicitation ||
                             (flow.capabilities.roots && !supported.roots)
                         )
-                            throw new Error('The originating input context is unavailable.');
+                            throw new RequestFailure('INPUT_CONTINUATION_UNAVAILABLE');
                         return await exchange(flow, context, token, state);
                     }
                     if (context.mcpReq.inputResponses) throw new Error('A signed continuation is required.');
