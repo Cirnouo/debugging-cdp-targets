@@ -77,6 +77,12 @@ export function createRegistrationRegistry({
             return registration.principal;
         },
         check,
+        resolve(registrationId: string) {
+            const registration = entries.get(registrationId);
+            if (!registration) throw new Error('The registration is absent or expired.');
+            check(registration.principal);
+            return registration.principal;
+        },
         touch(principal: ClientPrincipal) {
             check(principal).lastActivity = now();
         },

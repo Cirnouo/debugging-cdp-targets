@@ -31,6 +31,9 @@ terminal history expires with the empty registration. No ownership is persisted.
 `admin` is a trusted in-process closure. Its registration, connection and operation
 inventories, empty unregister, idle transfer, selected status and lifecycle control
 cannot be enabled by agent JSON. Administrative control refuses new-target start.
+Administrative unregister takes registrationId and transfer takes connectionId
+and recipient registrationId from that inventory. The core resolves and validates
+the current identity internally, so a GUI stores no bearer/principal mirror.
 Connection establishment and last-real-operation timestamps are separate from
 registration idle activity; status/wait/UI refresh do not update the latter
 connection timestamp.

@@ -1026,8 +1026,9 @@ export async function createGatewayCore({
             },
             admin: {
                 registrations: registrations.list,
-                unregister: registrations.unregister,
-                transfer(connectionId: string, principal: ClientPrincipal) {
+                unregister: (registrationId: string) => registrations.unregister(registrations.resolve(registrationId)),
+                transfer(connectionId: string, registrationId: string) {
+                    const principal = registrations.resolve(registrationId);
                     const connection = selected(connectionId);
                     registrations.transfer(
                         connectionId,

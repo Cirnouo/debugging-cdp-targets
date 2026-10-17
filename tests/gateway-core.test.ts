@@ -6,7 +6,7 @@ import { createGatewayCore } from '../src/application/plugin-runtime.ts';
 import type { LaunchOptions } from '../src/domains/control-contract.ts';
 import type { ClientRequestContext } from '../src/shared/client-context.ts';
 
-async function fixture() {
+async function fixture(now?: () => number) {
     const tool = { name: 'echo', inputSchema: { type: 'object' as const, properties: {} } };
     const catalog = createToolCatalog({ version: '1.11.0', tools: [{ name: 'echo', requires: {}, variants: [tool] }] });
     const children = new Map<number, EventEmitter>();
@@ -26,6 +26,7 @@ async function fixture() {
         entered = resolve;
     });
     const core = await createGatewayCore({
+        ...(now ? { now } : {}),
         loadCatalog: async () => catalog,
         createRouter: async () => {
             routersCreated += 1;
@@ -75,6 +76,7 @@ async function fixture() {
                         });
                         progress?.({ progress: 2 });
                     }
+                    if (args.fail) throw new Error('Late original execution failed.');
                     if (args.elicit)
                         await options?.elicitation?.request(
                             { mode: 'form', message: 'origin', requestedSchema: { type: 'object', properties: {} } },
@@ -117,6 +119,7 @@ async function fixture() {
         officialExits,
         executing,
         settle: () => settle(),
+        exit: (pid: number) => children.get(pid)?.emit('exit'),
         failClose: (value: boolean) => {
             rejectClose = value;
         },
@@ -219,7 +222,7 @@ for (const scope of ['target', 'official', 'both'] as const) {
             process.env.DCT_TEST_SNAPSHOT = 'changed';
             assert.ok(roots.roots[0]);
             roots.roots[0].uri = 'file:///changed';
-            f.core.admin.transfer(original.connectionId, b.registration.principal);
+            f.core.admin.transfer(original.connectionId, b.registration.principal.registrationId);
             const result = await f.core.controller.restart({
                 connectionId: original.connectionId,
                 sessionId: original.sessionId ?? '',
@@ -378,7 +381,7 @@ test('client abort detaches its wait while actual official execution keeps the c
             /unavailable/,
         );
         assert.equal(f.counts().closed, 0);
-        assert.throws(() => core.admin.transfer(first.connectionId, b.registration.principal), /busy/);
+        assert.throws(() => core.admin.transfer(first.connectionId, b.registration.principal.registrationId), /busy/);
         await assert.rejects(
             core.invoke(
                 'echo',
@@ -396,12 +399,162 @@ test('client abort detaches its wait while actual official execution keeps the c
         );
         f.settle();
         await new Promise<void>((resolve) => setImmediate(resolve));
-        core.admin.transfer(first.connectionId, b.registration.principal);
+        core.admin.transfer(first.connectionId, b.registration.principal.registrationId);
         await core.invoke('echo', { _dct: route }, b.context());
         assert.deepEqual(a.events, ['progress']);
     } finally {
         f.settle();
         await core.cleanup();
+    }
+});
+
+for (const mode of ['cancel', 'response-timeout', 'disconnect'] as const) {
+    test(`${mode} detaches the response while a late failure remains accounted to the original execution`, async () => {
+        const f = await fixture();
+        const a = f.client('a');
+        const b = f.client('b');
+        const wait = new AbortController();
+        try {
+            const first = await f.core.controller.start(
+                { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+                { client: a.context() },
+            );
+            const route = { connectionId: first.connectionId, sessionId: first.sessionId };
+            const origin = a.handle.request({
+                requestId: 0,
+                capabilities: { roots: false, formElicitation: false },
+                waitSignal: wait.signal,
+                onProgress: () => a.events.push('progress'),
+            });
+            const pending = f.core.invoke('echo', { _dct: route, hold: true, fail: true }, origin);
+            await f.executing;
+            const rejected = assert.rejects(pending, /cancel|timeout|unavailable/);
+            if (mode === 'disconnect') a.handle.detach();
+            else wait.abort(new Error(mode === 'cancel' ? 'Client cancelled.' : 'Response timeout.'));
+            await rejected;
+            assert.equal(f.counts().closed, 0);
+            assert.equal(f.generations().officialClosed, 1, 'Only initial catalog acquisition was closed.');
+            assert.throws(
+                () => f.core.admin.transfer(first.connectionId, b.registration.principal.registrationId),
+                /busy/,
+            );
+            f.settle();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            f.core.admin.transfer(first.connectionId, b.registration.principal.registrationId);
+            const result = await f.core.invoke('echo', { _dct: route }, b.context());
+            assert.deepEqual(result.structuredContent, { roots: { roots: [{ uri: 'file:///a' }] } });
+            assert.deepEqual(a.events, ['progress']);
+            assert.equal(f.core.admin.operations().length, 0, 'Official calls have no second result archive.');
+        } finally {
+            f.settle();
+            await f.core.cleanup();
+        }
+    });
+}
+
+test('actual target exit during detached execution invalidates only its old route and consumes late completion', async () => {
+    const f = await fixture();
+    const a = f.client('a');
+    const b = f.client('b');
+    try {
+        const first = await f.core.controller.start(
+            { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+            { client: a.context() },
+        );
+        const peer = await f.core.controller.start(
+            { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+            { client: b.context() },
+        );
+        const route = { connectionId: first.connectionId, sessionId: first.sessionId };
+        const pending = f.core.invoke('echo', { _dct: route, hold: true }, a.context());
+        await f.executing;
+        const detached = assert.rejects(pending, /unavailable/);
+        a.handle.detach();
+        await detached;
+        assert.ok(first.processId);
+        f.exit(first.processId);
+        f.settle();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.throws(() => f.core.admin.status(first.connectionId), /absent|closed/);
+        await f.core.invoke(
+            'echo',
+            { _dct: { connectionId: peer.connectionId, sessionId: peer.sessionId } },
+            b.context(),
+        );
+        assert.deepEqual(a.events, ['progress']);
+    } finally {
+        f.settle();
+        await f.core.cleanup();
+    }
+});
+
+test('authenticated reads refresh empty idle expiry without advancing last-real-operation time', async () => {
+    let now = 0;
+    const f = await fixture(() => now);
+    const a = f.client('a');
+    const empty = f.client('empty');
+    try {
+        const connection = await f.core.controller.start(
+            { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+            { client: a.context() },
+        );
+        const before = f.core.admin.connections()[0];
+        now = 29 * 60 * 1000;
+        await f.core.control({ action: 'status' }, empty.context());
+        await f.core.control(
+            { action: 'status', entryId: f.core.entryId, connectionId: connection.connectionId },
+            a.context(),
+        );
+        const after = f.core.admin.connections()[0];
+        assert.equal(after?.lastRealOperationAt, before?.lastRealOperationAt);
+        assert.equal(after?.establishedAt, before?.establishedAt);
+        now += 29 * 60 * 1000;
+        await f.core.control({ action: 'status' }, empty.context());
+        now += 30 * 60 * 1000;
+        await assert.rejects(f.core.control({ action: 'status' }, empty.context()), /expired/);
+        await f.core.control(
+            { action: 'status', entryId: f.core.entryId, connectionId: connection.connectionId },
+            a.context(),
+        );
+    } finally {
+        await f.core.cleanup();
+    }
+});
+
+test('trusted administration resolves inventory registration IDs without bearer or principal mirrors', async () => {
+    let now = 0;
+    const f = await fixture(() => now);
+    const a = f.client('a');
+    const b = f.client('b');
+    const expired = f.client('expired');
+    try {
+        const connection = await f.core.controller.start(
+            { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+            { client: a.context() },
+        );
+        const inventory = f.core.admin.registrations();
+        const recipient = inventory.find((item) => item.registrationId === b.registration.principal.registrationId);
+        assert.ok(recipient);
+        f.core.admin.transfer(connection.connectionId, recipient.registrationId);
+        assert.throws(() => f.core.admin.unregister(recipient.registrationId), /resources or jobs/);
+        assert.throws(
+            () => f.core.admin.transfer(connection.connectionId, 'absent'),
+            /registration.*absent|absent.*registration/,
+        );
+        assert.throws(() => f.core.admin.unregister('absent'), /registration.*absent|absent.*registration/);
+        now = 30 * 60 * 1000;
+        assert.throws(
+            () => f.core.admin.transfer(connection.connectionId, expired.registration.principal.registrationId),
+            /expired/,
+        );
+        await f.core.invoke(
+            'echo',
+            { _dct: { connectionId: connection.connectionId, sessionId: connection.sessionId } },
+            b.context(),
+        );
+        assert.equal(JSON.stringify(f.core.admin.registrations()).includes(b.registration.bearer), false);
+    } finally {
+        await f.core.cleanup();
     }
 });
 
@@ -458,7 +611,7 @@ test('registrations authorize reads, calls and immutable operation ownership acr
             ).operationId,
             first.operationId,
         );
-        core.admin.transfer(connectionId, b.registration.principal);
+        core.admin.transfer(connectionId, b.registration.principal.registrationId);
         await assert.rejects(
             core.invoke('echo', { _dct: { connectionId, sessionId } }, a.context()),
             /absent or unauthorized/,

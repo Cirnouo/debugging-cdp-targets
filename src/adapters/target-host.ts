@@ -428,10 +428,14 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 launch,
                 isolation,
                 targetKind = 'generic-cdp',
-                basePort = DEFAULT_BASE_PORT,
+                basePort: requestedBasePort = DEFAULT_BASE_PORT,
                 exactPort: requestedExactPort,
                 launchDefinition,
             } = options;
+            const basePort =
+                options.preparedLaunch?.portPolicy.kind === 'automatic'
+                    ? options.preparedLaunch.portPolicy.basePort
+                    : requestedBasePort;
             const exactPort =
                 options.preparedLaunch?.portPolicy.kind === 'fixed'
                     ? options.preparedLaunch.portPolicy.port

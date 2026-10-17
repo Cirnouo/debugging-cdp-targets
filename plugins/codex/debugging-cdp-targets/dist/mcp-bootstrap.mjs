@@ -42272,10 +42272,11 @@ function createTargetHost(dependencies = {}) {
         launch,
         isolation,
         targetKind = "generic-cdp",
-        basePort = DEFAULT_BASE_PORT,
+        basePort: requestedBasePort = DEFAULT_BASE_PORT,
         exactPort: requestedExactPort,
         launchDefinition
       } = options;
+      const basePort = options.preparedLaunch?.portPolicy.kind === "automatic" ? options.preparedLaunch.portPolicy.basePort : requestedBasePort;
       const exactPort = options.preparedLaunch?.portPolicy.kind === "fixed" ? options.preparedLaunch.portPolicy.port : requestedExactPort;
       context.signal?.throwIfAborted();
       if (isolation.mode === "data-dir" && context.dataDirectory === void 0)
@@ -43572,6 +43573,12 @@ function createRegistrationRegistry({
       return registration.principal;
     },
     check,
+    resolve(registrationId) {
+      const registration = entries.get(registrationId);
+      if (!registration) throw new Error("The registration is absent or expired.");
+      check(registration.principal);
+      return registration.principal;
+    },
     touch(principal) {
       check(principal).lastActivity = now();
     },
@@ -44943,8 +44950,9 @@ async function createGatewayCore({
       },
       admin: {
         registrations: registrations.list,
-        unregister: registrations.unregister,
-        transfer(connectionId, principal) {
+        unregister: (registrationId) => registrations.unregister(registrations.resolve(registrationId)),
+        transfer(connectionId, registrationId) {
+          const principal = registrations.resolve(registrationId);
           const connection = selected(connectionId);
           registrations.transfer(
             connectionId,
