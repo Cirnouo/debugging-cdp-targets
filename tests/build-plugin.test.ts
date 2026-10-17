@@ -72,6 +72,49 @@ test('actual-graph license collection rejects altered canonical semver and smol 
     }
 });
 
+test('canonical parser package boundaries reject missing or malformed metadata instead of ancestor notices', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-canonical-boundary-'));
+    try {
+        await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'fixture-owner' }));
+        await writeFile(path.join(root, 'LICENSE'), 'unrelated ancestor notice');
+        for (const [name, version, license] of [
+            ['semver', '7.8.5', 'ISC'],
+            ['smol-toml', '1.9.1', 'BSD-3-Clause'],
+        ] as const) {
+            const directory = path.join(root, 'node_modules', name);
+            await mkdir(path.join(directory, 'dist'), { recursive: true });
+            await writeFile(path.join(directory, 'dist', 'index.js'), '');
+            await writeFile(path.join(directory, 'LICENSE'), 'altered canonical notice');
+            const metadata = path.join(directory, 'package.json');
+            const collect = () => collectBundledLicenses([`node_modules/${name}/dist/index.js`], root);
+            for (const value of [
+                undefined,
+                'null',
+                '[]',
+                '{invalid-json',
+                JSON.stringify({ version, license }),
+                JSON.stringify({ name: 42, version, license }),
+                JSON.stringify({ name, license }),
+                JSON.stringify({ name, version }),
+            ]) {
+                await rm(metadata, { force: true });
+                if (value !== undefined) await writeFile(metadata, value);
+                await assert.rejects(collect(), /canonical.*license|canonical.*metadata/i, `${name}: ${String(value)}`);
+            }
+            await writeFile(metadata, JSON.stringify({ name, version, license }));
+            const original = await readFile(new URL(`../node_modules/${name}/LICENSE`, import.meta.url));
+            await writeFile(path.join(directory, 'LICENSE'), original);
+            await writeFile(path.join(directory, 'dist', 'package.json'), JSON.stringify({ name: 'fixture-decoy' }));
+            await writeFile(path.join(directory, 'dist', 'LICENSE'), 'unrelated nested notice');
+            const notice = (await collect()).toString();
+            assert.ok(notice.includes(`${name} — LICENSE`));
+            assert.doesNotMatch(notice, /fixture-owner|fixture-decoy|unrelated/);
+        }
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 async function vendorFixture() {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-vendor-licenses-'));
     const directory = path.join(root, 'node_modules', '@modelcontextprotocol', 'client');
