@@ -12,6 +12,8 @@ Git hook tests remain contributor-tooling regressions.
   installed/portable data selection and refusal to acquire data without ownership.
 - `app-chromium-storage.test.ts` checks separate synchronous Chromium storage
   roots for independent App processes.
+- `app-bootstrap.test.ts` exercises entry import completion before ready-dependent
+  startup, synchronous path redirection and observed asynchronous startup failure.
 - `app-configuration.test.ts` and `app-configuration-storage.test.ts` cover
   validated migration chains, backup/atomic commit, invalid/future settings,
   singleton admission before I/O and desired versus effective cold settings.

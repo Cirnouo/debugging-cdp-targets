@@ -12,7 +12,10 @@ and the shared Skill still have exactly one matching Plugin version.
 The small Electron bootstrap synchronously captures the native App data base and
 redirects Chromium userData/sessionData into separate children of one private
 per-process OS temporary directory. Only then does it import asynchronous main
-composition. Configuration never uses this cache. Normal exit tries to remove
+composition without awaiting its ready-dependent startup from the entry module.
+Electron releases ready only after entry import completes; main retains its startup
+promise and early normal-Quit handlers, while bootstrap observes rejected startup
+without exposing raw errors. Configuration never uses this cache. Normal exit tries to remove
 its own cache; Chromium-held files may remain in OS temporary storage.
 
 The App verifies its native loading closure before holding a kernel advisory

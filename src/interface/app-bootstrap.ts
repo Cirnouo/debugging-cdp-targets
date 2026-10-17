@@ -10,5 +10,11 @@ protocol.registerSchemesAsPrivileged([
     { scheme: 'dct-app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
-const { startDesktopApp } = await import('./app-main.ts');
-await startDesktopApp({ appData, chromium });
+// Electron releases ready only after this entry import settles. Main retains the
+// startup promise and cleanup ownership; awaiting it here would block ready.
+void import('./app-main.ts')
+    .then(({ startDesktopApp }) => startDesktopApp({ appData, chromium }))
+    .catch(() => {
+        // Main's early normal-Quit handler remains responsible for acquired resources.
+        process.stderr.write('App startup could not complete. Use normal Quit to retry owned cleanup.\n');
+    });
