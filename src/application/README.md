@@ -10,10 +10,11 @@
     A verified native replacement is checkpointed before URL writes, so explicit
     retries can complete synchronization without repeating a native update.
     A stale candidate also permits URL sync of a verified newer managed copy.
+    App main and management-window integration remain separate from this service.
 - `plugin-runtime.ts` owns the gateway registry, independent target connections,
   transport-free MCP dispatch, monitoring and independent official Server lifetimes.
-    Its temporary stdio wrapper explicitly cleans up at EOF; detached core clients
-    retain resources. [Shared core contract](../../docs/shared-core.md) documents the seam.
+    The direct HTTP App owns final cleanup; detached core clients retain resources.
+    [Shared core contract](../../docs/shared-core.md) documents the seam.
 - `mcp-lifecycle.ts` validates current identities and serializes per-connection
   lifecycle mutations through idempotent asynchronous operations.
 - `operations.ts` owns memory-only requests, replayable bounded events, waits,

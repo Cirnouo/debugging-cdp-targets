@@ -397,3 +397,141 @@ YAML and PNG remain valid and unchanged. The display restriction above comes
 from C5's inspected renderer consumers, not an SVG requirement or a new metadata
 contract. These observations are limited to this Desktop version and platform;
 they do not establish a product bug or behavior across all versions/platforms.
+
+## Native user-plugin management study — 2026-10-17
+
+This study establishes the native CLI adapter and management service contract for
+the direct HTTP payload above. App main and management-window integration remain
+pending. The service does not advertise a production stable candidate: App and
+Plugin 0.1.0 remain Unreleased. A missing candidate is a normal state.
+
+Executed native versions were Codex **0.163.0** and Claude Code **2.1.302**.
+Executables were selected explicitly for isolated acceptance. The adapter can
+otherwise resolve only the known executable name from its launch environment's
+PATH; it never scans drives, installs a CLI or probes a signed-in session. Each
+operation uses a neutral existing cwd, structured executable/args/env and
+`shell: false`, with hidden helper windows and bounded time/output. Unrecognized
+native version or output metadata fails closed.
+
+Config roots are explicit. Codex receives child-only `CODEX_HOME` and reads that
+root's `config.toml`; Claude receives child-only `CLAUDE_CONFIG_DIR`, with optional
+`CLAUDE_CODE_PLUGIN_CACHE_DIR` as a separate plugin-root override. App data is not
+a host config root. Standard bounded TOML/JSON parsing extracts only the own
+marketplace source/ref/pin and own user enablement. Unrelated settings, headers
+and tokens are neither rewritten nor retained in management summaries/receipts.
+
+Both adapters inventory only `debugging-cdp-targets`. Their adopted operations are:
+
+| Operation | Codex | Claude Code |
+| --- | --- | --- |
+| Catalog inventory | `plugin marketplace list --json` | `plugin marketplace list --json` |
+| Own Plugin inventory | `plugin list --marketplace debugging-cdp-targets --json` | `plugin list --json` |
+| Add genuinely absent catalog | `plugin marketplace add SOURCE --json` | `plugin marketplace add SOURCE --scope user --json` |
+| Selected catalog refresh | `plugin marketplace upgrade debugging-cdp-targets --json` | `plugin marketplace update debugging-cdp-targets --json` |
+| Initial own install | `plugin add debugging-cdp-targets@debugging-cdp-targets --json` | `plugin install debugging-cdp-targets@debugging-cdp-targets --scope user --json` |
+| Own user update | `plugin add debugging-cdp-targets@debugging-cdp-targets --json` | `plugin update debugging-cdp-targets@debugging-cdp-targets --scope user --json` |
+
+Codex list supplies neither installed path nor scope. Marketplace `source.path`
+is not an installed cache path. Only this service's safe native add result can
+establish its actual `installedPath` receipt. Cold existing installations or
+catalogs without adequate ownership evidence remain unresolved/read-only;
+there is no add-as-probe or guessed cache adoption. Add enables the Plugin, so
+explicit user `false` blocks it. Selected catalog upgrade can force-refresh other
+entries even at the same version; unrelated, disabled, pinned or unresolved
+copies block automatic refresh. Structured errors are checked even at exit 0.
+Configured refs hidden by list output are read from the selected TOML config.
+
+Claude list separates `scope`, `installPath` and optional `readFromFolder`.
+In-place copies remain read-only. Both advertised cache and actual in-place roots
+are physically compared across every returned own-Plugin scope. A user cache
+shared with project, local, managed or another scope cannot be patched; explicit
+user `false` overrides merged enablement. Same-version native update may do no
+work, so the executed upgrade fixture used distinct versions.
+
+Only Claude's exact installed-root `.in_use` directory is excluded from byte
+comparison when it is readable, nonlinked, stable and empty. Nonempty, unreadable,
+linked or changed markers remain in-use/read-only. The service neither deletes
+nor decodes markers to acquire a lease. Canonical Git payloads forbid that root
+marker. This exception follows the inspected 2.1.302 lease implementation; it
+does not authorize arbitrary unknown installation metadata.
+
+### Source, receipt and port synchronization boundaries
+
+The minimal future latest record has schema 1, a stable Plugin version,
+independent `minimumAppVersion`, Git URL and immutable lowercase 40-character
+payload SHA. HTTPS sources cannot contain credentials, query or fragment;
+loopback HTTP exists for isolated fixtures. Payload commit A precedes separately
+authorized catalog/feed commit B. Both hosts' git-subdir catalogs must agree on
+payload SHA, path and logical version. No history search or downgrade is used.
+
+Before native effects, both catalog records and immutable source blobs are
+validated without checkout, payload execution or Git hooks. Links, gitlinks,
+escape and every case-folded file/directory-prefix alias are refused. After
+native update, inventory must confirm the actual root, version, scope, source,
+ref and enablement; exact full bytes, own manifest and transport are revalidated.
+Only the proved `mcpServers['cdp-targets'].url` JSON literal may differ from source.
+Headers, other entries, formatting and other files remain byte-identical.
+
+A verified native replacement is checkpointed before later URL/persistence work.
+Schema 1 management metadata stores actual paths/source, file hashes, original
+strict loopback URL and unique UTF-8 byte offset. It stores no full MCP/header or
+configuration mirror, bearer, connection or runtime state. Its explicit data
+directory must already exist and be selected after App singleton admission.
+Every restore and retry revalidates actual bytes and native/config ownership;
+the service cannot absorb an external configuration change after its own command.
+Explicit retry can finish a known replacement without repeating native update.
+If its receipt never reached disk and the process is lost, a new instance lacks
+that proof and remains read-only.
+
+No candidate, an incompatible latest candidate or a stale older candidate does
+not prevent a compatible, revalidated managed copy's new-port URL sync. Current
+URL maintenance and update eligibility are independent. One host's failure does
+not undo a successful peer. Atomic own writes check identity before effects and
+read back immediately, including the narrow Claude lease check. No cross-process
+compare-and-set spans config, catalog, native cache and URL rename; late movement
+returns an explicit partial failure/retry. Disk/CLI success remains reload pending
+until actual host activation is independently demonstrated.
+
+The HTTP field/key basis matches maintained thin inputs: Codex `mcp.json` uses
+`streamable-http`, Claude `.mcp.json` uses `http`, both own key `cdp-targets` and
+default `http://127.0.0.1:27637/mcp`. The service accepts only a successfully bound
+strict loopback `/mcp` endpoint for synchronization. Its CLI fixture supplies no
+executable tools and does not establish App HTTP discovery or activation.
+
+### Primary sources and executed scope
+
+- Codex [Plugin packaging documentation](https://developers.openai.com/plugins/build/plugins)
+    and matching [0.163.0 Plugin CLI](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/cli/src/plugin_cmd.rs),
+    [Marketplace CLI](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/cli/src/marketplace_cmd.rs),
+    [installation manager](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core-plugins/src/manager.rs#L2973),
+    [loader](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core-plugins/src/loader.rs#L674)
+    and [installed metadata](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core-plugin-common/src/installed.rs#L47)
+    establish the separate catalog/add contracts and path evidence limits.
+- Claude [CLI reference](https://code.claude.com/docs/en/plugins/cli-reference),
+    [git-subdir source reference](https://code.claude.com/docs/en/plugins/marketplace-reference#git-subdir-plugin-source),
+    [loading rules](https://code.claude.com/docs/en/plugins/loading) and
+    [settings reference](https://code.claude.com/docs/en/settings) establish native
+    user scope, source and enablement contracts.
+- Local Claude 2.1.302 native JavaScript inspection at executable SHA-256
+    `3ab075f78998efef8b87f491c2e4a39c309dddf44e51d0103eba4f3713d2a0ae`
+    found `_m='.in_use'`, `Vde` PID/procStart markers, `Zho`/`g5` empty-directory
+    retention and `Hb`/`yCt` unknown/nonempty-marker refusal. This is inspected
+    local native source, not published source or a rendering/activation check.
+- Executed Codex 0.163.0 executable SHA-256 was
+    `2692c8c7bb2cf8b0aefe638741fc90236f4b824c59578ce84994f9de58200993`.
+- Isolated native acceptance used separate temporary host homes/config roots,
+    neutral cwd and loopback SMART HTTP Git remote with versions 0.1.11 → 0.1.12.
+    It proved actual installed-root replacement, preserved user intent,
+    nondefault-port sync, disabled/ref/shared/unrelated-source refusal and
+    independent host failure. A fresh manager with a null candidate resumed
+    a verified receipt and changed port. A late URL failure after replacement
+    and a stale candidate also recovered without a repeated native update.
+    Fixture A1 was `767d4884950e802a3964a495185629b6df359dba`, B1
+    `818209c061af791c7c60bfd225a5e08f5fec0c55`, A2
+    `98bb51a80b30406d2cc73488ea7afb7f0f6ce26b` and B2
+    `042046925e2bf138afde39c70ba4f1dbc2c675cd`. Logical transcript SHA-256 was
+    `c3c78b97b56db394fd99a2a3c19d37827108068c4ebc3cd6eb9d10f9404fdd2d`;
+    raw paths/transcript remain private. These fixture-only results do not prove
+    actual installed thin App tools, concurrent host clients, registration
+    context, reload activation, GUI or Desktop presentation. Those require
+    separate current App acceptance.

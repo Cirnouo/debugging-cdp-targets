@@ -137,8 +137,14 @@ Numeric prerelease identifiers may exceed that integer limit within the total
 length limit. Stable classification requires empty prerelease and build arrays;
 release eligibility allows arbitrary legal prerelease identifiers but no build
 metadata. Metadata agreement compares original strings, including build identifiers.
-The parser is bundled only in the standalone audit tooling; its type package is
-development-only. Generic security identities accept any legal prerelease/build.
+The pure runtime owner is `src/domains/software-version.ts`; `version-policy.ts`
+re-exports its predicates for tooling. The host-management service consumes its
+strict comparison, while App build entries do not yet import that service.
+The standalone audit bundles the parser with its original ISC notice. App notices
+follow actual bundle inputs when management is composed; installing a dependency
+alone does not make it an App bundle input. The type package is development-only.
+Generic security identities accept any legal prerelease/build. App versions are
+independent of the exact shared Skill and four peer Plugin manifest version group.
 
 Vendored notice evidence is build-only and adds no runtime dependency. For SDK
 2.2.0, every SDK input used by esbuild was independently compared with its original
