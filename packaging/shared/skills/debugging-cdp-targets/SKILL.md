@@ -344,7 +344,12 @@ and launches the actual app with its arguments, cwd and environment. Windows
 controls authorization prompts. Use this native capability; Agents need no
 registry inspection, privilege diagnosis, startup wrapper or launch script.
 
-Start returns an operationId immediately. Call `dct_operation_wait` with
+After required input admission, start returns an operationId. Modern clients
+resolve advertised roots before acceptance; legacy starts can accept while the
+original roots request is pending. Before handling `input_required`, an expired
+continuation or a detached response, read
+[the request continuation rules](references/recovery-and-events.md#modern-request-input).
+Call `dct_operation_wait` with
 `{ "registrationBearer": "<private-registration-bearer>", "operationId": "<operation-uuid>", "cursor": 0 }`,
 then use its returned cursor until complete. Each wait lasts up to 25 seconds;
 an incomplete response does not expire the operation. Continue with its cursor,

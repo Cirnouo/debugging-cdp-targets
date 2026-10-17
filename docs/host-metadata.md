@@ -29,6 +29,61 @@ already running App and retain their actual host version; SDK metadata capture
 is recorded separately from host consumption. Repository metadata validation is
 an independent static gate and never substitutes for either native host result.
 
+## MCP protocol compatibility research — 2026-10-17
+
+Retrieved 2026-10-17. This fixed-version record distinguishes published
+host/source support from an actual host exchange. The App now serves both
+2026-07-28 and sessionful legacy HTTP under the same Plugin URL; no metadata flag,
+personal configuration change or MCP Tasks requirement accompanies that endpoint.
+The [protocol ADR](adr/0018-mcp-protocol-compatibility.md) preserves the fixed
+outward catalog and operation wait/result path independently of host refresh.
+
+The canonical npm/release checks identified Codex `latest=0.163.0`
+(2026-10-15) and Claude Code `latest=2.1.302`, `next=2.1.302` (2026-10-16), both
+non-prerelease releases. Claude's separately named `stable` update channel was
+2.1.292; it is distinct from latest. Primary identities are the
+[Codex registry](https://registry.npmjs.org/@openai%2fcodex),
+[Codex release](https://github.com/openai/codex/releases/tag/rust-v0.163.0),
+[Claude registry](https://registry.npmjs.org/@anthropic-ai%2fclaude-code) and
+[Claude release](https://github.com/anthropics/claude-code/releases/tag/v2.1.302).
+
+| Feature | Codex 0.163.0 | Claude Code 2.1.302 | Evidence boundary |
+| --- | --- | --- | --- |
+| Default protocol | Versioned source leaves `mcp_2026_07_28` under development and disabled; the ordinary path prefers legacy 2025-06-18. | Official documentation describes SDK-v2 modern negotiation with runtime/flag/fallback conditions. | Preserve legacy default compatibility; a modern SDK fixture does not identify the host's negotiated era. |
+| Model-facing tool refresh | The ordinary path reads a local tool catalog. Receipt/logging and SDK cache invalidation do not refresh that host snapshot. | Dynamic tool refresh and newer-revision notification streams are documented. | The fixed outward catalog does not depend on a host refreshing its model tools. |
+| Progress | Inspected ordinary handler logs progress; UI/model relay is not established. | Versioned changelog records progress rendering and long-call fixes. | Optional progress does not guarantee every host displays it. |
+| MCP Tasks | Ordinary extension selection omits Tasks; tool-input handling accepts ordinary and input-required results. | Tasks advertisement and a complete task flow remain unverified. | Keep operation wait/status/result. Native background-task UI is a separate feature. |
+
+Codex references resolve to commit `83086188ae0614bd882818ff1aa23f3194962012`:
+[feature default](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/features/src/lib.rs#L1541-L1551),
+[protocol policy](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/rmcp-client/src/protocol_mode.rs#L8-L53),
+[ordinary catalog ownership](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-mcp/src/rmcp_client.rs#L1063-L1075),
+[catalog variants](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-mcp/src/client_tool_catalog.rs#L45-L84),
+[notification handler](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/rmcp-client/src/logging_client_handler.rs#L63-L92),
+[extension selection](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/codex-mcp/src/client_capabilities.rs#L34-L68)
+and [tool input](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/rmcp-client/src/tool_input.rs#L39-L87).
+These negative findings are bounded to the inspected ordinary configured/plugin
+external-server path, independently of host-owned Codex Apps.
+
+Claude references are the official [runtime documentation](https://code.claude.com/docs/en/mcp#mcp-client-runtimes),
+[dynamic updates](https://code.claude.com/docs/en/mcp#dynamic-tool-updates),
+[notification streams](https://code.claude.com/docs/en/mcp#notification-streams-on-the-v2-runtime)
+and the [2.1.302 changelog](https://github.com/anthropics/claude-code/blob/c017428c8c27e604840435048d5bce6a9a22c040/CHANGELOG.md).
+The latter records `subscriptions/listen` fixes in 2.1.233, notification-storm
+refresh fixes in 2.1.271, newer HTTP negotiation defaults in 2.1.274 and complete
+modern result/cache field compatibility in 2.1.302. Exact installed-session flags,
+subscription filters and modern negotiation have not been captured by this
+research. The [long-call UI](https://code.claude.com/docs/en/mcp#automatic-backgrounding-of-long-tool-calls)
+does not establish `io.modelcontextprotocol/tasks` support.
+
+Actual public-SDK modern/legacy HTTP regressions establish the App's serving
+boundary, including MRTR and progress. Existing `independent-sdk-http` host-smoke
+fixtures remain SDK evidence. No native Codex/Claude initialize/discovery envelope,
+acknowledged subscription filter or Tasks flow is claimed here. Final native
+default-host acceptance must identify exact host versions, settings, final source
+and observed register/status results separately; earlier target/GUI checks do not
+prove this protocol change's wire behavior.
+
 ## Sources and evidence levels
 
 The following primary sources establish separate consumers. Live documentation

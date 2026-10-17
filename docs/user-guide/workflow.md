@@ -215,7 +215,9 @@ exact lifetime rules.
 
 ## Operations and waiting
 
-Start returns an operationId immediately. The Agent calls `dct_operation_wait`
+After required input admission, start returns an operationId. Modern clients
+provide advertised roots before acceptance; legacy starts can accept while their
+original roots request is pending. The Agent calls `dct_operation_wait`
 with registrationBearer, operationId and cursor, continuing with the returned cursor until
 complete. Each wait lasts up to 25 seconds and may return incomplete; this bounds
 one response, not the operation or application Close. Cancelling a wait leaves
@@ -251,9 +253,10 @@ normally closes its owned resources; the minimal manager currently does not
 expose per-connection transfer controls.
 
 Read status or the original operation for current facts. There are no automatic
-host Hooks, task-active flags or end-task tool. Accepted start responses can
-precede roots admission: original facilities remain until admission settles or
-the originating client/session disconnects. See
+host Hooks, task-active flags or end-task tool. Legacy accepted start responses
+can precede roots admission; original facilities remain until admission settles
+or the originating client/session disconnects. Modern starts retain the captured
+roots snapshot after their accepted response. See
 [HTTP request lifetime](../app-runtime.md#request-lifetime), including best-effort
 remote roots cancellation after an SSE response has ended.
 

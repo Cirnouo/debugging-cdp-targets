@@ -64,6 +64,14 @@ a closed code and fixed actionable explanation. Unknown upstream errors remain
 generic; the App never projects arbitrary exception text. A locally known facility
 failure stays associated with its owned execution across the official SDK round trip.
 
+The same endpoint serves strict 2026-07-28 requests and sessionful legacy HTTP
+through one Server factory and Core. Public SDK classification owns era routing;
+invalid modern envelopes, unsupported revisions and header/body disagreements
+cannot fall back to legacy. Modern discovery/results/cache metadata are SDK
+generated, and modern calls do not create MCP sessions. Legacy initialization,
+GET/DELETE, session IDs and negotiated facilities remain supported. The outward
+official/lifecycle catalog remains fixed and does not advertise list changes.
+
 `dct_registration_register` returns public registrationId and private
 registrationBearer once. Every other lifecycle tool explicitly supplies that
 bearer. Each official call carries `{registrationBearer, connectionId, sessionId}`
@@ -75,10 +83,31 @@ and chat/session identifiers do not substitute for the bearer.
 ## Request lifetime
 
 Each call builds its own original facilities for roots, elicitation and progress.
-An accepted start may return operationId while roots admission is pending.
-Returning that response does not detach its client or replace original roots.
-A real original client/session disconnect makes those facilities unavailable,
-without closing App-owned targets.
+Modern capabilities belong to the current request envelope. A modern start
+collects advertised roots with SDK `input_required` before acceptance or resource
+acquisition, then retains that immutable snapshot for its asynchronous job.
+Unsupported roots produce an empty snapshot. Legacy accepted starts may return
+operationId while original roots admission is pending; normal response completion
+does not replace those facilities. A real original client/session disconnect
+makes them unavailable without closing App-owned targets.
+
+Modern form input continues the same invocation across response exchanges.
+Signed process-local state binds principal, route, arguments and the unconsumed
+round; accepted content is validated against the pending schema. One input flow
+has at most eight distinct forms and a fixed 600-second deadline beginning at its
+first form. Normal intermediate Server close preserves that invocation. Actual
+cancellation/disconnection or abandoned-input expiry removes its protocol holder
+and detaches facilities while Core retains actual execution accounting. There is
+no completed official-result archive or automatic replay.
+
+Progress uses only the active originating response and its defined current token,
+including numeric zero. A continuation can change its token. Intermediate/terminal
+completion and detach stop that channel; neither a peer nor a listen stream can
+receive it. Keep the operation wait/status/result path independently of optional
+progress. No MCP Tasks requirement, connection-state Resource or automatic chat
+question chain is added. [ADR 0018](adr/0018-mcp-protocol-compatibility.md) owns the
+protocol decision and [host metadata](host-metadata.md#mcp-protocol-compatibility-research--2026-10-17)
+separates fixed-version host source evidence from actual wire acceptance.
 
 Explicit cancel promptly ends local admission and its SDK wait; cleanup likewise
 terminates admission and retains accurate cancelled/failed state. Late roots
@@ -94,7 +123,27 @@ cannot promise abortion of the remote roots handler. Local termination and zero
 late effects remain required. Actual SDK HTTP tests cover this trace; InMemory
 tests cover reachable wire abortion. The pinned SDK protocol cancellation and
 Node transport send/stream mapping are the source of this limitation. No private
-SDK patch, replacement request context or new resumption protocol is used.
+SDK patch or replacement legacy request context is used. Modern input uses the
+public standard MRTR facilities described above.
+
+## Actual official catalogs
+
+Each real official generation publishes complete reviewed actual-tool snapshots.
+Advertised `tools.listChanged` enables a native SDK callback and one serialized
+uncapped page walk; notification bursts coalesce, and stale owners cannot publish.
+Complete Tool definitions, including output schema, must match reviewed variants.
+The fixed outward `tools/list` remains unchanged. Selected tool details expose
+`toolCatalog: {revision, state}`; selected configuration includes it under
+`official.toolCatalog`. State is `current`, `refreshing` or `unavailable`.
+
+Refresh failure retains last-known schemas marked unavailable and blocks new
+official forwarding with `OFFICIAL_CATALOG_UNAVAILABLE`. A later notification or
+call admission can validate a coalesced refresh and recover without restart or
+replay. Running calls and healthy resources remain alive. Each actual call
+captures its accepted Tool definition for its entire SDK output validation.
+Capability-free upstreams retain startup catalog knowledge without claiming
+notification support; fixture notifications do not prove the delivered official
+release emits live changes for its fixed startup configuration.
 
 ## Building and evidence
 

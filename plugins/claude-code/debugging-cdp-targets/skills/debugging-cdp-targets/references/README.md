@@ -13,8 +13,9 @@
     carriers and screenshot argv replacement. Read it before correcting feature
     argv, applying generic compatibility or replacing a screenshot launch.
 - `recovery-and-events.md` owns disposal/retry specifics, live restart, request lifetime and
-    operation notice grouping/acknowledgment/unread/status-selection constraints.
-    Read it before those operations or interpreting the corresponding notices.
+    operation status selectors plus modern roots/form continuation and active-response
+    progress. Read it before those operations or handling input-required/expired
+    continuation and detached-response facts.
 
 Follow the language choice in `../SKILL.md`. Load only the current language
 when a question is needed; do not actively read both catalogues. Load a conditional

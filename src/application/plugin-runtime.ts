@@ -243,6 +243,13 @@ export async function createGatewayCore({
             args,
             environment: connection.officialEnvironment,
             signal,
+            validateTools: (tools) => {
+                if (!fullCatalog) throw new Error('Missing fixed tool catalog.');
+                fullCatalog.validate(tools);
+            },
+            diagnose: (event) => {
+                if (connection.officialOwner === owner && !owner.retired) connection.diagnose(event);
+            },
             onAcquired: (resource) => owner.register('upstream', resource),
             roots: async () => structuredClone(connection.roots),
             elicitation: {
@@ -778,6 +785,7 @@ export async function createGatewayCore({
                 ...(request.toolNames ? {} : { enabledTools: statusOf(connection).enabledTools ?? [] }),
                 ...(request.toolNames
                     ? {
+                          ...(connection.upstream?.toolCatalog ? { toolCatalog: connection.upstream.toolCatalog } : {}),
                           toolAvailability: fullCatalog.describe(
                               connection.mcpArgs,
                               !connection.quarantined ? connection.upstream?.tools : undefined,
@@ -794,6 +802,9 @@ export async function createGatewayCore({
                           official: {
                               generation: connection.officialOwner.sessionId,
                               processId: connection.upstream?.processId,
+                              ...(connection.upstream?.toolCatalog
+                                  ? { toolCatalog: connection.upstream.toolCatalog }
+                                  : {}),
                           },
                           isolation: connection.directory.evidence(),
                       }
@@ -823,6 +834,10 @@ export async function createGatewayCore({
             connection.lastRealOperationAt = timestamp();
             if (client) connection.executionContext = client;
             const execution = (async () => {
+                // Last-known absence is not a current configuration fact until metadata admission settles.
+                await connection.upstream?.ensureToolCatalog?.();
+                owner.assertOpen();
+                routed(route);
                 if (connection.upstream && !connection.upstream.tools.some((tool) => tool.name === name))
                     return lifecycleResult({
                         code: 'TOOL_NOT_ENABLED',

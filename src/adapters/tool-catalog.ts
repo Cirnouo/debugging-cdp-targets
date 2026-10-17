@@ -4,6 +4,7 @@ import type { Tool } from '@modelcontextprotocol/client';
 import { ListToolsResultSchema } from '@modelcontextprotocol/core';
 import { parseMcpArgs, suggestMcpArgs } from '../domains/official-options.ts';
 import { isRecord } from '../shared/errors.ts';
+import { lifecycleTools } from './lifecycle-tools.ts';
 
 declare const __DCT_TOOL_CATALOG__: unknown;
 type Entry = { name: string; requires: Record<string, boolean>; variants: Tool[] };
@@ -30,10 +31,22 @@ const defaults: Record<string, boolean> = {
 function distinct<T>(items: T[]): T[] {
     return [...new Map(items.map((item) => [JSON.stringify(item), item])).values()];
 }
+function canonical(value: unknown): string {
+    return JSON.stringify(value, (_key, item: unknown) =>
+        isRecord(item)
+            ? Object.fromEntries(
+                  Object.keys(item)
+                      .sort()
+                      .map((key) => [key, item[key]]),
+              )
+            : item,
+    );
+}
 export function createToolCatalog(value: unknown) {
     if (!isRecord(value) || value.version !== '1.11.0' || !Array.isArray(value.tools))
         throw new Error('Invalid fixed official tool catalog.');
     const entries = new Map<string, Entry>();
+    const reserved = new Set(lifecycleTools().map((tool) => tool.name));
     for (const input of value.tools) {
         if (!isRecord(input) || typeof input.name !== 'string' || !isRecord(input.requires))
             throw new Error('Invalid official tool requirements.');
@@ -105,13 +118,14 @@ export function createToolCatalog(value: unknown) {
         tools,
         requirements,
         validate(actual: Tool[]) {
+            const names = new Set<string>();
             for (const tool of actual) {
+                if (reserved.has(tool.name) || Object.hasOwn(tool.inputSchema.properties ?? {}, '_dct'))
+                    throw new Error('Official catalog collides with reserved App routing.');
+                if (names.has(tool.name)) throw new Error('Official tool catalog contains duplicate names.');
+                names.add(tool.name);
                 const entry = entries.get(tool.name);
-                if (
-                    !entry?.variants.some(
-                        (variant) => JSON.stringify(variant.inputSchema) === JSON.stringify(tool.inputSchema),
-                    )
-                )
+                if (!entry?.variants.some((variant) => canonical(variant) === canonical(tool)))
                     throw new Error(`The official tool catalog changed outside the reviewed variants: ${tool.name}.`);
             }
         },
@@ -129,6 +143,7 @@ export function createToolCatalog(value: unknown) {
                     ...(actual !== undefined && !tool && suggestedMcpArgs ? { suggestedMcpArgs } : {}),
                     ...(actual ? { enabled: tool !== undefined } : {}),
                     ...(tool ? { inputSchema: tool.inputSchema } : {}),
+                    ...(tool?.outputSchema ? { outputSchema: tool.outputSchema } : {}),
                 };
             });
         },

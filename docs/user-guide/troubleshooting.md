@@ -27,6 +27,16 @@ never automatically restarts an application or replays a tool call.
 - **Official connection failure**: inspect the selected connection and authorize
     explicit scoped restart or normal Close. Client wait expiry alone never
     closes a healthy target/upstream or fabricates a process exit.
+- **OFFICIAL_CATALOG_UNAVAILABLE**: a private actual-catalog refresh failed
+    validation. Selected tool/configuration status retains last-known schemas
+    marked unavailable. A later call admission or catalog notification can
+    validate fresh metadata and recover; healthy resources and running calls
+    remain owned. Never replay a previous official call as a refresh workaround.
+- **Input continuation is unavailable or expired**: keep the original registration,
+    route and arguments with the signed one-time round while it is valid. An
+    expired/detached official invocation is not replayed. Inspect current facts
+    through status and retain Close/Keep ownership; a closed response is not
+    evidence that an actual official execution finished.
 - **A directory is occupied or occupancy is unverifiable**: leave the requested
     application unlaunched. Known same-directory/shared-namespace use, uncertain
     attribution of a related running app and incomplete inspection block start.

@@ -36,6 +36,22 @@ exact pnpm 12.4.2; installed Plugin users do not need pnpm. See
 [contributor setup](../../CONTRIBUTING.md#prepare-a-checkout) for optional mise
 selection and [ADR 0016](../adr/0016-toolchain-compatibility.md) for the policy.
 
+## MCP protocol compatibility
+
+The App's direct HTTP endpoint supports strict MCP 2026-07-28 and sessionful
+legacy clients through the same fixed tool catalog. The Plugin URL and explicit
+registration bearer/route stay the same. Modern roots and form input use standard
+request continuation; legacy negotiated roots/elicitation remain supported.
+Optional progress follows the active response and stops with it. Continue using
+`dct_operation_wait` for lifecycle completion and results; MCP Tasks is not required.
+
+Fixed-version research dated 2026-10-17 finds Codex 0.163.0 uses legacy by default;
+Claude Code 2.1.302 documents modern negotiation with runtime conditions. The
+[host metadata record](../host-metadata.md#mcp-protocol-compatibility-research--2026-10-17)
+owns primary links and distinguishes source support, SDK regressions and actual
+host acceptance. Native background tasks do not prove MCP Tasks support, and no
+experimental host flag is needed for this compatibility path.
+
 ## Launch and isolation compatibility
 
 The Agent checks application/version, documented CDP startup and read-only
