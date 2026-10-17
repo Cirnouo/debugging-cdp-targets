@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import test from 'node:test';
@@ -15,7 +16,18 @@ async function probe() {
     return import('./smoke/chrome-profile-probe.ts');
 }
 
-async function fixture(t: test.TestContext) {
+interface RejectedListener {
+    port: number;
+    fetchPort: number;
+    received: number;
+    closed: boolean;
+}
+
+async function fixture(
+    t: test.TestContext,
+    admissionPorts: readonly number[] = [],
+    rejectedListeners: RejectedListener[] = [],
+) {
     const requests: string[] = [];
     const evaluations: Record<string, unknown>[] = [];
     const replies: unknown[] = [{ url: 'chrome://version/', profilePath: '/synthetic/lease/Default' }];
@@ -34,7 +46,15 @@ async function fixture(t: test.TestContext) {
     const socketClosed = new Promise<void>((resolve) => {
         closed = resolve;
     });
+    const admission = `/fixture-fetch-admission-${randomUUID()}`;
+    let admissionRequests = 0;
+    let port = 0;
     const server = createServer((request, response) => {
+        if (request.url === admission) {
+            admissionRequests++;
+            response.end(admission);
+            return;
+        }
         requests.push(`${request.method} ${request.url}`);
         response.setHeader('content-type', 'application/json');
         if (request.url === '/json/version') {
@@ -93,22 +113,55 @@ async function fixture(t: test.TestContext) {
                 );
         });
     });
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const address = server.address();
-    assert.ok(address && typeof address !== 'string');
-    const port = address.port;
-    descriptor = {
-        id: 'fresh-page',
-        type: 'page',
-        url: 'about:blank',
-        webSocketDebuggerUrl: `ws://127.0.0.1:${port}/devtools/page/fresh-page`,
-    };
     t.after(async () => {
         for (const socket of sockets.clients) socket.terminate();
         await new Promise<void>((resolve) => sockets.close(() => resolve()));
         server.closeAllConnections();
         await new Promise<void>((resolve) => server.close(() => resolve()));
     });
+    let admitted = false;
+    for (let attempt = 0; attempt < 8; attempt++) {
+        admissionRequests = 0;
+        let fetchPort = 0;
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const failed = (error: Error) => reject(error);
+                server.once('error', failed);
+                server.listen(0, '127.0.0.1', () => {
+                    server.off('error', failed);
+                    resolve();
+                });
+            });
+            const address = server.address();
+            assert.ok(address && typeof address !== 'string');
+            port = address.port;
+            // A forced blocked Fetch URL never requires acquiring or contacting that port.
+            fetchPort = admissionPorts[attempt] ?? port;
+            const response = await fetch(`http://127.0.0.1:${fetchPort}${admission}`, {
+                signal: AbortSignal.timeout(1_000),
+            });
+            if (response.status !== 200 || (await response.text()) !== admission)
+                throw new Error('fixture-admission-failed');
+            admitted = true;
+            break;
+        } catch {
+            server.closeAllConnections();
+            await new Promise<void>((resolve) => server.close(() => resolve()));
+            rejectedListeners.push({
+                port,
+                fetchPort,
+                received: admissionRequests,
+                closed: !server.listening && server.address() === null,
+            });
+        }
+    }
+    if (!admitted) throw new Error('No Fetch-usable fixture listener after eight owned attempts.');
+    descriptor = {
+        id: 'fresh-page',
+        type: 'page',
+        url: 'about:blank',
+        webSocketDebuggerUrl: `ws://127.0.0.1:${port}/devtools/page/fresh-page`,
+    };
     const target: ProcessTarget = {
         processId: 4100,
         port,
@@ -145,6 +198,7 @@ async function fixture(t: test.TestContext) {
         requests,
         evaluations,
         replies,
+        rejectedListeners,
         setDescriptor(value: unknown) {
             descriptor = value;
         },
@@ -186,6 +240,27 @@ async function fixture(t: test.TestContext) {
         },
     };
 }
+
+test('owned profile fixture rejects a Fetch-blocked URL without reserving its port', async (t) => {
+    const f = await fixture(t, [6667]);
+    const { readChromeSmokeProfile } = await probe();
+    assert.equal(
+        await readChromeSmokeProfile(f.target, { platform: f.platform, pollMs: 1 }),
+        '/synthetic/lease/Default',
+    );
+    assert.notEqual(f.target.port, 6667);
+    assert.ok(f.rejectedListeners.length >= 1 && f.rejectedListeners.length < 8);
+    assert.equal(f.rejectedListeners[0]?.fetchPort, 6667);
+    assert.equal(f.rejectedListeners[0]?.received, 0);
+    assert.ok(f.rejectedListeners.every((listener) => listener.closed));
+});
+
+test('owned profile fixture bounds Fetch admission attempts and releases every rejected listener', async (t) => {
+    const rejected: RejectedListener[] = [];
+    await assert.rejects(fixture(t, Array(8).fill(6667), rejected), /eight owned attempts/);
+    assert.equal(rejected.length, 8);
+    assert.ok(rejected.every((listener) => listener.fetchPort === 6667 && listener.received === 0 && listener.closed));
+});
 
 test('native profile probe waits for the exact version document and asynchronously populated path, then closes its socket and fresh target', async (t) => {
     const f = await fixture(t);
