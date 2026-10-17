@@ -15,7 +15,7 @@ import { VERSION } from '../version.js';
  * @param message The message to display in the update notification.
  */
 let isChecking = false;
-/** @internal Reset flag for tests only. */
+/** @internal */
 export function resetUpdateCheckFlagForTesting() {
     isChecking = false;
 }

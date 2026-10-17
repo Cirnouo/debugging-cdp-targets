@@ -55,13 +55,14 @@ var __disposeResources = (this && this.__disposeResources) || (function (Suppres
     var e = new Error(message);
     return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
+import { pathToFileURL } from 'node:url';
 import { zod } from '../third_party/index.js';
 import { ToolCategory } from './categories.js';
 import { defineTool, pageIdSchema } from './ToolDefinition.js';
 export const evaluateScript = defineTool((cliArgs) => {
     return {
         name: 'evaluate_script',
-        description: `Evaluate a JavaScript function inside the target page${cliArgs.categoryExtensions ? ' or service worker' : ''}. Returns the response as JSON, so returned values have to be JSON-serializable.`,
+        description: `Evaluate JavaScript inside the target page${cliArgs.categoryExtensions ? ' or service worker' : ''}. The source can be provided inline or loaded from a local file. Returns the response as JSON, so returned values have to be JSON-serializable.`,
         annotations: {
             category: ToolCategory.DEBUGGING,
             readOnlyHint: false,
@@ -78,16 +79,27 @@ export const evaluateScript = defineTool((cliArgs) => {
                     }
                     : pageIdSchema
                 : {}),
-            function: zod.string().describe(`A JavaScript function declaration to be executed by the tool in the target page.
+            function: zod
+                .string()
+                .optional()
+                .describe(`JavaScript source to execute in the target page. Provide either this or sourcePath, but not both. The source is interpreted according to format.
 Example without arguments: \`() => document.title\` or \`async () => await fetch("example.com")\`.
 Example with arguments: \`(el) => el.innerText\`
 `),
+            sourcePath: zod
+                .string()
+                .optional()
+                .describe("The absolute or relative path to a JavaScript file on the MCP server's local filesystem. Provide either this or function, but not both."),
+            format: zod
+                .enum(['function', 'script'])
+                .optional()
+                .describe('How to interpret the source. "function" treats it as a function declaration and supports args. "script" evaluates it as classic JavaScript and does not support args. Defaults to "function". ECMAScript modules are not supported.'),
             args: zod
                 .array(zod
                 .string()
                 .describe('The uid of an element on the page from the page content snapshot'))
                 .optional()
-                .describe(`An optional list of arguments to pass to the function.`),
+                .describe(`An optional list of arguments (element uids from the page content snapshot) to pass to the function.`),
             filePath: zod
                 .string()
                 .optional()
@@ -112,11 +124,16 @@ Example with arguments: \`(el) => el.innerText\`
         blockedByDialog: true,
         verifyFilesSchema: {
             filePath: true,
+            sourcePath: true,
         },
         handler: async (request, response, context) => {
             const env_1 = { stack: [], error: void 0, hasError: false };
             try {
-                const { serviceWorkerId, args: uidArgs, function: fnString, pageId, dialogAction, filePath, waitForStableDom, } = request.params;
+                const { serviceWorkerId, args: uidArgs, function: fnString, sourcePath, format = 'function', pageId, dialogAction, filePath, waitForStableDom, } = request.params;
+                const source = await resolveScriptSource(fnString, sourcePath, context);
+                if (format === 'script' && uidArgs && uidArgs.length > 0) {
+                    throw new Error('args cannot be used when format is "script".');
+                }
                 if (cliArgs.categoryExtensions && serviceWorkerId) {
                     if (uidArgs && uidArgs.length > 0) {
                         throw new Error('args (element uids) cannot be used when evaluating in a service worker.');
@@ -128,7 +145,7 @@ Example with arguments: \`(el) => el.innerText\`
                     const result = await context
                         .getSelectedMcpPage()
                         .waitForEventsAfterAction(async () => {
-                        await performEvaluation(worker, fnString, [], response, {
+                        await performEvaluation(worker, source, format, [], response, {
                             filePath,
                             context,
                         });
@@ -147,6 +164,7 @@ Example with arguments: \`(el) => el.innerText\`
                 const mcpPage = cliArgs.pageIdRouting && request.params.pageId
                     ? context.getPageById(request.params.pageId)
                     : context.getSelectedMcpPage();
+                await mcpPage.init();
                 const page = mcpPage.pptrPage;
                 const args = [];
                 const stack = __addDisposableResource(env_1, new DisposableStack(), false);
@@ -159,7 +177,7 @@ Example with arguments: \`(el) => el.innerText\`
                 }
                 const evaluatable = await getPageOrFrame(page, frames);
                 const result = await mcpPage.waitForEventsAfterAction(async () => {
-                    await performEvaluation(evaluatable, fnString, args, response, {
+                    await performEvaluation(evaluatable, source, format, args, response, {
                         filePath,
                         context,
                     });
@@ -176,32 +194,70 @@ Example with arguments: \`(el) => el.innerText\`
         },
     };
 });
-const performEvaluation = async (evaluatable, fnString, args, response, options) => {
-    const env_2 = { stack: [], error: void 0, hasError: false };
+const resolveScriptSource = async (inlineSource, sourcePath, context) => {
+    if (inlineSource !== undefined) {
+        if (sourcePath !== undefined) {
+            throw new Error('Specify exactly one of function or sourcePath.');
+        }
+        return inlineSource;
+    }
+    if (sourcePath === undefined) {
+        throw new Error('Specify exactly one of function or sourcePath.');
+    }
+    const resourceUrl = sourcePath.startsWith('file:')
+        ? sourcePath
+        : pathToFileURL(sourcePath).href;
     try {
-        const fn = __addDisposableResource(env_2, await evaluatable.evaluateHandle(`(${fnString})`), false);
-        const result = await evaluatable.evaluate(async (fn, ...args) => {
-            // @ts-expect-error no types for function fn
-            return JSON.stringify(await fn(...args));
-        }, fn, ...args);
-        if (options?.filePath) {
-            const data = new TextEncoder().encode(result ?? 'undefined');
-            const { filename } = await options.context.saveFile(data, options.filePath, '.json');
-            response.appendResponseLine(`Script ran on page. Output saved to ${filename}.`);
+        return await context.loadResource(resourceUrl);
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new Error(`Unable to read script source from ${sourcePath}: ${errorMessage}`, { cause: error });
+    }
+};
+const performEvaluation = async (evaluatable, source, format, args, response, options) => {
+    let result;
+    if (format === 'function') {
+        const env_2 = { stack: [], error: void 0, hasError: false };
+        try {
+            const functionSource = source.trimEnd().replace(/;$/, '');
+            const fn = __addDisposableResource(env_2, await evaluatable.evaluateHandle(`(\n${functionSource}\n)`), false);
+            result = await evaluatable.evaluate(async (fn, ...args) => {
+                return JSON.stringify(await fn(...args));
+            }, fn, ...args);
         }
-        else {
-            response.appendResponseLine('Script ran on page and returned:');
-            response.appendResponseLine('```json');
-            response.appendResponseLine(`${result}`);
-            response.appendResponseLine('```');
+        catch (e_2) {
+            env_2.error = e_2;
+            env_2.hasError = true;
+        }
+        finally {
+            __disposeResources(env_2);
         }
     }
-    catch (e_2) {
-        env_2.error = e_2;
-        env_2.hasError = true;
+    else {
+        const env_3 = { stack: [], error: void 0, hasError: false };
+        try {
+            const value = __addDisposableResource(env_3, await evaluatable.evaluateHandle(source), false);
+            result = await evaluatable.evaluate(value => JSON.stringify(value), value);
+        }
+        catch (e_3) {
+            env_3.error = e_3;
+            env_3.hasError = true;
+        }
+        finally {
+            __disposeResources(env_3);
+        }
     }
-    finally {
-        __disposeResources(env_2);
+    if (options.filePath) {
+        const data = new TextEncoder().encode(result ?? 'undefined');
+        const { filename } = await options.context.saveFile(data, options.filePath, '.json');
+        response.appendResponseLine(`Script ran on page. Output saved to ${filename}.`);
+    }
+    else {
+        response.appendResponseLine('Script ran on page and returned:');
+        response.appendResponseLine('```json');
+        response.appendResponseLine(`${result}`);
+        response.appendResponseLine('```');
     }
 };
 const getPageOrFrame = async (page, frames) => {
@@ -216,17 +272,14 @@ const getPageOrFrame = async (page, frames) => {
     return pageOrFrame;
 };
 const getWebWorker = async (context, serviceWorkerId) => {
-    const serviceWorkers = context.getExtensionServiceWorkers();
-    const serviceWorker = serviceWorkers.find((sw) => context.getExtensionServiceWorkerId(sw) === serviceWorkerId);
-    if (serviceWorker && serviceWorker.target) {
-        const worker = await serviceWorker.target.worker();
-        if (!worker) {
-            throw new Error('Service worker target not found.');
-        }
-        return worker;
-    }
-    else {
+    const serviceWorker = context.getWorkerById(serviceWorkerId);
+    if (!serviceWorker || serviceWorker.type !== 'service_worker') {
         throw new Error('Service worker not found.');
     }
+    const worker = await serviceWorker.worker();
+    if (!worker) {
+        throw new Error('Service worker target not found.');
+    }
+    return worker;
 };
 //# sourceMappingURL=script.js.map

@@ -49,13 +49,11 @@ export class NetworkFormatter {
                     this.#requestBody = requestBodyNotAvailableMessage;
                 }
             }
+            else if (data) {
+                this.#requestBody = getSizeLimitedString(data, BODY_CONTEXT_SIZE_LIMIT);
+            }
             else {
-                if (data) {
-                    this.#requestBody = getSizeLimitedString(data, BODY_CONTEXT_SIZE_LIMIT);
-                }
-                else {
-                    this.#requestBody = requestBodyNotAvailableMessage;
-                }
+                this.#requestBody = requestBodyNotAvailableMessage;
             }
         }
         // Load Response Body
@@ -63,18 +61,21 @@ export class NetworkFormatter {
         if (response) {
             const responseBodyNotAvailableMessage = '<Response body not available anymore>';
             if (this.#options.responseFilePath) {
+                let buffer;
                 try {
-                    const buffer = await response.buffer();
+                    buffer = await response.buffer();
+                }
+                catch {
+                    // Response body is not available anymore
+                }
+                if (buffer) {
                     if (!this.#options.saveFile) {
                         throw new Error('Unable to save the response body to a file: no saveFile callback was configured.');
                     }
                     const result = await this.#options.saveFile(buffer, this.#options.responseFilePath, '.network-response');
                     this.#responseBodyFilePath = result.filename;
                 }
-                catch {
-                    // Flatten error handling for buffer() failure and save failure
-                }
-                if (!this.#responseBodyFilePath) {
+                else {
                     this.#responseBody = responseBodyNotAvailableMessage;
                 }
             }

@@ -3,6 +3,7 @@
  * Copyright 2025 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
+import { mcpOptions } from '../config/mcp-options.js';
 import * as commentsTools from './comments.js';
 import * as consoleTools from './console.js';
 import * as cssTools from './css.js';
@@ -23,28 +24,27 @@ import * as snapshotTools from './snapshot.js';
 import * as thirdPartyDeveloperTools from './thirdPartyDeveloper.js';
 import * as webmcpTools from './webmcp.js';
 export const createTools = (args) => {
-    const rawTools = args.slim
-        ? Object.values(slimTools)
-        : [
-            ...(args.devtoolsComments ? Object.values(commentsTools) : []),
-            ...Object.values(consoleTools),
-            ...Object.values(cssTools),
-            ...Object.values(emulationTools),
-            ...Object.values(extensionTools),
-            ...Object.values(inputTools),
-            ...Object.values(lighthouseTools),
-            ...Object.values(memoryTools),
-            ...Object.values(networkTools),
-            ...Object.values(pagesTools),
-            ...Object.values(performanceTools),
-            ...Object.values(pwaTools),
-            ...Object.values(screencastTools),
-            ...Object.values(screenshotTools),
-            ...Object.values(scriptTools),
-            ...Object.values(snapshotTools),
-            ...Object.values(thirdPartyDeveloperTools),
-            ...Object.values(webmcpTools),
-        ];
+    const rawTools = [
+        ...Object.values(commentsTools),
+        ...Object.values(consoleTools),
+        ...Object.values(cssTools),
+        ...Object.values(emulationTools),
+        ...Object.values(extensionTools),
+        ...Object.values(inputTools),
+        ...Object.values(lighthouseTools),
+        ...Object.values(memoryTools),
+        ...Object.values(networkTools),
+        ...Object.values(pagesTools),
+        ...Object.values(performanceTools),
+        ...Object.values(pwaTools),
+        ...Object.values(screencastTools),
+        ...Object.values(screenshotTools),
+        ...Object.values(scriptTools),
+        ...Object.values(slimTools),
+        ...Object.values(snapshotTools),
+        ...Object.values(thirdPartyDeveloperTools),
+        ...Object.values(webmcpTools),
+    ];
     const tools = [];
     for (const tool of rawTools) {
         tools.push(tool(args));
@@ -52,4 +52,17 @@ export const createTools = (args) => {
     tools.sort((a, b) => a.name.localeCompare(b.name));
     return tools;
 };
+/**
+ * Returns true if the tool is gated behind a hidden (internal) flag. Such
+ * tools are excluded from the generated documentation and CLI.
+ */
+export function requiresHiddenFlag(tool) {
+    for (const condition of tool.annotations.conditions ?? []) {
+        const option = mcpOptions[condition];
+        if (option.hidden) {
+            return true;
+        }
+    }
+    return false;
+}
 //# sourceMappingURL=tools.js.map

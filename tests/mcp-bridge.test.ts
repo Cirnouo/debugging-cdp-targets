@@ -43,7 +43,7 @@ server.setRequestHandler('tools/list', async (request) => {
     };
 });
 server.setRequestHandler('tools/call', async (request, ctx) => {
-    if (request.params.arguments?.environment) return { content: [], structuredContent: { updateChecks: process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS } };
+    if (request.params.arguments?.environment) return { content: [], structuredContent: { updateChecks: process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS, configDiscovery: process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY } };
     if (request.params.arguments?.invalidOutput) return { content: [], structuredContent: { value: 'invalid' } };
     if (request.params.arguments?.capabilities) return { content: [], structuredContent: { capabilities: server.getClientCapabilities() } };
     if (request.params.arguments?.elicit) {
@@ -69,21 +69,27 @@ await server.connect(new StdioServerTransport());
     return { bin, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
 
-test('update-check suppression is set only in the independent official child environment', async () => {
+test('update checks and config discovery are suppressed only in the independent official child environment', async () => {
     const fixture = await fakeOfficial();
     const previous = process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS;
+    const previousDiscovery = process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY;
+    process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY = 'parent-setting';
     process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS = 'parent-setting';
     const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         const content = (await connection.call('echo', { environment: true })).structuredContent;
         assert.ok(isRecord(content));
         assert.equal(content.updateChecks, '1');
+        assert.equal(content.configDiscovery, '1');
+        assert.equal(process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY, 'parent-setting');
         assert.equal(process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS, 'parent-setting');
     } finally {
         await connection.close();
         await fixture.cleanup();
         if (previous === undefined) delete process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS;
         else process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS = previous;
+        if (previousDiscovery === undefined) delete process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY;
+        else process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY = previousDiscovery;
     }
 });
 

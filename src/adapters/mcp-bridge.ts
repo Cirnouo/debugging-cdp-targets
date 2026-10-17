@@ -70,7 +70,11 @@ export async function createOfficialConnection(
         shell: false,
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1' },
+        env: {
+            ...process.env,
+            CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1',
+            CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1',
+        },
     });
     const listeners = new Set<() => void>();
     let exited = false;

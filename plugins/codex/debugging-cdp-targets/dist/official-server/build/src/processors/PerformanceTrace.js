@@ -9,7 +9,7 @@ import { parseTraceEventsFromBuffer } from './ChunkedTraceParser.js';
 /**
  * Type guard that verifies if an operation returned a valid TraceResult.
  *
- * @param x - The result or error object to inspect.
+ * @param x The result or error object to inspect.
  * @returns True if the object is a TraceResult; otherwise false.
  */
 export function traceResultIsSuccess(x) {
@@ -23,8 +23,8 @@ export function traceResultIsSuccess(x) {
  * allocation limits. A new trace engine model is created per call to ensure session
  * isolation and prevent memory retention.
  *
- * @param buffer - Raw binary trace data representing trace events and metadata.
- * @param metadata - Optional throttling configurations applied during recording; overrides embedded file metadata when defined.
+ * @param buffer Raw binary trace data representing trace events and metadata.
+ * @param metadata Optional throttling configurations applied during recording; overrides embedded file metadata when defined.
  * @returns A promise resolving to a {@link TraceResult} with parsed traces and insights, or a {@link TraceParseError} on failure.
  */
 export async function parseRawTraceBuffer(buffer, metadata) {
@@ -85,8 +85,8 @@ ${DevTools.PerformanceTraceFormatter.networkDataFormatDescription}`;
 /**
  * Generates a Markdown summary of main thread activity and network metrics from a parsed trace.
  *
- * @param result - The parsed trace result to summarize.
- * @param deviceScope - Optional CrUX device scope to filter field data.
+ * @param result The parsed trace result to summarize.
+ * @param deviceScope Optional CrUX device scope to filter field data.
  * @returns Formatted Markdown text describing performance findings.
  */
 export function getTraceSummary(result, deviceScope) {
@@ -102,10 +102,10 @@ ${extraFormatDescriptions}`;
 /**
  * Formats a specific performance insight from a parsed trace for display.
  *
- * @param result - The parsed trace result containing computed insight sets.
- * @param insightSetId - The identifier of the target insight set.
- * @param insightName - The name of the insight model to extract.
- * @param deviceScope - Optional CrUX device scope to contextualize metrics.
+ * @param result The parsed trace result containing computed insight sets.
+ * @param insightSetId The identifier of the target insight set.
+ * @param insightName The name of the insight model to extract.
+ * @param deviceScope Optional CrUX device scope to contextualize metrics.
  * @returns An object containing the formatted insight output text or an error message.
  */
 export function getInsightOutput(result, insightSetId, insightName, deviceScope) {

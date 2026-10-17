@@ -57,7 +57,7 @@ async function fixture(
     const runtime = await startPluginRuntime({
         loadCatalog: async () =>
             createToolCatalog({
-                version: '1.10.1',
+                version: '1.11.0',
                 tools: [{ name: 'list_pages', requires: {}, variants: tools }],
             }),
         createHost: () => ({

@@ -31947,7 +31947,7 @@ var require_cjs = __commonJS({
                 let vLastCode = -1;
                 if (validate && start < end) {
                     const c0 = url.charCodeAt(start);
-                    if (!(isValidHostnameChar(c0) || c0 === 46 || c0 === 95) || c0 === 45) {
+                    if (! /*@__INLINE__*/(isValidHostnameChar(c0) || c0 === 46 || c0 === 95) || c0 === 45) {
                         vValid = false;
                     }
                 }
@@ -31995,7 +31995,7 @@ var require_cjs = __commonJS({
                     else if (code >= 65 && code <= 90) {
                         hasUpper = true;
                     }
-                    else if (validate && !isValidHostnameChar(code)) {
+                    else if (validate && ! /*@__INLINE__*/isValidHostnameChar(code)) {
                         vValid = false;
                     }
                     if (validate) {
@@ -32169,7 +32169,7 @@ var require_cjs = __commonJS({
                 }
                 else if (
                 // A forbidden character in the label...
-                !(isValidAscii(code) || code === 45 || code === 95) || // ...or a '-' starting a label (the byte right after a '.'). A label must
+                ! /*@__INLINE__*/(isValidAscii(code) || code === 45 || code === 95) || // ...or a '-' starting a label (the byte right after a '.'). A label must
                     // not begin with a hyphen (RFC 1034 §3.5 / RFC 1035 §2.3.1 LDH, as amended
                     // by RFC 1123 §2.1; cf. UTS #46 CheckHyphens). The first label is covered by
                     // the leading-character guard above; mirrors the trailing-'-' rule below.

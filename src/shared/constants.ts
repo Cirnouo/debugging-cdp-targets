@@ -10,6 +10,6 @@ export const MAX_HTTP_BYTES = 8 * 1024 * 1024;
 export const TARGET_KINDS = Object.freeze(['chrome', 'generic-cdp']);
 export const DISPOSITIONS = Object.freeze(['Close', 'Keep']);
 export const PACKAGE_NAME = 'chrome-devtools-mcp';
-export const PACKAGE_VERSION = '1.10.1';
+export const PACKAGE_VERSION = '1.11.0';
 export const PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 export const NPM_REGISTRY = 'https://registry.npmjs.org';

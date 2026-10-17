@@ -160,7 +160,7 @@ export async function nativeCloseRuntime(t: TestContext) {
         profileAvailable: async () => true,
         createHost: () => host,
         loadCatalog: async () =>
-            createToolCatalog({ version: '1.10.1', tools: [{ name: 'list_pages', requires: {}, variants: tools }] }),
+            createToolCatalog({ version: '1.11.0', tools: [{ name: 'list_pages', requires: {}, variants: tools }] }),
         createRouter: async () => {
             const catalog = ++routerCount === 1;
             return {

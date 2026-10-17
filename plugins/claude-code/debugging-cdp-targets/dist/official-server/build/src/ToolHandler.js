@@ -61,9 +61,26 @@ import { ClearcutLogger } from './telemetry/ClearcutLogger.js';
 import { zod } from './third_party/index.js';
 import { labels } from './tools/categories.js';
 import { categoryToFlagName } from './config/category-options.js';
+import { isAvailableInMode, isSlimTool } from './tools/ToolDefinition.js';
 import { logger } from './utils/logger.js';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isLocalhost } from './utils/url.js';
+/**
+ * Upper bound on how long a tool call may wait to acquire the browser
+ * (connect/launch and McpContext initialization). A connect attempt on a
+ * half-open socket can hang without ever failing; this bound turns that into
+ * a clear error and abandons the attempt so the next call starts fresh.
+ *
+ * This does not bound the tool's own work. A slow but valid call (a long
+ * `wait_for` timeout, an `evaluate_script` awaiting a slow promise, a
+ * Lighthouse audit) must finish on its own terms without the browser being
+ * closed underneath it. A transport that dies mid-call is detected by the
+ * WebSocket keep-alive configured in BrowserManager#connect(), which rejects
+ * the in-flight CDP calls and fires `disconnected`.
+ */
+export const TOOL_CALL_TIMEOUT_MS = 60_000;
+class ToolCallTimeoutError extends Error {
+}
 function buildDisabledMessage(toolName, flag, categoryLabel) {
     const reason = categoryLabel
         ? `is in category ${categoryLabel} which`
@@ -71,6 +88,15 @@ function buildDisabledMessage(toolName, flag, categoryLabel) {
     return `Tool ${toolName} ${reason} is currently disabled. Enable it by running chrome-devtools start ${flag}=true. For more information check the README.`;
 }
 function getToolStatusInfo(tool, serverArgs) {
+    if (!isAvailableInMode(tool, serverArgs)) {
+        return {
+            disabled: true,
+            unavailableInMode: true,
+            reason: isSlimTool(tool)
+                ? `Tool ${tool.name} is only available with --slim.`
+                : `Tool ${tool.name} is not available with --slim.`,
+        };
+    }
     const category = tool.annotations.category;
     if (category) {
         const flag = categoryToFlagName(category);
@@ -94,24 +120,16 @@ function getToolStatusInfo(tool, serverArgs) {
 function isPageScopedTool(tool) {
     return 'pageScoped' in tool && tool.pageScoped === true;
 }
-function formatArgumentNames(names) {
-    return names.map(name => `"${name}"`).join(', ');
-}
-function buildUnknownArgumentsMessage(toolName, unknownArgumentNames, expectedArgumentNames) {
-    const unknownLabel = unknownArgumentNames.length === 1 ? 'argument' : 'arguments';
-    const expectedArguments = expectedArgumentNames.length
-        ? `Expected arguments: ${formatArgumentNames(expectedArgumentNames)}.`
-        : 'This tool does not accept any arguments.';
-    const correction = unknownArgumentNames.length === 1 ? 'Remove it' : 'Remove them';
-    return `Unknown ${unknownLabel} for tool "${toolName}": ${formatArgumentNames(unknownArgumentNames)}. ${expectedArguments} ${correction} and retry.`;
-}
 async function validateAndResolvePathOrUrl(filePathOrUrl, context) {
+    if (filePathOrUrl.trim().length === 0) {
+        return undefined;
+    }
     try {
         const url = new URL(filePathOrUrl);
         if (url.protocol === 'file:') {
             return pathToFileURL(await context.validatePath(fileURLToPath(url))).href;
         }
-        else if (['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
+        if (['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
             return filePathOrUrl;
         }
     }
@@ -154,7 +172,10 @@ async function validateToolFiles(tool, params, context) {
                 const updated = [];
                 for (const item of val) {
                     if (typeof item === 'string') {
-                        updated.push(await validateAndResolvePathOrUrl(item, context));
+                        const resolved = await validateAndResolvePathOrUrl(item, context);
+                        if (resolved !== undefined) {
+                            updated.push(resolved);
+                        }
                     }
                     else {
                         throw new Error('Unexpected non-string value as a file path or URL');
@@ -170,28 +191,54 @@ export class ToolHandler {
     serverArgs;
     getContext;
     toolMutex;
+    abandonPendingBrowserAttemptOnTimeout;
     inputSchema;
     registeredInputSchema;
     disabled;
     disabledReason;
-    constructor(tool, serverArgs, getContext, toolMutex) {
+    constructor(tool, serverArgs, getContext, toolMutex, abandonPendingBrowserAttemptOnTimeout) {
         this.tool = tool;
         this.serverArgs = serverArgs;
         this.getContext = getContext;
         this.toolMutex = toolMutex;
-        const { disabled, reason } = getToolStatusInfo(tool, serverArgs);
+        this.abandonPendingBrowserAttemptOnTimeout = abandonPendingBrowserAttemptOnTimeout;
+        const { disabled, reason, unavailableInMode } = getToolStatusInfo(tool, serverArgs);
         this.disabledReason = reason;
-        this.disabled = disabled && !serverArgs.viaCli;
+        this.disabled =
+            disabled && (Boolean(unavailableInMode) || !serverArgs.viaCli);
         this.inputSchema = tool.schema;
-        this.registeredInputSchema = zod.object(this.inputSchema).loose();
+        this.registeredInputSchema = zod.object(this.inputSchema).strict();
     }
-    unknownArgumentNames(params) {
-        return Object.keys(params).filter(key => !Object.hasOwn(this.inputSchema, key));
+    /**
+     * Races a promise against TOOL_CALL_TIMEOUT_MS, calling onTimeout() if the
+     * timer wins. The loser of the race is left running — there is no way to
+     * cancel a pending connect/launch — but since nothing is left awaiting it,
+     * it cannot block subsequent tool calls.
+     */
+    async #raceWithTimeout(promise, onTimeout) {
+        const timeoutError = new ToolCallTimeoutError(`Tool "${this.tool.name}" timed out after ${TOOL_CALL_TIMEOUT_MS}ms waiting for the browser connection to be established. The connection attempt will be retried automatically on the next tool call.`);
+        let timer;
+        const timeout = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(timeoutError), TOOL_CALL_TIMEOUT_MS);
+            timer.unref?.();
+        });
+        try {
+            return await Promise.race([promise, timeout]);
+        }
+        catch (err) {
+            if (err === timeoutError) {
+                onTimeout();
+            }
+            throw err;
+        }
+        finally {
+            clearTimeout(timer);
+        }
     }
     handle = async (params) => {
         const env_1 = { stack: [], error: void 0, hasError: false };
         try {
-            const _guard = __addDisposableResource(env_1, await this.toolMutex.acquire(), false);
+            const guard = __addDisposableResource(env_1, await this.toolMutex.acquire(), false);
             if (this.disabledReason) {
                 return {
                     content: [
@@ -203,25 +250,19 @@ export class ToolHandler {
                     isError: true,
                 };
             }
-            const unknownArgumentNames = this.unknownArgumentNames(params);
-            if (unknownArgumentNames.length) {
-                return {
-                    content: [
-                        {
-                            type: 'text',
-                            text: buildUnknownArgumentsMessage(this.tool.name, unknownArgumentNames, Object.keys(this.inputSchema)),
-                        },
-                    ],
-                    isError: true,
-                };
-            }
             const startTime = Date.now();
             let success = false;
             let devToolsData;
             let pageUrl;
             try {
                 logger?.(`${this.tool.name} request: ${JSON.stringify(params, null, '  ')}`);
-                const context = await this.getContext();
+                // ensureBrowser() has no cancellation mechanism, so this timeout only
+                // stops us from waiting — the attempt itself keeps running abandoned.
+                // abandonPendingBrowserAttemptOnTimeout() tells BrowserManager to
+                // discard that attempt if it succeeds later instead of handing it to a
+                // subsequent caller — see BrowserManager#abandonPendingAttempt()'s doc
+                // comment for the full mechanism.
+                const context = await this.#raceWithTimeout(this.getContext(), () => this.abandonPendingBrowserAttemptOnTimeout());
                 logger?.(`${this.tool.name} context: resolved`);
                 const response = this.serverArgs.slim
                     ? new SlimMcpResponse(this.serverArgs)
@@ -238,9 +279,10 @@ export class ToolHandler {
                         page =
                             this.serverArgs.pageIdRouting &&
                                 pageId !== undefined &&
-                                !this.serverArgs.slim
+                                !isSlimTool(this.tool)
                                 ? context.getPageById(pageId)
                                 : context.getSelectedMcpPage();
+                        await page?.init();
                         response.setPage(page);
                         if (this.tool.blockedByDialog) {
                             page.throwIfDialogOpen();
@@ -261,14 +303,10 @@ export class ToolHandler {
                 }
                 devToolsData = await context.getDevToolsData(page);
                 pageUrl = context.getSelectedMcpPageUrl(page);
-                // Resolve data format: --experimentalDataFormat takes precedence, fall back to legacy --experimentalToonFormat
-                let dataFormat = 'default';
-                if (this.serverArgs.experimentalDataFormat) {
-                    dataFormat = this.serverArgs.experimentalDataFormat;
-                }
-                else if (this.serverArgs.experimentalToonFormat) {
-                    dataFormat = 'toon';
-                }
+                // --experimentalDataFormat takes precedence over the legacy
+                // --experimentalToonFormat.
+                const dataFormat = this.serverArgs.experimentalDataFormat ??
+                    (this.serverArgs.experimentalToonFormat ? 'toon' : 'default');
                 const { content, structuredContent } = await response.handle(context, dataFormat);
                 const result = {
                     content,

@@ -6,7 +6,7 @@ Version 0.1.0 is under development and has not been released.
 
 - Codex with Plugin support, or Claude Code 2.1.283 or newer, and stable Node
     >=24.21.0 <25 available on PATH. The Plugin includes the complete official
-    `chrome-devtools-mcp@1.10.1` release; creating connections needs no npm/npx,
+    `chrome-devtools-mcp@1.11.0` release; creating connections needs no npm/npx,
     pnpm, or dependency download.
 - Internet access to obtain or update the Plugin. The installed Server can
     initialize its tool catalog offline; browser tools and visited pages may

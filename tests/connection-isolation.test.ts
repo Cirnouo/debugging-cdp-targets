@@ -72,7 +72,7 @@ async function fixture(
         ...(options.profileAvailable ? { profileAvailable: options.profileAvailable } : {}),
         loadCatalog: async () =>
             createToolCatalog({
-                version: '1.10.1',
+                version: '1.11.0',
                 tools: [{ name: 'list_pages', requires: {}, variants: tools }],
             }),
         createRouter: async () => {

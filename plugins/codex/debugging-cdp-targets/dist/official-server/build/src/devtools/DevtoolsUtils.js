@@ -194,7 +194,7 @@ export class SymbolizedError {
     static async fromError(opts) {
         const details = await SymbolizedError.#getExceptionDetails(opts.devTools, opts.error, opts.targetId);
         if (details) {
-            return SymbolizedError.fromDetails({
+            return await SymbolizedError.fromDetails({
                 details,
                 devTools: opts.devTools,
                 targetId: opts.targetId,
@@ -252,7 +252,7 @@ export async function createStackTraceForConsoleMessage(devTools, consoleMessage
     const message = consoleMessage;
     const rawStackTrace = message._rawStackTrace();
     if (rawStackTrace) {
-        return createStackTrace(devTools, rawStackTrace, message._targetId());
+        return await createStackTrace(devTools, rawStackTrace, message._targetId());
     }
     return undefined;
 }
@@ -282,7 +282,7 @@ export async function createStackTrace(devTools, rawStackTrace, targetId) {
         .catch()));
     const binding = devTools.universe.context.get(DevTools.DebuggerWorkspaceBinding);
     // DevTools uses branded types for ScriptId and others. Casting the puppeteer protocol type to the DevTools protocol type is safe.
-    return binding.createStackTraceFromProtocolRuntime(rawStackTrace, target);
+    return await binding.createStackTraceFromProtocolRuntime(rawStackTrace, target);
 }
 // Waits indefinitely for the script so pair it with Promise.race.
 async function waitForScript(model, scriptId, signal) {

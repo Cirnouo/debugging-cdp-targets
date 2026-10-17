@@ -21,31 +21,68 @@ export class DevToolsCommentBridge {
     isAttached(devtoolsPage) {
         return this.#attachedPages.has(devtoolsPage);
     }
+    /**
+     * Attaches to the DevTools page if it exposes the CD4A bridge.
+     *
+     * Returns false if the bridge does not exist, e.g., because the connected
+     * Chrome version does not support DevTools comments or the feature is
+     * disabled, or if the comment event binding could not be installed.
+     * Negative results are not cached so that a DevTools window that has not
+     * finished loading yet is checked again on the next call.
+     */
     async attach(devtoolsPage) {
         if (this.#attachedPages.has(devtoolsPage)) {
-            return;
+            return true;
         }
-        this.#attachedPages.add(devtoolsPage);
+        try {
+            const hasBridge = await devtoolsPage.evaluate(() => {
+                return Boolean(window.universe?.cd4aBridge);
+            });
+            if (!hasBridge) {
+                return false;
+            }
+        }
+        catch (e) {
+            logger?.('DevToolsCommentBridge: evaluate failed', e);
+            return false;
+        }
         try {
             await devtoolsPage.exposeFunction('__onDevToolsCommentEvent', () => {
                 this.#handleCommentEvent();
             });
         }
         catch (e) {
+            // The binding may already exist, e.g., exposed by a previous bridge.
+            // Whether it is usable is checked in the page below.
             logger?.('DevToolsCommentBridge: exposeFunction already bound or failed', e);
         }
+        let attached = false;
         try {
-            await devtoolsPage.evaluate(() => {
+            attached = await devtoolsPage.evaluate(() => {
+                const cd4aBridge = window.universe?.cd4aBridge;
+                if (!cd4aBridge ||
+                    typeof window.__onDevToolsCommentEvent !== 'function') {
+                    return false;
+                }
+                if (window.__onDevToolsCommentListener) {
+                    cd4aBridge.removeEventListener('CommentThreadsChanged', window.__onDevToolsCommentListener);
+                }
                 window.__onDevToolsCommentListener = () => {
                     window.__onDevToolsCommentEvent?.();
                 };
-                window.universe?.cd4aBridge?.addEventListener('CommentThreadsChanged', window.__onDevToolsCommentListener);
-                window.universe?.cd4aBridge?.setAgentAttached(true);
+                cd4aBridge.addEventListener('CommentThreadsChanged', window.__onDevToolsCommentListener);
+                cd4aBridge.setAgentAttached(true);
+                return true;
             });
         }
         catch (e) {
             logger?.('DevToolsCommentBridge: evaluate failed', e);
         }
+        if (!attached) {
+            return false;
+        }
+        this.#attachedPages.add(devtoolsPage);
+        return true;
     }
     async getComments(devtoolsPage) {
         return await devtoolsPage.evaluate(() => {
@@ -70,7 +107,7 @@ export class DevToolsCommentBridge {
             try {
                 const result = page.evaluate(() => {
                     if (window.__onDevToolsCommentListener) {
-                        window.universe?.cd4aBridge?.removeEventListener?.('CommentThreadsChanged', window.__onDevToolsCommentListener);
+                        window.universe?.cd4aBridge?.removeEventListener('CommentThreadsChanged', window.__onDevToolsCommentListener);
                         delete window.__onDevToolsCommentListener;
                     }
                     window.universe?.cd4aBridge?.setAgentAttached(false);

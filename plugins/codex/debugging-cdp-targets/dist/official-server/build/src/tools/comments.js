@@ -6,6 +6,7 @@
 import { zod } from '../third_party/index.js';
 import { ToolCategory } from './categories.js';
 import { definePageTool } from './ToolDefinition.js';
+const DEVTOOLS_COMMENTS_UNAVAILABLE_MESSAGE = 'DevTools comments are not working right now. Possible reasons: the connected Chrome version does not support DevTools comments, the feature is disabled, or the DevTools window has not finished loading. Try again later, or continue without DevTools comments.';
 export const openDevtools = definePageTool(() => ({
     name: 'open_devtools',
     description: 'Open a DevTools window for the selected page.',
@@ -49,6 +50,10 @@ export const getDevtoolsComments = definePageTool(() => ({
             return;
         }
         const bridge = await page.ensureDevToolsCommentBridge(devtoolsPage);
+        if (!bridge) {
+            response.appendResponseLine(DEVTOOLS_COMMENTS_UNAVAILABLE_MESSAGE);
+            return;
+        }
         const threads = await bridge.getComments(devtoolsPage);
         response.setDevToolsComments(threads);
     },
@@ -77,6 +82,10 @@ export const resolveDevtoolsComment = definePageTool(() => ({
         const devtoolsPage = await page.getDevToolsPage();
         if (!devtoolsPage) {
             response.appendResponseLine('DevTools window is not open for this page. Call open_devtools first to open DevTools.');
+            return;
+        }
+        if (!(await page.ensureDevToolsCommentBridge(devtoolsPage))) {
+            response.appendResponseLine(DEVTOOLS_COMMENTS_UNAVAILABLE_MESSAGE);
             return;
         }
         const { threadId, replyText } = request.params;
@@ -125,6 +134,10 @@ export const revealInDevtools = definePageTool(() => ({
             response.appendResponseLine('DevTools window is not open for this page. Call open_devtools first to open DevTools.');
             return;
         }
+        if (!(await page.ensureDevToolsCommentBridge(devtoolsPage))) {
+            response.appendResponseLine(DEVTOOLS_COMMENTS_UNAVAILABLE_MESSAGE);
+            return;
+        }
         const { panelName, uid, reqid } = request.params;
         let backendNodeId;
         let targetId;
@@ -148,9 +161,15 @@ export const revealInDevtools = definePageTool(() => ({
                 response.appendResponseLine(`Warning: Could not resolve network request ID ${reqid} to a CDP request ID.`);
             }
         }
+        const revealTarget = {
+            networkRequestId,
+            ...(backendNodeId !== undefined
+                ? { node: { backendNodeId, targetId: targetId ?? '' } }
+                : {}),
+        };
         await devtoolsPage.evaluate(async (panel, target) => {
             await window.universe?.cd4aBridge?.reveal(panel, target);
-        }, panelName, { backendNodeId, targetId, networkRequestId });
+        }, panelName ?? '', revealTarget);
         let targetDesc = '';
         if (uid && backendNodeId !== undefined) {
             targetDesc = ` (revealing element ${uid} [backend node ${backendNodeId}])`;

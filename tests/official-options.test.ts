@@ -44,3 +44,11 @@ test('official args cannot replace endpoint ownership or smuggle config, flags o
     ])
         assert.throws(() => parseMcpArgs(args), Error, JSON.stringify(args));
 });
+
+test('official 1.11 options accept file navigation control and canonical screencast rate alias', () => {
+    const options = parseMcpArgs(['--no-file-navigations', '--screencast-fps=12']);
+    assert.deepEqual(options.get('fileNavigations')?.values, [false]);
+    assert.deepEqual(options.get('screencastFps')?.values, ['12']);
+    assert.deepEqual(parseMcpArgs(['--experimental-screencast-fps=24']).get('screencastFps')?.values, ['24']);
+    assert.throws(() => parseMcpArgs(['--screencast-fps=12', '--experimentalScreencastFps=24']), /Duplicate/);
+});

@@ -9,16 +9,10 @@ function formatCommentThread(thread) {
         `- Comment: ${thread.text}`,
     ];
     if (thread.elementUid) {
-        lines.push(`- Target element (snapshot UID): ${thread.elementUid}`);
+        lines.push(`- Related element uid: ${thread.elementUid}`);
     }
     if (thread.reqid !== undefined) {
-        lines.push(`- Network request ID (reqid): ${thread.reqid}`);
-    }
-    if (thread.editor) {
-        const location = thread.editor.filePath
-            ? `${thread.editor.filePath}:${thread.editor.lineNumber}`
-            : `line ${thread.editor.lineNumber}`;
-        lines.push(`- Editor location: ${location}`);
+        lines.push(`- Related network reqid: ${thread.reqid}`);
     }
     return lines.join('\n');
 }
@@ -44,8 +38,8 @@ export class CommentFormatter {
         for (const thread of threads) {
             let elementUid;
             const resolveBackendNodeId = options?.resolveBackendNodeId;
-            if (thread.backendNodeId !== undefined && resolveBackendNodeId) {
-                elementUid = await resolveBackendNodeId(thread.backendNodeId);
+            if (thread.node?.backendNodeId !== undefined && resolveBackendNodeId) {
+                elementUid = await resolveBackendNodeId(thread.node.backendNodeId);
             }
             let reqid;
             const resolveCdpRequestId = options?.resolveCdpRequestId;
@@ -61,9 +55,6 @@ export class CommentFormatter {
             }
             if (reqid !== undefined) {
                 item.reqid = reqid;
-            }
-            if (thread.editor) {
-                item.editor = thread.editor;
             }
             structuredThreads.push(item);
         }

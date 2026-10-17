@@ -25,7 +25,7 @@ test('connections keep independent actual catalogs and explicit restart invalida
         inputSchema: { type: 'object', properties: { function: { type: 'string' } }, required: ['function'] },
     };
     const catalog = createToolCatalog({
-        version: '1.10.1',
+        version: '1.11.0',
         tools: [
             { name: routed.name, requires: { slim: false }, variants: [routed, unrouted] },
             { name: slim.name, requires: { slim: true }, variants: [slim] },

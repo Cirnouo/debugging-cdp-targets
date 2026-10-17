@@ -212,6 +212,17 @@ Per-connection mcpArgs can override them. Gateway environment defaults
 `DCT_EXTENSIONS`, `DCT_USAGE_STATISTICS` and `DCT_PERFORMANCE_CRUX` accept
 `true`/`false`.
 
+The delivered official Server 1.11.0 supports automatic configuration discovery
+and live reloading. The gateway sets `CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY=1`
+only in each official child, so upstream Plugin/global configuration cannot
+change an explicitly configured connection. `--config` remains gateway-owned
+and is rejected in `mcpArgs`; change options through explicit start/restart.
+See the [versioned upstream locator](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/a878bcad39584337e055778353246820deafa7c0/src/config/ConfigLocator.ts)
+and [parser](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/a878bcad39584337e055778353246820deafa7c0/src/config/ConfigParser.ts).
+
+The official recording rate option is `--screencastFps`; the earlier
+`--experimentalScreencastFps` spelling remains an alias.
+
 ## Official tool availability
 
 The gateway advertises a fixed full official catalog because Codex does not
@@ -245,6 +256,15 @@ Use official `--workspace` for file access. Selected status with
 sources: explicit directories, the system temporary-directory default and negotiated roots
 forwarding. cwd does not grant file access. Negotiation alone does not prove
 which roots a host supplied.
+
+Official Server 1.11.0 adds `--no-file-navigations` to reject tool-initiated
+`file:` navigation, including `view-source:file:`. Its default remains permissive,
+matching 1.10.1, which had no file-scheme check. Workspace roots authorize Server
+file operations; they do not sandbox browser navigation or pages already open.
+This optional navigation restriction does not control other browser filesystem
+access and does not change the separate `chrome://version/` restriction.
+Use OS sandboxing when filesystem confinement is required. See the
+[versioned navigation validator](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/a878bcad39584337e055778353246820deafa7c0/src/utils/url.ts).
 
 Explicit operation status for the original start and selected configuration
 carry flat isolation evidence: `{mode:'none'}` or

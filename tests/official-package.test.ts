@@ -29,7 +29,7 @@ test('reviewed official release agrees with exact build dependency and isolated 
     assert.equal(release.tarball, `${NPM_REGISTRY}/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz`);
     assert.equal(
         release.integrity,
-        'sha512-Klw6HWDqHC/XS1JwZldd2r49aUhbUJN9m9Mvcx4SEueIPXtzuQX+QelxAViobv8YUkDZ7HWDrmViR6LeYK0wAw==',
+        'sha512-CytJ/5tnzrS+J/74be2P5aCOsS/mmGRHys/Si+IYC4ucrbnWAmES/dYdxGJjeUCECRcoFUilZAysdjlwqUjXIA==',
     );
     assert.equal(release.bin, 'build/src/bin/chrome-devtools-mcp.js');
     assert.ok(Array.isArray(release.files) && release.files.length > 0);
@@ -68,10 +68,10 @@ test('build input verification rejects drift in root declarations, snapshot iden
         ]) {
             const original = await readFile(path.join(root, name), 'utf8');
             const changed = name.endsWith('.yaml')
-                ? original.replaceAll('1.10.1', '1.10.0')
+                ? original.replaceAll('1.11.0', '1.10.0')
                 : name === 'package.json'
-                  ? original.replace('"chrome-devtools-mcp": "1.10.1"', '"chrome-devtools-mcp": "1.10.0"')
-                  : original.replace('sha512-Klw6', 'sha512-Alw6');
+                  ? original.replace('"chrome-devtools-mcp": "1.11.0"', '"chrome-devtools-mcp": "1.10.0"')
+                  : original.replace('sha512-CytJ', 'sha512-AytJ');
             await writeFile(path.join(root, name), changed);
             await assert.rejects(verifyOfficialInputs(root), /official|importer|identity|integrity/i);
             await writeFile(path.join(root, name), original);

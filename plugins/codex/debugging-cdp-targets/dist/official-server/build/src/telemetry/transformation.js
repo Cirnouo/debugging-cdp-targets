@@ -156,34 +156,30 @@ function transformValue(zodType, value) {
     if (zodType === 'ZodString') {
         return bucketize(value.length);
     }
-    else if (zodType === 'ZodArray') {
+    if (zodType === 'ZodArray') {
         return value.length;
     }
-    else {
-        return value;
-    }
+    return value;
 }
 function hasEquivalentType(zodType, value) {
     if (zodType === 'ZodString') {
         return typeof value === 'string';
     }
-    else if (zodType === 'ZodArray') {
+    if (zodType === 'ZodArray') {
         return Array.isArray(value);
     }
-    else if (zodType === 'ZodNumber') {
+    if (zodType === 'ZodNumber') {
         return typeof value === 'number';
     }
-    else if (zodType === 'ZodBoolean') {
+    if (zodType === 'ZodBoolean') {
         return typeof value === 'boolean';
     }
-    else if (zodType === 'ZodEnum') {
+    if (zodType === 'ZodEnum') {
         return (typeof value === 'string' ||
             typeof value === 'number' ||
             typeof value === 'boolean');
     }
-    else {
-        return false;
-    }
+    return false;
 }
 export function sanitizeParams(params, schema) {
     const transformed = {};
