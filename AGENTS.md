@@ -10,6 +10,11 @@ the [filename policy and exact exceptions](docs/policies/quality.md#yaml-filenam
 Before editing AGENTS/Skill instructions, references or their layout/loading
 rules, read the [instruction progressive-disclosure policy](docs/policies/documentation.md#instruction-progressive-disclosure).
 
+Before adding, splitting, merging, renaming or moving maintained files, or changing
+their content responsibilities, read the
+[repository organization policy](docs/policies/repository-organization.md).
+Use the current directory maps until their corresponding migration updates them.
+
 Use `feat/`, `fix/`, `hotfix/`, or `chore/` with a lowercase kebab-case topic
 for the task's overall purpose. Standalone documentation, refactoring, tests,
 CI, and other maintenance use `chore/`; classify each commit independently.
