@@ -148,7 +148,7 @@ templates:
         title: 结束目标工作
         facts: |-
             应用：{application}
-            entryId：{entry_id}
+            registrationId：{registration_id}
             connectionId：{connection_id}
             sessionId：{session_id}
             既定目录清理策略：{cleanup_policy}
@@ -159,12 +159,12 @@ templates:
               description: Agent 请求正常关闭应用并等待实际退出；既定目录清理策略继续生效。
             - value: Keep
               label: Keep：保留应用
-              description: 保留存活应用及当前上游资源供后续任务使用；此选择不恢复已隔离的工具，也不改变目录清理策略。
+              description: 保留存活应用及当前上游资源供后续任务使用；此选择不取消尚未完成的官方调用，也不改变目录清理策略。
     live-recovery:
         title: 活连接恢复
         facts: |-
             应用：{application}
-            entryId：{entry_id}
+            registrationId：{registration_id}
             connectionId：{connection_id}
             sessionId：{session_id}
             错误代码：{failure_code}
@@ -181,7 +181,7 @@ templates:
         title: 目标已退出
         facts: |-
             应用：{application}
-            旧 entryId：{entry_id}
+            旧 registrationId：{registration_id}
             已移除 connectionId：{connection_id}
             已移除 sessionId：{session_id}
             已验证状态：应用实际退出，旧连接和会话不可复用
@@ -211,7 +211,7 @@ templates:
         title: 替换工具配置
         facts: |-
             应用：{application}
-            entryId：{entry_id}
+            registrationId：{registration_id}
             connectionId：{connection_id}
             sessionId：{session_id}
             所需工具：{tool_names}
@@ -228,7 +228,7 @@ templates:
         title: 变更启动参数
         facts: |-
             应用：{application}
-            entryId：{entry_id}
+            registrationId：{registration_id}
             connectionId：{connection_id}
             sessionId：{session_id}
             当前应用参数：{old_args}
@@ -245,7 +245,7 @@ templates:
         title: 原生弹窗协助
         facts: |-
             应用：{application}
-            entryId：{entry_id}
+            registrationId：{registration_id}
             connectionId：{connection_id}
             sessionId：{session_id}
             现有原生文件选择框：{dialog_label}
@@ -296,7 +296,7 @@ templates:
     cancel-intent:
         title: 取消范围
         facts: |-
-            entryId：{entry_id}
+            registrationId：{registration_id}
             operationId：{operation_id}
         question: 用户要求取消当前等待，还是取消该操作本身？
         options:

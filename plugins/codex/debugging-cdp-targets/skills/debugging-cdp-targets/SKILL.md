@@ -8,10 +8,23 @@ metadata:
 
 # Debugging CDP targets
 
-Use the cdp-targets MCP gateway. Start with `dct_connection_status({})` to
-discover entryId and connection summaries. Each newly launched target has independent
-connectionId, sessionId and official MCP. Never attach to an existing application.
-A framework name alone does not establish browser-level CDP compatibility.
+Use the thin host Plugin to connect directly to the running desktop App at
+http://127.0.0.1:27637/mcp (or the explicitly synchronized effective port). The App
+starts without targets and owns resources independently of chats and HTTP sessions.
+Call dct_registration_register({}) once for this work and retain its one-time
+registrationBearer privately. Pass it explicitly to every lifecycle request and
+inside every official _dct route. Never display/log the bearer or put it in user
+questions. Retain the returned public registrationId for factual disclosures.
+
+Then call dct_connection_status({registrationBearer}) for owned connection
+summaries. Each newly launched target has independent connectionId, sessionId and
+official MCP. An MCP session is never an implicit owner. Unknown/expired bearers
+are rejected before reads or effects; an empty registration expires after 30 idle
+minutes. Reconnect with the same bearer without replaying start. If the bearer is
+lost, report that the original resources remain App-owned; a new registration
+does not recover them and status cannot reveal the bearer. The user's normal App
+Quit remains available for authorized cleanup. Never attach to an existing application. A framework name alone
+does not establish browser-level CDP compatibility.
 
 ## Canonical user questions
 
@@ -78,9 +91,9 @@ finite input templates, not permission to invent other questions.
 Recovery facts select templates before asking. A still-live connection requiring
 recovery uses `live-recovery`; confirmed actual exit during active work uses
 `exit-start` in the current chat. An inactive/expected exit is informational.
-Hooks, synchronous errors and explicit status showing the same facts select the
-same template. No default, decline or unanswered question silently becomes Keep,
-end-task, restart, replay or new start. Explicit authorization already covering
+Synchronous errors and explicit status showing the same facts select the same
+template. No default, decline or unanswered question silently becomes Keep,
+restart, replay or new start. Explicit authorization already covering
 the operation is reused without another question.
 
 ## Isolation intent before launch
@@ -290,7 +303,7 @@ choice, a start can use:
 
 ```json
 {
-    "entryId": "<entry-uuid>",
+    "registrationBearer": "<private-registration-bearer>",
     "requestId": "chrome-start-1",
     "targetKind": "chrome",
     "isolation": {
@@ -332,7 +345,7 @@ controls authorization prompts. Use this native capability; Agents need no
 registry inspection, privilege diagnosis, startup wrapper or launch script.
 
 Start returns an operationId immediately. Call `dct_operation_wait` with
-`{ "entryId": "<entry-uuid>", "operationId": "<operation-uuid>", "cursor": 0 }`,
+`{ "registrationBearer": "<private-registration-bearer>", "operationId": "<operation-uuid>", "cursor": 0 }`,
 then use its returned cursor until complete. Each wait lasts up to 25 seconds;
 an incomplete response does not expire the operation. Continue with its cursor,
 including while normal application Close is still waiting for actual exit.
@@ -347,7 +360,7 @@ the wait from the operation; a clear cancellation request needs no extra questio
 
 A connection owns its directory lease across session restart. Restart uses the
 same real directory; the intermediate old-app exit does not release it.
-Keep/end-task retains the directory lease and live app/upstream until actual exit.
+Keep retains the directory lease and live app/upstream until actual exit.
 Final release waits until no live application, pending native acquisition,
 permission wait, late app creation, successor launch or relevant read/write
 resource can still use the directory. Failed/cancelled startup or restart releases
@@ -364,7 +377,7 @@ status `include: ["configuration"]` for the actual path, cleanup policy and stat
 This evidence remains available after failed/cancelled startup. For a retained
 directory or cleanup that has not completed, tell the user its actual absolute
 path, policy and state, including Agent-selected, random-child and resolved-link
-paths. Default summaries and automatic Hooks omit paths and raw filesystem errors.
+paths. Default summaries omit paths and raw filesystem errors.
 
 Do not infer deletion from Close, cancellation or route removal; read explicit
 directory evidence.
@@ -373,11 +386,11 @@ directory evidence.
 
 The global catalog is the complete official catalog, not the enabled tools of
 every connection. Start/wait lifecycle results are summaries. Query status with
-entryId and connectionId for enabledTools names and upstreamStatus. Query
-`dct_connection_status` with entryId, connectionId and
+registrationBearer and connectionId for enabledTools names and upstreamStatus. Query
+`dct_connection_status` with registrationBearer, connectionId and
 `toolNames: ["click_at", "evaluate_script"]` for exact input schemas and conditions.
 Before launch, omit connectionId to query configuration requirements. Exact
-schemas require a connected, valid actual upstream; disconnected/quarantined
+schemas require a connected, valid actual upstream; disconnected
 connections provide requirements only.
 
 On TOOL_NOT_ENABLED or a requested unavailable tool, and before changing tool
@@ -385,8 +398,9 @@ enablement/workspace access or inspecting configuration sources/diagnostics, rea
 [tool configuration](references/tool-configuration.md).
 Do not request configuration, schemas or diagnostics unless needed.
 
-Every official call needs `_dct: { connectionId, sessionId }`. The gateway
-removes only this routing field and preserves original arguments/results.
+Every official call needs `_dct: { registrationBearer, connectionId, sessionId }`.
+The App strips the entire _dct before forwarding original official arguments and
+results. A correct HTTP/MCP session alone grants no ownership.
 After start/restart, obtain fresh page IDs with list_pages for that route.
 
 Chrome can open `chrome://version/` in its native window. The delivered official
@@ -404,7 +418,7 @@ For a default connection's page, evaluate_script uses:
 
 ```json
 {
-    "_dct": { "connectionId": "<connection-uuid>", "sessionId": "<session-uuid>" },
+    "_dct": { "registrationBearer": "<private-registration-bearer>", "connectionId": "<connection-uuid>", "sessionId": "<session-uuid>" },
     "pageId": 1,
     "function": "() => document.title"
 }
@@ -448,26 +462,27 @@ dialogs, not Windows file pickers.
 
 Before ending a target's work, obtain **Close** or **Keep** with no default, unless
 the user has already supplied that choice. Use `close-keep` for the affected route.
-`dct_connection_stop` takes entryId,
+`dct_connection_stop` takes registrationBearer,
 connectionId, sessionId, requestId and disposition. Keep retains app/upstream;
 The disposition values are exactly `"Close"` and `"Keep"`.
 Close requests normal shutdown and waits for actual app exit without a target
 deadline. Continue operation waits while it remains incomplete. Failed/cancelled
 Close preserves live app ownership, observation and retry identity. Never
-force-kill. `dct_connection_end_task` ends work while retaining live resources;
-their later actual exit still removes that connection and is reported.
+force-kill. Keep retains ownership without a separate task-activity state. Actual
+exit still removes that connection; inspect explicit status when resuming work.
 
-`dct_connection_restart` requires entryId, connectionId, sessionId and requestId;
+`dct_connection_restart` requires registrationBearer, connectionId, sessionId and requestId;
 scope selects target, official or both from the immutable start snapshot.
 Pass scope explicitly; replacement mcpArgs requires completed Close/new start. Use it only for a still-live
 connection. Before restarting a live connection, read
 [recovery and events](references/recovery-and-events.md).
 
-Before reviewing/enabling host Hooks, interpreting operation/exit notices or their
-acknowledgment, or selecting operation status, read
+Before selecting operation status or retrying failed cleanup, read
 [recovery and events](references/recovery-and-events.md).
 Keep other connections usable. All runtime identities and operation queues stay in memory.
 
-If these lifecycle tools are absent, report a plugin/runtime version mismatch.
+If registration/lifecycle tools are absent or HTTP is unavailable, report the
+App connection or Plugin/App version mismatch. Do not launch a proxy, script or
+headless replacement.
 Use an updated plugin in a new chat once installation is authorized; do not
 invent tool fields or fall back to a launch script.

@@ -7,9 +7,10 @@ result as proof that the input is safe.
 
 Host descriptors are pure data with no file reads or release-evidence imports;
 standalone lockfile preflight must work without dependencies or official evidence.
-Build the shared runtime once, then assemble and independently audit both complete
+Build the App runtime separately, then assemble and independently audit both thin
 host payloads. Validate canonical packaging inputs before copying, exact host file
-inventories and formats, both Marketplace pointers and original official bytes.
+inventories and formats and both Marketplace pointers. App delivery independently
+verifies complete original official, Electron, ordinary Node and native inputs.
 Generated checks remain read-only and may not repair drift.
 
 Keep tooling non-destructive and cross-platform unless a check explicitly runs

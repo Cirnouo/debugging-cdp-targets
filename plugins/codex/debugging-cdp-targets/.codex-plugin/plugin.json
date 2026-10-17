@@ -10,7 +10,6 @@
     "license": "MIT",
     "keywords": ["cdp", "devtools", "debugging"],
     "mcpServers": "./mcp.json",
-    "hooks": "./hooks/hooks.json",
     "skills": "./skills/",
     "interface": {
         "displayName": "Debugging CDP Targets",

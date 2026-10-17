@@ -24,12 +24,11 @@ separately authorized annotated stable or prerelease tags.
 Before implementing the singleton desktop App migration, read
 [ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
 [accepted implementation plan](docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
-They govern forward implementation; the current stdio gateway and installed Skill
-remain supported until the atomic HTTP/Hook cutover in Task 4.
+They govern implementation. The singleton App owns direct HTTP and native resources;
+host plugins contain only metadata, artwork, documentation and the shared Skill.
 
-- The reusable stdio gateway relays official MCP tools and results using
-  the official SDK. Seven MCP lifecycle/operation tools extend it; status also
-  carries automatic Hooks. Fixed official catalog variants and per-connection
+- The singleton App relays official MCP tools and results through direct SDK
+  Streamable HTTP. Seven registration/lifecycle/operation tools extend it. Fixed official catalog variants and per-connection
   enablement follow ADR 0011. Do not create custom DevTools tools, a plugin CLI,
   dedicated control IPC, or persistent session state.
 - Manage one newly launched target per connection. Verify process, listener,
@@ -38,10 +37,12 @@ remain supported until the atomic HTTP/Hook cutover in Task 4.
   fixed connection limit. Official tools require _dct connection/session routing;
   remove it before forwarding original arguments. Reject stale identities.
 - Ask Close/Keep before ending a target's task. Keep retains target and upstream;
-  Close normally closes only that connection while preserving the gateway.
-  Every control request identifies the entry; restart/end-task/stop also identify
-  connection and session. Status optionally selects a connection; start creates
-  one. Status/start forbid session identity; only stop takes disposition.
+  Close normally closes only that connection while preserving the App. Every owned
+  request explicitly carries its registrationBearer; official _dct also carries
+  connection/session identity and is fully stripped before forwarding. Restart
+  requires an explicit target/official/both scope and immutable start snapshot.
+  Status optionally selects a connection; start creates one. Only stop takes
+  disposition. No public entryId, taskActive, end-task, Hooks or implicit owner.
 - Keep 0.1.0 unreleased. Never push, publish, tag, open a PR, or modify user
   config/global Skills/old state without explicit authorization.
 - Redact tokens, cookies, private page content and personal paths from public
@@ -49,7 +50,7 @@ remain supported until the atomic HTTP/Hook cutover in Task 4.
     [SECURITY.md](SECURITY.md).
 - Launch through structured executable/args/cwd/env and native platform support.
   Windows privilege detection and one-shot elevation helpers belong to the
-  plugin; manage the actual app PID/time/handle. Never force-kill applications.
+  App; manage the actual target PID/time/handle. Never force-kill applications.
   Keep authorization waiting separate from CDP readiness. Client wait cancellation
   detaches only its response; retain actual execution accounting and original client
   context until a real response or definitive upstream close. Never restart/replay
@@ -59,7 +60,7 @@ remain supported until the atomic HTTP/Hook cutover in Task 4.
     profile fallback. Data directories have connection-level leases across restart;
     preauthorized whole-directory cleanup waits for all live/pending app and resource
     users. Keep path evidence in explicit operation metadata/selected configuration,
-    never automatic Hooks or default summaries.
+    never default summaries.
 
 ## Navigation and commands
 
@@ -97,8 +98,10 @@ baseline. Before installation or toolchain changes, read the
 [toolchain policy](docs/policies/quality.md#toolchain-compatibility).
 
 Run focused tests first, then
-`pnpm verify:push`. Build committed runtime with `pnpm build:plugin`;
-`pnpm check:build` verifies it without writing. Domain changes are test-first.
+`pnpm verify:push`. `pnpm build:plugin` assembles the committed thin host payloads;
+`pnpm check:build` compares them without writing. `pnpm check:app` verifies App
+bundles, original native inputs and licenses; `pnpm build:app` stages explicitly
+supplied verified native archives. Domain changes are test-first.
 Maintained Node code is native, erasable TypeScript. Run `pnpm typecheck`;
 generated JavaScript is distribution output, never a handwritten fallback.
 Before changing runtime, tests or tooling, read applicable ancestor/local
@@ -118,7 +121,7 @@ Do not treat a manual verification run as proof that Git will run `pre-push`.
 Before starting an SSH push, read and complete the
 [SSH push initialization](docs/policies/quality.md#ssh-push-initialization).
 
-The official Server is a complete unchanged npm release delivered in Plugin dist.
+The official Server is a complete unchanged npm release delivered in the App.
 Never refresh release hashes automatically. Runtime only verifies and launches
 the delivered public bin. Before building Plugin delivery, dependency upgrades or
 official release/evidence/build-input changes, read the

@@ -27,8 +27,6 @@ export function createLifecycleService({
         signal?: AbortSignal,
         client?: ClientRequestContext,
     ): Promise<Record<string, unknown>> {
-        if (request.entryId !== undefined && request.entryId !== entryId)
-            throw new Error('This request identifies another entry.');
         const ownerId = client?.principal.registrationId;
         if (request.action === 'status' && request.connectionId && client)
             authorize?.(request.connectionId, client.principal);
@@ -36,7 +34,6 @@ export function createLifecycleService({
             if (request.operationId) {
                 const result = operations.get(request.operationId, ownerId);
                 signal?.throwIfAborted();
-                operations.markRead(request.operationId);
                 return { ...result };
             }
             return { ...handler.status(request.connectionId) };
@@ -44,19 +41,16 @@ export function createLifecycleService({
         if (request.action === 'wait') {
             const result = await operations.wait(request.operationId, request.cursor, signal, ownerId);
             signal?.throwIfAborted();
-            if (result.complete) operations.markRead(request.operationId);
             return result;
         }
         if (request.action === 'cancel') {
             const result = operations.cancel(request.operationId, ownerId);
             signal?.throwIfAborted();
-            operations.markRead(request.operationId);
             return { ...result };
         }
         const prior = operations.prior(request.requestId, request, ownerId);
         if (prior) {
             signal?.throwIfAborted();
-            operations.markRead(prior.operationId);
             return { ...prior };
         }
         if (closing) throw new Error('The gateway is closing.');
@@ -93,8 +87,7 @@ export function createLifecycleService({
                     let result: ConnectionStatus;
                     if (request.action === 'start') result = await handler.start(request, context);
                     else if (request.action === 'restart') result = await handler.restart(request, context);
-                    else if (request.action === 'stop') result = await handler.stop(request, context);
-                    else result = await handler.endTask(request);
+                    else result = await handler.stop(request, context);
                     if (result.sessionId)
                         operation.identity({ connectionId: result.connectionId, sessionId: result.sessionId });
                     if (operation.signal.aborted && (request.action === 'start' || request.action === 'restart')) {
@@ -128,9 +121,7 @@ export function createLifecycleService({
         list: operations.list,
         isBusy: (connectionId: string) => changing.has(connectionId),
         forgetOwner: operations.forgetOwner,
-        takeNotices: operations.takeNotices,
         cancelRoute: operations.cancelRoute,
-        markRead: operations.markRead,
         async close() {
             closing = true;
             await operations.close();

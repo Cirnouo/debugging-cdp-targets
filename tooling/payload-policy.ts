@@ -1,24 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import type { HostDescriptor } from './host-policy.ts';
 import { CODEX_HOST } from './host-policy.ts';
 
 export { PLUGIN_NAME, PLUGIN_ROOT } from './host-policy.ts';
-export const OFFICIAL_RELEASE = parseOfficialReleaseEvidence(
-    JSON.parse(readFileSync(new URL('./official-server-release.json', import.meta.url), 'utf8')),
-);
 export function requiredPayloadFiles(host: HostDescriptor = CODEX_HOST) {
     return Object.freeze([
         'LICENSE',
         'README.md',
         ...host.assets.map((file) => `assets/${file}`),
         ...Object.values(host.files).filter((file) => file !== 'README.md'),
-        'dist/README.md',
-        'dist/THIRD-PARTY-NOTICES.txt',
-        'dist/mcp-bootstrap.mjs',
-        'dist/windows-cdp-helper.ps1',
-        'dist/windows-native-helper.ps1',
-        'dist/windows-native-process.cs',
         'skills/README.md',
         'skills/debugging-cdp-targets/README.md',
         'skills/debugging-cdp-targets/SKILL.md',
@@ -29,7 +18,6 @@ export function requiredPayloadFiles(host: HostDescriptor = CODEX_HOST) {
         'skills/debugging-cdp-targets/references/tool-configuration.md',
         'skills/debugging-cdp-targets/references/screenshot-compatibility.md',
         'skills/debugging-cdp-targets/references/recovery-and-events.md',
-        ...OFFICIAL_RELEASE.files.map((file) => `dist/official-server/${file.path}`),
     ]);
 }
 export const REQUIRED_PAYLOAD_FILES = requiredPayloadFiles();

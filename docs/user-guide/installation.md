@@ -1,9 +1,13 @@
 # Installation
 
-Use a host with Plugin support and stable Node >=24.21.0 <25 on PATH. Each host
-receives a complete independent payload from the same maintained runtime, Skill
-and verified official Server release. Installed connections need no npm/npx,
-pnpm, repository dependencies or sibling Plugin. Version 0.1.0 is unreleased.
+Use a host with Plugin support and launch the separate desktop App first. Each
+host receives a thin payload with direct HTTP configuration, artwork and shared
+Skill. It does not install Node, run scripts or launch a gateway. The App supplies
+verified ordinary Node and the unchanged official Server. Version 0.1.0 remains
+unreleased; native installers are pending. Contributors can build a verified local
+Windows stage using the [App build instructions](../app-runtime.md#building-and-evidence).
+The default App HTTP address is `http://127.0.0.1:27637/mcp`; host configuration
+must match the effective App port. Host disconnect does not close managed targets.
 See [compatibility](compatibility.md) for prerequisites and tested host versions.
 
 ## Codex
@@ -28,14 +32,8 @@ Skill explicitly. The project website, Skill title/description/icons and full
 long description passed manual acceptance on Codex Desktop 26.1002.52244. See
 [host metadata evidence](../host-metadata.md) for consumers and limitations.
 
-### Codex Hooks
-
-Enable Hooks and review the installed definitions through Codex's standard trust
-flow. Installing the Plugin does not trust its Hooks. The isolated acceptance
-checks both trusted and untrusted definitions; see
-[Codex Hooks](https://learn.chatgpt.com/docs/hooks).
-See [automatic notifications](workflow.md#automatic-notifications) for delivery
-timing and the events they provide.
+The thin Plugin contains no Hooks. Follow the Skill to register once and keep the
+private bearer for explicit owned calls. Read lifecycle status/results directly.
 
 ### Update or uninstall in Codex
 
@@ -79,17 +77,8 @@ explicitly selected application.
 For an unreleased contributor checkout, pass its absolute repository directory
 to `claude plugin marketplace add`.
 
-### Claude Code Hooks
-
-Review the Plugin before installing or enabling it. Enabled Plugin Hooks are
-discovered from `hooks/hooks.json`; they call the scoped server
-`plugin:debugging-cdp-targets:cdp-targets`. Check `/hooks` to inspect active
-definitions. An effective `disableAllHooks: true` setting disables their
-execution while the Plugin MCP server can remain connected. Plugin enablement
-and these settings are Claude's controls; see
-[Claude Hooks](https://code.claude.com/docs/en/hooks).
-Lifecycle events require Hooks to execute in the current host. See
-[automatic notifications](workflow.md#automatic-notifications) for their behavior.
+The thin Plugin contains no Hooks. The native host MCP connection goes directly
+to the App. Use the shared Skill for registration, explicit routing and Close/Keep.
 
 ### Update or uninstall in Claude Code
 
@@ -112,4 +101,8 @@ detect the installation scope. Claude also supports project/local scopes; select
 the matching scope when updating or removing those installations. See the
 [Claude Marketplace reference](https://code.claude.com/docs/en/plugin-marketplaces).
 
-Continue with the [workflow](workflow.md) or return to the [user guide](README.md).
+Uninstalling either host Plugin removes integration only. Use the App's normal
+Quit to close managed targets and official children. Host Plugin update/uninstall
+is separate from App delivery; this development stage provides no App background
+updater or native uninstaller. Continue with the [workflow](workflow.md) or return
+to the [user guide](README.md).

@@ -1,8 +1,8 @@
 # CDP and lifecycle security
 
-Each gateway manages independent connections without a fixed count limit. One
-newly launched target belongs to each connection. Entry, connection and session
-UUIDs identify the gateway, task and target run. Each connection's target,
+One singleton App per OS user manages independent connections without a fixed count limit. One
+newly launched target belongs to each connection. Public registration, connection and session identities identify ownership and
+target runs; internal diagnostic correlation never grants authority. Each connection's target,
 CDP router/port and upstream child are independent. No persistent
 session record, CLI daemon, or process takeover is permitted. An isolated
 package cache cannot authorize attaching to a process.
@@ -25,17 +25,20 @@ must retain that port and refuse clearly when occupied; automatic port policy ma
 select another free port using only the recorded validated binding template. A foreign
 listener found after app creation cannot authorize automatic relaunch or takeover.
 
-The official SDK gateway owns host stdio and preserves the official Server's tool
-names and results. Exposed schemas add required _dct connection/session routing;
-validate and remove it before forwarding original arguments. Reject missing,
-unknown, closed, stale or colliding routing identities. Never select an implicit
-current target. Seven MCP lifecycle/operation tools extend the catalog; status
-also carries four automatic Hook event names. Empty discovery is read-only.
+The App owns direct SDK Streamable HTTP on 127.0.0.1 with exact effective
+Host/Origin/port, fixed /mcp methods and bounded JSON bodies. Do not trust forwarded
+authority or add permissive CORS. Each owned tool request explicitly supplies
+registrationBearer, and official _dct also supplies connection/session identity.
+Authenticate before resource/result reads or changes. Strip the entire _dct and
+forward unchanged original arguments/results. MCP sessions carry transport state,
+never an implicit owner. Register returns one token once; no token readback, long
+term HTTP key or Authorization owner alias. Empty registrations expire after 30
+idle minutes, with no resources or nonterminal work.
 The fixed full catalog combines verified variants. Status discovery returns
 connection summaries; selected status adds tool names, and explicit toolNames
 requests receive exact schemas only from a valid actual upstream. Configuration
 and diagnostics require selected include values. Operation selection excludes
-connection/tool/include selectors; an automatic hookEventName is the sole argument.
+connection/tool/include selectors; registrationBearer remains explicit on each selector.
 Enabled tools have no suggestedMcpArgs. Supported explicitly disabled tools and
 TOOL_NOT_ENABLED return complete replacement recipes; unavailable upstreams return
 requirements only, and unsupported tools return their reason without a recipe.
@@ -58,36 +61,14 @@ Observe the actual gateway-launched application from startup and retain confirme
 exit state to close subscription gaps. Windows Node children are helpers; native
 actual-app handles and reliable waits/events establish exit without process
 polling. Helper exit and observation failure cannot prove application exit. Revoke
-listeners and verify current identities before applying callbacks. Task activity
-is independent of process lifetime;
-start/restart and official reuse activate it, Keep/end-task end it. No background
-process scan, automatic restart or tool replay is permitted. Keep
-bounded startup readiness and pre-tool process/listener/endpoint verification.
-
-Actual exit gates forwarding, ends task activity, cancels dependent pending work,
-attempts disposal of every owned resource and removes the old connection/session.
-Exit cleanup bypasses lifecycle admission and blocked startup/tool work. Disposal
-failure retains plugin-owned resource evidence in an internal retry ledger rather
-than preserving a routable dead session. Enabled, authorized host MCP Tool Hooks drain
-in-memory events at PreToolUse, PostToolUse, UserPromptSubmit or Stop; no events
-return empty JSON without model context. Stop continues once for an undelivered
-event. Idle chats wait for the next turn. Exit reminders contain target kind,
-PID, port, identities, native exit facts, expected operation ID and cleanup status.
-Operation completion and quarantine
-events report compact operation/session evidence without full results, errors,
-configuration, diagnostics, schemas, recipes or application inputs. Successful
-terminal status/wait, terminal cancel or identical mutation retry delivery
-acknowledges its notice; aborted requests and nonterminal responses leave it
-unread. Inactive exit remains informational; active unexpected exit may suggest a
-new start. Group every expected Close/restart actual exit by operation ID into
-its notice, including new Target rollback. Pending related cleanup retains both
-exit facts and the operation notice until all cleanup results are ready. Compact
-failure notices retain phase/code and primitive native evidence without complete
-message/cause error text or tool names/counts.
-Follow each host's standard controls: Codex requires explicit definition trust;
-Claude Code loads enabled Plugin Hooks and honors disableAllHooks. Review the
-Plugin before enabling its code and Hooks. CDP/upstream or observation failure
-while an app lives reports a connection error, not process exit.
+listeners and verify current identities before applying callbacks. Actual exit
+revokes forwarding and dependent work, disposes every owned resource and removes
+the old connection/session. Exit cleanup bypasses admission and blocked work.
+Failure retains resource ownership and observation for retry. Keep retains the
+live target and upstream. There are no task-activity flags, end-task, Hooks or
+notification queues. CDP/upstream or observation failure while an app lives is a
+connection error rather than evidence of process exit. No automatic restart,
+process takeover or replay.
 
 Retry after ordinary exit requires start with new connection/session IDs.
 Explicit scoped restart retains immutable launch/environment/official/roots,
@@ -97,10 +78,10 @@ list_pages evidence. Fixed ports refuse collisions; automatic policy uses its
 recorded validated binding template to select another verified free port. Never automatically restart or replay tools.
 
 Official Server disposal immediately closes its public SDK transport and rejects
-pending calls, then proves the plugin-owned child exited. Allow two seconds after
+pending calls, then proves the App-owned child exited. Allow two seconds after
 stdin EOF, two seconds after TERM, then KILL within a total ten-second budget for
 this child only. Retain failed disposal ownership in the internal ledger for
-gateway cleanup retries. Handled gateway disconnect gates/cancels all owners and
+gateway cleanup retries. Normal App shutdown gates/cancels all owners and
 attempts every Server/catalog/router disposal in parallel with normal target
 shutdown despite peer failures, without imposing a new target-close deadline.
 
@@ -152,7 +133,7 @@ failure; a failed result cannot discard an acquired directory or its claim.
 
 Hold a connection-level lease across restart and release only after no live app,
 pending native acquisition/permission wait/late creation, successor or relevant
-read/write resource remains. Keep/end-task retains it until actual exit. An
+read/write resource remains. Keep retains it until actual exit. An
 intermediate restart exit cannot release it; final failed/cancelled restart can
 only release when the barrier is satisfied. Failed observation/Close/rollback
 with live or pending app retains ownership. Failed disposal remains in the
@@ -163,7 +144,7 @@ deletion. No persistence, daemon or scan of old state is permitted.
 Real paths, policy and cleanup state appear only in explicit operation metadata
 and selected configuration, including failed/cancelled startups. Later cleanup
 updates original start metadata without changing its terminal result/state or
-issuing a new completion notice. Default summaries and Hooks omit paths and raw
+issuing a new completion notice. Default summaries omit paths and raw
 filesystem errors. Agent reads explicit evidence and reports every retained
 actual absolute path, even after failed or cancelled launch.
 

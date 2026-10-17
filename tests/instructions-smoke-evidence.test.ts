@@ -21,13 +21,13 @@ test('instructions qualify only at semantic tool descriptions, never arbitrary s
 const instructions = 'complete production instructions';
 const prompt = 'Discover and finish.';
 const names = [
-    'dct_connection_end_task',
     'dct_connection_restart',
     'dct_connection_start',
     'dct_connection_status',
     'dct_connection_stop',
     'dct_operation_cancel',
     'dct_operation_wait',
+    'dct_registration_register',
 ];
 const instructionBlock = `<system-reminder>\n# MCP Server Instructions\n\nThe following MCP servers have provided instructions for how to use their tools and resources:\n\n## plugin:debugging-cdp-targets:cdp-targets\n${instructions}\n</system-reminder>`;
 const discoveryBlock = `<system-reminder>\nThe following deferred tools are now available via ToolSearch. Their schemas are NOT loaded — calling them directly will fail with InputValidationError. Use ToolSearch with query "select:<name>[,<name>...]" to load tool schemas before calling them:\n${names.map((name) => `mcp__plugin_debugging-cdp-targets_cdp-targets__${name}`).join('\n')}\n</system-reminder>`;
@@ -53,7 +53,7 @@ function request(block = instructionBlock, discovery = discoveryBlock, actualPro
     };
 }
 test('Claude instructions require exact host MCP reminder scope and independent supplied prompt', () => {
-    assert.deepEqual(claudeInstructionLocations(request(), instructions, prompt), [
+    assert.deepEqual(claudeInstructionLocations(request(), instructions, prompt, names), [
         '$.messages[0].content[1].text',
         '$.messages[0].content[0].text',
     ]);
@@ -64,8 +64,12 @@ test('Claude instructions require exact host MCP reminder scope and independent 
         defer_loading: true,
     };
     assert.equal(
-        claudeInstructionLocations({ ...request(), tools: [...request().tools, placeholder] }, instructions, prompt)
-            .length,
+        claudeInstructionLocations(
+            { ...request(), tools: [...request().tools, placeholder] },
+            instructions,
+            prompt,
+            names,
+        ).length,
         2,
     );
     assert.throws(() =>
@@ -73,6 +77,7 @@ test('Claude instructions require exact host MCP reminder scope and independent 
             { ...request(), tools: [...request().tools, { ...placeholder, defer_loading: false }] },
             instructions,
             prompt,
+            names,
         ),
     );
     for (const bad of [
@@ -90,5 +95,5 @@ test('Claude instructions require exact host MCP reminder scope and independent 
             tools: [{ name: 'mcp__plugin_debugging-cdp-targets_cdp-targets__dct_connection_status', input_schema: {} }],
         },
     ])
-        assert.throws(() => claudeInstructionLocations(bad, instructions, prompt));
+        assert.throws(() => claudeInstructionLocations(bad, instructions, prompt, names));
 });

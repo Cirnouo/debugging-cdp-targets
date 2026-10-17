@@ -16,10 +16,10 @@ import {
 } from '../src/adapters/fixture-diagnostics.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createOperationRegistry } from '../src/application/operations.ts';
-import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import { createTargetController } from '../src/application/target-controller.ts';
 import type { LaunchOptions } from '../src/domains/control-contract.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
+import { createCoreFixture } from './fixtures/core-runtime.ts';
 
 const entryId = '11111111-1111-4111-8111-111111111111';
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -440,14 +440,10 @@ test('retained rollback failure preserves primary official acquisition details a
 });
 
 async function runtimeFixture(primary?: Error, secondary?: Error) {
-    let resolveClosed = () => {};
-    const closed = new Promise<void>((resolve) => {
-        resolveClosed = resolve;
-    });
     let routers = 0;
     let secondaryFailures = 0;
     const children: EventEmitter[] = [];
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         createRouter: async () => {
             const catalog = ++routers === 1;
             return {
@@ -487,17 +483,6 @@ async function runtimeFixture(primary?: Error, secondary?: Error) {
             close: async () => {},
         }),
         loadCatalog: async () => createToolCatalog({ version: '1.11.0', tools: [] }),
-        createEntry: () => ({
-            connect: async () => {},
-            closed,
-            close: async () => {
-                resolveClosed();
-            },
-            roots: async () => ({ roots: [] }),
-            supportsRoots: () => false,
-            supportsFormElicitation: () => false,
-            elicit: async () => ({ action: 'cancel' }),
-        }),
     });
     return runtime;
 }
@@ -529,7 +514,7 @@ test('runtime preserves primary launch phase and code through secondary resource
         assert.ok(original >= 0 && cleanup > original);
         assert.equal(JSON.stringify(events).includes('/private/'), false);
     } finally {
-        await runtime.close();
+        await runtime.cleanup();
         stop();
     }
 });
@@ -543,7 +528,7 @@ test('runtime EOF cleanup has independent scope even when gateway was born in an
             () => runtimeFixture(),
         );
         await runFixtureObservation({ entryId, operationId: '10000000-0000-4000-8000-000000000011' }, () =>
-            runtime.close(),
+            runtime.cleanup(),
         );
         const cleanup = events.find((event) => event.stage === 'gateway-cleanup' && event.event === 'begin');
         assert.ok(cleanup, 'gateway cleanup must enter its own observation scope');

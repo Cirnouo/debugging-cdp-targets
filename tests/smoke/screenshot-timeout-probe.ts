@@ -70,7 +70,7 @@ await record('observation-limits', {
 });
 
 let client: ReturnType<typeof createClient> | undefined;
-let entryId = '';
+let initialized = false;
 const owned: ConnectionStatus[] = [];
 let identity: ProcessTarget | undefined;
 let pageTitle: string | undefined;
@@ -261,7 +261,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         }
     },
     async acquire(selectedFixture) {
-        client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+        client = createClient(path.join(root, 'tests/fixtures/http-gateway.ts'));
         await record('gateway-process', { pid: client.child.pid, entry: client.child.spawnargs });
         const initialization = {
             protocolVersion: '2024-11-05',
@@ -273,7 +273,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         client.notify('notifications/initialized');
         await record('mcp-notification', { method: 'notifications/initialized' });
         const initial = readStatus((await lifecycleTool('dct_connection_status')).structuredContent);
-        entryId = initial.entryId;
+        initialized = true;
         assert.ok(
             'connections' in initial && initial.connections.length === 0,
             'Fresh gateway must have no connections.',
@@ -283,7 +283,6 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         const connection = await control({
             isolation: { mode: 'none' },
             action: 'start',
-            entryId,
             requestId: randomUUID(),
             targetKind: 'chrome',
             launch,
@@ -336,7 +335,6 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         ];
         const schemas = (
             await lifecycleTool('dct_connection_status', {
-                entryId,
                 connectionId: connection.connectionId,
                 toolNames: names,
             })
@@ -350,13 +348,12 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
                 `Missing selected schema: ${name}`,
             );
         const routing = { connectionId: connection.connectionId, sessionId: connection.sessionId };
-        await record('routing', { entryId, ...routing });
+        await record('routing', { ...routing });
         return {
             identity,
             call: (name, args, interval) => tool(name, { ...args, _dct: routing }, interval),
             status: () =>
                 lifecycleTool('dct_connection_status', {
-                    entryId,
                     connectionId: connection.connectionId,
                     include: ['diagnostics'],
                 }),
@@ -391,14 +388,13 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
         let final: unknown;
         try {
             let connections = owned;
-            if (!entryId) {
+            if (!initialized) {
                 const discovered = readStatus((await lifecycleTool('dct_connection_status')).structuredContent);
-                entryId = discovered.entryId;
+                assert.ok('connections' in discovered);
+                initialized = true;
             }
             try {
-                const status = readStatus(
-                    (await lifecycleTool('dct_connection_status', { entryId })).structuredContent,
-                );
+                const status = readStatus((await lifecycleTool('dct_connection_status', {})).structuredContent);
                 assert.ok('connections' in status);
                 connections = status.connections;
             } catch (error) {
@@ -410,7 +406,6 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
                     try {
                         const receipt = await closeSmokeConnection(control, {
                             action: 'stop',
-                            entryId,
                             connectionId: connection.connectionId,
                             sessionId: connection.sessionId,
                             requestId: randomUUID(),
@@ -434,7 +429,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
             });
             if (!receipts.every((receipt) => receipt.status === 'fulfilled'))
                 failures.push('One or more normal Close operations failed.');
-            final = readStatus((await lifecycleTool('dct_connection_status', { entryId })).structuredContent);
+            final = readStatus((await lifecycleTool('dct_connection_status', {})).structuredContent);
             await record('final-status', final);
             if (!isRecord(final) || !Array.isArray(final.connections) || final.connections.length !== 0)
                 failures.push('Gateway retains connections.');
@@ -453,7 +448,7 @@ const result = await runScreenshotTimeoutProbe(fixture, path.join(folder, 'scree
                 await client.close();
             }
             await record('gateway-exit', { code: client.child.exitCode, signal: client.child.signalCode });
-            if (client.child.exitCode !== 0) failures.push('Gateway stdio exit was not zero.');
+            if (client.child.exitCode !== 0) failures.push('HTTP fixture normal cleanup/exit was not zero.');
         }
         if (failures.length > 0) throw new Error(JSON.stringify({ failures, retainedIdentities: owned, final }));
         return { final, gatewayExitCode: client.child.exitCode };

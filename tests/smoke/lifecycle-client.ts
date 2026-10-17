@@ -28,7 +28,6 @@ export async function closeSmokeConnection(
 
 export function readConnection(value: unknown): ConnectionStatus {
     assert.ok(isRecord(value));
-    validateIdentity(value.entryId, 'entry ID');
     validateIdentity(value.connectionId, 'connection ID');
     if (value.sessionId !== undefined) validateIdentity(value.sessionId, 'session ID');
     const status = value.status;
@@ -43,26 +42,22 @@ export function readConnection(value: unknown): ConnectionStatus {
     assert.ok(value.targetKind === undefined || value.targetKind === 'chrome' || value.targetKind === 'generic-cdp');
     assert.ok(value.processId === undefined || typeof value.processId === 'number');
     assert.ok(value.port === undefined || typeof value.port === 'number');
-    assert.ok(value.taskActive === undefined || typeof value.taskActive === 'boolean');
     assert.ok(value.pageIdsInvalidated === undefined || typeof value.pageIdsInvalidated === 'boolean');
     return {
-        entryId: value.entryId,
         connectionId: value.connectionId,
         status,
         ...(value.sessionId ? { sessionId: value.sessionId } : {}),
         ...(value.targetKind ? { targetKind: value.targetKind } : {}),
         ...(value.processId === undefined ? {} : { processId: value.processId }),
         ...(value.port === undefined ? {} : { port: value.port }),
-        ...(value.taskActive === undefined ? {} : { taskActive: value.taskActive }),
         ...(value.pageIdsInvalidated === undefined ? {} : { pageIdsInvalidated: value.pageIdsInvalidated }),
     };
 }
 export function readStatus(value: unknown): ControlResult {
     assert.ok(isRecord(value));
-    validateIdentity(value.entryId, 'entry ID');
     if (!('connections' in value)) return readConnection(value);
     assert.ok(Array.isArray(value.connections));
-    return { entryId: value.entryId, connections: value.connections.map(readConnection) };
+    return { connections: value.connections.map(readConnection) };
 }
 export function lifecycleClient(
     tool: (name: string, args?: Record<string, unknown>) => Promise<Record<string, unknown>>,
@@ -78,7 +73,6 @@ export function lifecycleClient(
         let cursor = 0;
         for (;;) {
             const response = await tool('dct_operation_wait', {
-                entryId: request.entryId,
                 operationId: accepted.operationId,
                 cursor,
             });

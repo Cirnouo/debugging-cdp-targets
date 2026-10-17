@@ -1,7 +1,10 @@
 import type { SpawnOptions } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { CallToolRequestParamsSchema, ElicitResultSchema, ListRootsResultSchema } from '@modelcontextprotocol/core';
 import { isRecord } from '../../src/shared/errors.ts';
+import { guiAuthorization } from '../gui-authorization.ts';
 
 export interface McpRequestInterval {
     dispatched(): void;
@@ -17,10 +20,133 @@ function observeInterval(action: (() => void) | undefined) {
 
 export function createClient(
     entry: string,
-    options: Pick<SpawnOptions, 'cwd' | 'env'> = {},
+    options: Pick<SpawnOptions, 'cwd' | 'env'> & { nodeExecutable?: string } = {},
     onServerRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>,
 ) {
-    return createStdioClient(process.execPath, [entry], options, onServerRequest);
+    return createHttpFixtureClient([entry], options, onServerRequest);
+}
+
+/** A test-owned child exposes real SDK HTTP; stdin EOF is explicit fixture teardown, never production IPC. */
+export function createHttpFixtureClient(
+    args: string[],
+    options: Pick<SpawnOptions, 'cwd' | 'env'> & { nodeExecutable?: string } = {},
+    onServerRequest?: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+) {
+    const { nodeExecutable = process.execPath, ...spawnOptions } = options;
+    const child = spawn(nodeExecutable, [...args, ...(guiAuthorization().allowed ? ['--allow-gui'] : [])], {
+        ...spawnOptions,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+        shell: false,
+    });
+    const closed = new Promise<void>((resolve) => child.once('close', () => resolve()));
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+    });
+    const lines = createInterface({ input: child.stdout });
+    const ready = new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('HTTP fixture startup deadline exceeded.')), 30_000);
+        child.once('error', reject);
+        child.once('exit', () => {
+            clearTimeout(timer);
+            reject(new Error(`HTTP fixture exited: ${stderr}`));
+        });
+        lines.on('line', (line) => {
+            try {
+                const value: unknown = JSON.parse(line);
+                if (!isRecord(value) || value.fixture !== 'http-gateway' || typeof value.url !== 'string')
+                    throw new Error('Unexpected HTTP fixture readiness output.');
+                const endpoint = new URL(value.url);
+                if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1' || endpoint.pathname !== '/mcp')
+                    throw new Error('Invalid HTTP fixture endpoint.');
+                clearTimeout(timer);
+                resolve(value.url);
+            } catch (error) {
+                clearTimeout(timer);
+                reject(error);
+            }
+        });
+    });
+    void ready.catch(() => {});
+    let sdk: Client | undefined;
+    let initialized: Promise<Client> | undefined;
+    let registration: Promise<string> | undefined;
+    const connect = () =>
+        (initialized ??= (async () => {
+            const client = new Client(
+                { name: 'native-http-fixture', version: '0.1.0' },
+                {
+                    capabilities: onServerRequest ? { roots: {}, elicitation: { form: {} } } : {},
+                },
+            );
+            sdk = client;
+            if (onServerRequest) {
+                client.setRequestHandler('roots/list', async () =>
+                    ListRootsResultSchema.parse(await onServerRequest('roots/list', {})),
+                );
+                client.setRequestHandler('elicitation/create', async (request) =>
+                    ElicitResultSchema.parse(await onServerRequest('elicitation/create', request.params)),
+                );
+            }
+            await client.connect(new StreamableHTTPClientTransport(new URL(await ready)));
+            return client;
+        })());
+    const bearer = () =>
+        (registration ??= (async () => {
+            const result = await (await connect()).callTool({ name: 'dct_registration_register', arguments: {} });
+            if (!isRecord(result.structuredContent) || typeof result.structuredContent.registrationBearer !== 'string')
+                throw new Error('HTTP fixture registration did not return a bearer.');
+            return result.structuredContent.registrationBearer;
+        })());
+    return {
+        child,
+        async request(
+            method: string,
+            params: Record<string, unknown> = {},
+            timeoutMs = 60_000,
+            interval?: McpRequestInterval,
+        ): Promise<unknown> {
+            const client = await connect();
+            if (method === 'initialize')
+                return {
+                    serverInfo: client.getServerVersion(),
+                    capabilities: client.getServerCapabilities(),
+                    instructions: client.getInstructions(),
+                };
+            if (method === 'tools/list') return client.listTools();
+            if (method !== 'tools/call') throw new Error('Unsupported native HTTP fixture method.');
+            const parsed = CallToolRequestParamsSchema.parse(params);
+            const arguments_ = { ...parsed.arguments };
+            if (parsed.name !== 'dct_registration_register') {
+                const token = await bearer();
+                if (parsed.name.startsWith('dct_')) arguments_.registrationBearer ??= token;
+                else if (isRecord(arguments_._dct)) arguments_._dct = { registrationBearer: token, ...arguments_._dct };
+            }
+            observeInterval(interval?.dispatched);
+            try {
+                return await client.callTool({ ...parsed, arguments: arguments_ }, { timeout: timeoutMs });
+            } finally {
+                observeInterval(interval?.settled);
+            }
+        },
+        notify(method: string) {
+            if (method === 'notifications/initialized') return; // connect already completed this SDK handshake.
+            if (method !== 'notifications/roots/list_changed') throw new Error('Unsupported fixture notification.');
+            void connect()
+                .then((client) => client.sendRootsListChanged())
+                .catch(() => {});
+        },
+        async close() {
+            try {
+                await sdk?.close();
+            } finally {
+                if (child.exitCode === null && child.signalCode === null) child.stdin.end();
+                await closed;
+                lines.close();
+            }
+        },
+    };
 }
 
 export function createStdioClient(

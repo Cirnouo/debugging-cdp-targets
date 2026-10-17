@@ -22,7 +22,7 @@ test('request deduplication and operation results remain scoped to immutable reg
     assert.equal(registry.get(b.operationId, 'b').result?.owner, 'b');
 });
 
-test('isolation evidence clones input and updates after terminal completion without new events or notices', async () => {
+test('isolation evidence clones input and updates after terminal completion without new events', async () => {
     const registry = createOperationRegistry(entryId);
     let update: (value: { mode: 'data-dir'; path: string; cleanup: 'retain'; state: 'held' | 'retained' }) => void =
         () => {};
@@ -44,14 +44,12 @@ test('isolation evidence clones input and updates after terminal completion with
     assert.equal(complete.state, 'succeeded');
     assert.ok('isolation' in complete && typeof complete.isolation === 'object' && complete.isolation !== null);
     assert.equal('path' in complete.isolation && complete.isolation.path, '/private/path');
-    assert.equal(registry.takeNotices().length, 1);
     update({ mode: 'data-dir', path: '/private/path', cleanup: 'retain', state: 'retained' });
     const later = registry.get(accepted.operationId);
     assert.equal(later.cursor, complete.cursor);
     assert.equal(later.state, complete.state);
     assert.deepEqual(later.result, complete.result);
     assert.deepEqual(later.error, complete.error);
-    assert.deepEqual(registry.takeNotices(), []);
     assert.deepEqual((await registry.wait(accepted.operationId, complete.cursor)).events, []);
     assert.ok('isolation' in later && typeof later.isolation === 'object' && later.isolation !== null);
     assert.equal('state' in later.isolation && later.isolation.state, 'retained');
@@ -93,8 +91,6 @@ test('acceptance is immediate, duplicate requests share a result and conflicting
     assert.deepEqual(result.operation.result, { value: 'ready' });
     assert.equal(JSON.stringify(result).includes('private'), false);
     assert.deepEqual(await registry.wait(first.operationId, 0), result);
-    assert.equal(registry.takeNotices().length, 1);
-    assert.equal(registry.takeNotices().length, 0);
 });
 
 test('cancelling a wait leaves the operation running and completion remains queryable', async () => {
@@ -192,7 +188,7 @@ test('pre-execution cancellation releases reservations and bounded replay report
     assert.equal(replay.replayTruncated, true);
 });
 
-test('Hook operation notices contain independent completion metadata without result or failure payloads', async () => {
+test('operation error snapshots preserve native failure fields without arbitrary private payloads', async () => {
     const registry = createOperationRegistry(entryId);
     const route = {
         connectionId: '22222222-2222-4222-8222-222222222222',
@@ -219,33 +215,13 @@ test('Hook operation notices contain independent completion metadata without res
         throw error;
     });
     await tick();
-    const [notice] = registry.takeNotices();
-    assert.deepEqual(notice, {
-        kind: 'operation',
-        entryId,
-        operationId: accepted.operationId,
-        action: 'stop',
-        state: 'failed',
-        phase: 'send-close',
-        elapsedMs: notice?.elapsedMs,
-        ...route,
-        code: 'NORMAL_CLOSE_FAILED',
-        category: 'access-denied',
-        nativeError: 5,
-        exceptionType: 'System.ComponentModel.Win32Exception',
-        closeRequested: false,
-        processExited: false,
-        listenerState: 'missing',
-        closeConfirmed: false,
-    });
-    assert.equal(JSON.stringify(notice).includes('private'), false);
     const snapshot = registry.get(accepted.operationId);
     assert.equal(snapshot.error?.nativeError, 5);
     assert.equal(snapshot.error?.mcpArgs, undefined);
     assert.equal(snapshot.error?.diagnostics, undefined);
 });
 
-test('ordinary failures retain the last active phase in error evidence and the compact Hook notice', async () => {
+test('ordinary failures retain the last active phase in error evidence', async () => {
     const registry = createOperationRegistry(entryId);
     const accepted = registry.submit('sdk-initialization', { action: 'start' }, async (context) => {
         context.phase('starting-official-server');
@@ -255,9 +231,6 @@ test('ordinary failures retain the last active phase in error evidence and the c
     const snapshot = registry.get(accepted.operationId);
     assert.equal(snapshot.phase, 'failed');
     assert.equal(snapshot.error?.phase, 'starting-official-server');
-    const [notice] = registry.takeNotices();
-    assert.equal(notice?.phase, 'starting-official-server');
-    assert.equal(JSON.stringify(notice).includes('private'), false);
 });
 
 test('an aborted operation cannot succeed from a late result or accept late context events', async () => {
@@ -336,48 +309,4 @@ test('route cancellation isolates the exact session and leaves Close and restart
     await tick();
     assert.equal(registry.get(old.operationId).state, 'cancelled');
     assert.equal(registry.get(next.operationId).state, 'succeeded');
-});
-
-test('markRead acknowledges only terminal snapshots and never suppresses future completion', async () => {
-    const registry = createOperationRegistry(entryId);
-    let finish: () => void = () => {};
-    const first = registry.submit('read', {}, async () => {
-        await new Promise<void>((resolve) => {
-            finish = resolve;
-        });
-        return { done: true };
-    });
-    assert.equal(typeof registry.markRead, 'function');
-    registry.markRead(first.operationId);
-    await tick();
-    finish();
-    await tick();
-    assert.equal(registry.takeNotices().length, 1);
-    const second = registry.submit('terminal-read', {}, async () => ({ done: true }));
-    await tick();
-    registry.markRead(second.operationId);
-    assert.deepEqual(registry.takeNotices(), []);
-});
-
-test('takeNotices retains terminal notices rejected by the delivery predicate', async () => {
-    const registry = createOperationRegistry(entryId);
-    const close = registry.submit('pending-exit-cleanup', { action: 'stop' }, async () => ({ done: true }));
-    const restart = registry.submit('ready-exit-cleanup', { action: 'restart' }, async () => ({ done: true }));
-    const direct = registry.submit('without-action', {}, async () => ({ done: true }));
-    await tick();
-    assert.deepEqual(
-        registry.takeNotices(() => false),
-        [],
-    );
-    assert.deepEqual(
-        registry.takeNotices((notice) => notice.action === 'restart').map((notice) => notice.operationId),
-        [restart.operationId],
-    );
-    const remaining = registry.takeNotices();
-    assert.deepEqual(
-        remaining.map((notice) => notice.operationId),
-        [close.operationId, direct.operationId],
-    );
-    assert.equal(Object.hasOwn(remaining[1] ?? {}, 'action'), false);
-    assert.deepEqual(registry.takeNotices(), []);
 });

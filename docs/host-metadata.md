@@ -8,6 +8,27 @@ Marketplace and install either complete host Plugin. Public directory submission
 is outside this contract. This document owns primary host research under the
 [documentation policy](policies/documentation.md#host-metadata-research).
 
+## Direct HTTP cutover
+
+The 2026-10-17 App cutover changes the maintained connection contract. Both thin
+payloads point at `http://127.0.0.1:27637/mcp`; neither contains Hooks, executable
+runtime, bearer headers or dependency scripts. Codex portable MCP declares
+`type: "streamable-http"` using the pinned
+[0.161.0 portable agent Plugin configuration parser](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/agent_plugin_config.rs).
+Claude declares `type: "http"` using its
+[official MCP HTTP configuration](https://code.claude.com/docs/en/mcp#connect-to-a-remote-http-server).
+App port edits require matching native host configuration after App restart.
+Registration ownership is explicit per tool request, independent of host MCP
+session reuse; initialization does not implicitly register a chat.
+
+The earlier dated installation, model-context Hook and Desktop presentation
+records below remain historical evidence for those exact sources and hosts.
+They do not prove HTTP tool execution, App GUI, current host icon rendering or
+installer behavior. Current Marketplace/instructions smokes connect to an
+already running App and retain their actual host version; SDK metadata capture
+is recorded separately from host consumption. Repository metadata validation is
+an independent static gate and never substitutes for either native host result.
+
 ## Sources and evidence levels
 
 The following primary sources establish separate consumers. Live documentation

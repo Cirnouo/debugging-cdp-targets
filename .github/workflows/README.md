@@ -14,6 +14,9 @@ This directory owns GitHub Actions workflows.
   request open/reopen/synchronize/title-or-body-edit events. Ordinary controlled
   real Chrome jobs upload the fixed safe fixture diagnostic files only on failure.
   The default-off manual Ubuntu startup study is the narrow exception below.
+  Quality also verifies App bundle/native-input/license composition. Latest-24
+  Ubuntu catalog smoke explicitly uses the independently verified installed
+  original release; this does not establish App/native delivery acceptance.
 - `release.yaml` runs that same-commit CI through `workflow_call` for newly
   created stable `v<major>.<minor>.<patch>` and prerelease candidate tag pushes.
   Only its downstream publish job has `contents: write`; all checks remain read-only.

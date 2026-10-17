@@ -31,28 +31,28 @@ const requirements: Record<string, { variables: string[]; values: string[] }> = 
         values: ['retain', 'delete-on-release'],
     },
     'close-keep': {
-        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'cleanup_policy'],
+        variables: ['application', 'registration_id', 'connection_id', 'session_id', 'cleanup_policy'],
         values: ['Close', 'Keep'],
     },
     'live-recovery': {
-        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'failure_code'],
+        variables: ['application', 'registration_id', 'connection_id', 'session_id', 'failure_code'],
         values: ['restart', 'Close'],
     },
     'exit-start': {
-        variables: ['application', 'entry_id', 'connection_id', 'session_id'],
+        variables: ['application', 'registration_id', 'connection_id', 'session_id'],
         values: ['start', 'no-start'],
     },
     'tools-start': { variables: ['application', 'tool_names', 'mcp_args'], values: ['start', 'decline'] },
     'tools-restart': {
-        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'tool_names', 'mcp_args'],
+        variables: ['application', 'registration_id', 'connection_id', 'session_id', 'tool_names', 'mcp_args'],
         values: ['restart', 'decline'],
     },
     'replace-launch': {
-        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'old_args', 'start_proposal'],
+        variables: ['application', 'registration_id', 'connection_id', 'session_id', 'old_args', 'start_proposal'],
         values: ['close-start', 'decline'],
     },
     'native-picker': {
-        variables: ['application', 'entry_id', 'connection_id', 'session_id', 'dialog_label'],
+        variables: ['application', 'registration_id', 'connection_id', 'session_id', 'dialog_label'],
         values: ['completed', 'cancelled'],
     },
     'missing-input': { variables: ['application', 'required_fields'], values: [] },
@@ -63,7 +63,7 @@ const requirements: Record<string, { variables: string[]; values: string[] }> = 
     },
     'answer-clarification': { variables: ['template_id', 'quoted_answer'], values: [] },
     'target-input': { variables: ['candidates'], values: [] },
-    'cancel-intent': { variables: ['entry_id', 'operation_id'], values: ['cancel-wait', 'cancel-operation'] },
+    'cancel-intent': { variables: ['registration_id', 'operation_id'], values: ['cancel-wait', 'cancel-operation'] },
 };
 const triggers = {
     'isolation-needed': 'isolation-intent',

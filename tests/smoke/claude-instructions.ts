@@ -4,7 +4,8 @@ import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { claudeSse, record } from './claude-host.ts';
+import { captureAppInitialization } from './app-http.ts';
+import { type ClaudeBlock, claudeSse, claudeToolResult, record } from './claude-host.ts';
 import { claudeCli, claudeHost, sandbox } from './claude-process.ts';
 import { claudeInstructionLocations, initializationEvidence, testedSource } from './instructions-evidence.ts';
 
@@ -12,9 +13,16 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable =
     process.argv[2] ?? (process.platform === 'win32' ? path.join(os.homedir(), '.local/bin/claude.exe') : 'claude');
 const { temporary } = await sandbox(root, 'instructions');
+const exercise = process.argv.includes('--exercise-lifecycle');
+let bearer: string | undefined;
+let registrationId: string | undefined;
+const lifecycleCalls: string[] = [];
 console.log(`Retained evidence: ${temporary}`);
-const fixtureEvidence = path.join(temporary, 'mcp.jsonl');
-const prompt = 'Discover the available inspection gateway, then finish without calling any tools.';
+const fixtureEvidence = path.join(temporary, 'app-http-initialize.json');
+await captureAppInitialization(fixtureEvidence);
+const prompt = exercise
+    ? 'Register once with the local inspection gateway and read only that registration status; start no target.'
+    : 'Discover the available inspection gateway, then finish without calling any tools.';
 let failure: unknown;
 let count = 0;
 let locations: string[] = [];
@@ -33,8 +41,8 @@ const model = createServer(async (request, response) => {
         let raw = '';
         for await (const chunk of request) raw += chunk;
         count++;
-        await writeFile(path.join(temporary, `request-${count}.json`), raw);
-        assert.equal(count, 1, 'No search or MCP execution is required.');
+        if (count === 1) await writeFile(path.join(temporary, `request-${count}.json`), raw);
+        assert.ok(count <= (exercise ? 3 : 1));
         const value: unknown = JSON.parse(raw);
         assert.ok(
             record(value) &&
@@ -43,11 +51,39 @@ const model = createServer(async (request, response) => {
                 Array.isArray(value.messages),
         );
         const production = await initializationEvidence(fixtureEvidence);
-        locations = claudeInstructionLocations(value, production.instructions, prompt);
+        if (!exercise)
+            locations = claudeInstructionLocations(value, production.instructions, prompt, production.toolNames);
+        let block: ClaudeBlock = { type: 'text', text: 'Instruction consumption fixture completed.' };
+        if (exercise) {
+            if (count === 2) {
+                const registered = claudeToolResult(value.messages.filter(record), 'register-once');
+                assert.ok(
+                    typeof registered.registrationBearer === 'string' && typeof registered.registrationId === 'string',
+                );
+                bearer = registered.registrationBearer;
+                registrationId = registered.registrationId;
+            }
+            if (count === 3) {
+                const status = claudeToolResult(value.messages.filter(record), 'owned-status');
+                assert.deepEqual(status.connections, []);
+                assert.equal(JSON.stringify(status).includes(bearer ?? 'missing-bearer'), false);
+            } else {
+                const name = count === 1 ? 'dct_registration_register' : 'dct_connection_status';
+                const tool = value.tools
+                    .filter(record)
+                    .find((tool) => typeof tool.name === 'string' && tool.name.endsWith(`__${name}`));
+                assert.ok(tool && typeof tool.name === 'string');
+                lifecycleCalls.push(name);
+                block = {
+                    type: 'tool_use',
+                    id: count === 1 ? 'register-once' : 'owned-status',
+                    name: tool.name,
+                    input: count === 1 ? {} : { registrationBearer: bearer },
+                };
+            }
+        }
         response.writeHead(200, { 'content-type': 'text/event-stream' });
-        response.end(
-            claudeSse(value.model, count, { type: 'text', text: 'Instruction consumption fixture completed.' }),
-        );
+        response.end(claudeSse(value.model, count, block));
     } catch (error) {
         const first = failure === undefined;
         failure ??= error;
@@ -69,22 +105,11 @@ try {
         path.join(marketplace, '.claude-plugin/marketplace.json'),
     );
     await mkdir(plugin, { recursive: true });
-    for (const name of ['.claude-plugin', 'hooks', 'skills', 'assets'])
+    for (const name of ['.claude-plugin', 'skills', 'assets', '.mcp.json', 'LICENSE', 'README.md'])
         await cp(path.join(root, 'plugins/claude-code/debugging-cdp-targets', name), path.join(plugin, name), {
             recursive: true,
         });
-    await writeFile(
-        path.join(plugin, '.mcp.json'),
-        JSON.stringify({
-            mcpServers: {
-                'cdp-targets': {
-                    command: process.execPath,
-                    args: [path.join(root, 'tests/fixtures/mcp-instructions-entry.ts')],
-                    env: { DCT_INSTRUCTIONS_EVIDENCE: fixtureEvidence },
-                },
-            },
-        }),
-    );
+
     await claudeCli(executable, ['plugin', 'marketplace', 'add', marketplace], temporary, endpoint);
     await claudeCli(
         executable,
@@ -100,10 +125,10 @@ try {
         prompt,
         undefined,
         90_000,
-        { toolSearch: true },
+        { toolSearch: !exercise, recordOutput: !exercise },
     );
     if (failure) throw failure;
-    assert.equal(count, 1);
+    assert.equal(count, exercise ? 3 : 1);
     const production = await initializationEvidence(fixtureEvidence);
     await writeFile(
         path.join(temporary, 'acceptance.json'),
@@ -113,6 +138,8 @@ try {
                 version: host.version,
                 source: await testedSource(root),
                 locations,
+                lifecycleCalls,
+                ...(exercise ? { registrationId, ownedEmptyStatus: true } : {}),
                 instructionLocation: locations[0],
                 deferredDiscoveryLocation: locations[1],
                 transportRole: 'user',
@@ -123,7 +150,7 @@ try {
         ),
     );
     console.log(
-        `Claude ${host.version}: complete instructions at ${locations[0]}; deferred discovery at ${locations[1]}; zero MCP calls.`,
+        `Claude ${host.version}: instruction locations ${locations.length}; host lifecycle calls ${lifecycleCalls.length}.`,
     );
 } catch (error) {
     failure ??= error;

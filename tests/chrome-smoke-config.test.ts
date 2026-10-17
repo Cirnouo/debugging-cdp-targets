@@ -12,7 +12,6 @@ import { closeSmokeConnection } from './smoke/lifecycle-client.ts';
 test('an explicit smoke Close waits for busy CDP without changing target identity', async () => {
     const request = {
         action: 'stop' as const,
-        entryId: randomUUID(),
         connectionId: randomUUID(),
         sessionId: randomUUID(),
         requestId: randomUUID(),
@@ -20,7 +19,7 @@ test('an explicit smoke Close waits for busy CDP without changing target identit
     };
     const calls: ControlRequest[] = [];
     let clock = 0;
-    const result: ControlResult = { entryId: request.entryId, connectionId: request.connectionId, status: 'idle' };
+    const result: ControlResult = { connectionId: request.connectionId, status: 'idle' };
     assert.equal(
         await closeSmokeConnection(
             async (next) => {
@@ -51,7 +50,6 @@ test('an explicit smoke Close waits for busy CDP without changing target identit
 test('smoke Close bounds busy waiting and never retries other failures', async () => {
     const request = {
         action: 'stop' as const,
-        entryId: randomUUID(),
         connectionId: randomUUID(),
         sessionId: randomUUID(),
         requestId: randomUUID(),
@@ -163,7 +161,6 @@ test('Chrome smoke verifies actual native profile evidence despite the official 
     const module = await host();
     assert.ok('inspectChromeSmokeDirectory' in module && typeof module.inspectChromeSmokeDirectory === 'function');
     const target = {
-        entryId: randomUUID(),
         connectionId: randomUUID(),
         sessionId: randomUUID(),
         status: 'active' as const,
@@ -331,7 +328,6 @@ test('connection recovery smoke separates external normal Close requests from ga
     assert.match(source, /await until\(async \(\) => \{[\s\S]*?!current\.connections\.some/);
     assert.match(source, /const closed = await Promise\.allSettled\(\[client\.close\(\)\]\)/);
     assert.match(source, /assert\.equal\(retainedAfterGatewayCleanup, false,/);
-    assert.match(source, /reminderReceived - connectionRetirementObservedAt <= 5_000/);
     assert.match(source, /normalCloseRequestedAt/);
     assert.doesNotMatch(source, /closeCompleted|normallyClosed|millisecondsFromCloseCompletion/);
 });

@@ -3,9 +3,11 @@
 - **Target application**: application explicitly known to expose browser-level CDP.
 - **Framework**: application technology; its name does not prove CDP compatibility.
 - **Rendering implementation**: renderer such as Chromium or WebView2.
-- **Plugin host**: Agent environment that installs and runs a Plugin, currently Codex or Claude Code.
-- **Static entry**: reusable host stdio configuration cdp-targets.
-- **Entry identity**: random UUID for one live MCP gateway.
+- **Plugin host**: Agent environment that loads a thin Plugin, currently Codex or Claude Code.
+- **App**: consciously launched desktop gateway and management UI, one per OS user.
+- **Static entry**: host direct HTTP configuration cdp-targets pointing at the App.
+- **Registration**: bearer-authenticated memory-only owner of connections and jobs, independent of chat, socket or MCP session.
+- **Registration identity**: public UUID used for ownership summaries, distinct from its private one-time bearer.
 - **Connection identity**: random UUID for one independent target task and its official MCP connection.
 - **Session identity**: fresh public route UUID changed after either target or official side restarts.
 - **Session owner**: in-memory resource-generation owner; logical router/directory and target/official generations have independent lifetimes.
@@ -21,8 +23,8 @@
 - **Current target**: verified newly launched process belonging to one session.
 - **CDP endpoint**: verified loopback discovery and browser WebSocket address.
 - **Official Server**: unmodified upstream chrome-devtools-mcp child for one connection.
-- **Gateway**: official SDK host transport managing independent connections and routing official tools.
-- **Routing identity**: required _dct connection/session object removed before official tool invocation.
+- **Gateway**: App-owned core and official SDK HTTP composition managing independent connections.
+- **Routing identity**: required _dct registrationBearer/connectionId/sessionId object removed completely before official invocation.
 - **Lifecycle operation**: MCP-accepted asynchronous mutation with stable operation identity.
 - **Request identity**: caller identifier binding identical mutation retries to one operation.
 - **Event cursor**: replay position in an operation's bounded in-memory event queue.
@@ -37,12 +39,9 @@
 - **Detached official wait**: ended client response wait whose actual official execution remains owned until real response or definitive upstream termination.
 - **Disposition**: explicit Close or Keep choice without a default.
 - **Kept target**: application and upstream retained within its live connection.
-- **Active task**: dependent work activated by start, live restart or official use and ended by Keep/end-task or actual exit.
-- **Exit reminder**: one in-memory process exit event awaiting delivery to Agent context through an enabled, authorized host Hook.
-- **Operation notice**: compact, unread terminal operation event awaiting authorized Hook delivery; expected exits are grouped by operation ID with each actual exit and cleanup result, and delivery waits for all related cleanup.
-- **Delivered terminal result**: terminal operation snapshot successfully returned through operation status, complete wait, terminal cancel or an identical mutation retry; aborted requests and nonterminal responses do not acknowledge it.
+- **Terminal result**: explicit owned operation snapshot returned by status, wait, cancel or an identical mutation retry, without a notice queue or acknowledgment.
 - **Exit cleanup**: revocation of a terminated session followed by disposal of all its owned resources.
-- **Cleanup ledger**: in-memory record of plugin-owned resources awaiting disposal retries after their session is removed.
+- **Cleanup ledger**: in-memory record of App-owned resources awaiting disposal retries after their session is removed.
 - **Retired connection**: connection removed after actual target exit and attempted exit cleanup.
 - **Port reservation**: gateway-local ownership of a selected target port for one session lifetime.
 - **Profile reservation**: gateway-local claim preventing simultaneous launches with the same canonical Chrome directory, distinct from native profile ownership.
@@ -50,22 +49,19 @@
 - **Closed connection**: removed target connection after actual exit; the gateway remains reusable.
 - **Live restart**: user-authorized target, official or both replacement using the same logical connection and immutable snapshot, with a fresh route session.
 - **Recovery**: explicit scoped restart or Close after diagnosed connection failure without automatic replay.
-- **Plugin payload**: manifests, instructions, self-contained runtime, and licenses.
+- **Plugin payload**: thin host manifests, instructions, artwork, documentation and license.
 - **Host distribution**: complete Plugin payload adapted to one Plugin host's installation interface.
 - **Packaging input**: maintained material used to assemble a host distribution.
 
-## Accepted forward App terms
+## Version and deployment terms
 
-[ADR 0017](adr/0017-singleton-desktop-app.md) owns the accepted design; these
-terms do not claim that its HTTP/App behavior is delivered. Current terms above
-remain applicable until the corresponding implementation cutover.
+[ADR 0017](adr/0017-singleton-desktop-app.md) owns the design. The
+[App runtime](app-runtime.md) states implemented behavior and separates local
+staging from pending installer/deployment acceptance.
 
-- **App**: consciously launched desktop gateway and management UI, one per OS user.
 - **App version**: independent strict SemVer in root package.json.version.
 - **Plugin version**: one strict SemVer owned by shared Skill metadata and matched
     by both maintained and generated host manifests, independently of App version.
-- **Registration**: bearer ownership of connections and jobs, independent of a
-    chat, socket or MCP session; GUI idle transfer provides lost-token recovery.
 - **Launch snapshot**: immutable successful launch, resolved environment, official
     configuration and initiating roots used by every scoped restart.
 - **Latest stable plugin record**: future schema-versioned static record naming

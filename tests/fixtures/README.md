@@ -1,9 +1,23 @@
 # Test fixtures
 
-`mcp-instructions-entry.ts` connects only the production MCP entry adapter with
-an empty official catalog and read-only status. It retains initialization and
-discovery evidence, fails on every tools/call, and imports no runtime, router,
-process manager or upstream. Instruction consumption never launches a target.
+`core-runtime.ts` composes the actual reusable Core with one explicit test
+registration, attached client and request-scoped facilities. It supplies private
+controller/control/invoke/cleanup conveniences without restoring a production
+stdio entry or implicit owner.
+
+`http-gateway.ts` exposes that actual Core through the production SDK HTTP adapter
+in a test-owned child. Calls use explicit registration bearers; start/restart
+require command-line `--allow-gui`. Source mode runs on the supported contributor
+Node and verifies the installed complete official package. The sealed build
+uses only its colocated App resources, verifies official and ordinary Node
+inputs and refuses a different Node executable. It has no worktree or old Plugin
+fallback. Stdin EOF
+is explicit test teardown: normal Core cleanup precedes HTTP closure. This
+private fixture lifecycle is not a production App/Plugin entry or control IPC.
+The sealed receipt/builder contract belongs to
+[tooling/native-fixture-seal.ts](../../tooling/native-fixture-seal.ts); source
+HTTP regression, sealed native execution and actual GUI App acceptance are
+separate evidence.
 
 `issue-feedback-http.ts` replaces only subprocess `fetch` with a private fake
 GitHub boundary for the actual CI entry test. It records request methods/routes
@@ -28,35 +42,9 @@ actual commits still receive complete strict validation. Its declared checks are
 synthetic fixture input.
 
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
-`hook-gateway.ts` composes the production gateway/SDK with fake process, CDP and
-upstream I/O for isolated Codex and Claude model-context tests. Each fake target
-has an independent child exit event; normal Close emits that actual fixture exit
-before reporting success. Its local HTTP triggers select a target by PID or
-release the controlled second launch. Target identity files and triggers exist
-only in the temporary integration fixture.
-The Post scenario returns the original successful upstream result, then schedules
-actual fixture exit with one setImmediate milestone. Runtime validation and SDK
-success response finish before that exit; cleanup is ready for the next host Hook
-I/O. The host smokes verify both the original successful result and exact
-PostToolUse delivery without a fixed delay or target polling.
-`hook-gateway-events.ts` parses compact Hook JSON inside actual host context
-wrappers, validates event identity/action and rejects full result, configuration
-or tool-schema payloads. Nested expected exits must retain their own identities,
-match the parent operation ID and have completed cleanup. Primitive native failure
-evidence is allowed; tool names/counts and complete message/cause text are rejected.
-It also checks default lifecycle/status summaries before
-test adapters can strip fields.
-Its test-only smoke wait reads empty Hook responses at 100ms intervals using
-the existing 15-second readiness polling budget and returns the first nonempty
-batch intact. It checks that budget before another read and after a read returns;
-late responses cannot satisfy readiness. Each pending RPC retains its separate
-existing timeout. It rejects malformed nonempty responses immediately; it never
-filters by expected identity, discards unrelated events, or reads another
-response after delivery. The smoke's identity/count/cleanup and subsequent
-empty-Hook assertions still validate that batch.
-
-`native-close-runtime.ts` composes the real gateway runtime, lifecycle/controller,
-Windows launcher, platform adapter, target host and data-directory registry.
+`native-close-runtime.ts` composes the real Core, explicit registration/request
+facilities, lifecycle/controller, Windows launcher, platform adapter, target host
+and data-directory registry.
 Only helper spawn/stdio, native snapshot/port/endpoint reads and MCP transport
 I/O are simulated. Accepted Close removes the fixture listener while retaining
 the actual native application observer; matching handle receipts or launch
@@ -65,6 +53,8 @@ gate holds the temporary directory lease after exit. Cleanup releases the gate
 and supplies separate matching launch-observer root/resource exit evidence even
 after assertions fail. Tests may defer native resource completion independently
 from root exit to verify operation and directory release barriers.
+Its private operation view reads the real Core admin registry; it neither
+publishes diagnostic entry identity nor fabricates Hook delivery.
 It never launches GUI or signals a real process.
 
 `native-child.ts` records exact argv/cwd/env and ignored standard input for a disposable process.
@@ -79,6 +69,11 @@ elapsed time or a final marker as exit evidence. It opens no GUI.
 after a private file in the same owned directory has been fully written and closed,
 then renamed to the final ready name. Readers keep their single strict PID read;
 other coordination markers retain their existing protocol.
+`native-resource-ready-preload.ts` holds only the PID-ready filesystem write
+boundary for the actual producer regression. Its controlled spawn boundary
+launches no detached descendants, so readiness ordering is exercised without
+unrelated process creation.
+
 `native-resource-cleanup.ts` retains independent native root/child witnesses before
 root release and reuses a retained late-descendant witness. Failure cleanup sends
 ordinary file signals, waits for all three actual handle exit receipts, then
@@ -148,6 +143,11 @@ selection, revalidation and receipts still execute the maintained C# methods.
 `normal-close-boundary.ps1` replaces exactly the user32 extern declarations in
 a temporary in-memory compilation, refusing missing/ambiguous declarations.
 It requires no additional native compiler and adds no production test APIs.
+`official-child.ts` is a private JSON-RPC process for official-child lifecycle
+tests. It records initialization/list/call and EOF/TERM boundaries and can hold
+work or resist normal protocol shutdown to exercise the owned Server reaper.
+It is never the original official package and never launches a browser.
+
 `owned-native-fixtures.ts` retains private native identities before readiness
 observation. Cleanup normally Closes every retained fixture, including failed
 readiness acquisitions, and removes ownership only after actual exit evidence.

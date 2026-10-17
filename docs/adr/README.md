@@ -1,8 +1,8 @@
 # Architecture decisions
 
-[ADR 0017](0017-singleton-desktop-app.md) is the accepted forward App design,
-with scoped supersession of 0007–0013 and 0015. Its implementation is pending;
-the current stdio/Hook contracts remain supported until the planned atomic cutover.
+[ADR 0017](0017-singleton-desktop-app.md) is the accepted App design,
+with scoped supersession of 0007–0013 and 0015. The minimal App/HTTP/thin-plugin
+cutover is implemented in source; native deployment/richer management remain.
 Historical decision bodies and evidence remain intact.
 
 - `0001-isolated-skill-payload.md`: historical standalone Skill distribution.
@@ -50,7 +50,7 @@ Historical decision bodies and evidence remain intact.
 
 - `0017-singleton-desktop-app.md`: accepted forward desktop App, OS-user singleton,
     direct HTTP, registration ownership, independent versions and thin plugins;
-    implementation pending under the tracked singleton App plan. Its scoped
+    implemented in stages under the tracked singleton App plan. Its scoped
     supersession takes effect with each implemented interface, atomically in Task 4.
 
 Old ADRs retain decision history, not current implementation rules. Add numbered

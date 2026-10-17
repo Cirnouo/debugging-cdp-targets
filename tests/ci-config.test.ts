@@ -213,7 +213,8 @@ test('latest Node 24 compatibility runs mandatory Ubuntu checks after the canoni
             'pnpm test',
             'pnpm check:build',
             'pnpm check:security:build',
-            'pnpm smoke:official',
+            'pnpm check:app',
+            'pnpm smoke:official --installed',
         ],
     );
 });

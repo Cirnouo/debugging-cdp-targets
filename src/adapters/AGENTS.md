@@ -1,9 +1,8 @@
 # Adapter implementation
 
-Before implementing this layer’s singleton App migration, read
-[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) and the
-[tracked plan](../../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
-These are forward requirements; current stdio rules apply until their planned cutover.
+Before changing this layer's singleton App architecture, read
+[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
+all resources; thin host plugins contain metadata, artwork and the shared Skill.
 
 Node child processes use shell:false. Portable target launches use windowsHide:false,
 detached:true and ignored stdio. Windows native support preserves normal GUI show
@@ -13,8 +12,8 @@ preserves full env/cwd/argv, and observes the actual app handle. A helper's exit
 is an observation failure, not evidence of app exit. One-shot ShellExecuteEx runas
 helpers may launch/close elevated apps; no persistent privileged service.
 Start the public upstream Server bin; never import private CLI/daemon internals.
-Resolve it within the Plugin using module location and verify every published
-file before each launch. Never acquire packages at runtime. Update-check suppression
+The App verifies its pinned ordinary Node and complete original official package
+and injects their absolute paths into catalog and per-connection factories. Never acquire packages at runtime. Update-check suppression
 belongs only to the official child's environment. Validate external evidence
 from `unknown` before assigning process, endpoint, package or IPC types.
 
@@ -28,9 +27,12 @@ An absent listener permits verified app cleanup; a foreign listener is distinct.
 Bind router to 127.0.0.1; rewrite only CDP discovery addresses. Preserve
 WebSocket frames. Each connection has its own target, port and upstream child.
 The gateway has independent routers and upstreams for all target connections.
-Lifecycle management is native MCP, with no CLI or dedicated control pipe.
+Lifecycle management uses direct SDK Streamable HTTP on exact loopback Host/Origin
+and /mcp boundaries, with no plugin CLI or administrative control pipe. The fixed
+activation-only singleton channel has no bearer, configuration or target commands.
 Fixed full schemas combine reviewed official variants and add required _dct
-routing. Report actual tools/schema/configuration before calls, reject disabled
+registrationBearer/connection/session routing. Strip the entire _dct before
+forwarding. Report actual tools/schema/configuration before calls, reject disabled
 tools with an explicit recipe, and forward original arguments/results.
 Reject routing collisions and missing, unknown, closed or stale IDs.
 Track lifecycle and busy state without logging tool contents. Confirm target
@@ -52,5 +54,5 @@ junctions, record/reverify real directory identity, and reserve equal or overlap
 ancestor/descendant claims. Preserve children-link boundaries during authorized
 whole-directory cleanup. Identity/disposal failure retains the claim and evidence.
 The acquired path is opaque during launch binding. Expose bounded filesystem
-failure categories to summaries/Hooks; paths belong in explicit directory evidence.
+failure categories to summaries; paths belong in explicit directory evidence.
 No directory-location denylist, fallback operation or scan of old state is allowed.

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
 import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution-audit.ts';
 import { isolateCodexSkills, isolatedCodexEnvironment } from './codex-host.ts';
-import { createClient, createStdioClient, readMcpTools } from './mcp-client.ts';
+import { createStdioClient } from './mcp-client.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const home = await mkdtemp(path.join(os.tmpdir(), 'dct-codex-home-'));
@@ -102,15 +102,7 @@ try {
         assert.deepEqual(presentation.defaultPrompt, manifest.interface.defaultPrompt);
         assert.deepEqual(detail.mcpServers, ['cdp-targets']);
         assert.ok(Array.isArray(detail.hooks));
-        assert.deepEqual(
-            detail.hooks
-                .map((hook: unknown) => {
-                    assert.ok(isRecord(hook) && typeof hook.key === 'string' && typeof hook.eventName === 'string');
-                    return hook.eventName;
-                })
-                .sort(),
-            ['postToolUse', 'preToolUse', 'stop', 'userPromptSubmit'],
-        );
+        assert.deepEqual(detail.hooks, []);
         assert.ok(Array.isArray(detail.skills));
         assert.equal(detail.skills.length, 1);
         const bundled: unknown = detail.skills[0];
@@ -164,28 +156,6 @@ try {
         assert.ok(
             appServer.child.stdin.destroyed && appServer.child.stdout.destroyed && appServer.child.stderr.destroyed,
             'App-server close must settle its process and all stdio before temporary cleanup.',
-        );
-    }
-    const client = createClient(path.join(installedPath, 'dist/mcp-bootstrap.mjs'));
-    try {
-        await client.request('initialize', {
-            protocolVersion: '2024-11-05',
-            capabilities: {},
-            clientInfo: { name: 'isolated-marketplace-smoke', version: '0.1.0' },
-        });
-        client.notify('notifications/initialized');
-        const tools = readMcpTools(await client.request('tools/list'));
-        assert.ok(tools.some((entry) => entry.name === 'list_pages'));
-        await assert.rejects(() => client.request('tools/call', { name: 'list_pages', arguments: {} }), /routing/);
-        const status = await client.request('tools/call', { name: 'dct_connection_status', arguments: {} });
-        assert.ok(isRecord(status) && isRecord(status.structuredContent));
-        assert.deepEqual(status.structuredContent.connections, []);
-    } finally {
-        await client.close();
-        assert.equal(client.child.exitCode, 0);
-        assert.ok(
-            client.child.stdin.destroyed && client.child.stdout.destroyed && client.child.stderr.destroyed,
-            'Gateway close must settle its process and all stdio before temporary cleanup.',
         );
     }
     console.log('Local Marketplace installed bytes, metadata, Skill presentation and Codex MCP discovery succeeded.');

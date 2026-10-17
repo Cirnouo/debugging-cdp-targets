@@ -4,14 +4,16 @@ import { appendFile, lstat, mkdir, mkdtemp, realpath, rmdir, writeFile } from 'n
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createOfficialConnection, type OfficialConnection } from '../../src/adapters/mcp-bridge.ts';
+import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createGatewayCore } from '../../src/application/plugin-runtime.ts';
 import type { ManagedTarget } from '../../src/domains/cdp-target.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { OFFICIAL_RELEASE } from '../../tooling/official-release.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 import { createChromeSmokeLaunch, requireChromeSmokeExecutable } from './chrome-host.ts';
 import { readChromeSmokeProfile } from './chrome-profile-probe.ts';
@@ -22,6 +24,17 @@ if (process.platform !== 'win32')
 if (args.length !== 1 || !path.isAbsolute(args[0] ?? ''))
     throw new Error('Supply one absolute evidence directory after --allow-gui.');
 const evidenceDirectory = path.resolve(args[0] ?? '');
+assert.equal(process.versions.electron, undefined, 'Run this direct-core regression with ordinary Node.');
+const [major, minor] = process.versions.node.split('.').map(Number);
+assert.ok(major === 24 && minor !== undefined && minor >= 21 && !process.version.includes('-'));
+const officialDirectory = await realpath(
+    fileURLToPath(new URL(`../../node_modules/${OFFICIAL_RELEASE.name}/`, import.meta.url)),
+);
+await verifyOfficialPackage(officialDirectory, OFFICIAL_RELEASE, { pnpmInstalled: true });
+const officialRuntime = Object.freeze({
+    nodeExecutable: process.execPath,
+    bin: path.join(officialDirectory, OFFICIAL_RELEASE.bin),
+});
 await mkdir(evidenceDirectory, { recursive: true });
 const chrome = await requireChromeSmokeExecutable();
 const scratch = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-retained-official-')));
@@ -135,6 +148,7 @@ function text(result: CallToolResult) {
 }
 const host = createTargetHost();
 const core = await createGatewayCore({
+    officialRuntime,
     createHost: () => ({
         ...host,
         launch: async (options, context) => {
@@ -257,7 +271,7 @@ try {
     const current = await state(fresh, 2);
     await call('get_network_request', { pageId: current.pageId, reqid: current.reqid });
     const configuration = await core.control(
-        { action: 'status', entryId: core.entryId, connectionId: next.connectionId, include: ['configuration'] },
+        { action: 'status', connectionId: next.connectionId, include: ['configuration'] },
         context(),
     );
     assert.deepEqual(configuration.roots, { roots: [{ uri: pathToFileURL(scratch).href }] });

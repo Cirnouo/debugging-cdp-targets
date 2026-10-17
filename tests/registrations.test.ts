@@ -40,13 +40,3 @@ test('empty registrations expire before activity refresh; resources and nontermi
     assert.throws(() => registry.check(job.principal), /expired/);
     registry.check(resource.principal);
 });
-
-test('the transitional in-process stdio principal has no recoverable bearer or agent idle expiry', () => {
-    let now = 0;
-    const registry = createRegistrationRegistry({ now: () => now });
-    const principal = registry.createTrusted();
-    now = 31 * 60 * 1000;
-    registry.check(principal);
-    assert.deepEqual(registry.list(), []);
-    assert.equal('bearer' in principal, false);
-});

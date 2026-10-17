@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
+import path from 'node:path';
 import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
 import {
@@ -11,7 +12,6 @@ import {
 import type { ApplicationProbeConfig } from './smoke/application-screenshot-core.ts';
 import type { PreparedApplicationScreenshotFixture } from './smoke/application-screenshot-fixture.ts';
 
-const entryId = '00000000-0000-4000-8000-000000000001';
 const connectionId = '00000000-0000-4000-8000-000000000002';
 const sessionId = '00000000-0000-4000-8000-000000000003';
 const operationId = '00000000-0000-4000-8000-000000000004';
@@ -21,7 +21,6 @@ const identity = {
     startedAtUtc: '2026-10-07T00:00:00.0000001Z',
 };
 const connection = {
-    entryId,
     connectionId,
     sessionId,
     processId: 4400,
@@ -48,10 +47,16 @@ const config: ApplicationProbeConfig = {
         fixtureFiles: {},
         page: { url: 'app://obsidian.md/index.html', title: 'synthetic' },
     },
-    payload: { root: 'C:/Evidence/sealed', receipt: {} },
+    payload: { root: path.resolve('C:/Evidence/sealed'), receipt: {} },
     mainWindow: { className: 'Chrome_WidgetWin_1', titleIncludes: 'synthetic' },
     identityFunction: '() => ({})',
     preflight: { status: 'approved', reason: 'Guarded' },
+};
+const verifiedPayload = {
+    root: config.payload.root,
+    inventoryDigest: 'b'.repeat(64),
+    entry: path.join(config.payload.root, 'http-fixture.mjs'),
+    nodeExecutable: path.join(config.payload.root, 'resources/node/node.exe'),
 };
 const prepared: PreparedApplicationScreenshotFixture = {
     fixture: config.fixture,
@@ -134,15 +139,16 @@ function boundary(
     let connected = false;
     let stopped = false;
     let operation = 'start';
-    let stdioClosed = false;
+    let fixtureClosed = false;
     const io: ApplicationAdapterIO = {
         environment: { Path: 'C:/System', WEBVIEW2_USER_DATA_FOLDER: 'old' },
         now: () => Date.parse(identity.startedAtUtc),
         client(entry, options) {
-            assert.equal(entry.replaceAll('\\', '/'), 'C:/Evidence/sealed/dist/mcp-bootstrap.mjs');
+            assert.equal(entry, verifiedPayload.entry);
+            assert.equal(options.nodeExecutable, verifiedPayload.nodeExecutable);
             assert.ok(options.env && !('WEBVIEW2_USER_DATA_FOLDER' in options.env));
             return {
-                child: { pid: 4000, spawnargs: ['node', entry], exitCode: null, signalCode: null },
+                child: { pid: 4000, spawnargs: [options.nodeExecutable, entry], exitCode: null, signalCode: null },
                 async request(method, params = {}, timeout) {
                     calls.push({ method, params, ...(timeout === undefined ? {} : { timeout }) });
                     if (method === 'initialize') return {};
@@ -152,7 +158,7 @@ function boundary(
                     if (params.name === 'dct_connection_status') {
                         if (failure === 'malformed-status')
                             return {
-                                structuredContent: { entryId, connections: [{ ...connection, status: 'corrupt' }] },
+                                structuredContent: { connections: [{ ...connection, status: 'corrupt' }] },
                             };
                         if (typeof args === 'object' && 'toolNames' in args)
                             return {
@@ -163,7 +169,7 @@ function boundary(
                                     ),
                                 },
                             };
-                        return { structuredContent: { entryId, connections: connected ? [connection] : [] } };
+                        return { structuredContent: { connections: connected ? [connection] : [] } };
                     }
                     if (params.name === 'dct_connection_start') {
                         connected = true;
@@ -180,7 +186,6 @@ function boundary(
                         sequence.push('cancel-permission-attempt');
                         return {
                             structuredContent: {
-                                entryId,
                                 operationId,
                                 state: failure === 'permission-uncertain' ? 'cancelling' : 'cancelled',
                                 cursor: 2,
@@ -200,7 +205,6 @@ function boundary(
                                         complete: false,
                                         cursor: 2,
                                         operation: {
-                                            entryId,
                                             operationId,
                                             state: 'cancelling',
                                             phase: 'awaiting-permission',
@@ -217,7 +221,6 @@ function boundary(
                                         cursor: 1,
                                         events: [{ phase: 'awaiting-permission', connectionId, sessionId }],
                                         operation: {
-                                            entryId,
                                             operationId,
                                             state: 'succeeded',
                                             phase: 'succeeded',
@@ -231,7 +234,6 @@ function boundary(
                                     cursor: 1,
                                     events: [],
                                     operation: {
-                                        entryId,
                                         operationId,
                                         state: 'running',
                                         phase: 'awaiting-permission',
@@ -269,7 +271,7 @@ function boundary(
                 },
                 notify() {},
                 async close() {
-                    stdioClosed = true;
+                    fixtureClosed = true;
                     sequence.push('gateway-close');
                     this.child.exitCode = 0;
                 },
@@ -402,7 +404,7 @@ function boundary(
         },
         io,
     );
-    return { adapter, calls, sequence, records, nativeCalls, closed: () => stdioClosed };
+    return { adapter, calls, sequence, records, nativeCalls, closed: () => fixtureClosed };
 }
 
 test('application adapter forwards CLI GUI authorization only for native window mutations', async () => {
@@ -412,10 +414,7 @@ test('application adapter forwards CLI GUI authorization only for native window 
             process.argv = original.filter((argument) => argument !== '--allow-gui');
             if (authorized) process.argv.push('--allow-gui');
             const io = boundary();
-            const route = await io.adapter.acquire(prepared, {
-                root: config.payload.root,
-                inventoryDigest: 'b'.repeat(64),
-            });
+            const route = await io.adapter.acquire(prepared, verifiedPayload);
             await route.sample(120);
             await route.condition('foreground-normal', 120);
             await route.condition('minimized', 120);
@@ -434,7 +433,7 @@ test('application adapter forwards CLI GUI authorization only for native window 
 });
 test('application adapter uses sealed entry generic-cdp identities and unchanged 90s receipt timeout', async () => {
     const io = boundary();
-    const route = await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });
+    const route = await io.adapter.acquire(prepared, verifiedPayload);
     await route.qualify();
     await route.call('list_pages', {});
     const official = io.calls.find((call) => call.params.name === 'list_pages');
@@ -454,7 +453,7 @@ test('application adapter uses sealed entry generic-cdp identities and unchanged
 });
 test('partial start discovered ownership is normally closed and actual exit proved', async () => {
     const io = boundary('start');
-    await assert.rejects(io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }));
+    await assert.rejects(io.adapter.acquire(prepared, verifiedPayload));
     assert.equal((await io.adapter.cleanup()).ok, true);
     assert.ok(io.sequence.includes('normal-close') && io.sequence.includes('exit-witness'));
 });
@@ -472,16 +471,16 @@ test('runtime profile evidence is bound to the reviewed expanded carrier instead
                 ),
             },
         },
-        { root: config.payload.root, inventoryDigest: 'b'.repeat(64) },
+        verifiedPayload,
     );
     await route.qualify();
     assert.equal((await io.adapter.cleanup()).ok, true);
 });
-test('target witness or anchor uncertainty keeps gateway stdio and retained identities', async () => {
+test('target witness or anchor uncertainty keeps HTTP fixture input and retained identities', async () => {
     for (const failure of ['close', 'witness', 'anchor', 'snapshot'] as const) {
         const io = boundary(failure);
         try {
-            await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });
+            await io.adapter.acquire(prepared, verifiedPayload);
         } catch {}
         const result = await io.adapter.cleanup();
         assert.equal(result.ok, false);
@@ -494,10 +493,7 @@ test('target witness or anchor uncertainty keeps gateway stdio and retained iden
 test('permission waiting or prior elevation fallback cancels the attempt and never proceeds to official tools', async () => {
     for (const failure of ['permission', 'permission-uncertain', 'elevation-fallback'] as const) {
         const io = boundary(failure);
-        await assert.rejects(
-            io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }),
-            /permission|elevation/i,
-        );
+        await assert.rejects(io.adapter.acquire(prepared, verifiedPayload), /permission|elevation/i);
         assert.equal(io.calls.filter((call) => call.params.name === 'dct_operation_cancel').length, 1);
         assert.ok(
             !io.calls.some((call) =>
@@ -515,7 +511,7 @@ test('permission waiting or prior elevation fallback cancels the attempt and nev
 
 test('measured elevated Obsidian token blocks official qualification and still normally closes the target', async () => {
     const io = boundary('elevated-token');
-    const route = await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });
+    const route = await io.adapter.acquire(prepared, verifiedPayload);
     await assert.rejects(route.qualify(), /ordinary privileges/);
     assert.ok(io.records.some((event) => event.kind === 'browser-process-output'));
     assert.ok(
@@ -529,7 +525,7 @@ test('measured elevated Obsidian token blocks official qualification and still n
 
 test('ordinary browser listener evidence cannot substitute for a distinct elevated root token', async () => {
     const io = boundary('elevated-root');
-    const route = await io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) });
+    const route = await io.adapter.acquire(prepared, verifiedPayload);
     await assert.rejects(route.qualify(), /ordinary privileges/);
     assert.ok(
         !io.calls.some((call) =>
@@ -541,7 +537,7 @@ test('ordinary browser listener evidence cannot substitute for a distinct elevat
 
 test('malformed ownership receipts are saved before boundary validation rejects them', async () => {
     const io = boundary('malformed-status');
-    await assert.rejects(io.adapter.acquire(prepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }));
+    await assert.rejects(io.adapter.acquire(prepared, verifiedPayload));
     assert.ok(
         io.records.some(
             (event) =>
@@ -558,10 +554,7 @@ test('malformed ownership receipts are saved before boundary validation rejects 
 
 test('Tauri Rust host without Chromium argv qualifies independently from its browser descendant', async () => {
     const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true });
-    const route = await io.adapter.acquire(tauriPrepared, {
-        root: config.payload.root,
-        inventoryDigest: 'b'.repeat(64),
-    });
+    const route = await io.adapter.acquire(tauriPrepared, verifiedPayload);
     const evidence = await route.qualify();
     assert.ok(
         typeof evidence === 'object' && evidence !== null && 'evidence' in evidence && Array.isArray(evidence.evidence),
@@ -593,10 +586,7 @@ test('Tauri observed browser must adopt the exact env candidate and baseline fea
             const selected = structuredClone(tauriPrepared);
             assert.ok(selected.launch.env);
             selected.launch.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port={port}${candidate ? ' --enable-features=CDPScreenshotNewSurface' : ''}`;
-            const route = await io.adapter.acquire(selected, {
-                root: config.payload.root,
-                inventoryDigest: 'b'.repeat(64),
-            });
+            const route = await io.adapter.acquire(selected, verifiedPayload);
             if (candidate === actualCandidate) await route.qualify();
             else await assert.rejects(route.qualify(), /feature carrier/);
             assert.equal((await io.adapter.cleanup()).ok, true);
@@ -628,18 +618,13 @@ test('Tauri actual host and browser hashes tokens tuples profile argv and listen
         },
     ]) {
         const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, ...options });
-        const route = await io.adapter.acquire(tauriPrepared, {
-            root: config.payload.root,
-            inventoryDigest: 'b'.repeat(64),
-        });
+        const route = await io.adapter.acquire(tauriPrepared, verifiedPayload);
         await assert.rejects(route.qualify());
         assert.equal((await io.adapter.cleanup()).ok, true);
     }
     for (const listener of [4400, 4499]) {
         const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, listener });
-        await assert.rejects(
-            io.adapter.acquire(tauriPrepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }),
-        );
+        await assert.rejects(io.adapter.acquire(tauriPrepared, verifiedPayload));
         const cleanup = await io.adapter.cleanup();
         assert.ok(io.sequence.includes('normal-close'));
         assert.equal(cleanup.ok, true);
@@ -650,10 +635,7 @@ test('partial Tauri start recovers the exact expanded copy path outside the runn
     const executable = 'C:/Fresh/cell-17/native/dct-tauri-screenshot-fixture.exe';
     const io = boundary('start', 'C:/Fresh/cell-17/webview2-profile', { tauri: true, executable });
     await assert.rejects(
-        io.adapter.acquire(
-            { ...tauriPrepared, launch: { ...tauriPrepared.launch, executable } },
-            { root: config.payload.root, inventoryDigest: 'b'.repeat(64) },
-        ),
+        io.adapter.acquire({ ...tauriPrepared, launch: { ...tauriPrepared.launch, executable } }, verifiedPayload),
     );
     assert.equal((await io.adapter.cleanup()).ok, true);
     const receipt = io.records.find((item) => item.kind === 'verified-target');
@@ -673,10 +655,7 @@ test('saved primary PNG receipt survives decoder failure before any pixel valida
     syncBuiltinESMExports();
     try {
         const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, pngFailure: true });
-        const route = await io.adapter.acquire(tauriPrepared, {
-            root: config.payload.root,
-            inventoryDigest: 'b'.repeat(64),
-        });
+        const route = await io.adapter.acquire(tauriPrepared, verifiedPayload);
         await assert.rejects(
             route.png('C:/Evidence/cell/screenshot.png', [], { width: 125, height: 125 }),
             /PNG decoder failed/,
@@ -696,9 +675,7 @@ test('saved primary PNG receipt survives decoder failure before any pixel valida
 test('Tauri listener descendant must have a current fresh same-session native tuple', async () => {
     for (const options of [{ browserSession: 2 }, { ownerStartedAt: '2026-10-06T00:00:00.0000002Z' }]) {
         const io = boundary(undefined, 'C:/Evidence/cell/webview2-profile', { tauri: true, ...options });
-        await assert.rejects(
-            io.adapter.acquire(tauriPrepared, { root: config.payload.root, inventoryDigest: 'b'.repeat(64) }),
-        );
+        await assert.rejects(io.adapter.acquire(tauriPrepared, verifiedPayload));
         assert.ok((await io.adapter.cleanup()).ok);
         assert.ok(io.sequence.includes('normal-close'));
     }
@@ -706,10 +683,7 @@ test('Tauri listener descendant must have a current fresh same-session native tu
         tauri: true,
         browserExecutable: 'C:/Foreign/browser.exe',
     });
-    const route = await io.adapter.acquire(tauriPrepared, {
-        root: config.payload.root,
-        inventoryDigest: 'b'.repeat(64),
-    });
+    const route = await io.adapter.acquire(tauriPrepared, verifiedPayload);
     await assert.rejects(route.qualify(), /executable/);
     assert.equal((await io.adapter.cleanup()).ok, true);
 });

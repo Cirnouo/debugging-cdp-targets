@@ -5,14 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution-audit.ts';
-import { claudeEnvironment, claudeRequest, claudeSse, record } from './claude-host.ts';
+import { captureAppInitialization } from './app-http.ts';
+import { claudeRequest, claudeSse, record } from './claude-host.ts';
 import { claudeCli, claudeHost, sandbox } from './claude-process.ts';
-import { createClient, readMcpTools } from './mcp-client.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable =
     process.argv[2] ?? (process.platform === 'win32' ? path.join(os.homedir(), '.local/bin/claude.exe') : 'claude');
 const { temporary } = await sandbox(root, 'marketplace');
+const actualTools = await captureAppInitialization(path.join(temporary, 'app-http-initialize.json'));
 const marketplace = path.join(temporary, 'marketplace');
 const source = path.join(marketplace, 'plugins/claude-code/debugging-cdp-targets');
 await mkdir(path.join(marketplace, '.claude-plugin'), { recursive: true });
@@ -65,10 +66,8 @@ try {
         await writeFile(path.join(temporary, `cli-${index}.json`), JSON.stringify({ args, stdout }, null, 4));
         if (index === 3) {
             assert.match(stdout, /Skills \(1\)/);
-            assert.match(stdout, /Hooks \(4\)/);
+            assert.doesNotMatch(stdout, /Hooks \([1-9]/);
             assert.match(stdout, /MCP servers \(1\)/);
-            for (const event of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'])
-                assert.ok(stdout.includes(event));
         }
     }
     const installed: unknown = JSON.parse(
@@ -116,29 +115,9 @@ try {
         (name: unknown) =>
             typeof name === 'string' && name.startsWith('mcp__plugin_debugging-cdp-targets_cdp-targets__'),
     );
-    assert.equal(tools.length, 74, 'Actual Claude discovery must expose 67 official and seven lifecycle tools.');
+    assert.equal(tools.length, actualTools.length, 'Actual Claude discovery must match the running App catalog.');
     assert.ok(tools.some((name: unknown) => typeof name === 'string' && name.endsWith('__list_pages')));
     assert.ok(!JSON.stringify(tools).includes('dct_watch_target'));
-    // Direct MCP verification supplements, and does not replace, the host discovery above.
-    const client = createClient(path.join(installedPath, 'dist/mcp-bootstrap.mjs'), {
-        cwd: path.join(temporary, 'workspace'),
-        env: claudeEnvironment(temporary, endpoint),
-    });
-    try {
-        await client.request('initialize', {
-            protocolVersion: '2024-11-05',
-            capabilities: {},
-            clientInfo: { name: 'claude-installed-gateway-smoke', version: '0.1.0' },
-        });
-        client.notify('notifications/initialized');
-        assert.equal(readMcpTools(await client.request('tools/list')).length, 74);
-        await assert.rejects(() => client.request('tools/call', { name: 'list_pages', arguments: {} }), /routing/);
-        const status = await client.request('tools/call', { name: 'dct_connection_status', arguments: {} });
-        assert.ok(record(status) && record(status.structuredContent));
-        assert.deepEqual(status.structuredContent.connections, []);
-    } finally {
-        await client.close();
-    }
     await writeFile(path.join(temporary, 'requests.json'), JSON.stringify(requests, null, 4));
     console.log(
         JSON.stringify({
@@ -149,7 +128,7 @@ try {
             activeSourcePath: active.path,
             toolCount: tools.length,
             skillDiscovered: true,
-            directGatewayVerified: true,
+            directHttpDiscovered: true,
         }),
     );
 } finally {

@@ -6,19 +6,54 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
+import { captureAppInitialization } from './app-http.ts';
 import { assertSuppressedSkillContext, isolateCodexSkills, isolatedCodexEnvironment } from './codex-host.ts';
 import { descriptionLocations, initializationEvidence, testedSource } from './instructions-evidence.ts';
 import { createStdioClient } from './mcp-client.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const executable = process.argv[2] ?? 'codex';
+const exercise = process.argv.includes('--exercise-lifecycle');
+let bearer: string | undefined;
+let registrationId: string | undefined;
+const lifecycleCalls: string[] = [];
+function toolRoute(value: unknown, name: string, namespace?: string): { name: string; namespace?: string } | undefined {
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = toolRoute(item, name, namespace);
+            if (found) return found;
+        }
+    } else if (isRecord(value)) {
+        if (value.type === 'namespace' && typeof value.name === 'string')
+            return toolRoute(value.tools, name, value.name);
+        if (typeof value.name === 'string' && (value.name === name || value.name.endsWith(`__${name}`)))
+            return { name: value.name, ...(namespace ? { namespace } : {}) };
+        for (const child of Object.values(value))
+            if (child && typeof child === 'object') {
+                const found = toolRoute(child, name, namespace);
+                if (found) return found;
+            }
+    }
+    return undefined;
+}
+function toolOutput(value: Record<string, unknown>, callId: string) {
+    assert.ok(Array.isArray(value.input));
+    const output = value.input.find(
+        (entry: unknown) => isRecord(entry) && entry.type === 'function_call_output' && entry.call_id === callId,
+    );
+    assert.ok(isRecord(output) && typeof output.output === 'string');
+    const parsed: unknown = JSON.parse(output.output.slice(output.output.indexOf('{')));
+    assert.ok(isRecord(parsed));
+    return parsed;
+}
 const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-codex-instructions-'));
 console.log(`Retained evidence: ${temporary}`);
 const home = path.join(temporary, 'home');
 const workspace = path.join(temporary, 'workspace');
 await Promise.all([mkdir(home), mkdir(workspace)]);
 const environment = await isolatedCodexEnvironment(home);
-const fixtureEvidence = path.join(temporary, 'mcp.jsonl');
+const fixtureEvidence = path.join(temporary, 'app-http-initialize.json');
+await captureAppInitialization(fixtureEvidence);
 const requests: Record<string, unknown>[] = [];
 let failure: unknown;
 let locations: string[] = [];
@@ -27,11 +62,13 @@ const model = createServer(async (request, response) => {
         assert.equal(request.url, '/v1/responses');
         let raw = '';
         for await (const chunk of request) raw += chunk;
-        await writeFile(path.join(temporary, `request-${requests.length + 1}.json`), raw);
+        // The first two requests precede registration. Later model context contains
+        // its private bearer and is deliberately retained only in process memory.
+        if (requests.length < 2) await writeFile(path.join(temporary, `request-${requests.length + 1}.json`), raw);
         const value: unknown = JSON.parse(raw);
         assert.ok(isRecord(value));
         requests.push(value);
-        assert.ok(requests.length <= 2);
+        assert.ok(requests.length <= (exercise ? 4 : 2));
         let item: Record<string, unknown>;
         if (requests.length === 1) {
             assert.ok(
@@ -42,12 +79,13 @@ const model = createServer(async (request, response) => {
                 type: 'tool_search_call',
                 call_id: 'discover-instructions',
                 execution: 'client',
-                arguments: { query: 'dct_connection_status', limit: 20 },
+                arguments: { query: 'dct_registration_register dct_connection_status', limit: 20 },
             };
         } else {
             const production = await initializationEvidence(fixtureEvidence);
-            locations = descriptionLocations(value.tools, production.instructions, '$.tools');
-            if (Array.isArray(value.input))
+            if (requests.length === 2)
+                locations = descriptionLocations(value.tools, production.instructions, '$.tools');
+            if (requests.length === 2 && Array.isArray(value.input))
                 value.input.forEach((entry: unknown, index: number) => {
                     if (isRecord(entry) && entry.type === 'tool_search_output')
                         locations.push(
@@ -55,12 +93,38 @@ const model = createServer(async (request, response) => {
                         );
                 });
             assert.ok(locations.length > 0, 'Complete instructions must appear in actual namespace/search metadata.');
-            item = {
-                type: 'message',
-                role: 'assistant',
-                id: 'instructions-final',
-                content: [{ type: 'output_text', text: 'Instruction consumption fixture completed.' }],
-            };
+            if (exercise && requests.length === 3) {
+                const registered = toolOutput(value, 'register-once');
+                assert.ok(
+                    typeof registered.registrationBearer === 'string' && typeof registered.registrationId === 'string',
+                );
+                bearer = registered.registrationBearer;
+                registrationId = registered.registrationId;
+            }
+            if (exercise && requests.length === 4) {
+                const status = toolOutput(value, 'owned-status');
+                assert.deepEqual(status.connections, []);
+                assert.equal(JSON.stringify(status).includes(bearer ?? 'missing-bearer'), false);
+            }
+            if (exercise && requests.length < 4) {
+                const name = requests.length === 2 ? 'dct_registration_register' : 'dct_connection_status';
+                const route = toolRoute(value.tools, name) ?? toolRoute(value.input, name);
+                assert.ok(route);
+                lifecycleCalls.push(name);
+                item = {
+                    type: 'function_call',
+                    call_id: requests.length === 2 ? 'register-once' : 'owned-status',
+                    ...route,
+                    arguments: JSON.stringify(requests.length === 2 ? {} : { registrationBearer: bearer }),
+                };
+            } else {
+                item = {
+                    type: 'message',
+                    role: 'assistant',
+                    id: 'instructions-final',
+                    content: [{ type: 'output_text', text: 'Instruction consumption fixture completed.' }],
+                };
+            }
         }
         response.writeHead(200, { 'content-type': 'text/event-stream' });
         response.end(
@@ -110,25 +174,11 @@ try {
     const plugin = path.join(marketplace, 'plugins/codex/debugging-cdp-targets');
     await mkdir(path.join(marketplace, '.agents/plugins'), { recursive: true });
     await mkdir(plugin, { recursive: true });
-    for (const name of ['.codex-plugin', 'hooks', 'skills', 'assets'])
+    for (const name of ['.codex-plugin', 'skills', 'assets', 'mcp.json', 'LICENSE', 'README.md'])
         await cp(path.join(root, 'plugins/codex/debugging-cdp-targets', name), path.join(plugin, name), {
             recursive: true,
         });
-    await writeFile(
-        path.join(plugin, 'mcp.json'),
-        JSON.stringify({
-            mcpServers: {
-                'cdp-targets': {
-                    type: 'stdio',
-                    default_tools_approval_mode: 'approve',
-                    command: process.execPath,
-                    args: [path.join(root, 'tests/fixtures/mcp-instructions-entry.ts')],
-                    cwd: root,
-                    env: { DCT_INSTRUCTIONS_EVIDENCE: fixtureEvidence },
-                },
-            },
-        }),
-    );
+
     await writeFile(
         path.join(marketplace, '.agents/plugins/marketplace.json'),
         JSON.stringify({
@@ -193,7 +243,7 @@ try {
     const server = servers.data.find((entry: unknown) => isRecord(entry) && entry.name === 'cdp-targets');
     assert.ok(isRecord(server) && isRecord(server.tools) && server.tools.dct_connection_status);
     assert.equal(server.pluginId, 'debugging-cdp-targets@dct-instructions-test');
-    assert.equal(Object.keys(server.tools).length, 7);
+    assert.equal(Object.keys(server.tools).length, (await initializationEvidence(fixtureEvidence)).toolNames.length);
     const finished = new Promise<void>((resolve, reject) => {
         turnTimer = setTimeout(
             () => reject(new Error(`Codex instructions turn timed out: ${String(failure)}`)),
@@ -210,17 +260,26 @@ try {
             input: [
                 {
                     type: 'text',
-                    text: 'Discover the available inspection gateway, then finish without calling any tools.',
+                    text: exercise
+                        ? 'Register once with the local inspection gateway and read only that registration status; start no target.'
+                        : 'Discover the available inspection gateway, then finish without calling any tools.',
                     text_elements: [],
                 },
             ],
         }),
         finished,
     ]);
-    await writeFile(path.join(temporary, 'notifications.json'), JSON.stringify(notifications, null, 4));
+    await writeFile(
+        path.join(temporary, 'notifications.json'),
+        JSON.stringify(
+            exercise ? notifications.filter(isRecord).map((entry) => ({ method: entry.method })) : notifications,
+            null,
+            4,
+        ),
+    );
     if (failure) throw failure;
     assert.ok(isRecord(complete?.turn) && complete.turn.status === 'completed');
-    assert.equal(requests.length, 2);
+    assert.equal(requests.length, exercise ? 4 : 2);
     const context = requests.flatMap((request) =>
         Array.isArray(request.input)
             ? request.input
@@ -244,13 +303,17 @@ try {
                 version,
                 source: await testedSource(root),
                 locations,
+                lifecycleCalls,
+                ...(exercise ? { registrationId, ownedEmptyStatus: true } : {}),
                 ...production,
             },
             null,
             4,
         ),
     );
-    console.log(`${version}: complete instructions consumed at ${locations.join(', ')}; zero MCP calls.`);
+    console.log(
+        `${version}: complete instructions consumed at ${locations.join(', ')}; host lifecycle calls ${lifecycleCalls.length}.`,
+    );
 } catch (error) {
     failure ??= error;
     throw error;

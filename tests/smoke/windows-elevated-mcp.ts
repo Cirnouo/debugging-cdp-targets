@@ -36,9 +36,7 @@ const permissions: unknown = JSON.parse(compiled.stdout.trim());
 assert.ok(isRecord(permissions));
 assert.equal(permissions.currentElevation, false, 'Run this smoke from an ordinary gateway process.');
 assert.equal(permissions.requiresElevation, true);
-const client = createClient(
-    fileURLToPath(new URL('../../plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs', import.meta.url)),
-);
+const client = createClient(fileURLToPath(new URL('../fixtures/http-gateway.ts', import.meta.url)));
 const events: Record<string, unknown>[] = [];
 const evidence: Record<string, unknown> = { gatewayElevated: false, events };
 async function tool(name: string, args: Record<string, unknown> = {}) {
@@ -63,12 +61,12 @@ try {
         clientInfo: { name: 'elevated-mcp-smoke', version: '0.1.0' },
     });
     client.notify('notifications/initialized');
-    const entryId = readStatus((await tool('dct_connection_status')).structuredContent).entryId;
+    const initial = readStatus((await tool('dct_connection_status')).structuredContent);
+    assert.ok('connections' in initial && initial.connections.length === 0);
     const marker = path.join(folder, 'visible');
     const target = await control({
         isolation: { mode: 'none' },
         action: 'start',
-        entryId,
         requestId: randomUUID(),
         basePort: 21522,
         launch: {
@@ -85,7 +83,6 @@ try {
     assert.ok(!('connections' in target));
     assert.equal(target.status, 'active');
     assert.ok(target.processId && target.port && target.sessionId);
-    evidence.entryId = entryId;
     evidence.connectionId = target.connectionId;
     evidence.sessionId = target.sessionId;
     evidence.processId = target.processId;
@@ -97,8 +94,7 @@ try {
     const readinessIndex = events.findIndex((event) => event.phase === 'waiting-cdp');
     assert.ok(permissionIndex >= 0 && readinessIndex > permissionIndex);
     evidence.permissionThenReadiness = true;
-    const status = (await tool('dct_connection_status', { entryId, connectionId: target.connectionId }))
-        .structuredContent;
+    const status = (await tool('dct_connection_status', { connectionId: target.connectionId })).structuredContent;
     assert.ok(isRecord(status));
     assert.equal(status.status, 'active');
     assert.ok(Array.isArray(status.enabledTools) && status.enabledTools.includes('take_screenshot'));
@@ -106,7 +102,6 @@ try {
     evidence.environmentPreserved = true;
     const closed = await control({
         action: 'stop',
-        entryId,
         requestId: randomUUID(),
         connectionId: target.connectionId,
         sessionId: target.sessionId,
@@ -118,7 +113,7 @@ try {
     const final = await createPlatformAdapter().snapshot(target.processId, target.port);
     assert.equal(final.root.exists, false);
     assert.deepEqual(final.listeners, []);
-    const gateway = readStatus((await tool('dct_connection_status', { entryId })).structuredContent);
+    const gateway = readStatus((await tool('dct_connection_status', {})).structuredContent);
     assert.ok('connections' in gateway);
     assert.deepEqual(gateway.connections, []);
     evidence.normalCloseConfirmed = true;

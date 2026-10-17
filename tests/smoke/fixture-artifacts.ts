@@ -9,7 +9,7 @@ import {
 import { type BrowserStartupRecord, validateBrowserStartupRecord } from './chrome-startup.ts';
 import { newFixtureEnvelope, readFixtureIndex } from './fixture-ci.ts';
 import { type LinuxStartupWaitRecord, validateLinuxStartupWaitRecord } from './linux-startup-wait.ts';
-import { createStdioClient } from './mcp-client.ts';
+import { createHttpFixtureClient } from './mcp-client.ts';
 
 export type FixtureLabel = 'official-server' | 'entry-recovery';
 export interface CollectorCostRecord {
@@ -579,8 +579,7 @@ export function createFixtureGatewayClient(
     fixture: FixtureLabel,
     artifacts: FixtureArtifacts,
 ) {
-    return createStdioClient(
-        process.execPath,
+    return createHttpFixtureClient(
         fixtureGatewayArguments(entry, directory, fixture, artifacts.snapshot().collectionId),
         { env: fixtureGatewayEnvironment() },
     );

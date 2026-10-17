@@ -6,7 +6,6 @@ type Registration = {
     lastActivity: number;
     resources: Set<string>;
     jobs: number;
-    trusted?: boolean;
 };
 
 /** Bearer possession authenticates a memory-only principal; only creation returns the bearer. */
@@ -30,12 +29,7 @@ export function createRegistrationRegistry({
         const registration = entries.get(principal.registrationId);
         if (!registration || registration.principal !== principal)
             throw new Error('The registration is absent or expired.');
-        if (
-            !registration.trusted &&
-            !registration.resources.size &&
-            !registration.jobs &&
-            now() - registration.lastActivity >= 30 * 60 * 1000
-        ) {
+        if (!registration.resources.size && !registration.jobs && now() - registration.lastActivity >= 30 * 60 * 1000) {
             remove(registration);
             throw new Error('The registration is absent or expired.');
         }
@@ -57,17 +51,6 @@ export function createRegistrationRegistry({
             entries.set(principal.registrationId, { principal, lastActivity: now(), resources: new Set(), jobs: 0 });
             bearers.set(digest(bearer), principal.registrationId);
             return { principal, bearer };
-        },
-        createTrusted() {
-            const principal = Object.freeze({ registrationId: randomUUID() });
-            entries.set(principal.registrationId, {
-                principal,
-                lastActivity: now(),
-                resources: new Set(),
-                jobs: 0,
-                trusted: true,
-            });
-            return principal;
         },
         authenticate(bearer: string) {
             const id = bearers.get(digest(bearer));
@@ -120,13 +103,11 @@ export function createRegistrationRegistry({
             remove(registration);
         },
         list() {
-            return [...entries.values()]
-                .filter((registration) => !registration.trusted)
-                .map(({ principal, resources, jobs }) => ({
-                    registrationId: principal.registrationId,
-                    resources: resources.size,
-                    jobs,
-                }));
+            return [...entries.values()].map(({ principal, resources, jobs }) => ({
+                registrationId: principal.registrationId,
+                resources: resources.size,
+                jobs,
+            }));
         },
     };
 }

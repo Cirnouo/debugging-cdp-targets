@@ -2,18 +2,14 @@ import { createHash } from 'node:crypto';
 import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
 import { parse as parseYaml } from 'yaml';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { isOfficialRelativePath } from '../src/shared/official-package.ts';
 import {
     parsePluginMetadata,
     readDistributionTree,
     validateCodexSkillPresentation,
-    validateHooks,
     validateHostManifest,
     validateMcpEntries,
 } from './distribution-audit.ts';
@@ -21,12 +17,9 @@ import type { HostDescriptor } from './host-policy.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { SHARED_ASSET_FILES, validateIconPng } from './icon-policy.ts';
 import { validatePayloadFileInventory } from './payload-policy.ts';
-import { verifyOfficialInputs } from './security/official-inputs.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const output = path.join(root, CODEX_HOST.payloadRoot);
-const runtimeOutput = path.join(output, 'dist');
 
 type ReviewedBundle = {
     name: string;
@@ -226,54 +219,6 @@ export async function collectBundledLicenses(
     return Buffer.from(`${sections.join('\n').trimEnd()}\n`);
 }
 
-export async function generateRuntimeFiles() {
-    const { release: evidence } = await verifyOfficialInputs(root);
-    const official = await verifyOfficialPackage(
-        await realpath(path.join(root, 'node_modules', evidence.name)),
-        evidence,
-        { pnpmInstalled: true },
-    );
-    const toolCatalog: unknown = JSON.parse(
-        await readFile(path.join(root, 'tooling', 'official-tool-catalog.json'), 'utf8'),
-    );
-    createToolCatalog(toolCatalog);
-    const result = await build({
-        absWorkingDir: root,
-        entryPoints: {
-            'mcp-bootstrap': path.join(root, 'src', 'interface', 'mcp-bootstrap.ts'),
-        },
-        outdir: runtimeOutput,
-        outExtension: { '.js': '.mjs' },
-        bundle: true,
-        platform: 'node',
-        format: 'esm',
-        target: 'node24',
-        packages: 'bundle',
-        define: {
-            __DCT_OFFICIAL_RELEASE__: JSON.stringify(evidence),
-            __DCT_TOOL_CATALOG__: JSON.stringify(toolCatalog),
-        },
-        legalComments: 'none',
-        banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
-        logLevel: 'warning',
-        write: false,
-        metafile: true,
-    });
-    const files = new Map<string, Buffer>(
-        result.outputFiles.map((file) => [
-            path.relative(runtimeOutput, file.path).replaceAll('\\', '/'),
-            Buffer.from(file.contents),
-        ]),
-    );
-    for (const [file, bytes] of official) files.set(`official-server/${file}`, bytes);
-    for (const file of ['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs']) {
-        files.set(file, await readFile(path.join(root, 'src', 'adapters', file)));
-    }
-    const notice = await collectBundledLicenses(Object.keys(result.metafile.inputs));
-    files.set('THIRD-PARTY-NOTICES.txt', notice);
-    return files;
-}
-
 async function verifyPackagingPath(packagingRoot: string, relative: string, directory: boolean) {
     const owned = path.resolve(packagingRoot);
     const input = path.resolve(owned, relative);
@@ -290,7 +235,7 @@ async function verifyPackagingPath(packagingRoot: string, relative: string, dire
     return input;
 }
 
-async function assemblePayload(runtime: ReadonlyMap<string, Buffer>, host: HostDescriptor, packagingRoot: string) {
+async function assemblePayload(host: HostDescriptor, packagingRoot: string) {
     const inputs = await readDistributionTree(await verifyPackagingPath(packagingRoot, host.inputRoot, true));
     const expectedInputs = ['README.md', ...Object.keys(host.files)];
     for (const file of inputs.keys())
@@ -329,16 +274,10 @@ async function assemblePayload(runtime: ReadonlyMap<string, Buffer>, host: HostD
         await verifyPackagingPath(packagingRoot, `${SHARED_PACKAGING_ROOT}/skills`, true),
     );
     for (const [file, bytes] of skills) add(`skills/${file}`, bytes);
-    const documentation = await readDistributionTree(
-        await verifyPackagingPath(packagingRoot, `${SHARED_PACKAGING_ROOT}/dist`, true),
-    );
-    for (const [file, bytes] of documentation) add(`dist/${file}`, bytes);
-    for (const [file, bytes] of runtime) add(`dist/${file}`, bytes);
     const errors = [
         ...validatePayloadFileInventory([...files.keys()], host),
         ...validateHostManifest(parsePluginMetadata(files.get(host.manifest)?.toString() ?? 'null'), host),
         ...validateMcpEntries(parsePluginMetadata(files.get(host.mcp)?.toString() ?? 'null'), host),
-        ...validateHooks(parsePluginMetadata(files.get(host.hooks)?.toString() ?? 'null'), host),
     ];
     if (host.id === 'codex') {
         const approvedIcon = assets.get('icon.png');
@@ -349,22 +288,21 @@ async function assemblePayload(runtime: ReadonlyMap<string, Buffer>, host: HostD
     return files;
 }
 
-export async function assembleCodexPayload(runtime: ReadonlyMap<string, Buffer>, packagingRoot = root) {
-    return assemblePayload(runtime, CODEX_HOST, packagingRoot);
+export async function assembleCodexPayload(packagingRoot = root) {
+    return assemblePayload(CODEX_HOST, packagingRoot);
 }
 
-export async function assembleClaudeCodePayload(runtime: ReadonlyMap<string, Buffer>, packagingRoot = root) {
-    return assemblePayload(runtime, CLAUDE_CODE_HOST, packagingRoot);
+export async function assembleClaudeCodePayload(packagingRoot = root) {
+    return assemblePayload(CLAUDE_CODE_HOST, packagingRoot);
 }
 
 export async function generateHostPayloads(packagingRoot = root) {
-    const runtime = await generateRuntimeFiles();
     const outputs = new Map<HostDescriptor['id'], Map<string, Buffer>>();
     const packageData = parsePluginMetadata(
         (await readRegularFile(await verifyPackagingPath(packagingRoot, 'package.json', false))).toString(),
     );
     for (const host of PLUGIN_HOSTS) {
-        const files = await assemblePayload(runtime, host, packagingRoot);
+        const files = await assemblePayload(host, packagingRoot);
         const manifest = parsePluginMetadata(files.get(host.manifest)?.toString() ?? 'null');
         const skill = files.get('skills/debugging-cdp-targets/SKILL.md')?.toString();
         const frontmatter: unknown = parseYaml(skill?.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
@@ -378,7 +316,7 @@ export async function generateHostPayloads(packagingRoot = root) {
 }
 
 export async function generatePluginFiles() {
-    return assembleCodexPayload(await generateRuntimeFiles());
+    return assembleCodexPayload();
 }
 
 export async function syncPluginFiles(

@@ -18,12 +18,7 @@ import {
 } from '../tooling/payload-policy.ts';
 
 test('MCP manifest requires one gateway entry without slots or connection limits', () => {
-    const entry = {
-        type: 'stdio',
-        command: 'node',
-        args: ['dist/mcp-bootstrap.mjs'],
-        cwd: '.',
-    };
+    const entry = { type: 'streamable-http', url: 'http://127.0.0.1:27637/mcp' };
     const valid = {
         $schema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
         mcpServers: { 'cdp-targets': entry },
@@ -33,8 +28,8 @@ test('MCP manifest requires one gateway entry without slots or connection limits
     assert.ok(validateMcpEntries({ ...valid, mcpServers: { 'cdp-target-1': entry, 'cdp-target-2': entry } }).length);
     assert.ok(validateMcpEntries({ ...valid, mcpServers: { ...valid.mcpServers, extra: entry } }).length);
     for (const invalid of [
-        { ...entry, args: [...entry.args, '--slot', '1'] },
-        { ...entry, args: [...entry.args, '--max-connections', '2'] },
+        { ...entry, args: ['--slot', '1'] },
+        { ...entry, command: 'node' },
         { ...entry, command: 'npx' },
         { ...entry, type: 'http' },
         { ...entry, args: [`\${PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`], cwd: `\${PLUGIN_ROOT}` },
@@ -83,16 +78,17 @@ test('Plugin inventory requires the complete nested conditional and question ref
     }
 });
 
-test('Plugin allowlist independently includes every reviewed official release path', async () => {
+test('thin Plugin inventory rejects every official release file and stale runtime output', async () => {
     const release: unknown = JSON.parse(
         await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(release) && Array.isArray(release.files));
     for (const record of release.files) {
         assert.ok(isRecord(record) && typeof record.path === 'string');
-        assert.ok(REQUIRED_PAYLOAD_FILES.includes(`dist/official-server/${record.path}`));
+        assert.ok(
+            validatePayloadFileInventory([...REQUIRED_PAYLOAD_FILES, `dist/official-server/${record.path}`]).length,
+        );
     }
-    assert.ok(validatePayloadFileInventory([...REQUIRED_PAYLOAD_FILES, 'dist/official-server/extra.js']).length);
 });
 
 test('physical Plugin inventory rejects unexpected empty directories', async () => {

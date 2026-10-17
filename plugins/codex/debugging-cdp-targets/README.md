@@ -1,62 +1,54 @@
 # Debugging CDP Targets for Codex
 
-This complete Plugin launches and inspects verified local CDP targets through the
-official Chrome DevTools MCP Server. It shares runtime and full Skill instructions
-with the independent Claude Code distribution. Version 0.1.0 is unreleased.
-Stable Node >=24.21.0 <25 must be available as `node`; installed runtime needs
-no repository dependencies or sibling Plugin. Actual installation and Hooks were
-accepted with Codex CLI 0.160.0 on Windows. The 2026-10-08 metadata follow-up
-passed with Codex CLI 0.161.0, including installed metadata/icon bytes and full
-formal explicit Skill context; the older baseline was not rerun.
+This thin Plugin connects Codex directly to the separately launched Debugging
+CDP Targets desktop App at `http://127.0.0.1:27637/mcp`. The App launches verified
+new local CDP targets and relays the unchanged official Chrome DevTools MCP
+Server. Version 0.1.0 is unreleased. Native installers remain under development;
+contributors can build a verified local Windows stage using the repository's
+[App build instructions](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/app-runtime.md).
+
+Launch the App first, then install the Plugin:
 
 ```powershell
 codex plugin marketplace add Cirnouo/debugging-cdp-targets
 codex plugin add debugging-cdp-targets@debugging-cdp-targets
 ```
 
-Enable the Plugin MCP connection and invoke `$debugging-cdp-targets`. The gateway
-starts with no target. Review/trust the four Hook definitions through Codex's
-standard flow; installation does not grant Hook trust. Hooks deliver pending
-exit/operation context at tool/turn boundaries, including one Stop continuation.
+In a new conversation, enable its MCP connection and explicitly invoke
+`$debugging-cdp-targets`. The App starts with no target. Follow the Skill to
+register once, retain the private one-time bearer and explicitly route every
+owned call. Conversations and MCP connections do not implicitly own targets.
+Disconnecting the host does not close them. Ask Close/Keep before ending work;
+Close normally ends that connection, while Keep preserves its target and upstream.
 
-Explicit Skill invocation is the verified path to the full instructions. The
-Plugin supplies a project website and separate Skill title/description/icons.
-Manual Codex Desktop 26.1002.52244 acceptance confirmed the project website,
-Skill title/short description/icons and full long description. Automatic starter
-prompt injection remains unverified. See the
-[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md)
-for dated source/cache evidence and remaining limits. Disposable CLI checks
-preserve personal configuration/global Skills but do not establish Windows OS-profile or no-read
-isolation or complete public catalog network suppression.
+The Skill obtains isolation intent, researches application-specific directory
+binding and checks occupancy before every launch. Directory retention or
+preauthorized whole-directory cleanup is independent of Close/Keep. The App
+provides a management window for HTTP port and appearance. A changed port becomes
+effective after a successful normal App restart; update the host's native HTTP
+setting to the same port. The default Plugin URL contains no credential.
 
-The Skill asks isolation intent, checks occupancy before every launch in either
-mode, and obtains the directory's retention/deletion policy before start when
-required. Chrome's old profile location is an explicit preset choice, never an
-automatic fallback. Close/Keep separately decides application lifetime.
-
-Refresh the Marketplace, then reinstall the current payload, even when its
-version remains 0.1.0:
+To refresh the installed payload, including an unreleased same-version build:
 
 ```powershell
 codex plugin marketplace upgrade debugging-cdp-targets
 codex plugin add debugging-cdp-targets@debugging-cdp-targets
 ```
 
-Marketplace upgrade refreshes the catalog source; Plugin add refreshes the
-installed cache. Start a new conversation to use the updated Skills and tools.
-To uninstall, run `codex plugin remove debugging-cdp-targets@debugging-cdp-targets`,
-then `codex plugin marketplace remove debugging-cdp-targets`.
+Start a new conversation after updating. To uninstall the Plugin, run
+`codex plugin remove debugging-cdp-targets@debugging-cdp-targets`, then
+`codex plugin marketplace remove debugging-cdp-targets`. This removes host
+integration; use the App's normal Quit to close its managed resources.
 
-`.codex-plugin/` owns the Codex manifest. `mcp.json` declares the portable MCP
-schema and registers one reusable stdio gateway; `LICENSE` is the MIT grant.
-`hooks/` contains automatic exit reminder Hooks, `skills/` contains Agent guidance,
-and `dist/` contains bundled runtime files requiring no install in this directory.
-Hook execution requires Codex's standard review and trust of each definition.
+The payload contains `.codex-plugin/`, portable direct-HTTP `mcp.json`, approved
+artwork, the complete shared Skill and MIT `LICENSE`. It contains no executable
+runtime, Hooks, Node installation, official Server or dependency scripts. The
+App delivers its own verified ordinary Node and original official release.
 
-`dist/official-server/` delivers the unchanged official chrome-devtools-mcp 1.11.0
-release, including its public Server bin, resources, licenses, vendor notices and
-published skills. The gateway verifies all of these bytes before each launch.
-Consumers need stable Node >=24.21.0 <25; package preparation is a contributor task.
-
+Explicit Skill invocation is the established full-instruction entry. Dated CLI
+metadata and historical Desktop icon observations, their host versions and
+presentation limits are recorded in the
+[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md).
+They do not establish new Desktop rendering acceptance for this HTTP cutover.
 See the [user guide](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/README.md)
-for detailed installation, compatibility, workflow, configuration, privacy and troubleshooting.
+for workflow, compatibility, privacy and troubleshooting.

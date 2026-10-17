@@ -3,6 +3,11 @@
 ## Runtime state and network access
 
 Target identity, launch settings and operation events are held in memory.
+The App persists only validated configuration; its Chromium caches use separate
+per-process temporary roots. Registration bearers are returned once and never
+read back by status, administration or diagnostics. Host chats may retain tool
+context according to their own storage controls. Host disconnect does not clean
+App-owned resources; normally Quit the App when all managed work should close.
 Windows elevation uses an authenticated one-shot helper pipe; application data
 never appears in its command line. The Plugin does not log launch commands,
 page contents, cookies, network or console data, secrets, or tool calls.
@@ -50,7 +55,7 @@ For an explicitly selected missing Chrome preset, Agent may prepare only absent
 The program creates/cleans `chrome-profile`; those containers remain afterward.
 Generic new selections still require an existing parent.
 
-The connection directory lease spans session restart and Keep/end-task through
+The connection directory lease spans session restart and Keep through
 actual application exit. Deletion waits until no live/unconfirmed app, pending
 native acquisition/permission wait/late creation, successor launch or relevant
 resource remains. Failed Close/observation/resource disposal retains ownership.
@@ -66,7 +71,7 @@ Original start evidence survives failed/cancelled startup and route removal.
 Later release/retry updates that metadata without another completion notice or
 changing the original terminal result/state/error/cursor. The Agent discloses
 retained actual absolute paths, including delegated/random/resolved-link paths.
-Default summaries and automatic Hooks omit paths and raw filesystem errors.
+Default summaries omit paths and raw filesystem errors.
 Reading entries/metadata for directory decisions does not require reading contents.
 
 Upgrades leave older caches, unselected existing profiles, user configuration and
@@ -87,7 +92,10 @@ kill. See [workflow](workflow.md) for ownership and actual-exit behavior and
 
 ## Bundled official package integrity
 
-The official Server is delivered at `<plugin-root>/dist/official-server/`.
+The complete unchanged official Server is delivered in App resources at
+`resources/official-server/`. Thin Plugins contain no executable runtime. The App
+verifies ordinary Node and original package bytes before catalog and connection
+spawns; no npm/npx or host PATH lookup supplies its runtime.
 Every published file is verified before each Server launch. Missing or changed
 files require reinstalling the Plugin, or rebuilding it in a prepared contributor
 checkout. Runtime does not fetch replacement packages. Only the official child's

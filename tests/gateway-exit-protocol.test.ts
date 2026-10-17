@@ -2,13 +2,11 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
-import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
-import type { ConnectionStatus, ControlRequest } from '../src/domains/control-contract.ts';
+import type { ConnectionStatus } from '../src/domains/control-contract.ts';
 import { parseControlRequest } from '../src/domains/control-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { hookResultEvents, waitForSmokeHookEvents } from './fixtures/hook-gateway-events.ts';
+import { createCoreFixture } from './fixtures/core-runtime.ts';
 
 class Application extends EventEmitter {
     exitCode: number | null = null;
@@ -42,11 +40,6 @@ async function fixture(
         failReplacementConnection?: boolean;
     } = {},
 ) {
-    let callbacks: Parameters<typeof createMcpEntryServer>[0] | undefined;
-    let finishEntry = () => {};
-    const closed = new Promise<void>((resolve) => {
-        finishEntry = resolve;
-    });
     const applications: Application[] = [];
     const order: string[] = [];
     let upstreamCloses = 0;
@@ -57,7 +50,7 @@ async function fixture(
     let timeoutCall = false;
     let callSignal: AbortSignal | undefined;
     const tools = [{ name: 'list_pages', inputSchema: { type: 'object' as const, properties: {} } }];
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         loadCatalog: async () =>
             createToolCatalog({
                 version: '1.11.0',
@@ -153,21 +146,9 @@ async function fixture(
                 },
             };
         },
-        createEntry: (value) => {
-            callbacks = value;
-            return {
-                connect: async () => {},
-                closed,
-                close: async () => finishEntry(),
-                roots: async () => ({ roots: [] }),
-                supportsRoots: () => false,
-                supportsFormElicitation: () => false,
-                elicit: async () => ({ action: 'cancel' }),
-            };
-        },
     });
-    assert.ok(callbacks?.control);
-    const selectedCallbacks = callbacks;
+    assert.ok(runtime?.control);
+    const selectedCallbacks = runtime;
     assert.ok(selectedCallbacks.control);
     const control = selectedCallbacks.control;
     const status = (value: Record<string, unknown> = {}) =>
@@ -190,7 +171,7 @@ async function fixture(
     order.length = 0;
     return {
         runtime,
-        callbacks,
+
         control,
         status,
         start,
@@ -211,12 +192,11 @@ async function fixture(
 }
 
 for (const kept of [false, true]) {
-    test(`smoke Hook wait preserves ${kept ? 'inactive kept' : 'active'} exit evidence after deferred cleanup`, async () => {
+    test(`route retirement precedes deferred cleanup for a ${kept ? 'kept' : 'live'} connection`, async () => {
         let release = () => {};
         const disposalGate = new Promise<void>((resolve) => {
             release = resolve;
         });
-        let pending: ReturnType<typeof waitForSmokeHookEvents> | undefined;
         const f = await fixture({ disposalGate });
         try {
             const current = await f.start();
@@ -229,49 +209,23 @@ for (const kept of [false, true]) {
                     disposition: 'Keep',
                 });
             f.applications[0]?.exit();
-            const status = f.runtime.controller.status();
-            assert.ok('connections' in status);
-            assert.deepEqual(
-                status.connections.map((connection) => connection.connectionId),
-                [peer.connectionId],
-            );
-            assert.deepEqual(f.callbacks.status('Stop'), {});
-            let settled = false;
-            pending = waitForSmokeHookEvents(async () => f.callbacks.status(kept ? 'Stop' : 'PostToolUse'));
-            void pending.then(
-                () => {
-                    settled = true;
-                },
-                () => {
-                    settled = true;
-                },
-            );
+            assert.throws(() => f.runtime.controller.status(current.connectionId), /closed/);
             await tick();
-            assert.equal(settled, false, 'Route removal cannot stand in for completed exit cleanup.');
+            assert.equal(
+                f.runtime.core.admin.registrations()[0]?.resources,
+                2,
+                'A revoked route must retain its pending cleanup ownership.',
+            );
             await assert.rejects(f.invoke(current), /closed|retired|exited/i);
             await f.invoke(peer);
             release();
-            const batches = await pending;
-            assert.equal(batches.length, 1);
-            assert.equal(batches[0]?.exits.length, 1);
-            const exit = batches[0]?.exits[0];
-            assert.ok(exit);
-            assert.equal(exit.connectionId, current.connectionId);
-            assert.equal(exit.sessionId, current.sessionId);
-            assert.equal(exit.processId, current.processId);
-            assert.equal(exit.port, current.port);
-            assert.equal(exit.taskActive, !kept);
-            assert.equal(exit.expected, undefined);
-            assert.equal(exit.cleanupStatus, 'succeeded');
-            assert.equal(exit.cleanupError, undefined);
-            assert.deepEqual(batches[0]?.operations, []);
-            assert.deepEqual(batches[0]?.connections, []);
-            assert.deepEqual(f.callbacks.status('Stop'), {});
+            await tick();
+            await tick();
+            assert.equal(f.runtime.core.admin.registrations()[0]?.resources, 1);
             await f.invoke(peer);
         } finally {
             release();
-            await pending?.catch(() => {});
-            await f.runtime.close();
+            await f.runtime.cleanup();
         }
     });
 }
@@ -295,7 +249,7 @@ test('actual exit immediately ends a call awaiting health validation and old hea
     } finally {
         release();
         await rejected;
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -321,7 +275,7 @@ test('normal Close is allowed while its router and official call are busy', asyn
         release();
         f.applications[0]?.exit();
         await rejected;
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -347,7 +301,7 @@ test('actual exit completes Close even while the normal-close request still awai
     } finally {
         release();
         await close;
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -375,7 +329,7 @@ test('normal Close remains available after a terminal official failure', async (
         release();
         await rejected;
         await close;
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -389,9 +343,8 @@ test('a settled SDK failure does not dispose or quarantine a healthy official ch
         assert.ok('status' in state);
         assert.equal(state.status, 'active');
         assert.equal(state.upstreamStatus, 'connected');
-        assert.deepEqual(f.callbacks.status('PostToolUse'), {});
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -419,83 +372,66 @@ test('cancelling a Close wait retains the accepted request and exit observation 
     f.applications[0]?.exit();
     await retry;
     assert.throws(() => f.runtime.controller.status(current.connectionId), /closed/);
-    await f.runtime.close();
+    await f.runtime.cleanup();
 });
 
-test('a failed restart includes both old exit and replacement rollback in one compact operation notice', async () => {
+test('a failed restart normally closes both the old target and replacement rollback', async () => {
     const f = await fixture({ failReplacementConnection: true });
-    const current = await f.start();
-    assert.ok(current.sessionId);
-    const accepted = await f.control(
-        parseControlRequest({
+    try {
+        const current = await f.start();
+        assert.ok(current.sessionId);
+        const accepted = await f.control({
             action: 'restart',
-            entryId: f.runtime.entryId,
             requestId: 'replacement-rollback',
             connectionId: current.connectionId,
             sessionId: current.sessionId,
-        }),
-    );
-    await tick();
-    const events = hookResultEvents(f.callbacks.status('PostToolUse'))[0];
-    assert.ok(events);
-    assert.deepEqual(events.exits, []);
-    const operation = events.operations[0];
-    assert.ok(operation);
-    assert.equal(operation.operationId, accepted.operationId);
-    assert.equal(operation.action, 'restart');
-    assert.equal(operation.state, 'failed');
-    assert.ok(Array.isArray(operation.exits));
-    assert.deepEqual(
-        operation.exits.map((event: unknown) => {
-            assert.ok(isRecord(event));
-            return event.expected;
-        }),
-        ['restart', 'rollback'],
-    );
-    assert.deepEqual(f.callbacks.status('Stop'), {});
-    const status = await f.status({ entryId: f.runtime.entryId, operationId: accepted.operationId });
-    assert.equal(status.state, 'failed');
-    const gateway = f.runtime.controller.status();
-    assert.ok('connections' in gateway);
-    assert.deepEqual(gateway.connections, []);
-    await f.runtime.close();
+            scope: 'both',
+        });
+        await tick();
+        const operation = f.runtime.core.admin.operations().find((item) => item.operationId === accepted.operationId);
+        assert.equal(operation?.action, 'restart');
+        assert.equal(operation?.state, 'failed');
+        assert.equal(f.applications.length, 2);
+        assert.ok(f.applications.every((application) => application.exitCode === 0));
+        const gateway = f.runtime.controller.status();
+        assert.ok('connections' in gateway);
+        assert.deepEqual(gateway.connections, []);
+    } finally {
+        await f.runtime.cleanup();
+    }
 });
 
-test('an expected exit waits for its operation terminal event and is delivered only with that compact event', async () => {
+test('a Close operation waits for owned disposal before becoming terminal', async () => {
     let release = () => {};
     const disposalGate = new Promise<void>((resolve) => {
         release = resolve;
     });
     const f = await fixture({ disposalGate });
-    const current = await f.start();
-    assert.ok(current.sessionId);
-    const accepted = await f.control(
-        parseControlRequest({
+    try {
+        const current = await f.start();
+        assert.ok(current.sessionId);
+        const accepted = await f.control({
             action: 'stop',
-            entryId: f.runtime.entryId,
             requestId: 'expected-close',
             connectionId: current.connectionId,
             sessionId: current.sessionId,
             disposition: 'Close',
-        }),
-    );
-    await tick();
-    try {
-        assert.deepEqual(
-            f.callbacks.status('PostToolUse'),
-            {},
-            'pending cleanup must not deliver the operation exit separately',
+        });
+        await tick();
+        assert.equal(
+            f.runtime.core.admin.operations().find((item) => item.operationId === accepted.operationId)?.state,
+            'running',
+        );
+        release();
+        await tick();
+        assert.equal(
+            f.runtime.core.admin.operations().find((item) => item.operationId === accepted.operationId)?.state,
+            'succeeded',
         );
     } finally {
         release();
-        await tick();
+        await f.runtime.cleanup();
     }
-    const delivered = JSON.stringify(f.callbacks.status('PostToolUse'));
-    assert.ok(delivered.includes(String(accepted.operationId)));
-    assert.ok(delivered.includes('target-exit'));
-    assert.ok(delivered.includes('succeeded'));
-    assert.deepEqual(f.callbacks.status('Stop'), {});
-    await f.runtime.close();
 });
 
 test('gateway shutdown awaits replacement official acquisition and retries late failed disposal', async () => {
@@ -506,11 +442,15 @@ test('gateway shutdown awaits replacement official acquisition and retries late 
     const f = await fixture({ replacementConnectionGate: replacementRouterGate, failLateUpstreamClose: true });
     const current = await f.start();
     assert.ok(current.sessionId);
-    const restart = f.runtime.controller.restart({ connectionId: current.connectionId, sessionId: current.sessionId });
+    const restart = f.runtime.controller.restart({
+        connectionId: current.connectionId,
+        sessionId: current.sessionId,
+        scope: 'both',
+    });
     const failed = assert.rejects(restart, /closing|retired|exited|late upstream disposal failed/);
     await tick();
     let closed = false;
-    const shutdown = f.runtime.close().then(() => {
+    const shutdown = f.runtime.cleanup().then(() => {
         closed = true;
     });
     await tick();
@@ -533,7 +473,7 @@ test('actual exit aborts an in-flight official call and suppresses late progress
     const first = await f.start();
     const second = await f.start();
     const progress: unknown[] = [];
-    const pending = f.callbacks.invoke(
+    const pending = f.runtime.invoke(
         'list_pages',
         { _dct: { connectionId: first.connectionId, sessionId: first.sessionId } },
         new AbortController().signal,
@@ -547,7 +487,7 @@ test('actual exit aborts an in-flight official call and suppresses late progress
     release();
     await rejected;
     assert.deepEqual(progress, []);
-    await f.runtime.close();
+    await f.runtime.cleanup();
 });
 
 test('gateway shutdown closes official resources before waiting on an already pending Target Close', async () => {
@@ -562,7 +502,7 @@ test('gateway shutdown closes official resources before waiting on an already pe
     });
     await tick();
     assert.equal(f.upstreamCloses(), 1);
-    const shutdown = f.runtime.close();
+    const shutdown = f.runtime.cleanup();
     await tick();
     assert.equal(f.upstreamCloses(), 3);
     const observed = f.runtime.controller.status(second.connectionId);
@@ -578,9 +518,9 @@ test('ordinary status gives a gateway summary and selected enabled names without
     const f = await fixture();
     try {
         const empty = await f.status();
-        assert.deepEqual(Object.keys(empty).sort(), ['connections', 'entryId']);
+        assert.deepEqual(Object.keys(empty).sort(), ['connections']);
         const current = await f.start();
-        const all = await f.status({ entryId: f.runtime.entryId });
+        const all = await f.status({});
         assert.ok(Array.isArray(all.connections));
         const connection: unknown = all.connections[0];
         assert.ok(isRecord(connection));
@@ -588,12 +528,11 @@ test('ordinary status gives a gateway summary and selected enabled names without
         assert.equal(connection.enabledToolCount, 1);
         for (const key of ['enabledTools', 'mcpArgs', 'workspace', 'diagnostics', 'toolAvailability'])
             assert.equal(Object.hasOwn(connection, key), false, key);
-        const selected = await f.status({ entryId: f.runtime.entryId, connectionId: current.connectionId });
+        const selected = await f.status({ connectionId: current.connectionId });
         assert.deepEqual(selected.enabledTools, ['list_pages']);
         for (const key of ['mcpArgs', 'workspace', 'diagnostics', 'toolAvailability'])
             assert.equal(Object.hasOwn(selected, key), false, key);
         const details = await f.status({
-            entryId: f.runtime.entryId,
             connectionId: current.connectionId,
             include: ['configuration', 'diagnostics'],
         });
@@ -601,11 +540,11 @@ test('ordinary status gives a gateway summary and selected enabled names without
         assert.ok(isRecord(details.workspace));
         assert.ok(Array.isArray(details.diagnostics));
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
-test('exit during CDP readiness cancels startup before official acquisition and keeps the exit notice', async () => {
+test('exit during CDP readiness cancels startup before official acquisition without acquiring an official child', async () => {
     let ready = () => {};
     const launchGate = new Promise<void>((resolve) => {
         ready = resolve;
@@ -620,8 +559,7 @@ test('exit during CDP readiness cancels startup before official acquisition and 
     const status = f.runtime.controller.status();
     assert.ok('connections' in status);
     assert.deepEqual(status.connections, []);
-    assert.ok(JSON.stringify(f.callbacks.status('PostToolUse')).includes('process-exited'));
-    await f.runtime.close();
+    await f.runtime.cleanup();
 });
 
 test('a late official connection cannot publish a ready session after its Target exited', async () => {
@@ -641,10 +579,10 @@ test('a late official connection cannot publish a ready session after its Target
     assert.ok('connections' in status);
     assert.deepEqual(status.connections, []);
     assert.equal(f.upstreamCloses(), 2);
-    await f.runtime.close();
+    await f.runtime.cleanup();
 });
 
-test('a real active exit removes only its connection and preserves one immutable Hook notice', async () => {
+test('a real active exit removes only its connection and leaves its peer usable', async () => {
     const f = await fixture();
     try {
         const first = await f.start();
@@ -656,17 +594,11 @@ test('a real active exit removes only its connection and preserves one immutable
         assert.ok('status' in stillActive);
         assert.equal(stillActive.status, 'active');
         await assert.rejects(f.invoke(first), /absent|closed/);
-        const notice = JSON.stringify(f.callbacks.status('PostToolUse'));
-        assert.ok(notice.includes(first.connectionId));
-        assert.ok(notice.includes(first.sessionId ?? 'missing'));
-        assert.ok(notice.includes('process-exited'));
-        assert.ok(notice.includes('new start') || notice.includes('new-start'));
-        assert.deepEqual(f.callbacks.status('Stop'), {});
         const next = await f.start();
         assert.notEqual(next.connectionId, first.connectionId);
         assert.notEqual(next.sessionId, first.sessionId);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -690,7 +622,7 @@ test('late actual exit after a failed Close automatically retires the retained l
         assert.throws(() => f.runtime.controller.status(current.connectionId), /absent|closed/);
         assert.equal(f.upstreamCloses(), 2);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -704,12 +636,11 @@ test('a missing process snapshot gates calls but cannot invent process exit or r
         assert.ok('status' in lost);
         assert.equal(lost.status, 'lost');
         assert.equal(f.upstreamCloses(), 1);
-        assert.deepEqual(f.callbacks.status('PostToolUse'), {});
         f.applications[0]?.exit();
         await tick();
         assert.throws(() => f.runtime.controller.status(current.connectionId), /absent|closed/);
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });
 
@@ -721,7 +652,7 @@ test('post-exit disposal failures never retain a routable session and are retrie
     assert.throws(() => f.runtime.controller.status(current.connectionId), /absent|closed/);
     await assert.rejects(f.invoke(current), /absent|closed/);
     assert.equal(f.upstreamCloses(), 2);
-    await f.runtime.close();
+    await f.runtime.cleanup();
     assert.equal(f.upstreamCloses(), 3);
 });
 
@@ -740,41 +671,32 @@ test('Close waits for application exit before closing the upstream and router', 
     await closing;
     assert.ok(f.order.indexOf('application-exit') < f.order.indexOf('upstream-close'));
     assert.ok(f.order.indexOf('upstream-close') < f.order.indexOf('router-close'));
-    await f.runtime.close();
+    await f.runtime.cleanup();
 });
 
-test('operation Hooks remain compact while settled official failures create no fabricated lifetime event', async () => {
+test('operation results remain summaries and an official failure creates no lifecycle operation', async () => {
     const f = await fixture();
     try {
         const accepted = await f.control({
             isolation: { mode: 'none' },
             action: 'start',
-            entryId: f.runtime.entryId,
             requestId: 'compact-result',
             launch: { executable: process.execPath },
         });
         assert.equal(typeof accepted.operationId, 'string');
         await tick();
-        const unread = JSON.stringify(f.callbacks.status('PostToolUse'));
-        assert.ok(unread.includes(String(accepted.operationId)));
+        const operation = f.runtime.core.admin.operations().find((item) => item.operationId === accepted.operationId);
+        const text = JSON.stringify(operation?.result);
         for (const field of ['enabledTools', 'mcpArgs', 'workspace', 'diagnostics', 'inputSchema', 'suggestedMcpArgs'])
-            assert.equal(unread.includes(field), false, field);
-        const wait: ControlRequest = parseControlRequest({
-            action: 'wait',
-            entryId: f.runtime.entryId,
-            operationId: accepted.operationId,
-        });
-        await f.control(wait);
-        assert.deepEqual(f.callbacks.status('PostToolUse'), {});
+            assert.equal(text.includes(field), false, field);
         const status = f.runtime.controller.status();
         assert.ok('connections' in status && status.connections[0]);
+        const prior = f.runtime.core.admin.operations().length;
         f.timeout();
         await assert.rejects(f.invoke(status.connections[0]), /timed out/);
-        const quarantined = JSON.stringify(f.callbacks.status('PostToolUse'));
-        assert.equal(quarantined, '{}');
-        for (const field of ['enabledTools', 'mcpArgs', 'workspace', 'diagnostics', 'inputSchema'])
-            assert.equal(quarantined.includes(field), false, field);
+        assert.equal(f.runtime.core.admin.operations().length, prior);
+        assert.equal(f.runtime.core.admin.connections()[0]?.upstreamStatus, 'connected');
     } finally {
-        await f.runtime.close();
+        await f.runtime.cleanup();
     }
 });

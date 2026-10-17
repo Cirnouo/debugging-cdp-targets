@@ -12,7 +12,7 @@
 - `screenshot-compatibility.md` owns feature syntax/conflicts, verified generic
     carriers and screenshot argv replacement. Read it before correcting feature
     argv, applying generic compatibility or replacing a screenshot launch.
-- `recovery-and-events.md` owns disposal/retry specifics, live restart, Hooks and
+- `recovery-and-events.md` owns disposal/retry specifics, live restart, request lifetime and
     operation notice grouping/acknowledgment/unread/status-selection constraints.
     Read it before those operations or interpreting the corresponding notices.
 

@@ -6,15 +6,14 @@ export const LIFECYCLE_ACTIONS: Record<string, ControlRequest['action']> = {
     dct_connection_start: 'start',
     dct_connection_restart: 'restart',
     dct_connection_stop: 'stop',
-    dct_connection_end_task: 'end-task',
     dct_operation_wait: 'wait',
     dct_operation_cancel: 'cancel',
 };
-export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
+export function lifecycleTools(): Tool[] {
     const uuid = { type: 'string', format: 'uuid' };
     const stringList = { type: 'array', items: { type: 'string' } };
     const identity = {
-        entryId: uuid,
+        registrationBearer: { type: 'string', minLength: 32, maxLength: 128 },
         connectionId: uuid,
         sessionId: uuid,
         requestId: { type: 'string', minLength: 1, maxLength: 128 },
@@ -31,10 +30,15 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
     });
     return [
         make(
+            'dct_registration_register',
+            'Create a memory-only registration. Save the returned bearer for every subsequent lifecycle and official tool call. The bearer is returned once, cannot be recovered, and owns resources independently of client/chat/session lifetime.',
+            {},
+        ),
+        make(
             'dct_connection_status',
-            'Discover this gateway with empty arguments. Otherwise specify entryId; select a connection or operation, or request toolNames to inspect configuration requirements before starting. Selected connections accept include for configuration or diagnostics. Operation status cannot combine connectionId, toolNames, or include. hookEventName is reserved for automatic host Hooks.',
+            'Read only this registration’s connections or operation, or request toolNames to inspect configuration requirements. Every call requires its registrationBearer. Selected connections accept include for configuration or diagnostics; operation selection cannot combine other selectors.',
             {
-                entryId: uuid,
+                registrationBearer: identity.registrationBearer,
                 connectionId: uuid,
                 operationId: uuid,
                 toolNames: stringList,
@@ -43,14 +47,14 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
                     items: { type: 'string', enum: ['configuration', 'diagnostics'] },
                     uniqueItems: true,
                 },
-                hookEventName: { type: 'string', enum: [...hookEvents] },
             },
+            ['registrationBearer'],
         ),
         make(
             'dct_connection_start',
             'Launch a new application natively and create an independent official MCP connection. Required isolation selects none or an existing/new managed data directory and explicit cleanup. Data-dir requires researched {dataDir} binding in args/env; none forbids it. Returns an operation immediately; use dct_operation_wait for completion and explicit operation metadata for directory evidence. Reuse requestId only when retrying the same request. The plugin detects Windows elevation requirements. Port placeholders are supported in args and env. cwd is not file-access authorization; use the official --workspace argument in mcpArgs.',
             {
-                entryId: uuid,
+                registrationBearer: identity.registrationBearer,
                 requestId: identity.requestId,
                 launch: {
                     type: 'object',
@@ -106,16 +110,16 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
                 targetKind: { type: 'string', enum: ['chrome', 'generic-cdp'] },
                 basePort: { type: 'integer', minimum: 1, maximum: 65535 },
             },
-            ['entryId', 'requestId', 'launch', 'isolation'],
+            ['registrationBearer', 'requestId', 'launch', 'isolation'],
         ),
         make(
             'dct_connection_restart',
-            'Explicitly restart the target, official Server or both using the immutable original launch, environment, roots and official options. Explicit fixed ports remain fixed; automatic port policy may select a new free port. Keeps connectionId and creates a new sessionId. Omitted scope means both only in this transitional stdio facade. Changed configuration requires Close and a new start. Never restart or replay tools automatically.',
+            'Explicitly restart the target, official Server or both using the immutable original launch, environment, roots and official options. Explicit fixed ports remain fixed; automatic port policy may select a new free port. Keeps connectionId and creates a new sessionId. Scope is required. Changed configuration requires Close and a new start. Never restart or replay tools automatically.',
             {
                 ...identity,
                 scope: { type: 'string', enum: ['target', 'official', 'both'] },
             },
-            Object.keys(identity),
+            [...Object.keys(identity), 'scope'],
         ),
         make(
             'dct_connection_stop',
@@ -127,29 +131,23 @@ export function lifecycleTools(hookEvents: readonly string[]): Tool[] {
             [...Object.keys(identity), 'disposition'],
         ),
         make(
-            'dct_connection_end_task',
-            'End current work for the identified session while retaining its live application and upstream connection.',
-            identity,
-            Object.keys(identity),
-        ),
-        make(
             'dct_operation_wait',
             'Wait up to 25 seconds for operation events or a final result. Replay uses the returned cursor. Continue waiting with that cursor when incomplete; cancelling this wait leaves the operation running.',
             {
-                entryId: uuid,
+                registrationBearer: identity.registrationBearer,
                 operationId: uuid,
                 cursor: { type: 'integer', minimum: 0 },
             },
-            ['entryId', 'operationId'],
+            ['registrationBearer', 'operationId'],
         ),
         make(
             'dct_operation_cancel',
             'Cancel this operation and perform actual cleanup. Cancellation may remain in progress during Windows authorization or normal close. Wait for the terminal result; failed cleanup preserves target identity for retry.',
             {
-                entryId: uuid,
+                registrationBearer: identity.registrationBearer,
                 operationId: uuid,
             },
-            ['entryId', 'operationId'],
+            ['registrationBearer', 'operationId'],
         ),
     ];
 }

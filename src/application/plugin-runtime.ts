@@ -7,7 +7,6 @@ import { profileAvailable as nativeProfileAvailable } from '../adapters/chrome-p
 import { DataDirectoryRegistry } from '../adapters/data-directory.ts';
 import { beginFixtureStage, emitFixtureEvent, runFixtureCleanup } from '../adapters/fixture-diagnostics.ts';
 import { createOfficialConnection, type OfficialConnection } from '../adapters/mcp-bridge.ts';
-import { createMcpEntryServer, type HookEventName } from '../adapters/mcp-entry-server.ts';
 import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from '../adapters/official-server.ts';
 import { createPortReservations } from '../adapters/port-reservation.ts';
 import { createTargetHost } from '../adapters/target-host.ts';
@@ -75,33 +74,20 @@ type ManagedConnection = {
     quarantine?: Promise<boolean>;
 };
 export type RuntimeDependencies = {
+    onCleanupReady?: (capability: GatewayConstructionCleanup) => void;
     officialRuntime?: Readonly<{ nodeExecutable: string; bin: string }>;
     dataDirectories?: DataDirectoryRegistry;
     profileAvailable?: typeof nativeProfileAvailable;
     createRouter?: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
     createHost?: () => ControllerHost;
     createConnection?: typeof createOfficialConnection;
-    createEntry?: typeof createMcpEntryServer;
     loadCatalog?: typeof loadOfficialToolCatalog;
     now?: () => number;
 };
-type ExitNotice = TargetEvent & {
-    kind: 'target-exit';
-    entryId: string;
-    connectionId: string;
-    cleanupStatus: 'pending' | 'succeeded' | 'failed';
-    cleanupCode?: string;
-};
-type FailureNotice = {
-    kind: 'connection-failure';
-    entryId: string;
-    connectionId: string;
-    sessionId: string;
-    code: string;
-    reason: string;
-    upstreamClosed?: boolean;
-};
-
+export type GatewayConstructionCleanup = Readonly<{
+    cleanup(): Promise<void>;
+    state(): 'open' | 'closing' | 'failed' | 'closed';
+}>;
 export async function createGatewayCore({
     dataDirectories = new DataDirectoryRegistry(),
     profileAvailable = nativeProfileAvailable,
@@ -111,6 +97,7 @@ export async function createGatewayCore({
     loadCatalog = loadOfficialToolCatalog,
     now,
     officialRuntime,
+    onCleanupReady,
 }: RuntimeDependencies = {}) {
     const runtimeLocation = officialRuntime ? Object.freeze({ ...officialRuntime }) : undefined;
     const timestamp = now ?? Date.now;
@@ -119,16 +106,12 @@ export async function createGatewayCore({
         ...(now ? { now } : {}),
         onExpire: (principal) => lifecycle.forgetOwner(principal.registrationId),
     });
-    const internalRegistration = { principal: registrations.createTrusted() };
-    const internalClient = createClientContext(internalRegistration.principal);
     const resourceRegistrations = new Map<string, { principal: ClientPrincipal; directory: ConnectionDirectory }>();
     const connections = new Map<string, ManagedConnection>();
     const owners = new Set<ConnectionOwner>();
     const directories = new Set<ConnectionDirectory>();
     const portReservations = createPortReservations();
     const makeHost = createHost ?? (() => createTargetHost({ portReservations }));
-    const notices = new Map<string, ExitNotice>();
-    const failures = new Map<string, FailureNotice>();
     const retirements = new Set<Promise<void>>();
     const starts = new Set<Promise<ConnectionStatus>>();
     const replacements = new Set<Promise<unknown>>();
@@ -163,9 +146,6 @@ export async function createGatewayCore({
         owners.add(owner);
         directory?.addOwner(owner);
         return owner;
-    }
-    function noticeKey(connectionId: string, sessionId: string) {
-        return `${connectionId}/${sessionId}`;
     }
     function selected(connectionId: string) {
         validateIdentity(connectionId, 'connection ID');
@@ -202,7 +182,7 @@ export async function createGatewayCore({
     function status(connectionId: string): ConnectionStatus;
     function status(connectionId?: string): GatewayStatus | ConnectionStatus {
         if (connectionId !== undefined) return statusOf(selected(connectionId));
-        return { entryId, connections: [...connections.values()].filter((item) => !item.owner.retired).map(summary) };
+        return { connections: [...connections.values()].filter((item) => !item.owner.retired).map(summary) };
     }
     async function disposeResources(owner: ConnectionOwner) {
         try {
@@ -233,34 +213,9 @@ export async function createGatewayCore({
         if (event.expected !== 'restart') connection.directory.requestRelease();
         // Target controller already revoked routing and the owner's dependent work.
         lifecycle.cancelRoute({ connectionId: connection.connectionId, sessionId: event.sessionId });
-        const key = noticeKey(connection.connectionId, event.sessionId);
-        failures.delete(key);
-        const notice: ExitNotice = {
-            kind: 'target-exit',
-            entryId,
-            connectionId: connection.connectionId,
-            sessionId: event.sessionId,
-            reason: event.reason,
-            taskActive: event.taskActive,
-            processId: event.processId,
-            port: event.port,
-            targetKind: event.targetKind,
-            exitedAt: event.exitedAt,
-            ...(event.expected ? { expected: event.expected } : {}),
-            ...(event.operationId ? { operationId: event.operationId } : {}),
-            ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
-            ...(event.signalCode === undefined ? {} : { signalCode: event.signalCode }),
-            cleanupStatus: 'pending',
-        };
-        if (!shuttingDown) notices.set(key, notice);
         const pending = (async () => {
             try {
                 await connection.controller.retireExited({ sessionId: event.sessionId });
-                notice.cleanupStatus = 'succeeded';
-            } catch (error) {
-                notice.cleanupStatus = 'failed';
-                notice.cleanupCode = 'RESOURCE_CLEANUP_FAILED';
-                throw error;
             } finally {
                 if (
                     event.expected !== 'restart' &&
@@ -319,73 +274,16 @@ export async function createGatewayCore({
             if (connection.officialOwner !== owner || owner.retired || connection.upstream !== upstream) return;
             delete connection.upstream;
             connection.controller.officialDisconnected();
-            failures.set(noticeKey(connection.connectionId, connection.sessionId), {
-                kind: 'connection-failure',
-                entryId,
-                connectionId: connection.connectionId,
-                sessionId: connection.sessionId,
-                code: 'CONNECTION_RECOVERY_REQUIRED',
-                reason: 'official-disconnected',
-            });
         });
-    }
-    function hookStatus(hookEventName: HookEventName): Record<string, unknown> {
-        const completed = lifecycle.takeNotices(
-            (operation) =>
-                ![...notices.values()].some(
-                    (event) => event.operationId === operation.operationId && event.cleanupStatus === 'pending',
-                ),
-        );
-        const observedExits = [...notices.values()]
-            .filter((event) => event.cleanupStatus !== 'pending')
-            .map((event) => ({
-                kind: event.kind,
-                entryId: event.entryId,
-                connectionId: event.connectionId,
-                sessionId: event.sessionId,
-                reason: event.reason,
-                taskActive: event.taskActive,
-                processId: event.processId,
-                port: event.port,
-                targetKind: event.targetKind,
-                exitedAt: event.exitedAt,
-                cleanupStatus: event.cleanupStatus,
-                ...(event.expected === undefined ? {} : { expected: event.expected }),
-                ...(event.operationId === undefined ? {} : { operationId: event.operationId }),
-                ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
-                ...(event.signalCode === undefined ? {} : { signalCode: event.signalCode }),
-                ...(event.cleanupCode === undefined ? {} : { cleanupCode: event.cleanupCode }),
-            }));
-        const operations = completed.map((operation) => {
-            const exits = observedExits.filter(
-                (event) => event.expected && event.operationId === operation.operationId,
-            );
-            return { ...operation, ...(exits.length ? { exits } : {}) };
-        });
-        const exits = observedExits.filter((event) => !event.expected || !event.operationId);
-        const connectionFailures = [...failures.values()];
-        for (const event of [...exits, ...operations.flatMap((operation) => operation.exits ?? [])])
-            notices.delete(noticeKey(event.connectionId, event.sessionId));
-        failures.clear();
-        if (!completed.length && !exits.length && !connectionFailures.length) return {};
-        const context =
-            'CDP lifecycle events: ' +
-            JSON.stringify({ exits, operations, connections: connectionFailures }) +
-            (exits.some((event) => event.taskActive && !event.expected)
-                ? '\nThe target exited and its old connection/session is closed. Ask the user whether to start a new task with a new start. Never restart or replay automatically.'
-                : '') +
-            (connectionFailures.length
-                ? '\nInspect the connection error and ask before explicit restart or Close; never replay automatically.'
-                : '');
-        return hookEventName === 'Stop'
-            ? { decision: 'block', reason: context }
-            : { hookSpecificOutput: { hookEventName, additionalContext: context } };
     }
     async function start(
         options: Parameters<Controller['start']>[0],
         context: ControlContext = {},
     ): Promise<ConnectionStatus> {
         if (shuttingDown) throw new Error('The gateway is closing.');
+        const principal = context.client?.principal;
+        if (!principal) throw new Error('Start requires an authenticated originating client.');
+        registrations.check(principal);
         context.signal?.throwIfAborted();
         const admissionSignal = context.signal
             ? AbortSignal.any([admissionShutdown.signal, context.signal])
@@ -428,7 +326,6 @@ export async function createGatewayCore({
             options.targetKind === 'chrome' ? profileAvailable : undefined,
         );
         directories.add(directory);
-        const principal = context.client?.principal ?? internalRegistration.principal;
         registrations.own(connectionId, principal);
         resourceRegistrations.set(connectionId, { principal, directory });
         const owner = newOwner(randomUUID(), directory);
@@ -505,14 +402,6 @@ export async function createGatewayCore({
                     onObservationFailure: (id) => {
                         if (managed.owner.sessionId !== id) return;
                         managed.quarantined = true;
-                        failures.set(noticeKey(connectionId, managed.sessionId), {
-                            kind: 'connection-failure',
-                            entryId,
-                            connectionId,
-                            sessionId: managed.sessionId,
-                            code: 'PROCESS_OBSERVATION_UNAVAILABLE',
-                            reason: 'process-monitor-lost',
-                        });
                         trackRetirement(closeUpstream(managed));
                     },
                     server: {
@@ -623,7 +512,7 @@ export async function createGatewayCore({
                 connection.owner.expectedOperationId = context.operationId;
                 if (request.scope === undefined || !['target', 'official', 'both'].includes(request.scope))
                     throw new Error('An explicit target, official or both restart scope is required.');
-                if (request.mcpArgs !== undefined)
+                if (Object.hasOwn(request, 'mcpArgs'))
                     throw new Error('Restart cannot replace mcpArgs; Close and start a new connection.');
                 const releaseSuccessor = connection.directory.holdSuccessor();
                 connection.restartScope = request.scope;
@@ -649,7 +538,6 @@ export async function createGatewayCore({
                             context.onIdentity?.({ connectionId: request.connectionId, sessionId });
                         },
                     });
-                    if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
                     return { ...summary(connection), ...result, connectionId: request.connectionId };
                 } catch (error) {
                     connection.directory.requestRelease();
@@ -700,7 +588,6 @@ export async function createGatewayCore({
             const result = await connection.controller.stop(request, context);
             if (request.disposition === 'Close') {
                 if (connections.get(request.connectionId) === connection) connections.delete(request.connectionId);
-                if (!context.operationId) notices.delete(noticeKey(request.connectionId, request.sessionId));
                 await retryDirectory(connection.directory);
             }
             return {
@@ -711,16 +598,6 @@ export async function createGatewayCore({
                     request.disposition === 'Close'
                         ? 'disconnected'
                         : (summary(connection).upstreamStatus ?? 'disconnected'),
-            };
-        },
-        endTask: async (request) => {
-            const connection = routed(request);
-            connection.lastRealOperationAt = timestamp();
-            return {
-                ...(await connection.controller.endTask(request)),
-                connectionId: connection.connectionId,
-                upstreamStatus: summary(connection).upstreamStatus ?? 'disconnected',
-                enabledToolCount: summary(connection).enabledToolCount ?? 0,
             };
         },
     };
@@ -738,8 +615,6 @@ export async function createGatewayCore({
         };
     }
     const catalogOwner = newOwner(randomUUID());
-    const catalogRouter = await createRouter();
-    catalogOwner.register('router', catalogRouter);
     function cleanup() {
         return runFixtureCleanup({ entryId }, performCleanup);
     }
@@ -812,49 +687,36 @@ export async function createGatewayCore({
         });
         return cleanupPromise;
     }
+    // Trusted composition retains this capability even if construction later rejects.
+    // A throwing callback runs before the first resource acquisition.
+    onCleanupReady?.(Object.freeze({ cleanup, state: () => cleanupState }));
     try {
-        const catalogConnection = await createConnection(catalogRouter.url, {
-            ...runtimeLocation,
-            signal: catalogOwner.signal,
-            onAcquired: (resource) => catalogOwner.register('upstream', resource),
-        });
-        if (!catalogOwner.hasResource('upstream')) catalogOwner.register('upstream', catalogConnection);
+        catalogOwner.assertOpen();
+        const catalogRouter = await catalogOwner.track(
+            createRouter().then((router) => {
+                catalogOwner.register('router', router);
+                catalogOwner.assertOpen();
+                return router;
+            }),
+        );
+        const catalogConnection = await catalogOwner.track(
+            createConnection(catalogRouter.url, {
+                ...runtimeLocation,
+                signal: catalogOwner.signal,
+                onAcquired: (resource) => catalogOwner.register('upstream', resource),
+            }).then((connection) => {
+                if (!catalogOwner.hasResource('upstream')) catalogOwner.register('upstream', connection);
+                catalogOwner.assertOpen();
+                return connection;
+            }),
+        );
         fullCatalog = await loadCatalog(catalogConnection.tools);
+        catalogOwner.assertOpen();
         fullCatalog.validate(catalogConnection.tools);
         const catalog: Tool[] = fullCatalog.tools;
         await disposeResources(catalogOwner);
         catalogOwner.retire(new Error('Catalog discovery completed.'));
         owners.delete(catalogOwner);
-        const callbacks: Parameters<typeof createMcpEntryServer>[0] = {
-            tools: catalog,
-            status: (hookEventName) => (hookEventName ? hookStatus(hookEventName) : { ...status() }),
-            control: async (request, signal, facilities) =>
-                control(
-                    request.action === 'restart' ? { ...request, scope: request.scope ?? 'both' } : request,
-                    signal,
-                    internalClient.request(
-                        facilities ?? {
-                            requestId: 0,
-                            capabilities: { roots: false, formElicitation: false },
-                            ...(signal ? { waitSignal: signal } : {}),
-                        },
-                    ),
-                ),
-            invoke: async (name, arguments_, signal, onProgress, facilities) =>
-                invoke(
-                    name,
-                    arguments_,
-                    signal,
-                    onProgress,
-                    internalClient.request(
-                        facilities ?? {
-                            requestId: 0,
-                            capabilities: { roots: false, formElicitation: false },
-                            ...(signal ? { waitSignal: signal } : {}),
-                        },
-                    ),
-                ),
-        };
         async function control(
             request: import('../domains/control-contract.ts').ControlRequest,
             signal?: AbortSignal,
@@ -887,18 +749,6 @@ export async function createGatewayCore({
         ): Promise<Record<string, unknown>> {
             if (client) registrations.check(client.principal);
             const result = await lifecycle.control(request, signal, client);
-            const snapshot = isRecord(result.operation) ? result.operation : result;
-            if (snapshot.state === 'succeeded' || snapshot.state === 'failed' || snapshot.state === 'cancelled') {
-                for (const [key, event] of notices) {
-                    if (event.expected && event.operationId === snapshot.operationId) notices.delete(key);
-                }
-                if (typeof snapshot.connectionId === 'string' && typeof snapshot.sessionId === 'string') {
-                    const key = noticeKey(snapshot.connectionId, snapshot.sessionId);
-                    const exit = notices.get(key);
-                    const error = isRecord(snapshot.error) ? snapshot.error : undefined;
-                    if (exit?.expected || error?.processExited === true) notices.delete(key);
-                }
-            }
             if (request.action !== 'status' || request.operationId || !fullCatalog) return result;
             const connection = request.connectionId ? selected(request.connectionId) : undefined;
             if (!connection)
@@ -972,7 +822,6 @@ export async function createGatewayCore({
                         ...fullCatalog?.requirements(name, connection.mcpArgs, true),
                         nextAction: 'close-and-new-start',
                     });
-                connection.controller.beginTask(route);
                 const healthTiming = measured(connection.diagnose, 'connection-health');
                 await connection.controller.checkHealth();
                 healthTiming();
@@ -1020,7 +869,6 @@ export async function createGatewayCore({
             entryId,
             controller: handler as CoreControlHandler,
             tools: catalog,
-            callbacks,
             invoke: (name: string, args: Record<string, unknown>, client: ClientRequestContext) =>
                 invoke(name, args, client.waitSignal, client.progress, client),
             cleanup,
@@ -1072,7 +920,6 @@ export async function createGatewayCore({
                 },
                 cleanupState: () => cleanupState,
             },
-            internalClient,
         };
     } catch (error) {
         try {
@@ -1084,37 +931,6 @@ export async function createGatewayCore({
         }
         throw error;
     }
-}
-
-/** Transitional stdio policy: transport EOF explicitly requests final core cleanup. */
-export async function startPluginRuntime(dependencies: RuntimeDependencies = {}) {
-    const core = await createGatewayCore(dependencies);
-    const entry = (dependencies.createEntry ?? createMcpEntryServer)({
-        ...core.callbacks,
-        invoke: (name, args, signal, progress, facilities) =>
-            core.callbacks.invoke(name, args, signal, progress, facilities),
-    });
-    try {
-        await entry.connect();
-    } catch (error) {
-        await entry.close();
-        await core.cleanup();
-        throw error;
-    }
-    const closed = entry.closed.then(core.cleanup);
-    return {
-        entryId: core.entryId,
-        controller: {
-            ...core.controller,
-            restart: (request: Parameters<ControlHandler['restart']>[0], context?: ControlContext) =>
-                core.controller.restart({ ...request, scope: request.scope ?? 'both' }, context),
-        },
-        closed,
-        async close() {
-            await core.cleanup();
-            await entry.close();
-        },
-    };
 }
 
 export type GatewayCore = Awaited<ReturnType<typeof createGatewayCore>>;

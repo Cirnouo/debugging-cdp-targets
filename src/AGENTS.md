@@ -1,27 +1,29 @@
 # Runtime boundaries
 
-Before implementing the singleton desktop App migration, read
-[ADR 0017](../docs/adr/0017-singleton-desktop-app.md) and the
-[accepted implementation plan](../docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
-They govern forward implementation; the current stdio gateway and installed Skill
-remain supported until the atomic HTTP/Hook cutover in Task 4.
+Before changing App ownership or transport, read
+[ADR 0017](../docs/adr/0017-singleton-desktop-app.md). The singleton Electron App
+owns core resources and direct HTTP; host plugins are thin.
+
 
 Dependencies flow interface → application → domains/shared; application may
 use explicit adapters. Adapters never depend on application/interface. Domains
 contain no environment, file, process, network, or PowerShell I/O.
 
-Only interface/mcp-bootstrap.ts executes directly.
-The transitional bootstrap owns host MCP stdin/stdout through the official SDK;
-transport-independent application core accepts explicit client request contexts.
-Client detach does not clean resources; stdio EOF explicitly requests cleanup. The
-gateway adds required _dct connection/session routing to compatible fixed official
-input schemas and removes it before forwarding. Validate each actual upstream's
-catalog against reviewed variants; preserve official names, arguments and results.
-Only the seven MCP lifecycle/operation tools extend the catalog; status carries
-automatic Hook output. Each gateway has an
-independent entry identity and manages any number of independent connections.
-Tests inject adapters at I/O boundaries. Use shared/constants.ts
-for cross-layer invariants. Never add persisted session state, plugin CLI or control IPC.
+Only interface/app-bootstrap.ts executes directly. It synchronously redirects
+Chromium userData/sessionData to separate per-process temporary directories before
+any await or controlled main import. App main owns the OS-user lease, selected
+configuration and cleanup-gated normal exit. Never call Electron's singleton API.
+
+The official SDK HTTP adapter authenticates explicit registrationBearer on every
+owned tool request. Official _dct contains bearer, connectionId and sessionId;
+strip it completely before forwarding unchanged arguments/results. MCP sessions
+never hold an implicit owner. Accepted asynchronous jobs retain original request
+facilities until admission settles or their real client/session disconnects.
+Client detach never requests application-owned cleanup. Seven ordinary
+registration/lifecycle/operation tools extend the catalog; no public entryId,
+task activity, end-task, Hooks or injected notices. Tests replace I/O boundaries.
+Never add persisted runtime state, plugin CLI or administrative control IPC.
+
 
 The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolation.md)
 requires pure isolation/launch validation in domains,

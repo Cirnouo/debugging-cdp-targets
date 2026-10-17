@@ -1,18 +1,22 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/client';
 import { createOfficialConnection, interruptedOfficialCall } from '../../src/adapters/mcp-bridge.ts';
+import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
 import { buildServerArguments } from '../../src/adapters/official-server.ts';
 import { createPlatformAdapter, validateProcessIdentity } from '../../src/adapters/platform-process.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
+import { waitForClient } from '../../src/application/client-context.ts';
 import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import type { ApplicationLaunch } from '../../src/domains/launch-command.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
+import { OFFICIAL_RELEASE } from '../../tooling/official-release.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 import { closeSmokeConnection, lifecycleClient, readStatus } from './lifecycle-client.ts';
 import { createClient } from './mcp-client.ts';
@@ -169,6 +173,9 @@ async function direct(
     directory: string,
     register: (action: () => Promise<unknown>) => void,
 ): Promise<Route> {
+    assert.equal(process.versions.electron, undefined, 'Direct native regression requires ordinary Node.');
+    const official = await realpath(path.join(root, 'node_modules', OFFICIAL_RELEASE.name));
+    await verifyOfficialPackage(official, OFFICIAL_RELEASE, { pnpmInstalled: true });
     const host = createTargetHost();
     const target = await host.launch(
         { isolation: { mode: 'none' }, launch, targetKind: fixture.targetKind, basePort: 20222 },
@@ -190,6 +197,8 @@ async function direct(
     );
     const url = `http://127.0.0.1:${target.port}`;
     const upstream = await createOfficialConnection(url, {
+        nodeExecutable: process.execPath,
+        bin: path.join(official, OFFICIAL_RELEASE.bin),
         args: buildServerArguments(url, process.env, ['--workspace', directory]),
         onAcquired: (resource) =>
             register(async () => {
@@ -201,9 +210,15 @@ async function direct(
         identity: target,
         schema: schemaMap(upstream.tools),
         async call(name, args = {}) {
-            const result = await upstream.call(name, args);
-            assert.ok(isRecord(result));
-            return result;
+            const wait = new AbortController();
+            const timer = setTimeout(() => wait.abort(new Error('MCP timeout: direct official response wait')), 90_000);
+            try {
+                const result = await waitForClient(upstream.call(name, args), wait.signal);
+                assert.ok(isRecord(result));
+                return result;
+            } finally {
+                clearTimeout(timer);
+            }
         },
         async close() {
             const results = await closeEvery([
@@ -221,17 +236,17 @@ async function direct(
     };
 }
 function gateway() {
-    const client = createClient(path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'));
+    const client = createClient(path.join(root, 'tests/fixtures/http-gateway.ts'));
     const tool = async (name: string, args: Record<string, unknown> = {}) => {
         const result = await client.request('tools/call', { name, arguments: args }, 90_000);
         assert.ok(isRecord(result));
         return result;
     };
     const control = lifecycleClient(tool);
-    let entryId = '';
+    let initialized = false;
     const owned: ConnectionStatus[] = [];
     const selected = async (connectionId: string) => {
-        const result = (await tool('dct_connection_status', { entryId, connectionId, include: ['diagnostics'] }))
+        const result = (await tool('dct_connection_status', { connectionId, include: ['diagnostics'] }))
             .structuredContent;
         assert.ok(isRecord(result));
         return result;
@@ -246,14 +261,13 @@ function gateway() {
             client.notify('notifications/initialized');
             const initial = readStatus((await tool('dct_connection_status')).structuredContent);
             assert.ok('connections' in initial && initial.connections.length === 0);
-            entryId = initial.entryId;
+            initialized = true;
         },
         async start(launch: ApplicationLaunch, directory: string): Promise<Route> {
             const started = Date.now();
             const summary = await control({
                 isolation: { mode: 'none' },
                 action: 'start',
-                entryId,
                 requestId: randomUUID(),
                 targetKind: fixture.targetKind,
                 launch,
@@ -265,7 +279,6 @@ function gateway() {
             const identity = await inspect(summary, launch, started);
             const details = (
                 await tool('dct_connection_status', {
-                    entryId,
                     connectionId: summary.connectionId,
                     toolNames: ['evaluate_script', 'list_pages', 'take_snapshot', 'take_screenshot'],
                 })
@@ -280,7 +293,6 @@ function gateway() {
                 close: () =>
                     closeSmokeConnection(control, {
                         action: 'stop',
-                        entryId,
                         connectionId: summary.connectionId,
                         sessionId: summary.sessionId ?? '',
                         requestId: randomUUID(),
@@ -290,11 +302,11 @@ function gateway() {
         },
         async close() {
             try {
-                assert.ok(entryId, 'Gateway did not initialize; only stdio exit can be observed.');
+                assert.ok(initialized, 'HTTP fixture did not initialize; only fixture exit can be observed.');
                 let connections = owned;
                 let statusFailure: unknown;
                 try {
-                    const current = readStatus((await tool('dct_connection_status', { entryId })).structuredContent);
+                    const current = readStatus((await tool('dct_connection_status', {})).structuredContent);
                     assert.ok('connections' in current);
                     connections = current.connections;
                 } catch (error) {
@@ -305,7 +317,6 @@ function gateway() {
                         assert.ok(connection.sessionId);
                         return closeSmokeConnection(control, {
                             action: 'stop',
-                            entryId,
                             connectionId: connection.connectionId,
                             sessionId: connection.sessionId,
                             requestId: randomUUID(),
@@ -317,7 +328,7 @@ function gateway() {
                     gatewayCloseResults: results,
                     statusFailure: statusFailure === undefined ? undefined : errorMessage(statusFailure),
                 });
-                const final = readStatus((await tool('dct_connection_status', { entryId })).structuredContent);
+                const final = readStatus((await tool('dct_connection_status', {})).structuredContent);
                 evidence.push({ gatewayCleanup: results, finalStatus: final, owned });
                 await save();
                 assert.ok(
@@ -329,7 +340,7 @@ function gateway() {
             } finally {
                 await client.close();
                 evidence.push({ gatewayExit: { code: client.child.exitCode, signal: client.child.signalCode } });
-                assert.equal(client.child.exitCode, 0, 'Gateway stdio exit failed.');
+                assert.equal(client.child.exitCode, 0, 'HTTP fixture normal cleanup/exit failed.');
             }
         },
     };
@@ -516,63 +527,68 @@ async function screenshot(
     });
     await save();
     if ('error' in outcome) {
-        if (interruptedOfficialCall(outcome.error) === 'upstream-timeout') return { timeout: true };
-        throw outcome.error;
-    }
-    if (
-        isRecord(outcome.result.structuredContent) &&
-        outcome.result.structuredContent.code === 'CONNECTION_RECOVERY_REQUIRED'
-    ) {
-        assert.equal(outcome.result.structuredContent.reason, 'upstream-timeout');
-        assert.equal(outcome.result.structuredContent.upstreamClosed, true);
-        assert.equal(diagnosticAfter?.upstreamStatus, 'quarantined');
-        assert.ok(
-            peer &&
-                isRecord(peerDuring) &&
-                peerDuring.whilePending === true &&
-                peerDuring.completedWhilePending === true,
-            'Peer not checked while pending.',
-        );
-        const afterPeerStarted = performance.now();
-        const peerAfter = returned(await evaluate(peer.route, peer.pageId, '() => ({title:document.title})'));
-        assert.ok(text(await peer.route.call('list_pages')).includes(`${peer.pageId}:`));
-        const afterPeerMs = performance.now() - afterPeerStarted;
-        assert.ok(afterPeerMs < 20_000, 'Peer did not respond promptly after quarantine.');
-        assert.ok(typeof peerAfter.title === 'string' && peerAfter.title.includes(fixture.pageTitle));
-        assert.ok(isRecord(peerDuring.peerBefore) && typeof peerDuring.peerBefore.handle === 'number');
-        const peerNativeAfter = await sampleWindow(peer.route.identity, 'None', peerDuring.peerBefore.handle);
-        assertWindowState(peerNativeAfter, 'normal');
-        const peerStatusAfter = await peer.route.status?.();
-        assert.ok(isRecord(peerDuring.peerStatusBefore));
-        assert.equal(peerStatusAfter?.sessionId, peerDuring.peerStatusBefore.sessionId);
-        assert.equal(peerStatusAfter?.connectionId, peerDuring.peerStatusBefore.connectionId);
-        assert.equal(peerStatusAfter?.processId, peerDuring.peerStatusBefore.processId);
-        assert.equal(peerStatusAfter?.port, peerDuring.peerStatusBefore.port);
-        assert.equal(peerStatusAfter?.upstreamStatus, 'connected');
-        const retained = await sampleWindow(route.identity, 'None', handle);
-        assertWindowState(retained, minimized ? 'minimized' : 'normal', before);
-        const gatedStarted = performance.now();
-        const rejected = await evaluate(route, pageId, '() => ({title:document.title})');
-        assert.ok(performance.now() - gatedStarted < 20_000, 'Quarantined route did not reject promptly.');
-        assert.equal(rejected.isError, true);
-        assert.ok(isRecord(rejected.structuredContent));
-        assert.equal(rejected.structuredContent.upstreamStatus, 'quarantined');
-        assert.equal(rejected.structuredContent.status, 'lost');
-        assert.equal(rejected.structuredContent.connectionId, diagnosticAfter?.connectionId);
-        assert.equal(rejected.structuredContent.entryId, diagnosticAfter?.entryId);
-        assert.equal(rejected.structuredContent.sessionId, diagnosticAfter?.sessionId);
-        assert.equal(rejected.structuredContent.nextAction, 'inspect-connection-error');
-        evidence.push({
-            isolation: {
-                peerAfter,
-                afterPeerMs,
-                peerNativeAfter,
-                peerStatusAfter,
-                retained,
-                rejected,
-                pendingCleanup: 'Observable quarantine; pending-map clearing covered by router regressions.',
-            },
-        });
+        const timeout =
+            interruptedOfficialCall(outcome.error) === 'upstream-timeout' ||
+            errorMessage(outcome.error).startsWith('MCP timeout:');
+        if (!timeout) throw outcome.error;
+        if (route.status) {
+            assert.equal(diagnosticAfter?.upstreamStatus, 'connected');
+            assert.equal(diagnosticAfter?.sessionId, diagnosticBefore?.sessionId);
+            assert.equal(diagnosticAfter?.processId, diagnosticBefore?.processId);
+            assert.equal(diagnosticAfter?.port, diagnosticBefore?.port);
+            assert.ok(
+                peer &&
+                    isRecord(peerDuring) &&
+                    peerDuring.whilePending === true &&
+                    peerDuring.completedWhilePending === true,
+                'Peer not checked while pending.',
+            );
+            const peerStarted = performance.now();
+            const peerAfter = returned(await evaluate(peer.route, peer.pageId, '() => ({title:document.title})'));
+            assert.ok(text(await peer.route.call('list_pages')).includes(`${peer.pageId}:`));
+            assert.ok(performance.now() - peerStarted < 20_000, 'Peer did not respond promptly after client timeout.');
+            assert.ok(typeof peerAfter.title === 'string' && peerAfter.title.includes(fixture.pageTitle));
+            assert.ok(isRecord(peerDuring.peerBefore) && typeof peerDuring.peerBefore.handle === 'number');
+            const peerNativeAfter = await sampleWindow(peer.route.identity, 'None', peerDuring.peerBefore.handle);
+            assertWindowState(peerNativeAfter, 'normal');
+            const peerStatusAfter = await peer.route.status?.();
+            assert.ok(isRecord(peerDuring.peerStatusBefore));
+            for (const field of ['sessionId', 'connectionId', 'processId', 'port'])
+                assert.equal(peerStatusAfter?.[field], peerDuring.peerStatusBefore[field]);
+            assert.equal(peerStatusAfter?.upstreamStatus, 'connected');
+            const retained = await sampleWindow(route.identity, 'None', handle);
+            assertWindowState(retained, minimized ? 'minimized' : 'normal', before);
+            const gatedStarted = performance.now();
+            let admission: 'rejected' | 'settled-before-followup';
+            try {
+                const readback = returned(await evaluate(route, pageId, '() => ({title:document.title})'));
+                assert.equal(typeof readback.title, 'string');
+                admission = 'settled-before-followup';
+            } catch (error) {
+                assert.ok(error instanceof ProtocolError);
+                assert.equal(error.code, ProtocolErrorCode.InvalidParams);
+                assert.ok(
+                    performance.now() - gatedStarted < 20_000,
+                    'Pending execution did not reject its peer call promptly.',
+                );
+                admission = 'rejected';
+            }
+            const sameOwner = await route.status();
+            for (const field of ['sessionId', 'connectionId', 'processId', 'port'])
+                assert.equal(sameOwner[field], diagnosticBefore?.[field]);
+            assert.equal(sameOwner.upstreamStatus, 'connected');
+            evidence.push({
+                isolation: {
+                    peerAfter,
+                    peerNativeAfter,
+                    peerStatusAfter,
+                    retained,
+                    admission,
+                    originalCaptureRetried: false,
+                    healthyUpstreamRetained: true,
+                },
+            });
+        }
         return { timeout: true };
     }
     text(outcome.result);

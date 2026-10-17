@@ -43,9 +43,11 @@ It uses exact pnpm 12.4.2 and `setup-node` with `node-version: '24.x'` and
 including when the runner cache has an older match; see the reviewed action's
 [versioned check-latest documentation](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/docs/advanced-usage.md#check-latest-version).
 After a normal frozen install, it runs `pnpm typecheck`, `pnpm test`,
-`pnpm check:build`, `pnpm check:security:build` and `pnpm smoke:official` in order.
+`pnpm check:build`, `pnpm check:security:build`, `pnpm check:app` and
+`pnpm smoke:official --installed` in order.
 This lane establishes Ubuntu compatibility for the default regressions, generated
-build comparisons and delivered official catalog with normal stdio shutdown.
+build comparisons and reviewed installed original official catalog with normal
+stdio shutdown. It does not establish App-delivery/native acceptance.
 It launches no GUI and does not establish latest-24 Windows, macOS or browser
 acceptance. The existing canonical jobs retain exact Node 24.21.0 and their
 acceptance checks. The main Ruleset requirements remain unchanged.
@@ -112,19 +114,25 @@ do not require an interactive desktop. They do not run the interactive Windows
 lane or establish its acceptance. Record local commands and results separately
 from any explicit interactive run and the remote Windows tests result; include
 the tested commit and any prerequisite skips or remaining limits in that evidence.
-pnpm build:plugin regenerates committed bundles; check:build is read-only.
+pnpm build:plugin regenerates committed thin payloads; check:build is read-only.
+pnpm check:app verifies App bundle/native input/license composition without writing;
+build:app stages explicitly supplied verified archives into a fresh directory.
 pnpm build:security regenerates the standalone audit entry;
 check:security:build is an offline, read-only comparison in verify:push.
 
-`pnpm smoke:official` is a separate explicit catalog smoke of the delivered public
-Server. It copies both host Plugins outside node_modules, uses a temporary home and empty
-PATH, invokes no browser tools, and shuts the child down normally through stdin.
+`pnpm smoke:official --stage <verified-App-stage>` explicitly verifies and uses
+App-delivered ordinary Node and original public Server. The mutually exclusive
+`--installed` mode explicitly verifies the reviewed repository package and current
+supported ordinary Node for independent release/catalog evidence. No default or
+fallback mode exists. Both use a temporary home/cwd and empty PATH, invoke no
+browser tools and normally dispose the actual child. Installed mode does not
+establish App/native delivery acceptance.
 
-Actual host Marketplace and Hook smokes remain explicit commands in `tests/smoke/`.
-They use disposable configuration and synthetic loopback models to prove host
-discovery, explicitly invoked full Skill context, all four Hook boundaries, one
-Stop continuation, idle-next-turn delivery and each host's disabled/untrusted
-negative. Preserve user configuration, global Skills and old state. Historical
+Actual host Marketplace/instructions smokes remain explicit in `tests/smoke/`.
+They use disposable configuration and synthetic loopback models for discovery,
+complete instructions and explicit native HTTP tool-call checks against an
+already running App. No target is launched by these host-only scenarios. Preserve
+user configuration, global Skills and old state. Historical
 Windows baselines are Codex CLI 0.160.0 and Claude Code 2.1.283; the metadata
 follow-up ran 0.161.0 and 2.1.294, not the older versions. These executables are
 not installed by CI. See [host metadata](../host-metadata.md) for the dated
@@ -313,8 +321,10 @@ all other jobs remain artifact-free. These records contain closed safe stage/out
 numbers and bounded allowlisted error cause codes. They exclude raw errors,
 messages/stacks, gateway/browser stderr, tool/page content, HTTP headers/bodies,
 environment, argv, process tables, lock content, hostnames and private paths.
-The original delivered gateway remains the smoke entry with a test-only safe
-subscriber preload. Streaming begins before work completes, has fixed record,
+The test-only real-core SDK HTTP fixture is the smoke entry, outside production
+delivery, with a safe subscriber preload. Sealed native comparison binds it to
+the exact clean source and complete App stage; development receipts say dirty.
+Fixture exit never establishes App GUI/exit acceptance. Streaming begins before work completes, has fixed record,
 event and byte caps, and exposes truncation, rejection or write limitations.
 Both owned smoke children omit inherited `NODE_OPTIONS`. Dependency-free
 initialization creates all five fixed files, with both smoke envelopes explicitly

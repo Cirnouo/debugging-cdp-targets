@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
+import type { ClientCapabilities } from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createOfficialConnection, interruptedOfficialCall } from '../src/adapters/mcp-bridge.ts';
-import { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
+import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
+import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
+import { createGatewayCore } from '../src/application/plugin-runtime.ts';
+import type { ClientRequestContext } from '../src/shared/client-context.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 const route = {
@@ -27,18 +32,19 @@ async function boundedSignal(signal: Promise<void>, description: string) {
     }
 }
 
-async function fakeOfficial(options: { pages?: number; repeatedCursor?: boolean } = {}) {
+async function fakeOfficial(options: { pages?: number; repeatedCursor?: boolean; reservedRouting?: boolean } = {}) {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-mcp-test-'));
     const bin = path.join(directory, 'server.mjs');
     await writeFile(
         bin,
         `import { Server } from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/server'))};
 import { StdioServerTransport } from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/server/stdio'))};
+import { access } from 'node:fs/promises';
 const server = new Server({ name: 'fake-official', version: '1' }, { capabilities: { tools: {} } });
 server.setRequestHandler('tools/list', async (request) => {
     const page = Number(request.params?.cursor === 'repeat' ? 1 : request.params?.cursor ?? 0);
     return {
-        tools: [{ name: ${options.pages ? "'echo_' + page" : "'echo'"}, inputSchema: { type: 'object', properties: {} }, outputSchema: { type: 'object', properties: { arguments: { type: 'object' }, value: { type: 'number' } } }, annotations: { title: 'Original title', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, _meta: { original: 'tool metadata' } }],
+        tools: [{ name: ${options.pages ? "'echo_' + page" : "'echo'"}, inputSchema: { type: 'object', properties: ${options.reservedRouting ? "{ _dct: { type: 'string' } }" : '{}'} }, outputSchema: { type: 'object', properties: { arguments: { type: 'object' }, value: { type: 'number' } } }, annotations: { title: 'Original title', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, _meta: { original: 'tool metadata' } }],
         ...(page + 1 < ${options.pages ?? 1} ? { nextCursor: ${options.repeatedCursor ? "'repeat'" : 'String(page + 1)'} } : {}),
     };
 });
@@ -60,13 +66,17 @@ server.setRequestHandler('tools/call', async (request, ctx) => {
         await new Promise(() => {});
     }
     if (request.params.arguments?.ignoreCancel) await new Promise(() => {});
+    if (request.params.arguments?.untilFile) {
+        while (!await access(request.params.arguments.untilFile).then(() => true, () => false))
+            await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     if (request.params.arguments?.delay) await new Promise((resolve) => setTimeout(resolve, request.params.arguments.delay));
     if (request.params.arguments?.wait) {
         await new Promise((resolve) => ctx.mcpReq.signal.addEventListener('abort', resolve, { once: true }));
         return { content: [{ type: 'text', text: 'cancelled' }] };
     }
     const token = request.params._meta?.progressToken;
-    if (token !== undefined) await ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: 1 } });
+    if (token !== undefined) await ctx.mcpReq.notify({ method: 'notifications/progress', params: { progressToken: token, progress: request.params.arguments?.zeroProgress ? 0 : 1 } });
     const roots = await server.listRoots();
     return { content: [{ type: 'text', text: JSON.stringify(roots) }], structuredContent: { arguments: request.params.arguments }, _meta: { original: 'result metadata' }, isError: false };
 });
@@ -206,96 +216,211 @@ test('public transport serialization failure closes pending SDK state and cannot
     }
 });
 
-test('entry preserves official tools and forwards calls, roots, progress and lifecycle choices', async () => {
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const tool = {
-        name: 'official_echo',
-        inputSchema: { type: 'object' as const, properties: { value: { type: 'string' } } },
-    };
-    let rootsChanged = false;
-    const entry = createMcpEntryServer({
-        onRootsChanged: async () => {
-            rootsChanged = true;
-        },
-        tools: [tool],
-        transport: serverTransport,
-        status: () => ({ state: 'idle' }),
-        invoke: async (name, arguments_, signal, progress) => {
-            assert.equal(name, tool.name);
-            assert.equal(signal.aborted, false);
-            progress({ progress: 1, total: 1 });
-            return { content: [{ type: 'text', text: String(arguments_.value) }] };
-        },
-    });
-    const client = new Client(
-        { name: 'test', version: '1' },
-        { capabilities: { roots: { listChanged: true }, elicitation: { form: {} } } },
-    );
-    client.setRequestHandler('roots/list', async () => ({ roots: [{ uri: 'file:///test' }] }));
-    client.setRequestHandler('elicitation/create', async (request) => {
-        assert.equal(request.params.mode, 'form');
-        if (request.params.mode !== 'form') throw new Error('Expected form');
-        assert.deepEqual(request.params.requestedSchema.properties.action, {
-            type: 'string',
-            title: '目标连接已断开，请选择下一步',
-            enum: ['restart', 'cancel'],
-            enumNames: ['误关闭，使用原端口重新启动', '有意关闭，终止依赖该目标的任务'],
-        });
-        return { action: 'accept', content: { action: 'restart' } };
-    });
-    await entry.connect();
-    assert.equal(entry.supportsFormElicitation(), false);
-    assert.equal(entry.supportsRoots(), false);
-    await client.connect(clientTransport);
-    assert.equal(entry.supportsFormElicitation(), true);
-    assert.equal(entry.supportsRoots(), true);
-    try {
-        const exposed = (await client.listTools()).tools[0];
-        assert.equal(exposed?.name, tool.name);
-        assert.deepEqual(exposed?.inputSchema.properties?.value, tool.inputSchema.properties.value);
-        assert.deepEqual(exposed?.inputSchema.required, ['_dct']);
-        assert.deepEqual(tool.inputSchema.properties, { value: { type: 'string' } });
-        let progressed = false;
-        assert.deepEqual(
-            await client.callTool(
-                { name: tool.name, arguments: { value: 'ok', _dct: route } },
-                {
-                    onprogress: () => {
-                        progressed = true;
-                    },
+async function httpBridge(fixture: Awaited<ReturnType<typeof fakeOfficial>>, capabilities: ClientCapabilities = {}) {
+    const children = new Map<number, EventEmitter>();
+    const calls: { args: Record<string, unknown>; signal?: AbortSignal; finished: Promise<void> }[] = [];
+    const upstreams: Awaited<ReturnType<typeof createOfficialConnection>>[] = [];
+    const contexts: ClientRequestContext[] = [];
+    const core = await createGatewayCore({
+        createConnection: async (url, options) => {
+            const connection = await createOfficialConnection(url, { ...options, bin: fixture.bin, args: [] });
+            upstreams.push(connection);
+            return {
+                ...connection,
+                call: async (name, args, signal, progress) => {
+                    let finish = () => {};
+                    const finished = new Promise<void>((resolve) => {
+                        finish = resolve;
+                    });
+                    calls.push({ args, ...(signal ? { signal } : {}), finished });
+                    try {
+                        return await connection.call(name, args, signal, progress);
+                    } finally {
+                        finish();
+                    }
                 },
-            ),
-            { content: [{ type: 'text', text: 'ok' }] },
-        );
-        assert.equal(progressed, true);
-        assert.deepEqual(await entry.roots(), { roots: [{ uri: 'file:///test' }] });
-        await client.sendRootsListChanged();
-        assert.equal(rootsChanged, true);
-        assert.deepEqual((await client.callTool({ name: 'dct_connection_status' })).structuredContent, {
-            state: 'idle',
-        });
-        for (const name of ['dct_connection_status']) {
-            const lifecycleTool = (await client.listTools()).tools.find((item) => item.name === name);
-            assert.equal(lifecycleTool?.inputSchema.additionalProperties, false);
-            await assert.rejects(client.callTool({ name, arguments: { extra: true } }));
-        }
-        assert.ok(!(await client.listTools()).tools.some((tool) => tool.name === 'dct_watch_target'));
-        await assert.rejects(client.callTool({ name: 'dct_watch_target', arguments: route }));
-        const forwarded = {
-            mode: 'form' as const,
-            message: '官方请求',
-            requestedSchema: { type: 'object' as const, properties: { value: { type: 'string' as const } } },
-        };
-        client.setRequestHandler('elicitation/create', async (request) => {
-            assert.deepEqual(request.params, forwarded);
-            return { action: 'accept', content: { value: '原始回答' } };
-        });
-        assert.deepEqual(await entry.elicit(forwarded), { action: 'accept', content: { value: '原始回答' } });
-    } finally {
-        await entry.close();
-        await client.close();
+            };
+        },
+        loadCatalog: async (tools) =>
+            createToolCatalog({
+                version: '1.11.0',
+                tools: (tools ?? []).map((tool) => ({ name: tool.name, requires: {}, variants: [tool] })),
+            }),
+        createRouter: async () => ({
+            url: 'http://127.0.0.1:31000',
+            isBusy: () => false,
+            setTarget() {},
+            clearTarget() {},
+            close: async () => {},
+        }),
+        createHost: () => ({
+            launch: async () => {
+                const processId = children.size + 42;
+                const child = new EventEmitter();
+                children.set(processId, child);
+                return {
+                    processId,
+                    port: 9222 + processId,
+                    executablePath: process.execPath,
+                    startedAtUtc: '2026-10-17T00:00:00Z',
+                    targetKind: 'generic-cdp' as const,
+                    child,
+                    launchDefinition: { executablePath: process.execPath, arguments: [] },
+                };
+            },
+            close: async (target) => {
+                children.get(target.processId)?.emit('exit');
+                return true;
+            },
+        }),
+    });
+    const invoke = core.invoke;
+    core.invoke = (name, args, context) => {
+        contexts.push(context);
+        return invoke(name, args, context);
+    };
+    let gateway: Awaited<ReturnType<typeof createMcpHttpServer>>;
+    try {
+        gateway = await createMcpHttpServer({ port: 0, core });
+    } catch (error) {
+        await core.cleanup();
+        throw error;
     }
-    await entry.closed;
+    const client = new Client({ name: 'http-bridge-host', version: '1' }, { capabilities });
+    try {
+        await client.connect(new StreamableHTTPClientTransport(new URL(gateway.url)));
+    } catch (error) {
+        await core.cleanup();
+        await gateway.close();
+        throw error;
+    }
+    const structured = (result: { structuredContent?: unknown }) => {
+        assert.ok(isRecord(result.structuredContent));
+        return result.structuredContent;
+    };
+    return {
+        core,
+        gateway,
+        client,
+        calls,
+        upstreams,
+        contexts,
+        async start() {
+            const registered = structured(await client.callTool({ name: 'dct_registration_register', arguments: {} }));
+            assert.equal(typeof registered.registrationBearer, 'string');
+            const registrationBearer = String(registered.registrationBearer);
+            const accepted = structured(
+                await client.callTool({
+                    name: 'dct_connection_start',
+                    arguments: {
+                        registrationBearer,
+                        requestId: 'fixture-start',
+                        isolation: { mode: 'none' },
+                        launch: { executable: process.execPath },
+                    },
+                }),
+            );
+            let cursor = 0;
+            for (let attempt = 0; attempt < 30; attempt++) {
+                const result = structured(
+                    await client.callTool({
+                        name: 'dct_operation_wait',
+                        arguments: {
+                            registrationBearer,
+                            operationId: accepted.operationId,
+                            cursor,
+                        },
+                    }),
+                );
+                assert.equal(typeof result.cursor, 'number');
+                cursor = Number(result.cursor);
+                if (!result.complete) continue;
+                assert.ok(isRecord(result.operation));
+                assert.equal(result.operation.state, 'succeeded');
+                assert.ok(isRecord(result.operation.result));
+                const { connectionId, sessionId } = result.operation.result;
+                assert.equal(typeof connectionId, 'string');
+                assert.equal(typeof sessionId, 'string');
+                return { registrationBearer, connectionId: String(connectionId), sessionId: String(sessionId) };
+            }
+            throw new Error('HTTP bridge fixture start never completed.');
+        },
+        async close() {
+            await core.cleanup();
+            await client.close();
+            await gateway.close();
+        },
+    };
+}
+
+test('HTTP real core preserves official tools, cached originating roots, progress, metadata and form results', async () => {
+    const fixture = await fakeOfficial();
+    const f = await httpBridge(fixture, { roots: { listChanged: true }, elicitation: { form: {} } });
+    let rootsReads = 0;
+    f.client.setRequestHandler('roots/list', async () => {
+        rootsReads++;
+        return { roots: [{ uri: 'file:///http-origin' }] };
+    });
+    f.client.setRequestHandler('elicitation/create', async (request) => {
+        assert.deepEqual(request.params, {
+            mode: 'form',
+            message: '上游原始问题',
+            requestedSchema: {
+                type: 'object',
+                properties: { value: { type: 'string', title: '原始字段' } },
+                required: ['value'],
+            },
+        });
+        return { action: 'accept', content: { value: '原始回答' } };
+    });
+    try {
+        const route = await f.start();
+        const tool = (await f.client.listTools()).tools.find((tool) => tool.name === 'echo');
+        assert.ok(tool);
+        assert.deepEqual(tool.inputSchema.required, ['_dct']);
+        assert.deepEqual(tool.outputSchema, f.upstreams[1]?.tools[0]?.outputSchema);
+        assert.deepEqual(tool.annotations, f.upstreams[1]?.tools[0]?.annotations);
+        assert.deepEqual(tool._meta, { original: 'tool metadata' });
+        const progress: unknown[] = [];
+        const result = await f.client.callTool(
+            { name: 'echo', arguments: { value: 'ok', _dct: route } },
+            {
+                onprogress: (value) => progress.push(value),
+            },
+        );
+        assert.deepEqual(result, {
+            content: [{ type: 'text', text: '{"roots":[{"uri":"file:///http-origin"}]}' }],
+            structuredContent: { arguments: { value: 'ok' } },
+            _meta: { original: 'result metadata' },
+            isError: false,
+        });
+        assert.equal(rootsReads, 1);
+        assert.equal(progress.length, 1);
+        assert.ok(isRecord(progress[0]) && progress[0].progress === 1);
+        const form = await f.client.callTool({ name: 'echo', arguments: { elicit: true, _dct: route } });
+        assert.deepEqual(form.structuredContent, { result: { action: 'accept', content: { value: '原始回答' } } });
+        const selected = await f.client.callTool({
+            name: 'dct_connection_status',
+            arguments: {
+                registrationBearer: route.registrationBearer,
+                connectionId: route.connectionId,
+            },
+        });
+        assert.ok(isRecord(selected.structuredContent));
+        assert.equal(selected.structuredContent.upstreamStatus, 'connected');
+        const keep = await f.client.callTool({
+            name: 'dct_connection_stop',
+            arguments: {
+                ...route,
+                requestId: 'fixture-keep',
+                disposition: 'Keep',
+            },
+        });
+        assert.ok(isRecord(keep.structuredContent) && typeof keep.structuredContent.operationId === 'string');
+    } finally {
+        await f.close();
+        await fixture.cleanup();
+    }
 });
 
 test('official bridge initializes, relays results/roots/progress/cancellation and exits by EOF', async () => {
@@ -465,142 +590,98 @@ test('catalog-only upstream has no fabricated roots capability', async () => {
     }
 });
 
-test('host cancellation crosses gateway, upstream call and nested form request without replay', async () => {
+test('HTTP host cancellation detaches its wait and retains the original owned execution until real terminal', async () => {
     const fixture = await fakeOfficial();
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    let connection: Awaited<ReturnType<typeof createOfficialConnection>> | undefined;
+    const f = await httpBridge(fixture, { elicitation: { form: {} } });
     let requests = 0;
-    let begin: () => void = () => {};
-    let end: () => void = () => {};
+    let begin = () => {};
     const began = new Promise<void>((resolve) => {
         begin = resolve;
     });
-    const ended = new Promise<void>((resolve) => {
-        end = resolve;
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+        release = resolve;
     });
-    const gateway = createMcpEntryServer({
-        tools: [{ name: 'echo', inputSchema: { type: 'object', properties: {} } }],
-        transport: serverTransport,
-        status: () => ({}),
-        invoke: (name, arguments_, signal, progress) => {
-            assert.ok(connection);
-            return connection.call(name, arguments_, signal, progress);
-        },
-    });
-    const host = new Client({ name: 'host', version: '1' }, { capabilities: { elicitation: { form: {} } } });
-    host.setRequestHandler('elicitation/create', async (request, ctx) => {
-        requests += 1;
+    f.client.setRequestHandler('elicitation/create', async (request) => {
+        requests++;
         assert.equal(request.params.message, '等待取消');
         begin();
-        await new Promise<void>((resolve) =>
-            ctx.mcpReq.signal.addEventListener(
-                'abort',
-                () => {
-                    end();
-                    resolve();
-                },
-                { once: true },
-            ),
-        );
+        await released;
         return { action: 'cancel' };
     });
-    await gateway.connect();
-    await host.connect(clientTransport);
     try {
-        connection = await createOfficialConnection('http://127.0.0.1:9222', {
-            bin: fixture.bin,
-            args: [],
-            elicitation: { form: gateway.supportsFormElicitation(), request: gateway.elicit },
-        });
-        assert.equal(gateway.supportsRoots(), false);
-        assert.deepEqual(capabilitiesOf(await connection.call('echo', { capabilities: true })), {
-            elicitation: { form: {} },
-        });
+        const route = await f.start();
+        const pid = f.upstreams[1]?.processId;
+        assert.equal(typeof pid, 'number');
         const abort = new AbortController();
-        const pending = host.callTool(
+        const pending = f.client.callTool(
             { name: 'echo', arguments: { elicit: true, elicitWait: true, _dct: route } },
-            {
-                signal: abort.signal,
-            },
+            { signal: abort.signal },
         );
         void pending.catch(() => {});
-        await boundedSignal(began, 'host must receive nested elicitation');
-        abort.abort();
+        await boundedSignal(began, 'host must receive the original nested elicitation');
+        abort.abort(new Error('Host no longer waits.'));
         await assert.rejects(pending);
-        await boundedSignal(ended, 'nested host request must receive cancellation');
+        assert.equal(f.calls.length, 1);
+        assert.equal(f.calls[0]?.signal?.aborted, false, 'Host cancellation cannot retire the owned execution.');
+        assert.equal(f.upstreams.length, 2, 'No replacement or replay is permitted.');
+        assert.equal(f.upstreams[1]?.processId, pid);
+        release();
+        assert.ok(f.calls[0]);
+        await boundedSignal(f.calls[0].finished, 'original upstream must reach a real terminal result');
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const result = await f.client.callTool({ name: 'echo', arguments: { capabilities: true, _dct: route } });
+        assert.ok(result.structuredContent);
         assert.equal(requests, 1);
+        assert.equal(f.upstreams.length, 2);
     } finally {
-        await connection?.close();
-        await gateway.close();
-        await host.close();
+        release();
+        await f.close();
         await fixture.cleanup();
     }
 });
 
-test('official catalog rejects reserved routing collisions and malformed tool routes', async () => {
-    assert.throws(
-        () =>
-            createMcpEntryServer({
-                tools: [
-                    { name: 'collision', inputSchema: { type: 'object', properties: { _dct: { type: 'string' } } } },
-                ],
-                status: () => ({}),
-                invoke: async () => ({ content: [] }),
-            }),
-        /reserved _dct/,
-    );
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    let invoked = 0;
-    const entry = createMcpEntryServer({
-        tools: [{ name: 'official', inputSchema: { type: 'object', properties: {}, additionalProperties: false } }],
-        transport: serverTransport,
-        status: () => ({}),
-        invoke: async () => {
-            invoked += 1;
-            return { content: [] };
-        },
-    });
-    const client = new Client({ name: 'routes', version: '1' }, { capabilities: {} });
-    await entry.connect();
-    await client.connect(clientTransport);
+test('HTTP catalog rejects reserved routing collisions and invalid registered routes before official dispatch', async () => {
+    const collision = await fakeOfficial({ reservedRouting: true });
     try {
+        await assert.rejects(httpBridge(collision), /reserved.*routing/i);
+    } finally {
+        await collision.cleanup();
+    }
+    const fixture = await fakeOfficial();
+    const f = await httpBridge(fixture);
+    try {
+        const registered = await f.client.callTool({ name: 'dct_registration_register', arguments: {} });
+        assert.ok(isRecord(registered.structuredContent));
+        const registrationBearer = registered.structuredContent.registrationBearer;
         for (const arguments_ of [
             {},
             { _dct: {} },
-            { _dct: { ...route, extra: true } },
-            { _dct: { ...route, sessionId: route.sessionId.replace('2222', 'ABCD') } },
+            { _dct: { ...route, registrationBearer, extra: true } },
+            { _dct: { ...route, registrationBearer, sessionId: route.sessionId.replace('2222', 'ABCD') } },
         ])
-            await assert.rejects(client.callTool({ name: 'official', arguments: arguments_ }));
-        assert.equal(invoked, 0);
-        const tools = (await client.listTools()).tools;
+            await assert.rejects(f.client.callTool({ name: 'echo', arguments: arguments_ }));
+        assert.equal(f.calls.length, 0);
+        const tools = (await f.client.listTools()).tools;
         assert.equal(
             tools.some((tool) => tool.name === 'dct_watch_target'),
             false,
         );
         const status = tools.find((tool) => tool.name === 'dct_connection_status');
-        assert.deepEqual(Object.keys(status?.inputSchema.properties ?? {}), [
-            'entryId',
-            'connectionId',
-            'operationId',
-            'toolNames',
-            'include',
-            'hookEventName',
-        ]);
-        for (const hookEventName of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'])
-            assert.deepEqual(
-                (await client.callTool({ name: 'dct_connection_status', arguments: { hookEventName } }))
-                    .structuredContent,
-                {},
-            );
+        assert.ok(status?.inputSchema.required?.includes('registrationBearer'));
         for (const arguments_ of [
-            { hookEventName: 'SessionEnd' },
-            { hookEventName: null },
-            { hookEventName: 'Stop', sessionId: route.sessionId },
+            { registrationBearer, hookEventName: 'Stop' },
+            { registrationBearer, entryId: route.connectionId },
+            { registrationBearer, sessionId: route.sessionId },
         ])
-            await assert.rejects(client.callTool({ name: 'dct_connection_status', arguments: arguments_ }));
+            await assert.rejects(f.client.callTool({ name: 'dct_connection_status', arguments: arguments_ }));
+        const discovery = await f.client.callTool({ name: 'dct_connection_status', arguments: { registrationBearer } });
+        assert.ok(isRecord(discovery.structuredContent));
+        assert.deepEqual(discovery.structuredContent.connections, []);
+        assert.equal(f.calls.length, 0);
     } finally {
-        await entry.close();
-        await client.close();
+        await f.close();
+        await fixture.cleanup();
     }
 });
 
@@ -638,114 +719,121 @@ test('official catalog rejects repeated pagination cursors', async () => {
     }
 });
 
-test('legacy raw host preserves request and progress ID zero and cancels the active call', async () => {
-    const [peer, transport] = InMemoryTransport.createLinkedPair();
-    const messages: import('@modelcontextprotocol/client').JSONRPCMessage[] = [];
-    peer.onmessage = (message) => {
-        messages.push(message);
+test('raw HTTP preserves request and progress ID zero while cancellation detaches only the original wait', async () => {
+    const fixture = await fakeOfficial();
+    const f = await httpBridge(fixture);
+    let session: string | undefined;
+    const rawLifetime = new AbortController();
+    const releaseFile = path.join(path.dirname(fixture.bin), 'release-original');
+    const raw = (message: unknown) =>
+        fetch(f.gateway.url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json, text/event-stream',
+                ...(session ? { 'mcp-session-id': session, 'mcp-protocol-version': '2025-11-25' } : {}),
+            },
+            body: JSON.stringify(message),
+            signal: AbortSignal.any([rawLifetime.signal, AbortSignal.timeout(5000)]),
+        });
+    const messages = async (response: Response): Promise<unknown[]> => {
+        assert.equal(response.status, 200);
+        const text = await response.text();
+        return response.headers.get('content-type')?.includes('text/event-stream')
+            ? text
+                  .split(/\r?\n/)
+                  .filter((line) => line.startsWith('data: '))
+                  .map((line): unknown => JSON.parse(line.slice(6)))
+            : [JSON.parse(text)];
     };
-    let entered: () => void = () => {};
-    let cancelled: () => void = () => {};
-    const began = new Promise<void>((resolve) => {
-        entered = resolve;
-    });
-    const ended = new Promise<void>((resolve) => {
-        cancelled = resolve;
-    });
-    const expected = {
-        content: [{ type: 'text' as const, text: 'original' }],
-        structuredContent: { exact: [1, false] },
-        _meta: { custom: 'preserved' },
-    };
-    const entry = createMcpEntryServer({
-        transport,
-        tools: [{ name: 'echo', inputSchema: { type: 'object', properties: {} } }],
-        status: () => ({}),
-        invoke: async (_name, args, signal, progress) => {
-            progress({ progress: 0, total: 1, message: 'original progress' });
-            if (args.wait) {
-                entered();
-                await new Promise<void>((resolve) =>
-                    signal.addEventListener(
-                        'abort',
-                        () => {
-                            cancelled();
-                            resolve();
-                        },
-                        { once: true },
-                    ),
-                );
-            }
-            return expected;
-        },
-    });
-    await peer.start();
-    await entry.connect();
     try {
-        await peer.send({
+        const route = await f.start();
+        const initialized = await raw({
             jsonrpc: '2.0',
             id: 100,
             method: 'initialize',
             params: {
-                protocolVersion: '2024-11-05',
+                protocolVersion: '2025-11-25',
                 capabilities: {},
-                clientInfo: { name: 'legacy-host', version: '1' },
+                clientInfo: { name: 'raw-http-host', version: '1' },
             },
         });
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        const initialized = messages.shift();
-        assert.ok(initialized && 'result' in initialized && isRecord(initialized.result));
-        assert.equal(initialized.result.protocolVersion, '2024-11-05');
-        assert.deepEqual(initialized.result.serverInfo, { name: 'debugging-cdp-targets', version: '0.1.0' });
-        assert.deepEqual(initialized.result.capabilities, { tools: {} });
-        const instructions = initialized.result.instructions;
-        assert.equal(
-            instructions,
-            "Use this gateway to inspect local Chrome browsers or other verified CDP-capable applications with official Chrome DevTools tools. Start with dct_connection_status({}) to discover entryId and connection summaries. dct_connection_start launches a new application for each target connection; never take over an existing application. Before preparing a launch, follow the debugging-cdp-targets Skill for isolation choices (including none), occupancy checks, verified startup and readiness. Route every official tool call with the selected connection's current connectionId and sessionId in _dct. Before ending a target's work, obtain Close or Keep unless the user already supplied that choice.",
+        session = initialized.headers.get('mcp-session-id') ?? undefined;
+        assert.ok(session);
+        const ready = (await messages(initialized))[0];
+        assert.ok(isRecord(ready) && isRecord(ready.result));
+        assert.equal(ready.result.protocolVersion, '2025-11-25');
+        assert.deepEqual(ready.result.serverInfo, { name: 'debugging-cdp-targets', version: '0.1.0' });
+        assert.ok(
+            typeof ready.result.instructions === 'string' && ready.result.instructions.includes('registrationBearer'),
         );
-        assert.equal(typeof instructions, 'string');
-        if (typeof instructions !== 'string') throw new Error('Expected initialize instructions');
-        for (const anchor of [
-            'dct_connection_status({})',
-            'entryId and connection summaries',
-            'dct_connection_start launches a new application',
-            'never take over an existing application',
-            'debugging-cdp-targets Skill',
-            'isolation choices (including none), occupancy checks, verified startup and readiness',
-            'current connectionId and sessionId in _dct',
-            'obtain Close or Keep unless the user already supplied that choice',
-        ]) {
-            assert.ok(instructions.includes(anchor), anchor);
-        }
-        assert.ok(Buffer.byteLength(instructions, 'utf8') < 1000);
-        await peer.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
-        await peer.send({
-            jsonrpc: '2.0',
-            id: 0,
-            method: 'tools/call',
-            params: { name: 'echo', arguments: { _dct: route }, _meta: { progressToken: 0 } },
-        });
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        assert.deepEqual(messages.splice(0), [
+        assert.equal((await raw({ jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
+        const result = await messages(
+            await raw({
+                jsonrpc: '2.0',
+                id: 0,
+                method: 'tools/call',
+                params: {
+                    name: 'echo',
+                    arguments: { zeroProgress: true, _dct: route },
+                    _meta: { progressToken: 0 },
+                },
+            }),
+        );
+        assert.deepEqual(result, [
+            { jsonrpc: '2.0', method: 'notifications/progress', params: { progress: 0, progressToken: 0 } },
             {
                 jsonrpc: '2.0',
-                method: 'notifications/progress',
-                params: { progress: 0, total: 1, message: 'original progress', progressToken: 0 },
+                id: 0,
+                result: {
+                    content: [{ type: 'text', text: '{"roots":[]}' }],
+                    structuredContent: { arguments: { zeroProgress: true } },
+                    _meta: { original: 'result metadata' },
+                    isError: false,
+                },
             },
-            { jsonrpc: '2.0', id: 0, result: expected },
         ]);
-        await peer.send({
+        const pending = raw({
             jsonrpc: '2.0',
             id: 0,
             method: 'tools/call',
-            params: { name: 'echo', arguments: { wait: true, _dct: route } },
-        });
-        await boundedSignal(began, 'legacy call must enter');
-        await peer.send({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 0 } });
-        await boundedSignal(ended, 'ID zero must receive cancellation');
+            params: {
+                name: 'echo',
+                arguments: { untilFile: releaseFile, _dct: route },
+            },
+        }).then(messages);
+        for (let attempt = 0; f.calls.length < 2 && attempt < 100; attempt++)
+            await new Promise<void>((resolve) => setTimeout(resolve, 5));
+        assert.equal(f.calls.length, 2);
+        assert.equal(
+            (await raw({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 0 } })).status,
+            202,
+        );
+        void pending.catch(() => {});
+        for (let attempt = 0; !f.contexts[1]?.waitSignal.aborted && attempt < 100; attempt++)
+            await new Promise<void>((resolve) => setTimeout(resolve, 5));
+        assert.equal(f.contexts[1]?.requestId, 0);
+        assert.equal(
+            f.contexts[1]?.waitSignal.aborted,
+            true,
+            'Wire cancellation for ID zero must detach that exact Core wait.',
+        );
+        rawLifetime.abort(new Error('Raw host stops waiting after explicit cancellation.'));
+        await assert.rejects(pending);
+        assert.equal(f.calls[1]?.signal?.aborted, false);
+        await assert.rejects(f.client.callTool({ name: 'echo', arguments: { capabilities: true, _dct: route } }));
+        assert.equal(f.calls.length, 2, 'A detached wait does not admit another owned execution.');
+        assert.ok(f.calls[1]);
+        await writeFile(releaseFile, 'release', 'utf8');
+        await boundedSignal(f.calls[1].finished, 'late result must settle the original execution');
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        await f.client.callTool({ name: 'echo', arguments: { capabilities: true, _dct: route } });
+        assert.equal(f.upstreams.length, 2, 'The healthy upstream is retained without replacement.');
     } finally {
-        await entry.close();
-        await peer.close();
+        rawLifetime.abort();
+        await writeFile(releaseFile, 'release', 'utf8');
+        await f.close();
+        await fixture.cleanup();
     }
 });
 

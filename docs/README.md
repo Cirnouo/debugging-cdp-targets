@@ -7,8 +7,10 @@
     dated CLI/Desktop acceptance and remaining evidence limits.
 - `shared-core.md` documents the transport-independent core, request contexts,
     registration ownership, immutable snapshots and definitive cleanup.
+- `app-runtime.md` documents singleton/storage/GUI ownership, HTTP authentication,
+    request lifetime, App staging and test-only seal boundaries.
 - `lifecycle-protocol.md` defines current MCP selectors, operation delivery,
-  session lifetime, restart, resource disposal and automatic Hook output.
+  session lifetime, scoped restart and resource disposal.
 - `mcp-native-validation.md` records the unreleased MCP/native delivery checklist,
   reproducible evidence, upstream attribution and remaining integration limits.
 - `application-screenshot-validation.md` records bounded Windows application

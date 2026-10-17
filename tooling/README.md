@@ -6,11 +6,18 @@
 - `app-native-release.json` records canonical registry tarball integrity and
   every original regular file in the native advisory-lock loading closure,
   including all original licenses and platform prebuilds.
-- `build-plugin.ts` assembles complete Codex and Claude Code payloads from
-  `packaging/`, root `LICENSE` and one shared runtime map. It bundles runtime and
-  helpers, derives all bundled package roots
-  from the esbuild metafile, and generates complete third-party license notices.
-  SDK inputs also require exact reviewed source/map fingerprints and vendor notices.
+- `build-plugin.ts` assembles thin Codex and Claude Code payloads from
+  `packaging/` and root `LICENSE`. Its license collector is also consumed by the
+  App build; SDK inputs require exact reviewed source/map fingerprints and notices.
+- `build-app.ts` builds the synchronous bootstrap, main, sandboxed preload and
+  renderer, collects actual graph licenses and stages verified original native
+  archives without overwriting an existing stage. `extract-app-zip.ps1` rejects
+  unsafe archive paths, duplicate destinations and link entries before extraction.
+- `native-fixture-seal.ts` binds a test-only real-core HTTP fixture, actual source
+  inputs and the complete App stage to independently checked file inventories.
+  Dirty development receipts cannot establish final native acceptance.
+- `official-release.ts` owns the canonical official release evidence independently
+  of thin Plugin delivery.
 - `vendored-licenses.json` records original registry tarball provenance, reviewed
   SDK input/source-map hashes, and exact vendored package licenses.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
@@ -18,7 +25,7 @@
 - `repository-audit.ts` checks text, YAML filenames, AST layer boundaries, versions, docs,
   symlink, and production safety.
 - `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
-  MCP/Hook format, Marketplace pointer and byte-identical packaging into a disposable directory;
+  direct HTTP format, Marketplace pointer and byte-identical packaging into a disposable directory;
   this is not a host install claim.
   It parses Codex Skill presentation YAML with duplicate-key rejection and
   validates its exact interface and PluginShared icon reference against regular
@@ -26,7 +33,7 @@
   input in both directions, excluding only exact host-declared overlay files;
   host inventories independently enforce Codex-only additions.
 - `host-policy.ts` owns filesystem-free host descriptors and canonical input/output paths.
-- `payload-policy.ts` owns the release-backed exact Plugin file allowlist.
+- `payload-policy.ts` owns the exact thin Plugin file allowlist.
 - `icon-policy.ts` owns approved artwork paths and PNG evidence validation.
     The repository's approved artwork profile is static square PNG, at least
     48 and at most 4096 pixels, at most 5 MiB, with noninterlaced 8-bit RGBA.
@@ -98,9 +105,11 @@
 - `check-text-style.ts` audits staged non-Biome text and YAML filenames; original official release
   files are exempt only after complete independent byte verification.
 - `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
-- `smoke-official-catalog.ts` independently copies both host Plugins outside
-  repository dependencies, initializes each official public Server with a temporary home and empty PATH,
-  reads only the catalog and closes stdin. Run it explicitly with pnpm smoke:official.
+- `smoke-official-catalog.ts` requires explicit `--stage <verified-App-stage>` or
+  `--installed`. Stage mode uses verified delivered ordinary Node/public bin;
+  installed mode verifies the repository's original release and supported ordinary
+  Node for release/catalog evidence only. Both isolate home/cwd, empty PATH, read
+  catalog and normally dispose the child. Neither proves host or target operation.
 - `security/` owns complete lock inventories, audit/exception policy,
   fingerprints, and disposable official Server dependency scans.
 - `AGENTS.md` specifies validator safety and independent evidence.

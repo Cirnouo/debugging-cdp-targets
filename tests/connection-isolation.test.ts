@@ -5,14 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
-import type { createMcpEntryServer } from '../src/adapters/mcp-entry-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { startPluginRuntime } from '../src/application/plugin-runtime.ts';
 import type { ConnectionStatus, ControlContext, LaunchOptions } from '../src/domains/control-contract.ts';
 import type { DataIsolationEvidence } from '../src/domains/data-isolation.ts';
 import { resolveLaunchDefinition } from '../src/domains/launch-command.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { hookResultEvents } from './fixtures/hook-gateway-events.ts';
+import { createCoreFixture } from './fixtures/core-runtime.ts';
 
 function deferred() {
     let resolve = () => {};
@@ -56,8 +54,7 @@ async function fixture(
     } = {},
 ) {
     const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-isolation-runtime-')));
-    let callbacks: Parameters<typeof createMcpEntryServer>[0] | undefined;
-    const closed = deferred();
+
     const launchEntered = deferred();
     const applications: Application[] = [];
     const launches: { options: LaunchOptions; directory?: string; arguments: string[] }[] = [];
@@ -68,7 +65,7 @@ async function fixture(
     let upstreams = 0;
     let failClose = options.failClose ?? false;
     let failUpstreamClose = options.failUpstreamClose ?? false;
-    const runtime = await startPluginRuntime({
+    const runtime = await createCoreFixture({
         dataDirectories: directories,
         ...(options.profileAvailable ? { profileAvailable: options.profileAvailable } : {}),
         loadCatalog: async () =>
@@ -153,28 +150,16 @@ async function fixture(
                 },
             };
         },
-        createEntry: (entry) => {
-            callbacks = entry;
-            return {
-                connect: async () => {},
-                closed: closed.promise,
-                close: async () => closed.resolve(),
-                roots: async () => ({ roots: [] }),
-                supportsRoots: () => false,
-                supportsFormElicitation: () => false,
-                elicit: async () => ({ action: 'cancel' }),
-            };
-        },
     });
-    assert.ok(callbacks);
-    assert.ok(callbacks.control);
-    const control = callbacks.control;
+    assert.ok(runtime);
+    assert.ok(runtime.control);
+    const control = runtime.control;
     t.after(async () => {
         failClose = false;
         failUpstreamClose = false;
         for (const child of applications) if (child.exitCode === null) child.exit();
-        if (options.expectCleanupFailure) await assert.rejects(runtime.close(), /cleanup failed/);
-        else await runtime.close();
+        if (options.expectCleanupFailure) await assert.rejects(runtime.cleanup(), /cleanup failed/);
+        else await runtime.cleanup();
         await rm(parent, { recursive: true, force: true });
     });
     const evidence: DataIsolationEvidence[] = [];
@@ -210,7 +195,7 @@ async function fixture(
         runtime,
         directories,
         disposal,
-        callbacks,
+
         control,
         parent,
         applications,
@@ -238,7 +223,7 @@ function route(connection: ConnectionStatus) {
     return { connectionId: connection.connectionId, sessionId: connection.sessionId };
 }
 
-for (const action of ['close', 'keep', 'end-task', 'unexpected', 'disconnect'] as const) {
+for (const action of ['close', 'keep', 'unexpected', 'disconnect'] as const) {
     test(`native descendant resources retain directory after root exit during ${action}`, {
         timeout: 10_000,
     }, async (t) => {
@@ -250,10 +235,9 @@ for (const action of ['close', 'keep', 'end-task', 'unexpected', 'disconnect'] a
         assert.ok(held?.mode === 'data-dir');
         let pending: Promise<unknown> | undefined;
         if (action === 'close') pending = f.runtime.controller.stop({ ...route(active), disposition: 'Close' });
-        else if (action === 'disconnect') pending = f.runtime.close();
+        else if (action === 'disconnect') pending = f.runtime.cleanup();
         else {
             if (action === 'keep') await f.runtime.controller.stop({ ...route(active), disposition: 'Keep' });
-            if (action === 'end-task') await f.runtime.controller.endTask(route(active));
             f.applications[0]?.exit();
         }
         let completed = false;
@@ -292,7 +276,7 @@ test('restart waits for old native resource users before creating its successor 
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
-    const pending = f.runtime.controller.restart(route(active));
+    const pending = f.runtime.controller.restart({ ...route(active), scope: 'both' });
     await tick();
     await tick();
     assert.equal(f.applications[0]?.exitCode, 0);
@@ -362,9 +346,8 @@ test('failed native resource observation preserves a dead route and the held dir
     await assert.rejects(f.directories.acquire({ kind: 'existing', path: held.path }, 'retain'), {
         code: 'directory-overlap',
     });
-    const hook = JSON.stringify(f.callbacks.status('PostToolUse'));
-    assert.ok(!hook.includes(held.path));
-    assert.match(hook, /RESOURCE_CLEANUP_FAILED/);
+    const summary = JSON.stringify(await f.control({ action: 'status' }));
+    assert.ok(!summary.includes(held.path));
 });
 
 test('prevalidation rejects missing binding and invalid official options before directory acquisition', async (t) => {
@@ -413,7 +396,7 @@ test('cancelled directory inspection holds acquisition until it settles without 
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
     abort.abort(reason);
-    const closing = f.runtime.close();
+    const closing = f.runtime.cleanup();
     await tick();
     assert.equal((await lstat(held.path)).isDirectory(), true);
     assert.equal(f.launches.length, 0);
@@ -451,7 +434,7 @@ test('connection isolation is allocated once, held across restart and deleted af
     assert.equal(held.path, path.join(f.parent, 'profile'));
     assert.equal(f.launches[0]?.directory, held.path);
     await writeFile(path.join(held.path, 'marker'), 'same directory');
-    const replacement = await f.runtime.controller.restart(route(active));
+    const replacement = await f.runtime.controller.restart({ ...route(active), scope: 'both' });
     assert.equal(f.launches[1]?.directory, held.path);
     assert.equal(await readFile(path.join(held.path, 'marker'), 'utf8'), 'same directory');
     assert.equal(f.state(), 'held');
@@ -460,7 +443,7 @@ test('connection isolation is allocated once, held across restart and deleted af
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
 
-test('Keep and end-task retain the lease until actual exit applies whole-directory policy', async (t) => {
+test('Keep retains the lease until actual exit applies whole-directory policy', async (t) => {
     const f = await fixture(t);
     const selected = path.join(f.parent, 'existing');
     await mkdir(selected);
@@ -477,7 +460,6 @@ test('Keep and end-task retain the lease until actual exit applies whole-directo
         f.context,
     );
     assert.ok(f.evidence.at(-1)?.mode === 'data-dir');
-    await f.runtime.controller.endTask(route(active));
     await f.runtime.controller.stop({ ...route(active), disposition: 'Keep' });
     assert.equal(await readFile(path.join(selected, 'prior'), 'utf8'), 'pre-existing');
     f.applications[0]?.exit();
@@ -491,11 +473,11 @@ test('failed restart retains directory until old resources successfully retry wi
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
-    await assert.rejects(f.runtime.controller.restart(route(active)), /EACCES/);
+    await assert.rejects(f.runtime.controller.restart({ ...route(active), scope: 'both' }), /EACCES/);
     assert.equal((await lstat(held.path)).isDirectory(), true);
     assert.throws(() => f.runtime.controller.status(active.connectionId), /absent|closed/);
     f.allowUpstream();
-    await f.runtime.close();
+    await f.runtime.cleanup();
     assert.equal(f.state(), 'deleted');
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
@@ -505,7 +487,7 @@ test('failed successor with no live app releases the directory after restart fin
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
-    await assert.rejects(f.runtime.controller.restart(route(active)), /Launch failed/);
+    await assert.rejects(f.runtime.controller.restart({ ...route(active), scope: 'both' }), /Launch failed/);
     await f.waitState('deleted');
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
@@ -545,7 +527,7 @@ test('unconfirmed observation and failed Close preserve ownership and directory 
     await f.waitState('deleted');
 });
 
-test('none exposes only explicit mode and summaries and Hooks omit directory and raw cleanup errors', async (t) => {
+test('none exposes only explicit mode and summaries omit directory and raw cleanup errors', async (t) => {
     const f = await fixture(t, { failUpstreamClose: true });
     const active = await f.runtime.controller.start(
         { launch: { executable: process.execPath }, isolation: { mode: 'none' } },
@@ -557,19 +539,15 @@ test('none exposes only explicit mode and summaries and Hooks omit directory and
     f.applications[0]?.exit();
     await tick();
     await tick();
-    const hook = f.callbacks.status('PostToolUse');
-    const text = JSON.stringify(hook);
+    const text = JSON.stringify(await f.control({ action: 'status' }));
     assert.ok(!text.includes(f.parent));
     assert.ok(!text.includes('EACCES private'));
-    const events = hookResultEvents(hook);
-    assert.equal(events[0]?.exits[0]?.cleanupStatus, 'failed');
 });
 
 test('idempotent start keeps original directory metadata after terminal actual exit without another notice', async (t) => {
     const f = await fixture(t);
     const request = {
         action: 'start' as const,
-        entryId: f.runtime.entryId,
         requestId: 'same-start',
         ...f.dataOptions('retain'),
     };
@@ -579,7 +557,6 @@ test('idempotent start keeps original directory metadata after terminal actual e
     while (snapshot.state !== 'succeeded') {
         const waited = await f.control({
             action: 'wait',
-            entryId: f.runtime.entryId,
             operationId: accepted.operationId,
             cursor: typeof snapshot.cursor === 'number' ? snapshot.cursor : 0,
         });
@@ -594,14 +571,13 @@ test('idempotent start keeps original directory metadata after terminal actual e
     assert.ok(typeof snapshot.connectionId === 'string' && typeof snapshot.sessionId === 'string');
     const selected = await f.control({
         action: 'status',
-        entryId: f.runtime.entryId,
         connectionId: snapshot.connectionId,
         include: ['configuration'],
     });
     assert.deepEqual(selected.isolation, snapshot.isolation);
     f.applications[0]?.exit();
     for (let attempt = 0; attempt < 50; attempt++) {
-        snapshot = await f.control({ action: 'status', entryId: f.runtime.entryId, operationId: accepted.operationId });
+        snapshot = await f.control({ action: 'status', operationId: accepted.operationId });
         if (isRecord(snapshot.isolation) && snapshot.isolation.state === 'retained') break;
         await tick();
     }
@@ -610,8 +586,7 @@ test('idempotent start keeps original directory metadata after terminal actual e
     assert.equal(snapshot.cursor, original.cursor);
     assert.deepEqual(snapshot.result, original.result);
     assert.equal(snapshot.state, original.state);
-    const hook = hookResultEvents(f.callbacks.status('PostToolUse'));
-    assert.equal(hook.flatMap((batch) => batch.operations).length, 0);
+    assert.equal(f.runtime.core.admin.operations().length, 1);
 });
 
 test('confirmed app exit while host acquisition is pending keeps the lease until launch settles', async (t) => {
@@ -640,7 +615,7 @@ test('actual successor exit racing restart completion wins final release after t
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
-    const pending = f.runtime.controller.restart(route(active));
+    const pending = f.runtime.controller.restart({ ...route(active), scope: 'both' });
     void pending.catch(() => {});
     while (f.applications.length < 2) await tick();
     f.applications[1]?.exit();
@@ -662,7 +637,7 @@ test('cancelled restart in the successor gap releases only after pending replace
     assert.ok(held?.mode === 'data-dir');
     const abort = new AbortController();
     const reason = new Error('cancelled successor');
-    const pending = f.runtime.controller.restart(route(active), { signal: abort.signal });
+    const pending = f.runtime.controller.restart({ ...route(active), scope: 'both' }, { signal: abort.signal });
     void pending.catch(() => {});
     while (f.applications[0]?.exitCode === null) await tick();
     abort.abort(reason);
@@ -695,7 +670,7 @@ test('directory deletion failure keeps original start evidence for gateway clean
     assert.equal(f.state(), 'cleanup-failed');
     assert.equal((await lstat(held.path)).isDirectory(), true);
     fail = false;
-    await f.runtime.close();
+    await f.runtime.cleanup();
     assert.equal(f.state(), 'deleted');
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
@@ -724,7 +699,7 @@ test('failed Chrome startup never deletes an externally occupied selected direct
     assert.equal(await readFile(path.join(selected, 'prior'), 'utf8'), 'external active data');
     assert.equal(f.state(), 'cleanup-failed');
     occupied = false;
-    await f.runtime.close();
+    await f.runtime.cleanup();
     assert.equal(f.state(), 'deleted');
     await assert.rejects(lstat(selected), { code: 'ENOENT' });
 });
@@ -747,7 +722,7 @@ test('Chrome release rechecks external native profile occupancy after our applic
     assert.equal((await lstat(held.path)).isDirectory(), true);
     assert.equal(f.state(), 'cleanup-failed');
     occupied = false;
-    await f.runtime.close();
+    await f.runtime.cleanup();
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
 
@@ -758,21 +733,19 @@ for (const state of ['failed', 'cancelled'] as const) {
         const f = await fixture(t, state === 'failed' ? { failLaunch: 1 } : { beforeCreation: gate.promise });
         const accepted = await f.control({
             action: 'start',
-            entryId: f.runtime.entryId,
             requestId: `start-${state}`,
             ...f.dataOptions(),
         });
         assert.ok(typeof accepted.operationId === 'string');
         if (state === 'cancelled') {
             await f.launchEntered;
-            await f.control({ action: 'cancel', entryId: f.runtime.entryId, operationId: accepted.operationId });
+            await f.control({ action: 'cancel', operationId: accepted.operationId });
             gate.resolve();
         }
         let snapshot = accepted;
         while (!['succeeded', 'failed', 'cancelled'].includes(String(snapshot.state))) {
             const waited = await f.control({
                 action: 'wait',
-                entryId: f.runtime.entryId,
                 operationId: accepted.operationId,
                 cursor: typeof snapshot.cursor === 'number' ? snapshot.cursor : 0,
             });

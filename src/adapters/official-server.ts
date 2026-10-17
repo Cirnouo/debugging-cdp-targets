@@ -1,13 +1,9 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { findEnvironmentKey } from '../domains/launch-command.ts';
 import { parseMcpArgs } from '../domains/official-options.ts';
 import { errorMessage } from '../shared/errors.ts';
-import { parseOfficialReleaseEvidence } from '../shared/official-package.ts';
+import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../shared/official-package.ts';
 import { verifyOfficialPackage } from './official-package.ts';
-
-declare const __DCT_OFFICIAL_RELEASE__: unknown;
 
 export function snapshotOfficialEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
     return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1', CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1' };
@@ -49,28 +45,21 @@ export function buildServerArguments(
     ];
 }
 
-/** Read-only, module-relative resolution; every launch verifies the whole release again. */
-export async function resolveServerBin(): Promise<string> {
+/** Trusted explicit input only. Missing App/runtime location never discovers another installation. */
+export async function resolveServerBin(options?: {
+    directory: string;
+    release: OfficialReleaseEvidence;
+    pnpmInstalled?: boolean;
+}): Promise<string> {
     try {
-        const packaged = typeof __DCT_OFFICIAL_RELEASE__ !== 'undefined';
-        const evidence = parseOfficialReleaseEvidence(
-            packaged
-                ? __DCT_OFFICIAL_RELEASE__
-                : JSON.parse(
-                      await readFile(new URL('../../tooling/official-server-release.json', import.meta.url), 'utf8'),
-                  ),
-        );
-        const directory = fileURLToPath(
-            new URL(
-                packaged ? './official-server/' : '../../plugins/codex/debugging-cdp-targets/dist/official-server/',
-                import.meta.url,
-            ),
-        );
-        await verifyOfficialPackage(directory, evidence);
-        return path.join(directory, evidence.bin);
+        if (!options || !path.isAbsolute(options.directory))
+            throw new Error('Explicit verified runtime location is required.');
+        const evidence = parseOfficialReleaseEvidence(options.release);
+        await verifyOfficialPackage(options.directory, evidence, { pnpmInstalled: options.pnpmInstalled === true });
+        return path.join(options.directory, evidence.bin);
     } catch (error) {
         throw new Error(
-            `Bundled official MCP package verification failed; reinstall the Plugin or run pnpm build:plugin. ${errorMessage(error)}`,
+            `Official MCP package verification failed; rebuild the verified App or prepare its reviewed development dependency. ${errorMessage(error)}`,
         );
     }
 }

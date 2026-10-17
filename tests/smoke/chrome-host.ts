@@ -80,7 +80,6 @@ export async function inspectChromeSmokeDirectory(
     assert.equal(fixture.port, target.port);
     assert.equal(fixture.targetKind, target.targetKind);
     const configuration = await tool('dct_connection_status', {
-        entryId: target.entryId,
         connectionId: target.connectionId,
         include: ['configuration'],
     });

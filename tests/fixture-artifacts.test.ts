@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { channel } from 'node:diagnostics_channel';
-import { copyFile, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -342,21 +342,13 @@ test('failure job summary emits fixed labels and UUIDs without sensitive unknown
     }
 });
 
-test('original delivered gateway remains the child entry with source subscriber preload', async () => {
+test('source HTTP core fixture remains the child entry with explicit subscriber preload', async () => {
     const { createFixtureArtifacts, fixtureGatewayArguments, fixtureGatewayEnvironment } = await import(
         './smoke/fixture-artifacts.ts'
     );
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-test-'));
-    const plugin = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-delivery-')));
     try {
-        const delivered = new URL('../plugins/codex/debugging-cdp-targets/', import.meta.url);
-        await cp(fileURLToPath(delivered), plugin, { recursive: true });
-        const original = path.join(plugin, 'dist/mcp-bootstrap.mjs');
-        assert.ok(
-            !original.startsWith(fileURLToPath(new URL('..', import.meta.url))),
-            'Delivered child must run outside repository coverage scope.',
-        );
-        assert.deepEqual(await readFile(original), await readFile(new URL('dist/mcp-bootstrap.mjs', delivered)));
+        const original = fileURLToPath(new URL('./fixtures/http-gateway.ts', import.meta.url));
         const defaultChild = spawnSync(process.execPath, fixtureGatewayArguments(original), {
             input: '',
             encoding: 'utf8',
@@ -368,7 +360,7 @@ test('original delivered gateway remains the child entry with source subscriber 
         const args = fixtureGatewayArguments(original, directory, 'official-server', parent.snapshot().collectionId);
         assert.equal(args[0], '--import');
         assert.equal(args[2], original);
-        // The original dist child initializes/exits without a browser; preload receives its cleanup event.
+        // The real source core/HTTP fixture exits through normal cleanup without a browser.
         const child = spawnSync(process.execPath, args, {
             input: '',
             encoding: 'utf8',
@@ -382,7 +374,6 @@ test('original delivered gateway remains the child entry with source subscriber 
         assert.deepEqual(fixtureGatewayArguments('original.mjs'), ['original.mjs']);
     } finally {
         await rm(directory, { recursive: true, force: true });
-        await rm(plugin, { recursive: true, force: true });
     }
 });
 
@@ -444,7 +435,7 @@ test('normal and truncated earlier collections are preserved and rejected withou
     }
 });
 
-test('both original gateway smoke launches omit hostile inherited NODE_OPTIONS while retaining the explicit subscriber', async () => {
+test('both source HTTP smoke fixtures omit hostile inherited NODE_OPTIONS while retaining the explicit subscriber', async () => {
     const { createFixtureArtifacts, createFixtureGatewayClient, fixtureGatewayEnvironment } = await import(
         './smoke/fixture-artifacts.ts'
     );
@@ -453,21 +444,13 @@ test('both original gateway smoke launches omit hostile inherited NODE_OPTIONS w
     assert.deepEqual(mixedCase, { Node_Options: 'injected', NODE_OPTIONS: 'injected-again', PATH: 'preserved' });
     for (const fixture of ['official-server', 'entry-recovery'] as const) {
         const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-test-'));
-        const plugin = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-artifacts-delivery-')));
         const inherited = process.env.NODE_OPTIONS;
         try {
             const sentinel = path.join(directory, 'injected');
             const hostile = `data:text/javascript,${encodeURIComponent(`import {writeFileSync} from 'node:fs';writeFileSync(${JSON.stringify(sentinel)},'injected');`)}`;
             process.env.NODE_OPTIONS = `--import=${hostile}`;
             const artifacts = createFixtureArtifacts(directory, fixture);
-            const delivered = new URL('../plugins/codex/debugging-cdp-targets/', import.meta.url);
-            await cp(fileURLToPath(delivered), plugin, { recursive: true });
-            const entry = path.join(plugin, 'dist/mcp-bootstrap.mjs');
-            assert.ok(
-                !entry.startsWith(fileURLToPath(new URL('..', import.meta.url))),
-                'Delivered child must run outside repository coverage scope.',
-            );
-            assert.deepEqual(await readFile(entry), await readFile(new URL('dist/mcp-bootstrap.mjs', delivered)));
+            const entry = fileURLToPath(new URL('./fixtures/http-gateway.ts', import.meta.url));
             const client = createFixtureGatewayClient(entry, directory, fixture, artifacts);
             await client.close();
             assert.equal(client.child.exitCode, 0);
@@ -481,7 +464,6 @@ test('both original gateway smoke launches omit hostile inherited NODE_OPTIONS w
             if (inherited === undefined) delete process.env.NODE_OPTIONS;
             else process.env.NODE_OPTIONS = inherited;
             await rm(directory, { recursive: true, force: true });
-            await rm(plugin, { recursive: true, force: true });
         }
     }
 });

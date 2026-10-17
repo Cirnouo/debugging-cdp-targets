@@ -1,7 +1,7 @@
 # Codex packaging inputs
 
 `.codex-plugin/` owns the maintained Codex manifest and its directory documentation.
-`mcp.json` declares the gateway; `hooks/` owns Codex automatic Hook definitions.
+`mcp.json` connects directly to the App's fixed loopback HTTP URL.
 The manifest explicitly discovers `./skills/`. Flat `skill-openai.yaml` and
 `skill-agents-README.md` inputs map through the host file inventory to the Skill's
 `agents/openai.yaml` and `agents/README.md`. They add Codex-only presentation;
@@ -25,5 +25,5 @@ Unicode code points, matching the
 This limit applies when Codex loads the manifest.
 `plugin-README.md` is copied as the installed payload README. This README documents
 maintained inputs and stays in the repository. The build also copies shared
-`packaging/shared/` assets, root `LICENSE` and the generated runtime map into
+`packaging/shared/` assets and root `LICENSE` into
 `plugins/codex/debugging-cdp-targets/`.

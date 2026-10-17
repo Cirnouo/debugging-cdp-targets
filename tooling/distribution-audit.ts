@@ -4,12 +4,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import type { HostDescriptor } from './host-policy.ts';
 import { CODEX_HOST, PLUGIN_HOSTS, PLUGIN_NAME, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { validateIconPng } from './icon-policy.ts';
-import { OFFICIAL_RELEASE, requiredPayloadFiles, validatePayloadFileInventory } from './payload-policy.ts';
+import { requiredPayloadFiles, validatePayloadFileInventory } from './payload-policy.ts';
 import { isSemVer, validateVersionAgreement } from './version-policy.ts';
 
 export function compareDistributionTrees(source: Map<string, Buffer>, installed: Map<string, Buffer>) {
@@ -34,18 +33,15 @@ export function validateMcpEntries(mcp: unknown, host: HostDescriptor = CODEX_HO
         return ['Portable MCP manifest requires the Agent Plugins MCP schema.'];
     if (!exactKeys(mcp, codex ? ['$schema', 'mcpServers'] : ['mcpServers'])) return ['Unexpected host MCP fields.'];
     const servers = mcp.mcpServers;
-    if (!exactKeys(servers, ['cdp-targets'])) return ['Plugin requires exactly one stdio gateway entry.'];
+    if (!exactKeys(servers, ['cdp-targets'])) return ['Plugin requires exactly one direct HTTP entry.'];
     const server = servers['cdp-targets'];
     if (
         !isRecord(server) ||
-        !exactKeys(server, codex ? ['type', 'command', 'args', 'cwd'] : ['type', 'command', 'args']) ||
-        server.type !== 'stdio' ||
-        server.command !== 'node' ||
-        JSON.stringify(server.args) !==
-            JSON.stringify([codex ? 'dist/mcp-bootstrap.mjs' : `\${CLAUDE_PLUGIN_ROOT}/dist/mcp-bootstrap.mjs`]) ||
-        (codex && server.cwd !== '.')
+        !exactKeys(server, ['type', 'url']) ||
+        server.type !== (codex ? 'streamable-http' : 'http') ||
+        server.url !== 'http://127.0.0.1:27637/mcp'
     )
-        return ['Invalid stdio gateway entry: cdp-targets.'];
+        return ['Invalid direct HTTP App entry: cdp-targets.'];
     return [];
 }
 
@@ -69,9 +65,8 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
     const common = ['name', 'version', 'description', 'author', 'repository', 'homepage', 'license', 'keywords'];
     if (host.id === 'codex') {
         if (
-            !exactKeys(manifest, [...common, 'mcpServers', 'hooks', 'skills', 'interface']) ||
+            !exactKeys(manifest, [...common, 'mcpServers', 'skills', 'interface']) ||
             manifest.mcpServers !== './mcp.json' ||
-            manifest.hooks !== './hooks/hooks.json' ||
             manifest.skills !== './skills/' ||
             !isRecord(manifest.interface)
         )
@@ -123,34 +118,6 @@ export function validateHostManifest(manifest: unknown, host: HostDescriptor = C
         manifest.icon !== './assets/icon.png'
     )
         return ['Claude Code uses default discovery without Codex manifest fields.'];
-    return [];
-}
-
-export function validateHooks(input: unknown, host: HostDescriptor = CODEX_HOST) {
-    if (!isRecord(input) || !exactKeys(input, ['hooks']) || !isRecord(input.hooks)) return ['Malformed Plugin Hooks.'];
-    const events = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'];
-    if (!exactKeys(input.hooks, events)) return ['Plugin requires exactly four Hook events.'];
-    const server = host.id === 'codex' ? 'cdp-targets' : 'plugin:debugging-cdp-targets:cdp-targets';
-    for (const event of events) {
-        const groups = input.hooks[event];
-        if (!Array.isArray(groups) || groups.length !== 1 || !isRecord(groups[0]) || !exactKeys(groups[0], ['hooks']))
-            return ['Invalid Plugin Hook group.'];
-        const hooks = groups[0].hooks;
-        if (
-            !Array.isArray(hooks) ||
-            hooks.length !== 1 ||
-            !isRecord(hooks[0]) ||
-            !exactKeys(hooks[0], ['type', 'server', 'tool', 'input', 'timeout']) ||
-            hooks[0].type !== 'mcp_tool' ||
-            hooks[0].server !== server ||
-            hooks[0].tool !== 'dct_connection_status' ||
-            hooks[0].timeout !== 3 ||
-            !isRecord(hooks[0].input) ||
-            !exactKeys(hooks[0].input, ['hookEventName']) ||
-            hooks[0].input.hookEventName !== event
-        )
-            return ['Invalid host MCP Hook identity, input or timeout.'];
-    }
     return [];
 }
 
@@ -295,20 +262,9 @@ export async function auditDistribution(root: string) {
                 if (bytes) errors.push(...validateIconPng(file, bytes));
             }
             if (host.id === 'codex') errors.push(...validateCodexSkillPresentation(source, approvedIcon));
-            const official = await verifyOfficialPackage(
-                path.join(root, host.payloadRoot, 'dist/official-server'),
-                OFFICIAL_RELEASE,
-            );
-            const copied = new Map(
-                [...source]
-                    .filter(([file]) => file.startsWith('dist/official-server/'))
-                    .map(([file, bytes]) => [file.slice('dist/official-server/'.length), bytes]),
-            );
-            errors.push(...compareDistributionTrees(official, copied));
             const manifest = parsePluginMetadata(source.get(host.manifest)?.toString() ?? 'null');
             errors.push(...validateHostManifest(manifest, host));
             errors.push(...validateMcpEntries(parsePluginMetadata(source.get(host.mcp)?.toString() ?? 'null'), host));
-            errors.push(...validateHooks(parsePluginMetadata(source.get(host.hooks)?.toString() ?? 'null'), host));
             errors.push(
                 ...validateMarketplace(
                     parsePluginMetadata((await readMetadataFile(path.join(root, host.marketplace))).toString()),

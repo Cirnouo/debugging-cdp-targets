@@ -7,9 +7,9 @@ import { isRecord } from '../../src/shared/errors.ts';
 
 export async function testedSource(root: string) {
     const files = [
-        'src/adapters/mcp-entry-server.ts',
+        'src/adapters/mcp-http-server.ts',
         'src/adapters/lifecycle-tools.ts',
-        'tests/fixtures/mcp-instructions-entry.ts',
+        'tests/smoke/app-http.ts',
         'tests/smoke/instructions-evidence.ts',
         'tests/smoke/codex-instructions.ts',
         'tests/smoke/claude-instructions.ts',
@@ -35,25 +35,27 @@ export async function testedSource(root: string) {
 }
 
 export async function initializationEvidence(file: string) {
-    const events: unknown[] = (await readFile(file, 'utf8'))
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line));
-    const methods = events.flatMap((event) =>
-        isRecord(event) && typeof event.method === 'string' ? [event.method] : [],
+    const capture: unknown = JSON.parse(await readFile(file, 'utf8'));
+    assert.ok(isRecord(capture) && capture.capture === 'independent-sdk-http' && isRecord(capture.result));
+    assert.ok(Array.isArray(capture.methods) && capture.methods.every((method) => typeof method === 'string'));
+    assert.ok(capture.methods.includes('initialize') && capture.methods.includes('tools/list'));
+    assert.equal(capture.methods.includes('tools/call'), false);
+    const result = capture.result;
+    assert.ok(typeof result.instructions === 'string' && result.instructions.length > 0);
+    assert.ok(
+        isRecord(result.serverInfo) &&
+            result.serverInfo.name === 'debugging-cdp-targets' &&
+            typeof result.serverInfo.version === 'string',
     );
-    assert.ok(methods.includes('initialize'));
-    assert.equal(methods.filter((method) => method === 'tools/call').length, 0);
-    const result = events.flatMap((event) =>
-        isRecord(event) && isRecord(event.result) && typeof event.result.instructions === 'string'
-            ? [event.result]
-            : [],
-    )[0];
-    assert.ok(result && typeof result.instructions === 'string');
-    assert.deepEqual(result.serverInfo, { name: 'debugging-cdp-targets', version: '0.1.0' });
     assert.deepEqual(result.capabilities, { tools: {} });
-    assert.equal(Buffer.byteLength(result.instructions), 689);
-    return { instructions: result.instructions, methods, initialize: result };
+    assert.ok(Array.isArray(capture.tools) && capture.tools.every((name) => typeof name === 'string'));
+    return {
+        instructions: result.instructions,
+        methods: capture.methods,
+        initialize: result,
+        toolNames: capture.tools,
+        capture: capture.capture,
+    };
 }
 
 // Only semantic system/tool descriptions qualify; user messages and arbitrary
@@ -74,7 +76,12 @@ export function descriptionLocations(value: unknown, instructions: string, prefi
 
 // This validates only this smoke's controlled single-prompt capture; reminder
 // tags alone do not authenticate authorship in arbitrary user input.
-export function claudeInstructionLocations(request: unknown, instructions: string, prompt: string): string[] {
+export function claudeInstructionLocations(
+    request: unknown,
+    instructions: string,
+    prompt: string,
+    toolNames: readonly string[],
+): string[] {
     assert.ok(isRecord(request) && Array.isArray(request.messages) && request.messages.length === 1);
     assert.ok(!prompt.includes(instructions) && !prompt.includes('<system-reminder>'));
     const message: unknown = request.messages[0];
@@ -95,25 +102,17 @@ export function claudeInstructionLocations(request: unknown, instructions: strin
         expected,
         'MCP host carrier must match scope, envelope and complete production paragraph.',
     );
-    const names = [
-        'dct_connection_end_task',
-        'dct_connection_restart',
-        'dct_connection_start',
-        'dct_connection_status',
-        'dct_connection_stop',
-        'dct_operation_cancel',
-        'dct_operation_wait',
-    ];
-    const discovery = `<system-reminder>\nThe following deferred tools are now available via ToolSearch. Their schemas are NOT loaded — calling them directly will fail with InputValidationError. Use ToolSearch with query "select:<name>[,<name>...]" to load tool schemas before calling them:\n${names.map((name) => `mcp__plugin_debugging-cdp-targets_cdp-targets__${name}`).join('\n')}\n</system-reminder>`;
+    const discovery = `<system-reminder>\nThe following deferred tools are now available via ToolSearch. Their schemas are NOT loaded — calling them directly will fail with InputValidationError. Use ToolSearch with query "select:<name>[,<name>...]" to load tool schemas before calling them:\n${[
+        ...toolNames,
+    ]
+        .sort()
+        .map((name) => `mcp__plugin_debugging-cdp-targets_cdp-targets__${name}`)
+        .join('\n')}\n</system-reminder>`;
     const deferred = prefix.flatMap((text, index) =>
         text.includes('The following deferred tools are now available via ToolSearch.') ? [{ text, index }] : [],
     );
     assert.equal(deferred.length, 1);
-    assert.equal(
-        deferred[0]?.text,
-        discovery,
-        'Deferred discovery must list exactly the seven Plugin lifecycle tools.',
-    );
+    assert.equal(deferred[0]?.text, discovery, 'Deferred discovery must list the actual App tool catalog.');
     assert.ok(Array.isArray(request.tools));
     const tools = request.tools.map((tool: unknown) => {
         assert.ok(isRecord(tool));

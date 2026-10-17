@@ -5,7 +5,8 @@ import { lstat, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type ConnectionStatus, validateIdentity } from '../../src/domains/control-contract.ts';
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/client';
+import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 import {
@@ -126,7 +127,7 @@ if (monitor)
         monitor.once('error', reject);
     });
 const client = createFixtureGatewayClient(
-    path.join(root, 'plugins/codex/debugging-cdp-targets/dist/mcp-bootstrap.mjs'),
+    path.join(root, 'tests/fixtures/http-gateway.ts'),
     outputDirectory,
     'official-server',
     artifacts,
@@ -166,14 +167,13 @@ function launch(profile: string, title: string) {
         chromeFileLogging === 'off' ? undefined : startupLog,
     );
 }
-let entryId: string | undefined;
 let active: ConnectionStatus | undefined;
 function route(target: ConnectionStatus) {
     assert.ok(target.sessionId);
     return { _dct: { connectionId: target.connectionId, sessionId: target.sessionId } };
 }
-async function emptyGateway(id: string) {
-    const result = await control({ action: 'status', entryId: id });
+async function emptyGateway() {
+    const result = await control({ action: 'status' });
     assert.ok('connections' in result);
     assert.deepEqual(result.connections, []);
 }
@@ -194,14 +194,14 @@ try {
     const statusTool = await tool('dct_connection_status');
     const response = readStatus(statusTool.structuredContent);
     assert.ok('connections' in response);
-    entryId = response.entryId;
-    validateIdentity(entryId, 'entry ID');
-    await emptyGateway(entryId);
-    await assert.rejects(() => tool('list_pages'), /routing/);
+    await emptyGateway();
+    await assert.rejects(
+        () => tool('list_pages'),
+        (error: unknown) => error instanceof ProtocolError && error.code === ProtocolErrorCode.InvalidParams,
+    );
     const first = await control({
         action: 'start',
         requestId: randomUUID(),
-        entryId,
         basePort: 19222,
         ...launch('profile-one', 'FIRST'),
     });
@@ -232,18 +232,16 @@ try {
         await closeSmokeConnection(control, {
             action: 'stop',
             requestId: randomUUID(),
-            entryId,
             connectionId: first.connectionId,
             sessionId: first.sessionId,
             disposition: 'Close',
         });
         active = undefined;
         await assert.rejects(lstat(firstDirectory), { code: 'ENOENT' });
-        await emptyGateway(entryId);
+        await emptyGateway();
         const second = await control({
             action: 'start',
             requestId: randomUUID(),
-            entryId,
             basePort: 19222,
             ...launch('profile-two', 'SECOND'),
         });
@@ -262,14 +260,13 @@ try {
         await closeSmokeConnection(control, {
             action: 'stop',
             requestId: randomUUID(),
-            entryId,
             connectionId: second.connectionId,
             sessionId: second.sessionId,
             disposition: 'Close',
         });
         active = undefined;
         await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
-        await emptyGateway(entryId);
+        await emptyGateway();
         console.log(
             'Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.',
         );
@@ -277,14 +274,12 @@ try {
 } catch (error) {
     failures.primary(error);
 } finally {
-    if (entryId && active?.sessionId) {
-        const cleanupEntryId = entryId;
+    if (active?.sessionId) {
         const { connectionId, sessionId } = active;
         await failures.cleanup('target-cleanup', () =>
             closeSmokeConnection(control, {
                 action: 'stop',
                 requestId: randomUUID(),
-                entryId: cleanupEntryId,
                 connectionId,
                 sessionId,
                 disposition: 'Close',

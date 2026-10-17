@@ -12,8 +12,12 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
-- MCP initialization instructions expose gateway discovery, launch isolation,
-    connection/session routing and Close/Keep workflow to compatible hosts.
+- MCP initialization instructions expose registration, launch isolation,
+    explicit bearer/connection/session routing and Close/Keep to compatible hosts.
+- A consciously launched singleton Electron desktop App with a sandboxed React
+    manager, tray/fallback window, separate installed/portable data, validated
+    atomic settings, hot appearance, cold HTTP port and cleanup-gated normal exit.
+    Verified local Windows staging precedes native installer delivery.
 
 - Stable Node >=24.21.0 <25 support, with Node 24.21.0 as the exact CI and
     problem-reproduction baseline, optional mise selection of everyday Node 24,
@@ -39,8 +43,8 @@ Version 0.1.0 remains under development; no release has been published.
     and page-load performance profiling.
 - A generated geometric project icon with theme-aware README artwork, universal
   Codex base icons, a Codex dark variant and a universal Claude directory icon.
-- Independent Codex and Claude Code Plugins and Marketplace catalogs, each with
-  a complete runtime and shared application-agnostic debugging instructions,
+- Independent thin Codex and Claude Code Plugins and Marketplace catalogs, with
+  direct App HTTP configuration and shared application-agnostic debugging instructions,
   including fixed Chinese/English isolation, directory, cleanup, recovery,
   configuration, input and Close/Keep questions with explicit Agent/User/Plugin
   roles, declared factual variables and event-to-template mapping.
@@ -49,16 +53,17 @@ Version 0.1.0 remains under development; no release has been published.
   with cumulative Changelog-based notes, new contributor attribution, and required
   security and cross-platform CI gates. Arbitrary legal SemVer prerelease labels
   preserve the latest stable release as the comparison baseline and GitHub latest.
-- One reusable stdio gateway that creates independent official chrome-devtools-mcp
+- One App-owned SDK HTTP gateway that creates independent official chrome-devtools-mcp
   1.11.0 connections for new targets, without a fixed connection limit.
-- MCP support for stdio, roots, form elicitation, progress and cancellation.
-- Complete unchanged official chrome-devtools-mcp 1.11.0 bundled with each Plugin,
+- Direct host HTTP and original official-child stdio, roots, form elicitation,
+  request-associated progress and cancellation.
+- Complete unchanged official chrome-devtools-mcp 1.11.0 bundled with the App,
   with integrity-verified startup and no runtime package downloads.
   Automatic update checks are disabled only for the official Server child.
 - Parallel independent-connection official calls with explicit connection/session routing and
   independent progress, cancellation, actual-exit observation and lifecycle events.
-- Seven native MCP lifecycle/operation tools with idempotent asynchronous requests,
-  bounded event waits, explicit lifecycle cancellation, Close/Keep and automatic Hook results.
+- Seven registration/lifecycle/operation tools with explicit per-call bearer,
+  idempotent asynchronous requests, bounded waits, explicit cancellation and Close/Keep.
 - A transport-independent shared core with bearer-scoped resource/operation ownership,
     immutable roots and launch snapshots, explicit target/official/both restart,
     per-connection execution admission and retryable final cleanup that retains failures.
@@ -76,16 +81,10 @@ Version 0.1.0 remains under development; no release has been published.
   and router while replacing the selected target, official Server, or both, and
   refreshing the public session. Target-only restart retains the official Server;
   fixed target ports remain fixed, while automatic ports may change before launch.
-- Lifecycle status and native process exit monitoring with automatic, reviewed
-  Codex and Claude Code MCP Tool Hooks, independent compact events and fresh
-  page identities after live restart. Expected exits are grouped by operation ID
-  with all actual exit/cleanup facts, including new Target rollback, and wait for
-  related cleanup before delivery. Terminal status/wait, terminal cancel and
-  identical mutation retry delivery acknowledge operation notices; aborted
-  requests and nonterminal responses leave them unread. Failure notices retain
-  the active failure phase and compact native evidence without error payloads.
-  Failed startup retains its primary phase and error code when rollback also
-  fails, with the owned target identity available for explicit recovery.
+  Directory ownership remains stable across every scope.
+- Explicit owned lifecycle/operation status and native actual-exit observation.
+  Failed startup retains primary phase/error and owned identity for recovery;
+  resource disposal failures retain ownership for retry without restoring dead routes.
 - Structured executable/args/cwd/env launches with native Windows privilege
   detection, private one-shot elevation, actual app handles and separate
   authorization and CDP readiness waits. Independently verified generic
@@ -106,11 +105,11 @@ Version 0.1.0 remains under development; no release has been published.
     Program-owned exclusive named/random allocation, existing-nonempty retention,
     explicit cleanup for other cases and reuse of prior whole-directory choices.
     Only selected-preset container ancestors may be prepared; none uses no preset.
-- Connection-level data-directory leases across session restart and Keep/end-task,
+- Connection-level data-directory leases across session restart and Keep,
     with preauthorized retain or whole-directory delete-on-release after all
     actual-app/native-acquisition/successor/resource users settle. Explicit original
     start metadata retains actual real path/policy/state after failed/cancelled
-    startup and later cleanup; default summaries/Hooks omit directory evidence.
+    startup and later cleanup; default summaries omit directory evidence.
 - Chrome native occupancy checks and launch reservations, with no implicit profile
     fallback. Gateway-local port ownership is reserved before probing and retained
     until actual exit or evidence that no app was created. Automatic updater
@@ -124,6 +123,13 @@ Version 0.1.0 remains under development; no release has been published.
   and hidden Windows auxiliary consoles.
 
 ### Security
+
+- Explicit bearer ownership on every owned HTTP request, exact loopback Host,
+    Origin, path, method and body boundaries, and no implicit MCP-session owner.
+- Verified ordinary Node and complete original native loading closure in the App,
+    with original licenses, archive provenance and no runtime package fallback.
+- A sandboxed local management renderer with fixed assets, restrictive CSP and
+    sender/main-frame validation before narrow management actions.
 
 - Dependency and vulnerability-exception identities use shared strict SemVer
   parsing, rejecting malformed prerelease/build identifiers and unsafe core numbers.
@@ -139,7 +145,7 @@ Version 0.1.0 remains under development; no release has been published.
 - Independent official Server disposal closes the public SDK transport immediately,
   rejects pending calls and proves actual child exit. Its owned child receives
   two seconds for EOF, two seconds after TERM, then KILL within a ten-second budget;
-  applications remain subject only to normal Close. Gateway disconnect attempts
+  applications remain subject only to normal Close. Normal App Quit attempts
   every resource cleanup in parallel with target shutdown despite peer failures.
 - Script-disabled Supply chain security CI gate for complete repository
   and isolated official Server vulnerability/signature audits.
