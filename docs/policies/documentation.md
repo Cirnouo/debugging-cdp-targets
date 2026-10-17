@@ -8,6 +8,12 @@ defines terms only. Repository requirements belong here; implementation
 constraints belong in applicable ancestor and local AGENTS.md files; decisions
 belong in docs/adr.
 
+The [repository organization policy](repository-organization.md) owns content
+responsibilities, naming and structural changes across source, tests, tooling
+and documentation. Read it before adding, splitting, merging, renaming or moving
+maintained files, or changing their content responsibilities. The audience and
+instruction rules below continue to apply.
+
 Every human-maintained non-root directory has a README naming its immediate
 files and subdirectories. The `.github` directory uses `INDEX.md` instead:
 GitHub prioritizes a README there over the root README on the repository home

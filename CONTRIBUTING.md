@@ -11,6 +11,12 @@ The singleton App owns direct HTTP and native resources; thin host Plugins load
 metadata, artwork and the shared Skill. [App runtime](docs/app-runtime.md) records
 current composition and separates local staging from installer acceptance.
 
+Before adding, splitting, merging, renaming or moving maintained files, or changing
+their content responsibilities, follow the
+[repository organization policy](docs/policies/repository-organization.md).
+It explains how to choose an owner, name cohesive content and keep tests, tooling
+and documentation aligned with the current layout during migration.
+
 ## Prepare a checkout
 
 Fork the repository and clone your fork. Use stable Node >=24.21.0 <25 and
