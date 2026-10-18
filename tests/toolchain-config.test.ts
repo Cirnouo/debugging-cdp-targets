@@ -31,11 +31,11 @@ const biome = record(biomeInput);
 test('default test and coverage commands select only safe root, tooling, Gateway and Host regressions with sequential files and retained floors', () => {
     assert.equal(
         command(scripts, 'test'),
-        'node --test --test-concurrency=1 tests/*.test.ts tests/tooling/governance/commit-grammar.test.ts tests/tooling/governance/commit-validation.test.ts tests/tooling/quality/text-policy.test.ts tests/gateway/owned-tool-arguments.test.ts tests/host-plugins/payload-integrity.test.ts tests/host-plugins/payload-filesystem.test.ts',
+        'node --test --test-concurrency=1 tests/*.test.ts tests/tooling/governance/commit-events.test.ts tests/tooling/governance/commit-grammar.test.ts tests/tooling/governance/commit-history.test.ts tests/tooling/governance/commit-validation.test.ts tests/tooling/quality/text-policy.test.ts tests/gateway/owned-tool-arguments.test.ts tests/host-plugins/payload-integrity.test.ts tests/host-plugins/payload-filesystem.test.ts',
     );
     assert.equal(
         command(scripts, 'test:coverage'),
-        'node --experimental-test-coverage --test-coverage-lines=52 --test-coverage-branches=71 --test-coverage-functions=61 --test --test-concurrency=1 tests/*.test.ts tests/tooling/governance/commit-grammar.test.ts tests/tooling/governance/commit-validation.test.ts tests/tooling/quality/text-policy.test.ts tests/gateway/owned-tool-arguments.test.ts tests/host-plugins/payload-integrity.test.ts tests/host-plugins/payload-filesystem.test.ts',
+        'node --experimental-test-coverage --test-coverage-lines=52 --test-coverage-branches=71 --test-coverage-functions=61 --test --test-concurrency=1 tests/*.test.ts tests/tooling/governance/commit-events.test.ts tests/tooling/governance/commit-grammar.test.ts tests/tooling/governance/commit-history.test.ts tests/tooling/governance/commit-validation.test.ts tests/tooling/quality/text-policy.test.ts tests/gateway/owned-tool-arguments.test.ts tests/host-plugins/payload-integrity.test.ts tests/host-plugins/payload-filesystem.test.ts',
     );
 });
 

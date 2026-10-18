@@ -21,8 +21,8 @@ and depends on the pure current `domains/control-contract.ts` value/callback typ
 The complete lifecycle-contract move remains pending with its App UI/CDP domain
 consumers. Existing layer, pure-model and I/O rules remain in force for all current owners.
 
-[Tooling governance](../../tooling/governance/README.md) separates pure commit
-grammar from actual message execution.
+[Tooling governance](../../tooling/governance/README.md) separates supplied commit
+events and pure grammar from actual message execution and Git/history auditing.
 [Text policy](../../tooling/quality/README.md) owns shared pure style and YAML
 filename rules. Their central
 [tooling tests](../../tests/tooling/README.md) have explicit safe default selection;

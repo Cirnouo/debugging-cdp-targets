@@ -6,11 +6,12 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { isRecord } from '../src/shared/errors.ts';
-import { buildCommitCheckRequest, resolveAuditBranch, validateCommitRecords } from '../tooling/check-commits.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
+import { validateCommitRecords } from '../../../tooling/governance/check-commits.ts';
+import { buildCommitCheckRequest } from '../../../tooling/governance/commit-events.ts';
 
-const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
-const commitlintCli = fileURLToPath(new URL('../node_modules/@commitlint/cli/cli.js', import.meta.url));
+const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const commitlintCli = fileURLToPath(new URL('../../../node_modules/@commitlint/cli/cli.js', import.meta.url));
 
 function commitlintAccepts(message: string) {
     const result = spawnSync(process.execPath, [commitlintCli, '--config', 'commitlint.config.ts'], {
@@ -29,7 +30,7 @@ function recordErrors(message: string) {
 
 async function wrappedBodyLabelFixture() {
     const fixture: unknown = JSON.parse(
-        await readFile(new URL('./fixtures/wrapped-body-label-squash.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../fixtures/wrapped-body-label-squash.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(fixture));
     assert.ok(typeof fixture.number === 'number' && typeof fixture.title === 'string');
@@ -55,33 +56,6 @@ function sanitizedGitEnvironment(environment = process.env, overrides = {}) {
         ...overrides,
     };
 }
-
-test('builds a pull request audit for raw title, squash header, source branch and commit range', () => {
-    const event = {
-        number: 123,
-        pull_request: {
-            title: 'ci(tooling): add quality gates',
-            body: 'Explain the final behavior.\n\nCloses #220\nRefs: #221',
-            base: { sha: 'base' },
-            head: { ref: 'chore/quality-gates', sha: 'head' },
-        },
-    };
-    assert.deepEqual(buildCommitCheckRequest({ eventName: 'pull_request', event }), {
-        branches: ['chore/quality-gates'],
-        directMessages: [
-            {
-                label: 'pull request title',
-                message: 'ci(tooling): add quality gates',
-            },
-            {
-                label: 'pull request squash header',
-                message: 'ci(tooling): add quality gates (#123)',
-            },
-        ],
-        range: 'base..head',
-        includeAncestors: false,
-    });
-});
 
 test('PR headers exclude long descriptions while identity rejects missing or malformed bodies', () => {
     const pr = {
@@ -115,76 +89,6 @@ test('PR headers exclude long descriptions while identity rejects missing or mal
         empty.directMessages.every(({ message }) => commitlintAccepts(message)),
         true,
     );
-});
-
-test('PR squash headers exclude empty descriptions and issue footers without changing the event', () => {
-    const pr = {
-        title: 'fix(target): reject stale identity',
-        head: { ref: 'fix/stale-identity', sha: 'head' },
-        base: { sha: 'base' },
-    };
-    const cases = [
-        null,
-        '',
-        'Closes #220',
-        'Validate the endpoint.\n\nFixes #220\nResolves owner/repository#221\nRefs: #222',
-    ];
-    for (const body of cases) {
-        const event = { number: 123, pull_request: { ...pr, body } };
-        const original = Buffer.from(JSON.stringify(event));
-        const request = buildCommitCheckRequest({ eventName: 'pull_request', event });
-        assert.equal(request.directMessages[1]?.message, 'fix(target): reject stale identity (#123)');
-        assert.deepEqual(Buffer.from(JSON.stringify(event)), original);
-    }
-});
-
-test('PR identity requires a positive safe integer number from the event root', () => {
-    const pr = {
-        number: 123,
-        title: 'fix(target): reject stale identity',
-        body: null,
-        head: { ref: 'fix/stale-identity', sha: 'head' },
-        base: { sha: 'base' },
-    };
-    for (const number of [undefined, null, '123', false, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, {}]) {
-        assert.throws(
-            () => buildCommitCheckRequest({ eventName: 'pull_request', event: { number, pull_request: pr } }),
-            /pull request number.*positive safe integer/i,
-        );
-    }
-    assert.throws(
-        () => buildCommitCheckRequest({ eventName: 'pull_request', event: { pull_request: pr } }),
-        /pull request number.*positive safe integer/i,
-    );
-    const maximum = buildCommitCheckRequest({
-        eventName: 'pull_request',
-        event: { number: Number.MAX_SAFE_INTEGER, pull_request: pr },
-    });
-    assert.equal(maximum.directMessages[1]?.message, 'fix(target): reject stale identity (#9007199254740991)');
-});
-
-test('PR titles reject their own trailing number instead of duplicating or stripping it', () => {
-    const pr = {
-        body: null,
-        head: { ref: 'fix/stale-identity', sha: 'head' },
-        base: { sha: 'base' },
-    };
-    for (const title of ['fix(target): reject stale identity (#123)', 'fix(target): reject stale identity (#123)   ']) {
-        assert.throws(
-            () =>
-                buildCommitCheckRequest({
-                    eventName: 'pull_request',
-                    event: { number: 123, pull_request: { ...pr, title } },
-                }),
-            /remove.*\(#123\).*title/i,
-        );
-    }
-    const reference = buildCommitCheckRequest({
-        eventName: 'pull_request',
-        event: { number: 123, pull_request: { ...pr, title: 'fix(target): follow issue (#220)' } },
-    });
-    assert.equal(reference.directMessages[0]?.message, 'fix(target): follow issue (#220)');
-    assert.equal(reference.directMessages[1]?.message, 'fix(target): follow issue (#220) (#123)');
 });
 
 test('PR squash headers include the actual number in the 100-character budget', () => {
@@ -239,7 +143,7 @@ test('PR number suffixes do not hide invalid raw titles', () => {
 
 test('non-merge commits reject unwrapped squash bodies regardless of commit identity', async () => {
     const message: unknown = JSON.parse(
-        await readFile(new URL('./fixtures/unwrapped-squash-message.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../fixtures/unwrapped-squash-message.json', import.meta.url), 'utf8'),
     );
     assert.ok(typeof message === 'string');
     assert.equal(commitlintAccepts(message), false);
@@ -248,52 +152,8 @@ test('non-merge commits reject unwrapped squash bodies regardless of commit iden
     }
 });
 
-test('builds normal and first-push audits from GitHub push payloads', () => {
-    assert.deepEqual(
-        buildCommitCheckRequest({
-            eventName: 'push',
-            event: {
-                ref: 'refs/heads/chore/quality-gates',
-                before: 'before',
-                after: 'after',
-            },
-        }),
-        {
-            branches: ['chore/quality-gates'],
-            directMessages: [],
-            range: 'before..after',
-            includeAncestors: false,
-        },
-    );
-    assert.deepEqual(
-        buildCommitCheckRequest({
-            eventName: 'push',
-            event: {
-                ref: 'refs/heads/feat/first-push',
-                before: '0000000000000000000000000000000000000000',
-                after: 'after',
-            },
-        }),
-        {
-            branches: ['feat/first-push'],
-            directMessages: [],
-            range: 'after',
-            includeAncestors: true,
-        },
-    );
-});
-
-test('builds a local audit over current ancestry', () => {
-    assert.deepEqual(buildCommitCheckRequest({ currentBranch: 'main' }), {
-        branches: ['main'],
-        directMessages: [],
-        range: 'HEAD',
-        includeAncestors: true,
-    });
-});
-
 test('checks task-purpose branches at local, push and pull request entry points', async (context) => {
-    const currentBody = await readFile(new URL('./fixtures/current-pr-body.md', import.meta.url), 'utf8');
+    const currentBody = await readFile(new URL('../../fixtures/current-pr-body.md', import.meta.url), 'utf8');
     const cases = [
         { eventName: '', localBranch: 'docs/branch-policy', sourceBranch: 'docs/branch-policy', status: 1 },
         { eventName: '', localBranch: 'chore/branch-policy', sourceBranch: 'chore/branch-policy', status: 0 },
@@ -355,7 +215,7 @@ test('checks task-purpose branches at local, push and pull request entry points'
                     await writeFile(eventPath, `${JSON.stringify(event)}\n`, 'utf8');
                     const result = spawnSync(
                         process.execPath,
-                        [path.join(repositoryRoot, 'tooling/check-commits.ts')],
+                        [path.join(repositoryRoot, 'tooling/governance/check-commits.ts')],
                         {
                             cwd: directory,
                             encoding: 'utf8',
@@ -384,81 +244,6 @@ test('checks task-purpose branches at local, push and pull request entry points'
     }
 });
 
-test('builds a workflow dispatch audit from its explicit event branch', () => {
-    const currentBranch = resolveAuditBranch({
-        environment: {
-            GITHUB_REF: 'refs/heads/main',
-            GITHUB_REF_NAME: 'main',
-            GITHUB_REF_TYPE: 'branch',
-        },
-        event: {},
-        eventName: 'workflow_dispatch',
-    });
-    assert.deepEqual(
-        buildCommitCheckRequest({
-            eventName: 'workflow_dispatch',
-            event: {},
-            currentBranch,
-        }),
-        {
-            branches: ['main'],
-            directMessages: [],
-            range: 'HEAD',
-            includeAncestors: true,
-        },
-    );
-});
-
-test('builds a scheduled audit over the explicit branch and complete ancestry', () => {
-    const currentBranch = resolveAuditBranch({
-        environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' },
-        event: { schedule: '17 1 * * 1' },
-        eventName: 'schedule',
-    });
-    assert.deepEqual(buildCommitCheckRequest({ eventName: 'schedule', currentBranch }), {
-        branches: ['main'],
-        directMessages: [],
-        range: 'HEAD',
-        includeAncestors: true,
-    });
-});
-
-test('scheduled audits reject missing and contradictory tag identities instead of local fallback', () => {
-    for (const { environment, event } of [
-        { environment: {}, event: { ref: 'main' } },
-        {
-            environment: { GITHUB_REF: 'refs/tags/v0.1.0', GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' },
-            event: {},
-        },
-        { environment: { GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: 'main' }, event: { ref: 'main' } },
-        { environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_TYPE: 'tag' }, event: {} },
-        { environment: { GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' }, event: { ref: 'refs/tags/v0.1.0' } },
-        { environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_NAME: 'codex/other' }, event: {} },
-    ]) {
-        const currentBranch = resolveAuditBranch({
-            environment,
-            event,
-            eventName: 'schedule',
-            localBranch: 'main',
-        });
-        assert.equal(currentBranch, undefined);
-        assert.throws(() => buildCommitCheckRequest({ eventName: 'schedule', currentBranch }), /branch identity/);
-    }
-});
-
-test('scheduled branch evidence accepts explicit matching fallbacks without local inference', () => {
-    for (const { environment, event } of [
-        { environment: { GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'main' }, event: {} },
-        { environment: {}, event: { ref: 'refs/heads/main' } },
-        { environment: { GITHUB_REF: 'refs/heads/main', GITHUB_REF_NAME: 'main' }, event: { ref: 'main' } },
-    ]) {
-        assert.equal(
-            resolveAuditBranch({ environment, event, eventName: 'schedule', localBranch: 'codex/other' }),
-            'main',
-        );
-    }
-});
-
 test('scheduled audit rejects shallow ancestry that hides an invalid earlier commit', async () => {
     const folder = await mkdtemp(path.join(os.tmpdir(), 'cdp-scheduled-ancestry-'));
     const fixtureEnvironment = sanitizedGitEnvironment();
@@ -481,7 +266,7 @@ test('scheduled audit rejects shallow ancestry that hides an invalid earlier com
         const eventPath = path.join(folder, 'event.json');
         await writeFile(eventPath, '{"schedule":"17 1 * * 1"}\n', 'utf8');
         const check = (cwd: string) =>
-            spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
+            spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/governance/check-commits.ts')], {
                 cwd,
                 encoding: 'utf8',
                 windowsHide: true,
@@ -507,7 +292,7 @@ test('scheduled audit rejects shallow ancestry that hides an invalid earlier com
 });
 
 test('runs the workflow_dispatch checker from a detached GitHub checkout', async () => {
-    const root = fileURLToPath(new URL('../', import.meta.url));
+    const root = fileURLToPath(new URL('../../../', import.meta.url));
     const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'cdp-workflow-dispatch-'));
     const eventPath = path.join(temporaryDirectory, 'event.json');
     await writeFile(eventPath, '{}\n', 'utf8');
@@ -537,7 +322,7 @@ test('runs the workflow_dispatch checker from a detached GitHub checkout', async
             });
             assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
         }
-        const checkerPath = path.join(root, 'tooling/check-commits.ts');
+        const checkerPath = path.join(root, 'tooling/governance/check-commits.ts');
         for (const eventName of ['workflow_dispatch', 'schedule']) {
             const result = spawnSync(process.execPath, [checkerPath], {
                 cwd: temporaryDirectory,
@@ -624,12 +409,16 @@ test('audits all rewritten history when a forced push base is absent from the ch
                             eventPath,
                             JSON.stringify({ ref: 'refs/heads/main', before, after: head, forced }),
                         );
-                        return spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
-                            cwd,
-                            encoding: 'utf8',
-                            env: { ...fixtureEnvironment, GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: eventPath },
-                            windowsHide: true,
-                        });
+                        return spawnSync(
+                            process.execPath,
+                            [path.join(repositoryRoot, 'tooling/governance/check-commits.ts')],
+                            {
+                                cwd,
+                                encoding: 'utf8',
+                                env: { ...fixtureEnvironment, GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: eventPath },
+                                windowsHide: true,
+                            },
+                        );
                     };
                     const result = await check(true);
                     assert.equal(result.status, invalidAncestor ? 1 : 0, `${result.stdout}\n${result.stderr}`);
@@ -829,16 +618,20 @@ test('preserved body label messages retain their bytes and current PRs require t
                 assert.deepEqual(object.subarray(object.indexOf('\n\n') + 2), messageBytes);
                 const eventBytes = Buffer.from(`${JSON.stringify(event)}\n`);
                 await writeFile(eventPath, eventBytes);
-                const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
-                    cwd: directory,
-                    encoding: 'utf8',
-                    env: {
-                        ...fixtureEnvironment,
-                        GITHUB_EVENT_NAME: eventName,
-                        GITHUB_EVENT_PATH: eventName ? eventPath : '',
+                const result = spawnSync(
+                    process.execPath,
+                    [path.join(repositoryRoot, 'tooling/governance/check-commits.ts')],
+                    {
+                        cwd: directory,
+                        encoding: 'utf8',
+                        env: {
+                            ...fixtureEnvironment,
+                            GITHUB_EVENT_NAME: eventName,
+                            GITHUB_EVENT_PATH: eventName ? eventPath : '',
+                        },
+                        windowsHide: true,
                     },
-                    windowsHide: true,
-                });
+                );
                 const after = git(['cat-file', 'commit', wrapped]);
                 assert.deepEqual(after.subarray(after.indexOf('\n\n') + 2), messageBytes);
                 assert.deepEqual(await readFile(messagePath), messageBytes);
@@ -864,7 +657,7 @@ test('accepts URL-only long body lines when commitlint accepts them', () => {
 });
 
 test('current PR CLI validates review descriptions independently of headers and actual topic commits', async (context) => {
-    const compliantBody = await readFile(new URL('./fixtures/current-pr-body.md', import.meta.url), 'utf8');
+    const compliantBody = await readFile(new URL('../../fixtures/current-pr-body.md', import.meta.url), 'utf8');
     const reviewNote = 'observations: the complete description supplies review context';
     const longProse = 'The review includes detailed behavior and verification evidence. '.repeat(4);
     const directory = await mkdtemp(path.join(os.tmpdir(), 'cdp-current-pr-'));
@@ -902,12 +695,16 @@ test('current PR CLI validates review descriptions independently of headers and 
             };
             const bytes = Buffer.from(`${JSON.stringify(event)}\n`);
             await writeFile(eventPath, bytes);
-            const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
-                cwd: directory,
-                encoding: 'utf8',
-                env: { ...fixtureEnvironment, GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: eventPath },
-                windowsHide: true,
-            });
+            const result = spawnSync(
+                process.execPath,
+                [path.join(repositoryRoot, 'tooling/governance/check-commits.ts')],
+                {
+                    cwd: directory,
+                    encoding: 'utf8',
+                    env: { ...fixtureEnvironment, GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: eventPath },
+                    windowsHide: true,
+                },
+            );
             assert.equal(result.error, undefined);
             assert.deepEqual(await readFile(eventPath), bytes);
             return result;
@@ -1030,7 +827,7 @@ test('preserves trailing header whitespace when reading Git history for commitli
             assert.equal(gitResult.status, 0, `${gitResult.stdout}\n${gitResult.stderr}`);
         }
 
-        const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/check-commits.ts')], {
+        const result = spawnSync(process.execPath, [path.join(repositoryRoot, 'tooling/governance/check-commits.ts')], {
             cwd: temporaryDirectory,
             encoding: 'utf8',
             env: {
