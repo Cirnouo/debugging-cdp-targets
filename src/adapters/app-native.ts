@@ -68,9 +68,18 @@ export async function loadAppAdvisoryLock(evidence: AppNativeEvidence): Promise<
     if (!isRecord(extension) || typeof extension.tryLock !== 'function')
         throw new Error('Invalid native advisory-lock interface.');
     const tryLock = extension.tryLock;
-    return (descriptor) => {
+    return (descriptor, options) => {
         if (!Number.isSafeInteger(descriptor) || descriptor < 0) throw new Error('Invalid advisory-lock descriptor.');
-        const result: unknown = tryLock(descriptor);
+        if (
+            options !== undefined &&
+            (!isRecord(options) ||
+                Object.keys(options).length !== 1 ||
+                !Object.hasOwn(options, 'shared') ||
+                typeof options.shared !== 'boolean')
+        )
+            throw new Error('Invalid advisory-lock mode.');
+        const result: unknown =
+            options === undefined ? tryLock(descriptor) : tryLock(descriptor, { shared: options.shared });
         if (typeof result !== 'boolean') throw new Error('Invalid native advisory-lock result.');
         return result;
     };

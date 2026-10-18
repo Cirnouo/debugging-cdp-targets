@@ -205,6 +205,76 @@ workflow is not evidence of native App delivery.
 
 ## Delivery and implementation gates
 
+### Accepted live deployment amendment — 2026-10-17
+
+This forward amendment adds live installation/update and installation-bound
+managed uninstall. It does not describe current installer or GUI support.
+Complete immutable, content-identified builds retain every Electron, ordinary
+Node, official Server, native-loader and lazy resource byte. One atomic selection
+record chooses the next launch; an existing App pins its admitted build for its
+whole lifetime. Updating the selection never changes a live App's files, data,
+listener or children. Same-SemVer builds have distinct content identities. No
+rollback solver, automatic pruning, background App updater or service is added.
+
+Exactly two persistent installation lock inodes survive managed uninstall:
+exclusive operation ownership serializes writers, while shared live-use ownership
+excludes exclusive deletion. These are separate from the OS-user singleton.
+Never unlink/recreate, expire, upgrade or take over a lease. Every admitted App
+and pending restart launch remains covered until actual exit or an overlapping
+successor-held shared lease is acknowledged. The original audited public native
+lock API supplies shared/exclusive modes; Linux uses its OFD lock family, rather
+than a shell flock substitute. Actual ownership/permissions must authorize each
+role; a metadata field is not permission evidence.
+
+Installation metadata records configuration, physical root identity and a complete
+build selection, never persisted runtime sessions or registration credentials.
+Copied/moved portable directories require explicit enrollment validation in the
+delivery layer; startup must not adopt, rewrite or repair identities. Strict
+schema-versioned active/removing/removed fences refuse future, malformed, stale
+or foreign identities. A pre-commit failure retains the previous selection; an
+uncertain outcome after atomic replacement is an indeterminate commit. Keep the
+fence and payloads rather than guessing success, restoring or replaying work.
+Complete payload verification must precede selection; formatted build/manifest
+hashes alone do not prove the payload is complete or trusted.
+
+The supplied removal flow requests normal cleanup only from the matching
+installation and current account through one closed private activation frame.
+It requires cleanup and actual exit plus exclusive installation use before
+deleting owned binaries. Failure, uncertainty or another user's reader refuses
+deletion. Preserve user data/plugins and the coordination tombstone. Manual
+Trash/rm, forced package/file overrides and overlaying a live portable directory
+remain outside supplied callbacks. Native NSIS needs a custom non-overwriting
+sequence, DEB retains complete runtime outside dpkg's replaced payload file list,
+and DMG uses an explicit install/update GUI action; default builder replacement
+does not establish this contract.
+
+Normal restart uses one short, verified, copied ordinary-Node bridge outside the
+installation. Both launches have detached lifetime. Exact parent exit precedes
+successor launch, with overlapping use leases. One private atomic temporary
+receipt, at most 512 bytes and bound to attempt nonce, actual child PID,
+installation and build, acknowledges the successor's independently acquired use
+lease. A valid ACK lets the bridge exit promptly. An unacknowledged live or
+uncertain child retains observation and coverage without kill, replay or
+timeout-as-exit. No GUI fd-3 assumption or resident cleanup driver is introduced;
+unverifiable actual-exit-safe helper cleanup leaves owned temporary residue.
+Synchronous Chromium userData/sessionData isolation remains startup step zero,
+before any await, native verification or installation lease. Chosen configuration
+migration remains after singleton ownership.
+
+Task 7 is split into independently reviewable increments: 7a implements strict
+pure metadata/transitions, the existing native shared/exclusive seam and a bounded
+atomic state store; 7b integrates pinned startup, normal quit and restart handoff;
+7c delivers actual packaging/installer GUI and native acceptance on all six cells.
+7a accepts only already enrolled roots, stages/removes no payload, and does not
+enable deployment in current App startup. Missing native Windows ACL evidence,
+macOS permission/local-filesystem evidence and system-DEB role validation block
+those store/lease inputs. These are hard prerequisites before 7b enables admission
+on those platforms; existing App startup retains its current platform behavior.
+Raw native lock tests in owned temporary fixtures do not establish installed
+permissions or Electron/installer support. Six native
+OS/architecture cells, both installer and portable families, remain mandatory;
+source inspection, unit tests and cross-builds are not native acceptance.
+
 App distributions own ordinary supported Node, full official release, native
 helpers, licenses/notices and verifiable integrities. Thin host-native plugins
 contain manifests/Skill/assets without runtime, official bytes or host Hooks.

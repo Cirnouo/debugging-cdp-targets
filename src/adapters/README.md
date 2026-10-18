@@ -1,5 +1,13 @@
 # I/O adapters
 
+- `app-deployment.ts` opens only already enrolled installation metadata, validates
+  physical root/native private-account permissions and holds exactly operation
+  and use lock inodes. Its bounded canonical state store preserves removal fences
+  and distinguishes pre-commit failure from indeterminate replacement/readback.
+  It stages/removes no payload and is not integrated into App startup. Initial
+  store inputs are Linux ext-family/tmpfs/XFS/Btrfs only; Windows ACL, macOS and
+  system-DEB role producers are required before those platforms use admission.
+  Filesystem IDs bound the supported mechanism, not power-loss durability.
 - `app-singleton.ts` holds the advisory kernel lock descriptor for the App's
   lifetime in a native-account namespace independent of selected data roots.
 - `app-activation.ts` provides only a bounded fixed activation frame and reply;
@@ -11,7 +19,8 @@
 - `app-configuration.ts` validates the whole migration chain before a backup and
   atomic settings replacement, keeping desired port separate from effective port.
 - `app-native.ts` verifies the complete original native loader closure before
-  loading its public advisory-lock API.
+  loading its original public shared/exclusive advisory-lock API. Callers without
+  an explicit validated shared option retain exclusive behavior.
 - `app-delivery.ts` verifies immutable archive and regular-file evidence without
   executing or repairing delivery inputs.
 - `native-host-plugins.ts` manages only the own user plugin through separate
