@@ -266,7 +266,7 @@ Git hook tests remain contributor-tooling regressions.
   flag forwarding. Entrypoint regression subprocesses block external
   child acquisition so a broken guard cannot open a real fixture during the test.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
-  runnable root, explicit tooling/Gateway or interactive lane and retains the
+  runnable root, explicit tooling/Gateway/Host or interactive lane and retains the
   four-file, eighteen-case interactive inventory without launching fixtures.
 - `issue-policy.test.ts` validates literal GitHub form bodies against the current
   YAML, including label-only classification, required and optional answers,
