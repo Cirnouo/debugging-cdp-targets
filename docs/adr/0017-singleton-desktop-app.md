@@ -5,7 +5,7 @@ The shared core and minimal App/direct HTTP/thin-plugin cutover are implemented
 in source; richer management, native deployment and all six distribution cells
 remain separate acceptance work. [App runtime](../app-runtime.md) documents the
 current boundary and evidence limits. This decision and the
-[implementation plan](../superpowers/plans/2026-10-17-singleton-app-plan.md)
+[implementation plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md)
 govern the remaining work; historical decisions below retain their design context.
 
 ## Decision and supersession

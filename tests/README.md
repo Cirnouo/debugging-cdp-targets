@@ -217,7 +217,7 @@ Git hook tests remain contributor-tooling regressions.
   bounded existing-buffer listener-owner classification without extra native I/O,
   precise Linux kernel creation ticks, malformed evidence rejection,
   and PID/path/session mismatch checks with injected I/O.
-- `repository-audit.test.ts` tests AST boundaries, text-style enforcement, YAML
+- `repository-audit.test.ts` tests AST boundaries, repository traversal, YAML
   filenames including generated output and exact exceptions, and directory
   documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
@@ -225,7 +225,7 @@ Git hook tests remain contributor-tooling regressions.
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
   nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
   and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
-- `commit-checks.test.ts`, `governance.test.ts` validate Git rules/topology,
+- `commit-checks.test.ts`, `tooling/governance/` validate Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
   They independently check raw PR titles and predicted squash headers with actual
   PR numbers, enforce the current description template, and accept long prose,
@@ -421,7 +421,8 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select only `tests/*.test.ts`; they do not launch
+command and `pnpm test:coverage` select `tests/*.test.ts` plus the three explicit
+tooling suites listed in [tooling tests](tooling/README.md); they do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

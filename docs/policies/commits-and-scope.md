@@ -121,7 +121,7 @@ this does not add a retrospective body-presence requirement to history.
 
 Before merging, compare the final header with the validated raw title plus the
 actual ` (#<current-PR-number>)` suffix and validate the exact complete candidate.
-The existing `validateCommitMessage` in `tooling/governance.ts` supplies raw stdin
+The existing `validateCommitMessage` in `tooling/governance/commit-validation.ts` supplies raw stdin
 to commitlint and can validate that candidate without rewriting it. Use raw stdin
 for this check: commitlint's `--edit` parsing can strip comment lines, so it does
 not establish that the exact candidate passed. PR CI cannot prevalidate a future

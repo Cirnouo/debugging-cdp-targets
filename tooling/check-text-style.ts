@@ -5,7 +5,7 @@ import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { errorMessage } from '../src/shared/errors.ts';
 import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import { PLUGIN_HOSTS } from './host-policy.ts';
-import { validateTextStyle, validateYamlFilename } from './repository-audit.ts';
+import { validateTextStyle, validateYamlFilename } from './quality/text-policy.ts';
 
 export async function checkTextStyle(root: string, arguments_: readonly string[]) {
     const paths = arguments_.map((argument) => {

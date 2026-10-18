@@ -10,7 +10,7 @@ Spec: the global constraints below record the user's accepted design. They super
 
 Status: accepted forward implementation plan, 2026-10-17. Task 2 records the
 contracts; the currently delivered stdio Plugin remains supported until Task 4.
-[ADR 0017](../../adr/0017-singleton-desktop-app.md) owns the forward architecture.
+[ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) owns the forward architecture.
 This tracked plan replaces the ignored planning copy as the durable task owner.
 
 ## Global constraints
@@ -122,6 +122,6 @@ repository/user/global configuration changes are authorized by this plan.
 The existing CONTRIBUTING.md Agent submission link targets the absent
 AGENTS.md#issue-submissions heading. Task 7 must reconcile this stale reference
 with its canonical policy owner, currently
-[typed Issue submissions](../../policies/commits-and-scope.md#typed-issue-submissions),
+[typed Issue submissions](../../docs/policies/commits-and-scope.md#typed-issue-submissions),
 while checking the actual surrounding submission obligations. It is a tracked
 cleanup item, not a permanent exemption from current-content correctness.

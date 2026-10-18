@@ -27,8 +27,10 @@
   them before copying notices; the standalone auditor reuses the YAML/semver data.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its original YAML and semver licenses.
-- `repository-audit.ts` checks text, YAML filenames, AST layer boundaries, versions, docs,
-  symlink, and production safety.
+- `repository-audit.ts` checks AST layer boundaries, versions, docs, symlink and
+  production safety, consuming shared text rules from `quality/`.
+- `quality/` owns pure text style and YAML filename rules reused by the repository
+  walker and staged text checker.
 - `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
   direct HTTP format, Marketplace pointer and byte-identical packaging into a disposable directory;
   this is not a host install claim.
@@ -57,7 +59,8 @@
   conditions and probe hashes from the unchanged official 1.11.0 public bin.
 - `official-server-release.json` records the reviewed official npm release, its
   source tag/commit, tarball integrity and every published file digest and length.
-- `governance.ts` owns commit type/scope and branch grammar.
+- `governance/` owns pure commit type/scope and branch grammar separately from
+  actual commitlint execution. The root command entries consume those owners.
 - `commit-footer-rule.ts` supplies the local commitlint `footer-leading-blank`
   rule. It checks original message lines, preserves body labels without a
   preceding blank line, and requires separation before reserved footer syntax.

@@ -8,12 +8,8 @@ import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { isApprovedIconPath, validateIconPng } from './icon-policy.ts';
+import { validateTextStyle, validateYamlFilename } from './quality/text-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
-
-export function validateYamlFilename(file: string): string[] {
-    if (!/\.ya?ml$/i.test(file) || file.endsWith('.yaml') || file === '.github/ISSUE_TEMPLATE/config.yml') return [];
-    return [`${file}: maintained YAML filenames must use lowercase .yaml.`];
-}
 
 const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/adapters/app-native.ts', ['fs-native-extensions']],
@@ -25,23 +21,6 @@ const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/interface/app-renderer.ts', ['react', 'react-dom/client']],
     ['src/interface/app-manager.ts', ['react']],
 ]);
-
-export function validateTextStyle(file: string, source: string) {
-    const errors = [];
-    if (source.includes('\r')) errors.push(`${file}: use LF, not CRLF.`);
-    if (source.includes('\t')) errors.push(`${file}: tabs are prohibited.`);
-    if (source && !source.endsWith('\n')) errors.push(`${file}: add a final newline.`);
-    if (
-        !['pnpm-lock.yaml', 'tooling/security/upstream-pnpm-lock.yaml'].includes(file) &&
-        /\.(?:json|yaml|yml|ps1|toml|sh)$/.test(file)
-    ) {
-        source.split('\n').forEach((line, index) => {
-            if (/^ +\S/.test(line) && (line.match(/^ */)?.[0].length ?? 0) % 4)
-                errors.push(`${file}:${index + 1}: indentation must be a multiple of four.`);
-        });
-    }
-    return errors;
-}
 
 function visit(node: unknown, callback: (node: Node) => void) {
     if (!node || typeof node !== 'object') return;

@@ -215,7 +215,7 @@ advertised inner implementation name `debugging-cdp-targets` have distinct roles
 | --- | --- | --- |
 | `serverInfo` and capabilities | Codex [retains implementation fields](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1131); the [status processor](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/app-server/src/request_processors/mcp_processor.rs#L529) and generated `McpServerInfo`/`McpServerStatus` expose `serverInfo` and `serverCapabilities`. | Keep existing identity and tools capability. The production-adapter initialize regression verifies the unchanged name/version and exact tools capability; host API observability remains source evidence. |
 | Optional `title`, `description`, `icons`, `websiteUrl` | C5's `app-initial-25361a10f2bf.js` has conditional metadata consumers: `N_n` mention/search tools gated by `openai/mentions`, `I_n` file metadata and `W_n` `openai/settings`. `H_n` chooses `tool_meta.connector_name ?? serverInfo.title ?? name`. `app-shared-40678a67f0e3.js` `Rqr` (export `CG`) accepts HTTPS/data icons with theme fallback. | Keep omitted: no applicable ordinary gateway presentation benefit was found. These fields are not declared unsupported. Claude-specific optional display consumers and actual Desktop presentation remain unverified. |
-| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **IMPLEMENTED:** return the [execution plan's exact 689-byte text](superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production-adapter protocol regression verifies exact text, workflow anchors and the byte bound. Actual 0.162.0 Plugin namespace/search consumption passed in the dated acceptance below. |
+| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **IMPLEMENTED:** return the [execution plan's exact 689-byte text](../.superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production-adapter protocol regression verifies exact text, workflow anchors and the byte bound. Actual 0.162.0 Plugin namespace/search consumption passed in the dated acceptance below. |
 | `instructions` in Claude | [Official server-author guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) says instructions help tool search and documents a 2,048-character bound. | Use the same implemented text; it fits both researched bounds. Actual 2.1.295 first-request consumption passed through the scoped host reminder documented below; search execution and real-model adherence remain unverified. |
 
 ### MCP instruction consumption acceptance, 2026-10-09
@@ -263,11 +263,16 @@ inspection does not prove ordinary gateway rendering or instruction adherence.
 
 On Windows, actual Codex CLI **0.161.0** and Claude Code **2.1.294** passed the
 selected Marketplace installed-tree/gateway smokes and all **eight Hook/Skill
-scenarios per host** on 2026-10-08. The maintained commands and assertions are in
-[smoke instructions](../tests/smoke/README.md), [Codex Marketplace smoke](../tests/smoke/marketplace.ts),
-[Codex Hook/Skill smoke](../tests/smoke/codex-hooks.ts),
-[Claude Marketplace smoke](../tests/smoke/claude-marketplace.ts) and
-[Claude Hook/Skill smoke](../tests/smoke/claude-hooks.ts).
+scenarios per host** on 2026-10-08. These dated results concern the retired
+[stdio/Hook contract](../tests/smoke/README.md#historical-stdio-and-hook-host-acceptance).
+The former [Codex Hook/Skill suite](https://github.com/Cirnouo/debugging-cdp-targets/blob/e7fd6c82ef37f639500a8c2b3eda7e900b963d27/tests/smoke/codex-hooks.ts)
+and [Claude Hook/Skill suite](https://github.com/Cirnouo/debugging-cdp-targets/blob/e7fd6c82ef37f639500a8c2b3eda7e900b963d27/tests/smoke/claude-hooks.ts)
+are preserved at the last main snapshot before their removal. This snapshot
+does not establish which source commit ran on 2026-10-08.
+Current HTTP instructions and maintained Marketplace entrypoints are separate:
+[smoke instructions](../tests/smoke/README.md),
+[Codex Marketplace smoke](../tests/smoke/marketplace.ts) and
+[Claude Marketplace smoke](../tests/smoke/claude-marketplace.ts).
 Historical accepted baselines Codex 0.160.0 and Claude 2.1.283 were not rerun;
 Claude 2.1.283 remains the first supported baseline.
 

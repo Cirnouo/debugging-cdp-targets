@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
 import { PLUGIN_ROOT } from '../tooling/payload-policy.ts';
-import { auditRepository, validateRuntimeSource, validateTextStyle } from '../tooling/repository-audit.ts';
+import { auditRepository, validateRuntimeSource } from '../tooling/repository-audit.ts';
 
 test('runtime parser approvals belong only to their exact reviewed consumers', () => {
     assert.deepEqual(
@@ -485,19 +485,6 @@ for (const override of ["['shell']: true", 'get shell() { return true; }', 'shel
         );
     });
 }
-
-test('text audit enforces four spaces, LF, final newline, and no tabs', () => {
-    assert.deepEqual(validateTextStyle('example.yaml', 'name:\n    value: true\n'), []);
-    for (const text of ['name:\n  value: true\n', 'name:\r\n', '\tname\n', 'name']) {
-        assert.ok(validateTextStyle('example.yaml', text).length, JSON.stringify(text));
-    }
-    assert.deepEqual(validateTextStyle('pnpm-lock.yaml', 'lockfileVersion:\n  generated: true\n'), []);
-    assert.deepEqual(
-        validateTextStyle('tooling/security/upstream-pnpm-lock.yaml', 'lockfileVersion:\n  generated: true\n'),
-        [],
-    );
-    assert.ok(validateTextStyle('tooling/security/other-lock.yaml', 'lockfileVersion:\n  generated: true\n').length);
-});
 
 test('AST audit accepts erasable TypeScript without erasing its dependency evidence', () => {
     assert.deepEqual(
