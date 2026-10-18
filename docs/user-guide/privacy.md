@@ -97,8 +97,9 @@ The complete unchanged official Server is delivered in App resources at
 verifies ordinary Node and original package bytes before catalog and connection
 spawns; no npm/npx or host PATH lookup supplies its runtime.
 Every published file is verified before each Server launch. Missing or changed
-files require reinstalling the Plugin, or rebuilding it in a prepared contributor
-checkout. Runtime does not fetch replacement packages. Only the official child's
+files require restoring a verified App distribution, or rebuilding and reverifying
+the App stage in a prepared contributor checkout; see [App building and evidence](../app-runtime.md#building-and-evidence).
+Runtime does not fetch replacement packages. Only the official child's
 environment disables its automatic update check.
 
 ## Dependency audit scope

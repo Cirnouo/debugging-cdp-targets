@@ -285,6 +285,13 @@ inspection does not prove ordinary gateway rendering or instruction adherence.
 
 ## Executed host acceptance and its limits
 
+The 2026-10-05 Windows origin used Codex CLI 0.160.0 and Claude Code 2.1.283
+for actual Plugin installation, discovery and model-context Hooks. Claude 2.1.283
+is the first supported baseline. The existing [MCP/native peer-host follow-up](../mcp-native-validation.md)
+owns that original acceptance scope; later versions below are separate runs.
+Those historical payloads each contained executable runtime and the complete
+original official release. Current thin payloads share the separately running App.
+
 On Windows, actual Codex CLI **0.161.0** and Claude Code **2.1.294** passed the
 selected Marketplace installed-tree/gateway smokes and all **eight Hook/Skill
 scenarios per host** on 2026-10-08. These dated results concern the retired
