@@ -75,6 +75,24 @@ Git hook tests remain contributor-tooling regressions.
     roots/launch snapshots, scoped restart and retained cleanup failure/retry.
 - `client-context.test.ts`, `registrations.test.ts` and `official-execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
+- `host-management.test.ts` checks absent/corrupt/incompatible latest records,
+    immutable sources, SemVer decisions and effective App URL boundaries.
+- `host-plugin-manager.test.ts` checks pre-effect decisions, per-host retries,
+    source movement, replacement checkpoint recovery without repeated native update,
+    independent partial failures and candidate-free URL sync of newer managed copies.
+- `native-host-plugins.test.ts` exercises the two actual command/output contracts
+    through process I/O fixtures, safe scope/path resolution and hidden user pins.
+- `host-user-intent.test.ts` checks standard TOML forms, strict own intent,
+    duplicate/prototype rejection and preservation of unrelated configuration.
+- `verified-plugin-files.test.ts` checks exact payloads, links, atomic URL writes,
+    readback and Claude's narrowly researched installed lease directory.
+- `managed-plugin-receipts.test.ts` checks persistent management metadata,
+    secret-free round trips, corruption/future schemas, forged offsets, links and
+    complete source hash revalidation across fresh manager instances.
+- `git-plugin-source.test.ts` rejects divergent catalogs and unsafe Git trees
+    before any native host mutation or payload execution.
+- `software-version.test.ts` checks the runtime/tooling version owner's strict
+    input limits and SemVer precedence, including prerelease and build metadata.
 - `instructions-smoke-evidence.test.ts` rejects arbitrary request/user strings
   as MCP instruction evidence and validates semantic tool descriptions and the
   exact Claude host-generated reminder/deferred-discovery carrier.

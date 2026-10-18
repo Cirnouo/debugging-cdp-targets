@@ -292,7 +292,9 @@ export function validateRuntimeSource(file: string, source: string) {
             return;
         }
         const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
-        if (domain && (!specifier.startsWith('.') || !/^src\/(?:domains|shared)\//.test(resolved))) {
+        const versionParser = file === 'src/domains/software-version.ts' && specifier === 'semver/functions/parse.js';
+        const hostConfigParser = file === 'src/adapters/host-user-intent.ts' && specifier === 'smol-toml';
+        if (domain && !versionParser && (!specifier.startsWith('.') || !/^src\/(?:domains|shared)\//.test(resolved))) {
             errors.push(`${file}: domains may depend only on domains and shared.`);
         }
         if (layer === 'adapters' && /^src\/(?:application|interface)\//.test(resolved))
@@ -306,6 +308,8 @@ export function validateRuntimeSource(file: string, source: string) {
             !specifier.startsWith('node:') &&
             specifier !== 'ws' &&
             !APP_RUNTIME_IMPORTS.get(file)?.includes(specifier) &&
+            !versionParser &&
+            !hostConfigParser &&
             ![
                 '@modelcontextprotocol/client',
                 '@modelcontextprotocol/server',

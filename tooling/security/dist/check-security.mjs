@@ -7912,7 +7912,7 @@ var PLUGIN_ROOT = CODEX_HOST.payloadRoot;
 // tooling/security/audit-policy.ts
 var import_yaml = __toESM(require_dist(), 1);
 
-// tooling/version-policy.ts
+// src/domains/software-version.ts
 var import_parse = __toESM(require_parse(), 1);
 function parseStrictVersion(value) {
   if (typeof value !== "string" || value !== value.trim() || value.startsWith("v") || value.startsWith("V"))

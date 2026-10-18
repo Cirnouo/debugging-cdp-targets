@@ -2,10 +2,19 @@
 
 - `client-context.ts` owns client availability and response-wait detachment.
 - `registrations.ts` authenticates memory-only bearer ownership and idle expiry.
+- `host-plugin-manager.ts` provides the narrow host inspection and per-host
+    install/update/URL synchronization service for the accepted App design.
+    Latest candidate decisions are separate from verified current-copy URL sync;
+    `null` advertises no release. Persisted management receipts survive a normal
+    App restart, while every disk success remains host reload pending.
+    A verified native replacement is checkpointed before URL writes, so explicit
+    retries can complete synchronization without repeating a native update.
+    A stale candidate also permits URL sync of a verified newer managed copy.
+    App main and management-window integration remain separate from this service.
 - `plugin-runtime.ts` owns the gateway registry, independent target connections,
   transport-free MCP dispatch, monitoring and independent official Server lifetimes.
-    Its temporary stdio wrapper explicitly cleans up at EOF; detached core clients
-    retain resources. [Shared core contract](../../docs/shared-core.md) documents the seam.
+    The direct HTTP App owns final cleanup; detached core clients retain resources.
+    [Shared core contract](../../docs/shared-core.md) documents the seam.
 - `mcp-lifecycle.ts` validates current identities and serializes per-connection
   lifecycle mutations through idempotent asynchronous operations.
 - `operations.ts` owns memory-only requests, replayable bounded events, waits,

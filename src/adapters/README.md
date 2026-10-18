@@ -14,6 +14,21 @@
   loading its public advisory-lock API.
 - `app-delivery.ts` verifies immutable archive and regular-file evidence without
   executing or repairing delivery inputs.
+- `native-host-plugins.ts` manages only the own user plugin through separate
+    Codex and Claude native CLI contracts, preserves user intent and consumes
+    actual install receipts instead of constructing cache paths.
+- `host-user-intent.ts` reads only the explicitly selected user configuration
+    with standard TOML/JSON parsers and extracts the own source/ref/enablement.
+    Unrelated settings never enter the normalized management receipt.
+- `git-plugin-source.ts` verifies both latest catalogs and the immutable Git
+    payload blobs without executing or checking out plugin code.
+- `verified-plugin-files.ts` checks complete source bytes, paths, sharing and
+    leases before an atomic own-URL overlay and immediate readback. Only Claude's
+    exact empty `.in_use` host directory is excluded from installed comparisons.
+- `managed-plugin-receipts.ts` persists schema-one App management metadata in an
+    explicit existing App data directory and verifies it again after restart.
+    The App must admit its singleton/data root before constructing the store;
+    receipts contain no bearers, connections, live sessions or host output.
 - `fixture-diagnostics.ts` owns opt-in fixture observation, direct I/O scopes,
   closed safe event/error metadata and receiver-side exception containment.
 - `cdp-router.ts` forwards loopback HTTP/WebSocket CDP and tracks requests.
