@@ -231,6 +231,39 @@ consumers when a batch changes a referenced path or contract. New discoveries
 within this scope refine the plan before implementation rather than being ignored
 because a filename was absent from this snapshot.
 
+### Source instruction coverage and target model boundaries
+
+Every proposed source directory that owns maintained content also inventories
+its immediate cumulative AGENTS and README. The fifteen additional instruction
+leaves below close the same gap across the whole target, not just target models.
+Author each instruction with its real migration; do not create empty files,
+copy parent policies, exempt ancestors, or preauthorize future runtime I/O.
+
+- Gateway connection, MCP, official and target directories preserve distinct
+    resource/generation, original-client continuation, upstream child/catalog and
+    acquisition/exit ownership. The initial target slice permits only supplied
+    identity evidence and resource contracts; current I/O authority stays put.
+- Desktop main, preload, renderer, configuration and instance directories state
+    their actual trust boundaries: privileged composition, closed bridge,
+    sandboxed presentation, schema/atomic store, and singleton/activation lifetime.
+- Host native and receipt directories distinguish bounded external commands
+    from schema/verified bytes/store, preserving the full synchronization and
+    endpoint write/readback transactions at their actual owners.
+- Deployment native, native/windows and restart directories preserve narrow
+    OS roles, original companions, and the uncertain-successor/receipt/use-lease
+    join. An instruction grants no unaccepted worker or installer adoption.
+- Platform native instructions preserve actual PID/time/handle/listener proof,
+    target normal Close and separate read-only parent observation; common
+    platform support acquires no business registry authority.
+
+The target model uses two meaningful pure owners: cdp-identity.ts validates
+supplied endpoint/listener evidence, while target-contract.ts describes evidence,
+managed resource capabilities and the one retained-target error constructor.
+Keep their actual consumers and existing constructor/privacy behavior. PortRange
+and the test-only choosePort policy remain an explicitly unfinished current
+domain residue until real claim-before-await admission ownership is resolved;
+do not invent a production caller or substitute the chooser for reservation.
+
 ### Source leaves
 
 ```text
@@ -248,8 +281,10 @@ src/deployment/model/release-inputs.ts
 src/deployment/model/restart-handoff.ts
 src/deployment/native-authority.ts
 src/deployment/native-loader.ts
+src/deployment/native/AGENTS.md
 src/deployment/native/README.md
 src/deployment/native/macos-deployment-authority.jxa
+src/deployment/native/windows/AGENTS.md
 src/deployment/native/windows/README.md
 src/deployment/native/windows/authority.cs
 src/deployment/native/windows/create.cs
@@ -257,10 +292,12 @@ src/deployment/native/windows/protocol.ts
 src/deployment/native/windows/stream.ts
 src/deployment/native/windows/support.ts
 src/deployment/official-runtime.ts
+src/deployment/restart/AGENTS.md
 src/deployment/restart/README.md
 src/deployment/restart/bridge.ts
 src/desktop/AGENTS.md
 src/desktop/README.md
+src/desktop/configuration/AGENTS.md
 src/desktop/configuration/README.md
 src/desktop/configuration/data-directory.ts
 src/desktop/configuration/model.ts
@@ -269,10 +306,12 @@ src/desktop/contracts/AGENTS.md
 src/desktop/contracts/README.md
 src/desktop/contracts/commands.ts
 src/desktop/contracts/snapshots.ts
+src/desktop/instance/AGENTS.md
 src/desktop/instance/README.md
 src/desktop/instance/activation.ts
 src/desktop/instance/chromium-storage.ts
 src/desktop/instance/singleton.ts
+src/desktop/main/AGENTS.md
 src/desktop/main/README.md
 src/desktop/main/asset-policy.ts
 src/desktop/main/bootstrap.ts
@@ -283,8 +322,10 @@ src/desktop/main/management-evidence.ts
 src/desktop/main/management-window.ts
 src/desktop/main/management.ts
 src/desktop/main/startup.ts
+src/desktop/preload/AGENTS.md
 src/desktop/preload/README.md
 src/desktop/preload/management-bridge.ts
+src/desktop/renderer/AGENTS.md
 src/desktop/renderer/README.md
 src/desktop/renderer/app.css
 src/desktop/renderer/app.html
@@ -302,6 +343,7 @@ src/gateway/AGENTS.md
 src/gateway/README.md
 src/gateway/client-availability.ts
 src/gateway/client-context.ts
+src/gateway/connections/AGENTS.md
 src/gateway/connections/README.md
 src/gateway/connections/cdp-router.ts
 src/gateway/connections/connection-view.ts
@@ -314,11 +356,13 @@ src/gateway/core.ts
 src/gateway/diagnostics.ts
 src/gateway/lifecycle-contract.ts
 src/gateway/lifecycle.ts
+src/gateway/mcp/AGENTS.md
 src/gateway/mcp/README.md
 src/gateway/mcp/http-policy.ts
 src/gateway/mcp/http-server.ts
 src/gateway/mcp/lifecycle-tools.ts
 src/gateway/mcp/request-dispatch.ts
+src/gateway/official/AGENTS.md
 src/gateway/official/README.md
 src/gateway/official/actual-catalog.ts
 src/gateway/official/catalog-input.ts
@@ -334,6 +378,7 @@ src/gateway/owned-tool-arguments.ts
 src/gateway/registrations.ts
 src/gateway/registry.ts
 src/gateway/request-failure.ts
+src/gateway/targets/AGENTS.md
 src/gateway/targets/README.md
 src/gateway/targets/chrome-profile-lease.ts
 src/gateway/targets/data-directories.ts
@@ -344,6 +389,7 @@ src/gateway/targets/model/chrome-profile-argument.ts
 src/gateway/targets/model/chromium-features.ts
 src/gateway/targets/model/isolation.ts
 src/gateway/targets/model/launch-command.ts
+src/gateway/targets/model/target-contract.ts
 src/gateway/targets/model/target-policy.ts
 src/gateway/targets/port-reservations.ts
 src/gateway/targets/target-host.ts
@@ -354,6 +400,7 @@ src/host-plugins/catalog-source.ts
 src/host-plugins/endpoint-write.ts
 src/host-plugins/git-source.ts
 src/host-plugins/host-policy.ts
+src/host-plugins/native/AGENTS.md
 src/host-plugins/native/README.md
 src/host-plugins/native/claude.ts
 src/host-plugins/native/codex.ts
@@ -361,6 +408,7 @@ src/host-plugins/native/command.ts
 src/host-plugins/native/user-intent-file.ts
 src/host-plugins/payload-files.ts
 src/host-plugins/payload-integrity.ts
+src/host-plugins/receipts/AGENTS.md
 src/host-plugins/receipts/README.md
 src/host-plugins/receipts/contract.ts
 src/host-plugins/receipts/payload.ts
@@ -370,6 +418,7 @@ src/host-plugins/user-intent.ts
 src/platform/AGENTS.md
 src/platform/README.md
 src/platform/fixture-diagnostics.ts
+src/platform/native/AGENTS.md
 src/platform/native/README.md
 src/platform/native/advisory-lock.ts
 src/platform/native/macos-parent-identity.jxa
