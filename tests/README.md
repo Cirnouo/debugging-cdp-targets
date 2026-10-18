@@ -95,8 +95,9 @@ Git hook tests remain contributor-tooling regressions.
     through process I/O fixtures, safe scope/path resolution and hidden user pins.
 - `host-user-intent.test.ts` checks standard TOML forms, strict own intent,
     duplicate/prototype rejection and preservation of unrelated configuration.
-- `verified-plugin-files.test.ts` checks exact payloads, links, atomic URL writes,
-    readback and Claude's narrowly researched installed lease directory.
+- `host-plugins/` separates pure payload proof and real disposable-filesystem
+    endpoint writes/readback, links and Claude's researched installed lease
+    directory; see its [suite inventory](host-plugins/README.md).
 - `managed-plugin-receipts.test.ts` checks persistent management metadata,
     secret-free round trips, corruption/future schemas, forged offsets, links and
     complete source hash revalidation across fresh manager instances.
@@ -423,8 +424,9 @@ Git hook tests remain contributor-tooling regressions.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
 command and `pnpm test:coverage` select `tests/*.test.ts` plus the three explicit
-tooling suites listed in [tooling tests](tooling/README.md) and exactly
-`tests/gateway/owned-tool-arguments.test.ts`; they do not launch
+tooling suites listed in [tooling tests](tooling/README.md), exactly
+`tests/gateway/owned-tool-arguments.test.ts` and the two explicit
+Host suites in [Host plugin tests](host-plugins/README.md); they do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

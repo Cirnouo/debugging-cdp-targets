@@ -44,6 +44,7 @@ const toolingCases = [
 ];
 
 const gatewayCases = ['tests/gateway/owned-tool-arguments.test.ts'];
+const hostCases = ['tests/host-plugins/payload-filesystem.test.ts', 'tests/host-plugins/payload-integrity.test.ts'];
 
 async function testFiles(): Promise<string[]> {
     const { stdout } = await promisify(execFile)(
@@ -107,7 +108,8 @@ test('every maintained test file belongs to an explicit safe default or interact
             (file) =>
                 !/^tests\/(?:[^/]+|interactive\/[^/]+)\.test\.ts$/.test(file) &&
                 !toolingCases.includes(file) &&
-                !gatewayCases.includes(file),
+                !gatewayCases.includes(file) &&
+                !hostCases.includes(file),
         ),
         [],
         'Nested or misplaced test files must be selected by a maintained test command.',
@@ -119,6 +121,10 @@ test('every maintained test file belongs to an explicit safe default or interact
     assert.deepEqual(
         files.filter((file) => file.startsWith('tests/gateway/')),
         gatewayCases,
+    );
+    assert.deepEqual(
+        files.filter((file) => file.startsWith('tests/host-plugins/')),
+        hostCases,
     );
     assert.deepEqual(
         files.filter((file) => file.startsWith('tests/interactive/')),

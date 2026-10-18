@@ -621,3 +621,58 @@ test('pure Gateway dependencies retain original TypeScript and indirect import e
     ])
         assert.deepEqual(validateRuntimeSource(file, source), [], source);
 });
+test('Host payload proof enforces pure imports and process-state boundaries at its actual owner', () => {
+    const file = 'src/host-plugins/payload-integrity.ts';
+    for (const source of [
+        "import fs from 'node:fs';",
+        "import fs from 'node:fs/promises';",
+        "import child from 'node:child_process';",
+        "import http from 'node:http';",
+        "import net from 'node:net';",
+        "import x from '../application/host-plugin-manager.ts';",
+        "import x from '../adapters/verified-plugin-files.ts';",
+        "import x from '../interface/app-main.ts';",
+        'const value = process.env;',
+        'const value = (process as { env: unknown }).env;',
+        "const fs = import('node:fs');",
+        'const fs = import(moduleName);',
+        "const fs = require('node:fs');",
+        'const fs = require?.(moduleName);',
+        "import fs from '\\u006eode:fs';",
+        "export { x } from '../adapters/x.ts';",
+        "export * from 'node:fs';",
+        "import type { Stats } from 'node:fs';",
+        "export type { Stats } from 'node:fs';",
+        "type Stats = import('node:fs').Stats;",
+        "import type Stats = require('node:fs');",
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
+    for (const source of [
+        "import { isDeepStrictEqual } from 'node:util';",
+        "import { x } from '../domains/host-management.ts';",
+        "import type { X } from '../shared/errors.ts';",
+        "import { x } from './payload-integrity.ts';",
+    ])
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+    assert.ok(validateRuntimeSource('src/host-plugins/other.ts', "import x from 'node:util';").length);
+});
+
+test('Host payload source requires its local instructions and immediate directory map', async () => {
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-host-instructions-')));
+    const file = 'src/host-plugins/payload-integrity.ts';
+    try {
+        execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+        await mkdir(path.join(root, 'src/host-plugins'), { recursive: true });
+        await writeFile(path.join(root, file), 'export const value = 1;\n');
+        const before = await auditRepository(root);
+        assert.ok(before.includes(`${file}: source directory requires local AGENTS.md.`));
+        assert.ok(before.includes('src/host-plugins: add README.md describing immediate contents.'));
+        await writeFile(path.join(root, 'src/host-plugins/AGENTS.md'), '# Pure Host payload proof\n');
+        await writeFile(path.join(root, 'src/host-plugins/README.md'), '# Host payload proof\n');
+        const after = await auditRepository(root);
+        assert.ok(!after.some((error) => error.startsWith(`${file}:`)));
+        assert.ok(!after.some((error) => error.startsWith('src/host-plugins:')));
+    } finally {
+        await rm(root, { recursive: true });
+    }
+});

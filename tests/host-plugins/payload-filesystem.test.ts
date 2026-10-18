@@ -3,8 +3,8 @@ import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { patchPluginEndpoint, readPluginTree, verifyPluginFiles } from '../src/adapters/verified-plugin-files.ts';
-import type { PluginHost } from '../src/domains/host-management.ts';
+import { patchPluginEndpoint, readPluginTree } from '../../src/adapters/verified-plugin-files.ts';
+import type { PluginHost } from '../../src/domains/host-management.ts';
 
 async function fixture(host: PluginHost) {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-payload-')));
@@ -79,46 +79,6 @@ test('URL overlay preserves duplicate unrelated strings', async (t) => {
         await readFile(path.join(f.root, f.mcp), 'utf8'),
         sameUrl.replace('http://127.0.0.1:27637/mcp', 'http://localhost:3333/mcp'),
     );
-});
-
-test('MCP formatting drift is outside the one URL byte overlay', async () => {
-    const f = await fixture('codex');
-    try {
-        const drifted = new Map(f.files);
-        const current = drifted.get(f.mcp);
-        assert.ok(current);
-        drifted.set(f.mcp, Buffer.from(`${current.toString('utf8')}\n`));
-        assert.throws(() => verifyPluginFiles('codex', '0.2.0', f.files, drifted), /overlay/);
-    } finally {
-        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
-    }
-});
-
-test('source layouts without a bounded unique canonical own URL literal fail before native installation', async () => {
-    const f = await fixture('codex');
-    try {
-        const original = f.files.get(f.mcp)?.toString('utf8');
-        assert.ok(original);
-        const escaped = new Map(f.files);
-        escaped.set(
-            f.mcp,
-            Buffer.from(original.replace('http://127.0.0.1:27637/mcp', 'http:\\/\\/127.0.0.1:27637/mcp')),
-        );
-        assert.throws(() => verifyPluginFiles('codex', '0.2.0', escaped, escaped, false), /payload-overlay/);
-        const crowded = new Map(f.files);
-        crowded.set(
-            f.mcp,
-            Buffer.from(
-                original.replace(
-                    '"extra":',
-                    `"copies":${JSON.stringify(Array(65).fill('http://127.0.0.1:27637/mcp'))},"extra":`,
-                ),
-            ),
-        );
-        assert.throws(() => verifyPluginFiles('codex', '0.2.0', crowded, crowded, false), /payload-overlay/);
-    } finally {
-        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
-    }
 });
 
 test('rejects extra files, hard links, symbolic links and wrong manifests before write', async () => {

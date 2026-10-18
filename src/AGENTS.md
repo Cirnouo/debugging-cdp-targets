@@ -12,6 +12,9 @@ depend only on gateway/domains/shared through relative imports. Domains and
 gateway contain no environment, file, process, network, or PowerShell I/O.
 The existing semver/functions/parse.js exception remains limited to
 domains/software-version.ts; gateway gains no external dependency exception.
+The delivered `host-plugins/` slice is also pure: it depends only on its own
+domain, existing domains and shared contracts. Application and adapters consume
+its payload proof directly; the remaining technical-layer owners stay in place.
 
 Only interface/app-bootstrap.ts executes directly. It synchronously redirects
 Chromium userData/sessionData to separate per-process temporary directories before

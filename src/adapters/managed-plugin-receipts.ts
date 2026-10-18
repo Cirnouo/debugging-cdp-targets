@@ -10,16 +10,15 @@ import {
     type StablePluginRecord,
     validateAppEndpoint,
 } from '../domains/host-management.ts';
+import {
+    overlayPluginEndpoint,
+    type PluginPayloadFiles,
+    pluginMcpEndpointEvidence,
+    verifyPluginPayload,
+} from '../host-plugins/payload-integrity.ts';
 import { errorCode, isRecord } from '../shared/errors.ts';
 import { readRegularFile } from './file-evidence.ts';
-import {
-    canonicalPluginRoot,
-    overlayPluginEndpoint,
-    type PluginFiles,
-    pluginMcpEndpointEvidence,
-    readPluginTree,
-    verifyPluginFiles,
-} from './verified-plugin-files.ts';
+import { canonicalPluginRoot, readPluginTree } from './verified-plugin-files.ts';
 
 export interface ReceiptHostSelection {
     configRoot: string;
@@ -190,7 +189,7 @@ export function createManagedPluginReceipt(
     selection: ReceiptHostSelection,
     native: NativeManagedReceipt,
     record: StablePluginRecord,
-    files: PluginFiles,
+    files: PluginPayloadFiles,
 ): ManagedPluginReceipt {
     const mcp = files.get(pluginMcpPath(host));
     if (!mcp) throw new Error('invalid-managed-receipt');
@@ -234,7 +233,7 @@ export async function restoreReceiptFiles(receipt: ManagedPluginReceipt): Promis
             if (!bytes || bytes.length !== item.size || digest(bytes) !== item.sha256) throw new Error();
             expected.set(item.path, bytes);
         }
-        verifyPluginFiles(receipt.host, receipt.record.version, expected, actual);
+        verifyPluginPayload(receipt.host, receipt.record.version, expected, actual);
         return expected;
     } catch {
         throw new Error('managed-receipt-payload-changed');
