@@ -48,7 +48,7 @@ App delivers its own verified ordinary Node and original official release.
 Explicit Skill invocation is the established full-instruction entry. Dated CLI
 metadata and historical Desktop icon observations, their host versions and
 presentation limits are recorded in the
-[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md).
+[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/evidence/host-plugin-research.md).
 They do not establish new Desktop rendering acceptance for this HTTP cutover.
 See the [user guide](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/README.md)
 for workflow, compatibility, privacy and troubleshooting.

@@ -148,8 +148,9 @@ status and concise documentation, contribution and security navigation may
 remain. Do not remove necessary first-use steps merely to shorten the page.
 
 Complete configuration options, directory-selection order and cleanup rules
-belong in docs/user-guide/. Host metadata fields, consumers, primary research
-and host acceptance evidence belong in docs/host-metadata.md. Test matrices,
+belong in docs/user-guide/. Current Host metadata fields and consumers belong in
+docs/reference/host-metadata.md; primary research and dated host acceptance belong
+in docs/evidence/host-plugin-research.md. Test matrices,
 platform acceptance and implementation details belong in the corresponding
 compatibility guide, test documentation, source documentation or ADRs. Do not
 add research or acceptance summaries to the root README merely because a
@@ -232,8 +233,11 @@ Before the first implementation for a new host, or a change to an existing
 host's metadata contract, independently research that host's current official
 documentation and applicable versioned implementation. Do not derive its
 requirements from another host, a publication portal, or a prior conversation.
-Record the result in [host metadata](../host-metadata.md), the single owner of
-primary host research. For each manifest, Marketplace, Skill and MCP metadata
+Record the result in [Host research evidence](../evidence/host-plugin-research.md),
+the single owner of primary host research. Keep current adopted fields in the
+[Host metadata reference](../reference/host-metadata.md), linked to that evidence,
+and implementation transactions in [Host architecture](../architecture/host-plugin-management.md).
+For each manifest, Marketplace, Skill and MCP metadata
 surface, name the consumer, supported interface, defaults, precedence and path
 base, adopted value or deliberate omission, necessity, research date, host
 version and direct primary sources. Distinguish documented support, inspected

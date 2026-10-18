@@ -42,7 +42,7 @@ Node and the complete original official release.
 
 The manifest's homepage/title and historical local listing-icon limits are
 documented with dated source and acceptance evidence in the
-[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/host-metadata.md).
+[host metadata record](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/evidence/host-plugin-research.md).
 Historical Hook acceptance is not current HTTP acceptance. See the
 [user guide](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/README.md)
 for workflow, requirements, configuration, privacy and troubleshooting.

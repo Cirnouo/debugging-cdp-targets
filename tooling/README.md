@@ -51,7 +51,7 @@
     the exact shared asset inventory and copies only each host's delivery icons.
     Delivery PNGs use only IHDR, consecutive IDAT and IEND chunks. Source artwork
     may additionally retain its original `caBX` Content Credentials before IDAT.
-    [Host metadata](../docs/host-metadata.md) owns researched consumer support and
+    [Host metadata](../docs/evidence/host-plugin-research.md) owns researched consumer support and
     limits for Claude's listing icon and Codex's retained dark composer key.
 - `official-tool-catalog.ts` verifies the fixed public tools/list configuration
   matrix; `--write` deliberately regenerates tool metadata for the verified release.
@@ -124,7 +124,9 @@
 
 Before changing host metadata validation, follow the
 [independent research policy](../docs/policies/documentation.md#host-metadata-research)
-and update the central [host metadata record](../docs/host-metadata.md).
+and update the central [host metadata record](../docs/evidence/host-plugin-research.md).
+Keep selected current fields in the [Host metadata reference](../docs/reference/host-metadata.md)
+linked to that evidence.
 Use package scripts for supported checks. Pure validators never mutate user state
 or publish artifacts. The explicit Issue workflow runs `node tooling/issue-feedback.ts`
 with its trusted Issue event and step-scoped built-in token to update only owned

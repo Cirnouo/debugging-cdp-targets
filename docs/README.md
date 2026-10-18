@@ -2,9 +2,9 @@
 
 - `user-guide/` explains installation, operation, compatibility, configuration,
     privacy and troubleshooting for Plugin users.
-- `reference/` defines the shared vocabulary in its sole domain glossary.
-- `host-metadata.md` owns independent host metadata research, field decisions,
-    dated CLI/Desktop acceptance and remaining evidence limits.
+- `reference/` owns the sole domain glossary and current adopted Host metadata.
+- `architecture/` explains current Host Plugin management and synchronization.
+- `evidence/` owns dated Host research, CLI/Desktop acceptance and evidence limits.
 - `shared-core.md` documents the transport-independent core, request contexts,
     registration ownership, immutable snapshots and definitive cleanup.
 - `app-runtime.md` documents singleton/storage/GUI ownership, HTTP authentication,

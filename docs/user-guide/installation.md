@@ -30,7 +30,7 @@ and formal explicit Skill invocation loaded the complete instructions. Selecting
 a Desktop starter prompt has not been proved to load the same body; invoke the
 Skill explicitly. The project website, Skill title/description/icons and full
 long description passed manual acceptance on Codex Desktop 26.1002.52244. See
-[host metadata evidence](../host-metadata.md) for consumers and limitations.
+[host metadata evidence](../evidence/host-plugin-research.md) for consumers and limitations.
 
 The thin Plugin contains no Hooks. Follow the Skill to register once and keep the
 private bearer for explicit owned calls. Read lifecycle status/results directly.
@@ -49,7 +49,7 @@ The first command refreshes the catalog source; the second installs the current
 payload into Codex's Plugin cache. A catalog refresh alone does not establish
 that the installed files changed. Start a new conversation to use the updated
 bundled Skills and tools. The same-version refresh was verified with Codex CLI
-0.161.0; see [host metadata evidence](../host-metadata.md#codex-cache-refresh).
+0.161.0; see [host metadata evidence](../evidence/host-plugin-research.md#codex-cache-refresh).
 
 To uninstall, remove the Plugin before removing its Marketplace source:
 

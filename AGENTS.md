@@ -86,10 +86,10 @@ Before changing the root README, read and follow the
 
 Before implementing a new host or changing a host metadata contract, follow the
 [independent host research policy](docs/policies/documentation.md#host-metadata-research)
-and update the [host metadata evidence](docs/host-metadata.md).
+and update the [host metadata evidence](docs/evidence/host-plugin-research.md).
 
 - [Domain language](docs/reference/domain-language.md)
-- [Host metadata](docs/host-metadata.md)
+- [Host metadata](docs/reference/host-metadata.md)
 - [Policies](docs/policies/README.md)
 - [Decisions](docs/adr/README.md)
 - [Source](src/README.md)

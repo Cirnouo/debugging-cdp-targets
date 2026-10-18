@@ -105,7 +105,7 @@ user target. These are SDK/source regression evidence. Dated native host and
 target acceptance must name the exact final source separately; an
 `independent-sdk-http` capture is never a Codex/Claude capability capture.
 
-The [host metadata record](../host-metadata.md#mcp-protocol-compatibility-research--2026-10-17)
+The [host metadata record](../evidence/host-plugin-research.md#mcp-protocol-compatibility-research--2026-10-17)
 records Codex 0.163.0's legacy default and Claude Code 2.1.302's documented modern
 runtime with its capture limits. Preserve default compatibility and the wait
 path; no experimental host flag or personal configuration is required.

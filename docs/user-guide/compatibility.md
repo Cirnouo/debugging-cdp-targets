@@ -47,7 +47,7 @@ Optional progress follows the active response and stops with it. Continue using
 
 Fixed-version research dated 2026-10-17 finds Codex 0.163.0 uses legacy by default;
 Claude Code 2.1.302 documents modern negotiation with runtime conditions. The
-[host metadata record](../host-metadata.md#mcp-protocol-compatibility-research--2026-10-17)
+[host metadata record](../evidence/host-plugin-research.md#mcp-protocol-compatibility-research--2026-10-17)
 owns primary links and distinguishes source support, SDK regressions and actual
 host acceptance. Native background tasks do not prove MCP Tasks support, and no
 experimental host flag is needed for this compatibility path.
@@ -86,7 +86,7 @@ effective-root/policy/environment and runtime enforcement limits.
 The records below describe the dated stdio/Hook architecture and presentation
 checks before the HTTP cutover. They do not establish current HTTP execution,
 new App GUI or installer acceptance. Current HTTP contracts and evidence limits
-are owned by [host metadata](../host-metadata.md#direct-http-cutover).
+are owned by [host metadata](../reference/host-metadata.md#direct-http-cutover).
 
 Actual Plugin installation, tool discovery and model-context Hooks were accepted
 on Windows on 2026-10-05 with Codex CLI 0.160.0 and Claude Code 2.1.283. Claude
@@ -112,7 +112,7 @@ prod, confirmed project website navigation, Skill title/short description/icons
 and the full long description at source ebcd580. The installed cache matched all
 380 files from that pinned source before the human checked the UI. Automatic
 starter prompt injection and dark-mode-specific rendering remain unverified.
-See the [host metadata record](../host-metadata.md) for primary sources, cache
+See the [host metadata record](../evidence/host-plugin-research.md) for primary sources, cache
 preparation evidence and the exact manual scope.
 
 ## Desktop Chrome acceptance

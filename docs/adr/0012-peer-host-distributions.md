@@ -39,9 +39,11 @@ overlays from flat Codex inputs. Only those exact overlay destinations are
 excluded from the reverse shared-set comparison; each host independently
 enforces its complete inventory, and Claude excludes the Codex overlays.
 The shared SKILL.md remains byte-identical. See the
-[host metadata record](../host-metadata.md) and
+[host metadata record](../evidence/host-plugin-research.md) and
 [research policy](../policies/documentation.md#host-metadata-research) for the
 independently researched consumer contract and evidence boundaries.
+The [Host metadata reference](../reference/host-metadata.md) owns current adopted
+fields; the dated record retains the original acceptance scope.
 
 Pure host descriptors centralize paths without reading files or release evidence.
 This preserves standalone lockfile preflight before dependency installation.
