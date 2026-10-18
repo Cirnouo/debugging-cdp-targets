@@ -55,9 +55,10 @@ Linux/macOS application acceptance. The first security entry is generated
 JavaScript so lockfile preflight needs no installed dependencies.
 
 Contributor `pnpm test`, `pnpm test:coverage`, `pnpm verify:push` and pre-push
-verification use the default `tests/*.test.ts` lane without launching GUI
-fixtures. `pnpm test:windows:interactive` returns a successful explicit skip by
-default. Only `pnpm test:windows:interactive --allow-gui` selects the eighteen
+verification use the safe default inventory in the
+[verification policy](../../docs/policies/quality.md#verification), including
+its exact nested suites, without launching GUI fixtures.
+`pnpm test:windows:interactive` returns a successful explicit skip by default. Only `pnpm test:windows:interactive --allow-gui` selects the eighteen
 interactive cases and requires an interactive Windows desktop; after authorization
 it fails on non-Windows. Each file also skips direct Node execution without the
 flag. CI/environment detection never grants GUI permission. Both lanes run files

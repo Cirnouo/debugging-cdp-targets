@@ -6,8 +6,12 @@ owns core resources and direct HTTP; host plugins are thin.
 
 
 Dependencies flow interface → application → domains/shared; application may
-use explicit adapters. Adapters never depend on application/interface. Domains
-contain no environment, file, process, network, or PowerShell I/O.
+use explicit adapters. Adapters may consume the delivered pure gateway argument
+rules and never depend on application/interface. The current gateway slice may
+depend only on gateway/domains/shared through relative imports. Domains and
+gateway contain no environment, file, process, network, or PowerShell I/O.
+The existing semver/functions/parse.js exception remains limited to
+domains/software-version.ts; gateway gains no external dependency exception.
 
 Only interface/app-bootstrap.ts executes directly. It synchronously redirects
 Chromium userData/sessionData to separate per-process temporary directories before

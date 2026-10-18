@@ -13,8 +13,9 @@ Use the current maps in [source](../../src/README.md), [tests](../../tests/READM
 [tooling](../../tooling/README.md), [documentation](../README.md) and
 [packaging](../../packaging/README.md), together with all applicable ancestor and
 local `AGENTS.md` files. READMEs describe current placement; AGENTS and policies
-govern implementation. The source is currently organized by technical layers.
-Existing layer, pure-model and I/O rules remain in force.
+govern implementation. The source retains technical layers alongside the
+delivered pure Gateway argument owner in `src/gateway/`. Existing layer,
+pure-model and I/O rules remain in force.
 
 [Tooling governance](../../tooling/governance/README.md) separates pure commit
 grammar from actual message execution.
@@ -28,13 +29,16 @@ with subdomains or technical boundaries inside them when needed; central root
 `tests/` corresponding to those responsibilities; and tooling organized by its
 actual responsibilities and meaningful names. Maintained implementation planning
 lives at root [.superpowers/](../../.superpowers/README.md). Future reviewed
-specifications use the same planning owner and narrow tracking rules. The broad
-source content migration remains under review: this policy does not approve a
-particular future directory, file list, symbol signature or implementation sequence.
+specifications use the same planning owner and narrow tracking rules. The reviewed
+[complete content plan](../../.superpowers/plans/2026-10-18-repository-content-reorganization.md)
+records the remaining target, content boundaries and delivery batches. Proposed
+paths do not become current placement until their owning migration updates the
+maps and instructions.
 
 Until each migration updates its maps and instructions atomically, place work
-with the existing owner. Do not introduce a parallel future tree or copy a module
-into a proposed domain to anticipate that migration. Root `.superpowers/` contains
+with the existing owner, including that bounded Gateway slice. Do not introduce
+a parallel future tree or copy a module into a proposed domain to anticipate
+that migration. Root `.superpowers/` contains
 individually tracked planning entries and ignored private work. A future reviewed
 plan requires an exact per-file `.gitignore` exception and a matching plans
 inventory entry in the same change. Keep its `sdd`, native stages, logs and other

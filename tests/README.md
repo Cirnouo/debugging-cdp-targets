@@ -46,8 +46,9 @@ Git hook tests remain contributor-tooling regressions.
   excludes credentials, executable helpers and duplicated App runtime payloads.
 - `app-control-cutover.test.ts` checks the public lifecycle identities and actual
   SDK schema validation of explicit bearer inputs versus missing or retired fields.
-- `mcp-http-policy.test.ts` checks exact loopback authority/Origin/path/method,
-  bounded unambiguous bodies and per-request bearer/official route extraction.
+- `mcp-http-policy.test.ts` checks exact loopback authority/Origin/path/method
+  and bounded unambiguous bodies.
+- `gateway/` owns the pure explicit bearer and official tool-argument suite.
 - `mcp-http-server.test.ts` covers actual SDK HTTP clients, originating roots,
   elicitation/progress, client cancellation versus owned work, boundary rejection
   and explicit shutdown over the real Core with controlled native/official I/O.
@@ -264,8 +265,8 @@ Git hook tests remain contributor-tooling regressions.
   flag forwarding. Entrypoint regression subprocesses block external
   child acquisition so a broken guard cannot open a real fixture during the test.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
-  runnable root or interactive lane and retains the four-file, eighteen-case
-  interactive inventory without launching fixtures.
+  runnable root, explicit tooling/Gateway or interactive lane and retains the
+  four-file, eighteen-case interactive inventory without launching fixtures.
 - `issue-policy.test.ts` validates literal GitHub form bodies against the current
   YAML, including label-only classification, required and optional answers,
   exact dropdown options, H3 order/duplicates, fake structural headings, and
@@ -422,7 +423,8 @@ Git hook tests remain contributor-tooling regressions.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
 command and `pnpm test:coverage` select `tests/*.test.ts` plus the three explicit
-tooling suites listed in [tooling tests](tooling/README.md); they do not launch
+tooling suites listed in [tooling tests](tooling/README.md) and exactly
+`tests/gateway/owned-tool-arguments.test.ts`; they do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
