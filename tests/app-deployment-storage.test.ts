@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
+import type { BigIntStats } from 'node:fs';
 import filesystem, {
     chmod,
     lstat,
@@ -484,6 +485,206 @@ test('an opened state document unlinked before its first stat rejects as changed
         await use?.release();
         await operation?.release();
         await own.cleanup();
+    }
+});
+
+for (const receipt of ['named', 'current'] as const) {
+    test(`an invalidated ${receipt} document receipt rejects without returning or parsing its bytes`, {
+        skip: !supported,
+        timeout: 20000,
+    }, async (context) => {
+        const own = await fixture();
+        const captured = Promise.withResolvers<void>();
+        const resume = Promise.withResolvers<void>();
+        const originalOpen = filesystem.open;
+        const originalLstat = filesystem.lstat;
+        const originalParse = JSON.parse;
+        const stateFile = path.join(own.envelope, 'state.json');
+        const originalStateText = `${JSON.stringify(own.state)}\n`;
+        let armed = false;
+        let observing = false;
+        let countParse = false;
+        let namedCalls = 0;
+        let readCalls = 0;
+        let parseCalls = 0;
+        let closeCalls = 0;
+        let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
+        let before: BigIntStats | undefined;
+        let operation: DeploymentLease | undefined;
+        let use: DeploymentLease | undefined;
+        let settleRead: Promise<unknown> | undefined;
+        const openBoundary = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
+            const handle = await originalOpen(...args);
+            if (!armed || args[0] !== stateFile) return handle;
+            armed = false;
+            observing = true;
+            opened = handle;
+            return new Proxy(handle, {
+                get(target, key) {
+                    if (key === 'stat')
+                        return async () => {
+                            const entry = await target.stat({ bigint: true });
+                            before ??= entry;
+                            return entry;
+                        };
+                    if (key === 'read')
+                        return (...values: unknown[]) => {
+                            readCalls++;
+                            return Reflect.apply(target.read, target, values);
+                        };
+                    if (key === 'close')
+                        return async () => {
+                            closeCalls++;
+                            await target.close();
+                        };
+                    const value: unknown = Reflect.get(target, key, target);
+                    return typeof value === 'function' ? value.bind(target) : value;
+                },
+            });
+        });
+        const lstatBoundary = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
+            const entry = await originalLstat(...args);
+            if (!observing || args[0] !== stateFile) return entry;
+            if (++namedCalls !== (receipt === 'named' ? 1 : 2)) return entry;
+            observing = false;
+            captured.resolve();
+            await resume.promise;
+            assert.ok(opened);
+            assert.ok(before);
+            const invalidated = await opened.stat({ bigint: true });
+            const replacement = await originalLstat(stateFile, { bigint: true });
+            assert.equal(invalidated.isFile(), true);
+            assert.equal(invalidated.isSymbolicLink(), false);
+            assert.equal(invalidated.nlink, 0n);
+            assert.equal(invalidated.ino, before.ino);
+            assert.equal(replacement.nlink, 1n);
+            assert.notEqual(replacement.ino, invalidated.ino);
+            if (receipt === 'named') return invalidated;
+            const expected = before;
+            context.diagnostic(
+                JSON.stringify({
+                    receipt,
+                    modeledFields: ['mtimeNs', 'ctimeNs'],
+                    actual: { mtimeNs: String(invalidated.mtimeNs), ctimeNs: String(invalidated.ctimeNs) },
+                    modeled: { mtimeNs: String(expected.mtimeNs), ctimeNs: String(expected.ctimeNs) },
+                    actualNlink: String(invalidated.nlink),
+                }),
+            );
+            // Model only timestamp equality to reach the current-receipt classifier.
+            // Inode, link count, type and private-role metadata remain actual.
+            return new Proxy(invalidated, {
+                get(target, key) {
+                    if (key === 'mtimeNs') return expected.mtimeNs;
+                    if (key === 'ctimeNs') return expected.ctimeNs;
+                    const value: unknown = Reflect.get(target, key, target);
+                    return typeof value === 'function' ? value.bind(target) : value;
+                },
+            });
+        });
+        const parseBoundary = mock.method(JSON, 'parse', (...args: Parameters<typeof JSON.parse>) => {
+            if (countParse && args[0] === originalStateText) parseCalls++;
+            return originalParse(...args);
+        });
+        syncBuiltinESMExports();
+        try {
+            const store = await openDeploymentInstallation(own.directory, { tryLock: await native() });
+            operation = await store.tryAcquire('operation');
+            use = await store.tryAcquire('use');
+            assert.ok(operation);
+            assert.ok(use);
+            armed = true;
+            countParse = true;
+            const reading = store.read(use).then(
+                (value) => ({ value }),
+                (error: unknown) => ({ error }),
+            );
+            settleRead = reading;
+            await Promise.race([
+                captured.promise,
+                reading.then(() => {
+                    throw new Error('Reader bypassed its controlled receipt return.');
+                }),
+            ]);
+            countParse = false;
+            const selected = await store.commit(operation, own.state, next);
+            countParse = true;
+            resume.resolve();
+            const result = await reading;
+            countParse = false;
+            assert.ok('error' in result);
+            assert.ok(result.error instanceof Error);
+            assert.match(result.error.message, /document identity.*changed/);
+            assert.equal(parseCalls, 0);
+            if (receipt === 'named') assert.equal(readCalls, 0);
+            else assert.ok(readCalls > 0, 'current receipt follows bounded reads');
+            assert.equal(closeCalls, 1);
+            assert.ok(opened);
+            await assert.rejects(opened.stat(), { code: 'EBADF' });
+            assert.deepEqual(await store.read(use), selected);
+        } finally {
+            countParse = false;
+            resume.resolve();
+            await settleRead?.catch(() => {});
+            parseBoundary.mock.restore();
+            lstatBoundary.mock.restore();
+            openBoundary.mock.restore();
+            syncBuiltinESMExports();
+            await use?.release();
+            await operation?.release();
+            await own.cleanup();
+        }
+    });
+}
+
+test('named document hardlinks, nonregular entries, private-mode failures and absence remain fatal', {
+    skip: !supported,
+}, async () => {
+    for (const kind of ['hardlink', 'nonregular', 'permissions', 'absent'] as const) {
+        const own = await fixture();
+        const originalLstat = filesystem.lstat;
+        const stateFile = path.join(own.envelope, 'state.json');
+        const secondName = path.join(own.envelope, 'state-second-link.json');
+        let armed = false;
+        let operation: DeploymentLease | undefined;
+        let use: DeploymentLease | undefined;
+        const boundary = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
+            if (!armed || args[0] !== stateFile) return originalLstat(...args);
+            armed = false;
+            if (kind === 'hardlink') await filesystem.link(stateFile, secondName);
+            if (kind === 'permissions') await chmod(stateFile, 0o644);
+            if (kind === 'absent') await unlink(stateFile);
+            // The nonregular control supplies actual owned-directory metadata only here.
+            const entry = await originalLstat(kind === 'nonregular' ? own.envelope : stateFile, { bigint: true });
+            if (kind === 'hardlink') assert.equal(entry.nlink, 2n);
+            if (kind === 'nonregular') assert.equal(entry.isDirectory(), true);
+            if (kind === 'permissions') assert.notEqual(entry.mode & 0o077n, 0n);
+            return entry;
+        });
+        syncBuiltinESMExports();
+        try {
+            const store = await openDeploymentInstallation(own.directory, { tryLock: await native() });
+            operation = await store.tryAcquire('operation');
+            use = await store.tryAcquire('use');
+            assert.ok(operation);
+            assert.ok(use);
+            armed = true;
+            await assert.rejects(store.read(use), (error: unknown) => {
+                assert.ok(error instanceof Error);
+                assert.doesNotMatch(error.message, /document identity.*changed/);
+                if (kind === 'absent') return isRecord(error) && error.code === 'ENOENT';
+                return (
+                    kind === 'permissions' ? /native private-account permissions/ : /regular file with one link/
+                ).test(error.message);
+            });
+        } finally {
+            boundary.mock.restore();
+            syncBuiltinESMExports();
+            if (kind === 'hardlink') await unlink(secondName).catch(() => {});
+            if (kind === 'permissions') await chmod(stateFile, 0o600);
+            await use?.release();
+            await operation?.release();
+            await own.cleanup();
+        }
     }
 });
 

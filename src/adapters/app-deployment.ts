@@ -55,6 +55,12 @@ function regular(entry: BigIntStats) {
     privateEntry(entry);
 }
 
+function regularDocument(entry: BigIntStats) {
+    if (entry.isFile() && !entry.isSymbolicLink() && entry.nlink === 0n)
+        throw new Error('Deployment document identity changed.');
+    regular(entry);
+}
+
 function unchanged(first: BigIntStats, second: BigIntStats) {
     return (
         sameIdentity(first, second) &&
@@ -72,13 +78,11 @@ async function readDocument<T>(
     const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
         const before = await handle.stat({ bigint: true });
-        if (before.isFile() && !before.isSymbolicLink() && before.nlink === 0n)
-            throw new Error('Deployment document identity changed.');
-        regular(before);
+        regularDocument(before);
         if (before.size < 1n || before.size > BigInt(maximum))
             throw new Error('Deployment document exceeds its bound.');
         const named = await lstat(file, { bigint: true });
-        regular(named);
+        regularDocument(named);
         if (!unchanged(before, named)) throw new Error('Deployment document identity changed.');
         const buffer = Buffer.alloc(maximum + 1);
         let bytesRead = 0;
@@ -97,8 +101,8 @@ async function readDocument<T>(
             !unchanged(before, current)
         )
             throw new Error('Deployment document identity or bounded content changed.');
-        regular(after);
-        regular(current);
+        regularDocument(after);
+        regularDocument(current);
         const bytes = buffer.subarray(0, bytesRead);
         const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
         const value = parse(JSON.parse(text));
