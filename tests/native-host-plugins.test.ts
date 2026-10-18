@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,7 +15,7 @@ async function fixture(
     market: unknown,
     extra: Record<string, unknown> = {},
 ) {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-host-空 & '));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-host-空 & ')));
     const cwd = path.join(root, 'neutral');
     await mkdir(cwd);
     const catalog = path.join(root, 'catalog');

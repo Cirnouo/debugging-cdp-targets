@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -11,7 +11,7 @@ import {
 } from '../src/adapters/managed-plugin-receipts.ts';
 
 test('schema-one receipt survives a new store instance, verifies original bytes and rejects drift', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-managed-receipt-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-managed-receipt-')));
     const payload = path.join(root, 'payload');
     await mkdir(path.join(payload, '.claude-plugin'), { recursive: true });
     const files = new Map([

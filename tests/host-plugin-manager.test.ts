@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -26,7 +26,7 @@ async function harness(
     options: { failRefresh?: boolean; moveAfterRefresh?: boolean; failPatch?: boolean } = {},
 ) {
     const effects: string[] = [];
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-manager-fixture-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-manager-fixture-')));
     fixtureRoots.push(root);
     const manifest = host === 'codex' ? '.codex-plugin/plugin.json' : '.claude-plugin/plugin.json';
     const mcp = host === 'codex' ? 'mcp.json' : '.mcp.json';
@@ -195,7 +195,7 @@ test('source movement and partial host failures stop without replay or peer roll
 });
 
 test('a retained in-process receipt cannot authorize refresh over changed installed bytes', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-manager-receipt-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-manager-receipt-')));
     const files = new Map([
         ['.claude-plugin/plugin.json', Buffer.from('{"name":"debugging-cdp-targets","version":"0.2.0"}')],
         ['.mcp.json', Buffer.from('{"mcpServers":{"cdp-targets":{"type":"http","url":"http://127.0.0.1:27637/mcp"}}}')],
@@ -251,7 +251,7 @@ test('a retained in-process receipt cannot authorize refresh over changed instal
 });
 
 async function replacementFixture() {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-manager-replacement-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-manager-replacement-')));
     fixtureRoots.push(root);
     const metadata = path.join(root, 'metadata');
     await mkdir(metadata);

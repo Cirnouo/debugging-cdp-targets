@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -7,7 +7,7 @@ import { patchPluginEndpoint, readPluginTree, verifyPluginFiles } from '../src/a
 import type { PluginHost } from '../src/domains/host-management.ts';
 
 async function fixture(host: PluginHost) {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-payload-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-payload-')));
     const manifest = host === 'codex' ? '.codex-plugin/plugin.json' : '.claude-plugin/plugin.json';
     const mcp = host === 'codex' ? 'mcp.json' : '.mcp.json';
     const files = new Map([
@@ -124,7 +124,7 @@ test('source layouts without a bounded unique canonical own URL literal fail bef
 
 test('rejects extra files, hard links, symbolic links and wrong manifests before write', async () => {
     const f = await fixture('claude');
-    const external = await mkdtemp(path.join(os.tmpdir(), 'dct-external-'));
+    const external = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-external-')));
     try {
         await writeFile(path.join(f.root, 'extra'), 'extra');
         await assert.rejects(
