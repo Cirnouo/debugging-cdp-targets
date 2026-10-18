@@ -63,11 +63,11 @@
   event/ref construction, actual commitlint execution and the Git/history audit command.
 - `version-policy.ts` re-exports the pure domain version predicates and owns exact
   Package/Plugin/Skill string agreement. It also supplies security identity validation.
-- `release.ts` reads both maintained packaging and generated host metadata,
-  validates a new tag-push context, builds Changelog-based notes,
-  and creates/resumes a stable or prerelease draft before publication after the
-  reusable CI gate. It checks returned classification and preserves a stable-only
-  latest-release baseline for notes and comparisons.
+- [releases/](releases/README.md) separates supplied-value Markdown note extraction
+  and body construction from the complete tag/remote/draft/publication transaction.
+  Its publisher validates maintained/generated metadata and new tag-push identity,
+  creates or resumes a correctly classified draft after reusable CI, and preserves
+  the stable-only latest-release baseline.
 - `governance/check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
@@ -127,7 +127,7 @@ Use package scripts for supported checks. Pure validators never mutate user stat
 or publish artifacts. The explicit Issue workflow runs `node tooling/issue-feedback.ts`
 with its trusted Issue event and step-scoped built-in token to update only owned
 diagnostic labels/comments. Ordinary checks and tests never invoke that CI entry
-against GitHub. The separate Release workflow runs `node tooling/release.ts`
+against GitHub. The separate Release workflow runs `node tooling/releases/publish-release.ts`
 with its new tag-push event and built-in token; ordinary checks and tests never
 invoke its publishing CLI. It does not change repository settings or upload
 custom assets.

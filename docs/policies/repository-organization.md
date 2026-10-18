@@ -31,7 +31,9 @@ consumers. Existing layer, pure-model and I/O rules remain in force for all curr
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.
 [Text policy](../../tooling/quality/README.md) owns shared pure style and YAML
-filename rules. Their central
+filename rules. [Release tooling](../../tooling/releases/README.md) separates pure
+supplied-value Markdown notes from the complete tag/remote/draft/publication
+transaction. Their central
 [tooling tests](../../tests/tooling/README.md) have explicit safe default selection;
 other tooling and test owners retain their current placement.
 

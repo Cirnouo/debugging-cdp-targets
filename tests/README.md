@@ -340,11 +340,11 @@ Git hook tests remain contributor-tooling regressions.
   delayed startup before PID and signal-handler initialization.
 - `version-policy.test.ts` checks shared SemVer grammar, stable/release predicates,
   parser limits, arbitrary legal prerelease labels, and exact metadata agreement.
-- `release.test.ts` checks stable and prerelease tag/event identity, dated Changelog
-  extraction, English notes, paginated draft recovery, returned classification,
-  stable-only comparisons, and fail-closed publication with
-  simulated GitHub I/O and disposable Git fixtures. It never changes this
-  repository's tags or creates real GitHub Releases.
+- [tooling/releases/](tooling/releases/README.md) separates supplied-value Changelog
+  and English note regressions from stable/prerelease tag/event identity, paginated
+  draft recovery, returned classification, stable-only comparisons and fail-closed
+  publication. Publication uses simulated GitHub I/O and disposable Git fixtures;
+  it never changes this repository's tags or creates real GitHub Releases.
 - `supply-chain.test.ts` covers complete multi-document inventories, fail-closed
   audit/signature reports, strict dependency/exception SemVer, exact bounded exceptions,
   installed graphs, lockfile preflight and upstream review-before-install with fake
@@ -456,7 +456,7 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select `tests/*.test.ts` plus the five explicit
+command and `pnpm test:coverage` select `tests/*.test.ts` plus the seven explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
 `tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
