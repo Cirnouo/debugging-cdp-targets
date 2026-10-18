@@ -1,5 +1,8 @@
 # I/O adapters
 
+- `app-parent-exit.ts` validates exact-parent readiness and actual-exit evidence
+  from a controlled read-only producer. It implements no native watch or Close
+  request and is not integrated into App startup.
 - `app-deployment.ts` opens only already enrolled installation metadata, validates
   physical root/native private-account permissions and holds exactly operation
   and use lock inodes. Its bounded canonical state store preserves removal fences

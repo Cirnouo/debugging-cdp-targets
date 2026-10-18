@@ -1,5 +1,8 @@
 # Application orchestration
 
+- `app-restart.ts` prepares module-only restart orchestration through controlled
+  producers, retaining installation use and child observation until a bound ACK,
+  definitive no-child result or actual child exit. App startup does not import it.
 - `client-context.ts` owns client availability and response-wait detachment.
 - `registrations.ts` authenticates memory-only bearer ownership and idle expiry.
 - `app-management.ts` projects secret-free Core administration for validated

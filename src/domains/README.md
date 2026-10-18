@@ -1,5 +1,7 @@
 # Pure domain rules
 
+- `app-restart.ts` validates the bounded private restart context and exact
+  successor lease ACK. Syntax grants no file ownership or native lease proof.
 - `app-deployment.ts` strictly validates initial physical installation metadata,
   complete immutable selection identifiers and active/removing/removed transitions.
   It grants no payload-verification, permission, enrollment or deletion authority.
