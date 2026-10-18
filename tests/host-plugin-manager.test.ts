@@ -571,7 +571,11 @@ test('persisted verified replacement survives a new manager after late URL or st
             await assertPersisted('0.3.0', 'http://127.0.0.1:5555/mcp');
             t.diagnostic(`${failure}: actual receipt write/readback, injection and fresh-manager recovery confirmed`);
         } catch (error) {
-            await f.retainFailure(error);
+            try {
+                await f.retainFailure(error);
+            } catch {
+                // Capture is best effort; preserve the original failure below.
+            }
             throw error;
         }
     }
@@ -623,7 +627,11 @@ test('persisted verified replacement survives a new manager after late URL or st
                 `${failure}: incomplete receipt write refused by completion assertion; stale receipt stays read-only`,
             );
         } catch (error) {
-            await f.retainFailure(error);
+            try {
+                await f.retainFailure(error);
+            } catch {
+                // Capture is best effort; preserve the original failure below.
+            }
             throw error;
         }
     }
