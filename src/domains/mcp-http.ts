@@ -1,6 +1,3 @@
-import { isRecord } from '../shared/errors.ts';
-import { parseConnectionRoute } from './control-contract.ts';
-
 export const MCP_MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
 type HttpRequestEvidence = Readonly<{
     method: string | undefined;
@@ -49,26 +46,4 @@ export function mcpHttpRejection(request: HttpRequestEvidence, effectivePort: nu
     )
         return { status: 415, message: 'A UTF-8 JSON request body is required.' };
     return undefined;
-}
-
-function registrationBearer(value: unknown): string {
-    if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(value))
-        throw new Error('A registration bearer is required.');
-    return value;
-}
-
-export function parseRegisteredArguments(value: unknown) {
-    if (!isRecord(value) || !Object.hasOwn(value, 'registrationBearer'))
-        throw new Error('A registration bearer is required.');
-    const bearer = registrationBearer(value.registrationBearer);
-    const { registrationBearer: _bearer, ...arguments_ } = value;
-    return { registrationBearer: bearer, arguments: arguments_ };
-}
-
-export function parseRegisteredOfficialArguments(value: unknown) {
-    if (!isRecord(value) || !isRecord(value._dct)) throw new Error('An authenticated connection route is required.');
-    const selected = parseRegisteredArguments(value._dct);
-    const route = parseConnectionRoute(selected.arguments);
-    const { _dct: _route, ...arguments_ } = value;
-    return { registrationBearer: selected.registrationBearer, route, arguments: arguments_ };
 }

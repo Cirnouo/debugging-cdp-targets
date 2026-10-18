@@ -9,8 +9,9 @@
 - `app-ui.ts` validates the fixed local asset routes and narrow management
   requests/snapshots, selected explicit configuration, unbounded elapsed clocks
   and startup failure without invented settings.
-- `mcp-http.ts` validates the exact loopback HTTP endpoint/body headers and
-  explicit per-request registration routing without reflecting secret inputs.
+- `mcp-http.ts` validates the exact loopback HTTP endpoint/body headers without
+  reflecting secret inputs. Explicit bearer/tool-argument extraction belongs to
+  `gateway/owned-tool-arguments.ts`.
 - `request-failure.ts` owns closed, path-free explanations for authenticated
   busy and originating-client facility failures across the HTTP boundary.
 - `host-management.ts` validates the one latest stable plugin record and the

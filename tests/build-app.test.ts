@@ -35,6 +35,9 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         },
     });
     for (const input of [
+        'src/gateway/owned-tool-arguments.ts',
+        'src/domains/mcp-http.ts',
+        'src/adapters/mcp-request-handler.ts',
         'src/application/host-plugin-manager.ts',
         'src/adapters/native-host-plugins.ts',
         'src/adapters/managed-plugin-receipts.ts',

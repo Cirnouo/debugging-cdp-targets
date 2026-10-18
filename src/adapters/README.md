@@ -51,8 +51,9 @@
   validates loopback HTTP boundaries and routes strict modern requests beside
   sessionful legacy connections through one shared Core.
 - `mcp-request-handler.ts` owns the common fixed declarations, authenticated
-  dispatch, modern roots preflight before lifecycle acceptance, bounded form
-  continuation around one Core execution and active-request progress routing.
+  dispatch using the pure `gateway/owned-tool-arguments.ts` parsers, modern roots
+  preflight before lifecycle acceptance, bounded form continuation around one
+  Core execution and active-request progress routing.
 - `target-host.ts` launches and verifies a newly created target. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
   the debugging process and fixes Windows screenshots with one bare

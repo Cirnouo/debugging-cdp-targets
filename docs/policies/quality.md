@@ -72,8 +72,9 @@ Develop changed behavior test-first. Regression tests use isolated fake CDP
 targets; never download packages or launch user browsers in the default suite.
 `pnpm test` and `pnpm test:coverage` select `tests/*.test.ts` plus
 `tests/tooling/governance/commit-grammar.test.ts`,
-`tests/tooling/governance/commit-validation.test.ts` and
-`tests/tooling/quality/text-policy.test.ts`. They run files sequentially
+`tests/tooling/governance/commit-validation.test.ts`,
+`tests/tooling/quality/text-policy.test.ts` and exactly
+`tests/gateway/owned-tool-arguments.test.ts`. They run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.

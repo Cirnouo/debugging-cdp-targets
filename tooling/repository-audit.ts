@@ -264,6 +264,7 @@ export function validateRuntimeSource(file: string, source: string) {
     }
     const layer = file.split('/')[1];
     const domain = layer === 'domains';
+    const gateway = layer === 'gateway';
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
     function dependency(specifier: unknown) {
@@ -277,6 +278,8 @@ export function validateRuntimeSource(file: string, source: string) {
         if (domain && !versionParser && (!specifier.startsWith('.') || !/^src\/(?:domains|shared)\//.test(resolved))) {
             errors.push(`${file}: domains may depend only on domains and shared.`);
         }
+        if (gateway && (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved)))
+            errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);
         if (layer === 'adapters' && /^src\/(?:application|interface)\//.test(resolved))
             errors.push(`${file}: adapter depends on an upper layer.`);
         if (layer === 'shared' && specifier.startsWith('.') && !resolved.startsWith('src/shared/'))
@@ -331,8 +334,8 @@ export function validateRuntimeSource(file: string, source: string) {
             callee.name === 'require'
         )
             dependency(node.arguments[0]?.type === 'StringLiteral' ? node.arguments[0].value : undefined);
-        if (domain && object?.type === 'Identifier' && object.name === 'process')
-            errors.push(`${file}: domains cannot access process state.`);
+        if ((domain || gateway) && object?.type === 'Identifier' && object.name === 'process')
+            errors.push(`${file}: ${layer} cannot access process state.`);
         if (
             !entry &&
             (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
@@ -414,7 +417,7 @@ export async function auditRepository(root: string) {
         if (/\.(?:mjs|cjs|js)$/.test(file) && !file.includes('/dist/'))
             errors.push(`${file}: maintained Node code must be TypeScript.`);
         if (
-            /^src\/(?:interface|application|domains|adapters|shared)\//.test(file) &&
+            /^src\/(?:interface|application|domains|adapters|shared|gateway)\//.test(file) &&
             !files.has(`${path.posix.dirname(file)}/AGENTS.md`)
         )
             errors.push(`${file}: source directory requires local AGENTS.md.`);

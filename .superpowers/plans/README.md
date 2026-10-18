@@ -16,6 +16,9 @@ acceptance limits.
 - [2026-10-17-singleton-app-plan.md](2026-10-17-singleton-app-plan.md) is the
     accepted singleton desktop App implementation plan referenced by contributor
     instructions. Its dated steps do not replace current delivery evidence.
+- [2026-10-18-repository-content-reorganization.md](2026-10-18-repository-content-reorganization.md)
+    records the complete source, central test, tooling and documentation target,
+    content boundaries, incremental delivery and separate completion criteria.
 
 Before implementing the singleton migration, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) and the

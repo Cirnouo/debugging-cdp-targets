@@ -22,8 +22,8 @@ import {
     type ServerContext,
 } from '@modelcontextprotocol/server';
 import { type CoreControlRequest, parseControlRequest } from '../domains/control-contract.ts';
-import { parseRegisteredArguments, parseRegisteredOfficialArguments } from '../domains/mcp-http.ts';
 import { RequestFailure, requestFailureExplanation } from '../domains/request-failure.ts';
+import { parseOfficialToolArguments, parseRegistrationBearerArguments } from '../gateway/owned-tool-arguments.ts';
 import type { ClientRequestContext, ClientRequestFacilities } from '../shared/client-context.ts';
 import { isRecord } from '../shared/errors.ts';
 import { LIFECYCLE_ACTIONS, lifecycleTools } from './lifecycle-tools.ts';
@@ -299,8 +299,8 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                 }
                 const action = Object.hasOwn(LIFECYCLE_ACTIONS, name) ? LIFECYCLE_ACTIONS[name] : undefined;
                 const parsed = action
-                    ? parseRegisteredArguments(arguments_)
-                    : parseRegisteredOfficialArguments(arguments_);
+                    ? parseRegistrationBearerArguments(arguments_)
+                    : parseOfficialToolArguments(arguments_);
                 const client = core.attachClient(parsed.registrationBearer);
                 authenticated = true;
                 const envelope = context.mcpReq.envelope;
@@ -364,7 +364,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                 const token = request.params._meta?.progressToken;
                 if (modern && !control) {
                     if (!core.tools.some((tool) => tool.name === name)) throw new Error('Unknown tool.');
-                    const official = parseRegisteredOfficialArguments(arguments_);
+                    const official = parseOfficialToolArguments(arguments_);
                     const hash = fingerprint({ arguments: official.arguments, route: official.route });
                     const route = fingerprint(official.route);
                     if (state) {
@@ -468,7 +468,7 @@ export function createMcpRequestHandler(core: McpHttpCore) {
                     }
                 }
                 if (!core.tools.some((tool) => tool.name === name)) throw new Error('Unknown tool.');
-                const official = parseRegisteredOfficialArguments(arguments_);
+                const official = parseOfficialToolArguments(arguments_);
                 return await core.invoke(name, { ...official.arguments, _dct: official.route }, requestContext);
             } catch (error) {
                 if (authenticated && error instanceof RequestFailure)

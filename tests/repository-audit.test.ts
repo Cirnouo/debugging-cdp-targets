@@ -554,3 +554,70 @@ test('optional require calls retain literal and computed dependency enforcement'
         [],
     );
 });
+
+test('pure Gateway argument owner rejects filesystem imports', () => {
+    assert.ok(
+        validateRuntimeSource('src/gateway/owned-tool-arguments.ts', "import fs from 'node:fs';").some((error) =>
+            error.includes('gateway may depend'),
+        ),
+    );
+});
+
+test('pure Gateway argument owner rejects process state', () => {
+    assert.ok(
+        validateRuntimeSource('src/gateway/owned-tool-arguments.ts', 'const value = process.env;').some((error) =>
+            error.includes('gateway cannot access process state'),
+        ),
+    );
+});
+
+test('pure Gateway dependencies retain original TypeScript and indirect import evidence', () => {
+    const file = 'src/gateway/owned-tool-arguments.ts';
+    for (const source of [
+        "import net from 'node:net';",
+        "import x from '@modelcontextprotocol/core';",
+        "import x from 'ws';",
+        "import x from '../adapters/x.ts';",
+        "import x from '../application/x.ts';",
+        "import x from '../interface/x.ts';",
+        "export { x } from '../adapters/x.ts';",
+        "export * from '../adapters/x.ts';",
+        "const fs = require('node:fs');",
+        "const fs = import('node:fs');",
+        "import fs from '\\u006eode:fs';",
+        'const fs = import(variable);',
+        "import type { Host } from '../adapters/target-host.ts';",
+        "export type { Host } from '../application/target-controller.ts';",
+        "type Host = import('../adapters/target-host.ts').Host;",
+        "import type Host = require('../adapters/target-host.ts');",
+        "import type fs = require('node:fs');",
+        "const fs = require?.('node:fs');",
+        "const fs = (require as (name: string) => unknown)?.('node:fs');",
+        'const fs = require?.(moduleName);',
+    ]) {
+        const errors = validateRuntimeSource(file, source);
+        assert.ok(
+            errors.some((error) => /gateway may depend|computed module/.test(error)),
+            source,
+        );
+    }
+    for (const source of [
+        'const value = process.env;',
+        'const value = process["env"];',
+        'const value = (process as { env: unknown }).env;',
+        'const value = process?.env;',
+    ])
+        assert.ok(
+            validateRuntimeSource(file, source).some((error) => error.includes('gateway cannot access process state')),
+            source,
+        );
+    for (const source of [
+        "import { isRecord } from '../shared/errors.ts';",
+        "import { type ConnectionRoute, parseConnectionRoute } from '../domains/control-contract.ts';",
+        "export type { Route } from './route.ts';",
+        "type Route = import('../domains/control-contract.ts').ConnectionRoute;",
+        "import type Shared = require('../shared/errors.ts');",
+        "const shared = require?.('../shared/errors.ts');",
+    ])
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+});

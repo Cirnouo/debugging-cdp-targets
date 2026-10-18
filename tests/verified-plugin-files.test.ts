@@ -59,7 +59,7 @@ for (const host of ['codex', 'claude'] as const) {
                 /payload/,
             );
         } finally {
-            await rm(f.root, { recursive: true });
+            await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
         }
     });
 }
@@ -90,7 +90,7 @@ test('MCP formatting drift is outside the one URL byte overlay', async () => {
         drifted.set(f.mcp, Buffer.from(`${current.toString('utf8')}\n`));
         assert.throws(() => verifyPluginFiles('codex', '0.2.0', f.files, drifted), /overlay/);
     } finally {
-        await rm(f.root, { recursive: true });
+        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -117,7 +117,7 @@ test('source layouts without a bounded unique canonical own URL literal fail bef
         );
         assert.throws(() => verifyPluginFiles('codex', '0.2.0', crowded, crowded, false), /payload-overlay/);
     } finally {
-        await rm(f.root, { recursive: true });
+        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -149,8 +149,8 @@ test('rejects extra files, hard links, symbolic links and wrong manifests before
             /manifest|layout/,
         );
     } finally {
-        await rm(f.root, { recursive: true });
-        await rm(external, { recursive: true });
+        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
+        await rm(external, { recursive: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -175,7 +175,7 @@ test('atomic write and readback failure remain visible with bounded errors', asy
             /readback-failed/,
         );
     } finally {
-        await rm(f.root, { recursive: true });
+        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
     }
 });
 
@@ -207,6 +207,6 @@ test('Claude permits only its researched empty host lease directory and refuses 
             /readback-failed/,
         );
     } finally {
-        await rm(f.root, { recursive: true });
+        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
     }
 });
