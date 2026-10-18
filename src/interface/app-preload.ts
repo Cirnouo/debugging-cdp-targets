@@ -14,6 +14,7 @@ async function exitRequest(action: 'quit' | 'restart') {
 const bridge: AppUiBridge = Object.freeze({
     inspect: () => inspectRequest({ action: 'inspect' }),
     configure: (configuration) => inspectRequest({ action: 'configure', configuration }),
+    manage: (command) => inspectRequest({ action: 'manage', command }),
     quit: () => exitRequest('quit'),
     restart: () => exitRequest('restart'),
 });

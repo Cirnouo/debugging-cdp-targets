@@ -17,6 +17,7 @@ import type { HostDescriptor } from './host-policy.ts';
 import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
 import { SHARED_ASSET_FILES, validateIconPng } from './icon-policy.ts';
 import { validatePayloadFileInventory } from './payload-policy.ts';
+import { RUNTIME_LICENSE_INPUTS } from './runtime-license-policy.ts';
 import { validateVersionAgreement } from './version-policy.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -172,7 +173,41 @@ export async function collectBundledLicenses(
     let review: VendorReview | undefined;
     for (const input of inputs) {
         if (!input.replaceAll('\\', '/').includes('node_modules/')) continue;
-        const resolved = await realpath(path.resolve(workingDirectory, input));
+        const inputPath = path.resolve(workingDirectory, input);
+        const resolved = await realpath(inputPath);
+        const canonicalBoundary = (file: string) => {
+            const parts = file.split(path.sep);
+            const index = parts.lastIndexOf('node_modules');
+            const identity =
+                index < 0 ? undefined : RUNTIME_LICENSE_INPUTS.find((item) => item.name === parts[index + 1]);
+            return identity ? { identity, root: parts.slice(0, index + 2).join(path.sep) } : undefined;
+        };
+        const canonicalPackage = canonicalBoundary(resolved) ?? canonicalBoundary(inputPath);
+        if (canonicalPackage) {
+            try {
+                const directory = await realpath(canonicalPackage.root);
+                const relative = path.relative(directory, resolved);
+                const metadata: unknown = JSON.parse(
+                    (await readRegularFile(path.join(directory, 'package.json'))).toString('utf8'),
+                );
+                const expected = canonicalPackage.identity;
+                if (
+                    !relative ||
+                    relative.startsWith('..') ||
+                    path.isAbsolute(relative) ||
+                    !isRecord(metadata) ||
+                    metadata.name !== expected.name ||
+                    metadata.version !== expected.version ||
+                    metadata.license !== expected.license ||
+                    sha256(await readRegularFile(path.join(directory, 'LICENSE'))) !== expected.licenseSha256
+                )
+                    throw new Error('Invalid canonical package.');
+                packages.set(directory, expected.name);
+                continue;
+            } catch {
+                throw new Error('Canonical bundled package license or metadata changed.');
+            }
+        }
         let directory = path.dirname(resolved);
         while (true) {
             let metadata: unknown;
@@ -182,10 +217,20 @@ export async function collectBundledLicenses(
                 if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
             }
             if (metadata !== undefined) {
-                if (!metadata || typeof metadata !== 'object')
-                    throw new Error(`Malformed bundled package metadata: ${directory}`);
+                if (!isRecord(metadata)) throw new Error(`Malformed bundled package metadata: ${directory}`);
                 if ('name' in metadata) {
                     if (typeof metadata.name !== 'string') throw new Error(`Malformed package name: ${directory}`);
+                    const canonical = RUNTIME_LICENSE_INPUTS.find(
+                        (item) => item.name === metadata.name || item.name === path.basename(directory),
+                    );
+                    if (
+                        canonical &&
+                        (metadata.name !== canonical.name ||
+                            Reflect.get(metadata, 'version') !== canonical.version ||
+                            Reflect.get(metadata, 'license') !== canonical.license ||
+                            sha256(await readRegularFile(path.join(directory, 'LICENSE'))) !== canonical.licenseSha256)
+                    )
+                        throw new Error('Canonical bundled package license or identity changed.');
                     packages.set(directory, metadata.name);
                     if (metadata.name.startsWith('@modelcontextprotocol/')) {
                         review ??= await readVendorReview(evidenceFile);

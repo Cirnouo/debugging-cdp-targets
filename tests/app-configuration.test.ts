@@ -8,15 +8,42 @@ import {
     runConfigurationMigrations,
 } from '../src/domains/app-configuration.ts';
 
-test('App defaults use the loopback MCP port and a cheap system appearance setting', () => {
-    assert.deepEqual(defaultAppConfiguration(), { schemaVersion: 1, port: 27637, appearance: 'system' });
+test('real schema 1 migrates purely to host selections without changing the saved port or appearance', () => {
+    const original = Object.freeze({ schemaVersion: 1, port: 28761, appearance: 'dark' });
+    const result = migrateAppConfiguration(original);
+    assert.deepEqual(result, {
+        configuration: {
+            schemaVersion: 2,
+            port: 28761,
+            appearance: 'dark',
+            hosts: {
+                codex: { configRoot: null, executable: null, pluginRoot: null },
+                claude: { configRoot: null, executable: null, pluginRoot: null },
+            },
+        },
+        migrated: true,
+        sourceVersion: 1,
+    });
+    assert.deepEqual(original, { schemaVersion: 1, port: 28761, appearance: 'dark' });
 });
 
-test('the initial production schema makes no promise to migrate unpublished legacy data', () => {
+test('App defaults use the loopback MCP port and a cheap system appearance setting', () => {
+    assert.deepEqual(defaultAppConfiguration(), {
+        schemaVersion: 2,
+        port: 27637,
+        appearance: 'system',
+        hosts: {
+            codex: { configRoot: null, executable: null, pluginRoot: null },
+            claude: { configRoot: null, executable: null, pluginRoot: null },
+        },
+    });
+});
+
+test('current schema is stable and unpublished or incomplete schemas are refused', () => {
     assert.deepEqual(migrateAppConfiguration(defaultAppConfiguration()), {
         configuration: defaultAppConfiguration(),
         migrated: false,
-        sourceVersion: 1,
+        sourceVersion: 2,
     });
     for (const invalid of [
         null,

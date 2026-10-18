@@ -101,7 +101,13 @@ export class HostPluginManager {
     private readonly busy = new Set<PluginHost>();
     private readonly synchronized = new Map<
         PluginHost,
-        { record: StablePluginRecord; files: PluginFiles; root: string; pendingReceipt?: ManagedPluginReceipt }
+        {
+            record: StablePluginRecord;
+            files: PluginFiles;
+            root: string;
+            pendingReceipt?: ManagedPluginReceipt;
+            reloadPending?: boolean;
+        }
     >();
 
     constructor(options: {
@@ -133,17 +139,60 @@ export class HostPluginManager {
                     return {
                         host: inventory.host,
                         state: reason ? 'read-only' : 'inspected',
-                        activation: 'unverified' as const,
+                        activation: this.inspectionActivation(inventory),
                         ...(reason ? { reason } : {}),
                         ...summary(inventory),
                     };
                 } catch (error) {
-                    return this.failure(adapter.selection.host, false, error);
+                    const failure = this.failure(adapter.selection.host, false, error);
+                    const retained = this.synchronized.get(adapter.selection.host);
+                    if (
+                        retained?.reloadPending &&
+                        [
+                            'cli-missing',
+                            'invalid-native-output',
+                            'native-command-failed',
+                            'native-command-timeout',
+                            'native-output-too-large',
+                        ].includes(failure.reason ?? '')
+                    )
+                        return { ...failure, activation: 'reload-pending' };
+                    if (retained) delete retained.reloadPending;
+                    return failure;
                 } finally {
                     this.busy.delete(adapter.selection.host);
                 }
             }),
         );
+    }
+
+    private inspectionActivation(inventory: HostInventory): HostPluginSummary['activation'] {
+        const retained = this.synchronized.get(inventory.host);
+        if (!retained?.reloadPending) return 'unverified';
+        const own = inventory.installations.filter((item) => item.scope === 'user');
+        const restrictions = [
+            inventory.readOnlyReason,
+            inventory.marketplace?.readOnlyReason,
+            ...own.map((item) => item.readOnlyReason),
+        ];
+        try {
+            if (
+                own.length !== 1 ||
+                own[0]?.root !== retained.root ||
+                own[0]?.version !== retained.record.version ||
+                inventory.marketplace?.source !== retained.record.source.url ||
+                !inventory.catalog ||
+                restrictions.some(
+                    (reason) => reason && !['disabled', 'plugin-in-use', 'shared-installation'].includes(reason),
+                )
+            )
+                throw new Error('changed-copy');
+            verifyCatalog(retained.record, inventory.host, inventory.catalog);
+            return 'reload-pending';
+        } catch {
+            delete retained.reloadPending;
+            return 'unverified';
+        }
     }
 
     async synchronize(value: unknown, effectiveEndpoint: string, host?: PluginHost): Promise<HostPluginSummary[]> {
@@ -312,6 +361,7 @@ export class HostPluginManager {
                 files: PluginFiles;
                 root: string;
                 pendingReceipt?: ManagedPluginReceipt;
+                reloadPending?: boolean;
             } = { record, files: source.files, root: own.root };
             if (this.receiptStore) {
                 if (!adapter.captureManagedReceipt) throw new Error('managed-receipt-unavailable');
@@ -338,6 +388,7 @@ export class HostPluginManager {
             )
                 throw new Error('native-install-identity-mismatch');
             verifyCatalog(record, host, after.catalog);
+            checkpoint.reloadPending = true;
             return { host, state: 'disk-synchronized', activation: 'reload-pending', version: record.version };
         } catch (error) {
             return this.failure(host, mutated, error);
@@ -413,6 +464,7 @@ export class HostPluginManager {
             )
                 throw new Error('native-install-identity-mismatch');
             verifyCatalog(receipt.record, host, after.catalog);
+            receipt.reloadPending = true;
             return {
                 host,
                 state: 'disk-synchronized',

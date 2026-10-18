@@ -22,6 +22,9 @@
   of thin Plugin delivery.
 - `vendored-licenses.json` records original registry tarball provenance, reviewed
   SDK input/source-map hashes, and exact vendored package licenses.
+- `runtime-license-policy.ts` owns canonical YAML, semver ISC and smol-toml
+  BSD-3-Clause license identities/hashes. The actual-graph App collector verifies
+  them before copying notices; the standalone auditor reuses the YAML/semver data.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its original YAML and semver licenses.
 - `repository-audit.ts` checks text, YAML filenames, AST layer boundaries, versions, docs,

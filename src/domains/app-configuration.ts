@@ -1,7 +1,17 @@
 import { isRecord } from '../shared/errors.ts';
 
 export type AppAppearance = 'system' | 'light' | 'dark';
-export type AppConfiguration = Readonly<{ schemaVersion: 1; port: number; appearance: AppAppearance }>;
+export type AppHostSelection = Readonly<{
+    configRoot: string | null;
+    executable: string | null;
+    pluginRoot: string | null;
+}>;
+export type AppConfiguration = Readonly<{
+    schemaVersion: 2;
+    port: number;
+    appearance: AppAppearance;
+    hosts: Readonly<{ codex: AppHostSelection; claude: AppHostSelection }>;
+}>;
 export type AppConfigurationState = Readonly<{
     desired: AppConfiguration;
     effective: AppConfiguration;
@@ -9,7 +19,15 @@ export type AppConfigurationState = Readonly<{
 }>;
 
 export function defaultAppConfiguration(): AppConfiguration {
-    return { schemaVersion: 1, port: 27637, appearance: 'system' };
+    return {
+        schemaVersion: 2,
+        port: 27637,
+        appearance: 'system',
+        hosts: {
+            codex: { configRoot: null, executable: null, pluginRoot: null },
+            claude: { configRoot: null, executable: null, pluginRoot: null },
+        },
+    };
 }
 
 function validPort(value: unknown): value is number {
@@ -23,8 +41,8 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
 export function parseAppConfiguration(value: unknown): AppConfiguration {
     if (
         !isRecord(value) ||
-        !exactKeys(value, ['schemaVersion', 'port', 'appearance']) ||
-        value.schemaVersion !== 1 ||
+        !exactKeys(value, ['schemaVersion', 'port', 'appearance', 'hosts']) ||
+        value.schemaVersion !== 2 ||
         !validPort(value.port) ||
         !['system', 'light', 'dark'].some((appearance) => appearance === value.appearance)
     )
@@ -32,7 +50,36 @@ export function parseAppConfiguration(value: unknown): AppConfiguration {
     const appearance = value.appearance;
     if (appearance !== 'system' && appearance !== 'light' && appearance !== 'dark')
         throw new Error('Invalid App appearance.');
-    return Object.freeze({ schemaVersion: 1, port: value.port, appearance });
+    if (!isRecord(value.hosts) || !exactKeys(value.hosts, ['codex', 'claude']))
+        throw new Error('Invalid host settings.');
+    const selection = (input: unknown): AppHostSelection => {
+        if (!isRecord(input) || !exactKeys(input, ['configRoot', 'executable', 'pluginRoot']))
+            throw new Error('Invalid host selection.');
+        const selected = (item: unknown): string | null => {
+            if (item === null) return null;
+            if (
+                typeof item !== 'string' ||
+                item.length > 8192 ||
+                /[\x00-\x1f]/.test(item) ||
+                !(/^[A-Za-z]:[\\/]/.test(item) || item.startsWith('/') || /^\\\\[^\\]+\\[^\\]+/.test(item))
+            )
+                throw new Error('Host selections require absolute paths.');
+            return item;
+        };
+        return Object.freeze({
+            configRoot: selected(input.configRoot),
+            executable: selected(input.executable),
+            pluginRoot: selected(input.pluginRoot),
+        });
+    };
+    const codex = selection(value.hosts.codex);
+    if (codex.pluginRoot !== null) throw new Error('Codex does not support a plugin cache override.');
+    return Object.freeze({
+        schemaVersion: 2,
+        port: value.port,
+        appearance,
+        hosts: Object.freeze({ codex, claude: selection(value.hosts.claude) }),
+    });
 }
 
 type ConfigurationDocument = Record<string, unknown>;
@@ -92,14 +139,33 @@ export function runConfigurationMigrations<T>(
 }
 
 export function migrateAppConfiguration(value: unknown): ConfigurationMigrationResult<AppConfiguration> {
-    // Schema 1 is the initial delivered format. No unpublished schema 0 is accepted.
-    return runConfigurationMigrations(value, { currentVersion: 1, steps: [], validateCurrent: parseAppConfiguration });
+    const validateSchemaOne = (input: ConfigurationDocument) => {
+        if (
+            !exactKeys(input, ['schemaVersion', 'port', 'appearance']) ||
+            input.schemaVersion !== 1 ||
+            !validPort(input.port) ||
+            !['system', 'light', 'dark'].includes(String(input.appearance))
+        )
+            throw new Error('Invalid schema 1 configuration.');
+    };
+    return runConfigurationMigrations(value, {
+        currentVersion: 2,
+        steps: [
+            {
+                fromVersion: 1,
+                validateSource: validateSchemaOne,
+                migrate: (input) => ({ ...input, schemaVersion: 2, hosts: defaultAppConfiguration().hosts }),
+                validateDestination: parseAppConfiguration,
+            },
+        ],
+        validateCurrent: parseAppConfiguration,
+    });
 }
 
 export function applyAppConfiguration(effective: AppConfiguration, desired: AppConfiguration): AppConfigurationState {
     return {
         desired,
-        effective: Object.freeze({ ...effective, appearance: desired.appearance }),
+        effective: Object.freeze({ ...effective, appearance: desired.appearance, hosts: desired.hosts }),
         restartRequired: desired.port !== effective.port,
     };
 }

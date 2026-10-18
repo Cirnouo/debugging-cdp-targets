@@ -64,6 +64,7 @@ test('Electron and React imports stay restricted to their explicit App interface
         ['src/interface/app-preload.ts', 'electron'],
         ['src/interface/app-renderer.ts', 'react'],
         ['src/interface/app-renderer.ts', 'react-dom/client'],
+        ['src/interface/app-manager.ts', 'react'],
     ];
     for (const [file, dependency] of surfaces) {
         if (!file || !dependency) throw new Error('Invalid literal interface fixture.');
@@ -77,6 +78,8 @@ test('Electron and React imports stay restricted to their explicit App interface
     }
     assert.ok(validateRuntimeSource('src/interface/app-preload.ts', "import x from 'react-dom/client';").length);
     assert.ok(validateRuntimeSource('src/interface/app-renderer.ts', "import x from 'electron';").length);
+    assert.ok(validateRuntimeSource('src/interface/app-manager.ts', "import x from 'electron';").length);
+    assert.ok(validateRuntimeSource('src/interface/app-manager.ts', "import x from 'react-dom/client';").length);
 });
 
 test('repository audit accepts the supported Node range and contributor entry point', async (context) => {

@@ -1,13 +1,14 @@
 # Pure domain rules
 
 - `official-execution.ts` tracks one matching wire identity until real response/close.
-- `app-configuration.ts` owns the initial App schema, sequential migration
-  validation and desired/effective settings. Unpublished legacy schemas have no
-  production migration promise.
+- `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
+  explicit host selections and desired/effective hot/cold settings. Unpublished
+  pre-schema-1 formats have no production migration promise.
 - `app-release.ts` validates independently maintained Electron, ordinary Node
   and complete native loader release evidence.
 - `app-ui.ts` validates the fixed local asset routes and narrow management
-  requests/snapshots, including startup failure without invented settings.
+  requests/snapshots, selected explicit configuration, unbounded elapsed clocks
+  and startup failure without invented settings.
 - `mcp-http.ts` validates the exact loopback HTTP endpoint/body headers and
   explicit per-request registration routing without reflecting secret inputs.
 - `request-failure.ts` owns closed, path-free explanations for authenticated

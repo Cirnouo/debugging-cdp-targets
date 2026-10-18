@@ -22,6 +22,26 @@ test('settings require singleton admission before reading, backing up or writing
     });
 });
 
+test('production schema 1 migration backs up exact original bytes and commits complete schema 2 once', async () => {
+    await fixture(async (directory) => {
+        const original = '{"schemaVersion":1,"port":28761,"appearance":"dark"}\n';
+        await writeFile(path.join(directory, 'configuration.json'), original);
+        const settings = await openAppConfiguration(directory, { ownsSingleton: true });
+        assert.equal(settings.state().desired.schemaVersion, 2);
+        assert.equal(settings.state().desired.port, 28761);
+        assert.equal(settings.state().desired.appearance, 'dark');
+        assert.equal(settings.state().desired.hosts.codex.configRoot, null);
+        assert.equal(await readFile(path.join(directory, 'configuration.schema-1.backup.json'), 'utf8'), original);
+        const saved = await readFile(path.join(directory, 'configuration.json'), 'utf8');
+        await openAppConfiguration(directory, { ownsSingleton: true });
+        assert.equal(await readFile(path.join(directory, 'configuration.json'), 'utf8'), saved);
+        assert.deepEqual((await readdir(directory)).sort(), [
+            'configuration.json',
+            'configuration.schema-1.backup.json',
+        ]);
+    });
+});
+
 test('the whole successful migration chain commits once with original bytes backed up', async () => {
     await fixture(async (directory) => {
         const original = '{"schemaVersion":1,"port":28765}\n';
@@ -105,7 +125,7 @@ test('failed intermediate migration preserves original bytes without a backup or
 test('desired port stays cold and appearance applies hot', async () => {
     await fixture(async (directory) => {
         const settings = await openAppConfiguration(directory, { ownsSingleton: true });
-        await settings.save({ schemaVersion: 1, port: 29111, appearance: 'dark' });
+        await settings.save({ ...defaultAppConfiguration(), port: 29111, appearance: 'dark' });
         assert.equal(settings.state().desired.port, 29111);
         assert.equal(settings.state().effective.port, 27637);
         assert.equal(settings.state().effective.appearance, 'dark');
@@ -174,14 +194,14 @@ test('a failed atomic replacement cleans its temporary file and preserves effect
         const original = await readFile(file);
         await unlink(file);
         await mkdir(file);
-        await assert.rejects(settings.save({ schemaVersion: 1, port: 29111, appearance: 'dark' }));
+        await assert.rejects(settings.save({ ...defaultAppConfiguration(), port: 29111, appearance: 'dark' }));
         assert.equal(settings.state().desired.port, 27637);
         assert.equal(settings.state().effective.appearance, 'system');
         assert.deepEqual(await readdir(directory), ['configuration.json']);
         assert.deepEqual(await readdir(file), []);
         await rm(file, { recursive: true });
         await writeFile(file, original);
-        await settings.save({ schemaVersion: 1, port: 29111, appearance: 'dark' });
+        await settings.save({ ...defaultAppConfiguration(), port: 29111, appearance: 'dark' });
         assert.equal(settings.state().desired.port, 29111);
     });
 });

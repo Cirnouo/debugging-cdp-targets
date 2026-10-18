@@ -248,9 +248,12 @@ errors. Do not infer deletion from Close, cancellation or route removal.
 A registration owns resources independently of a conversation, socket or MCP
 session. Retain its bearer in the authorized task context and reconnect with
 that same bearer; do not repeat start. Status cannot recover a lost bearer. A new
-registration does not acquire the old owner's targets. The App's normal Quit
-normally closes its owned resources; the minimal manager currently does not
-expose per-connection transfer controls.
+registration does not acquire the old owner's targets. In the App manager,
+choose the new registration as the transfer destination and transfer idle
+connections individually or in a selected batch. Busy connections refuse
+transfer; historical terminal operations keep their original registration owner.
+Unregister the old registration only after its resources and active jobs are
+empty. The App's normal Quit closes its owned resources after cleanup succeeds.
 
 Read status or the original operation for current facts. There are no automatic
 host Hooks, task-active flags or end-task tool. Legacy accepted start responses

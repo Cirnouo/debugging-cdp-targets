@@ -17,6 +17,10 @@ type State = {
     routerEntered: Promise<void>;
     releaseNative(): void;
     releaseRouter(): void;
+    releaseHosts(): void;
+    releaseSettings(): void;
+    configureManagement(): Promise<AppUiSnapshot>;
+    restartManagement(): Promise<void>;
     quit(): void;
     quitManagement(): Promise<void>;
     inspect(): AppUiSnapshot;
@@ -30,6 +34,9 @@ type State = {
         activationClosed: number;
         cacheCleaned: number;
         unavailableOwnerDialogs: number;
+        hostStarts: number;
+        settingsWrites: number;
+        relaunches: number;
     };
 };
 type Harness = { state: State; run(): Promise<void> };
@@ -45,15 +52,17 @@ async function component() {
     const stateModule = `
 import { EventEmitter } from 'node:events';
 function deferred(){let release;const promise=new Promise(resolve=>{release=resolve});return{promise,release}}
-const native=deferred(),nativeEntered=deferred(),router=deferred(),routerEntered=deferred();
+const native=deferred(),nativeEntered=deferred(),router=deferred(),routerEntered=deferred(),hosts=deferred(),settings=deferred();
 export const state={mode:'router-pending',catalogFails:false,cleanupFails:false,
- counts:{exits:0,locks:0,data:0,http:0,closes:0,windowDestroyed:0,activationClosed:0,cacheCleaned:0,unavailableOwnerDialogs:0},
+ counts:{exits:0,locks:0,data:0,http:0,closes:0,windowDestroyed:0,activationClosed:0,cacheCleaned:0,unavailableOwnerDialogs:0,hostStarts:0,settingsWrites:0,relaunches:0},
  nativeEntered:nativeEntered.promise,routerEntered:routerEntered.promise,
- releaseNative:()=>native.release(),releaseRouter:()=>router.release(),
+ releaseNative:()=>native.release(),releaseRouter:()=>router.release(),releaseHosts:()=>hosts.release(),releaseSettings:()=>settings.release(),hosts,settings,
+ configureManagement:()=>state.management.configure({...state.management.inspect().configuration.desired,port:28761}),
+ restartManagement:()=>state.management.restart(),
  quit:()=>app.quit(),quitManagement:()=>state.management.quit(),inspect:()=>state.management.inspect(),
  native,signalNative:()=>nativeEntered.release(),router,signalRouter:()=>routerEntered.release()};
 export const app=new EventEmitter();
-app.whenReady=async()=>{};app.relaunch=()=>{};
+app.whenReady=async()=>{};app.relaunch=()=>{state.counts.relaunches++};
 app.quit=()=>{let prevented=false;app.emit('before-quit',{preventDefault(){prevented=true}});if(!prevented){state.counts.exits++;app.emit('will-quit')}};
 export const Menu={buildFromTemplate:()=>[]},nativeImage={createFromPath:()=>({setTemplateImage(){}})};
 export const dialog={showMessageBox:async(options)=>{if(options.type!=='warning'||!options.message.includes('already running'))throw Error('Expected visible unavailable-owner warning');state.counts.unavailableOwnerDialogs++}};
@@ -73,14 +82,15 @@ loadCatalog:async()=>{if(state.catalogFails)throw Error('Catalog failed');return
         electron: `export { app, Menu, nativeImage, Tray, dialog } from 'app-test-state';`,
         'app-test-state': stateModule,
         '../application/plugin-runtime.ts': coreModule,
+        '../application/app-host-management.ts': `import{state}from'app-test-state';export function createAppHostManagement(){return{snapshot:()=>[],assertConfigurable(){},configure(){},run:async()=>{state.counts.hostStarts++;if(state.counts.http===0)throw Error('Host sync before bind');if(state.mode==='host-pending')await state.hosts.promise},close:async()=>{if(state.mode==='host-pending')await state.hosts.promise}}}`,
         '../adapters/app-native.ts': `import{state}from'app-test-state';export async function loadAppAdvisoryLock(){state.signalNative();if(state.mode==='native-pending')await state.native.promise;return()=>true}`,
         '../adapters/app-singleton.ts': `import{state}from'app-test-state';export function acquireAppSingleton(){state.counts.locks++;return{ownsSingleton:state.mode!=='unavailable-owner',paths:{activation:'fixture-only'}}}`,
         '../adapters/app-activation.ts': `import{state}from'app-test-state';export async function activateExistingApp(){return false}export async function listenForAppActivation(){return{close:async()=>{state.counts.activationClosed++}}}`,
         '../adapters/app-storage.ts': `import{state}from'app-test-state';export function selectAppDataDirectory(){return'fixture-only'}export async function prepareAppDataDirectory(){state.counts.data++;return'fixture-only'}`,
-        '../adapters/app-configuration.ts': `export async function openAppConfiguration(){const config={schemaVersion:1,port:27637,appearance:'system'};return{state:()=>({desired:config,effective:config,restartRequired:false}),save:async()=>{}}}`,
+        '../adapters/app-configuration.ts': `import{state}from'app-test-state';export async function openAppConfiguration(){const config={schemaVersion:2,port:27637,appearance:'system',hosts:{codex:{configRoot:null,executable:null,pluginRoot:null},claude:{configRoot:null,executable:null,pluginRoot:null}}};return{state:()=>({desired:config,effective:config,restartRequired:false}),save:async()=>{state.counts.settingsWrites++;if(state.mode==='settings-pending')await state.settings.promise}}}`,
         '../adapters/app-official-runtime.ts': `export async function verifyAppOfficialRuntime(){return{nodeExecutable:'fixture-only-node',bin:'fixture-only-public-bin'}}`,
         '../adapters/file-evidence.ts': `export async function readRegularFile(file){return Buffer.from(file.endsWith('distribution.json')?JSON.stringify({schemaVersion:1,kind:'portable',platform:process.platform,architecture:process.arch}):${JSON.stringify(evidence)})}`,
-        '../adapters/mcp-http-server.ts': `import{state}from'app-test-state';export async function createMcpHttpServer(options){state.counts.http++;state.accepting=options.accepting;return{close:async()=>{}}}`,
+        '../adapters/mcp-http-server.ts': `import{state}from'app-test-state';export async function createMcpHttpServer(options){state.counts.http++;if(state.mode==='bind-failure')throw Error('Bind refused');state.accepting=options.accepting;return{close:async()=>{}}}`,
         './app-window.ts': `import{state}from'app-test-state';export async function createManagementWindow(options){state.management=options;let destroyed=false;return{window:{isDestroyed:()=>destroyed,destroy(){destroyed=true;state.counts.windowDestroyed++},webContents:{reload(){}}},activate(){}}}`,
     };
     try {
@@ -139,6 +149,98 @@ async function until(condition: () => boolean) {
     }
     assert.ok(condition(), 'App component did not reach its bounded terminal state.');
 }
+
+test('successful bind precedes independent host sync and Quit waits for owned native management settlement', async () => {
+    const f = await component();
+    try {
+        f.state.mode = 'host-pending';
+        await f.run();
+        assert.equal(f.state.counts.hostStarts, 2);
+        assert.equal(f.state.inspect().phase, 'ready');
+        const quitting = f.state.quitManagement();
+        await Promise.resolve();
+        await Promise.resolve();
+        assert.equal(f.state.counts.exits, 0);
+        assert.equal(f.state.counts.activationClosed, 0);
+        f.state.releaseHosts();
+        await quitting;
+        assert.equal(f.state.counts.exits, 1);
+    } finally {
+        f.state.releaseHosts();
+        await f.close();
+    }
+});
+
+test('Quit waits for an admitted atomic configuration write before final exit', async () => {
+    const f = await component();
+    try {
+        f.state.mode = 'settings-pending';
+        await f.run();
+        const saving = f.state.configureManagement();
+        assert.equal(f.state.counts.settingsWrites, 1);
+        const quitting = f.state.quitManagement();
+        await until(() => f.state.counts.exits > 0 || f.state.inspect().phase === 'closing');
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(f.state.counts.exits, 0);
+        f.state.releaseSettings();
+        await saving;
+        await quitting;
+        assert.equal(f.state.counts.exits, 1);
+    } finally {
+        f.state.releaseSettings();
+        await f.close();
+    }
+});
+
+test('failed endpoint bind retains management and never starts host URL synchronization', async () => {
+    const f = await component();
+    try {
+        f.state.mode = 'bind-failure';
+        await f.run();
+        assert.equal(f.state.inspect().phase, 'failed');
+        assert.equal(f.state.counts.hostStarts, 0);
+        assert.equal(f.state.counts.exits, 0);
+        await f.state.quitManagement();
+        assert.equal(f.state.counts.exits, 1);
+    } finally {
+        await f.close();
+    }
+});
+
+test('settings cannot race the initial gateway bind or replace a selected adapter during startup', async () => {
+    const f = await component();
+    const running = f.run();
+    try {
+        await f.state.routerEntered;
+        await assert.rejects(f.state.configureManagement(), /startup|starting|unavailable/);
+        assert.equal(f.state.counts.settingsWrites, 0);
+    } finally {
+        f.state.releaseRouter();
+        await running;
+        await f.state.quitManagement();
+        await f.close();
+    }
+});
+
+test('failed normal restart retains its restart intent and relaunches only after cleanup retry succeeds', async () => {
+    const f = await component();
+    try {
+        f.state.mode = 'immediate';
+        f.state.catalogFails = true;
+        f.state.cleanupFails = true;
+        await f.run();
+        await assert.rejects(f.state.restartManagement());
+        assert.equal(Reflect.get(f.state.inspect(), 'exitIntent'), 'restart');
+        assert.equal(f.state.counts.relaunches, 0);
+        assert.equal(f.state.counts.exits, 0);
+        f.state.cleanupFails = false;
+        await f.state.restartManagement();
+        assert.equal(f.state.counts.relaunches, 1);
+        assert.equal(f.state.counts.exits, 1);
+    } finally {
+        await f.close();
+    }
+});
 
 test('Quit during native verification waits the whole startup and acquires no singleton or selected data afterward', async () => {
     const f = await component();

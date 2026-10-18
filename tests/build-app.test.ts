@@ -24,7 +24,30 @@ test('official catalog evidence requires one explicit source mode and never sile
 
 test('App build separates synchronous bootstrap and emits only sandboxed local renderer assets with actual licenses', async () => {
     const root = fileURLToPath(new URL('..', import.meta.url));
-    const files = await generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
+    let actualInputs: readonly string[] = [];
+    const files = await generateAppFiles({
+        root,
+        kind: 'portable',
+        platform: 'win32',
+        architecture: 'x64',
+        onInputs: async (inputs) => {
+            actualInputs = inputs;
+        },
+    });
+    for (const input of [
+        'src/application/host-plugin-manager.ts',
+        'src/adapters/native-host-plugins.ts',
+        'src/adapters/managed-plugin-receipts.ts',
+    ])
+        assert.ok(
+            actualInputs.some((name) => name.replaceAll('\\', '/').endsWith(input)),
+            input,
+        );
+    for (const name of ['semver', 'smol-toml'])
+        assert.ok(
+            actualInputs.some((input) => input.replaceAll('\\', '/').includes(`/node_modules/${name}/`)),
+            name,
+        );
     for (const [name, bytes] of files) {
         if (!/\.(?:mjs|cjs|js)$/.test(name) || name.startsWith('node_modules/')) continue;
         const checked = spawnSync(
@@ -46,7 +69,14 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
     assert.match(files.get('app-preload.cjs')?.toString('utf8') ?? '', /exposeInMainWorld/);
     assert.doesNotMatch(files.get('app-renderer.js')?.toString('utf8') ?? '', /node:|from "electron"/);
     const notices = files.get('THIRD-PARTY-NOTICES.txt')?.toString('utf8') ?? '';
-    for (const dependency of ['react', 'react-dom', '@modelcontextprotocol/node', 'fs-native-extensions'])
+    for (const dependency of [
+        'react',
+        'react-dom',
+        '@modelcontextprotocol/node',
+        'fs-native-extensions',
+        'semver',
+        'smol-toml',
+    ])
         assert.ok(notices.includes(dependency));
     for (const file of [
         'LICENSE',

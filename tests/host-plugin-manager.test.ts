@@ -16,7 +16,9 @@ import {
     pluginMcpEndpointEvidence,
     readPluginTree,
 } from '../src/adapters/verified-plugin-files.ts';
+import { createAppHostManagement } from '../src/application/app-host-management.ts';
 import { HostPluginManager } from '../src/application/host-plugin-manager.ts';
+import { defaultAppConfiguration } from '../src/domains/app-configuration.ts';
 import type { PluginHost } from '../src/domains/host-management.ts';
 
 const fixtureRoots: string[] = [];
@@ -148,6 +150,70 @@ test('safe install refreshes selected catalog then resolves actual root and leav
     assert.equal(sync?.candidate, 'no-candidate');
     assert.equal(sync?.activation, 'reload-pending');
     assert.deepEqual(f.effects, ['inspect', 'patch', 'inspect']);
+});
+
+test('App host inspection preserves reload pending only for the synchronized copy and keeps fresh restrictions', async () => {
+    const f = await harness('claude', { host: 'claude', cliVersion: '2.1.302', installations: [] });
+    await f.manager.synchronize(stable, 'http://127.0.0.1:3333/mcp');
+    const hosts = createAppHostManagement({
+        dataRoot: '/fixture-data',
+        appVersion: '0.1.0',
+        hosts: defaultAppConfiguration().hosts,
+        endpoint: () => 'http://127.0.0.1:4444/mcp',
+        createManager: () => f.manager,
+    });
+    const inspect = f.adapter.inspect;
+    try {
+        await hosts.run({ kind: 'host-sync', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.activation, 'reload-pending');
+        await hosts.run({ kind: 'host-inspect', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.state, 'inspected');
+        assert.equal(hosts.snapshot()[1]?.activation, 'reload-pending');
+        const current = await inspect();
+        f.adapter.inspect = async () => ({
+            ...current,
+            installations: current.installations.map((item) => ({ ...item, enabled: false })),
+        });
+        await hosts.run({ kind: 'host-inspect', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.state, 'read-only');
+        assert.equal(hosts.snapshot()[1]?.reason, 'disabled');
+        assert.equal(hosts.snapshot()[1]?.activation, 'reload-pending');
+        f.adapter.inspect = async () => {
+            throw new Error('cli-missing');
+        };
+        await hosts.run({ kind: 'host-inspect', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.state, 'failed');
+        assert.equal(hosts.snapshot()[1]?.reason, 'cli-missing');
+        assert.equal(hosts.snapshot()[1]?.activation, 'reload-pending');
+        f.adapter.inspect = async () => ({
+            ...current,
+            installations: current.installations.map((item) => ({ ...item, root: '/different-copy' })),
+        });
+        await hosts.run({ kind: 'host-inspect', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.activation, 'unverified');
+        f.adapter.inspect = inspect;
+        await hosts.run({ kind: 'host-sync', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.activation, 'reload-pending');
+        f.adapter.inspect = async () => ({
+            ...current,
+            marketplace: {
+                root: '/catalog',
+                source: 'https://example.invalid/other.git',
+                readOnlyReason: 'marketplace-source-or-pin',
+            },
+        });
+        await hosts.run({ kind: 'host-inspect', host: 'claude' });
+        assert.equal(hosts.snapshot()[1]?.state, 'read-only');
+        assert.equal(hosts.snapshot()[1]?.activation, 'unverified');
+        hosts.configure({
+            ...defaultAppConfiguration().hosts,
+            claude: { configRoot: '/another-selection', executable: null, pluginRoot: null },
+        });
+        assert.equal(hosts.snapshot()[1]?.state, 'not-checked');
+        assert.equal(hosts.snapshot()[1]?.activation, 'unverified');
+    } finally {
+        await hosts.close();
+    }
 });
 
 test('newer, disabled, pinned, unresolved and unrelated inventory cannot trigger mutation', async () => {

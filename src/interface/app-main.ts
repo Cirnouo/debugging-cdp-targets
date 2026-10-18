@@ -10,11 +10,16 @@ import { acquireAppSingleton } from '../adapters/app-singleton.ts';
 import { prepareAppDataDirectory, selectAppDataDirectory } from '../adapters/app-storage.ts';
 import { readRegularFile } from '../adapters/file-evidence.ts';
 import { createMcpHttpServer } from '../adapters/mcp-http-server.ts';
+import { createAppHostManagement } from '../application/app-host-management.ts';
+import { createAppManagement } from '../application/app-management.ts';
 import { createGatewayCore, type GatewayConstructionCleanup, type GatewayCore } from '../application/plugin-runtime.ts';
+import type { AppConfiguration } from '../domains/app-configuration.ts';
 import { parseAppDistribution } from '../domains/app-distribution.ts';
 import { parseAppNativeEvidence } from '../domains/app-release.ts';
 import type { AppUiSnapshot } from '../domains/app-ui.ts';
 import { createManagementWindow } from './app-window.ts';
+
+declare const __DCT_APP_VERSION__: string;
 
 export async function startDesktopApp(options: {
     appData: string;
@@ -35,12 +40,51 @@ export async function startDesktopApp(options: {
     let allowExit = false;
     let requestedActivation = false;
     let shutdown: Promise<void> | undefined;
+    let hosts: ReturnType<typeof createAppHostManagement> | undefined;
+    let savingConfiguration = false;
+    let configurationWrite: Promise<void> | undefined;
+    let exitIntent: 'quit' | 'restart' = 'quit';
     const isClosing = () => phase === 'closing';
+    const management = createAppManagement({
+        core: () => core,
+        closing: isClosing,
+        hosts: {
+            snapshot: () => hosts?.snapshot() ?? [],
+            run: async (command) => {
+                if (savingConfiguration) throw new Error('Settings are being saved.');
+                if (!hosts) throw new Error('Host management is unavailable.');
+                await hosts.run(command);
+            },
+        },
+    });
     const inspect = (): AppUiSnapshot => ({
         phase,
         ...(configuration ? { configuration: configuration.state() } : {}),
         ...(message ? { message } : {}),
+        management: management.snapshot(),
+        ...(phase === 'closing' ? { exitIntent } : {}),
     });
+    async function configure(value: AppConfiguration) {
+        if (!configuration) throw new Error('Configuration is unavailable.');
+        if (phase === 'starting') throw new Error('Settings are unavailable during startup.');
+        if (isClosing() || savingConfiguration) throw new Error('The App is closing or settings are being saved.');
+        savingConfiguration = true;
+        try {
+            hosts?.assertConfigurable(value.hosts);
+            configurationWrite = configuration.save(value);
+            await configurationWrite;
+            hosts?.configure(configuration.state().desired.hosts);
+            return inspect();
+        } finally {
+            savingConfiguration = false;
+            configurationWrite = undefined;
+        }
+    }
+    async function manage(command: Parameters<typeof management.manage>[0]) {
+        if (savingConfiguration) throw new Error('Settings are being saved.');
+        const result = await management.manage(command);
+        return { ...inspect(), management: result };
+    }
     const activate = () => {
         requestedActivation = true;
         manager?.activate();
@@ -50,12 +94,16 @@ export async function startDesktopApp(options: {
     };
     function quit(restart = false): Promise<void> {
         if (shutdown) return shutdown;
+        exitIntent = restart ? 'restart' : 'quit';
         phase = 'closing';
         message = 'Waiting for normal owned target, official Server and router cleanup.';
         const pending = (async () => {
             try {
                 await startup?.catch(() => {});
-                await construction?.cleanup();
+                await configurationWrite?.catch(() => {});
+                const cleanup = await Promise.allSettled([construction?.cleanup(), hosts?.close()]);
+                const failed = cleanup.find((result) => result.status === 'rejected');
+                if (failed?.status === 'rejected') throw failed.reason;
                 await http?.close();
                 await activation?.close();
                 tray?.destroy();
@@ -66,7 +114,7 @@ export async function startDesktopApp(options: {
                 app.quit();
             } catch (error) {
                 phase = 'closing';
-                message = 'Normal cleanup failed. The App retains ownership. Retry Quit.';
+                message = `Normal cleanup failed. The App retains ownership. Retry ${restart ? 'Restart' : 'Quit'}.`;
                 activate();
                 refresh();
                 throw error;
@@ -141,16 +189,22 @@ export async function startDesktopApp(options: {
                       });
             const dataRoot = await prepareAppDataDirectory(selected, admission);
             configuration = await openAppConfiguration(dataRoot, admission);
+            hosts = createAppHostManagement({
+                dataRoot,
+                appVersion: typeof __DCT_APP_VERSION__ === 'undefined' ? '0.1.0' : __DCT_APP_VERSION__,
+                hosts: configuration.state().effective.hosts,
+                endpoint: () =>
+                    phase === 'ready' && http && configuration
+                        ? `http://127.0.0.1:${configuration.state().effective.port}/mcp`
+                        : undefined,
+            });
             await app.whenReady();
             if (isClosing()) return;
             manager = await createManagementWindow({
                 directory,
                 inspect,
-                configure: async (value) => {
-                    if (!configuration) throw new Error('Configuration is unavailable.');
-                    await configuration.save(value);
-                    return inspect();
-                },
+                configure,
+                manage,
                 quit,
                 restart: () => quit(true),
                 canDestroy: () => allowExit,
@@ -199,6 +253,9 @@ export async function startDesktopApp(options: {
             });
             if (isClosing()) return;
             phase = 'ready';
+            // No published candidate exists in 0.1.0. Restore/revalidate owned receipts only after this bind.
+            for (const host of ['codex', 'claude'] as const)
+                void hosts?.run({ kind: 'host-sync', host }).catch(() => {});
             refresh();
         } catch {
             if (isClosing()) return;
@@ -210,11 +267,8 @@ export async function startDesktopApp(options: {
             manager ??= await createManagementWindow({
                 directory,
                 inspect,
-                configure: async (value) => {
-                    if (!configuration) throw new Error('Configuration is unavailable.');
-                    await configuration.save(value);
-                    return inspect();
-                },
+                configure,
+                manage,
                 quit,
                 restart: () => quit(true),
                 canDestroy: () => allowExit,
