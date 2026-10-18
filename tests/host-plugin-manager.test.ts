@@ -1,17 +1,32 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { link, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { JsonHostPluginReceiptStore } from '../src/adapters/managed-plugin-receipts.ts';
+import {
+    JsonHostPluginReceiptStore,
+    parseManagedPluginReceipt,
+    restoreReceiptFiles,
+} from '../src/adapters/managed-plugin-receipts.ts';
 import type { HostInventory } from '../src/adapters/native-host-plugins.ts';
-import { patchPluginEndpoint } from '../src/adapters/verified-plugin-files.ts';
+import {
+    overlayPluginEndpoint,
+    patchPluginEndpoint,
+    pluginMcpEndpointEvidence,
+    readPluginTree,
+} from '../src/adapters/verified-plugin-files.ts';
 import { HostPluginManager } from '../src/application/host-plugin-manager.ts';
 import type { PluginHost } from '../src/domains/host-management.ts';
 
 const fixtureRoots: string[] = [];
+const retainedFixtureRoots = new Set<string>();
 test.afterEach(async () => {
-    await Promise.all(fixtureRoots.splice(0).map((root) => rm(root, { recursive: true })));
+    await Promise.all(
+        fixtureRoots
+            .splice(0)
+            .map((root) => (retainedFixtureRoots.has(root) ? undefined : rm(root, { recursive: true }))),
+    );
 });
 
 const stable = {
@@ -295,7 +310,11 @@ async function replacementFixture() {
     let current: string | undefined;
     let offered = '0.2.0';
     let refreshed = false;
-    let failure: 'none' | 'patch' | 'readback' | 'store-before' | 'store-after' = 'none';
+    let failure: 'none' | 'patch' | 'readback' | 'store-before' | 'store-after' | 'store-write' = 'none';
+    const receiptFile = path.join(metadata, 'claude-managed-plugin.json');
+    const linkedReceipt = path.join(metadata, 'linked-receipt');
+    const writes: { version: string; phase: string; error?: unknown }[] = [];
+    const injections: { version: string; phase: string }[] = [];
     const effects = { mutations: 0, patches: 0, sources: 0 };
     const makeManager = () => {
         const store = new JsonHostPluginReceiptStore(metadata);
@@ -348,16 +367,42 @@ async function replacementFixture() {
             },
             patchEndpoint: async (...args) => {
                 effects.patches++;
-                if (failure === 'patch') throw new Error('plugin-url-write-failed');
+                if (failure === 'patch') {
+                    injections.push({ version: args[2], phase: failure });
+                    throw new Error('plugin-url-write-failed');
+                }
                 await patchPluginEndpoint(...args);
-                if (failure === 'readback') throw new Error('plugin-url-readback-failed');
+                if (failure === 'readback') {
+                    injections.push({ version: args[2], phase: failure });
+                    throw new Error('plugin-url-readback-failed');
+                }
             },
             receiptStore: {
                 read: (host) => store.read(host),
                 write: async (host, receipt) => {
-                    if (failure === 'store-before') throw new Error('managed-receipt-write-failed');
-                    await store.write(host, receipt);
-                    if (failure === 'store-after') throw new Error('managed-receipt-write-failed');
+                    const version = receipt.record.version;
+                    if (failure === 'store-before') {
+                        injections.push({ version, phase: failure });
+                        throw new Error('managed-receipt-write-failed');
+                    }
+                    if (failure === 'store-write') await link(receiptFile, linkedReceipt);
+                    writes.push({ version, phase: 'started' });
+                    try {
+                        await store.write(host, receipt);
+                        writes.push({ version, phase: 'completed' });
+                        const readback = parseManagedPluginReceipt(
+                            await new JsonHostPluginReceiptStore(metadata).read(host),
+                        );
+                        assert.deepEqual(readback, receipt, 'independent receipt readback must equal the actual write');
+                        writes.push({ version, phase: 'read-back' });
+                    } catch (error) {
+                        writes.push({ version, phase: 'rejected', error });
+                        throw error;
+                    }
+                    if (failure === 'store-after') {
+                        injections.push({ version, phase: failure });
+                        throw new Error('managed-receipt-write-failed');
+                    }
                 },
             },
         });
@@ -367,6 +412,77 @@ async function replacementFixture() {
         effects,
         record,
         payloads,
+        writes,
+        injections,
+        receiptFile,
+        linkedReceipt,
+        native: () => ({ root: path.join(root, current ?? ''), version: current, configuration }),
+        readReceipt: async () =>
+            parseManagedPluginReceipt(await new JsonHostPluginReceiptStore(metadata).read('claude')),
+        assertWritten: (version: string) => {
+            assert.deepEqual(
+                writes.filter((entry) => entry.version === version).map((entry) => entry.phase),
+                ['started', 'completed', 'read-back'],
+                'actual receipt write and independent readback must complete before recovery',
+            );
+        },
+        assertPayload: async (version: string, endpoint: string) => {
+            const payload = payloads.get(version);
+            assert.ok(payload);
+            assert.equal(await realpath(payload.root), payload.root);
+            const actual = await readPluginTree(payload.root, 'claude');
+            const expected = new Map(payload.files);
+            const original = expected.get('.mcp.json');
+            assert.ok(original);
+            expected.set('.mcp.json', overlayPluginEndpoint(original, 'claude', endpoint));
+            assert.deepEqual(actual, expected, 'installed bytes may differ only by the expected own URL');
+            const mcp = actual.get('.mcp.json');
+            assert.ok(mcp);
+            assert.equal(pluginMcpEndpointEvidence(mcp, 'claude').endpoint, endpoint);
+        },
+        retainFailure: async (error: unknown) => {
+            retainedFixtureRoots.add(root);
+            const paths = [receiptFile, linkedReceipt];
+            for (const payload of payloads.values())
+                for (const name of payload.files.keys()) paths.push(path.join(payload.root, name));
+            const files = await Promise.all(
+                paths.map(async (file) => {
+                    try {
+                        const stat = await lstat(file, { bigint: true });
+                        assert.ok(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 1024n * 1024n);
+                        const bytes = await readFile(file);
+                        return {
+                            file,
+                            stat,
+                            bytes: bytes.toString('base64'),
+                            sha256: createHash('sha256').update(bytes).digest('hex'),
+                        };
+                    } catch (captureError) {
+                        return { file, captureError };
+                    }
+                }),
+            );
+            const evidence = {
+                root,
+                canonical: await realpath(root),
+                current,
+                offered,
+                refreshed,
+                failure,
+                configuration,
+                writes,
+                injections,
+                effects,
+                error,
+                files,
+            };
+            const file = path.join(root, 'failure-evidence.json');
+            await writeFile(
+                file,
+                `${JSON.stringify(evidence, (_key, value) => (value instanceof Error ? { ...value, name: value.name, message: value.message, stack: value.stack, cause: value.cause } : typeof value === 'bigint' ? value.toString() : value), 4)}\n`,
+            );
+            console.error(`DCT_REPLACEMENT_FAILURE=${file}`);
+        },
         fail: (value: typeof failure) => {
             failure = value;
         },
@@ -402,23 +518,114 @@ test('verified native replacement can retry URL and receipt failures without rep
     }
 });
 
-test('persisted verified replacement survives a new manager after late URL or store readback failure', async () => {
+test('persisted verified replacement survives a new manager after late URL or store readback failure', async (t) => {
     for (const failure of ['patch', 'readback', 'store-after'] as const) {
         const f = await replacementFixture();
-        const manager = f.makeManager();
-        await manager.synchronize(f.record('0.2.0'), 'http://127.0.0.1:3333/mcp');
-        f.fail(failure);
-        assert.equal(
-            (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:4444/mcp'))[0]?.state,
-            'partial-failure',
-        );
-        f.fail('none');
-        const mutations = f.effects.mutations;
-        const resumed = (await f.makeManager().synchronize(null, 'http://127.0.0.1:5555/mcp'))[0];
-        assert.equal(resumed?.state, 'disk-synchronized', `${failure}: ${JSON.stringify(resumed)}`);
-        assert.equal(resumed?.version, '0.3.0');
-        assert.equal(resumed?.activation, 'reload-pending');
-        assert.equal(f.effects.mutations, mutations);
+        try {
+            const assertPersisted = async (version: string, endpoint: string) => {
+                const receipt = await f.readReceipt();
+                const payload = f.payloads.get(version);
+                assert.ok(payload);
+                assert.equal(receipt.record.version, version);
+                assert.deepEqual(receipt.record, f.record(version));
+                assert.deepEqual(receipt.native, f.native());
+                assert.equal(receipt.native.root, payload.root);
+                assert.deepEqual(await restoreReceiptFiles(receipt), payload.files);
+                assert.deepEqual(
+                    receipt.files,
+                    [...payload.files]
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([name, bytes]) => ({
+                            path: name,
+                            size: bytes.length,
+                            sha256: createHash('sha256').update(bytes).digest('hex'),
+                        })),
+                );
+                await f.assertPayload(version, endpoint);
+            };
+            const manager = f.makeManager();
+            const initial = (await manager.synchronize(f.record('0.2.0'), 'http://127.0.0.1:3333/mcp'))[0];
+            assert.equal(initial?.state, 'disk-synchronized', JSON.stringify(initial));
+            f.assertWritten('0.2.0');
+            await assertPersisted('0.2.0', 'http://127.0.0.1:3333/mcp');
+            f.fail(failure);
+            const failed = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:4444/mcp'))[0];
+            assert.equal(failed?.state, 'partial-failure', JSON.stringify(failed));
+            assert.deepEqual(
+                f.injections,
+                [{ version: '0.3.0', phase: failure }],
+                'the intended injection must be reached',
+            );
+            f.assertWritten('0.3.0');
+            await assertPersisted(
+                '0.3.0',
+                failure === 'readback' ? 'http://127.0.0.1:4444/mcp' : 'http://127.0.0.1:27637/mcp',
+            );
+            f.fail('none');
+            const mutations = f.effects.mutations;
+            const resumed = (await f.makeManager().synchronize(null, 'http://127.0.0.1:5555/mcp'))[0];
+            assert.equal(resumed?.state, 'disk-synchronized', `${failure}: ${JSON.stringify(resumed)}`);
+            assert.equal(resumed?.version, '0.3.0');
+            assert.equal(resumed?.activation, 'reload-pending');
+            assert.equal(f.effects.mutations, mutations);
+            await assertPersisted('0.3.0', 'http://127.0.0.1:5555/mcp');
+            t.diagnostic(`${failure}: actual receipt write/readback, injection and fresh-manager recovery confirmed`);
+        } catch (error) {
+            await f.retainFailure(error);
+            throw error;
+        }
+    }
+    for (const failure of ['store-before', 'store-write'] as const) {
+        const f = await replacementFixture();
+        try {
+            const manager = f.makeManager();
+            const initial = (await manager.synchronize(f.record('0.2.0'), 'http://127.0.0.1:3333/mcp'))[0];
+            assert.equal(initial?.state, 'disk-synchronized', JSON.stringify(initial));
+            f.assertWritten('0.2.0');
+            const previous = await readFile(f.receiptFile);
+            f.fail(failure);
+            const failed = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:4444/mcp'))[0];
+            assert.equal(failed?.state, 'partial-failure');
+            assert.equal(failed?.reason, 'managed-receipt-write-failed');
+            assert.throws(() => f.assertWritten('0.3.0'), /actual receipt write and independent readback/);
+            assert.equal(
+                f.injections.some((entry) => entry.phase === 'store-after'),
+                false,
+            );
+            assert.deepEqual(await readFile(f.receiptFile), previous);
+            if (failure === 'store-write') {
+                assert.equal((await lstat(f.receiptFile)).nlink, 2);
+                assert.deepEqual(
+                    f.writes.filter((entry) => entry.version === '0.3.0').map((entry) => entry.phase),
+                    ['started', 'rejected'],
+                );
+                const rejected = f.writes.find((entry) => entry.version === '0.3.0' && entry.phase === 'rejected');
+                assert.ok(rejected?.error instanceof Error);
+                assert.equal(rejected.error.message, 'managed-receipt-write-failed');
+                await rm(f.linkedReceipt);
+            } else {
+                assert.deepEqual(f.injections, [{ version: '0.3.0', phase: 'store-before' }]);
+                assert.equal(
+                    f.writes.some((entry) => entry.version === '0.3.0'),
+                    false,
+                );
+            }
+            assert.equal((await f.readReceipt()).record.version, '0.2.0');
+            assert.equal(f.native().version, '0.3.0');
+            await f.assertPayload('0.3.0', 'http://127.0.0.1:27637/mcp');
+            f.fail('none');
+            const mutations = f.effects.mutations;
+            const resumed = (await f.makeManager().synchronize(null, 'http://127.0.0.1:5555/mcp'))[0];
+            assert.equal(resumed?.state, 'read-only');
+            assert.equal(resumed?.reason, 'managed-receipt-payload-changed');
+            assert.equal(f.effects.mutations, mutations);
+            t.diagnostic(
+                `${failure}: incomplete receipt write refused by completion assertion; stale receipt stays read-only`,
+            );
+        } catch (error) {
+            await f.retainFailure(error);
+            throw error;
+        }
     }
 });
 
