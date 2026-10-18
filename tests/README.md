@@ -13,6 +13,11 @@ Git hook tests remain contributor-tooling regressions.
   evidence, and the preparatory modules are not imported by App startup.
 - `app-deployment.test.ts` rejects malformed/future/foreign metadata, incomplete
   immutable selections and invalid removal-fence transitions.
+- `app-deployment-payload.test.ts` checks literal canonical content identities,
+  complete inert runtime representatives, strict inventories and independent
+  expected selections through real owned temporary files and controlled I/O.
+  Darwin framework graph, executable-bit and race/error cases establish source
+  behavior only, without native signing, reparse, permission or installer proof.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   verified public native addon to test shared read-only use, independent operation
   writers, exclusive deletion barriers and persistent lock inode identity.

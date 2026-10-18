@@ -25,7 +25,11 @@
   loading its original public shared/exclusive advisory-lock API. Callers without
   an explicit validated shared option retain exclusive behavior.
 - `app-delivery.ts` verifies immutable archive and regular-file evidence without
-  executing or repairing delivery inputs.
+  executing or repairing delivery inputs. Its separate payload verifier compares
+  a complete canonical manifest and observed tree with independently expected
+  content identity, OS and architecture. It returns content evidence only;
+  trusted provenance, native authority, enrollment and lifetime admission remain
+  caller obligations. No App startup consumer is enabled by this module.
 - `native-host-plugins.ts` manages only the own user plugin through separate
     Codex and Claude native CLI contracts, preserves user intent and consumes
     actual install receipts instead of constructing cache paths.
