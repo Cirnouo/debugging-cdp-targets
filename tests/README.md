@@ -7,6 +7,10 @@ owns a disposable native process. The retired per-chat stdio entry, automatic
 host Tool Hooks and task-activity model are not current runtime interfaces.
 Git hook tests remain contributor-tooling regressions.
 
+- `app-restart.test.ts` uses deterministic deferred producers for bounded private
+  context/ACK parsing, read-only exact-parent evidence and restart lease overlap,
+  uncertain child retention and cleanup retry. It supplies no native execution
+  evidence, and the preparatory modules are not imported by App startup.
 - `app-deployment.test.ts` rejects malformed/future/foreign metadata, incomplete
   immutable selections and invalid removal-fence transitions.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
