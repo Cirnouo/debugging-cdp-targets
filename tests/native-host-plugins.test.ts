@@ -15,7 +15,7 @@ async function fixture(
     market: unknown,
     extra: Record<string, unknown> = {},
 ) {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-host-空 & ')));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-host-private-空 & ')));
     const cwd = path.join(root, 'neutral');
     await mkdir(cwd);
     const catalog = path.join(root, 'catalog');
@@ -198,7 +198,23 @@ test('Claude own user disablement beats merged enabled and unrelated data stays 
         const result = await f.adapter.inspect();
         assert.equal(result.installations[0]?.readOnlyReason, 'disabled');
         assert.equal(result.installations.length, 1);
-        assert.doesNotMatch(JSON.stringify(result), /private|secret|TOKEN/);
+        assert.equal(result.marketplace?.root, f.catalog);
+        const serialized = JSON.stringify(result);
+        for (const excluded of [
+            'mcpServers',
+            'secret',
+            'private',
+            'PRIVATE_TOKEN',
+            'never-display',
+            'unrelated@other',
+            '/not-read',
+        ]) {
+            assert.equal(
+                serialized.includes(JSON.stringify(excluded)),
+                false,
+                `unexpected private JSON key or value: ${excluded}`,
+            );
+        }
     } finally {
         await rm(f.root, { recursive: true });
     }
