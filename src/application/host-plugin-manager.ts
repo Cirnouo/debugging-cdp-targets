@@ -10,12 +10,7 @@ import {
     restoreReceiptFiles,
 } from '../adapters/managed-plugin-receipts.ts';
 import { type HostInventory, type NativeHostPluginAdapter, verifyCatalog } from '../adapters/native-host-plugins.ts';
-import {
-    type PluginFiles,
-    patchPluginEndpoint,
-    readPluginTree,
-    verifyPluginFiles,
-} from '../adapters/verified-plugin-files.ts';
+import { patchPluginEndpoint, readPluginTree } from '../adapters/verified-plugin-files.ts';
 import {
     decidePluginUpdate,
     type PluginHost,
@@ -23,6 +18,7 @@ import {
     type StablePluginRecord,
     validateAppEndpoint,
 } from '../domains/host-management.ts';
+import { type PluginPayloadFiles, verifyPluginPayload } from '../host-plugins/payload-integrity.ts';
 
 export interface HostPluginSummary {
     host: PluginHost;
@@ -51,7 +47,7 @@ export interface HostPluginSummary {
 }
 
 export interface ReviewedPluginSource {
-    files: PluginFiles;
+    files: PluginPayloadFiles;
     catalog: Record<string, unknown>;
 }
 
@@ -103,7 +99,7 @@ export class HostPluginManager {
         PluginHost,
         {
             record: StablePluginRecord;
-            files: PluginFiles;
+            files: PluginPayloadFiles;
             root: string;
             pendingReceipt?: ManagedPluginReceipt;
             reloadPending?: boolean;
@@ -240,7 +236,7 @@ export class HostPluginManager {
         const retained = this.synchronized.get(host);
         if (retained) {
             try {
-                verifyPluginFiles(
+                verifyPluginPayload(
                     host,
                     retained.record.version,
                     retained.files,
@@ -355,10 +351,10 @@ export class HostPluginManager {
             const own = installed.installations.find((item) => item.scope === 'user');
             if (!own?.root || own.version !== record.version || !own.enabled)
                 throw new Error('native-install-identity-mismatch');
-            verifyPluginFiles(host, record.version, source.files, await readPluginTree(own.root, host));
+            verifyPluginPayload(host, record.version, source.files, await readPluginTree(own.root, host));
             const checkpoint: {
                 record: StablePluginRecord;
-                files: PluginFiles;
+                files: PluginPayloadFiles;
                 root: string;
                 pendingReceipt?: ManagedPluginReceipt;
                 reloadPending?: boolean;

@@ -22,8 +22,9 @@
     Unrelated settings never enter the normalized management receipt.
 - `git-plugin-source.ts` verifies both latest catalogs and the immutable Git
     payload blobs without executing or checking out plugin code.
-- `verified-plugin-files.ts` checks complete source bytes, paths, sharing and
-    leases before an atomic own-URL overlay and immediate readback. Only Claude's
+- `verified-plugin-files.ts` owns filesystem evidence, paths, sharing and leases,
+    consuming pure `../host-plugins/payload-integrity.ts` byte proof around the
+    complete atomic own-URL write and immediate readback. Only Claude's
     exact empty `.in_use` host directory is excluded from installed comparisons.
 - `managed-plugin-receipts.ts` persists schema-one App management metadata in an
     explicit existing App data directory and verifies it again after restart.

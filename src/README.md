@@ -10,6 +10,7 @@ The singleton App owns direct HTTP, management and native resources. The
 - `application/`: independent target lifecycles and connection registry orchestration.
 - `domains/`: pure launch, HTTP admission and CDP identity/port rules.
 - `gateway/`: pure explicit bearer and official tool-argument extraction.
+- `host-plugins/`: pure payload byte proof and own-endpoint overlays.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.

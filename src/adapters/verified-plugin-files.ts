@@ -2,18 +2,15 @@ import { randomUUID } from 'node:crypto';
 import type { BigIntStats } from 'node:fs';
 import { lstat, open, readdir, realpath, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
+import { type PluginHost, pluginMcpPath, validateAppEndpoint } from '../domains/host-management.ts';
 import {
-    OWN_PLUGIN,
-    type PluginHost,
-    pluginManifestPath,
-    pluginMcpPath,
-    validateAppEndpoint,
-} from '../domains/host-management.ts';
+    overlayPluginEndpoint,
+    type PluginPayloadFiles,
+    pluginMcpEndpointEvidence,
+    verifyPluginPayload,
+} from '../host-plugins/payload-integrity.ts';
 import { isRecord } from '../shared/errors.ts';
 import { readRegularFile } from './file-evidence.ts';
-
-export type PluginFiles = ReadonlyMap<string, Buffer>;
 
 /** Claude 2.1.302 creates this directory for PID/creation-time leases and may leave it empty at exit. */
 export async function assertClaudePluginUnused(root: string): Promise<void> {
@@ -106,118 +103,12 @@ export async function readPluginTree(root: string, host?: PluginHost): Promise<M
     return files;
 }
 
-function jsonObject(bytes: Buffer | undefined): Record<string, unknown> {
-    if (!bytes) throw new Error('invalid-payload-layout');
-    const value: unknown = JSON.parse(bytes.toString('utf8'));
-    if (!isRecord(value)) throw new Error('invalid-payload-json');
-    return value;
-}
-
-function ownServer(document: Record<string, unknown>, host: PluginHost): Record<string, unknown> {
-    if (!isRecord(document.mcpServers) || !isRecord(document.mcpServers['cdp-targets']))
-        throw new Error('invalid-payload-transport');
-    const server = document.mcpServers['cdp-targets'];
-    if (
-        server.type !== (host === 'codex' ? 'streamable-http' : 'http') ||
-        typeof server.url !== 'string' ||
-        ['command', 'args', 'cwd'].some((key) => Object.hasOwn(server, key))
-    )
-        throw new Error('invalid-payload-transport');
-    validateAppEndpoint(server.url);
-    return server;
-}
-
-/** Let JSON.parse identify the unique own-value literal; no headers or full JSON enter the receipt. */
-export function pluginMcpEndpointEvidence(bytes: Buffer, host: PluginHost): { endpoint: string; byteOffset: number } {
-    const text = bytes.toString('utf8');
-    if (!Buffer.from(text).equals(bytes)) throw new Error('invalid-payload-json');
-    const document = jsonObject(bytes);
-    const server = ownServer(document, host);
-    const endpoint = server.url;
-    if (typeof endpoint !== 'string') throw new Error('invalid-payload-transport');
-    const original = Buffer.from(JSON.stringify(endpoint));
-    server.url = endpoint === 'http://127.0.0.1:1/mcp' ? 'http://127.0.0.1:2/mcp' : 'http://127.0.0.1:1/mcp';
-    const replacement = Buffer.from(JSON.stringify(server.url));
-    let result: number | undefined;
-    let candidates = 0;
-    for (
-        let offset = bytes.indexOf(original);
-        offset !== -1;
-        offset = bytes.indexOf(original, offset + original.length)
-    ) {
-        if (++candidates > 64) throw new Error('ambiguous-payload-overlay');
-        const candidate = Buffer.concat([
-            bytes.subarray(0, offset),
-            replacement,
-            bytes.subarray(offset + original.length),
-        ]);
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(candidate.toString('utf8'));
-        } catch {
-            continue;
-        }
-        if (!isDeepStrictEqual(document, parsed)) continue;
-        if (result !== undefined) throw new Error('ambiguous-payload-overlay');
-        result = offset;
-    }
-    if (result === undefined) throw new Error('invalid-payload-overlay');
-    return { endpoint, byteOffset: result };
-}
-
-/** Only the proved own string literal may differ from immutable source bytes. */
-export function overlayPluginEndpoint(bytes: Buffer, host: PluginHost, endpoint: string, byteOffset?: number): Buffer {
-    validateAppEndpoint(endpoint);
-    const original = pluginMcpEndpointEvidence(bytes, host);
-    if (byteOffset !== undefined && original.byteOffset !== byteOffset) throw new Error('mismatched-payload-overlay');
-    if (original.endpoint === endpoint) return bytes;
-    return Buffer.concat([
-        bytes.subarray(0, original.byteOffset),
-        Buffer.from(JSON.stringify(endpoint)),
-        bytes.subarray(original.byteOffset + Buffer.byteLength(JSON.stringify(original.endpoint))),
-    ]);
-}
-
-export function verifyPluginFiles(
-    host: PluginHost,
-    version: string,
-    expected: PluginFiles,
-    actual: PluginFiles,
-    overlay = true,
-) {
-    const manifest = jsonObject(actual.get(pluginManifestPath(host)));
-    const sourceManifest = jsonObject(expected.get(pluginManifestPath(host)));
-    if (
-        manifest.name !== OWN_PLUGIN ||
-        manifest.version !== version ||
-        sourceManifest.name !== OWN_PLUGIN ||
-        sourceManifest.version !== version
-    )
-        throw new Error('invalid-payload-manifest');
-    if (actual.size !== expected.size) throw new Error('mismatched-payload-files');
-    for (const [name, bytes] of expected) {
-        const observed = actual.get(name);
-        if (!observed) throw new Error('mismatched-payload-files');
-        if (name !== pluginMcpPath(host) || !overlay) {
-            if (!bytes.equals(observed)) throw new Error('mismatched-payload-bytes');
-        } else {
-            const current = jsonObject(observed);
-            const endpoint = ownServer(current, host).url;
-            if (typeof endpoint !== 'string' || !overlayPluginEndpoint(bytes, host, endpoint).equals(observed))
-                throw new Error('mismatched-payload-overlay');
-        }
-    }
-    const mcp = actual.get(pluginMcpPath(host));
-    if (!mcp) throw new Error('invalid-payload-layout');
-    pluginMcpEndpointEvidence(mcp, host);
-}
-
 /** Only the own URL is mutable. Caller has already established exclusive user provenance. */
 export async function patchPluginEndpoint(
     host: PluginHost,
     root: string,
     version: string,
-    expected: PluginFiles,
+    expected: PluginPayloadFiles,
     endpoint: string,
     io: { rename?: typeof rename; afterWrite?: () => Promise<void> } = {},
 ) {
@@ -225,12 +116,11 @@ export async function patchPluginEndpoint(
     const canonical = await canonicalPluginRoot(root);
     const identity = await lstat(canonical, { bigint: true });
     const before = await readPluginTree(canonical, host);
-    verifyPluginFiles(host, version, expected, before);
+    verifyPluginPayload(host, version, expected, before);
     const name = pluginMcpPath(host);
-    const document = jsonObject(before.get(name));
-    if (ownServer(document, host).url === endpoint) return;
     const currentBytes = before.get(name);
     if (!currentBytes) throw new Error('invalid-payload-layout');
+    if (pluginMcpEndpointEvidence(currentBytes, host).endpoint === endpoint) return;
     const patched = overlayPluginEndpoint(currentBytes, host, endpoint);
     const file = path.join(canonical, name);
     const original = await lstat(file, { bigint: true });
@@ -268,8 +158,10 @@ export async function patchPluginEndpoint(
         const directory = await lstat(canonical, { bigint: true });
         if (directory.ino !== identity.ino || directory.dev !== identity.dev) throw new Error('moved-payload');
         const after = await readPluginTree(canonical, host);
-        verifyPluginFiles(host, version, expected, after);
-        if (ownServer(jsonObject(after.get(name)), host).url !== endpoint) throw new Error('mismatched-url');
+        verifyPluginPayload(host, version, expected, after);
+        const currentBytes = after.get(name);
+        if (!currentBytes) throw new Error('invalid-payload-layout');
+        if (pluginMcpEndpointEvidence(currentBytes, host).endpoint !== endpoint) throw new Error('mismatched-url');
     } catch {
         throw new Error('plugin-url-readback-failed');
     }

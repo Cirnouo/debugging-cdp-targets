@@ -263,7 +263,8 @@ export function validateRuntimeSource(file: string, source: string) {
         return [`${file}: invalid source: ${error instanceof Error ? error.message : String(error)}`];
     }
     const layer = file.split('/')[1];
-    const domain = layer === 'domains';
+    const hostPayload = layer === 'host-plugins';
+    const domain = layer === 'domains' || hostPayload;
     const gateway = layer === 'gateway';
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
@@ -275,7 +276,10 @@ export function validateRuntimeSource(file: string, source: string) {
         const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
         const versionParser = file === 'src/domains/software-version.ts' && specifier === 'semver/functions/parse.js';
         const hostConfigParser = file === 'src/adapters/host-user-intent.ts' && specifier === 'smol-toml';
-        if (domain && !versionParser && (!specifier.startsWith('.') || !/^src\/(?:domains|shared)\//.test(resolved))) {
+        const payloadComparison = file === 'src/host-plugins/payload-integrity.ts' && specifier === 'node:util';
+        const pureRelative =
+            /^src\/(?:domains|shared)\//.test(resolved) || (hostPayload && resolved.startsWith('src/host-plugins/'));
+        if (domain && !versionParser && !payloadComparison && (!specifier.startsWith('.') || !pureRelative)) {
             errors.push(`${file}: domains may depend only on domains and shared.`);
         }
         if (gateway && (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved)))
@@ -417,7 +421,7 @@ export async function auditRepository(root: string) {
         if (/\.(?:mjs|cjs|js)$/.test(file) && !file.includes('/dist/'))
             errors.push(`${file}: maintained Node code must be TypeScript.`);
         if (
-            /^src\/(?:interface|application|domains|adapters|shared|gateway)\//.test(file) &&
+            /^src\/(?:interface|application|domains|adapters|shared|gateway|host-plugins)\//.test(file) &&
             !files.has(`${path.posix.dirname(file)}/AGENTS.md`)
         )
             errors.push(`${file}: source directory requires local AGENTS.md.`);

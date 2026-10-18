@@ -10,16 +10,12 @@ import {
     restoreReceiptFiles,
 } from '../src/adapters/managed-plugin-receipts.ts';
 import type { HostInventory } from '../src/adapters/native-host-plugins.ts';
-import {
-    overlayPluginEndpoint,
-    patchPluginEndpoint,
-    pluginMcpEndpointEvidence,
-    readPluginTree,
-} from '../src/adapters/verified-plugin-files.ts';
+import { patchPluginEndpoint, readPluginTree } from '../src/adapters/verified-plugin-files.ts';
 import { createAppHostManagement } from '../src/application/app-host-management.ts';
 import { HostPluginManager } from '../src/application/host-plugin-manager.ts';
 import { defaultAppConfiguration } from '../src/domains/app-configuration.ts';
 import type { PluginHost } from '../src/domains/host-management.ts';
+import { overlayPluginEndpoint, pluginMcpEndpointEvidence } from '../src/host-plugins/payload-integrity.ts';
 
 const fixtureRoots: string[] = [];
 const retainedFixtureRoots = new Set<string>();

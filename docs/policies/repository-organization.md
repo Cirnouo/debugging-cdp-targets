@@ -13,9 +13,10 @@ Use the current maps in [source](../../src/README.md), [tests](../../tests/READM
 [tooling](../../tooling/README.md), [documentation](../README.md) and
 [packaging](../../packaging/README.md), together with all applicable ancestor and
 local `AGENTS.md` files. READMEs describe current placement; AGENTS and policies
-govern implementation. The source retains technical layers alongside the
-delivered pure Gateway argument owner in `src/gateway/`. Existing layer,
-pure-model and I/O rules remain in force.
+govern implementation. The source retains technical layers alongside the delivered
+pure Gateway argument owner in `src/gateway/` and
+[Host payload proof](../../src/host-plugins/README.md) in `src/host-plugins/`.
+Existing layer, pure-model and I/O rules remain in force for all current owners.
 
 [Tooling governance](../../tooling/governance/README.md) separates pure commit
 grammar from actual message execution.

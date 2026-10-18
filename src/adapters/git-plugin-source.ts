@@ -9,9 +9,9 @@ import {
     pluginSourcePath,
     type StablePluginRecord,
 } from '../domains/host-management.ts';
+import { verifyPluginPayload } from '../host-plugins/payload-integrity.ts';
 import { isRecord } from '../shared/errors.ts';
 import { verifyCatalog } from './native-host-plugins.ts';
-import { verifyPluginFiles } from './verified-plugin-files.ts';
 
 type GitRun = (args: string[], cwd: string, env: Record<string, string | undefined>) => Promise<Buffer>;
 
@@ -106,7 +106,7 @@ export async function readGitPluginSource(record: StablePluginRecord, host: Plug
             if (total > 16 * 1024 * 1024) throw new Error('oversized-git-source');
             files.set(relative, bytes);
         }
-        verifyPluginFiles(host, validated.version, files, files, false);
+        verifyPluginPayload(host, validated.version, files, files, false);
         return { catalog, files };
     } finally {
         await rm(root, { recursive: true });
