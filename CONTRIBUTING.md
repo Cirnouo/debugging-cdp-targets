@@ -6,7 +6,7 @@ vulnerabilities through the private channel in [SECURITY.md](SECURITY.md).
 
 Before implementing the singleton desktop App migration, read
 [ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
-[accepted implementation plan](docs/superpowers/plans/2026-10-17-singleton-app-plan.md).
+[accepted implementation plan](.superpowers/plans/2026-10-17-singleton-app-plan.md).
 The singleton App owns direct HTTP and native resources; thin host Plugins load
 metadata, artwork and the shared Skill. [App runtime](docs/app-runtime.md) records
 current composition and separates local staging from installer acceptance.
@@ -77,7 +77,7 @@ Keep the generated H3 fields when editing the body, including optional fields;
 optional answers may be empty or `_No response_`. Apply only the corresponding
 form label when submitting a typed Issue through another interface. See the
 [typed Issue policy](docs/policies/commits-and-scope.md#typed-issue-submissions)
-and [Agent submission rules](AGENTS.md#issue-submissions).
+and [Agent submission rules](docs/policies/commits-and-scope.md#typed-issue-submissions).
 
 The [remote Issue workflow](.github/workflows/issues.yaml) reads the latest Issue
 and reports structural form errors with a `template: invalid` label and an owned

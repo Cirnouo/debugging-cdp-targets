@@ -22,7 +22,9 @@
     and preserved earlier cleanup failures.
 - `policies/` contains repository-wide contribution requirements.
 - `adr/` records architecture decisions and superseded decisions.
-- `superpowers/` contains implementation plans linked to reviewed decisions.
+
+[Maintained planning](../.superpowers/README.md) owns reviewed implementation
+plans outside this documentation tree.
 
 The root README is the user entry point and quick start; detailed installation
 and operation belong in `user-guide/`. Source implementation rules belong next

@@ -1,5 +1,14 @@
 .idea/
-.superpowers/
+/.superpowers/*
+!/.superpowers/README.md
+!/.superpowers/plans/
+/.superpowers/plans/*
+!/.superpowers/plans/README.md
+!/.superpowers/plans/2026-10-02-bundled-official-server.md
+!/.superpowers/plans/2026-10-05-claude-code-distribution.md
+!/.superpowers/plans/2026-10-08-host-metadata.md
+!/.superpowers/plans/2026-10-09-mcp-instructions.md
+!/.superpowers/plans/2026-10-17-singleton-app-plan.md
 node_modules/
 coverage/
 test-results/

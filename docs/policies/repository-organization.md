@@ -26,16 +26,18 @@ other tooling and test owners retain their current placement.
 The selected direction is source roots named for cohesive domain responsibilities,
 with subdomains or technical boundaries inside them when needed; central root
 `tests/` corresponding to those responsibilities; and tooling organized by its
-actual responsibilities and meaningful names. Maintained plans and specifications
-are intended to move to root `.superpowers/`. The broad content migration remains
-under review: this policy does not approve a particular future directory, file
-list, symbol signature or implementation sequence.
+actual responsibilities and meaningful names. Maintained implementation planning
+lives at root [.superpowers/](../../.superpowers/README.md). Future reviewed
+specifications use the same planning owner and narrow tracking rules. The broad
+source content migration remains under review: this policy does not approve a
+particular future directory, file list, symbol signature or implementation sequence.
 
 Until each migration updates its maps and instructions atomically, place work
 with the existing owner. Do not introduce a parallel future tree or copy a module
-into a proposed domain to anticipate that migration. Current maintained plans
-remain under [docs/superpowers](../superpowers/README.md). Root `.superpowers/`
-contains ignored private work. Keep its `sdd`, native stages, logs and other
+into a proposed domain to anticipate that migration. Root `.superpowers/` contains
+individually tracked planning entries and ignored private work. A future reviewed
+plan requires an exact per-file `.gitignore` exception and a matching plans
+inventory entry in the same change. Keep its `sdd`, native stages, logs and other
 private evidence ignored and out of tracked planning relocations, maintained
 publishable paths and staging. Never blanket-unignore that material. Bounded
 retention copies between exact ignored private locations remain permitted within

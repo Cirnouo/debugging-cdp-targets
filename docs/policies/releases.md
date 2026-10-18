@@ -145,7 +145,7 @@ Changing the repository setting still requires explicit user authorization.
 ## Accepted forward App and plugin delivery
 
 [ADR 0017](../adr/0017-singleton-desktop-app.md) and the
-[tracked implementation plan](../superpowers/plans/2026-10-17-singleton-app-plan.md)
+[tracked implementation plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md)
 own the accepted forward delivery design. Native App artifacts, updater and thin
 HTTP plugins are not delivered by this policy change. The current source-only
 publisher above is not evidence of native App delivery. Task 7 must replace its
