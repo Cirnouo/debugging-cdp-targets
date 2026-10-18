@@ -14,9 +14,12 @@ Use the current maps in [source](../../src/README.md), [tests](../../tests/READM
 [packaging](../../packaging/README.md), together with all applicable ancestor and
 local `AGENTS.md` files. READMEs describe current placement; AGENTS and policies
 govern implementation. The source retains technical layers alongside the delivered
-pure Gateway argument owner in `src/gateway/` and
+Gateway argument and diagnostic owners in `src/gateway/` and
 [Host payload proof](../../src/host-plugins/README.md) in `src/host-plugins/`.
-Existing layer, pure-model and I/O rules remain in force for all current owners.
+Argument rules remain pure; only `gateway/diagnostics.ts` reads its existing clock
+and depends on the pure current `domains/control-contract.ts` value/callback types.
+The complete lifecycle-contract move remains pending with its App UI/CDP domain
+consumers. Existing layer, pure-model and I/O rules remain in force for all current owners.
 
 [Tooling governance](../../tooling/governance/README.md) separates pure commit
 grammar from actual message execution.

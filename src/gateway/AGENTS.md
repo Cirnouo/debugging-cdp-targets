@@ -1,10 +1,14 @@
-# Pure Gateway argument implementation
+# Gateway argument and diagnostic implementation
 
 Apply root and [source instructions](../AGENTS.md) cumulatively. This delivered
-Gateway slice contains only deterministic argument parsing: relative dependencies
-may target gateway, domains and shared. No environment, filesystem, process,
-network, native or external-package access is permitted, including type-only
-imports/exports and type `import()`.
+Gateway slice owns deterministic argument parsing and the existing bounded
+one-shot diagnostic clock. Pure argument rules may use relative dependencies in
+gateway, domains and shared, but must not import diagnostics, including through
+type-only imports/exports or type `import()`. Unknown Gateway files remain pure.
+Only diagnostics.ts may read its existing performance.now() clock and import its
+pure Diagnostic/Diagnose contract from domains/control-contract.ts. No other
+clock, environment, filesystem, process, network, native or external-package
+access is permitted. The same dependency restrictions apply to erased syntax.
 
 Syntax extraction grants no authentication or live-route authority. Preserve
 explicit per-request bearers, complete official `_dct` removal, validation order,

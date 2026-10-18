@@ -2,8 +2,9 @@ import type { IncomingHttpHeaders } from 'node:http';
 import http from 'node:http';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 import type { ManagedTarget } from '../domains/cdp-target.ts';
+import type { Diagnose, Diagnostic } from '../domains/control-contract.ts';
+import { measured } from '../gateway/diagnostics.ts';
 import { LOOPBACK, MAX_HTTP_BYTES, REQUEST_TIMEOUT_MS } from '../shared/constants.ts';
-import { type Diagnose, type Diagnostic, measured } from '../shared/diagnostics.ts';
 import { isRecord } from '../shared/errors.ts';
 
 function rewriteDiscovery(value: unknown, routerPort: number): unknown {

@@ -3,7 +3,7 @@ import http from 'node:http';
 import { test } from 'node:test';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createCdpRouter } from '../src/adapters/cdp-router.ts';
-import type { Diagnostic } from '../src/shared/diagnostics.ts';
+import type { Diagnostic } from '../src/domains/control-contract.ts';
 
 test('quarantine aborts outstanding discovery and clears pending state before another session can attach', async () => {
     let observed: () => void = () => {};
@@ -62,6 +62,21 @@ test('disconnect clears unanswered CDP requests and records only phase timing me
         await closed;
         assert.equal(router.isBusy(), false);
         assert.ok(diagnostics.some((event) => event.phase === 'cdp-screenshot' && event.outcome === 'interrupted'));
+        router.clearTarget();
+        await router.close();
+        await router.close();
+        const screenshots = diagnostics.filter((event) => event.phase === 'cdp-screenshot');
+        assert.equal(screenshots.length, 1);
+        assert.equal(screenshots[0]?.outcome, 'interrupted');
+        assert.ok(
+            diagnostics.every(
+                (event) =>
+                    Number.isFinite(event.elapsedMs) &&
+                    event.elapsedMs >= 0 &&
+                    event.elapsedMs === Math.round(event.elapsedMs * 100) / 100,
+            ),
+        );
+        assert.equal(router.isBusy(), false);
         assert.ok(diagnostics.every((event) => Object.keys(event).sort().join() === 'elapsedMs,outcome,phase'));
         assert.equal(JSON.stringify(diagnostics).includes('never-record-this'), false);
     } finally {

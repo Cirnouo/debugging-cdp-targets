@@ -19,10 +19,11 @@ import {
     serializeMessage,
 } from '@modelcontextprotocol/client';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
+import type { Diagnose } from '../domains/control-contract.ts';
 import { createOfficialExecution } from '../domains/official-execution.ts';
 import { RequestFailure } from '../domains/request-failure.ts';
+import { measured } from '../gateway/diagnostics.ts';
 import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
-import { type Diagnose, measured } from '../shared/diagnostics.ts';
 import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from './official-server.ts';
 
 export type OfficialConnectionResource = {

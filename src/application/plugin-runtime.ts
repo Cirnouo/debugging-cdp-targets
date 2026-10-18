@@ -11,6 +11,7 @@ import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } f
 import { createPortReservations } from '../adapters/port-reservation.ts';
 import { createTargetHost } from '../adapters/target-host.ts';
 import { loadOfficialToolCatalog, workspaceSources } from '../adapters/tool-catalog.ts';
+import type { Diagnose, Diagnostic } from '../domains/control-contract.ts';
 import {
     type ConnectionRoute,
     type ConnectionStatus,
@@ -30,9 +31,9 @@ import {
     prepareLaunchDefinition,
     validateDataIsolationBinding,
 } from '../domains/launch-command.ts';
+import { measured } from '../gateway/diagnostics.ts';
 import type { ClientPrincipal, ClientRequestContext } from '../shared/client-context.ts';
 import { DEFAULT_BASE_PORT } from '../shared/constants.ts';
-import { type Diagnose, type Diagnostic, measured } from '../shared/diagnostics.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import { createClientContext, waitForClient } from './client-context.ts';
 import { type ConnectionDirectory, createConnectionDirectory } from './connection-directory.ts';

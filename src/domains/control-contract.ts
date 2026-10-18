@@ -1,5 +1,4 @@
 import type { ClientRequestContext } from '../shared/client-context.ts';
-import type { Diagnostic } from '../shared/diagnostics.ts';
 import { isRecord } from '../shared/errors.ts';
 import { type DataIsolation, type DataIsolationEvidence, parseDataIsolation } from './data-isolation.ts';
 import {
@@ -8,6 +7,23 @@ import {
     type PreparedLaunchDefinition,
     parseApplicationLaunch,
 } from './launch-command.ts';
+
+/** Bounded metadata only: no arguments, environment, URLs, page data or payloads. */
+export type Diagnostic = {
+    phase:
+        | 'connection-health'
+        | 'identity-check'
+        | 'discovery-response'
+        | 'cdp-connect'
+        | 'cdp-response'
+        | 'cdp-screenshot'
+        | 'upstream-processing'
+        | 'tool-catalog-refresh'
+        | 'result-ready';
+    outcome: 'completed' | 'failed' | 'interrupted';
+    elapsedMs: number;
+};
+export type Diagnose = (event: Diagnostic) => void;
 
 export type TargetKind = 'chrome' | 'generic-cdp';
 export type Disposition = 'Close' | 'Keep';

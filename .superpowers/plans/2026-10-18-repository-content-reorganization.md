@@ -187,6 +187,13 @@ not a requirement for one PR per row or permission to skip content work.
 | B8 | Remaining reviewed-data/canonical-license placement and complete independent fingerprint/input coverage. |
 | F1–F7 | Separate pending feature source: physical state/leases; module restart; immutable payload snapshot; exact parent watch; native writer authority; flat-stage producer; fresh contributor transaction/current docs. Integrate newer main effects; source-only is not native adoption or default cutover. |
 
+The interim O4 diagnostic cut keeps the actual pure contract at
+`src/domains/control-contract.ts`, including `Diagnostic` and `Diagnose`, while
+only clock-backed `measured` moves to `src/gateway/diagnostics.ts`. The final
+`gateway/lifecycle-contract.ts` and complete symbol/caller migration above remain
+pending until the actual App UI and CDP domain consumers move coherently. This
+interim placement does not complete O4 or the whole Gateway target.
+
 ## Per-batch workflow and complete-task gates
 
 Use an independent managed worktree, test-first meaningful regressions, focused

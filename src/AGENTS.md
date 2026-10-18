@@ -7,9 +7,14 @@ owns core resources and direct HTTP; host plugins are thin.
 
 Dependencies flow interface → application → domains/shared; application may
 use explicit adapters. Adapters may consume the delivered pure gateway argument
-rules and never depend on application/interface. The current gateway slice may
-depend only on gateway/domains/shared through relative imports. Domains and
-gateway contain no environment, file, process, network, or PowerShell I/O.
+rules or its exact diagnostics clock and never depend on application/interface.
+Pure Gateway rules may depend only on gateway/domains/shared through relative
+imports; domains/shared and pure Gateway owners must not import the clock,
+including through erased syntax. Only gateway/diagnostics.ts may read its existing
+performance.now() clock and depend on the pure domains/control-contract.ts.
+Domains and Gateway contain no environment, file, process, network or PowerShell
+I/O. Diagnostic value/callback types remain in the current domain contract; its
+complete relocation and other symbol/caller changes remain future work.
 The existing semver/functions/parse.js exception remains limited to
 domains/software-version.ts; gateway gains no external dependency exception.
 The delivered `host-plugins/` slice is also pure: it depends only on its own
