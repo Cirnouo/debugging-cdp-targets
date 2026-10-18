@@ -95,7 +95,8 @@ test('repository audit accepts the supported Node range and contributor entry po
             'CHANGELOG.md': '## [Unreleased]\n',
             'package.json': `${JSON.stringify({ version: '2.3.4', engines: { node: '^24.21.0' }, packageManager: 'pnpm@12.4.2' }, null, 4)}\n`,
             'docs/README.md': '# Documentation\n',
-            'docs/domain-language.md': '# Domain language\n',
+            'docs/reference/README.md': '# Reference\n',
+            'docs/reference/domain-language.md': '# Domain language\n',
             'plugins/README.md': '# Plugins\n',
             'plugins/codex/README.md': '# Codex\n',
             'packaging/README.md': '# Packaging\n',
@@ -127,6 +128,28 @@ test('repository audit accepts the supported Node range and contributor entry po
             await mkdir(path.dirname(target), { recursive: true });
             await writeFile(target, source);
         }
+        assert.deepEqual(await auditRepository(root), []);
+        const glossary = path.join(root, 'docs/reference/domain-language.md');
+        const retiredGlossary = path.join(root, 'docs/domain-language.md');
+        const glossarySource = await readFile(glossary, 'utf8');
+        await context.test('rejects a missing canonical glossary', async () => {
+            await rm(glossary);
+            assert.ok((await auditRepository(root)).some((error) => /only glossary/.test(error)));
+        });
+        await context.test('rejects the retired glossary as the only glossary', async () => {
+            await writeFile(retiredGlossary, glossarySource);
+            assert.ok((await auditRepository(root)).some((error) => /only glossary/.test(error)));
+        });
+        await context.test('rejects the retired glossary alongside the canonical glossary', async () => {
+            await writeFile(glossary, glossarySource);
+            assert.ok((await auditRepository(root)).some((error) => /only glossary/.test(error)));
+            await rm(retiredGlossary);
+        });
+        await context.test('rejects CONTEXT.md alongside the canonical glossary', async () => {
+            await writeFile(path.join(root, 'CONTEXT.md'), '# Duplicate vocabulary\n');
+            assert.ok((await auditRepository(root)).some((error) => /only glossary/.test(error)));
+            await rm(path.join(root, 'CONTEXT.md'));
+        });
         assert.deepEqual(await auditRepository(root), []);
         for (const host of PLUGIN_HOSTS) {
             for (const base of [host.inputRoot, host.payloadRoot]) {

@@ -37,6 +37,30 @@ Scope: unreleased 0.1.0, [ADR 0011](adr/0011-mcp-native-lifecycle.md).
 The implementation changes the repository and generated delivery files only.
 No installed plugin, user configuration, old test state, release, tag or PR is changed.
 
+## Desktop Chrome acceptance — 2026-10-04
+
+Real desktop Chrome acceptance passed on the following systems on 2026-10-04:
+
+| Operating system | Architecture | Chrome version |
+| --- | --- | --- |
+| Windows, OS build 10.0.26300 | x64 | 154.0.8037.98 |
+| Ubuntu 24.04.5 LTS with Xvfb | x64 | 154.0.8037.57 |
+| macOS 15.7.9 | arm64 | 152.0.7977.83 |
+
+The Linux and macOS evidence comes from GitHub's `ubuntu-24.04` and `macos-15`
+runners. The acceptance checks cover official page/CSS tools, concurrent
+independent connections, Keep/reuse, scoped Close, same-port recovery, stale
+sessions and exit cleanup. These dated results precede the actual-exit lifecycle
+revision in [ADR 0013](adr/0013-session-owned-exit-cleanup.md); they do not
+establish acceptance of that later revision or the explicit isolation/connection
+lease change in [ADR 0015](adr/0015-explicit-data-directory-isolation.md). See
+[the smoke instructions](../tests/smoke/README.md) for the test boundaries.
+The original record did not identify an exact executed source commit for this
+OS/version matrix; none is inferred here. Its original [MCP/native delivery
+record](#delivered-behavior) and [smoke/CI boundaries](../tests/smoke/README.md)
+remain distinct from later revisions. Other application/OS/browser combinations
+remain best effort.
+
 ## Delivered behavior
 
 | Original issue | Delivery | Evidence and limits |

@@ -259,7 +259,7 @@ Skill case captured the complete installed body. Those disposable contexts used
 synthetic model endpoints and no real target/account model API. These results
 do not establish HTTP migration, Desktop rendering, automatic starter-prompt
 Skill injection or acceptance on earlier host baselines. Dated host research
-and presentation evidence remain in [host metadata](../../docs/host-metadata.md).
+and presentation evidence remain in [host metadata](../../docs/evidence/host-plugin-research.md).
 
 ## Native fixture and screenshot entrypoints
 

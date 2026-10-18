@@ -24,13 +24,10 @@ Enable the Plugin's MCP connection in a new conversation, then invoke
 `$debugging-cdp-targets` with the application and task you want to inspect.
 Enabling the connection does not launch a browser automatically.
 
-The installed Plugin declares a project website and separate Skill title,
-description and icons. Actual Codex CLI 0.161.0 inspection accepted those values
-and formal explicit Skill invocation loaded the complete instructions. Selecting
-a Desktop starter prompt has not been proved to load the same body; invoke the
-Skill explicitly. The project website, Skill title/description/icons and full
-long description passed manual acceptance on Codex Desktop 26.1002.52244. See
-[host metadata evidence](../host-metadata.md) for consumers and limitations.
+Invoke the Skill explicitly to load its complete entry instructions. Selecting a
+Desktop starter prompt has not been proved to load the same body. Separate
+[dated metadata and Desktop checks](../evidence/host-plugin-research.md#manual-desktop-acceptance)
+record the exact consumers and limitations.
 
 The thin Plugin contains no Hooks. Follow the Skill to register once and keep the
 private bearer for explicit owned calls. Read lifecycle status/results directly.
@@ -48,8 +45,8 @@ codex plugin add debugging-cdp-targets@debugging-cdp-targets
 The first command refreshes the catalog source; the second installs the current
 payload into Codex's Plugin cache. A catalog refresh alone does not establish
 that the installed files changed. Start a new conversation to use the updated
-bundled Skills and tools. The same-version refresh was verified with Codex CLI
-0.161.0; see [host metadata evidence](../host-metadata.md#codex-cache-refresh).
+bundled Skills and tools. The [dated same-version cache proof](../evidence/host-plugin-research.md#codex-cache-refresh)
+records the tested CLI version and limits.
 
 To uninstall, remove the Plugin before removing its Marketplace source:
 
@@ -71,8 +68,8 @@ claude plugin install debugging-cdp-targets@debugging-cdp-targets
 The Plugin also appears in Claude Code's `/plugin` interface after adding the
 Marketplace. Restart Claude Code after installation. Invoke
 `/debugging-cdp-targets:debugging-cdp-targets` with the application and task.
-The installed `cdp-targets` server starts with no target; the Skill launches an
-explicitly selected application.
+The native HTTP connection reaches the already running App, initially without
+a target. The Skill starts the explicitly selected application.
 
 For an unreleased contributor checkout, pass its absolute repository directory
 to `claude plugin marketplace add`.

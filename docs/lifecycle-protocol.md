@@ -2,7 +2,7 @@
 
 This is the current protocol for unreleased 0.1.0. [ADR 0013](adr/0013-session-owned-exit-cleanup.md)
 records session ownership and actual exit; [ADR 0015](adr/0015-explicit-data-directory-isolation.md)
-records connection directory leases. [Domain language](domain-language.md)
+records connection directory leases. [Domain language](reference/domain-language.md)
 defines its terms. The [shared core contract](shared-core.md) defines originating
 clients, registration ownership, immutable snapshots and actual execution. Runtime state, requests, events and disposal retries are
 gateway-local memory. There is no target takeover, persistent session or plugin

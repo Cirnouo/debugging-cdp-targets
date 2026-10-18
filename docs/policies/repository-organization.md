@@ -64,7 +64,7 @@ Before creating or reorganizing content:
     implementations when they truly implement the same contract. Independent
     verification against separate evidence is not accidental duplication.
 3. Choose a name that describes the current purpose in the repository's
-    [domain language](../domain-language.md). Align file, export and test names
+    [domain language](../reference/domain-language.md). Align file, export and test names
     with that purpose. Avoid misleading historical names, catch-all `utils` or
     `context` modules, and names based only on the task that introduced them.
     Rename actual callers together rather than retaining old-name forwarding

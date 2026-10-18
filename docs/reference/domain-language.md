@@ -13,7 +13,7 @@
 - **Session owner**: in-memory resource-generation owner; logical router/directory and target/official generations have independent lifetimes.
 - **Isolation intent**: the user's choice between no data directory isolation and an explicitly selected isolation directory.
 - **Data directory**: the real filesystem directory selected for application state under the isolation contract.
-- **Directory selection**: Agent chooses a suitable location, the user selects the Chrome-only preset, an existing directory, or a new named/random child under a selected parent; the preset maps to an existing/new operation.
+- **Directory selection**: the choice of an existing or newly created application data directory; the [ordered selection procedure](../user-guide/workflow.md#select-a-directory-and-cleanup-policy) defines the available choices and cleanup decision.
 - **Application binding**: the researched argument or environment carrier directing a particular application/version to its data directory.
 - **Isolation support**: verified full, partial or unsupported coverage of application state and production effects; unknown means unresolved evidence.
 - **Directory lease**: connection-level ownership of a selected real data directory across target sessions.
@@ -55,8 +55,8 @@
 
 ## Version and deployment terms
 
-[ADR 0017](adr/0017-singleton-desktop-app.md) owns the design. The
-[App runtime](app-runtime.md) states implemented behavior and separates local
+[ADR 0017](../adr/0017-singleton-desktop-app.md) owns the design. The
+[App runtime](../app-runtime.md) states implemented behavior and separates local
 staging from pending installer/deployment acceptance.
 
 - **App version**: independent strict SemVer in root package.json.version.
@@ -67,6 +67,4 @@ staging from pending installer/deployment acceptance.
 - **Latest stable plugin record**: future schema-versioned static record naming
     one stable plugin version, minimumAppVersion and immutable verifiable source
     for both host payloads. No record/feed is advertised for unreleased 0.1.0.
-- **App scope**: durable commit responsibility for desktop lifecycle, management
-    UI, configuration and OS integration; delivery remains distribution, official
-    transport devtools and connection lifecycle session.
+- **App scope**: the commit responsibility named `app`; the [commit policy](../policies/commits-and-scope.md#commits) defines its governance and related scopes.

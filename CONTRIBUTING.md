@@ -104,14 +104,15 @@ Before adding a root README translation, follow the
 
 Before implementing a new host or changing a metadata contract, follow the
 [host research policy](docs/policies/documentation.md#host-metadata-research).
-The [host metadata record](docs/host-metadata.md) owns primary sources, adopted
-fields and the distinction between CLI proof and manual Desktop acceptance.
+The [Host research record](docs/evidence/host-plugin-research.md) owns primary sources and dated
+acceptance; the [Host metadata reference](docs/reference/host-metadata.md) owns adopted
+fields. The evidence record distinguishes CLI proof from manual Desktop acceptance.
 
 The accepted [data directory isolation design](docs/adr/0015-explicit-data-directory-isolation.md)
 governs the runtime boundary. Review its intent-first research, existing/new
 directory operations, connection leases across restart, deletion authorization,
 late-acquisition safety and explicit path evidence before changing those boundaries.
-Use the [domain glossary](docs/domain-language.md) for terminology and the
+Use the [domain glossary](docs/reference/domain-language.md) for terminology and the
 [security policy](docs/policies/security.md#data-directory-isolation-boundary)
 for the required ownership and disclosure constraints.
 

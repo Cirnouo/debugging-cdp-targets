@@ -32,8 +32,10 @@ Claude also offers a plugin cache root. Blank uses the App's user environment.
 Save before inspecting a changed selection, and wait for that host's active work
 to finish before replacing its selection. Missing stable updates are ordinary
 while 0.1.0 is Unreleased; known verified App-owned copies can still synchronize.
-See [App runtime](../app-runtime.md#management-and-host-synchronization) for the
-ownership, migration and acceptance boundaries.
+See [Host Plugin management](../architecture/host-plugin-management.md) for
+ownership, synchronization/retry and acceptance boundaries; the
+[App dashboard](../app-runtime.md#management-and-host-synchronization) owns the
+management view.
 
 The seven tools are:
 

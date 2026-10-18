@@ -1,14 +1,20 @@
-# Host metadata for self-installation
+# Host Plugin research and acceptance
 
 Original research and acceptance date: 2026-10-08. A separate Desktop
 presentation study and Skill/MCP research dated 2026-10-09 appear below.
-Version 0.1.0 remains unreleased.
+Version 0.1.0 remains unreleased. [Current metadata](../reference/host-metadata.md)
+and [Host management architecture](../architecture/host-plugin-management.md)
+own adopted fields and current implementation. Dated wording below identifies
+its original research or execution context; it does not establish later acceptance.
 The goal is useful, accurate metadata when users add this GitHub repository's
 Marketplace and install either complete host Plugin. Public directory submission
-is outside this contract. This document owns primary host research under the
-[documentation policy](policies/documentation.md#host-metadata-research).
+is outside this contract. This record owns primary dated host research under the
+[documentation policy](../policies/documentation.md#host-metadata-research).
 
 ## Direct HTTP cutover
+
+This is the 2026-10-17 cutover record. The [current metadata reference](../reference/host-metadata.md#direct-http-cutover)
+owns the adopted connection fields and their present configuration consequences.
 
 The 2026-10-17 App cutover changes the maintained connection contract. Both thin
 payloads point at `http://127.0.0.1:27637/mcp`; neither contains Hooks, executable
@@ -35,7 +41,7 @@ Retrieved 2026-10-17. This fixed-version record distinguishes published
 host/source support from an actual host exchange. The App now serves both
 2026-07-28 and sessionful legacy HTTP under the same Plugin URL; no metadata flag,
 personal configuration change or MCP Tasks requirement accompanies that endpoint.
-The [protocol ADR](adr/0018-mcp-protocol-compatibility.md) preserves the fixed
+The [protocol ADR](../adr/0018-mcp-protocol-compatibility.md) preserves the fixed
 outward catalog and operation wait/result path independently of host refresh.
 
 The canonical npm/release checks identified Codex `latest=0.163.0`
@@ -91,17 +97,23 @@ was researched on the original date above; versioned source is used for
 version-specific behavior. A documented field is not proof of a particular UI
 rendering it.
 
+<a id="c1"></a>
+
 - **C1 — Codex package/catalog:** [official packaging documentation](https://developers.openai.com/plugins/build/plugins)
     and [0.161.0 compatibility manifest parser](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/manifest.rs).
     [0.160.0 component loading](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/core-plugins/src/loader.rs#L1081-L1119)
     establishes component defaults. Compatibility packaging is retained; a
     portable root manifest's `extensions.com.openai`, when present, replaces
     rather than merges the compatibility overlay.
+<a id="c2"></a>
+
 - **C2 — Codex Skill:** [official Skill metadata documentation](https://learn.chatgpt.com/docs/build-skills#optional-metadata),
     [0.160.0 YAML reader](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/ext/skills/src/loader/metadata.rs#L130-L153),
     [PluginShared asset resolution](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/skills/src/interface.rs#L124-L146),
     [host loader](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/ext/skills/src/loader/host.rs)
     and [namespace resolver](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/ext/skills/src/loader/namespace.rs).
+<a id="c3"></a>
+
 - **C3 — Codex inspection/context:** [official App Server API](https://learn.chatgpt.com/docs/app-server#skills),
     [0.161.0 configuration-write handler](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/app-server/src/request_processors/catalog_processor.rs#L646)
     and [Skill configuration rules](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/config/src/skills_config.rs).
@@ -109,6 +121,8 @@ rendering it.
     the inspected loader and executed API use `agents/openai.yaml`. This package
     follows the actual YAML consumer; the documentation mismatch is not evidence
     for adding a JSON metadata file.
+<a id="c4"></a>
+
 - **C4 — Codex cache/install:** [official CLI Plugin and Marketplace reference](https://learn.chatgpt.com/docs/cli/reference#codex-plugin)
     separates Marketplace upgrade from Plugin add; [official packaging cache documentation](https://developers.openai.com/plugins/build/plugins#how-local-marketplaces-work)
     explains that hosts load the installed cached copy. The inspected 0.161.0
@@ -117,6 +131,8 @@ rendering it.
     version; the [store replacement](https://github.com/openai/codex/blob/rust-v0.161.0/codex-rs/core-plugins/src/store.rs#L648-L690)
     stages and replaces an existing cache root with backup/rollback handling.
     The executed same-version refresh below is bounded to Codex CLI 0.161.0.
+<a id="c5"></a>
+
 - **C5 — Codex Desktop Skill presentation:** locally inspected packed
     `resources/app.asar` on 2026-10-09. Its `package.json` identifies Windows
     Desktop version **26.1002.52244**, `codexBuildNumber` **13536** and
@@ -129,11 +145,19 @@ rendering it.
     `yJr`, `P2`) and `webview/assets/plugin-detail-view-dd0bb2666944.js` (`Ma`).
     Their separate presentation paths and evidence limits are recorded below;
     this is source inspection, not a new API or manual rendering check.
+<a id="l1"></a>
+
 - **L1 — Claude package:** [official Plugin manifest reference](https://code.claude.com/docs/en/plugins-reference).
     Local loading and listing-only fields are distinguished there.
+<a id="l2"></a>
+
 - **L2 — Claude catalog:** [Marketplace creation/install documentation](https://code.claude.com/docs/en/plugin-marketplaces)
     and [Marketplace field reference](https://code.claude.com/docs/en/plugins/marketplace-reference).
+<a id="l3"></a>
+
 - **L3 — Claude Skill:** [official frontmatter reference](https://code.claude.com/docs/en/skills#frontmatter-reference).
+<a id="m1"></a>
+
 - **M1 — MCP:** [2025-11-25 initialization/lifecycle specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
     and [tool specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools).
     Protocol metadata does not prescribe host UI behavior. The
@@ -149,9 +173,9 @@ Fields outside those checks remain unverified.
 These evidence levels are not interchangeable.
 Source references C1–M1 above apply to the rows that name them.
 
-## Adopted field matrix
+## Adopted field matrix — dated pre-HTTP contract
 
-Paths identify maintained inputs. Generated equivalents live in each
+This is the original pre-HTTP field selection, including retired Hooks and stdio wiring. It is preserved as dated evidence, not the current metadata contract. Paths identify the then-maintained inputs. Generated equivalents live in each
 `plugins/<host>/debugging-cdp-targets/` payload. “Required” below means necessary
 for this package's functional identity/wiring or its selected quality contract;
 optional host features are not inferred requirements.
@@ -215,7 +239,7 @@ advertised inner implementation name `debugging-cdp-targets` have distinct roles
 | --- | --- | --- |
 | `serverInfo` and capabilities | Codex [retains implementation fields](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1131); the [status processor](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/app-server/src/request_processors/mcp_processor.rs#L529) and generated `McpServerInfo`/`McpServerStatus` expose `serverInfo` and `serverCapabilities`. | Keep existing identity and tools capability. The production-adapter initialize regression verifies the unchanged name/version and exact tools capability; host API observability remains source evidence. |
 | Optional `title`, `description`, `icons`, `websiteUrl` | C5's `app-initial-25361a10f2bf.js` has conditional metadata consumers: `N_n` mention/search tools gated by `openai/mentions`, `I_n` file metadata and `W_n` `openai/settings`. `H_n` chooses `tool_meta.connector_name ?? serverInfo.title ?? name`. `app-shared-40678a67f0e3.js` `Rqr` (export `CG`) accepts HTTPS/data icons with theme fallback. | Keep omitted: no applicable ordinary gateway presentation benefit was found. These fields are not declared unsupported. Claude-specific optional display consumers and actual Desktop presentation remain unverified. |
-| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **IMPLEMENTED:** return the [execution plan's exact 689-byte text](../.superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production-adapter protocol regression verifies exact text, workflow anchors and the byte bound. Actual 0.162.0 Plugin namespace/search consumption passed in the dated acceptance below. |
+| `instructions` in Codex | [Initialization and namespace conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L843) retain instructions as `namespace_description` ([conversion](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/codex-mcp/src/rmcp_client.rs#L1027)); the [tool handler](https://github.com/openai/codex/blob/rust-v0.162.0/codex-rs/core/src/tools/handlers/mcp.rs#L514-L579) uses it in namespace/search descriptions. The Plugin path truncates at a UTF-8 boundary within 1,000 bytes. | **IMPLEMENTED:** return the [execution plan's exact 689-byte text](../../.superpowers/plans/2026-10-09-mcp-instructions.md#production-text) through official SDK options, supplementing the full Skill. Production-adapter protocol regression verifies exact text, workflow anchors and the byte bound. Actual 0.162.0 Plugin namespace/search consumption passed in the dated acceptance below. |
 | `instructions` in Claude | [Official server-author guidance](https://code.claude.com/docs/en/mcp#for-mcp-server-authors) says instructions help tool search and documents a 2,048-character bound. | Use the same implemented text; it fits both researched bounds. Actual 2.1.295 first-request consumption passed through the scoped host reminder documented below; search execution and real-model adherence remain unverified. |
 
 ### MCP instruction consumption acceptance, 2026-10-09
@@ -261,18 +285,25 @@ inspection does not prove ordinary gateway rendering or instruction adherence.
 
 ## Executed host acceptance and its limits
 
+The 2026-10-05 Windows origin used Codex CLI 0.160.0 and Claude Code 2.1.283
+for actual Plugin installation, discovery and model-context Hooks. Claude 2.1.283
+is the first supported baseline. The existing [MCP/native peer-host follow-up](../mcp-native-validation.md)
+owns that original acceptance scope; later versions below are separate runs.
+Those historical payloads each contained executable runtime and the complete
+original official release. Current thin payloads share the separately running App.
+
 On Windows, actual Codex CLI **0.161.0** and Claude Code **2.1.294** passed the
 selected Marketplace installed-tree/gateway smokes and all **eight Hook/Skill
 scenarios per host** on 2026-10-08. These dated results concern the retired
-[stdio/Hook contract](../tests/smoke/README.md#historical-stdio-and-hook-host-acceptance).
+[stdio/Hook contract](../../tests/smoke/README.md#historical-stdio-and-hook-host-acceptance).
 The former [Codex Hook/Skill suite](https://github.com/Cirnouo/debugging-cdp-targets/blob/e7fd6c82ef37f639500a8c2b3eda7e900b963d27/tests/smoke/codex-hooks.ts)
 and [Claude Hook/Skill suite](https://github.com/Cirnouo/debugging-cdp-targets/blob/e7fd6c82ef37f639500a8c2b3eda7e900b963d27/tests/smoke/claude-hooks.ts)
 are preserved at the last main snapshot before their removal. This snapshot
 does not establish which source commit ran on 2026-10-08.
 Current HTTP instructions and maintained Marketplace entrypoints are separate:
-[smoke instructions](../tests/smoke/README.md),
-[Codex Marketplace smoke](../tests/smoke/marketplace.ts) and
-[Claude Marketplace smoke](../tests/smoke/claude-marketplace.ts).
+[smoke instructions](../../tests/smoke/README.md),
+[Codex Marketplace smoke](../../tests/smoke/marketplace.ts) and
+[Claude Marketplace smoke](../../tests/smoke/claude-marketplace.ts).
 Historical accepted baselines Codex 0.160.0 and Claude 2.1.283 were not rerun;
 Claude 2.1.283 remains the first supported baseline.
 
@@ -289,7 +320,7 @@ installed entry body at the captured model boundary. These historical smokes
 establish explicit entry injection, not conditional reading of the question or
 operation references introduced on 2026-10-13, locale selection or model adherence.
 
-The [Codex smoke helper](../tests/smoke/codex-host.ts) disables nonfixture Skills
+The [Codex smoke helper](../../tests/smoke/codex-host.ts) disables nonfixture Skills
 through the formal API into disposable CODEX_HOME before model threads, refreshes
 discovery, and requires the exact fixture enabled set. It checks model-visible
 paths and distinct unrelated metadata; approved identical metadata is not
@@ -321,7 +352,7 @@ refreshes the selected Git catalog source. Run
 `codex plugin add debugging-cdp-targets@debugging-cdp-targets` afterward to
 reinstall its current payload, even while its version stays 0.1.0. Catalog
 freshness alone is not installed-cache freshness. The
-[installation guide](user-guide/installation.md#update-or-uninstall-in-codex)
+[installation guide](../user-guide/installation.md#update-or-uninstall-in-codex)
 owns the supported user commands.
 
 An actual 0.161.0 disposable-configuration test on 2026-10-08 changed a source
@@ -405,9 +436,11 @@ they do not establish a product bug or behavior across all versions/platforms.
 
 ## Native user-plugin management study — 2026-10-17
 
-This study establishes the native CLI adapter and management service contract for
-the direct HTTP payload above. App main and management-window integration remain
-pending. The service does not advertise a production stable candidate: App and
+At the time of this 2026-10-17 study, the native CLI adapter and management
+service contract applied to the direct HTTP payload above. App main and
+management-window integration remained pending in that tested source. The
+[current Host architecture](../architecture/host-plugin-management.md) describes
+the subsequently delivered composition; it is not a native rerun of this study. The service does not advertise a production stable candidate: App and
 Plugin 0.1.0 remain Unreleased. A missing candidate is a normal state.
 
 Executed native versions were Codex **0.163.0** and Claude Code **2.1.302**.
@@ -462,46 +495,14 @@ does not authorize arbitrary unknown installation metadata.
 
 ### Source, receipt and port synchronization boundaries
 
-The minimal future latest record has schema 1, a stable Plugin version,
-independent `minimumAppVersion`, Git URL and immutable lowercase 40-character
-payload SHA. HTTPS sources cannot contain credentials, query or fragment;
-loopback HTTP exists for isolated fixtures. Payload commit A precedes separately
-authorized catalog/feed commit B. Both hosts' git-subdir catalogs must agree on
-payload SHA, path and logical version. No history search or downgrade is used.
-
-Before native effects, both catalog records and immutable source blobs are
-validated without checkout, payload execution or Git hooks. Links, gitlinks,
-escape and every case-folded file/directory-prefix alias are refused. After
-native update, inventory must confirm the actual root, version, scope, source,
-ref and enablement; exact full bytes, own manifest and transport are revalidated.
-Only the proved `mcpServers['cdp-targets'].url` JSON literal may differ from source.
-Headers, other entries, formatting and other files remain byte-identical.
-
-A verified native replacement is checkpointed before later URL/persistence work.
-Schema 1 management metadata stores actual paths/source, file hashes, original
-strict loopback URL and unique UTF-8 byte offset. It stores no full MCP/header or
-configuration mirror, bearer, connection or runtime state. Its explicit data
-directory must already exist and be selected after App singleton admission.
-Every restore and retry revalidates actual bytes and native/config ownership;
-the service cannot absorb an external configuration change after its own command.
-Explicit retry can finish a known replacement without repeating native update.
-If its receipt never reached disk and the process is lost, a new instance lacks
-that proof and remains read-only.
-
-No candidate, an incompatible latest candidate or a stale older candidate does
-not prevent a compatible, revalidated managed copy's new-port URL sync. Current
-URL maintenance and update eligibility are independent. One host's failure does
-not undo a successful peer. Atomic own writes check identity before effects and
-read back immediately, including the narrow Claude lease check. No cross-process
-compare-and-set spans config, catalog, native cache and URL rename; late movement
-returns an explicit partial failure/retry. Disk/CLI success remains reload pending
-until actual host activation is independently demonstrated.
-
-The HTTP field/key basis matches maintained thin inputs: Codex `mcp.json` uses
-`streamable-http`, Claude `.mcp.json` uses `http`, both own key `cdp-targets` and
-default `http://127.0.0.1:27637/mcp`. The service accepts only a successfully bound
-strict loopback `/mcp` endpoint for synchronization. Its CLI fixture supplies no
-executable tools and does not establish App HTTP discovery or activation.
+The 2026-10-17 method validated immutable Git payloads before native effects,
+then actual installed bytes and ownership after replacement. It checkpointed
+verified replacement before URL/receipt persistence and exercised retry without
+repeating native update, including null/stale-candidate port changes. The
+[current synchronization architecture](../architecture/host-plugin-management.md#source-receipt-and-port-synchronization)
+owns the complete maintained transaction and strict endpoint/write rules. The
+exact executed inputs, source/tree identities and remaining activation limits
+are retained below.
 
 ### Primary sources and executed scope
 

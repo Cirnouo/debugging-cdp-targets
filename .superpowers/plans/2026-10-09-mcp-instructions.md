@@ -5,7 +5,8 @@
 Add standard MCP initialize instructions so hosts can discover the gateway's
 purpose and entry workflow. Preserve serverInfo, capabilities, tool contracts,
 Skill fields and shared Skill bytes. Version 0.1.0 remains unreleased.
-The primary research and field decisions belong in [host metadata](../../docs/host-metadata.md).
+The primary research and dated field decisions belong in [Host research evidence](../../docs/evidence/host-plugin-research.md).
+Current adopted fields belong in the [Host metadata reference](../../docs/reference/host-metadata.md).
 
 Use Node 24.21.0 and pnpm 12.4.2. Work from the latest remote main in an
 independent worktree on `feat/mcp-instructions`. Subagents use gpt-6.1-sol;

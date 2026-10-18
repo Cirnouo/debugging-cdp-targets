@@ -80,34 +80,10 @@ summary polling and GUI refresh. Both display HH:mm:ss with unbounded hours;
 missing/invalid evidence displays Unavailable. One local clock interval updates
 the view without touching Core activity or invoking host CLIs.
 
-The App constructs the concrete Codex/Claude Task5 manager, native adapters and
-secret-free receipt store only after singleton/data admission. After successful
-HTTP bind it independently restores/revalidates each selected host's owned
-receipt and synchronizes its URL. Missing published candidates are ordinary in
-0.1.0; no feed, polling URL or stable release is invented. A verified owned copy
-can synchronize with a null candidate, and a stale compatible candidate never
-downgrades it. Disk synchronization remains host reload pending; file readback
-does not prove an active host session.
-Inspect preserves that reload obligation for the same verified managed copy,
-while showing current restrictions or native-read failure. A changed selection,
-copy or provenance invalidates that pending-copy attribution.
-
-Host summaries preserve missing CLI/plugin, native failures, no candidate,
-disabled/pinned/read-only/shared restrictions and partial failure. Inspect host
-and Sync / retry explicitly perform native work; ordinary dashboard refreshes
-read cached host state. Hosts serialize independently. Explicit absolute
-configuration roots and executable selections support different desktop
-environments; Claude also supports a cache-root selection. Blank uses the App's
-admitted user environment and home as neutral cwd. Selection changes refuse
-while that host is busy and create a fresh idle adapter/manager. Receipts from
-another root/selection never authorize adoption.
-
-Save a desired port, restart normally through cleanup, bind the new endpoint,
-then synchronize eligible hosts independently. A failed bind keeps the manager
-available for a port correction and performs no host URL synchronization.
-One host's failure does not roll back the other; retry the affected host and
-reload it after successful disk synchronization. Quit denies new mutations and
-waits for actual native CLI completion as well as normal Core cleanup.
+The [Host Plugin management architecture](architecture/host-plugin-management.md)
+owns native selection, cached host jobs, synchronization checkpoints, receipt
+restoration, port retry and reload obligations. The dashboard exposes these
+independent host outcomes and waits for actual native completion before Quit.
 
 Current source tests cover these contracts with real Core/Task5 services and
 controlled I/O. React server rendering is component-only evidence. Native
@@ -167,7 +143,7 @@ completion and detach stop that channel; neither a peer nor a listen stream can
 receive it. Keep the operation wait/status/result path independently of optional
 progress. No MCP Tasks requirement, connection-state Resource or automatic chat
 question chain is added. [ADR 0018](adr/0018-mcp-protocol-compatibility.md) owns the
-protocol decision and [host metadata](host-metadata.md#mcp-protocol-compatibility-research--2026-10-17)
+protocol decision and [host metadata](evidence/host-plugin-research.md#mcp-protocol-compatibility-research--2026-10-17)
 separates fixed-version host source evidence from actual wire acceptance.
 
 Explicit cancel promptly ends local admission and its SDK wait; cleanup likewise

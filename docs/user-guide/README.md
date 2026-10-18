@@ -22,7 +22,7 @@ These pages explain installation and operation in detail:
     conditional application guidance.
 
 The [lifecycle protocol](../lifecycle-protocol.md) defines exact MCP selectors and
-delivery rules. [Domain language](../domain-language.md) defines terms;
+delivery rules. [Domain language](../reference/domain-language.md) defines terms;
 [validation evidence](../mcp-native-validation.md) records dated research and test
 boundaries. Contributor rules and architecture decisions remain in
 [repository documentation](../README.md).
