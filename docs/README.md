@@ -2,7 +2,7 @@
 
 - `user-guide/` explains installation, operation, compatibility, configuration,
     privacy and troubleshooting for Plugin users.
-- `domain-language.md` defines the shared vocabulary.
+- `reference/` defines the shared vocabulary in its sole domain glossary.
 - `host-metadata.md` owns independent host metadata research, field decisions,
     dated CLI/Desktop acceptance and remaining evidence limits.
 - `shared-core.md` documents the transport-independent core, request contexts,

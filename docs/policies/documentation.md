@@ -3,7 +3,7 @@
 The root README is the user entry point: project overview, requirements, a short
 host-specific quick start, common workflow and links to detailed documentation.
 docs/user-guide/ owns complete installation, operation, compatibility,
-configuration, privacy and troubleshooting guidance. docs/domain-language.md
+configuration, privacy and troubleshooting guidance. docs/reference/domain-language.md
 defines terms only. Repository requirements belong here; implementation
 constraints belong in applicable ancestor and local AGENTS.md files; decisions
 belong in docs/adr.

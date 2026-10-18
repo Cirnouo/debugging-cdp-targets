@@ -111,7 +111,7 @@ The accepted [data directory isolation design](docs/adr/0015-explicit-data-direc
 governs the runtime boundary. Review its intent-first research, existing/new
 directory operations, connection leases across restart, deletion authorization,
 late-acquisition safety and explicit path evidence before changing those boundaries.
-Use the [domain glossary](docs/domain-language.md) for terminology and the
+Use the [domain glossary](docs/reference/domain-language.md) for terminology and the
 [security policy](docs/policies/security.md#data-directory-isolation-boundary)
 for the required ownership and disclosure constraints.
 

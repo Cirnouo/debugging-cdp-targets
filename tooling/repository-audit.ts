@@ -467,8 +467,12 @@ export async function auditRepository(root: string) {
     const ignore = files.get('.gitignore') ?? '';
     for (const pattern of ['.idea/', 'node_modules/', '.env*'])
         if (!ignore.includes(pattern)) errors.push(`Ignore policy missing ${pattern}.`);
-    if (!files.has('docs/domain-language.md') || files.has('CONTEXT.md'))
-        errors.push('Use docs/domain-language.md as the only glossary.');
+    if (
+        !files.has('docs/reference/domain-language.md') ||
+        files.has('docs/domain-language.md') ||
+        files.has('CONTEXT.md')
+    )
+        errors.push('Use docs/reference/domain-language.md as the only glossary.');
     if (!files.get('CHANGELOG.md')?.includes('## [Unreleased]'))
         errors.push('Changelog requires an Unreleased section.');
     return errors;
