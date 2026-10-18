@@ -28,7 +28,8 @@
 - `cdp-target.ts` selects candidates and validates listener/endpoint identity.
 - `chromium-features.ts` composes the fixed Chrome screenshot feature immutably,
   preserves unrelated ASCII lists and positional args, and rejects ambiguous conflicts.
-- `control-contract.ts` owns MCP lifecycle request/result unions and identities.
+- `control-contract.ts` owns MCP lifecycle request/result unions, identities and
+  pure diagnostic phase/outcome/elapsed value types and callback signature.
 - `data-isolation.ts` validates required isolation intent, directory operations,
   cleanup policy and typed directory evidence.
 - `official-options.ts` validates reviewed official options and complete recipes,

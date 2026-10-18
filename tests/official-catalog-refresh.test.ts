@@ -15,7 +15,7 @@ import {
 import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createGatewayCore } from '../src/application/plugin-runtime.ts';
-import type { Diagnostic } from '../src/shared/diagnostics.ts';
+import type { Diagnostic } from '../src/domains/control-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 const first: Tool = {

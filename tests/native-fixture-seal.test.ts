@@ -172,6 +172,9 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('tests/smoke/screenshot-layers-study.ts'));
     assert.ok(built.inputs.includes('tests/smoke/screenshot-timeout-study.ts'));
     assert.ok(built.inputs.includes('src/gateway/owned-tool-arguments.ts'));
+    assert.ok(built.inputs.includes('src/gateway/diagnostics.ts'));
+    assert.ok(built.inputs.includes('src/domains/control-contract.ts'));
+    assert.equal(built.inputs.includes('src/shared/diagnostics.ts'), false);
     assert.ok(built.inputs.includes('src/domains/mcp-http.ts'));
     assert.ok(built.inputs.includes('src/adapters/mcp-request-handler.ts'));
     assert.ok(built.inputs.includes('src/adapters/target-host.ts'));

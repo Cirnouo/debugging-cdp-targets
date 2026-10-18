@@ -699,3 +699,171 @@ test('Host payload source requires its local instructions and immediate director
         await rm(root, { recursive: true });
     }
 });
+
+test('pure runtime owners reject ambient clock and process references through original AST forms', () => {
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/example.ts',
+        'src/shared/example.ts',
+        'src/gateway/owned-tool-arguments.ts',
+        'src/gateway/unreviewed.ts',
+    ])
+        for (const source of [
+            'const value = performance.now();',
+            'const value = (performance as Performance)?.["now"]();',
+            'const { now } = performance;',
+            'const clock = performance;',
+            'const value = Date.now();',
+            'const value = new Date();',
+            'const value = globalThis.performance.now();',
+            'const value = (globalThis as typeof globalThis)?.["Date"].now();',
+            'const { performance: clock } = globalThis;',
+            'const value = process.env;',
+            'const { env } = process;',
+            'const value = globalThis["process"]?.env;',
+            'const value = global.process.env;',
+            'const value = global["performance"].now();',
+            'const ambient = global;',
+            'const ambient = globalThis; const value = ambient[key];',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => /ambient clock|process state/.test(error)),
+                `${file}: ${source}`,
+            );
+    for (const source of [
+        'const value = { performance: 1, Date: 2, process: 3 };',
+        'const value = record.performance;',
+        'const value = Math.round(input.elapsedMs * 100) / 100;',
+    ])
+        assert.deepEqual(validateRuntimeSource('src/gateway/unreviewed.ts', source), [], source);
+});
+
+test('pure owners cannot import the Gateway clock through runtime reexport or erased dependencies', () => {
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/control-contract.ts',
+        'src/shared/example.ts',
+        'src/gateway/owned-tool-arguments.ts',
+        'src/gateway/unreviewed.ts',
+    ])
+        for (const dependency of [
+            file.startsWith('src/gateway/') ? './diagnostics.ts' : '../gateway/diagnostics.ts',
+            'node:perf_hooks',
+        ])
+            for (const source of [
+                "import { measured } from './diagnostics.ts';",
+                "export { measured } from './diagnostics.ts';",
+                "export * from './diagnostics.ts';",
+                "import type { Diagnose } from './diagnostics.ts';",
+                "export type { Diagnose } from './diagnostics.ts';",
+                "type Clock = import('./diagnostics.ts').Diagnose;",
+                "import type Clock = require('./diagnostics.ts');",
+                "const clock = require?.('./diagnostics.ts');",
+                "const clock = import('./diagnostics.ts');",
+                'const clock = import(moduleName);',
+            ])
+                assert.ok(
+                    validateRuntimeSource(file, source.replaceAll('./diagnostics.ts', dependency)).length,
+                    `${file}: ${source}`,
+                );
+});
+
+test('Gateway diagnostic clock permission is exact and imports only its pure contract', () => {
+    const file = 'src/gateway/diagnostics.ts';
+    assert.deepEqual(
+        validateRuntimeSource(
+            file,
+            "import type { Diagnostic, Diagnose } from '../domains/control-contract.ts'; const started = performance.now();",
+        ),
+        [],
+    );
+    for (const source of [
+        "import { isRecord } from '../shared/errors.ts';",
+        "import { parseOfficialToolArguments } from './owned-tool-arguments.ts';",
+        "import type { ApplicationLaunch } from '../domains/launch-command.ts';",
+        "export * from '../adapters/cdp-router.ts';",
+        "import fs from 'node:fs';",
+        "import type fs = require('node:fs');",
+        'const clock = import(moduleName);',
+        'const value = process.env;',
+        'const value = globalThis.process.env;',
+        'const value = Date.now();',
+        'const value = performance.timeOrigin;',
+        'const clock = performance;',
+        'const value = fetch(url);',
+        'const value = new WebSocket(url);',
+        'const value = globalThis["fetch"](url);',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
+});
+
+test('nested ambient roots cannot expose clock process network or global aliases', () => {
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/example.ts',
+        'src/shared/example.ts',
+        'src/gateway/owned-tool-arguments.ts',
+        'src/gateway/unreviewed.ts',
+        'src/gateway/diagnostics.ts',
+    ])
+        for (const source of [
+            'const value = globalThis.global.process.env;',
+            'const value = globalThis.globalThis.performance.now();',
+            'const value = global.globalThis.Date.now();',
+            'const value = globalThis.global.fetch(url);',
+            'const value = globalThis.global["performance"].now();',
+            'const value = globalThis["global"]?.process.env;',
+            'const value = globalThis.globalThis["process"].env;',
+            'const value = (globalThis as typeof globalThis).global?.performance.now();',
+            'const value = global?.globalThis?.Date.now();',
+            'const value = globalThis?.["globalThis"]?.["performance"]?.now();',
+            'const value = globalThis.global.globalThis.process?.env;',
+            'const ambient = globalThis.global; const value = ambient.process.env;',
+            'const { performance: clock } = globalThis.globalThis;',
+            'const { env } = global.globalThis.process;',
+            'const ambient = globalThis["global"]; const value = ambient.performance.now();',
+            'const ambient = globalThis.global;',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) =>
+                    /ambient clock|process state|network I\/O/.test(error),
+                ),
+                `${file}: ${source}`,
+            );
+});
+
+test('TypeScript method-signature declaration keys remain pure record names', () => {
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/example.ts',
+        'src/gateway/unreviewed.ts',
+        'src/gateway/diagnostics.ts',
+    ])
+        for (const source of [
+            'interface RecordValue { performance(): number; Date(): number; process(): string; }',
+            'type RecordValue = { performance(): number; Date(): number; process(): string; };',
+            'type RecordValue = { performance<T>(): T; process<T>(): T; Date<T>(): T; };',
+            'interface RecordValue { globalThis(): string; global(): string; }',
+            'interface RecordValue { performance: () => number; process: () => string; }',
+        ])
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+});
+
+test('computed TypeScript method keys and method bodies retain actual ambient rejection', () => {
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/example.ts',
+        'src/gateway/unreviewed.ts',
+        'src/gateway/diagnostics.ts',
+    ])
+        for (const source of [
+            'interface RecordValue { [performance](): number; }',
+            'type RecordValue = { [process.env.key](): string; };',
+            'type RecordValue = { performance<T extends typeof process>(): T; };',
+            'const record = { performance() { return process.env; } };',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => /ambient clock|process state/.test(error)),
+                `${file}: ${source}`,
+            );
+});

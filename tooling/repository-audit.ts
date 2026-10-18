@@ -3,7 +3,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
-import type { Node } from '@babel/types';
+import { isReferenced, type Node } from '@babel/types';
 import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
 import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
@@ -22,13 +22,24 @@ const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/interface/app-manager.ts', ['react']],
 ]);
 
-function visit(node: unknown, callback: (node: Node) => void) {
+function visit(
+    node: unknown,
+    callback: (node: Node, parent?: Node, grandparent?: Node) => void,
+    parent?: Node,
+    grandparent?: Node,
+) {
     if (!node || typeof node !== 'object') return;
     // Only traverse parser-produced nodes; comments also carry a type field.
-    if ('type' in node && typeof node.type === 'string' && !node.type.startsWith('Comment')) callback(node as Node);
+    const current =
+        'type' in node && typeof node.type === 'string' && !node.type.startsWith('Comment')
+            ? (node as Node)
+            : undefined;
+    if (current) callback(current, parent, grandparent);
     for (const value of Object.values(node)) {
-        if (Array.isArray(value)) for (const child of value) visit(child, callback);
-        else if (value && typeof value === 'object') visit(value, callback);
+        if (Array.isArray(value))
+            for (const child of value) visit(child, callback, current ?? parent, current ? parent : grandparent);
+        else if (value && typeof value === 'object')
+            visit(value, callback, current ?? parent, current ? parent : grandparent);
     }
 }
 
@@ -266,6 +277,8 @@ export function validateRuntimeSource(file: string, source: string) {
     const hostPayload = layer === 'host-plugins';
     const domain = layer === 'domains' || hostPayload;
     const gateway = layer === 'gateway';
+    const diagnosticClock = file === 'src/gateway/diagnostics.ts';
+    const pure = domain || layer === 'shared' || gateway;
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
     function dependency(specifier: unknown) {
@@ -284,6 +297,10 @@ export function validateRuntimeSource(file: string, source: string) {
         }
         if (gateway && (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved)))
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);
+        if (diagnosticClock && (!specifier.startsWith('.') || resolved !== 'src/domains/control-contract.ts'))
+            errors.push(`${file}: Gateway diagnostics may depend only on the pure control contract.`);
+        if (pure && !diagnosticClock && (resolved === 'src/gateway/diagnostics.ts' || specifier === 'node:perf_hooks'))
+            errors.push(`${file}: pure owners cannot depend on the diagnostic clock.`);
         if (layer === 'adapters' && /^src\/(?:application|interface)\//.test(resolved))
             errors.push(`${file}: adapter depends on an upper layer.`);
         if (layer === 'shared' && specifier.startsWith('.') && !resolved.startsWith('src/shared/'))
@@ -307,7 +324,47 @@ export function validateRuntimeSource(file: string, source: string) {
         )
             errors.push(`${file}: unapproved runtime dependency: ${specifier}`);
     }
-    visit(ast, (node) => {
+    visit(ast, (node, parent, grandparent) => {
+        if (
+            pure &&
+            node.type === 'Identifier' &&
+            parent &&
+            !(parent.type === 'TSMethodSignature' && !parent.computed && parent.key === node) &&
+            isReferenced(node, parent, grandparent)
+        ) {
+            let ambient = node.name;
+            if (ambient === 'globalThis' || ambient === 'global') {
+                const member = parent.type === 'MemberExpression' || parent.type === 'OptionalMemberExpression';
+                const property =
+                    member && parent.object === node
+                        ? parent.computed
+                            ? parent.property.type === 'StringLiteral'
+                                ? parent.property.value
+                                : undefined
+                            : propertyName(parent.property)
+                        : undefined;
+                if (!property || property === 'global' || property === 'globalThis')
+                    errors.push(`${file}: cannot alias or compute ambient clock/process state.`);
+                ambient = property ?? ambient;
+            }
+            if (ambient === 'process') errors.push(`${file}: ${layer} cannot access process state.`);
+            if (ambient === 'performance' || ambient === 'Date') {
+                const reviewedRead =
+                    diagnosticClock &&
+                    node.name === 'performance' &&
+                    parent.type === 'MemberExpression' &&
+                    !parent.computed &&
+                    parent.object === node &&
+                    propertyName(parent.property) === 'now' &&
+                    grandparent?.type === 'CallExpression' &&
+                    grandparent.callee === parent &&
+                    grandparent.arguments.length === 0;
+                if (!reviewedRead)
+                    errors.push(`${file}: cannot access ambient clock outside the reviewed diagnostic read.`);
+            }
+            if (['fetch', 'WebSocket', 'XMLHttpRequest'].includes(ambient))
+                errors.push(`${file}: ${layer} cannot access ambient network I/O.`);
+        }
         const object =
             node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression'
                 ? expression(node.object)
