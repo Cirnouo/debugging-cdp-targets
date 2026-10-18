@@ -64,22 +64,21 @@ for (const host of ['codex', 'claude'] as const) {
     });
 }
 
-test('URL overlay preserves duplicate unrelated strings', async () => {
+test('URL overlay preserves duplicate unrelated strings', async (t) => {
     const f = await fixture('codex');
-    try {
-        const original = f.files.get(f.mcp)?.toString('utf8');
-        assert.ok(original);
-        const sameUrl = original.replace('https://example.invalid', 'http://127.0.0.1:27637/mcp');
-        f.files.set(f.mcp, Buffer.from(sameUrl));
-        await writeFile(path.join(f.root, f.mcp), sameUrl);
-        await patchPluginEndpoint('codex', f.root, '0.2.0', f.files, 'http://localhost:3333/mcp');
-        assert.equal(
-            await readFile(path.join(f.root, f.mcp), 'utf8'),
-            sameUrl.replace('http://127.0.0.1:27637/mcp', 'http://localhost:3333/mcp'),
-        );
-    } finally {
-        await rm(f.root, { recursive: true });
-    }
+    t.after(async () => {
+        await rm(f.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
+    });
+    const original = f.files.get(f.mcp)?.toString('utf8');
+    assert.ok(original);
+    const sameUrl = original.replace('https://example.invalid', 'http://127.0.0.1:27637/mcp');
+    f.files.set(f.mcp, Buffer.from(sameUrl));
+    await writeFile(path.join(f.root, f.mcp), sameUrl);
+    await patchPluginEndpoint('codex', f.root, '0.2.0', f.files, 'http://localhost:3333/mcp');
+    assert.equal(
+        await readFile(path.join(f.root, f.mcp), 'utf8'),
+        sameUrl.replace('http://127.0.0.1:27637/mcp', 'http://localhost:3333/mcp'),
+    );
 });
 
 test('MCP formatting drift is outside the one URL byte overlay', async () => {

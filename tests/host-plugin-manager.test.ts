@@ -314,6 +314,7 @@ async function replacementFixture() {
     let current: string | undefined;
     let offered = '0.2.0';
     let refreshed = false;
+    let failOldRemoval = false;
     let failure: 'none' | 'patch' | 'readback' | 'store-before' | 'store-after' | 'store-write' = 'none';
     const receiptFile = path.join(metadata, 'claude-managed-plugin.json');
     const linkedReceipt = path.join(metadata, 'linked-receipt');
@@ -346,7 +347,15 @@ async function replacementFixture() {
                         if (current && current !== version) {
                             const previous = payloads.get(current);
                             assert.ok(previous);
-                            await rm(previous.root, { recursive: true });
+                            if (failOldRemoval) {
+                                await rm(path.join(previous.root, 'README.md'));
+                                throw Object.assign(new Error('controlled partial old-tree removal'), {
+                                    code: 'ENOTEMPTY',
+                                    syscall: 'rmdir',
+                                    path: previous.root,
+                                });
+                            }
+                            await rm(previous.root, { recursive: true, maxRetries: 5, retryDelay: 100 });
                         }
                         current = version;
                     },
@@ -420,6 +429,9 @@ async function replacementFixture() {
         injections,
         receiptFile,
         linkedReceipt,
+        failOldRemoval: (value: boolean) => {
+            failOldRemoval = value;
+        },
         native: () => ({ root: path.join(root, current ?? ''), version: current, configuration }),
         readReceipt: async () =>
             parseManagedPluginReceipt(await new JsonHostPluginReceiptStore(metadata).read('claude')),
@@ -496,29 +508,112 @@ async function replacementFixture() {
 test('verified native replacement can retry URL and receipt failures without replaying native updates', async () => {
     for (const failure of ['patch', 'readback', 'store-before', 'store-after'] as const) {
         const f = await replacementFixture();
+        try {
+            const manager = f.makeManager();
+            assert.equal(
+                (await manager.synchronize(f.record('0.2.0'), 'http://127.0.0.1:3333/mcp'))[0]?.state,
+                'disk-synchronized',
+            );
+            f.assertWritten('0.2.0');
+            await f.assertPayload('0.2.0', 'http://127.0.0.1:3333/mcp');
+            f.fail(failure);
+            const failed = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:4444/mcp'))[0];
+            assert.equal(failed?.state, 'partial-failure');
+            assert.equal(
+                failed?.reason,
+                failure === 'patch'
+                    ? 'plugin-url-write-failed'
+                    : failure === 'readback'
+                      ? 'plugin-url-readback-failed'
+                      : 'managed-receipt-write-failed',
+                JSON.stringify(failed),
+            );
+            assert.deepEqual(
+                f.injections,
+                [{ version: '0.3.0', phase: failure }],
+                'the intended injection must be reached',
+            );
+            assert.equal(f.native().version, '0.3.0');
+            await f.assertPayload(
+                '0.3.0',
+                failure === 'readback' ? 'http://127.0.0.1:4444/mcp' : 'http://127.0.0.1:27637/mcp',
+            );
+            const receipt = await f.readReceipt();
+            if (failure === 'store-before') {
+                assert.equal(
+                    f.writes.some((entry) => entry.version === '0.3.0'),
+                    false,
+                );
+                assert.equal(receipt.record.version, '0.2.0');
+            } else {
+                f.assertWritten('0.3.0');
+                assert.deepEqual(receipt.record, f.record('0.3.0'));
+                assert.deepEqual(receipt.native, f.native());
+                assert.deepEqual(await restoreReceiptFiles(receipt), f.payloads.get('0.3.0')?.files);
+            }
+            f.fail('none');
+            const mutations = f.effects.mutations;
+            if (failure === 'store-before') {
+                const lostProof = (await f.makeManager().synchronize(null, 'http://127.0.0.1:5555/mcp'))[0];
+                assert.equal(lostProof?.state, 'read-only');
+                assert.equal(lostProof?.reason, 'managed-receipt-payload-changed');
+                assert.equal(f.effects.mutations, mutations);
+            }
+            const resumed = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:5555/mcp'))[0];
+            assert.equal(resumed?.state, 'disk-synchronized', `${failure}: ${JSON.stringify(resumed)}`);
+            assert.equal(resumed?.activation, 'reload-pending');
+            assert.equal(f.effects.mutations, mutations);
+            const newRoot = f.payloads.get('0.3.0')?.root;
+            assert.ok(newRoot);
+            assert.match(await readFile(path.join(newRoot, '.mcp.json'), 'utf8'), /5555/);
+        } catch (error) {
+            try {
+                await f.retainFailure(error);
+            } catch {
+                // Capture is best effort; preserve the original failure below.
+            }
+            throw error;
+        }
+    }
+    const f = await replacementFixture();
+    try {
         const manager = f.makeManager();
         assert.equal(
             (await manager.synchronize(f.record('0.2.0'), 'http://127.0.0.1:3333/mcp'))[0]?.state,
             'disk-synchronized',
         );
-        f.fail(failure);
+        f.assertWritten('0.2.0');
+        await f.assertPayload('0.2.0', 'http://127.0.0.1:3333/mcp');
+        f.fail('store-after');
+        f.failOldRemoval(true);
         const failed = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:4444/mcp'))[0];
         assert.equal(failed?.state, 'partial-failure');
+        assert.equal(failed?.reason, 'verification-failed');
+        assert.deepEqual(f.injections, []);
+        assert.equal(f.native().version, '0.2.0');
+        assert.equal(
+            f.writes.some((entry) => entry.version === '0.3.0'),
+            false,
+        );
+        assert.throws(() => f.assertWritten('0.3.0'), /actual receipt write and independent readback/);
+        assert.equal((await f.readReceipt()).record.version, '0.2.0');
+        const oldRoot = f.payloads.get('0.2.0')?.root;
+        assert.ok(oldRoot);
+        await assert.rejects(readFile(path.join(oldRoot, 'README.md')), { code: 'ENOENT' });
         f.fail('none');
+        f.failOldRemoval(false);
         const mutations = f.effects.mutations;
-        if (failure === 'store-before') {
-            const lostProof = (await f.makeManager().synchronize(null, 'http://127.0.0.1:5555/mcp'))[0];
-            assert.equal(lostProof?.state, 'read-only');
-            assert.equal(lostProof?.reason, 'managed-receipt-payload-changed');
-            assert.equal(f.effects.mutations, mutations);
-        }
-        const resumed = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:5555/mcp'))[0];
-        assert.equal(resumed?.state, 'disk-synchronized', `${failure}: ${JSON.stringify(resumed)}`);
-        assert.equal(resumed?.activation, 'reload-pending');
+        const refused = (await manager.synchronize(f.record('0.3.0'), 'http://127.0.0.1:5555/mcp'))[0];
+        assert.equal(refused?.state, 'read-only');
+        assert.equal(refused?.reason, 'managed-receipt-payload-changed');
         assert.equal(f.effects.mutations, mutations);
-        const newRoot = f.payloads.get('0.3.0')?.root;
-        assert.ok(newRoot);
-        assert.match(await readFile(path.join(newRoot, '.mcp.json'), 'utf8'), /5555/);
+    } catch (error) {
+        try {
+            await f.retainFailure(error);
+        } catch {
+            // Capture is best effort; preserve the original failure below.
+        }
+        throw error;
     }
 });
 
