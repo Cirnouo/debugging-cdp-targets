@@ -241,9 +241,9 @@ Git hook tests remain contributor-tooling regressions.
 - `build-plugin.test.ts` checks complete transitive bundle license collection,
   nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
   and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
-- `commit-checks.test.ts`, `tooling/governance/` validate Git rules/topology,
+- `tooling/governance/` validates supplied commit events and Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
-  They independently check raw PR titles and predicted squash headers with actual
+  These tests independently check raw PR titles and predicted squash headers with actual
   PR numbers, enforce the current description template, and accept long prose,
   wide tables, fenced evidence and adjacent trailer-looking review text. Actual
   non-merge commit bodies retain strict length/footer rules regardless of commit
@@ -437,7 +437,7 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select `tests/*.test.ts` plus the three explicit
+command and `pnpm test:coverage` select `tests/*.test.ts` plus the five explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and the two explicit
 Host suites in [Host plugin tests](host-plugins/README.md); they do not launch

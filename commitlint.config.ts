@@ -1,7 +1,7 @@
 import configConventional from '@commitlint/config-conventional';
 import type { UserConfig } from '@commitlint/types';
 
-import { footerLeadingBlank } from './tooling/commit-footer-rule.ts';
+import { footerLeadingBlank } from './tooling/governance/commit-footer.ts';
 import { COMMIT_SCOPES, COMMIT_TYPES } from './tooling/governance/commit-grammar.ts';
 
 export default {

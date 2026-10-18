@@ -70,7 +70,7 @@ labels, not an inference of prose intent. Hyphenated labels such as
 boundary. A body label cannot hide a later unseparated reserved footer, and
 every body or footer still requires a blank line after the header.
 
-The local `footer-leading-blank` rule in `tooling/commit-footer-rule.ts` owns
+The local `footer-leading-blank` rule in `tooling/governance/commit-footer.ts` owns
 these boundaries at error severity. The Conventional Commits parser, original
 message, other commitlint rules and Git topology checks remain authoritative
 for their existing responsibilities.
