@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { createPlatformAdapter } from '../src/adapters/platform-process.ts';
-import type { ManagedTarget, ProcessEvidence, ProcessTarget } from '../src/domains/cdp-target.ts';
+import type { ManagedTarget, ProcessEvidence, ProcessTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
 const identity: ProcessTarget = {

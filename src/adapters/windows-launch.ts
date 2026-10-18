@@ -2,9 +2,9 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ProcessTarget } from '../domains/cdp-target.ts';
 import type { LaunchContext } from '../domains/control-contract.ts';
 import type { LaunchDefinition } from '../domains/launch-command.ts';
+import type { ProcessTarget } from '../gateway/targets/model/target-contract.ts';
 import { DetailedError, isRecord } from '../shared/errors.ts';
 
 class NativeApplication extends EventEmitter {

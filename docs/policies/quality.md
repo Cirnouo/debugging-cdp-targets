@@ -78,7 +78,8 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/quality/text-policy.test.ts`,
 `tests/gateway/owned-tool-arguments.test.ts`,
 `tests/host-plugins/payload-integrity.test.ts` and
-`tests/host-plugins/payload-filesystem.test.ts`. They run files sequentially
+`tests/host-plugins/payload-filesystem.test.ts`, plus exactly
+`tests/gateway/targets/port-and-endpoint-admission.test.ts`. They run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.

@@ -11,7 +11,7 @@ import { createOfficialConnection, type OfficialConnection } from '../../src/ada
 import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createGatewayCore } from '../../src/application/plugin-runtime.ts';
-import type { ManagedTarget } from '../../src/domains/cdp-target.ts';
+import type { ManagedTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { OFFICIAL_RELEASE } from '../../tooling/official-release.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';

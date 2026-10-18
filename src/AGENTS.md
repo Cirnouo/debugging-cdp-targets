@@ -7,7 +7,8 @@ owns core resources and direct HTTP; host plugins are thin.
 
 Dependencies flow interface → application → domains/shared; application may
 use explicit adapters. Adapters may consume the delivered pure gateway argument
-rules or its exact diagnostics clock and never depend on application/interface.
+rules and target models, or its exact diagnostics clock, and never depend on
+application/interface.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Only gateway/diagnostics.ts may read its existing

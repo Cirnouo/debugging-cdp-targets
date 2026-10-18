@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
-import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
+import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { GUI_SKIP_REASON, guiAuthorization } from '../gui-authorization.ts';
 

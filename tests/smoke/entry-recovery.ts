@@ -6,8 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/client';
 import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
-import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlResult } from '../../src/domains/control-contract.ts';
+import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 import {

@@ -7,7 +7,7 @@ import { createAppManagement } from '../src/application/app-management.ts';
 import { createOperationRegistry } from '../src/application/operations.ts';
 import { createGatewayCore, type GatewayCore } from '../src/application/plugin-runtime.ts';
 import type { AppManagementCommand, AppManagementSnapshot } from '../src/domains/app-ui.ts';
-import type { ManagedTarget } from '../src/domains/cdp-target.ts';
+import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
 
 type Controller = {

@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { createTargetController } from '../src/application/target-controller.ts';
-import { type ManagedTarget, RetainedTargetError } from '../src/domains/cdp-target.ts';
+import { type ManagedTarget, RetainedTargetError } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
 const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

@@ -4,8 +4,8 @@ import { mock, test } from 'node:test';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import type { OfficialConnection } from '../src/adapters/mcp-bridge.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { RetainedTargetError } from '../src/domains/cdp-target.ts';
 import type { ConnectionStatus, ControlHandler, LaunchOptions } from '../src/domains/control-contract.ts';
+import { RetainedTargetError } from '../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { createCoreFixture } from './fixtures/core-runtime.ts';
 

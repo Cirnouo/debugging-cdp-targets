@@ -2,15 +2,15 @@ import { spawn } from 'node:child_process';
 import { readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { PortRange } from '../domains/cdp-target.ts';
+import type { LaunchContext } from '../domains/control-contract.ts';
 import type {
     ListenerEvidence,
     ManagedTarget,
-    PortRange,
     ProcessEvidence,
     ProcessTarget,
     RootEvidence,
-} from '../domains/cdp-target.ts';
-import type { LaunchContext } from '../domains/control-contract.ts';
+} from '../gateway/targets/model/target-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import {
     beginFixtureStage,

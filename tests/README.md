@@ -67,7 +67,8 @@ Git hook tests remain contributor-tooling regressions.
   SDK schema validation of explicit bearer inputs versus missing or retired fields.
 - `mcp-http-policy.test.ts` checks exact loopback authority/Origin/path/method
   and bounded unambiguous bodies.
-- `gateway/` owns the pure explicit bearer and official tool-argument suite.
+- `gateway/` owns pure explicit bearer/tool-argument and supplied target endpoint
+  admission suites.
 - `mcp-http-server.test.ts` covers actual SDK HTTP clients, originating roots,
   elicitation/progress, client cancellation versus owned work, boundary rejection
   and explicit shutdown over the real Core with controlled native/official I/O.
@@ -207,7 +208,8 @@ Git hook tests remain contributor-tooling regressions.
   strict switch/target conflicts. Non-Windows Chrome keeps existing feature choices.
 
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
-  Server options, identity, and launch rollback using fake targets.
+  Server options, candidate port selection and launch rollback using controlled
+  targets. The original pure identity case lives in `gateway/targets/`.
 - `plugin-distribution.test.ts` validates portable manifests and inventory.
 - `icon-packaging.test.ts` checks exact host artwork metadata and delivery,
   rejects missing/unexpected assets, and exercises PNG size, dimensions, CRCs,
@@ -444,7 +446,8 @@ Git hook tests remain contributor-tooling regressions.
 Run `pnpm test` or a focused Node test for default regressions. The default
 command and `pnpm test:coverage` select `tests/*.test.ts` plus the five explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
-`tests/gateway/owned-tool-arguments.test.ts` and the two explicit
+`tests/gateway/owned-tool-arguments.test.ts` and
+`tests/gateway/targets/port-and-endpoint-admission.test.ts`, and the two explicit
 Host suites in [Host plugin tests](host-plugins/README.md); they do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run

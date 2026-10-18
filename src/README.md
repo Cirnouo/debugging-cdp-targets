@@ -8,8 +8,9 @@ The singleton App owns direct HTTP, management and native resources. The
 
 - `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
 - `application/`: independent target lifecycles and connection registry orchestration.
-- `domains/`: pure launch, HTTP admission and CDP identity/port rules.
-- `gateway/`: pure explicit bearer/tool-argument extraction and bounded clock-backed diagnostics.
+- `domains/`: pure launch, HTTP admission and remaining port candidate rules.
+- `gateway/`: pure explicit bearer/tool-argument extraction, target evidence/identity
+    models and bounded clock-backed diagnostics.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants.

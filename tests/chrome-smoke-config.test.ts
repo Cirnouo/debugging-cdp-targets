@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import type { ProcessTarget } from '../src/domains/cdp-target.ts';
 import type { ControlRequest, ControlResult } from '../src/domains/control-contract.ts';
+import type { ProcessTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { closeSmokeConnection } from './smoke/lifecycle-client.ts';
 
 test('an explicit smoke Close waits for busy CDP without changing target identity', async () => {

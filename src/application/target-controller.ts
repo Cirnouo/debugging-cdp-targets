@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { emitFixtureEvent } from '../adapters/fixture-diagnostics.ts';
-import { type ManagedTarget, RetainedTargetError } from '../domains/cdp-target.ts';
 import type {
     ControlContext,
     Disposition,
@@ -8,6 +7,7 @@ import type {
     LaunchOptions,
     TargetStatus,
 } from '../domains/control-contract.ts';
+import { type ManagedTarget, RetainedTargetError } from '../gateway/targets/model/target-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
 import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 

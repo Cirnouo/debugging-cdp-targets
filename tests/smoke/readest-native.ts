@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
-import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
+import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 
 const args = requireGuiAuthorization();

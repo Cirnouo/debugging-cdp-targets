@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { createTargetController, type TargetEvent } from '../src/application/target-controller.ts';
-import type { ManagedTarget } from '../src/domains/cdp-target.ts';
 import type { LaunchOptions } from '../src/domains/control-contract.ts';
+import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
 
 const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 type FixtureChild = EventEmitter & { exitCode: number | null; signalCode: string | null };

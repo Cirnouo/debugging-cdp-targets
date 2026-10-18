@@ -37,6 +37,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
     for (const input of [
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/diagnostics.ts',
+        'src/gateway/targets/model/cdp-identity.ts',
+        'src/gateway/targets/model/target-contract.ts',
         'src/domains/control-contract.ts',
         'src/domains/mcp-http.ts',
         'src/adapters/mcp-request-handler.ts',
@@ -52,6 +54,10 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         );
     assert.equal(
         actualInputs.some((name) => name.replaceAll('\\', '/').endsWith('src/shared/diagnostics.ts')),
+        false,
+    );
+    assert.equal(
+        actualInputs.some((name) => name.replaceAll('\\', '/').endsWith('src/domains/cdp-target.ts')),
         false,
     );
     for (const name of ['semver', 'smol-toml'])

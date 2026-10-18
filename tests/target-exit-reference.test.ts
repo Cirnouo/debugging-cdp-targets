@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { waitForTargetExit } from '../src/adapters/platform-process.ts';
-import type { ManagedTarget } from '../src/domains/cdp-target.ts';
+import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 for (const mode of ['single', 'cancel-one', 'cancel-all']) {
