@@ -40,6 +40,7 @@ const interactiveCases = {
 const toolingCases = [
     'tests/tooling/governance/commit-grammar.test.ts',
     'tests/tooling/governance/commit-validation.test.ts',
+    'tests/tooling/quality/text-policy.test.ts',
 ];
 
 async function testFiles(): Promise<string[]> {

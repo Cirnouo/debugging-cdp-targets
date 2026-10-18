@@ -17,7 +17,9 @@ govern implementation. The source is currently organized by technical layers.
 Existing layer, pure-model and I/O rules remain in force.
 
 [Tooling governance](../../tooling/governance/README.md) separates pure commit
-grammar from actual message execution. Its central
+grammar from actual message execution.
+[Text policy](../../tooling/quality/README.md) owns shared pure style and YAML
+filename rules. Their central
 [tooling tests](../../tests/tooling/README.md) have explicit safe default selection;
 other tooling and test owners retain their current placement.
 
