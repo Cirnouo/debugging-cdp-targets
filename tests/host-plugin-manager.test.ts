@@ -25,7 +25,11 @@ test.afterEach(async () => {
     await Promise.all(
         fixtureRoots
             .splice(0)
-            .map((root) => (retainedFixtureRoots.has(root) ? undefined : rm(root, { recursive: true }))),
+            .map((root) =>
+                retainedFixtureRoots.has(root)
+                    ? undefined
+                    : rm(root, { recursive: true, maxRetries: 5, retryDelay: 100 }),
+            ),
     );
 });
 
