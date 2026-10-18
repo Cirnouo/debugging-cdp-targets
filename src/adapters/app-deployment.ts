@@ -72,6 +72,8 @@ async function readDocument<T>(
     const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
         const before = await handle.stat({ bigint: true });
+        if (before.isFile() && !before.isSymbolicLink() && before.nlink === 0n)
+            throw new Error('Deployment document identity changed.');
         regular(before);
         if (before.size < 1n || before.size > BigInt(maximum))
             throw new Error('Deployment document exceeds its bound.');

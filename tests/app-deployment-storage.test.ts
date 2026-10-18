@@ -410,6 +410,83 @@ test('readback failure retains the committed removal fence and reports indetermi
     }
 });
 
+test('an opened state document unlinked before its first stat rejects as changed identity', {
+    skip: !supported,
+    timeout: 20000,
+}, async () => {
+    const own = await fixture();
+    const captured = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const originalOpen = filesystem.open;
+    const stateFile = path.join(own.envelope, 'state.json');
+    let armed = false;
+    let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
+    let operation: DeploymentLease | undefined;
+    let use: DeploymentLease | undefined;
+    let settleRead: Promise<unknown> | undefined;
+    const boundary = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
+        const handle = await originalOpen(...args);
+        if (armed && args[0] === stateFile) {
+            armed = false;
+            opened = handle;
+            captured.resolve();
+            await resume.promise;
+        }
+        return handle;
+    });
+    syncBuiltinESMExports();
+    try {
+        const store = await openDeploymentInstallation(own.directory, { tryLock: await native() });
+        operation = await store.tryAcquire('operation');
+        use = await store.tryAcquire('use');
+        assert.ok(operation);
+        assert.ok(use);
+        armed = true;
+        const reading = store.read(use).then(
+            (value) => ({ value }),
+            (error: unknown) => ({ error }),
+        );
+        settleRead = reading;
+        await Promise.race([
+            captured.promise,
+            reading.then(() => {
+                throw new Error('Reader bypassed its controlled open return.');
+            }),
+        ]);
+        const selected = await store.commit(operation, own.state, next);
+        assert.ok(opened);
+        const oldInode = await opened.stat({ bigint: true });
+        assert.equal(oldInode.isFile(), true);
+        assert.equal(oldInode.nlink, 0n);
+        resume.resolve();
+        const result = await reading;
+        assert.ok('error' in result);
+        assert.ok(result.error instanceof Error);
+        assert.match(result.error.message, /document identity.*changed/);
+        await assert.rejects(opened.stat(), { code: 'EBADF' });
+        assert.deepEqual(await store.read(use), selected);
+
+        const secondName = path.join(own.envelope, 'state-second-link.json');
+        await filesystem.link(stateFile, secondName);
+        try {
+            await assert.rejects(
+                store.read(use),
+                (error: unknown) => error instanceof Error && /regular file with one link/.test(error.message),
+            );
+        } finally {
+            await filesystem.unlink(secondName);
+        }
+    } finally {
+        resume.resolve();
+        await settleRead?.catch(() => {});
+        boundary.mock.restore();
+        syncBuiltinESMExports();
+        await use?.release();
+        await operation?.release();
+        await own.cleanup();
+    }
+});
+
 test('a separate leased reader returns complete selections during atomic writer replacements', {
     skip: !supported,
     timeout: 20000,
