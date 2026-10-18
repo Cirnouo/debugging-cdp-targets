@@ -106,6 +106,48 @@ These clarify the global constraints without claiming implementation or publicat
     returned path, bytes, version and pin before patching this plugin URL. External
     source movement can yield visible partial failure; do not promise host atomicity.
 
+## Accepted Task 7 live deployment amendment — 2026-10-17
+
+Implement the accepted [ADR 0017 amendment](../../docs/adr/0017-singleton-desktop-app.md#accepted-live-deployment-amendment--2026-10-17)
+as three bounded increments. This is forward work, not current installer support.
+
+- 7a: strict schema-version-one physical installation metadata, immutable complete
+    build selection and active/removing/removed transitions; exactly two existing
+    native shared/exclusive installation lock inodes and a bounded atomic state
+    store with explicit pre-commit/indeterminate outcomes and adversarial real
+    cross-process tests. Accept only enrolled roots. No payload staging/removal,
+    startup integration, identity adoption/repair or generic inventory framework.
+    Formatted hashes are not payload proof. Windows ACLs, macOS permissions/local
+    filesystem evidence and system-DEB roles remain conservatively gated. These
+    are hard prerequisites before 7b enables admission on those platforms; the
+    existing App retains its supported platform behavior meanwhile.
+- 7b: pinned complete runtime closure and installation-use admission before data
+    or gateway work, preserving synchronous Chromium isolation as step zero;
+    installation/account-bound closed normal quit; cleanup and actual-exit gates;
+    a short external copied ordinary-Node bridge with detached launches and one
+    bounded private atomic receipt ACK for overlapping successor use ownership.
+    Unknown live children retain coverage; no kill/replay/timeout success or
+    resident cleanup supervisor. Unprovable helper cleanup leaves owned residue.
+- 7c: audited packaging inputs and custom live-safe NSIS, retained-runtime DEB,
+    explicit DMG installer GUI and extracted portable integration; managed removal
+    retains configuration/plugins and lock tombstone, refuses remaining readers,
+    and never deletes a live payload. Complete native six-cell installer/portable
+    acceptance and final bilingual docs, CI and cumulative Unreleased audit.
+
+Updates commit only next-launch selection after independently verifying complete
+immutable payloads; they leave a live App's pinned files, configuration, HTTP and
+children untouched. Normal restart selects the new build only after cleanup and
+actual old-owner exit. Two builds may share SemVer but not content identity.
+Do not prune or solve rollback/history. Supplied managed callbacks exclude manual
+Trash/rm, forced package overrides and overlay extraction. No App updater,
+autostart, service, public administrative API, tags or publication is authorized.
+
+Each increment keeps independently green source, fresh Ultra review, actual
+generated pre-push verification, current-head CI, controlled squash/main CI/local
+fast-forward and owned-worktree archive. Parallel private 7a starts only from a
+committed App foundation; actual App/host/GUI producers precede final ordered
+integration and remote delivery.
+
 ## Verification and completion ownership
 
 The scoped Task 2 contracts are independently green before runtime work. Later

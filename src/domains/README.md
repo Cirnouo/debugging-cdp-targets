@@ -1,5 +1,8 @@
 # Pure domain rules
 
+- `app-deployment.ts` strictly validates initial physical installation metadata,
+  complete immutable selection identifiers and active/removing/removed transitions.
+  It grants no payload-verification, permission, enrollment or deletion authority.
 - `official-execution.ts` tracks one matching wire identity until real response/close.
 - `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
   explicit host selections and desired/effective hot/cold settings. Unpublished

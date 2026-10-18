@@ -7,6 +7,16 @@ owns a disposable native process. The retired per-chat stdio entry, automatic
 host Tool Hooks and task-activity model are not current runtime interfaces.
 Git hook tests remain contributor-tooling regressions.
 
+- `app-deployment.test.ts` rejects malformed/future/foreign metadata, incomplete
+  immutable selections and invalid removal-fence transitions.
+- `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
+  verified public native addon to test shared read-only use, independent operation
+  writers, exclusive deletion barriers and persistent lock inode identity.
+- `app-deployment-storage.test.ts` tests enrolled-root and lease ownership,
+  bounded canonical state, atomic failure/readback outcomes and retained fences
+  through real owned temporary files. Linux private-account/local-filesystem
+  cases skip explicitly elsewhere; unsupported native roles refuse before writes.
+  These GUI-free tests do not establish installer or six-cell native acceptance.
 - `app-singleton.test.ts`, `app-activation.test.ts` and `app-storage.test.ts`
   cover the account-wide advisory lease, bounded activation-only channel,
   installed/portable data selection and refusal to acquire data without ownership.
