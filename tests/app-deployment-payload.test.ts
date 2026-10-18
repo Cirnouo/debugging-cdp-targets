@@ -321,7 +321,11 @@ test('read-only verification covers nested runtime representatives, hidden files
         assert.equal(result.selectedManifestSha256, expected.selectedManifestSha256);
         assert.ok(Object.isFrozen(result));
         assert.equal(await readFile(path.join(root, 'payload-manifest.json'), 'utf8'), identity.canonicalManifest);
-        await assert.rejects(delivery.verifyDeploymentPayload(path.relative(process.cwd(), root), expected));
+        const relativeRoot = path.basename(root);
+        assert.equal(path.isAbsolute(relativeRoot), false);
+        await assert.rejects(delivery.verifyDeploymentPayload(relativeRoot, expected), {
+            message: 'Payload root must be an absolute canonical directory.',
+        });
         await assert.rejects(delivery.verifyDeploymentPayload(`${root}${path.sep}.`, expected));
     } finally {
         await cleanup(root);
