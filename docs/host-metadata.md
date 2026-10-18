@@ -263,11 +263,16 @@ inspection does not prove ordinary gateway rendering or instruction adherence.
 
 On Windows, actual Codex CLI **0.161.0** and Claude Code **2.1.294** passed the
 selected Marketplace installed-tree/gateway smokes and all **eight Hook/Skill
-scenarios per host** on 2026-10-08. The maintained commands and assertions are in
-[smoke instructions](../tests/smoke/README.md), [Codex Marketplace smoke](../tests/smoke/marketplace.ts),
-[Codex Hook/Skill smoke](../tests/smoke/codex-hooks.ts),
-[Claude Marketplace smoke](../tests/smoke/claude-marketplace.ts) and
-[Claude Hook/Skill smoke](../tests/smoke/claude-hooks.ts).
+scenarios per host** on 2026-10-08. These dated results concern the retired
+[stdio/Hook contract](../tests/smoke/README.md#historical-stdio-and-hook-host-acceptance).
+The former [Codex Hook/Skill suite](https://github.com/Cirnouo/debugging-cdp-targets/blob/e7fd6c82ef37f639500a8c2b3eda7e900b963d27/tests/smoke/codex-hooks.ts)
+and [Claude Hook/Skill suite](https://github.com/Cirnouo/debugging-cdp-targets/blob/e7fd6c82ef37f639500a8c2b3eda7e900b963d27/tests/smoke/claude-hooks.ts)
+are preserved at the last main snapshot before their removal. This snapshot
+does not establish which source commit ran on 2026-10-08.
+Current HTTP instructions and maintained Marketplace entrypoints are separate:
+[smoke instructions](../tests/smoke/README.md),
+[Codex Marketplace smoke](../tests/smoke/marketplace.ts) and
+[Claude Marketplace smoke](../tests/smoke/claude-marketplace.ts).
 Historical accepted baselines Codex 0.160.0 and Claude 2.1.283 were not rerun;
 Claude 2.1.283 remains the first supported baseline.
 
