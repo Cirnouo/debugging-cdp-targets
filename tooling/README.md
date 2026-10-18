@@ -59,12 +59,8 @@
   conditions and probe hashes from the unchanged official 1.11.0 public bin.
 - `official-server-release.json` records the reviewed official npm release, its
   source tag/commit, tarball integrity and every published file digest and length.
-- `governance/` owns pure commit grammar and supplied event/ref construction,
-  actual commitlint execution and the Git/history audit command.
-- `commit-footer-rule.ts` supplies the local commitlint `footer-leading-blank`
-  rule. It checks original message lines, preserves body labels without a
-  preceding blank line, and requires separation before reserved footer syntax.
-  A separated generic trailer can begin a group of adjacent footer lines.
+- `governance/` owns pure commit grammar, original-line footer policy and supplied
+  event/ref construction, actual commitlint execution and the Git/history audit command.
 - `version-policy.ts` re-exports the pure domain version predicates and owns exact
   Package/Plugin/Skill string agreement. It also supplies security identity validation.
 - `release.ts` reads both maintained packaging and generated host metadata,
