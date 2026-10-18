@@ -700,9 +700,9 @@ test('Host payload source requires its local instructions and immediate director
     }
 });
 
-
 test('pure runtime owners reject ambient clock and process references through original AST forms', () => {
     for (const file of [
+        'src/host-plugins/payload-integrity.ts',
         'src/domains/example.ts',
         'src/shared/example.ts',
         'src/gateway/owned-tool-arguments.ts',
@@ -740,6 +740,7 @@ test('pure runtime owners reject ambient clock and process references through or
 
 test('pure owners cannot import the Gateway clock through runtime reexport or erased dependencies', () => {
     for (const file of [
+        'src/host-plugins/payload-integrity.ts',
         'src/domains/control-contract.ts',
         'src/shared/example.ts',
         'src/gateway/owned-tool-arguments.ts',
@@ -798,6 +799,7 @@ test('Gateway diagnostic clock permission is exact and imports only its pure con
 
 test('nested ambient roots cannot expose clock process network or global aliases', () => {
     for (const file of [
+        'src/host-plugins/payload-integrity.ts',
         'src/domains/example.ts',
         'src/shared/example.ts',
         'src/gateway/owned-tool-arguments.ts',
@@ -831,7 +833,12 @@ test('nested ambient roots cannot expose clock process network or global aliases
 });
 
 test('TypeScript method-signature declaration keys remain pure record names', () => {
-    for (const file of ['src/domains/example.ts', 'src/gateway/unreviewed.ts', 'src/gateway/diagnostics.ts'])
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/example.ts',
+        'src/gateway/unreviewed.ts',
+        'src/gateway/diagnostics.ts',
+    ])
         for (const source of [
             'interface RecordValue { performance(): number; Date(): number; process(): string; }',
             'type RecordValue = { performance(): number; Date(): number; process(): string; };',
@@ -843,7 +850,12 @@ test('TypeScript method-signature declaration keys remain pure record names', ()
 });
 
 test('computed TypeScript method keys and method bodies retain actual ambient rejection', () => {
-    for (const file of ['src/domains/example.ts', 'src/gateway/unreviewed.ts', 'src/gateway/diagnostics.ts'])
+    for (const file of [
+        'src/host-plugins/payload-integrity.ts',
+        'src/domains/example.ts',
+        'src/gateway/unreviewed.ts',
+        'src/gateway/diagnostics.ts',
+    ])
         for (const source of [
             'interface RecordValue { [performance](): number; }',
             'type RecordValue = { [process.env.key](): string; };',
