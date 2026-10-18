@@ -4,7 +4,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../src/shared/errors.ts';
-import { validateBranchName, validateCommitMessage } from './governance.ts';
+import { validateBranchName } from './governance/commit-grammar.ts';
+import { validateCommitMessage } from './governance/commit-validation.ts';
 import { validatePullRequestBody } from './pull-request-policy.ts';
 
 type EventRequest = { eventName?: string | undefined; event?: unknown; currentBranch?: string | undefined };

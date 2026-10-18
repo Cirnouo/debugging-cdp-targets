@@ -16,6 +16,11 @@ local `AGENTS.md` files. READMEs describe current placement; AGENTS and policies
 govern implementation. The source is currently organized by technical layers.
 Existing layer, pure-model and I/O rules remain in force.
 
+[Tooling governance](../../tooling/governance/README.md) separates pure commit
+grammar from actual message execution. Its central
+[tooling tests](../../tests/tooling/README.md) have explicit safe default selection;
+other tooling and test owners retain their current placement.
+
 The selected direction is source roots named for cohesive domain responsibilities,
 with subdomains or technical boundaries inside them when needed; central root
 `tests/` corresponding to those responsibilities; and tooling organized by its

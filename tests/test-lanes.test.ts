@@ -37,6 +37,11 @@ const interactiveCases = {
     ],
 };
 
+const toolingCases = [
+    'tests/tooling/governance/commit-grammar.test.ts',
+    'tests/tooling/governance/commit-validation.test.ts',
+];
+
 async function testFiles(): Promise<string[]> {
     const { stdout } = await promisify(execFile)(
         'git',
@@ -91,13 +96,19 @@ function registeredCases(statements: t.Statement[], bindings: Record<string, str
     return names;
 }
 
-test('every maintained test file belongs to a runnable root or interactive lane', async () => {
+test('every maintained test file belongs to an explicit safe default or interactive lane', async () => {
     const files = await testFiles();
     assert.ok(files.length > 0);
     assert.deepEqual(
-        files.filter((file) => !/^tests\/(?:[^/]+|interactive\/[^/]+)\.test\.ts$/.test(file)),
+        files.filter(
+            (file) => !/^tests\/(?:[^/]+|interactive\/[^/]+)\.test\.ts$/.test(file) && !toolingCases.includes(file),
+        ),
         [],
         'Nested or misplaced test files must be selected by a maintained test command.',
+    );
+    assert.deepEqual(
+        files.filter((file) => file.startsWith('tests/tooling/')),
+        toolingCases,
     );
     assert.deepEqual(
         files.filter((file) => file.startsWith('tests/interactive/')),

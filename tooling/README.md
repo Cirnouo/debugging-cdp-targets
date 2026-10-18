@@ -57,7 +57,8 @@
   conditions and probe hashes from the unchanged official 1.11.0 public bin.
 - `official-server-release.json` records the reviewed official npm release, its
   source tag/commit, tarball integrity and every published file digest and length.
-- `governance.ts` owns commit type/scope and branch grammar.
+- `governance/` owns pure commit type/scope and branch grammar separately from
+  actual commitlint execution. The root command entries consume those owners.
 - `commit-footer-rule.ts` supplies the local commitlint `footer-leading-blank`
   rule. It checks original message lines, preserves body labels without a
   preceding blank line, and requires separation before reserved footer syntax.
