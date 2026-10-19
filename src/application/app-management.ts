@@ -8,8 +8,8 @@ import {
     parseAppManagementSnapshot,
 } from '../domains/app-ui.ts';
 import type { ConnectionRoute } from '../domains/control-contract.ts';
+import type { GatewayCore } from '../gateway/core.ts';
 import { isRecord } from '../shared/errors.ts';
-import type { GatewayCore } from './plugin-runtime.ts';
 
 /** Trusted in-process administration. Only closed, secret-free projections cross preload. */
 export function createAppManagement(options: {

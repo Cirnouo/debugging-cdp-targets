@@ -6,8 +6,8 @@ import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { Server } from '@modelcontextprotocol/server';
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { createGatewayCore } from '../src/application/plugin-runtime.ts';
 import { type LaunchOptions, parseControlRequest } from '../src/domains/control-contract.ts';
+import { createGatewayCore } from '../src/gateway/core.ts';
 import type { ClientRequestContext } from '../src/shared/client-context.ts';
 import { isRecord } from '../src/shared/errors.ts';
 

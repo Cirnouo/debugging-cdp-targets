@@ -35,6 +35,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         },
     });
     for (const input of [
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
         'src/gateway/connections/resource-owner.ts',
         'src/gateway/connections/directory-lease.ts',
         'src/gateway/owned-tool-arguments.ts',
@@ -68,6 +70,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         false,
     );
     for (const oldInput of [
+        'src/application/plugin-runtime.ts',
         'src/application/connection-owner.ts',
         'src/application/connection-directory.ts',
         'src/domains/chrome-profile.ts',

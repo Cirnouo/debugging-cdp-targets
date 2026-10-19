@@ -53,8 +53,10 @@ const toolingCases = [
 ];
 
 const gatewayCases = [
+    'tests/gateway/connections/construction-cleanup.test.ts',
     'tests/gateway/connections/directory-lifetime.test.ts',
     'tests/gateway/connections/directory-operation-evidence.test.ts',
+    'tests/gateway/connections/gateway-cleanup.test.ts',
     'tests/gateway/owned-tool-arguments.test.ts',
     'tests/gateway/targets/chrome-launch.test.ts',
     'tests/gateway/targets/chrome-profile-argument.test.ts',

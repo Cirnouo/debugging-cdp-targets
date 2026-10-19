@@ -31,7 +31,10 @@ explicit rejected concurrent evidence, and normally exits after the final sample
 `core-runtime.ts` composes the actual reusable Core with one explicit test
 registration, attached client and request-scoped facilities. It supplies private
 controller/control/invoke/cleanup conveniences without restoring a production
-stdio entry or implicit owner.
+stdio entry or implicit owner. It also exports createConnectionRuntimeFixture
+and connectionStatus: the shared controlled host/router/official setup and status
+support for entry-runtime and Gateway cleanup, preserving every support assertion
+and teardown branch. Regression-case bodies remain in their suites.
 
 `http-gateway.ts` exposes that actual Core through the production SDK HTTP adapter
 in a test-owned child. Calls use explicit registration bearers; start/restart

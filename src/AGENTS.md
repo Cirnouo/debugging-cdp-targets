@@ -8,7 +8,7 @@ owns core resources and direct HTTP; host plugins are thin.
 Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
 rules and target models, or its exact diagnostics clock, and never depend on
-application/interface.
+application/interface or either mutable Gateway service.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact
@@ -26,10 +26,29 @@ clock, filesystem, network, native or external-package access. Pure owners canno
 depend on either mutable role, including through erased syntax; unknown Gateway
 files remain pure. Before changing these lifetime owners, read their cumulative
 [connections instructions](gateway/connections/AGENTS.md).
+Only gateway/core.ts owns the existing managed-connection transaction and actual
+execution/context. Its exact application value providers are client-context.ts,
+mcp-lifecycle.ts, registrations.ts and target-controller.ts. Its reviewed adapters
+remain cdp-router, chrome-profile, data-directory, fixture-diagnostics, mcp-bridge,
+official-server, port-reservation, target-host and tool-catalog; its node imports
+remain crypto, os and path. SDK client, resource-owner and shared client-context
+are TYPE-only. Core retains its existing process.env spread, process.platform
+reads and supplied-now fallback to the Date.now reference; it gains no general
+ambient I/O, SDK value dependency or clock-call permission.
+Only gateway/registry.ts owns route membership and the retained cleanup ledger:
+its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
+domains/control-contract and shared/errors. TYPE-only dependencies are the original
+Core ManagedConnection, connections/directory-lease, shared/client-context and the
+three exact application registrations/mcp-lifecycle/target-controller ports. Its
+sole ambient capability is the existing direct process.stderr.write diagnostic.
+Neither service grants permissions to siblings, pure owners, adapters or unknown
+Gateway files. Type imports, reexports, import() and require obey the same exact
+role boundaries. Before editing Core or registry, read the cumulative
+[Gateway instructions](gateway/AGENTS.md) and their application lifecycle trigger.
 Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.
 The existing semver/functions/parse.js exception remains limited to
-domains/software-version.ts; gateway gains no external dependency exception.
+domains/software-version.ts; pure Gateway gains no external dependency exception.
 The delivered `host-plugins/` slice is also pure: it depends only on its own
 domain, existing domains and shared contracts. Application and adapters consume
 its payload proof directly; the remaining technical-layer owners stay in place.
@@ -53,8 +72,8 @@ Never add persisted runtime state, plugin CLI or administrative control IPC.
 The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolation.md)
 requires pure isolation/launch validation in gateway/targets/model/,
 directory filesystem evidence and claims in adapters, and connection-level lease
-lifetime/release barriers in gateway/connections/. Application retains the registry,
-cleanup/retry joins and explicit operation evidence. Target and official resources have independent generation owners alongside the
+lifetime/release barriers in gateway/connections/. Gateway registry owns route
+membership and retained cleanup/retry joins; Core retains explicit operation evidence. Target and official resources have independent generation owners alongside the
 logical connection/router owner. Public session identity changes after either side
 restarts and is distinct from those internal generations. Start requires explicit isolation; no fixed profile fallback
 or automatic path disclosure through Hooks/default summaries is permitted.

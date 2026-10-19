@@ -1,5 +1,11 @@
-# Gateway arguments, target models and connection lifetimes
+# Gateway Core, registry, arguments and connection lifetimes
 
+- `core.ts` owns transport-free dispatch, independent managed connections,
+    generation pointers and original official execution facilities. Start, restart,
+    stop, admission, workspace policy and projections remain complete transactions.
+- `registry.ts` owns route membership, resource/directory enrollment and retained
+    cleanup/retry joins with one ledger and definitive barriers. It consumes the
+    original Core ManagedConnection type without a runtime cycle or duplicate state.
 - `owned-tool-arguments.ts` owns `parseRegistrationBearerArguments` and
     `parseOfficialToolArguments`: syntactic explicit bearer extraction and
     complete removal of official `_dct` routing from the remaining arguments.
@@ -14,13 +20,15 @@
 - `connections/` owns complete resource-generation retention/disposal and
     connection-level directory-lease barriers through their exact adapter capabilities.
 - `AGENTS.md` keeps argument and target rules pure and limits the exact diagnostics owner
-    to its clock read and pure contract dependency, with two exact mutable connection roles.
+    to its clock read and pure contract dependency, with exact Core, registry and
+    connection roles and the mandatory application lifecycle instruction trigger.
 
 The HTTP server still consumes admission from `domains/mcp-http.ts`; the
 request handler consumes these parsers before real Core authentication. This
 argument owner holds no registration, live-route, continuation or execution state.
-Core still joins the registry, retained cleanup/retry ownership and original actual
-execution facilities; the two connections owners retain their complete lifetimes.
-The remaining runtime keeps its current technical-layer placement.
+Core retains original actual execution facilities; registry joins route membership
+and retained cleanup/retry ownership; the two connections owners retain their complete lifetimes.
+The remaining controller, registrations and lifecycle services keep their current
+technical-layer placement and exact transitional Core/registry dependencies.
 The complete lifecycle-contract path and symbol migration remains pending until
 the actual App UI and CDP domain consumers move with it.

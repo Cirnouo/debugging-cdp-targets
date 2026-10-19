@@ -13,8 +13,8 @@ import { CallToolResultSchema } from '@modelcontextprotocol/core';
 import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createClientContext } from '../src/application/client-context.ts';
-import { createGatewayCore } from '../src/application/plugin-runtime.ts';
 import type { CoreControlRequest } from '../src/domains/control-contract.ts';
+import { createGatewayCore } from '../src/gateway/core.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 const BEARER = 'a'.repeat(48);
