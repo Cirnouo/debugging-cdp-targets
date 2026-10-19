@@ -1,8 +1,13 @@
 # I/O adapters
 
 - `app-parent-exit.ts` validates exact-parent readiness and actual-exit evidence
-  from a controlled read-only producer. It implements no native watch or Close
-  request and is not integrated into App startup.
+  from a trusted read-only producer. Windows retained-handle status and Unix
+  positive absence are distinct; Unix records claim no exit status.
+- `app-parent-watch.ts` captures native self identity and observes only the actual
+  bridge parent through narrow Linux proc reads, a fixed read-only Windows helper,
+  or a macOS libproc/JXA source candidate. No App startup/worker wiring or native
+  acceptance is established. Both macOS architectures still require actual ABI,
+  JXA loading, buffer and errno proof; helpers never request parent Close.
 - `app-deployment.ts` opens only already enrolled installation metadata, validates
   physical root/native private-account permissions and holds exactly operation
   and use lock inodes. Its bounded canonical state store preserves removal fences

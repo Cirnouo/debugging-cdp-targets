@@ -1,0 +1,79 @@
+// Source candidate for macOS 15 x64/arm64 only. libproc is private/changeable.
+// Native JXA symbol loading, Ref/buffer semantics and errno remain acceptance gates.
+// ABI: xnu-11215.1.10/bsd/sys/proc_info.h, proc_bsdinfo (136 bytes).
+// No Automation events, process lists, signals, status invention or ps fallback.
+ObjC.import('Foundation');
+ObjC.bindFunction('dlopen', ['void *', ['string', 'int']]);
+ObjC.bindFunction('dlerror', ['string', []]);
+$.dlerror();
+$.dlopen('/usr/lib/libproc.dylib', 2);
+if ($.dlerror()) throw new Error('Required libproc could not be loaded.');
+ObjC.bindFunction('proc_pidinfo', ['int', ['int', 'int', 'unsigned long', 'void *', 'int']]);
+ObjC.bindFunction('proc_pidpath', ['int', ['int', 'void *', 'unsigned int']]);
+ObjC.bindFunction('__error', ['int *', []]);
+ObjC.bindFunction('memcpy', ['void *', ['void *', 'void *', 'unsigned long']]);
+
+function unsigned32(storage, offset) {
+    var part = storage.subdataWithRange($.NSMakeRange(offset, 4));
+    var output = Ref('unsigned int');
+    $.memcpy(output, part.bytes, 4);
+    var value = Number(output[0]);
+    if (!Number.isSafeInteger(value) || value < 0 || value > 4294967295) throw new Error('Invalid native integer.');
+    return value;
+}
+
+function unsigned64Decimal(storage, offset) {
+    // The native halves remain exact; reject values beyond JavaScript's exact
+    // integer range instead of rounding a birth identity.
+    var value = unsigned32(storage, offset) + unsigned32(storage, offset + 4) * 4294967296;
+    if (!Number.isSafeInteger(value)) throw new Error('Native birth exceeds exact integer range.');
+    return String(value);
+}
+
+function bsdInfo(processId) {
+    var storage = $.NSMutableData.dataWithLength(136);
+    var nativeError = $.__error();
+    nativeError[0] = 0;
+    // arg=1 includes zombie lookup. A zero return alone is never absence.
+    var size = Number($.proc_pidinfo(processId, 3, 1, storage.mutableBytes, 136));
+    var observedError = Number(nativeError[0]);
+    if (size !== 136 || observedError !== 0) return { size: size, errno: observedError };
+    return {
+        size: size,
+        errno: observedError,
+        processId: unsigned32(storage, 12),
+        realUid: unsigned32(storage, 28),
+        effectiveUid: unsigned32(storage, 20),
+        startSeconds: unsigned64Decimal(storage, 120),
+        startMicroseconds: unsigned64Decimal(storage, 128),
+        status: unsigned32(storage, 4)
+    };
+}
+
+function executable(processId) {
+    var storage = $.NSMutableData.dataWithLength(4096);
+    var nativeError = $.__error();
+    nativeError[0] = 0;
+    var size = Number($.proc_pidpath(processId, storage.mutableBytes, 4096));
+    var observedError = Number(nativeError[0]);
+    if (size < 1 || size >= 4096 || observedError !== 0) return { size: size, errno: observedError, value: '' };
+    var text = $.NSString.alloc.initWithBytesLengthEncoding(storage.bytes, size, $.NSUTF8StringEncoding);
+    if (text.isNil()) throw new Error('Native executable path is not UTF-8.');
+    return { size: size, errno: observedError, value: ObjC.unwrap(text) };
+}
+
+function run(arguments) {
+    if (arguments.length !== 2 || !/^[1-9]\d*$/.test(arguments[0]) || !/^[1-9]\d*$/.test(arguments[1]))
+        throw new Error('Invalid fixed process selectors.');
+    var processId = Number(arguments[0]);
+    var authorityId = Number(arguments[1]);
+    if (!Number.isSafeInteger(processId) || processId > 2147483647 ||
+        !Number.isSafeInteger(authorityId) || authorityId > 2147483647) throw new Error('Invalid native PID.');
+    var authority = bsdInfo(authorityId);
+    var before = bsdInfo(processId);
+    var result = { event: 'parent-native-snapshot-v1', before: before, authority: authority };
+    if (before.size !== 136 || before.errno !== 0) return JSON.stringify(result);
+    if (before.status !== 5) result.path = executable(processId);
+    result.after = bsdInfo(processId);
+    return JSON.stringify(result);
+}
