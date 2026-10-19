@@ -5,7 +5,7 @@ import { verifyAppOfficialRuntime } from '../../src/adapters/app-official-runtim
 import { createMcpHttpServer } from '../../src/adapters/mcp-http-server.ts';
 import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
 import { createGatewayCore } from '../../src/gateway/core.ts';
-import { parseOfficialReleaseEvidence } from '../../src/shared/official-package.ts';
+import { parseOfficialReleaseEvidence } from '../../src/gateway/official/release-evidence.ts';
 import { guiAuthorization } from '../gui-authorization.ts';
 
 declare const __DCT_FIXTURE_STAGE__: boolean;

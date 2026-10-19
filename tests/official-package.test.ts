@@ -10,9 +10,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
+import { parseOfficialReleaseEvidence } from '../src/gateway/official/release-evidence.ts';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../src/shared/constants.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import { readLockInventory } from '../tooling/security/audit-policy.ts';
 import { verifyOfficialInputs } from '../tooling/security/official-inputs.ts';
 

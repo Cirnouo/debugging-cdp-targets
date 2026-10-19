@@ -1,6 +1,6 @@
-import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from './constants.ts';
-import { isRecord } from './errors.ts';
-import { isPortablePayloadRelativePath } from './payload-path.ts';
+import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../../shared/constants.ts';
+import { isRecord } from '../../shared/errors.ts';
+import { isPortablePayloadRelativePath } from '../../shared/payload-path.ts';
 
 export interface OfficialReleaseFile {
     path: string;

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import type { Tool } from '@modelcontextprotocol/client';
 import { ListToolsResultSchema } from '@modelcontextprotocol/core';
-import { parseMcpArgs, suggestMcpArgs } from '../domains/official-options.ts';
+import { parseMcpArgs, suggestMcpArgs } from '../gateway/official/options.ts';
 import { isRecord } from '../shared/errors.ts';
 import { lifecycleTools } from './lifecycle-tools.ts';
 

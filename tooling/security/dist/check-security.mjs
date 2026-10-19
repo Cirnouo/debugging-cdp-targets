@@ -8247,7 +8247,7 @@ function isPortablePayloadRelativePath(value) {
   );
 }
 
-// src/shared/official-package.ts
+// src/gateway/official/release-evidence.ts
 function demand2(condition, message) {
   if (!condition) throw new Error(`Invalid official release: ${message}`);
 }

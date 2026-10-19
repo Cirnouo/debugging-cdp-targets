@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createOfficialExecution } from '../src/domains/official-execution.ts';
+import { createOfficialExecution } from '../../../src/gateway/official/execution.ts';
 
 for (const id of [0, 42, '0', 'request'] as const) {
     test(`official wire execution observes only its exact ${typeof id} identity ${id}`, async () => {

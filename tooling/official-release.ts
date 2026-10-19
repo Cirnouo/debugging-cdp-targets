@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
+import { parseOfficialReleaseEvidence } from '../src/gateway/official/release-evidence.ts';
 
 /** Reviewed App delivery input; thin host payload policy has no official-runtime dependency. */
 export const OFFICIAL_RELEASE = parseOfficialReleaseEvidence(

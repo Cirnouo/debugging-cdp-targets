@@ -7,8 +7,14 @@ owns core resources and direct HTTP; host plugins are thin.
 
 Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
-rules and target models, or its exact diagnostics clock, and never depend on
+rules, target models and pure Official options/execution/release evidence, or its
+exact diagnostics clock, and never depend on
 application/interface or either mutable Gateway service.
+The pure Official owners contain no ambient defaults, package reads, live catalog
+or child/context lifetime authority. Their actual environment default capture,
+child snapshot and verified bin resolution remain in adapters/official-server.ts.
+Before editing those pure owners, read their cumulative
+[Official instructions](gateway/official/AGENTS.md).
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact

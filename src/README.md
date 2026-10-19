@@ -12,7 +12,8 @@ The singleton App owns direct HTTP, management and native resources. The
 - `gateway/`: complete Core transaction and retained registry/cleanup ownership,
     pure explicit bearer/tool-argument extraction, target evidence/identity
     models, structured launch/isolation rules, bounded clock-backed diagnostics
-    and complete resource-generation/directory-lease lifetime in `connections/`.
+    and complete resource-generation/directory-lease lifetime in `connections/`,
+    plus supplied Official options, wire-terminal values and release evidence in `official/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
