@@ -1,4 +1,4 @@
-# Gateway arguments, target models and diagnostics
+# Gateway arguments, target models and connection lifetimes
 
 - `owned-tool-arguments.ts` owns `parseRegistrationBearerArguments` and
     `parseOfficialToolArguments`: syntactic explicit bearer extraction and
@@ -11,12 +11,16 @@
 - `targets/` owns pure supplied-evidence CDP identity, target/resource contracts,
     profile arguments, screenshot feature composition, isolation and structured launch values.
     Target acquisition, claims, observation and cleanup stay with current owners.
+- `connections/` owns complete resource-generation retention/disposal and
+    connection-level directory-lease barriers through their exact adapter capabilities.
 - `AGENTS.md` keeps argument and target rules pure and limits the exact diagnostics owner
-    to its clock read and pure contract dependency.
+    to its clock read and pure contract dependency, with two exact mutable connection roles.
 
 The HTTP server still consumes admission from `domains/mcp-http.ts`; the
 request handler consumes these parsers before real Core authentication. This
-owner holds no registration, live-route, continuation, execution or resource
-state. The remaining runtime keeps its current technical-layer placement.
+argument owner holds no registration, live-route, continuation or execution state.
+Core still joins the registry, retained cleanup/retry ownership and original actual
+execution facilities; the two connections owners retain their complete lifetimes.
+The remaining runtime keeps its current technical-layer placement.
 The complete lifecycle-contract path and symbol migration remains pending until
 the actual App UI and CDP domain consumers move with it.

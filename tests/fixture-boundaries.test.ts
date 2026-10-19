@@ -14,8 +14,8 @@ import {
 } from '../src/adapters/fixture-diagnostics.ts';
 import { resolveUnixExecutable, unixSnapshot } from '../src/adapters/platform-process.ts';
 import { createTargetHost, type HostDependencies } from '../src/adapters/target-host.ts';
-import { createConnectionDirectory } from '../src/application/connection-directory.ts';
-import { createConnectionOwner } from '../src/application/connection-owner.ts';
+import { createConnectionDirectoryLease } from '../src/gateway/connections/directory-lease.ts';
+import { createResourceOwner } from '../src/gateway/connections/resource-owner.ts';
 
 const first = {
     entryId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -333,7 +333,7 @@ for (const throws of [false, true]) {
         });
         const failure = ioError('EACCES', 'open');
         const directory = runFixtureObservation(first, () =>
-            createConnectionDirectory(
+            createConnectionDirectoryLease(
                 registry,
                 {
                     mode: 'data-dir',
@@ -377,14 +377,14 @@ test('connection release barriers and shared pending release retain one attempt 
     });
     const registry = new DataDirectoryRegistry({ platform: 'linux', io: { ...io, remove: () => pending } });
     const directory = runFixtureObservation(first, () =>
-        createConnectionDirectory(registry, {
+        createConnectionDirectoryLease(registry, {
             mode: 'data-dir',
             directory: { kind: 'existing', path: '/fixture' },
             cleanup: 'delete-on-release',
         }),
     );
     await runFixtureObservation(first, () => directory.acquire());
-    const owner = createConnectionOwner('first-session');
+    const owner = createResourceOwner('first-session');
     owner.track(pending);
     directory.addOwner(owner);
     directory.requestRelease();

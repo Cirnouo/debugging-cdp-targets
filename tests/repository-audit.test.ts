@@ -8,6 +8,155 @@ import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
 import { PLUGIN_ROOT } from '../tooling/payload-policy.ts';
 import { auditRepository, validateRuntimeSource } from '../tooling/repository-audit.ts';
 
+function connectionDependencyForms(specifier: string) {
+    return [
+        { erased: false, source: `import { value } from '${specifier}';` },
+        { erased: false, source: `import '${specifier}';` },
+        { erased: true, source: `import type { Value } from '${specifier}';` },
+        { erased: true, source: `import { type Value } from '${specifier}';` },
+        { erased: false, source: `export { value } from '${specifier}';` },
+        { erased: false, source: `export * from '${specifier}';` },
+        { erased: true, source: `export type { Value } from '${specifier}';` },
+        { erased: true, source: `export { type Value } from '${specifier}';` },
+        { erased: true, source: `export type * from '${specifier}';` },
+        { erased: true, source: `type Value = import('${specifier}').Value;` },
+        { erased: true, source: `import type Value = require('${specifier}');` },
+        { erased: false, source: `import Value = require('${specifier}');` },
+        { erased: false, source: `const value = require('${specifier}');` },
+        { erased: false, source: `const value = require?.('${specifier}');` },
+        { erased: false, source: `const value = (require as (name: string) => unknown)?.('${specifier}');` },
+        { erased: false, source: `const value = import('${specifier}');` },
+    ];
+}
+
+test('connection resource roles accept only their exact adapter and erased contract capabilities', () => {
+    for (const [file, dependency, onlyType] of [
+        ['src/gateway/connections/directory-lease.ts', '../../adapters/data-directory.ts', false],
+        ['src/gateway/connections/resource-owner.ts', '../targets/model/target-contract.ts', true],
+        ['src/gateway/connections/directory-lease.ts', '../../adapters/fixture-diagnostics.ts', false],
+        ['src/gateway/connections/directory-lease.ts', '../targets/model/isolation.ts', true],
+        ['src/gateway/connections/directory-lease.ts', './resource-owner.ts', true],
+    ] as const) {
+        for (const { source, erased } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            if (!onlyType || erased) assert.deepEqual(errors, [], `${file}: ${source}`);
+            else assert.ok(errors.length, `${file}: ${source}`);
+        }
+    }
+});
+
+test('connection resource roles reject wrong dependencies across runtime and erased syntax', () => {
+    for (const file of ['src/gateway/connections/resource-owner.ts', 'src/gateway/connections/directory-lease.ts']) {
+        for (const dependency of [
+            'node:fs',
+            'node:net',
+            'node:child_process',
+            '@modelcontextprotocol/core',
+            'ws',
+            '../../application/target-controller.ts',
+            '../../interface/app-main.ts',
+            '../../adapters/target-host.ts',
+            '../../domains/control-contract.ts',
+            '../targets/model/unknown.ts',
+            './unknown.ts',
+            '../diagnostics.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+        for (const source of [
+            'const value = import(moduleName);',
+            'const value = require?.(moduleName);',
+            'const value = (require as (name: string) => unknown)?.(moduleName);',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('computed module dependencies')),
+                `${file}: ${source}`,
+            );
+    }
+});
+
+test('pure Gateway cannot acquire either mutable connection owner even through erased syntax', () => {
+    for (const [file, prefix] of [
+        ['src/gateway/owned-tool-arguments.ts', './connections'],
+        ['src/gateway/targets/model/isolation.ts', '../../connections'],
+        ['src/gateway/unreviewed.ts', './connections'],
+        ['src/gateway/connections/unreviewed.ts', '.'],
+    ] as const)
+        for (const owner of ['resource-owner', 'directory-lease'])
+            for (const { source } of connectionDependencyForms(`${prefix}/${owner}.ts`))
+                assert.ok(
+                    validateRuntimeSource(file, source).some((error) =>
+                        error.includes('pure owners cannot depend on mutable connection owners'),
+                    ),
+                    `${file}: ${source}`,
+                );
+    for (const { source } of connectionDependencyForms('../../adapters/data-directory.ts'))
+        assert.ok(validateRuntimeSource('src/gateway/connections/unreviewed.ts', source).length, source);
+});
+
+test('adapters cannot acquire mutable connection authorities through runtime or erased dependencies', () => {
+    for (const owner of ['resource-owner', 'directory-lease']) {
+        for (const dependency of [
+            `../gateway/connections/${owner}.ts`,
+            `../gateway/connections/../connections/${owner}.ts`,
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource('src/adapters/example.ts', source).length, source);
+        for (const caller of ['src/application/example.ts', 'src/interface/example.ts'])
+            for (const { source } of connectionDependencyForms(`../gateway/connections/${owner}.ts`))
+                assert.deepEqual(validateRuntimeSource(caller, source), [], `${caller}: ${source}`);
+    }
+    for (const dependency of [
+        '../gateway/targets/model/target-contract.ts',
+        '../gateway/diagnostics.ts',
+        '../gateway/owned-tool-arguments.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource('src/adapters/example.ts', source), [], source);
+});
+
+test('mutable connection roles retain ambient guards and harmless declaration keys', () => {
+    for (const file of ['src/gateway/connections/resource-owner.ts', 'src/gateway/connections/directory-lease.ts']) {
+        assert.deepEqual(
+            validateRuntimeSource(
+                file,
+                'interface RecordValue { performance(): number; Date(): number; process(): string; }',
+            ),
+            [],
+        );
+        for (const source of [
+            'const value = process.env;',
+            'const value = process?.env;',
+            'const value = (process as {env: unknown})["env"];',
+            'const {env} = process;',
+            'const value = Date.now();',
+            'const value = new Date();',
+            'const value = performance.now();',
+            'const clock = performance;',
+            'const {now} = performance;',
+            'const value = globalThis.global.process.env;',
+            'const value = global?.globalThis?.Date.now();',
+            'const value = globalThis?.["globalThis"]?.["performance"]?.now();',
+            'const ambient = globalThis.global; const value = ambient.process.env;',
+            'const {performance: clock} = globalThis.globalThis;',
+            'const value = fetch(url);',
+            'const value = new WebSocket(url);',
+            'const value = new XMLHttpRequest();',
+            'const value = globalThis.global["fetch"](url);',
+            'interface RecordValue { [performance](): number; }',
+            'const record = { performance() { return process.env; } };',
+        ])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+});
+
+test('connection resource roles accept both complete actual lifetime sources', async () => {
+    for (const file of ['src/gateway/connections/resource-owner.ts', 'src/gateway/connections/directory-lease.ts']) {
+        const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+        assert.deepEqual(validateRuntimeSource(file, source), [], file);
+    }
+});
+
 test('runtime parser approvals belong only to their exact reviewed consumers', () => {
     assert.deepEqual(
         validateRuntimeSource('src/domains/software-version.ts', "import parse from 'semver/functions/parse.js';"),
