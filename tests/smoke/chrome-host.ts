@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { access, constants, realpath, stat } from 'node:fs/promises';
+import type { BigIntStats } from 'node:fs';
+import { access, constants, lstat, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -12,6 +13,166 @@ import { validateCdpIdentity } from '../../src/gateway/targets/model/cdp-identit
 import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { readChromeSmokeProfile } from './chrome-profile-probe.ts';
+import type { FixtureArtifacts, ProfileDirectoryRecord, ProfilePoint, ProfileRole } from './fixture-artifacts.ts';
+
+export type ProfileStat = Pick<BigIntStats, 'dev' | 'ino' | 'isDirectory' | 'isFile' | 'isSymbolicLink'>;
+
+/** Private point-in-time fixture identity only; never a lease or process-completion proof. */
+export function createChromeProfileObservations(
+    enabled: boolean,
+    sink: Pick<FixtureArtifacts, 'profileDirectory' | 'rejected'>,
+    io: { inspect?: (path: string) => Promise<ProfileStat>; now?: () => number } = {},
+) {
+    const bindings = new Map<ProfileRole, { path: string; baseline?: { dev: bigint; ino: bigint } }>();
+    const inspect = io.inspect ?? ((file: string) => lstat(file, { bigint: true }));
+    const now = io.now ?? (() => performance.now());
+    let origin: number | undefined;
+    let lastTime: number | undefined;
+    function rejected() {
+        try {
+            sink.rejected();
+        } catch {}
+    }
+    function time(): number | undefined {
+        try {
+            const value = now();
+            if (!Number.isFinite(value) || value < 0 || (lastTime !== undefined && value < lastTime)) return;
+            lastTime = value;
+            return value;
+        } catch {
+            return;
+        }
+    }
+    if (enabled) {
+        origin = time();
+        if (origin === undefined) rejected();
+    }
+    function readCode(error: unknown): unknown {
+        try {
+            if (!error || (typeof error !== 'object' && typeof error !== 'function')) return;
+            const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+            return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+        } catch {
+            return;
+        }
+    }
+    function emit(
+        role: ProfileRole,
+        point: ProfilePoint,
+        start: number | undefined,
+        outcome: { value: ProfileStat } | { error: unknown },
+        captureBaseline = false,
+    ) {
+        try {
+            const end = time();
+            const binding = bindings.get(role);
+            if (!binding) return;
+            let result: ProfileDirectoryRecord['result'] = 'unavailable';
+            let entryKind: ProfileDirectoryRecord['entryKind'] = 'unknown';
+            let matchesBaseline: boolean | null = null;
+            let readError: ProfileDirectoryRecord['readError'] = 'other';
+            if ('value' in outcome) {
+                const value = outcome.value;
+                if (typeof value.dev !== 'bigint' || typeof value.ino !== 'bigint') {
+                    rejected();
+                    return;
+                }
+                entryKind = value.isSymbolicLink()
+                    ? 'symlink'
+                    : value.isDirectory()
+                      ? 'directory'
+                      : value.isFile()
+                        ? 'file'
+                        : 'other';
+                if (captureBaseline && entryKind === 'directory') binding.baseline = { dev: value.dev, ino: value.ino };
+                if (binding.baseline)
+                    matchesBaseline =
+                        entryKind === 'directory' &&
+                        binding.baseline.dev === value.dev &&
+                        binding.baseline.ino === value.ino;
+                result = 'present';
+                readError = 'none';
+            } else {
+                const code = readCode(outcome.error);
+                if (code === 'ENOENT') {
+                    result = 'absent';
+                    entryKind = 'none';
+                    readError = 'none';
+                } else if (code === 'EACCES' || code === 'EPERM') readError = 'denied';
+            }
+            if (origin === undefined || start === undefined || end === undefined || end < start) {
+                rejected();
+                return;
+            }
+            sink.profileDirectory({
+                kind: 'profile-directory',
+                role,
+                point,
+                elapsedMs: end - origin,
+                readDurationMs: end - start,
+                result,
+                entryKind,
+                matchesBaseline,
+                readError,
+            });
+        } catch {
+            rejected();
+        }
+    }
+    async function observe<T extends ProfileStat>(
+        role: ProfileRole,
+        point: ProfilePoint,
+        start: number | undefined,
+        pending: Promise<T>,
+    ): Promise<T> {
+        let value: T;
+        try {
+            value = await pending;
+        } catch (error) {
+            emit(role, point, start, { error });
+            throw error;
+        }
+        emit(role, point, start, { value });
+        return value;
+    }
+    async function sampleRead(role: ProfileRole, point: ProfilePoint, captureBaseline = false) {
+        if (!enabled) return;
+        const binding = bindings.get(role);
+        if (!binding) return;
+        const start = time();
+        try {
+            const value = await inspect(binding.path);
+            emit(role, point, start, { value }, captureBaseline);
+        } catch (error) {
+            emit(role, point, start, { error });
+        }
+    }
+    return {
+        async register(role: ProfileRole, file: string) {
+            if (!enabled) return;
+            if (bindings.has(role) || [...bindings.values()].some((binding) => binding.path === file)) {
+                rejected();
+                return;
+            }
+            bindings.set(role, { path: file });
+            await sampleRead(role, 'registered', true);
+        },
+        sample(role: ProfileRole, point: ProfilePoint) {
+            return sampleRead(role, point);
+        },
+        async sampleAll(point: ProfilePoint) {
+            if (!enabled) return;
+            await sampleRead('first', point);
+            await sampleRead('second', point);
+        },
+        observeCheck<T extends ProfileStat>(file: string, point: ProfilePoint, pending: Promise<T>): Promise<T> {
+            if (!enabled) return pending;
+            const role = [...bindings].find(([, binding]) => binding.path === file)?.[0];
+            if (!role) return pending;
+            return observe(role, point, time(), pending);
+        },
+    };
+}
 
 function absolutePath(value: string, platform: NodeJS.Platform) {
     if (platform !== 'win32') return path.posix.isAbsolute(value);

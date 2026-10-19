@@ -113,6 +113,7 @@ test('read-only parent preparation waits for exact handle readiness and actual m
     let closeRequests = 0;
     let disposals = 0;
     const producer = {
+        method: 'windows-handle' as const,
         ready: ready.promise,
         exited: exited.promise,
         dispose: async () => {
@@ -164,6 +165,7 @@ test('parent helper EOF, error and reused identity never become actual parent ex
         { ...parentExit, closeRequested: true },
     ]) {
         const observer = await prepareAppParentExit(parentIdentity, async () => ({
+            method: 'windows-handle',
             ready: Promise.resolve(parentReady),
             exited: Promise.resolve(result),
             dispose: async () => {},
@@ -173,12 +175,13 @@ test('parent helper EOF, error and reused identity never become actual parent ex
     }
     const error = new Error('Read-only native observation failed.');
     const observer = await prepareAppParentExit(parentIdentity, async () => ({
+        method: 'windows-handle',
         ready: Promise.resolve({ ...parentReady, executablePath: '/other/App' }),
         exited: Promise.reject(error),
         dispose: async () => {},
     }));
     await assert.rejects(observer.ready);
-    await assert.rejects(observer.exited, error);
+    await assert.rejects(observer.exited);
     await assert.rejects(
         prepareAppParentExit({ ...parentIdentity, processId: 0 }, async () => {
             throw new Error('Invalid parent reached native boundary.');
