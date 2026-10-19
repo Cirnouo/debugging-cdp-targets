@@ -30,7 +30,7 @@ function recordErrors(message: string) {
 
 async function wrappedBodyLabelFixture() {
     const fixture: unknown = JSON.parse(
-        await readFile(new URL('../../fixtures/wrapped-body-label-squash.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../fixtures/submissions/wrapped-body-label-squash.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(fixture));
     assert.ok(typeof fixture.number === 'number' && typeof fixture.title === 'string');
@@ -143,7 +143,7 @@ test('PR number suffixes do not hide invalid raw titles', () => {
 
 test('non-merge commits reject unwrapped squash bodies regardless of commit identity', async () => {
     const message: unknown = JSON.parse(
-        await readFile(new URL('../../fixtures/unwrapped-squash-message.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../fixtures/submissions/unwrapped-squash-message.json', import.meta.url), 'utf8'),
     );
     assert.ok(typeof message === 'string');
     assert.equal(commitlintAccepts(message), false);
@@ -153,7 +153,10 @@ test('non-merge commits reject unwrapped squash bodies regardless of commit iden
 });
 
 test('checks task-purpose branches at local, push and pull request entry points', async (context) => {
-    const currentBody = await readFile(new URL('../../fixtures/current-pr-body.md', import.meta.url), 'utf8');
+    const currentBody = await readFile(
+        new URL('../../fixtures/submissions/current-pr-body.md', import.meta.url),
+        'utf8',
+    );
     const cases = [
         { eventName: '', localBranch: 'docs/branch-policy', sourceBranch: 'docs/branch-policy', status: 1 },
         { eventName: '', localBranch: 'chore/branch-policy', sourceBranch: 'chore/branch-policy', status: 0 },
@@ -657,7 +660,10 @@ test('accepts URL-only long body lines when commitlint accepts them', () => {
 });
 
 test('current PR CLI validates review descriptions independently of headers and actual topic commits', async (context) => {
-    const compliantBody = await readFile(new URL('../../fixtures/current-pr-body.md', import.meta.url), 'utf8');
+    const compliantBody = await readFile(
+        new URL('../../fixtures/submissions/current-pr-body.md', import.meta.url),
+        'utf8',
+    );
     const reviewNote = 'observations: the complete description supplies review context';
     const longProse = 'The review includes detailed behavior and verification evidence. '.repeat(4);
     const directory = await mkdtemp(path.join(os.tmpdir(), 'cdp-current-pr-'));

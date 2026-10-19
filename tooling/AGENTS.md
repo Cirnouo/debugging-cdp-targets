@@ -32,6 +32,12 @@ unexpected payload content. Do not execute payload code during static audits,
 do not download dependencies in tests, and do not mutate Git history, user
 state, browser profiles, or globally installed Skills.
 
+Release notes in `releases/release-notes.ts` operate only on supplied values,
+without process, filesystem, network or publication dependencies.
+`releases/publish-release.ts` retains the complete tag/remote/draft/publication
+transaction and may be invoked only through the explicitly authorized release
+workflow, after reading the root-triggered [release policy](../docs/policies/releases.md).
+
 Supply-chain implementations additionally follow `security/AGENTS.md`.
 `check:security` is an explicit network gate, not part of default tests or
 verify:push. Do not auto-relax installation trust on failure.

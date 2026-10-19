@@ -1,5 +1,5 @@
 import { parseDocument } from 'yaml';
-import { normalizeSubmissionText, scanSubmissionMarkdown } from './submission-markdown.ts';
+import { normalizeSubmissionText, scanSubmissionMarkdown } from './markdown.ts';
 
 export const ISSUE_INVALID_LABEL = 'template: invalid';
 

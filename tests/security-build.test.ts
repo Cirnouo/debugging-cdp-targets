@@ -177,7 +177,7 @@ test('release host metadata loads without release evidence or installed dependen
     try {
         const outfile = path.join(directory, 'release.mjs');
         await build({
-            entryPoints: [path.join(root, 'tooling/release.ts')],
+            entryPoints: [path.join(root, 'tooling/releases/publish-release.ts')],
             outfile,
             bundle: true,
             platform: 'node',

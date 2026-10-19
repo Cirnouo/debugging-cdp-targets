@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { IssueFormConfigurationError, validateIssueBody } from '../tooling/issue-policy.ts';
+import { IssueFormConfigurationError, validateIssueBody } from '../../../tooling/submissions/issue-forms.ts';
 
 const forms = {
-    bugReport: readFileSync(new URL('../.github/ISSUE_TEMPLATE/bug_report.yaml', import.meta.url), 'utf8'),
-    featureRequest: readFileSync(new URL('../.github/ISSUE_TEMPLATE/feature_request.yaml', import.meta.url), 'utf8'),
+    bugReport: readFileSync(new URL('../../../.github/ISSUE_TEMPLATE/bug_report.yaml', import.meta.url), 'utf8'),
+    featureRequest: readFileSync(
+        new URL('../../../.github/ISSUE_TEMPLATE/feature_request.yaml', import.meta.url),
+        'utf8',
+    ),
 };
 // Literal generated form bodies are independent of the YAML parser and validator.
 const bugBody = `### Operating system and version

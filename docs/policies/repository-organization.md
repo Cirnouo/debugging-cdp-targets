@@ -31,8 +31,15 @@ consumers. Existing layer, pure-model and I/O rules remain in force for all curr
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.
 [Text policy](../../tooling/quality/README.md) owns shared pure style and YAML
-filename rules. Their central
-[tooling tests](../../tests/tooling/README.md) have explicit safe default selection;
+filename rules. [Release tooling](../../tooling/releases/README.md) separates pure
+supplied-value Markdown notes from the complete tag/remote/draft/publication
+transaction. [Submission values](../../tooling/submissions/README.md) own the
+shared Markdown scanner and supplied PR-template/Issue-form policies at their
+actual governance and feedback callers. Their central
+[tooling tests](../../tests/tooling/README.md) explicitly select direct scanner and
+policy suites; [literal submission evidence](../../tests/fixtures/submissions/README.md)
+retains raw commit/PR fixtures. The invoked Issue feedback transaction and REST
+adapter remain at root tooling with their root suites and HTTP preload;
 other tooling and test owners retain their current placement.
 
 The selected direction is source roots named for cohesive domain responsibilities,

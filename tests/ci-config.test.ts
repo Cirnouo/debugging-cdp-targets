@@ -322,7 +322,7 @@ test('release workflow publishes new stable and prerelease candidate tags after 
         cache: 'pnpm',
     });
     const install = steps.findIndex((step) => step.run === 'pnpm install --frozen-lockfile');
-    const publishStep = steps.findIndex((step) => step.run === 'node tooling/release.ts');
+    const publishStep = steps.findIndex((step) => step.run === 'node tooling/releases/publish-release.ts');
     assert.ok(install >= 0 && publishStep > install);
     assert.deepEqual(steps[publishStep]?.env, { GH_TOKEN: `\${{ github.token }}` });
     assert.doesNotMatch(

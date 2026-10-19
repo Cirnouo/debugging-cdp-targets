@@ -3,7 +3,7 @@ import {
     readSubmissionChecklist,
     readSubmissionHeading,
     scanSubmissionMarkdown,
-} from './submission-markdown.ts';
+} from './markdown.ts';
 
 export function validatePullRequestBody(body: string | null, template: string): string[] {
     const expected = scanSubmissionMarkdown(template).filter((section) => section.heading !== null);
