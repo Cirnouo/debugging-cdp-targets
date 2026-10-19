@@ -92,7 +92,10 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/targets/structured-launch.test.ts`,
 `tests/gateway/targets/chromium-features.test.ts`,
 `tests/gateway/targets/chrome-profile.test.ts` and
-`tests/gateway/targets/chrome-launch.test.ts`. They run files sequentially
+`tests/gateway/targets/chrome-launch.test.ts`,
+`tests/gateway/connections/directory-lifetime.test.ts`,
+`tests/gateway/connections/directory-operation-evidence.test.ts` and
+`tests/gateway/targets/directory-admission.test.ts`. They run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.

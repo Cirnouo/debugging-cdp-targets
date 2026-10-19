@@ -363,13 +363,17 @@ Git hook tests remain contributor-tooling regressions.
 - `gateway-exit-protocol.test.ts` checks early exit and late acquisition,
   pending health/request cancellation, busy Close, terminal operations and
   owned-resource accounting, replacement rollback, retired routes and peer cleanup.
-- `connection-isolation.test.ts` checks connection leases across restart, pending
+- `gateway/connections/` checks connection leases across restart, pending
   native/directory acquisition, late cancellation, actual exit and failed cleanup;
   terminal metadata preserves paths while default summaries omit them.
   Independent native resource users hold the directory after immediate root route
   revocation for Close, Keep, unexpected exit, restart, late rollback and explicit
   Core cleanup. Resource observation failure preserves retained ownership/claim
   evidence without restoring a dead route.
+  Its directory-lifetime and directory-operation-evidence suites retain twenty
+  lifetime and five explicit evidence cases; `gateway/targets/directory-admission.test.ts`
+  retains two pre-acquisition cases. All share the real Core/DataDirectoryRegistry
+  support in `fixtures/connection-directory-runtime.ts`, preserving support/cleanup assertions.
 - `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
 - `target-recovery.test.ts` checks explicit same-port recovery, literal launch
   evidence and rejection of port races after an application is created.
@@ -442,12 +446,15 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select `tests/*.test.ts` plus the twelve explicit
+command and `pnpm test:coverage` select twenty-six entries: `tests/*.test.ts`, the twelve explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
 `tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
-value suites in [Target tests](gateway/targets/README.md), and the two explicit
-Host suites in [Host plugin tests](host-plugins/README.md); they do not launch
+value suites in [Target tests](gateway/targets/README.md), the two
+[Connections suites](gateway/connections/README.md) and target
+`directory-admission.test.ts`, plus the two explicit
+Host suites in [Host plugin tests](host-plugins/README.md). The eleven Gateway suites
+retain the original order with these three additions; default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

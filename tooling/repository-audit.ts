@@ -278,10 +278,13 @@ export function validateRuntimeSource(file: string, source: string) {
     const domain = layer === 'domains' || hostPayload;
     const gateway = layer === 'gateway';
     const diagnosticClock = file === 'src/gateway/diagnostics.ts';
+    const resourceOwner = file === 'src/gateway/connections/resource-owner.ts';
+    const directoryLease = file === 'src/gateway/connections/directory-lease.ts';
+    const connectionOwner = resourceOwner || directoryLease;
     const pure = domain || layer === 'shared' || gateway;
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
-    function dependency(specifier: unknown) {
+    function dependency(specifier: unknown, typeOnly = false) {
         if (typeof specifier !== 'string') {
             errors.push(`${file}: computed module dependencies are prohibited.`);
             return;
@@ -304,7 +307,31 @@ export function validateRuntimeSource(file: string, source: string) {
         ) {
             errors.push(`${file}: domains may depend only on domains and shared.`);
         }
-        if (gateway && (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved)))
+        const mutableConnection =
+            resolved === 'src/gateway/connections/resource-owner.ts' ||
+            resolved === 'src/gateway/connections/directory-lease.ts';
+        if (pure && !connectionOwner && mutableConnection)
+            errors.push(`${file}: pure owners cannot depend on mutable connection owners.`);
+        if (layer === 'adapters' && mutableConnection)
+            errors.push(`${file}: adapters cannot depend on mutable connection owners.`);
+        if (connectionOwner) {
+            const permittedType =
+                typeOnly &&
+                (resourceOwner
+                    ? resolved === 'src/gateway/targets/model/target-contract.ts'
+                    : resolved === 'src/gateway/targets/model/isolation.ts' ||
+                      resolved === 'src/gateway/connections/resource-owner.ts');
+            const permittedAdapter =
+                directoryLease &&
+                (resolved === 'src/adapters/data-directory.ts' || resolved === 'src/adapters/fixture-diagnostics.ts');
+            if (!specifier.startsWith('.') || (!permittedType && !permittedAdapter))
+                errors.push(`${file}: unapproved connection owner dependency.`);
+        }
+        if (
+            gateway &&
+            !connectionOwner &&
+            (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
+        )
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);
         if (diagnosticClock && (!specifier.startsWith('.') || resolved !== 'src/domains/control-contract.ts'))
             errors.push(`${file}: Gateway diagnostics may depend only on the pure control contract.`);
@@ -387,16 +414,31 @@ export function validateRuntimeSource(file: string, source: string) {
                 node.type === 'ExportNamedDeclaration' ||
                 node.type === 'ExportAllDeclaration') &&
             node.source
-        )
-            dependency(node.source.value);
+        ) {
+            const typeOnly =
+                node.type === 'ImportDeclaration'
+                    ? node.importKind === 'type' ||
+                      (node.specifiers.length > 0 &&
+                          node.specifiers.every(
+                              (specifier) => specifier.type === 'ImportSpecifier' && specifier.importKind === 'type',
+                          ))
+                    : node.exportKind === 'type' ||
+                      (node.type === 'ExportNamedDeclaration' &&
+                          node.specifiers.length > 0 &&
+                          node.specifiers.every(
+                              (specifier) => specifier.type === 'ExportSpecifier' && specifier.exportKind === 'type',
+                          ));
+            dependency(node.source.value, typeOnly);
+        }
         if (node.type === 'ImportExpression')
             dependency(node.source.type === 'StringLiteral' ? node.source.value : undefined);
-        if (node.type === 'TSImportType') dependency(node.argument.value);
+        if (node.type === 'TSImportType') dependency(node.argument.value, true);
         if (node.type === 'TSImportEqualsDeclaration' && node.moduleReference.type === 'TSExternalModuleReference')
             dependency(
                 node.moduleReference.expression.type === 'StringLiteral'
                     ? node.moduleReference.expression.value
                     : undefined,
+                node.importKind === 'type',
             );
         if (
             (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') &&
