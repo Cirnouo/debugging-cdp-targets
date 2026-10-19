@@ -81,6 +81,8 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/submissions/markdown.test.ts`,
 `tests/tooling/submissions/pull-requests.test.ts`,
 `tests/tooling/submissions/issue-forms.test.ts`,
+`tests/tooling/submissions/issue-feedback.test.ts`,
+`tests/tooling/submissions/issue-workflow.test.ts`,
 `tests/gateway/owned-tool-arguments.test.ts`,
 `tests/host-plugins/payload-integrity.test.ts` and
 `tests/host-plugins/payload-filesystem.test.ts`, plus exactly

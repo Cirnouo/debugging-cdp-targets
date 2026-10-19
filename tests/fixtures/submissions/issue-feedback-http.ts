@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { isRecord } from '../../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 // Subprocess-only HTTP boundary. No real network request can leave this fixture.
 const fixturePath = process.env.DCT_ISSUE_HTTP_STATE;
