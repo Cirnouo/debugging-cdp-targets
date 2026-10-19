@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { findEnvironmentKey } from '../domains/launch-command.ts';
 import { parseMcpArgs } from '../domains/official-options.ts';
+import { findEnvironmentKey } from '../shared/environment-key.ts';
 import { errorMessage } from '../shared/errors.ts';
 import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../shared/official-package.ts';
 import { verifyOfficialPackage } from './official-package.ts';

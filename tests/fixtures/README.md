@@ -1,5 +1,11 @@
 # Test fixtures
 
+`target-host.ts` exports createTargetHostFixture, the shared controlled target-host
+I/O boundary for the Gateway profile and launch suites. It preserves synthetic
+process/listener evidence, async profile availability, argv observations and
+close-emitted exit cleanup without launching a real child. Its current root
+fixture location precedes the separately planned fixture-family migration.
+
 `deployment-lock.ts` is a test-only ordinary Node child using the independently
 verified original native loader closure. Parent-owned fixed acquire/release
 commands exercise exactly the fixture operation/use files, with no GUI or

@@ -7,7 +7,7 @@ import {
     type DataDirectorySelection,
     type DataDirectoryState,
     parseDataIsolation,
-} from '../domains/data-isolation.ts';
+} from '../gateway/targets/model/isolation.ts';
 import { errorCode } from '../shared/errors.ts';
 import {
     beginFixtureStage,

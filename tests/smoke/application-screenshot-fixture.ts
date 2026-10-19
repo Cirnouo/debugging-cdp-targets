@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { withChromeScreenshotFeature } from '../../src/domains/chromium-features.ts';
-import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domains/launch-command.ts';
+import { withChromeScreenshotFeature } from '../../src/gateway/targets/model/chromium-features.ts';
+import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/gateway/targets/model/launch-command.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 
 export interface ApplicationScreenshotFixture {

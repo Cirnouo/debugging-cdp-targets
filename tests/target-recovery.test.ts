@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
-import { prepareLaunchDefinition } from '../src/domains/launch-command.ts';
+import { prepareLaunchDefinition } from '../src/gateway/targets/model/launch-command.ts';
 
 function fixture({ busy = false, race = false, busyPorts = [] as number[] } = {}) {
     const launched: { port: number; args: string[]; cwd: string | undefined; env: NodeJS.ProcessEnv | undefined }[] =

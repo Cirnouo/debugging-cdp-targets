@@ -1,6 +1,6 @@
 import type { TargetKind } from '../../../domains/control-contract.ts';
-import type { LaunchDefinition } from '../../../domains/launch-command.ts';
 import { DetailedError } from '../../../shared/errors.ts';
+import type { LaunchDefinition } from './launch-command.ts';
 
 export interface ListenerEvidence {
     localAddress: string;

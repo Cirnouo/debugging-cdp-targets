@@ -7,7 +7,7 @@ import {
     type FixtureOrigin,
     runFixtureResource,
 } from '../adapters/fixture-diagnostics.ts';
-import type { DataIsolation, DataIsolationEvidence } from '../domains/data-isolation.ts';
+import type { DataIsolation, DataIsolationEvidence } from '../gateway/targets/model/isolation.ts';
 import type { ConnectionOwner } from './connection-owner.ts';
 
 /** A connection lease outlives every session owner and every removed route. */

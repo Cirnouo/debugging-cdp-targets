@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import * as launch from '../src/domains/launch-command.ts';
+import * as launch from '../../../src/gateway/targets/model/launch-command.ts';
 
 const braceVariable = (name: string) => `\${${name}}`;
 

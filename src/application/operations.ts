@@ -7,7 +7,7 @@ import {
     runFixtureObservation,
 } from '../adapters/fixture-diagnostics.ts';
 import { type ConnectionRoute, lifecycleFailureEvidence } from '../domains/control-contract.ts';
-import type { DataIsolationEvidence } from '../domains/data-isolation.ts';
+import type { DataIsolationEvidence } from '../gateway/targets/model/isolation.ts';
 import { errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 
 type State = 'accepted' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled';

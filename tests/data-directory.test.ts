@@ -283,7 +283,7 @@ test('post-creation entry inspection failure keeps identity so authorized releas
 
 test('release requested by the acquisition observer waits for identity and inspection completion', async (t) => {
     const root = await fixture(t);
-    let release: Promise<import('../src/domains/data-isolation.ts').DataDirectoryEvidence> | undefined;
+    let release: Promise<import('../src/gateway/targets/model/isolation.ts').DataDirectoryEvidence> | undefined;
     const registry = new DataDirectoryRegistry();
     const lease = await registry.acquire(
         { kind: 'new', parent: root, name: 'early-release' },

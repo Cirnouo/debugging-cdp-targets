@@ -39,6 +39,11 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/gateway/diagnostics.ts',
         'src/gateway/targets/model/cdp-identity.ts',
         'src/gateway/targets/model/target-contract.ts',
+        'src/gateway/targets/model/chrome-profile-argument.ts',
+        'src/gateway/targets/model/chromium-features.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/gateway/targets/model/launch-command.ts',
+        'src/shared/environment-key.ts',
         'src/domains/control-contract.ts',
         'src/domains/mcp-http.ts',
         'src/adapters/mcp-request-handler.ts',
@@ -60,6 +65,17 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         actualInputs.some((name) => name.replaceAll('\\', '/').endsWith('src/domains/cdp-target.ts')),
         false,
     );
+    for (const oldInput of [
+        'src/domains/chrome-profile.ts',
+        'src/domains/chromium-features.ts',
+        'src/domains/data-isolation.ts',
+        'src/domains/launch-command.ts',
+    ])
+        assert.equal(
+            actualInputs.some((name) => name.replaceAll('\\', '/').endsWith(oldInput)),
+            false,
+            oldInput,
+        );
     for (const name of [
         'windows-deployment-authority.ps1',
         'windows-deployment-authority.cs',
