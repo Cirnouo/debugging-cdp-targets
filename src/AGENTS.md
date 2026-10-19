@@ -5,7 +5,7 @@ Before changing App ownership or transport, read
 owns core resources and direct HTTP; host plugins are thin.
 
 
-Dependencies flow interface → application → pure domains/Gateway/shared;
+Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
 rules and target models, or its exact diagnostics clock, and never depend on
 application/interface.
@@ -16,8 +16,17 @@ relative target value owners gateway/targets/model/isolation.ts and
 gateway/targets/model/launch-command.ts; this grants no Host payload or shared
 permission to depend on Gateway. Only gateway/diagnostics.ts may read its existing
 performance.now() clock and depend on the pure domains/control-contract.ts.
-Domains and Gateway contain no environment, file, process, network or PowerShell
-I/O. Diagnostic value/callback types remain in the current domain contract; its
+Domains and pure Gateway owners contain no environment, file, process, network or
+PowerShell I/O. The exact gateway/connections/resource-owner.ts owns resource
+generation state and permits only its target-contract TYPE dependency. The exact
+gateway/connections/directory-lease.ts owns connection-level lease lifetime through
+the existing data-directory and fixture-diagnostics adapters, plus isolation and
+resource-owner TYPE dependencies. Neither role gains ambient process/environment,
+clock, filesystem, network, native or external-package access. Pure owners cannot
+depend on either mutable role, including through erased syntax; unknown Gateway
+files remain pure. Before changing these lifetime owners, read their cumulative
+[connections instructions](gateway/connections/AGENTS.md).
+Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.
 The existing semver/functions/parse.js exception remains limited to
 domains/software-version.ts; gateway gains no external dependency exception.
@@ -43,8 +52,9 @@ Never add persisted runtime state, plugin CLI or administrative control IPC.
 
 The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolation.md)
 requires pure isolation/launch validation in gateway/targets/model/,
-directory filesystem evidence and claims in adapters, and connection-level leases,
-release barriers and explicit operation evidence in application. Target and official resources have independent generation owners alongside the
+directory filesystem evidence and claims in adapters, and connection-level lease
+lifetime/release barriers in gateway/connections/. Application retains the registry,
+cleanup/retry joins and explicit operation evidence. Target and official resources have independent generation owners alongside the
 logical connection/router owner. Public session identity changes after either side
 restarts and is distinct from those internal generations. Start requires explicit isolation; no fixed profile fallback
 or automatic path disclosure through Hooks/default summaries is permitted.

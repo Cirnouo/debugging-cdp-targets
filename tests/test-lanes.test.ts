@@ -43,15 +43,23 @@ const toolingCases = [
     'tests/tooling/governance/commit-history.test.ts',
     'tests/tooling/governance/commit-validation.test.ts',
     'tests/tooling/quality/text-policy.test.ts',
+    'tests/tooling/releases/publication.test.ts',
+    'tests/tooling/releases/release-notes.test.ts',
+    'tests/tooling/submissions/issue-forms.test.ts',
+    'tests/tooling/submissions/markdown.test.ts',
+    'tests/tooling/submissions/pull-requests.test.ts',
 ];
 
 const gatewayCases = [
+    'tests/gateway/connections/directory-lifetime.test.ts',
+    'tests/gateway/connections/directory-operation-evidence.test.ts',
     'tests/gateway/owned-tool-arguments.test.ts',
     'tests/gateway/targets/chrome-launch.test.ts',
     'tests/gateway/targets/chrome-profile-argument.test.ts',
     'tests/gateway/targets/chrome-profile.test.ts',
     'tests/gateway/targets/chromium-features.test.ts',
     'tests/gateway/targets/data-isolation.test.ts',
+    'tests/gateway/targets/directory-admission.test.ts',
     'tests/gateway/targets/port-and-endpoint-admission.test.ts',
     'tests/gateway/targets/structured-launch.test.ts',
 ];

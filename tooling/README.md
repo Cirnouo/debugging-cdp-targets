@@ -67,11 +67,11 @@
   event/ref construction, actual commitlint execution and the Git/history audit command.
 - `version-policy.ts` re-exports the pure domain version predicates and owns exact
   Package/Plugin/Skill string agreement. It also supplies security identity validation.
-- `release.ts` reads both maintained packaging and generated host metadata,
-  validates a new tag-push context, builds Changelog-based notes,
-  and creates/resumes a stable or prerelease draft before publication after the
-  reusable CI gate. It checks returned classification and preserves a stable-only
-  latest-release baseline for notes and comparisons.
+- [releases/](releases/README.md) separates supplied-value Markdown note extraction
+  and body construction from the complete tag/remote/draft/publication transaction.
+  Its publisher validates maintained/generated metadata and new tag-push identity,
+  creates or resumes a correctly classified draft after reusable CI, and preserves
+  the stable-only latest-release baseline.
 - `governance/check-commits.ts` validates Git topology/event ranges, including complete
   rewritten ancestry when a forced push's old commit is unavailable, and full
   scheduled branch ancestry using GitHub's explicit ref without detached fallback.
@@ -80,15 +80,8 @@
   against the current template only for PR events; commit body/footer rules do
   not apply to it. Every actual non-merge commit in the selected range or ancestry
   is validated directly without message normalization or commit-specific exceptions.
-- `pull-request-policy.ts` validates current PR section order, canonical checklist
-  labels/placement, selections, conditional N/A reasons, and evidence by reading
-  the supplied current template. The CLI loads `.github/PULL_REQUEST_TEMPLATE.md`;
-  the low-level Git range/message builder remains independent of that template.
-- `issue-policy.ts` parses supplied current Issue form YAML and derives classification
-  labels, H3 field order, required responses, and exact single-choice dropdown options.
-  It returns skipped, valid, or invalid body diagnostics; malformed or unsupported
-  forms throw a distinct configuration error. Ordinary unlabeled Issues are exempt.
-  This pure policy has no CLI or local submission hook.
+- [submissions/](submissions/README.md) owns supplied Markdown scanning, current
+  PR-template policy and Issue-form policy, consumed by governance and feedback.
 - `issue-feedback.ts` is the CI-only Issue publisher: it validates trusted event
   and live Issue identity, consumes current form YAML through the pure policy,
   paginates owned bot comments, checks stale snapshots and publishes recoverable
@@ -97,13 +90,6 @@
   and stale owned diagnosis is cleared. It has no package command or local hook.
 - `issue-github.ts` owns the fixed public GitHub REST boundary for Issue feedback,
   bounded requests, redirect refusal, token headers and sanitized transport errors.
-- `submission-markdown.ts` scans submission sections at a selected heading depth,
-  logical wrapped checkbox labels, adjacent continuations, and content paragraphs.
-  Paragraphs retain their text and whether it includes literal code or quoted
-  content. Shared line readers identify headings/checklists without rescanning
-  literal output as Markdown structure.
-  Fences, indented code, quotes, and comments cannot supply structural headings
-  or checklists; code and quoted content can supply evidence beyond starter prose.
 - `test-windows-interactive.ts` is the command-line-only GUI lane runner. Without
   `--allow-gui` it returns a successful explicit skip before selecting files. With
   authorization it runs all four interactive files through native `node:test.run`,
@@ -131,7 +117,7 @@ Use package scripts for supported checks. Pure validators never mutate user stat
 or publish artifacts. The explicit Issue workflow runs `node tooling/issue-feedback.ts`
 with its trusted Issue event and step-scoped built-in token to update only owned
 diagnostic labels/comments. Ordinary checks and tests never invoke that CI entry
-against GitHub. The separate Release workflow runs `node tooling/release.ts`
+against GitHub. The separate Release workflow runs `node tooling/releases/publish-release.ts`
 with its new tag-push event and built-in token; ordinary checks and tests never
 invoke its publishing CLI. It does not change repository settings or upload
 custom assets.

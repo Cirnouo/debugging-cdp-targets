@@ -1,4 +1,8 @@
-import { DataDirectoryError, type DataDirectoryLease, type DataDirectoryRegistry } from '../adapters/data-directory.ts';
+import {
+    DataDirectoryError,
+    type DataDirectoryLease,
+    type DataDirectoryRegistry,
+} from '../../adapters/data-directory.ts';
 import {
     beginFixtureStage,
     captureFixtureOrigin,
@@ -6,19 +10,19 @@ import {
     type FixtureFields,
     type FixtureOrigin,
     runFixtureResource,
-} from '../adapters/fixture-diagnostics.ts';
-import type { DataIsolation, DataIsolationEvidence } from '../gateway/targets/model/isolation.ts';
-import type { ConnectionOwner } from './connection-owner.ts';
+} from '../../adapters/fixture-diagnostics.ts';
+import type { DataIsolation, DataIsolationEvidence } from '../targets/model/isolation.ts';
+import type { ResourceOwner } from './resource-owner.ts';
 
 /** A connection lease outlives every session owner and every removed route. */
-export function createConnectionDirectory(
+export function createConnectionDirectoryLease(
     registry: DataDirectoryRegistry,
     isolation: DataIsolation,
     publish?: (evidence: DataIsolationEvidence) => void,
     canDelete?: (directory: string) => Promise<boolean>,
 ) {
     let origin: FixtureOrigin | undefined;
-    const owners = new Set<ConnectionOwner>();
+    const owners = new Set<ResourceOwner>();
     let lease: DataDirectoryLease | undefined;
     let acquisitionPending = false;
     let successors = 0;
@@ -45,7 +49,7 @@ export function createConnectionDirectory(
         get released() {
             return released;
         },
-        addOwner(owner: ConnectionOwner) {
+        addOwner(owner: ResourceOwner) {
             owners.add(owner);
         },
         holdSuccessor() {
@@ -150,4 +154,4 @@ export function createConnectionDirectory(
     };
 }
 
-export type ConnectionDirectory = ReturnType<typeof createConnectionDirectory>;
+export type ConnectionDirectoryLease = ReturnType<typeof createConnectionDirectoryLease>;

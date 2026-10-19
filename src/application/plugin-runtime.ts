@@ -25,6 +25,11 @@ import {
     parseConnectionRoute,
     validateIdentity,
 } from '../domains/control-contract.ts';
+import {
+    type ConnectionDirectoryLease,
+    createConnectionDirectoryLease,
+} from '../gateway/connections/directory-lease.ts';
+import { createResourceOwner, type ResourceOwner } from '../gateway/connections/resource-owner.ts';
 import { measured } from '../gateway/diagnostics.ts';
 import { parseDataIsolation } from '../gateway/targets/model/isolation.ts';
 import {
@@ -36,8 +41,6 @@ import type { ClientPrincipal, ClientRequestContext } from '../shared/client-con
 import { DEFAULT_BASE_PORT } from '../shared/constants.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import { createClientContext, waitForClient } from './client-context.ts';
-import { type ConnectionDirectory, createConnectionDirectory } from './connection-directory.ts';
-import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 import { createLifecycleService } from './mcp-lifecycle.ts';
 import { createRegistrationRegistry } from './registrations.ts';
 import {
@@ -52,11 +55,11 @@ type Controller = ReturnType<typeof createTargetController>;
 type ManagedConnection = {
     connectionId: string;
     sessionId: string;
-    owner: ConnectionOwner;
-    logicalOwner: ConnectionOwner;
-    officialOwner: ConnectionOwner;
+    owner: ResourceOwner;
+    logicalOwner: ResourceOwner;
+    officialOwner: ResourceOwner;
     restartScope?: import('../domains/control-contract.ts').RestartScope;
-    directory: ConnectionDirectory;
+    directory: ConnectionDirectoryLease;
     controller: Controller;
     router: RuntimeRouter;
     upstream?: OfficialConnection;
@@ -108,10 +111,13 @@ export async function createGatewayCore({
         ...(now ? { now } : {}),
         onExpire: (principal) => lifecycle.forgetOwner(principal.registrationId),
     });
-    const resourceRegistrations = new Map<string, { principal: ClientPrincipal; directory: ConnectionDirectory }>();
+    const resourceRegistrations = new Map<
+        string,
+        { principal: ClientPrincipal; directory: ConnectionDirectoryLease }
+    >();
     const connections = new Map<string, ManagedConnection>();
-    const owners = new Set<ConnectionOwner>();
-    const directories = new Set<ConnectionDirectory>();
+    const owners = new Set<ResourceOwner>();
+    const directories = new Set<ConnectionDirectoryLease>();
     const portReservations = createPortReservations();
     const makeHost = createHost ?? (() => createTargetHost({ portReservations }));
     const retirements = new Set<Promise<void>>();
@@ -122,7 +128,7 @@ export async function createGatewayCore({
     const admissionShutdown = new AbortController();
     let cleanupPromise: Promise<void> | undefined;
     let cleanupState: 'open' | 'closing' | 'failed' | 'closed' = 'open';
-    async function retryDirectory(directory: ConnectionDirectory) {
+    async function retryDirectory(directory: ConnectionDirectoryLease) {
         try {
             await directory.retry();
         } finally {
@@ -136,8 +142,8 @@ export async function createGatewayCore({
             }
         }
     }
-    function newOwner(sessionId: string, directory?: ConnectionDirectory) {
-        const owner = createConnectionOwner(
+    function newOwner(sessionId: string, directory?: ConnectionDirectoryLease) {
+        const owner = createResourceOwner(
             sessionId,
             directory
                 ? () => {
@@ -186,7 +192,7 @@ export async function createGatewayCore({
         if (connectionId !== undefined) return statusOf(selected(connectionId));
         return { connections: [...connections.values()].filter((item) => !item.owner.retired).map(summary) };
     }
-    async function disposeResources(owner: ConnectionOwner) {
+    async function disposeResources(owner: ResourceOwner) {
         try {
             await owner.closeResources();
         } finally {
@@ -337,7 +343,7 @@ export async function createGatewayCore({
         const connectionId = randomUUID();
         const sessionId = randomUUID();
         const initialArgs = buildServerArguments('http://127.0.0.1:1', ambient, options.mcpArgs).slice(1);
-        const directory = createConnectionDirectory(
+        const directory = createConnectionDirectoryLease(
             dataDirectories,
             isolation,
             context.onIsolation,
@@ -352,7 +358,7 @@ export async function createGatewayCore({
         owner.expectedOperationId = context.operationId;
         let connection: ManagedConnection | undefined;
         const diagnostics: (Diagnostic & { sessionId: string })[] = [];
-        function diagnoseFor(selectedOwner: ConnectionOwner): Diagnose {
+        function diagnoseFor(selectedOwner: ResourceOwner): Diagnose {
             return (event) => {
                 if (selectedOwner.retired || (connection && connection.owner !== selectedOwner)) return;
                 diagnostics.push({ ...event, sessionId: selectedOwner.sessionId });
@@ -426,7 +432,7 @@ export async function createGatewayCore({
                         ensure: (_options, context) => ensureUpstream(managed, context),
                         close: async (selectedOwner = managed.owner) => {
                             const errors: unknown[] = [];
-                            async function disposeSide(owner: ConnectionOwner) {
+                            async function disposeSide(owner: ResourceOwner) {
                                 try {
                                     await disposeResources(owner);
                                 } catch (error) {
@@ -644,7 +650,7 @@ export async function createGatewayCore({
         cleanupState = 'closing';
         for (const directory of directories) directory.requestRelease();
         const closing: Promise<unknown>[] = [];
-        const cleaning = new Map<ConnectionOwner, { version: number; joined: boolean }>();
+        const cleaning = new Map<ResourceOwner, { version: number; joined: boolean }>();
         for (const connection of connections.values()) {
             connection.owner.abortWork(new Error('The gateway is closing.'));
             connection.router.clearTarget();

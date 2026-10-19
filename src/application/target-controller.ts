@@ -7,9 +7,9 @@ import type {
     LaunchOptions,
     TargetStatus,
 } from '../domains/control-contract.ts';
+import { createResourceOwner, type ResourceOwner } from '../gateway/connections/resource-owner.ts';
 import { type ManagedTarget, RetainedTargetError } from '../gateway/targets/model/target-contract.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
-import { type ConnectionOwner, createConnectionOwner } from './connection-owner.ts';
 
 export interface ControllerRouter {
     setTarget(target: ManagedTarget): void;
@@ -36,7 +36,7 @@ export type TargetEvent = {
     generation?: string;
     reason: 'process-exited';
 
-    expected?: ConnectionOwner['expectedExit'];
+    expected?: ResourceOwner['expectedExit'];
     operationId?: string;
     processId: number;
     port: number;
@@ -46,7 +46,7 @@ export type TargetEvent = {
     signalCode?: string;
 };
 type Current = {
-    owner: ConnectionOwner;
+    owner: ResourceOwner;
     sessionId: string;
     options: LaunchOptions;
     unsubscribe?: () => void;
@@ -91,11 +91,11 @@ export function createTargetController({
     host: ControllerHost;
     server: {
         ensure(options: LaunchOptions, context?: LaunchContext): Promise<void>;
-        close(owner?: ConnectionOwner): Promise<void>;
+        close(owner?: ResourceOwner): Promise<void>;
     };
     onProcessExit?: (event: TargetEvent) => void;
     onObservationFailure?: (sessionId: string) => void;
-    createOwner?: (sessionId: string) => Promise<ConnectionOwner>;
+    createOwner?: (sessionId: string) => Promise<ResourceOwner>;
 }) {
     let current: Current | undefined;
     let state: TargetStatus['status'] = 'idle';
@@ -103,7 +103,7 @@ export function createTargetController({
 
     let gated = true;
     let changing = false;
-    let checking: { owner: ConnectionOwner; job: Promise<void> } | undefined;
+    let checking: { owner: ResourceOwner; job: Promise<void> } | undefined;
     function status(): TargetStatus {
         const target = current?.owner.target;
         return {
@@ -281,7 +281,7 @@ export function createTargetController({
     }
     async function attach(options: LaunchOptions, sessionId: string, context: ControlContext) {
         context.signal?.throwIfAborted();
-        const owner = createOwner ? await createOwner(sessionId) : createConnectionOwner(sessionId);
+        const owner = createOwner ? await createOwner(sessionId) : createResourceOwner(sessionId);
         owner.expectedOperationId = context.operationId;
         const selected: Current = { owner, sessionId, options: structuredClone(options) };
         current = selected;

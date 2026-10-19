@@ -1,5 +1,18 @@
 # Test fixtures
 
+`connection-directory-runtime.ts` exports createDirectoryRuntimeFixture, deferred,
+tick and route for the connection lifetime, operation evidence and directory
+admission suites. It composes real Core/DataDirectoryRegistry over controlled
+ControllerHost/router/official boundaries, keeping Application private and all
+setup/support/teardown assertions and expectCleanupFailure cleanup branches.
+Regression-case assertion bodies remain in the three suites. This support differs
+from target-host.ts's real createTargetHost fake; neither fixture copies the other.
+The reviewed intermediate root location precedes the final
+`fixtures/gateway/connection-directory-runtime.ts` relocation in the maintained
+[content plan](../../.superpowers/plans/2026-10-18-repository-content-reorganization.md).
+That later move must update suite imports and both affected fixture maps together;
+core-runtime.ts stays at its current location until its own migration.
+
 `target-host.ts` exports createTargetHostFixture, the shared controlled target-host
 I/O boundary for the Gateway profile and launch suites. It preserves synthetic
 process/listener evidence, async profile availability, argv observations and
@@ -39,22 +52,8 @@ GitHub boundary for the actual CI entry test. It records request methods/routes
 in a disposable transcript and cannot send network traffic; the test confirms
 feedback publication precedes an invalid exit without printing body or token.
 
-`unwrapped-squash-message.json` preserves a malformed squash message as negative
-input for strict body-length validation, including a formerly exempt identity.
-
-`wrapped-body-label-squash.json` preserves the complete original PR description
-and GitHub-wrapped squash message as UTF-8 text without normalizing their bytes.
-The message puts an ordinary body label at a line boundary; actual-commit audit
-regressions distinguish it from explicit trailers without rewriting history.
-Its historical prose does not exempt a current PR from the current template.
-
-`current-pr-body.md` is a literal compliant current PR body with checklist
-selections, conditional N/A reasons, evidence, an ordinary body label and Issue
-references. CLI regressions preserve raw event bytes while checking the current
-template, raw title and predicted squash header independently. Variants include
-long review prose, wide tables, fenced evidence and adjacent trailer-looking text;
-actual commits still receive complete strict validation. Its declared checks are
-synthetic fixture input.
+[submissions/](submissions/README.md) owns literal current PR bodies and original
+squash-message evidence used by governance and commitlint regressions.
 
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
 `native-close-runtime.ts` composes the real Core, explicit registration/request

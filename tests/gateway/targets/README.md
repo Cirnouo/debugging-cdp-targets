@@ -13,8 +13,12 @@
     canonical binding, occupancy, peer claims, cancellation and actual-exit release.
 - `chrome-launch.test.ts` keeps seventeen controlled preset/launch cases,
     exact recovery, pre-spawn conflict/port release and non-Windows restoration.
+- `directory-admission.test.ts` keeps two real Core pre-acquisition cases:
+    missing binding/invalid official options and already-cancelled startup without
+    evidence or filesystem effects. It shares `fixtures/connection-directory-runtime.ts`
+    with the connection suites, separately from the target-host fixture.
 
-Both default and coverage commands explicitly select all seven suites once, with
+Both default and coverage commands explicitly select all eight suites once, with
 file concurrency 1. The six value suites conserve all 59 original registrations,
 inner assertions and cleanup. Both runtime suites share the controlled
 [target host fixture](../../fixtures/target-host.ts); no real target launches.
