@@ -13,6 +13,10 @@
   renderer, collects actual graph licenses and stages verified original native
   archives without overwriting an existing stage. `extract-app-zip.ps1` rejects
   unsafe archive paths, duplicate destinations and link entries before extraction.
+  The exact helper/source-input inventory also includes the fixed read-only
+  Windows deployment authority C#/PowerShell and macOS JXA source. They are
+  repository-owned MIT inputs, with no new third-party runtime or notice.
+  Copying these sources does not enable deployment admission or enrollment.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed

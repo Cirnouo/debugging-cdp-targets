@@ -60,6 +60,15 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         actualInputs.some((name) => name.replaceAll('\\', '/').endsWith('src/domains/cdp-target.ts')),
         false,
     );
+    for (const name of [
+        'windows-deployment-authority.ps1',
+        'windows-deployment-authority.cs',
+        'macos-deployment-authority.jxa',
+    ]) {
+        assert.ok(files.has(name), `Missing fixed deployment helper: ${name}`);
+        assert.ok(files.get(name)?.equals(await readFile(new URL(`../src/adapters/${name}`, import.meta.url))));
+        assert.ok(actualInputs.includes(`src/adapters/${name}`), `Missing helper source input: ${name}`);
+    }
     for (const name of ['semver', 'smol-toml'])
         assert.ok(
             actualInputs.some((input) => input.replaceAll('\\', '/').includes(`/node_modules/${name}/`)),

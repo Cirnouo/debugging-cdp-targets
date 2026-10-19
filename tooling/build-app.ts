@@ -118,7 +118,14 @@ export async function generateAppFiles(options: AppBuild) {
     );
     for (const file of ['app-release-inputs.json', 'app-native-release.json', 'official-server-release.json'])
         files.set(`delivery/${file}`, await readRegularFile(path.join(root, 'tooling', file)));
-    for (const file of ['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs'])
+    for (const file of [
+        'windows-cdp-helper.ps1',
+        'windows-native-helper.ps1',
+        'windows-native-process.cs',
+        'windows-deployment-authority.ps1',
+        'windows-deployment-authority.cs',
+        'macos-deployment-authority.jxa',
+    ])
         files.set(file, await readRegularFile(path.join(root, 'src/adapters', file)));
     const native = parseAppNativeEvidence(
         JSON.parse(files.get('delivery/app-native-release.json')?.toString('utf8') ?? 'null'),
@@ -148,9 +155,14 @@ export async function generateAppFiles(options: AppBuild) {
         'src/interface/app.css',
         'packaging/shared/assets/icon.png',
         'LICENSE',
-        ...['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs'].map(
-            (file) => `src/adapters/${file}`,
-        ),
+        ...[
+            'windows-cdp-helper.ps1',
+            'windows-native-helper.ps1',
+            'windows-native-process.cs',
+            'windows-deployment-authority.ps1',
+            'windows-deployment-authority.cs',
+            'macos-deployment-authority.jxa',
+        ].map((file) => `src/adapters/${file}`),
     ]);
     return files;
 }

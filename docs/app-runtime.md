@@ -184,6 +184,42 @@ release emits live changes for its fixed startup configuration.
 
 ## Building and evidence
 
+The deployment store remains a source-only prerequisite, outside App bootstrap,
+main, activation and restart-worker composition. Its normal open returns only
+read/shared-use capabilities. The separate trusted worker open validates actual
+native authority before exposing operation, commit or deletion. Per-user roles
+trust code running as the same account; OS permissions do not distinguish that
+account's ordinary App from arbitrary code run by that account. Linux system-DEB
+readers use the fixed root-owned `/opt/debugging-cdp-targets` envelope, while
+mutation requires the worker's actual matching real/effective UID 0. Metadata
+kind and environment values confer no writer authority.
+
+The source has bounded Windows handle/SID/protected-DACL/local-NTFS evidence and
+a macOS JXA descriptor/UID/ACL/local-APFS candidate, alongside Linux private and
+system permission checks. Unknown results, unsafe ancestors, links, cross-volume
+control entries, changed identities and missing fixed leases refuse admission.
+Windows inherited control-file ACEs require the checked protected parent
+template; macOS managed entries require absent/empty ACLs and private modes.
+Trusted macOS ancestors can reside on the sealed read-only System volume while
+the managed root and controls require writable local APFS on their own device.
+Ancestor ownership, non-granting ACLs, safe modes, local APFS and ownership-enabled
+mount checks remain required. The fixed JXA query distinguishes request-only
+`ATTR_VOL_INFO` from the exact result-bearing volume mask.
+Controlled transcripts, Node VM buffers and C# compilation establish source
+contracts only. Actual Windows permission/ACL readback, macOS 15 JXA/Ref/errno
+behavior and Linux multi-account/root execution remain native gates. No native
+installer/portable acceptance is implied by these branches or shipped helpers.
+
+Fresh create-only enrollment and initial installation/state publication remain
+unimplemented. The current stage builder verifies original inputs but still
+returns a flat local development stage; the complete payload verifier observes
+inventory agreement without establishing input provenance. A later producer
+must join those responsibilities before publishing an enrolled initial build.
+Ordinary startup neither creates nor repairs a missing or partial envelope.
+The installation schema, canonical identity formula and two persistent lease
+inodes are unchanged. App admission stays disabled until the complete producer,
+protected creation and native gates are integrated together.
+
 Complete the trusted installation sequence first. App build checks reviewed
 Electron/ordinary Node archives, the unchanged complete official npm release and
 original native loader files, then collects licenses from actual esbuild inputs

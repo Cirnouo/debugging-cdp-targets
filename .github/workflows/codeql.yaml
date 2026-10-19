@@ -66,9 +66,11 @@ jobs:
                     Add-Type -AssemblyName System.IO.Compression.FileSystem
                     $sourceArchive = [IO.Compression.ZipFile]::OpenRead((Join-Path $env:DCT_CODEQL_DATABASE_ROOT 'csharp/src.zip'))
                     try {
-                        $nativeSource = @($sourceArchive.Entries | Where-Object { $_.FullName.Replace('\', '/').EndsWith('/src/adapters/windows-native-process.cs', [StringComparison]::Ordinal) })
-                        if ($nativeSource.Count -ne 1) { throw 'The native helper is missing or ambiguous in the C# extraction source archive.' }
-                        Write-Output 'Verified native helper source extraction: src/adapters/windows-native-process.cs'
+                        foreach ($source in @('src/adapters/windows-native-process.cs', 'src/adapters/windows-deployment-authority.cs')) {
+                            $nativeSource = @($sourceArchive.Entries | Where-Object { $_.FullName.Replace('\', '/').EndsWith('/' + $source, [StringComparison]::Ordinal) })
+                            if ($nativeSource.Count -ne 1) { throw 'A native helper is missing or ambiguous in the C# extraction source archive.' }
+                            Write-Output ('Verified native helper source extraction: ' + $source)
+                        }
                     }
                     finally {
                         $sourceArchive.Dispose()

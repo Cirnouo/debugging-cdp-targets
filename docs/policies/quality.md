@@ -384,8 +384,9 @@ for the fixed protocol, metrics and manual command.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at
-01:47 UTC. C# uses Windows with build-mode none and must prove extraction of the
-native helper from its database source archive. No product build or project
+01:47 UTC. C# uses Windows with build-mode none and must prove extraction of both
+the native process helper and deployment authority helper from its database
+source archive. No product build or project
 dependency install is run. CodeQL Actions use the independently reviewed official
 v4 commit; only analysis jobs can write security events. Generated distribution
 and unchanged upstream directories retain their distribution, integrity and

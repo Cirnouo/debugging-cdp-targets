@@ -201,8 +201,9 @@ descriptor. They reject non-regular files, final-component links, path identity
 changes and observed size/modification/change-time changes during the read;
 the descriptor is closed on every outcome. Existing canonical package-root,
 path, complete-file-set and digest checks remain required.
-Maintained TypeScript (`.ts`, `.mts`, `.cts`) and generated JavaScript are both
-included. Compiler, parser and type dependencies are audited like every other
+Maintained TypeScript (`.ts`, `.mts`, `.cts`), generated JavaScript and native
+PowerShell (`.ps1`), JXA (`.jxa`) and C# (`.cs`) helper sources are included.
+Compiler, parser and type dependencies are audited like every other
 development dependency. Type or language changes do not authorize automatic
 exception renewal; changed fingerprints require a fresh human review.
 
