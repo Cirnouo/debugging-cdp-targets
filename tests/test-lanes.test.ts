@@ -45,7 +45,9 @@ const toolingCases = [
     'tests/tooling/quality/text-policy.test.ts',
     'tests/tooling/releases/publication.test.ts',
     'tests/tooling/releases/release-notes.test.ts',
+    'tests/tooling/submissions/issue-feedback.test.ts',
     'tests/tooling/submissions/issue-forms.test.ts',
+    'tests/tooling/submissions/issue-workflow.test.ts',
     'tests/tooling/submissions/markdown.test.ts',
     'tests/tooling/submissions/pull-requests.test.ts',
 ];

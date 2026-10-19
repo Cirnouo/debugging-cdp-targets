@@ -78,6 +78,6 @@ jobs:
             -   name: Install audited dependencies without lifecycle scripts
                 run: pnpm install --frozen-lockfile --ignore-scripts
             -   name: Validate latest Issue and publish recoverable feedback
-                run: node tooling/issue-feedback.ts
+                run: node tooling/submissions/publish-issue-feedback.ts
                 env:
                     GH_TOKEN: ${{ github.token }}

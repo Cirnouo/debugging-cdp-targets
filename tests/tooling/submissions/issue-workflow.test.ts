@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { parse } from 'yaml';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
-const file = new URL('../.github/workflows/issues.yaml', import.meta.url);
+const file = new URL('../../../.github/workflows/issues.yaml', import.meta.url);
 function workflow() {
     assert.ok(existsSync(file), 'remote Issue feedback workflow must exist');
     const value: unknown = parse(readFileSync(file, 'utf8'));
@@ -99,7 +99,10 @@ test('read-only supply-chain gate precedes disabled-script install and writer bi
     ]);
     assert.ok(gate.every((step) => step.env === undefined));
     const runs = publisher.flatMap((step) => (typeof step.run === 'string' ? [step.run] : []));
-    assert.deepEqual(runs, ['pnpm install --frozen-lockfile --ignore-scripts', 'node tooling/issue-feedback.ts']);
+    assert.deepEqual(runs, [
+        'pnpm install --frozen-lockfile --ignore-scripts',
+        'node tooling/submissions/publish-issue-feedback.ts',
+    ]);
     assert.deepEqual(publisher.at(-1)?.env, { GH_TOKEN: `\${{ github.token }}` });
     assert.ok(publisher.slice(0, -1).every((step) => step.env === undefined));
     assert.ok(

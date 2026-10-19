@@ -33,14 +33,15 @@ events and pure grammar from actual message execution and Git/history auditing.
 [Text policy](../../tooling/quality/README.md) owns shared pure style and YAML
 filename rules. [Release tooling](../../tooling/releases/README.md) separates pure
 supplied-value Markdown notes from the complete tag/remote/draft/publication
-transaction. [Submission values](../../tooling/submissions/README.md) own the
-shared Markdown scanner and supplied PR-template/Issue-form policies at their
-actual governance and feedback callers. Their central
-[tooling tests](../../tests/tooling/README.md) explicitly select direct scanner and
-policy suites; [literal submission evidence](../../tests/fixtures/submissions/README.md)
-retains raw commit/PR fixtures. The invoked Issue feedback transaction and REST
-adapter remain at root tooling with their root suites and HTTP preload;
-other tooling and test owners retain their current placement.
+transaction. [Submissions](../../tooling/submissions/README.md) own the shared
+Markdown scanner and supplied PR-template/Issue-form policies, the complete
+injected Issue feedback transaction, its fixed public REST adapter and the invoked
+publisher. Invocation owns event/form files and credentials; one expected
+snapshot owns recoverable label/comment effects through a supplied request.
+Their central [tooling tests](../../tests/tooling/README.md) explicitly select
+all five suites; [submission fixtures](../../tests/fixtures/submissions/README.md)
+retain three literal commit/PR inputs and the subprocess HTTP preload.
+Other tooling and test owners retain their current placement.
 
 The selected direction is source roots named for cohesive domain responsibilities,
 with subdomains or technical boundaries inside them when needed; central root
