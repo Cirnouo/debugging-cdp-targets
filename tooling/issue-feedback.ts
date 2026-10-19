@@ -3,7 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../src/shared/errors.ts';
 import { createGitHubIssueRequest, IssueAutomationError, type IssueRequest } from './issue-github.ts';
-import { ISSUE_INVALID_LABEL, type IssueBodyResult, type IssueFormSources, validateIssueBody } from './issue-policy.ts';
+import {
+    ISSUE_INVALID_LABEL,
+    type IssueBodyResult,
+    type IssueFormSources,
+    validateIssueBody,
+} from './submissions/issue-forms.ts';
 
 const FEEDBACK_MARKER = '<!-- debugging-cdp-targets:issue-form-feedback:v1 -->';
 // Public GitHub identity: https://api.github.com/users/github-actions%5Bbot%5D
