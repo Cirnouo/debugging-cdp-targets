@@ -720,6 +720,35 @@ failure envelope. BEGIN records persist
 before settlement, so a hung child can leave a running summary and unfinished
 stage evidence. A failed final write cannot erase already streamed progress.
 
+For an accepted ordinary `official-server` collection, the parent also emits
+events-only `profile-directory` records; startup studies and entry recovery do
+not enable this observation. Each closed nine-key row contains `kind`, `role`
+(`first` or `second`), `point`, monotonic `elapsedMs` and `readDurationMs`,
+`result` (`present`, `absent` or `unavailable`), `entryKind`, nullable
+`matchesBaseline` and `readError` (`none`, `denied` or `other`). The fixed points
+are registration, after Close, before/after the second start for the first role,
+before/after gateway close for both roles, and final checks. Complete ordinary
+execution produces twelve rows with a hard sixteen-row cap inside the unchanged
+stream bounds. All four ENOENT assertions reuse their single bigint lstat reads;
+the other eight observations are one-shot metadata reads. Final checks retain
+the existing Set order and continue after an earlier failure. No profile detail
+is added to summary envelopes; existing validation/incomplete counters expose
+loss, and interrupted execution leaves unobserved intervals unknown.
+
+Paths and device/inode identities remain private. The comparison baseline is the
+first fixture registration observation of a directory after held-path verification,
+not gateway lease-acquisition identity. An unavailable or non-directory baseline
+stays unknown; later reads never rebaseline it. Present records compare device,
+inode and directory kind, with `true` restricted to directories. ENOENT alone
+means absent; EACCES/EPERM mean unavailable/denied, and other failures remain
+unavailable/other. Optional read, writer or clock failure cannot change the
+acceptance outcome or original Error; invalid clock evidence is rejected without
+fabricating durations. Read duration excludes writer overhead, which uses the
+existing collector measurement. Added awaits can perturb timing. These snapshots
+cannot identify a creator, establish ownership or continuous existence, rule out
+inode reuse, or prove completion of native workers. A later green smoke remains
+non-reproduction of the unresolved cleanup failure.
+
 Use the job index to distinguish prerequisite failure from either smoke stage.
 The stream records direct native startup, readiness, listener/endpoint,
 profile and data-directory checks for the controlled target. These boundaries

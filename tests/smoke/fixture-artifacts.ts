@@ -12,6 +12,112 @@ import { type LinuxStartupWaitRecord, validateLinuxStartupWaitRecord } from './l
 import { createHttpFixtureClient } from './mcp-client.ts';
 
 export type FixtureLabel = 'official-server' | 'entry-recovery';
+export type ProfileRole = 'first' | 'second';
+export type ProfilePoint =
+    | 'registered'
+    | 'after-close'
+    | 'before-second-start'
+    | 'after-second-start'
+    | 'before-gateway-close'
+    | 'after-gateway-close'
+    | 'final-check';
+export interface ProfileDirectoryRecord {
+    kind: 'profile-directory';
+    role: ProfileRole;
+    point: ProfilePoint;
+    elapsedMs: number;
+    readDurationMs: number;
+    result: 'present' | 'absent' | 'unavailable';
+    entryKind: 'directory' | 'file' | 'symlink' | 'other' | 'none' | 'unknown';
+    matchesBaseline: boolean | null;
+    readError: 'none' | 'denied' | 'other';
+}
+
+/** Project only closed own data fields; raw input never reaches serialization. */
+export function validateProfileDirectoryRecord(value: unknown): Readonly<ProfileDirectoryRecord> | undefined {
+    try {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+        const descriptors = Object.getOwnPropertyDescriptors(value);
+        const keys = [
+            'kind',
+            'role',
+            'point',
+            'elapsedMs',
+            'readDurationMs',
+            'result',
+            'entryKind',
+            'matchesBaseline',
+            'readError',
+        ];
+        if (
+            Reflect.ownKeys(value).length !== keys.length ||
+            keys.some((key) => !descriptors[key] || !('value' in descriptors[key]))
+        )
+            return;
+        const kind: unknown = descriptors.kind?.value;
+        const role: unknown = descriptors.role?.value;
+        const point: unknown = descriptors.point?.value;
+        const elapsedMs: unknown = descriptors.elapsedMs?.value;
+        const readDurationMs: unknown = descriptors.readDurationMs?.value;
+        const result: unknown = descriptors.result?.value;
+        const entryKind: unknown = descriptors.entryKind?.value;
+        const matchesBaseline: unknown = descriptors.matchesBaseline?.value;
+        const readError: unknown = descriptors.readError?.value;
+        if (
+            kind !== 'profile-directory' ||
+            (role !== 'first' && role !== 'second') ||
+            (point !== 'registered' &&
+                point !== 'after-close' &&
+                point !== 'before-second-start' &&
+                point !== 'after-second-start' &&
+                point !== 'before-gateway-close' &&
+                point !== 'after-gateway-close' &&
+                point !== 'final-check') ||
+            (role === 'second' && (point === 'before-second-start' || point === 'after-second-start')) ||
+            typeof elapsedMs !== 'number' ||
+            !Number.isFinite(elapsedMs) ||
+            elapsedMs < 0 ||
+            typeof readDurationMs !== 'number' ||
+            !Number.isFinite(readDurationMs) ||
+            readDurationMs < 0 ||
+            (matchesBaseline !== null && typeof matchesBaseline !== 'boolean')
+        )
+            return;
+        if (result === 'present') {
+            if (
+                (entryKind !== 'directory' &&
+                    entryKind !== 'file' &&
+                    entryKind !== 'symlink' &&
+                    entryKind !== 'other') ||
+                readError !== 'none' ||
+                (matchesBaseline === true && entryKind !== 'directory')
+            )
+                return;
+        } else if (result === 'absent') {
+            if (entryKind !== 'none' || matchesBaseline !== null || readError !== 'none') return;
+        } else if (result === 'unavailable') {
+            if (
+                entryKind !== 'unknown' ||
+                matchesBaseline !== null ||
+                (readError !== 'denied' && readError !== 'other')
+            )
+                return;
+        } else return;
+        return Object.freeze({
+            kind,
+            role,
+            point,
+            elapsedMs,
+            readDurationMs,
+            result,
+            entryKind,
+            matchesBaseline,
+            readError,
+        });
+    } catch {
+        return;
+    }
+}
 export interface CollectorCostRecord {
     kind: 'collector-cost';
     callbacks: number;
@@ -99,6 +205,7 @@ const maxBytes = 1_048_576;
 const maxRecordBytes = 4096;
 const maxEvents = 2000;
 const maxWaitSummary = 8;
+const maxProfileRecords = 16;
 const marker = `${JSON.stringify({ kind: 'truncated' })}\n`;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 function record(value: unknown): value is Record<string, unknown> {
@@ -123,6 +230,8 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
     };
     const file = path.join(directory, `${fixture}.events.ndjson`);
     let cleanupEnded = false;
+    let profileRecords = 0;
+    let profileOverflow = false;
     try {
         if (existsSync(`${file}.lock`)) progress.writeFailed = true;
         if (statSync(file).size > maxBytes) {
@@ -186,6 +295,15 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
                         progress.linuxStartupWaitOmitted++;
                     }
                 }
+            } else if (value.kind === 'profile-directory') {
+                profileRecords++;
+                if (profileRecords > maxProfileRecords) profileOverflow = true;
+                if (
+                    fixture !== 'official-server' ||
+                    !validateProfileDirectoryRecord(value) ||
+                    profileRecords > maxProfileRecords
+                )
+                    progress.invalidEvents++;
             } else if (value.kind === 'truncated') progress.truncated = true;
             else if (value.kind === 'limitation') {
                 if (value.reason === 'validation-rejected') progress.invalidEvents++;
@@ -199,6 +317,7 @@ export function readFixtureProgress(directory: string, fixture: FixtureLabel) {
     progress.incomplete =
         progress.truncated ||
         progress.writeFailed ||
+        profileOverflow ||
         progress.linuxStartupWaitOmitted > 0 ||
         (progress.gatewayEvents > 0 && !cleanupEnded);
     return progress;
@@ -229,6 +348,7 @@ export function createFixtureArtifacts(
     let measuring = false;
     let costUnavailable = false;
     let costFlushed = false;
+    let profileRecords = 0;
     function measure(action: () => void) {
         if (!eventsFile || measuring) {
             action();
@@ -440,6 +560,20 @@ export function createFixtureArtifacts(
                     summary.incomplete = true;
                 }
                 append(wait);
+                persist();
+            });
+        },
+        profileDirectory(value: unknown) {
+            if (summary.collectionRejected || io.streamOnly || fixture !== 'official-server') return;
+            const safe = validateProfileDirectoryRecord(value);
+            if (!safe || profileRecords >= maxProfileRecords) {
+                if (profileRecords >= maxProfileRecords) summary.incomplete = true;
+                collector.rejected();
+                return;
+            }
+            profileRecords++;
+            measure(() => {
+                append(safe);
                 persist();
             });
         },
