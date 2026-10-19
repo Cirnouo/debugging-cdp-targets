@@ -45,7 +45,10 @@ const toolingCases = [
     'tests/tooling/quality/text-policy.test.ts',
 ];
 
-const gatewayCases = ['tests/gateway/owned-tool-arguments.test.ts'];
+const gatewayCases = [
+    'tests/gateway/owned-tool-arguments.test.ts',
+    'tests/gateway/targets/port-and-endpoint-admission.test.ts',
+];
 const hostCases = ['tests/host-plugins/payload-filesystem.test.ts', 'tests/host-plugins/payload-integrity.test.ts'];
 
 async function testFiles(): Promise<string[]> {

@@ -4,8 +4,9 @@ import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { createPlatformAdapter, validateProcessIdentity } from '../../src/adapters/platform-process.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
-import { type ProcessEvidence, type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
+import { validateCdpIdentity } from '../../src/gateway/targets/model/cdp-identity.ts';
+import type { ProcessEvidence, ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { guiMutationArguments } from '../gui-authorization.ts';
 import {

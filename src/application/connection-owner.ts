@@ -1,4 +1,4 @@
-import type { ManagedTarget } from '../domains/cdp-target.ts';
+import type { ManagedTarget } from '../gateway/targets/model/target-contract.ts';
 
 export interface OwnedResource {
     close(): Promise<void>;

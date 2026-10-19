@@ -7,8 +7,9 @@ import {
     type PlatformAdapter,
     validateProcessIdentity,
 } from '../../src/adapters/platform-process.ts';
-import { type ProcessTarget, validateCdpIdentity } from '../../src/domains/cdp-target.ts';
 import type { ConnectionStatus, LaunchOptions } from '../../src/domains/control-contract.ts';
+import { validateCdpIdentity } from '../../src/gateway/targets/model/cdp-identity.ts';
+import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { readChromeSmokeProfile } from './chrome-profile-probe.ts';
 

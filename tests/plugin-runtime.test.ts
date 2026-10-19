@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { RawData } from 'ws';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
-import type { ManagedTarget } from '../src/domains/cdp-target.ts';
+import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
 
 function targetFixture(port: number, processId = 42): ManagedTarget {
@@ -28,7 +28,7 @@ function listeningPort(server: http.Server) {
 
 const { createCdpRouter } = await import('../src/adapters/cdp-router.ts');
 const { createTargetController } = await import('../src/application/target-controller.ts');
-const { choosePort, validateCdpIdentity } = await import('../src/domains/cdp-target.ts');
+const { choosePort } = await import('../src/domains/cdp-target.ts');
 const { createTargetHost } = await import('../src/adapters/target-host.ts');
 const { applyChromePreset } = await import('../src/adapters/target-host.ts');
 const { buildServerArguments } = await import('../src/adapters/official-server.ts');
@@ -158,39 +158,6 @@ test('port allocation skips occupied and operating-system reserved ports', async
 test('port allocation never selects a privileged port and fails when exhausted', async () => {
     assert.equal(await choosePort({ basePort: 1, probe: async () => true }), 1024);
     await assert.rejects(choosePort({ basePort: 65535, probe: async () => false }), /No available/);
-});
-
-test('CDP identity rejects foreign and exposed listeners', () => {
-    const endpoint = {
-        Browser: 'Chrome/153.0.0.0',
-        webSocketDebuggerUrl: 'ws://127.0.0.1:9222/devtools/browser/test',
-    };
-    const owned = [{ localAddress: '127.0.0.1', owningProcess: 42 }];
-    assert.equal(
-        validateCdpIdentity({ endpoint, port: 9222, listeners: owned, processIds: [42] }).browserProduct,
-        endpoint.Browser,
-    );
-    assert.throws(() => validateCdpIdentity({ endpoint, port: 9222, listeners: owned, processIds: [43] }), /owner/i);
-    assert.throws(
-        () =>
-            validateCdpIdentity({
-                endpoint,
-                port: 9222,
-                listeners: [...owned, { localAddress: '0.0.0.0', owningProcess: 42 }],
-                processIds: [42],
-            }),
-        /exposed/i,
-    );
-    assert.throws(
-        () =>
-            validateCdpIdentity({
-                endpoint: { ...endpoint, webSocketDebuggerUrl: 'ws://127.0.0.1:9223/devtools/browser/test' },
-                port: 9222,
-                listeners: owned,
-                processIds: [42],
-            }),
-        /port/i,
-    );
 });
 
 test('target host launches and verifies a browser-level CDP endpoint', async (context) => {

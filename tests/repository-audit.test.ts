@@ -595,55 +595,85 @@ test('pure Gateway argument owner rejects process state', () => {
 });
 
 test('pure Gateway dependencies retain original TypeScript and indirect import evidence', () => {
-    const file = 'src/gateway/owned-tool-arguments.ts';
-    for (const source of [
-        "import net from 'node:net';",
-        "import x from '@modelcontextprotocol/core';",
-        "import x from 'ws';",
-        "import x from '../adapters/x.ts';",
-        "import x from '../application/x.ts';",
-        "import x from '../interface/x.ts';",
-        "export { x } from '../adapters/x.ts';",
-        "export * from '../adapters/x.ts';",
-        "const fs = require('node:fs');",
-        "const fs = import('node:fs');",
-        "import fs from '\\u006eode:fs';",
-        'const fs = import(variable);',
-        "import type { Host } from '../adapters/target-host.ts';",
-        "export type { Host } from '../application/target-controller.ts';",
-        "type Host = import('../adapters/target-host.ts').Host;",
-        "import type Host = require('../adapters/target-host.ts');",
-        "import type fs = require('node:fs');",
-        "const fs = require?.('node:fs');",
-        "const fs = (require as (name: string) => unknown)?.('node:fs');",
-        'const fs = require?.(moduleName);',
-    ]) {
-        const errors = validateRuntimeSource(file, source);
-        assert.ok(
-            errors.some((error) => /gateway may depend|computed module/.test(error)),
-            source,
-        );
+    for (const [file, parent] of [
+        ['src/gateway/owned-tool-arguments.ts', '..'],
+        ['src/gateway/targets/model/cdp-identity.ts', '../../..'],
+        ['src/gateway/targets/model/target-contract.ts', '../../..'],
+    ] as const) {
+        for (const source of [
+            "import net from 'node:net';",
+            "import x from '@modelcontextprotocol/core';",
+            "import x from 'ws';",
+            "import x from '../adapters/x.ts';",
+            "import x from '../application/x.ts';",
+            "import x from '../interface/x.ts';",
+            "export { x } from '../adapters/x.ts';",
+            "export * from '../adapters/x.ts';",
+            "const fs = require('node:fs');",
+            "const fs = import('node:fs');",
+            "import fs from '\\u006eode:fs';",
+            'const fs = import(variable);',
+            "import type { Host } from '../adapters/target-host.ts';",
+            "export type { Host } from '../application/target-controller.ts';",
+            "type Host = import('../adapters/target-host.ts').Host;",
+            "import type Host = require('../adapters/target-host.ts');",
+            "import type fs = require('node:fs');",
+            "const fs = require?.('node:fs');",
+            "const fs = (require as (name: string) => unknown)?.('node:fs');",
+            'const fs = require?.(moduleName);',
+        ]) {
+            const errors = validateRuntimeSource(file, source.replaceAll('../', `${parent}/`));
+            assert.ok(
+                errors.some((error) => /gateway may depend|computed module/.test(error)),
+                source,
+            );
+        }
+        for (const source of [
+            'const value = process.env;',
+            'const value = process["env"];',
+            'const value = (process as { env: unknown }).env;',
+            'const value = process?.env;',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source.replaceAll('../', `${parent}/`)).some((error) =>
+                    error.includes('gateway cannot access process state'),
+                ),
+                source,
+            );
+        for (const source of [
+            "import { isRecord } from '../shared/errors.ts';",
+            "import { type ConnectionRoute, parseConnectionRoute } from '../domains/control-contract.ts';",
+            "export type { Route } from './route.ts';",
+            "type Route = import('../domains/control-contract.ts').ConnectionRoute;",
+            "import type Shared = require('../shared/errors.ts');",
+            "const shared = require?.('../shared/errors.ts');",
+        ])
+            assert.deepEqual(validateRuntimeSource(file, source.replaceAll('../', `${parent}/`)), [], source);
     }
-    for (const source of [
-        'const value = process.env;',
-        'const value = process["env"];',
-        'const value = (process as { env: unknown }).env;',
-        'const value = process?.env;',
-    ])
-        assert.ok(
-            validateRuntimeSource(file, source).some((error) => error.includes('gateway cannot access process state')),
-            source,
-        );
-    for (const source of [
-        "import { isRecord } from '../shared/errors.ts';",
-        "import { type ConnectionRoute, parseConnectionRoute } from '../domains/control-contract.ts';",
-        "export type { Route } from './route.ts';",
-        "type Route = import('../domains/control-contract.ts').ConnectionRoute;",
-        "import type Shared = require('../shared/errors.ts');",
-        "const shared = require?.('../shared/errors.ts');",
-    ])
-        assert.deepEqual(validateRuntimeSource(file, source), [], source);
 });
+
+test('target identity and resource contracts accept their supplied-evidence model dependencies', () => {
+    for (const [file, sources] of [
+        [
+            'src/gateway/targets/model/cdp-identity.ts',
+            [
+                "import type { ListenerEvidence } from './target-contract.ts';",
+                "import type { TargetKind } from '../../../domains/control-contract.ts';",
+                "import { isRecord } from '../../../shared/errors.ts';",
+            ],
+        ],
+        [
+            'src/gateway/targets/model/target-contract.ts',
+            [
+                "import type { TargetKind } from '../../../domains/control-contract.ts';",
+                "import type { LaunchDefinition } from '../../../domains/launch-command.ts';",
+                "import { DetailedError } from '../../../shared/errors.ts';",
+            ],
+        ],
+    ] as const)
+        for (const source of sources) assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+});
+
 test('Host payload proof enforces pure imports and process-state boundaries at its actual owner', () => {
     const file = 'src/host-plugins/payload-integrity.ts';
     for (const source of [
@@ -707,6 +737,8 @@ test('pure runtime owners reject ambient clock and process references through or
         'src/shared/example.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/unreviewed.ts',
+        'src/gateway/targets/model/cdp-identity.ts',
+        'src/gateway/targets/model/target-contract.ts',
     ])
         for (const source of [
             'const value = performance.now();',
@@ -745,9 +777,15 @@ test('pure owners cannot import the Gateway clock through runtime reexport or er
         'src/shared/example.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/unreviewed.ts',
+        'src/gateway/targets/model/cdp-identity.ts',
+        'src/gateway/targets/model/target-contract.ts',
     ])
         for (const dependency of [
-            file.startsWith('src/gateway/') ? './diagnostics.ts' : '../gateway/diagnostics.ts',
+            file.startsWith('src/gateway/targets/model/')
+                ? '../../diagnostics.ts'
+                : file.startsWith('src/gateway/')
+                  ? './diagnostics.ts'
+                  : '../gateway/diagnostics.ts',
             'node:perf_hooks',
         ])
             for (const source of [
@@ -804,6 +842,8 @@ test('nested ambient roots cannot expose clock process network or global aliases
         'src/shared/example.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/unreviewed.ts',
+        'src/gateway/targets/model/cdp-identity.ts',
+        'src/gateway/targets/model/target-contract.ts',
         'src/gateway/diagnostics.ts',
     ])
         for (const source of [
@@ -837,6 +877,8 @@ test('TypeScript method-signature declaration keys remain pure record names', ()
         'src/host-plugins/payload-integrity.ts',
         'src/domains/example.ts',
         'src/gateway/unreviewed.ts',
+        'src/gateway/targets/model/cdp-identity.ts',
+        'src/gateway/targets/model/target-contract.ts',
         'src/gateway/diagnostics.ts',
     ])
         for (const source of [
@@ -854,6 +896,8 @@ test('computed TypeScript method keys and method bodies retain actual ambient re
         'src/host-plugins/payload-integrity.ts',
         'src/domains/example.ts',
         'src/gateway/unreviewed.ts',
+        'src/gateway/targets/model/cdp-identity.ts',
+        'src/gateway/targets/model/target-contract.ts',
         'src/gateway/diagnostics.ts',
     ])
         for (const source of [

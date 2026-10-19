@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import { waitForTargetExit } from '../../src/adapters/platform-process.ts';
-import type { ManagedTarget } from '../../src/domains/cdp-target.ts';
+import type { ManagedTarget } from '../../src/gateway/targets/model/target-contract.ts';
 
 const mode = process.argv[2];
 if (mode === 'application') {

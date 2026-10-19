@@ -7,7 +7,7 @@ import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createPortReservations } from '../src/adapters/port-reservation.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
 import { createTargetController, type TargetEvent } from '../src/application/target-controller.ts';
-import type { ManagedTarget } from '../src/domains/cdp-target.ts';
+import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
 function fixture(

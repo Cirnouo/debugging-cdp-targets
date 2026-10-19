@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
-import type { ProcessTarget } from '../../src/domains/cdp-target.ts';
+import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { createOwnedNativeFixtures } from '../fixtures/owned-native-fixtures.ts';
 import { GUI_SKIP_REASON, guiAuthorization, guiMutationArguments } from '../gui-authorization.ts';
 import { createScreenshotBackgroundAnchor } from '../smoke/screenshot-background-anchor.ts';

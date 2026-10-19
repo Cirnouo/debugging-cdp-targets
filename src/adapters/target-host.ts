@@ -3,8 +3,6 @@ import { realpath } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import type { ManagedTarget } from '../domains/cdp-target.ts';
-import { RetainedTargetError, validateCdpIdentity } from '../domains/cdp-target.ts';
 import { withChromeScreenshotFeature } from '../domains/chromium-features.ts';
 import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
 import { parseDataIsolation } from '../domains/data-isolation.ts';
@@ -14,6 +12,9 @@ import {
     resolveLaunchDefinition,
     validateDataIsolationBinding,
 } from '../domains/launch-command.ts';
+import { validateCdpIdentity } from '../gateway/targets/model/cdp-identity.ts';
+import type { ManagedTarget } from '../gateway/targets/model/target-contract.ts';
+import { RetainedTargetError } from '../gateway/targets/model/target-contract.ts';
 import {
     DEFAULT_BASE_PORT,
     LOOPBACK,

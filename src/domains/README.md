@@ -29,7 +29,12 @@
     remains a tooling responsibility.
 - `launch-command.ts` validates structured launches, expands provided variables, and
   checks port-source conflicts without executing a shell.
-- `cdp-target.ts` selects candidates and validates listener/endpoint identity.
+- `cdp-target.ts` retains PortRange and the standalone candidate chooser with
+    caller-supplied reserved ranges/probes. PortRange serves the native adapter;
+    choosePort has two test cases and no production caller. Supplied endpoint/
+    listener identity and target/resource contracts now belong to
+    `gateway/targets/model/`. Actual claim-before-await admission and claim
+    lifetime remain in the target host; this port residue is still unfinished.
 - `chromium-features.ts` composes the fixed Chrome screenshot feature immutably,
   preserves unrelated ASCII lists and positional args, and rejects ambiguous conflicts.
 - `control-contract.ts` owns MCP lifecycle request/result unions, identities and
