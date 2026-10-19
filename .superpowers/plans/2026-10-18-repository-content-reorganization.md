@@ -72,6 +72,23 @@ expectations must not be replaced with the implementation's own generated data.
     `chrome-launch.test.ts` consumer imports to final
     `tests/fixtures/gateway/target-host.ts`; retain one implementation and list only
     that final gateway fixture leaf in the target inventory.
+- Connection-directory suites share real Core/DataDirectoryRegistry setup over
+    controlled ControllerHost, router and official boundaries, distinct from the
+    O4 target-host fake. The bounded O5 cut may extract that setup to intermediate
+    `tests/fixtures/connection-directory-runtime.ts`, keeping current
+    `core-runtime.ts` in place. Export only `createDirectoryRuntimeFixture`,
+    `deferred`, `tick` and `route`; keep `Application` private. Preserve all setup,
+    support and cleanup assertions and branches, including `assert.ok` checks for
+    child/runtime/control, the route sessionId assertion and `t.after`'s
+    `expectCleanupFailure`/`assert.rejects` branch. Regression-case assertion
+    bodies stay in suites; add no facade, reexports or copied production rules.
+    Initially update existing `tests/fixtures/README.md`; fixture imports remain
+    `../../src` and `./core-runtime.ts`, and suite consumers use
+    `../../fixtures/connection-directory-runtime.ts`. Later fixture-family
+    migration moves the same body and all consumer imports to final
+    `tests/fixtures/gateway/connection-directory-runtime.ts`, recomputes relative
+    imports and updates `tests/fixtures/gateway/README.md` with the relocation.
+    Keep one implementation and inventory only that final Gateway fixture leaf.
 - Host tests use `host-policy`, `synchronize`, `user-intent` and `git-source`.
     Official tests distinguish `reviewed-catalog`, `execution` and `options`.
     Remove retired entry/disconnect wording where the actual behavior is Core
@@ -591,6 +608,7 @@ tests/fixtures/deployment/deployment-lock.ts
 tests/fixtures/deployment/deployment-state-reader.ts
 tests/fixtures/deployment/deployment-support.ts
 tests/fixtures/gateway/README.md
+tests/fixtures/gateway/connection-directory-runtime.ts
 tests/fixtures/gateway/core-runtime.ts
 tests/fixtures/gateway/fake-cdp-target.ts
 tests/fixtures/gateway/http-gateway.ts
