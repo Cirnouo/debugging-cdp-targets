@@ -1,0 +1,141 @@
+// Fixed macOS 15 evidence candidate. No Apple events, UI, setters or alternate runtime.
+// Native JXA/Ref/errno/attribute-buffer behavior still requires actual x64/arm64 acceptance.
+// ABI constants: Apple xnu bsd/sys/attr.h, bsd/sys/mount.h; Libc include/sys/acl.h.
+ObjC.import('Foundation');
+ObjC.bindFunction('open', ['int', ['string', 'int']]);
+ObjC.bindFunction('close', ['int', ['int']]);
+ObjC.bindFunction('getuid', ['unsigned int', []]);
+ObjC.bindFunction('geteuid', ['unsigned int', []]);
+ObjC.bindFunction('fcntl', ['int', ['int', 'int', 'void *']]);
+ObjC.bindFunction('fgetattrlist', ['int', ['int', 'void *', 'void *', 'unsigned long', 'unsigned long']]);
+ObjC.bindFunction('acl_get_fd_np', ['void *', ['int', 'int']]);
+ObjC.bindFunction('acl_valid', ['int', ['void *']]);
+ObjC.bindFunction('acl_get_entry', ['int', ['void *', 'int', 'void *']]);
+ObjC.bindFunction('acl_get_tag_type', ['int', ['void *', 'void *']]);
+ObjC.bindFunction('acl_free', ['int', ['void *']]);
+ObjC.bindFunction('__error', ['int *', []]);
+ObjC.bindFunction('memcpy', ['void *', ['void *', 'void *', 'unsigned long']]);
+
+function demand(condition) { if (!condition) throw new Error('Deployment native evidence is unavailable.'); }
+function u32(storage, offset) {
+    demand(offset >= 0 && offset + 4 <= Number(storage.length));
+    var value = Ref('unsigned int');
+    $.memcpy(value, storage.subdataWithRange($.NSMakeRange(offset, 4)).bytes, 4);
+    var result = Number(value[0]);
+    demand(Number.isSafeInteger(result) && result >= 0 && result <= 4294967295);
+    return result;
+}
+function byte(storage, offset) {
+    demand(offset >= 0 && offset < Number(storage.length));
+    var value = Ref('unsigned char');
+    $.memcpy(value, storage.subdataWithRange($.NSMakeRange(offset, 1)).bytes, 1);
+    return Number(value[0]);
+}
+function decimal64(storage, offset) {
+    // Decimal long multiplication keeps each 32-bit half exact, including UINT64_MAX.
+    var high = String(u32(storage, offset + 4));
+    var carry = u32(storage, offset);
+    var result = '';
+    for (var index = high.length - 1; index >= 0; index--) {
+        var part = Number(high[index]) * 4294967296 + carry;
+        result = String(part % 10) + result;
+        carry = Math.floor(part / 10);
+    }
+    while (carry > 0) { result = String(carry % 10) + result; carry = Math.floor(carry / 10); }
+    return result.replace(/^0+(?=\d)/, '');
+}
+function put(storage, offset, value, short) {
+    var pointer = Ref(short ? 'unsigned short' : 'unsigned int');
+    pointer[0] = value;
+    storage.replaceBytesInRangeWithBytes($.NSMakeRange(offset, short ? 2 : 4), pointer);
+}
+function attributes(fd, common, volume, directory, file) {
+    var request = $.NSMutableData.dataWithLength(24);
+    put(request, 0, 5, true);
+    put(request, 4, common, false); put(request, 8, volume, false);
+    put(request, 12, directory, false); put(request, 16, file, false);
+    var storage = $.NSMutableData.dataWithLength(512);
+    var errno = $.__error(); errno[0] = 0;
+    demand(Number($.fgetattrlist(fd, request.bytes, storage.mutableBytes, 512, 0)) === 0 && Number(errno[0]) === 0);
+    var length = u32(storage, 0);
+    demand(length >= 24 && length <= 512);
+    // ATTR_VOL_INFO selects a volume request; xnu-11215.1.10 does not return it in ab.actual.
+    var returnedVolume = volume & 0x7fffffff;
+    demand(u32(storage, 4) === common && u32(storage, 8) === returnedVolume &&
+        u32(storage, 12) === directory && u32(storage, 16) === file && u32(storage, 20) === 0);
+    return storage.subdataWithRange($.NSMakeRange(0, length));
+}
+function acl(fd) {
+    var errno = $.__error(); errno[0] = 0;
+    var value = $.acl_get_fd_np(fd, 0x100);
+    var observed = Number(errno[0]);
+    var nil = Ref('void *'); nil[0] = null;
+    if (Ref.equals(value, nil[0])) { demand(observed === 2); return 'absent'; }
+    demand(observed === 0);
+    try {
+        demand(Number($.acl_valid(value)) === 0);
+        var count = 0, granting = false, selector = 0;
+        while (true) {
+            var entry = Ref('void *'); errno[0] = 0;
+            var status = Number($.acl_get_entry(value, selector, entry));
+            // Apple's validated ACL iterator uses -1/EINVAL for exhaustion, not POSIX 0.
+            if (status === -1) { demand(Number(errno[0]) === 22); break; }
+            demand(status === 0 && Number(errno[0]) === 0 && count < 128);
+            var tag = Ref('int'); errno[0] = 0;
+            demand(Number($.acl_get_tag_type(entry[0], tag)) === 0 && Number(errno[0]) === 0);
+            demand(Number(tag[0]) === 1 || Number(tag[0]) === 2);
+            granting = granting || Number(tag[0]) === 1;
+            count++; selector = -1;
+        }
+        return count === 0 ? 'empty' : granting ? 'present' : 'deny-only';
+    } finally { demand(Number($.acl_free(value)) === 0); }
+}
+function nativePath(fd) {
+    var storage = $.NSMutableData.dataWithLength(1024);
+    var errno = $.__error(); errno[0] = 0;
+    demand(Number($.fcntl(fd, 50, storage.mutableBytes)) === 0 && Number(errno[0]) === 0);
+    var length = 0;
+    while (length < 1024 && byte(storage, length) !== 0) length++;
+    demand(length > 0 && length < 1024);
+    var text = $.NSString.alloc.initWithBytesLengthEncoding(storage.bytes, length, $.NSUTF8StringEncoding);
+    demand(!text.isNil());
+    return ObjC.unwrap(text);
+}
+function run(arguments) {
+    demand(arguments.length === 1 && typeof arguments[0] === 'string' && arguments[0][0] === '/' &&
+        arguments[0].length < 1024 && !/[\0\r\n]/.test(arguments[0]));
+    var account = Number($.getuid());
+    demand(Number.isSafeInteger(account) && account >= 0 && account === Number($.geteuid()));
+    var fd = Number($.open(arguments[0], 0x104)); // O_RDONLY | O_NONBLOCK | O_NOFOLLOW
+    demand(Number.isInteger(fd) && fd >= 0);
+    try {
+        var before = attributes(fd, 0x8207800a, 0, 0, 0);
+        demand(Number(before.length) === 56 && u32(before, 44) === 0);
+        var type = u32(before, 28); demand(type === 1 || type === 2);
+        var directory = type === 2;
+        var detail = attributes(fd, 0x80000000, 0, directory ? 1 : 0, directory ? 0 : 0x201);
+        demand(Number(detail.length) === (directory ? 28 : 36));
+        var security = acl(fd);
+        // Volume and file/security requests are deliberately separate ABI layouts.
+        var volume = attributes(fd, 0x80000000, 0x80124000, 0, 0);
+        demand(Number(volume.length) >= 69);
+        var offset = u32(volume, 60); // positive attrreference offset from this field
+        var length = u32(volume, 64);
+        var start = 60 + offset;
+        demand(offset < 512 && length > 1 && length <= 32 && start >= 68 && start + length <= Number(volume.length));
+        demand(byte(volume, start + length - 1) === 0);
+        for (var index = start; index < start + length - 1; index++) demand(byte(volume, index) !== 0);
+        var textBytes = volume.subdataWithRange($.NSMakeRange(start, length - 1));
+        var text = $.NSString.alloc.initWithBytesLengthEncoding(textBytes.bytes, length - 1, $.NSUTF8StringEncoding);
+        demand(!text.isNil());
+        var after = attributes(fd, 0x8207800a, 0, 0, 0);
+        demand(Number(after.length) === Number(before.length));
+        for (var position = 0; position < Number(before.length); position++) demand(byte(before, position) === byte(after, position));
+        var actualPath = nativePath(fd); demand(actualPath === arguments[0]);
+        return JSON.stringify({ platform: 'darwin', account: String(account), owner: String(u32(before, 32)), path: actualPath,
+            device: String(u32(before, 24)), inode: decimal64(before, 48), links: String(u32(detail, 24)),
+            size: directory ? '0' : decimal64(detail, 28), directory: directory, mode: u32(before, 40) & 4095,
+            acl: security, filesystem: ObjC.unwrap(text), mountFlags: u32(volume, 24),
+            lockCapabilities: (u32(volume, 32) & 0x300) === 0x300 && (u32(volume, 48) & 0x300) === 0x300 });
+    } finally { demand(Number($.close(fd)) === 0); }
+}

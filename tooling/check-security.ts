@@ -35,8 +35,8 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
     );
     const code = paths.filter(
         (file) =>
-            /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) ||
-            /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) ||
+            /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1|jxa|cs)$/.test(file) ||
+            /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1|jxa|cs)$/.test(file) ||
             PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/official-server/`)),
     );
     const configuration = paths.filter(

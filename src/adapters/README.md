@@ -8,14 +8,22 @@
   or a macOS libproc/JXA source candidate. No App startup/worker wiring or native
   acceptance is established. Both macOS architectures still require actual ABI,
   JXA loading, buffer and errno proof; helpers never request parent Close.
-- `app-deployment.ts` opens only already enrolled installation metadata, validates
-  physical root/native private-account permissions and holds exactly operation
-  and use lock inodes. Its bounded canonical state store preserves removal fences
-  and distinguishes pre-commit failure from indeterminate replacement/readback.
-  It stages/removes no payload and is not integrated into App startup. Initial
-  store inputs are Linux ext-family/tmpfs/XFS/Btrfs only; Windows ACL, macOS and
-  system-DEB role producers are required before those platforms use admission.
-  Filesystem IDs bound the supported mechanism, not power-loss durability.
+- `app-deployment.ts` opens only already enrolled installation metadata and
+  holds exactly operation and use lock inodes. Normal open exposes read/shared
+  use; the separate trusted writer open can commit or acquire operation/deletion
+  after native validation. Its bounded canonical state store preserves removal
+  fences, changed-document refusal and pre-commit versus indeterminate outcomes.
+  It stages/removes no payload and remains outside App startup.
+- `app-deployment-native.ts` obtains actual account, ancestor, object and volume
+  evidence for Linux private/system roles and Windows/macOS source candidates.
+  Caller metadata or helper success alone never grants writer authority.
+- `windows-deployment-authority.cs` and `windows-deployment-authority.ps1` provide
+  fixed read-only handle/SID/DACL/local-NTFS evidence; no elevation or mutation
+  entry is included in this slice.
+- `macos-deployment-authority.jxa` provides read-only descriptor/UID/ACL/local-APFS
+  source evidence with exact returned masks. Controlled source checks do not
+  establish native acceptance on either architecture. Filesystem IDs bound the
+  supported mechanism, not power-loss durability.
 - `app-singleton.ts` holds the advisory kernel lock descriptor for the App's
   lifetime in a native-account namespace independent of selected data roots.
 - `app-activation.ts` provides only a bounded fixed activation frame and reply;

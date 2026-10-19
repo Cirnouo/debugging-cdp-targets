@@ -35,7 +35,7 @@ preserve the parser license. Keep generated code out of manual formatting, but
 verify it byte-for-byte against maintained source. All maintained policy code
 remains tested; audit artifacts never belong to the Plugin payload.
 Maintained security code is strict TypeScript. Fingerprint `.ts`, `.mts`, `.cts`
-alongside generated JS and existing helpers. Changing types, compiler/parser
+alongside generated JS and PowerShell, JXA and C# native helper sources. Changing types, compiler/parser
 dependencies or generated output invalidates matching review evidence; never
 automatically refresh exception hashes or dates. The committed `.mjs` bootstrap
 must remain runnable without installed dependencies or TypeScript.
