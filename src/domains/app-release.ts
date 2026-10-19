@@ -1,5 +1,5 @@
 import { isRecord } from '../shared/errors.ts';
-import { isOfficialRelativePath } from '../shared/official-package.ts';
+import { isPortablePayloadRelativePath } from '../shared/payload-path.ts';
 
 export const APP_ELECTRON_VERSION = '44.8.0';
 export const APP_NODE_VERSION = '24.21.0';
@@ -60,7 +60,7 @@ function digest(value: unknown): value is string {
 function releaseFile(value: unknown, withDestination = false): AppReleaseFile {
     fields(value, ['path', 'bytes', 'sha256'], withDestination ? ['destination'] : []);
     if (
-        !isOfficialRelativePath(value.path) ||
+        !isPortablePayloadRelativePath(value.path) ||
         typeof value.bytes !== 'number' ||
         !Number.isSafeInteger(value.bytes) ||
         value.bytes < 0 ||
@@ -135,7 +135,7 @@ export function parseAppReleaseInputs(value: unknown): AppReleaseInputs {
             files(entry.runtimeFiles, true);
             runtimeFiles = entry.runtimeFiles.map((file: unknown) => {
                 fields(file, ['path', 'destination', 'bytes', 'sha256']);
-                if (!isOfficialRelativePath(file.destination)) throw new Error('Invalid Node delivery path.');
+                if (!isPortablePayloadRelativePath(file.destination)) throw new Error('Invalid Node delivery path.');
                 return { ...releaseFile(file, true), destination: file.destination };
             });
             if (

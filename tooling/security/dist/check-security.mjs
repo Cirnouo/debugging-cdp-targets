@@ -8240,17 +8240,19 @@ var PACKAGE_VERSION = "1.11.0";
 var PACKAGE_SPEC = `${PACKAGE_NAME}@${PACKAGE_VERSION}`;
 var NPM_REGISTRY = "https://registry.npmjs.org";
 
+// src/shared/payload-path.ts
+function isPortablePayloadRelativePath(value) {
+  return typeof value === "string" && value.length > 0 && value.split("/").every(
+    (part) => part.length > 0 && part !== "." && part !== ".." && !/[\\:\x00-\x1f\x7f<>"|?*]/.test(part) && !/[. ]$/.test(part) && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)
+  );
+}
+
 // src/shared/official-package.ts
 function demand2(condition, message) {
   if (!condition) throw new Error(`Invalid official release: ${message}`);
 }
 function fields(value, names) {
   demand2(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), "evidence fields.");
-}
-function isOfficialRelativePath(value) {
-  return typeof value === "string" && value.length > 0 && value.split("/").every(
-    (part) => part.length > 0 && part !== "." && part !== ".." && !/[\\:\x00-\x1f\x7f<>"|?*]/.test(part) && !/[. ]$/.test(part) && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)
-  );
 }
 function parseOfficialReleaseEvidence(input) {
   fields(input, ["schemaVersion", "name", "version", "registry", "tarball", "integrity", "bin", "source", "files"]);
@@ -8278,7 +8280,7 @@ function parseOfficialReleaseEvidence(input) {
   let previous = "";
   for (const file of input.files) {
     fields(file, ["path", "sha256", "bytes"]);
-    demand2(isOfficialRelativePath(file.path), "unsafe relative path.");
+    demand2(isPortablePayloadRelativePath(file.path), "unsafe relative path.");
     demand2(file.path > previous && !aliases.has(file.path.toLowerCase()), "duplicate, alias or unsorted path.");
     demand2(typeof file.sha256 === "string" && /^[a-f0-9]{64}$/.test(file.sha256), "SHA-256 digest.");
     demand2(typeof file.bytes === "number" && Number.isSafeInteger(file.bytes) && file.bytes >= 0, "byte length.");
@@ -8681,7 +8683,7 @@ async function checkSecurity(root, options = {}) {
       "pnpm-workspace.yaml",
       "pnpm-lock.yaml",
       ".npmrc",
-      "tooling/vendored-licenses.json",
+      "tooling/licenses/reviewed-vendors.json",
       "tooling/official-server-release.json",
       "tooling/security/upstream-pnpm-lock.yaml"
     ].includes(file)

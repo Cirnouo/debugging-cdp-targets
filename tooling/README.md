@@ -7,8 +7,7 @@
   every original regular file in the native advisory-lock loading closure,
   including all original licenses and platform prebuilds.
 - `build-plugin.ts` assembles thin Codex and Claude Code payloads from
-  `packaging/` and root `LICENSE`. Its license collector is also consumed by the
-  App build; SDK inputs require exact reviewed source/map fingerprints and notices.
+  `packaging/` and root `LICENSE`, retaining complete assembly and read-only checks.
 - `build-app.ts` builds the synchronous bootstrap, main, sandboxed preload and
   renderer, collects actual graph licenses and stages verified original native
   archives without overwriting an existing stage. `extract-app-zip.ps1` rejects
@@ -24,11 +23,10 @@
   Dirty development receipts cannot establish final native acceptance.
 - `official-release.ts` owns the canonical official release evidence independently
   of thin Plugin delivery.
-- `vendored-licenses.json` records original registry tarball provenance, reviewed
-  SDK input/source-map hashes, and exact vendored package licenses.
-- `runtime-license-policy.ts` owns canonical YAML, semver ISC and smol-toml
-  BSD-3-Clause license identities/hashes. The actual-graph App collector verifies
-  them before copying notices; the standalone auditor reuses the YAML/semver data.
+- [licenses/](licenses/README.md) owns the actual bundled-notices collector shared
+  by App and research fixtures, pure canonical identities and fixed reviewed SDK
+  source-map/vendor license evidence. Standalone security reuses canonical data
+  while preserving its distinct original-byte notice format.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its original YAML and semver licenses.
 - `repository-audit.ts` checks AST layer boundaries, versions, docs, symlink and

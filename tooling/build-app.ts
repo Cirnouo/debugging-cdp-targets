@@ -13,7 +13,7 @@ import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { type AppDistribution, parseAppDistribution } from '../src/domains/app-distribution.ts';
 import { parseAppNativeEvidence, parseAppReleaseInputs } from '../src/domains/app-release.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { collectBundledLicenses } from './build-plugin.ts';
+import { collectBundledLicenses } from './licenses/bundled-notices.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';
 import { isSemVer } from './version-policy.ts';
 
@@ -144,9 +144,10 @@ export async function generateAppFiles(options: AppBuild) {
         'pnpm-lock.yaml',
         'pnpm-workspace.yaml',
         'tooling/build-app.ts',
-        'tooling/build-plugin.ts',
+        'tooling/licenses/bundled-notices.ts',
+        'tooling/licenses/canonical-inputs.ts',
         'tooling/extract-app-zip.ps1',
-        'tooling/vendored-licenses.json',
+        'tooling/licenses/reviewed-vendors.json',
         'tooling/official-tool-catalog.json',
         ...['app-release-inputs.json', 'app-native-release.json', 'official-server-release.json'].map(
             (file) => `tooling/${file}`,

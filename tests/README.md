@@ -276,9 +276,10 @@ Git hook tests remain contributor-tooling regressions.
   documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
   required portable MCP schema declarations, and allowlists.
-- `build-plugin.test.ts` checks complete transitive bundle license collection,
-  nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
-  and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
+- `tooling/licenses/` checks the actual bundled-notices collector, canonical
+  package boundaries, reviewed SDK/vendor evidence, default roots and import isolation.
+- `tooling/distribution/` checks complete thin-payload bytes, competing/missing/linked
+  inputs, read-only output synchronization and independent App/plugin versions.
 - `tooling/governance/` validates supplied commit events and Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
   These tests independently check raw PR titles and predicted squash headers with actual
@@ -470,7 +471,7 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select twenty-eight entries: `tests/*.test.ts`, the twelve explicit
+command and `pnpm test:coverage` select thirty entries: `tests/*.test.ts`, the fourteen explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
 `tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
@@ -478,7 +479,7 @@ value suites in [Target tests](gateway/targets/README.md), the four
 [Connections suites](gateway/connections/README.md) and target
 `directory-admission.test.ts`, plus the two explicit
 Host suites in [Host plugin tests](host-plugins/README.md). The thirteen Gateway suites
-retain all twenty-six existing selectors in their original order, with
+retain all twenty-eight existing selectors in their original order, with
 `connections/construction-cleanup.test.ts` and `connections/gateway-cleanup.test.ts`
 appended once in that order; default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
