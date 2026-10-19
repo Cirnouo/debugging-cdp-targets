@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { verifyAppOfficialRuntime } from '../../src/adapters/app-official-runtime.ts';
 import { createMcpHttpServer } from '../../src/adapters/mcp-http-server.ts';
 import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
-import { createGatewayCore } from '../../src/application/plugin-runtime.ts';
+import { createGatewayCore } from '../../src/gateway/core.ts';
 import { parseOfficialReleaseEvidence } from '../../src/shared/official-package.ts';
 import { guiAuthorization } from '../gui-authorization.ts';
 

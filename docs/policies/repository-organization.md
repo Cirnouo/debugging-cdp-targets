@@ -20,8 +20,15 @@ The exact `gateway/connections/resource-owner.ts` retains resource generations a
 `directory-lease.ts` retains the connection-level lease across sessions, pending
 acquisition, successor holds and cleanup retries. These complete mutable algorithms
 use only their exact reviewed type/adapter capabilities; unknown Gateway files
-remain pure. Core keeps registry, generation fences, execution/context and cleanup/
-retry joins; target-controller and adapters retain actual acquisition/exit and I/O.
+remain pure. The exact gateway/core.ts owns the full managed-connection transaction,
+generation fences and original execution/context; gateway/registry.ts owns route
+membership and retained cleanup/retry joins, including all seven collections and
+definitive cleanup barriers. It uses the original Core ManagedConnection TYPE and
+only the three reviewed application TYPE ports, without a runtime cycle or copied
+capability contract. Core uses the four existing application service providers.
+Target-controller and adapters retain actual acquisition/exit and I/O. Admission,
+managed connection, workspace policy and projection remain coherent Core content
+until their complete ownership cuts; no new await or snapshot is introduced.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend
 only on the exact relative isolation.ts and launch-command.ts model owners in

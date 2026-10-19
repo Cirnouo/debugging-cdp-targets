@@ -24,7 +24,7 @@ Keep adapter filesystem identity/claim/deletion rights with the existing adapter
 
 Normal Close waits for actual application exit, without a target deadline or
 force-kill. Failed Close/observation/rollback retains live ownership. Keep preserves
-resources and observation. Failed resource disposal remains in Core's in-memory
+resources and observation. Failed resource disposal remains in gateway/registry.ts's in-memory
 cleanup ledger without restoring dead routes; final App exit cannot succeed while
 live/pending resources or leases remain. Cancellation detaches client waits only:
 Core retains actual official execution and original roots/progress/elicitation

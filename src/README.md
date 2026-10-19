@@ -7,9 +7,10 @@ The singleton App owns direct HTTP, management and native resources. The
 [runtime contract](../docs/app-runtime.md) describes its startup and cleanup.
 
 - `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
-- `application/`: independent target lifecycles and connection registry orchestration.
+- `application/`: existing target controller, lifecycle/registration and App orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
-- `gateway/`: pure explicit bearer/tool-argument extraction, target evidence/identity
+- `gateway/`: complete Core transaction and retained registry/cleanup ownership,
+    pure explicit bearer/tool-argument extraction, target evidence/identity
     models, structured launch/isolation rules, bounded clock-backed diagnostics
     and complete resource-generation/directory-lease lifetime in `connections/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
@@ -20,7 +21,7 @@ The singleton App owns direct HTTP, management and native resources. The
 [ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the
 isolation boundary: gateway/targets/model/ validates directory intent and opaque binding;
 adapters acquire/reverify/remove real directories; gateway/connections holds leases
-across restart; application joins registry/cleanup and exposes evidence only through explicit
+across restart; gateway/registry joins cleanup and Core exposes evidence only through explicit
 operation metadata or selected configuration.
 
 `packaging/` owns maintained thin host inputs and shared Skill/documentation.

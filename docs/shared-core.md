@@ -1,10 +1,13 @@
 # Shared gateway core
 
-`createGatewayCore()` in `src/application/plugin-runtime.ts` constructs the
+`createGatewayCore()` in `src/gateway/core.ts` constructs the
 transport-independent core and fixed official catalog. It attaches no client and
 launches no target. Catalog discovery owns a short-lived verified official child
 and router and disposes both before returning. The separately composed Electron
 App owns direct SDK HTTP and final cleanup; thin Plugins never launch a core.
+Core owns the complete managed-connection generation/execution object;
+`src/gateway/registry.ts` owns route membership and retained cleanup joins over
+those same objects, with no runtime back edge or duplicated capability shape.
 See [App runtime](app-runtime.md) for bootstrap, storage and request lifetime.
 
 ## Client and registration boundary

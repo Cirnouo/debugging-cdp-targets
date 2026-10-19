@@ -12,11 +12,11 @@ import { readRegularFile } from '../adapters/file-evidence.ts';
 import { createMcpHttpServer } from '../adapters/mcp-http-server.ts';
 import { createAppHostManagement } from '../application/app-host-management.ts';
 import { createAppManagement } from '../application/app-management.ts';
-import { createGatewayCore, type GatewayConstructionCleanup, type GatewayCore } from '../application/plugin-runtime.ts';
 import type { AppConfiguration } from '../domains/app-configuration.ts';
 import { parseAppDistribution } from '../domains/app-distribution.ts';
 import { parseAppNativeEvidence } from '../domains/app-release.ts';
 import type { AppUiSnapshot } from '../domains/app-ui.ts';
+import { createGatewayCore, type GatewayConstructionCleanup, type GatewayCore } from '../gateway/core.ts';
 import { createManagementWindow } from './app-window.ts';
 
 declare const __DCT_APP_VERSION__: string;

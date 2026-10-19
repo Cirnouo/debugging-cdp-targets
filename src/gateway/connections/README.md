@@ -9,8 +9,8 @@
     successor holds, live apps and resource cleanup, publishing explicit evidence.
 - `AGENTS.md` defines cumulative lifetime, capability and evidence constraints.
 
-Core in application/plugin-runtime.ts creates/enrolls these owners and retains the
-connection registry, generation fences, original actual-execution context and
-cleanup/retry joins. target-controller.ts owns launch and actual-exit observation.
+Core in gateway/core.ts creates these owners and retains generation fences and
+original actual-execution context. gateway/registry.ts enrolls them and owns route
+membership and retained cleanup/retry joins. target-controller.ts owns launch and actual-exit observation.
 The data-directory adapter still owns filesystem claims/identity/whole-directory
 cleanup. No compatibility facade or second authority is introduced here.
