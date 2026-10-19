@@ -71,15 +71,19 @@ async function fixture() {
 }
 
 test('unsupported native permission/filesystem roles refuse before creating or adopting deployment metadata', async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), 'dct-deployment-unsupported-'));
+    const rawDirectory = await mkdtemp(path.join(tmpdir(), 'dct-deployment-unsupported-'));
     const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-    Object.defineProperty(process, 'platform', { value: 'aix', configurable: true });
     try {
+        const directory = await filesystem.realpath(rawDirectory);
+        assert.ok(path.isAbsolute(directory));
+        assert.equal(path.resolve(directory), directory);
+        assert.equal(await filesystem.realpath(directory), directory);
+        Object.defineProperty(process, 'platform', { value: 'aix', configurable: true });
         await assert.rejects(openDeploymentWriterInstallation(directory, { tryLock: () => true }), /unsupported/i);
         assert.deepEqual(await readdir(directory), []);
     } finally {
         if (platform) Object.defineProperty(process, 'platform', platform);
-        await rm(directory, { recursive: true });
+        await rm(rawDirectory, { recursive: true });
     }
 });
 
