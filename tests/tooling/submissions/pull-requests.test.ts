@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { validatePullRequestBody } from '../tooling/pull-request-policy.ts';
-import { scanSubmissionMarkdown } from '../tooling/submission-markdown.ts';
+import { validatePullRequestBody } from '../../../tooling/submissions/pull-requests.ts';
 
-const template = readFileSync(new URL('../.github/PULL_REQUEST_TEMPLATE.md', import.meta.url), 'utf8');
+const template = readFileSync(new URL('../../../.github/PULL_REQUEST_TEMPLATE.md', import.meta.url), 'utf8');
 
 const compliantBody = `## Problem
 
@@ -137,22 +136,6 @@ test('accepts unindented lazy continuations of logically wrapped checklist label
         'Focused tests and\n`pnpm verify:push` pass.',
     );
     assert.equal(errors(body), '');
-    assert.equal(
-        scanSubmissionMarkdown('- [x] Focused tests and\n`pnpm verify:push` pass.\n')[0]?.checklists[0]?.label,
-        'Focused tests and `pnpm verify:push` pass.',
-    );
-});
-
-test('logical checkbox continuations stop at headings, lists, quotes and code fences', () => {
-    for (const block of [
-        '## Details',
-        '- Next item',
-        '> results',
-        '```text\npassed\n```',
-        '    ```text\n    passed\n    ```',
-    ]) {
-        assert.equal(scanSubmissionMarkdown(`- [x] Confirmed.\n${block}\n`)[0]?.checklists[0]?.label, 'Confirmed.');
-    }
 });
 
 test('requires actual Problem, Resulting behavior and Verification content beyond starter prose', () => {
@@ -242,7 +225,6 @@ test('accepts literal fenced TAP counters as verification evidence without treat
         '```text\n# tests 586\n# pass 586\n# fail 0\n```',
     );
     assert.equal(errors(body), '');
-    assert.equal(scanSubmissionMarkdown(body).filter((section) => section.heading !== null).length, 4);
 });
 
 test('accepts equivalent setext H2 sections and rejects headings synthesized by removing comments', () => {
@@ -342,21 +324,7 @@ test('derives sections, checklists and starter prose from the supplied template'
     assert.match(errors('## Context\n\n#19\n\n## Outcome\n\nDone.\n', currentTemplate), /checklist/i);
 });
 
-test('scanner selects section depth for reuse and does not split on deeper headings', () => {
-    const scanned = scanSubmissionMarkdown('### Answer\n\n#### Details\n\nready\n\n- [x] Confirmed.\n', {
-        sectionLevel: 3,
-    });
-    assert.equal(scanned.length, 2);
-    assert.equal(scanned[1]?.heading, 'Answer');
-    assert.deepEqual(scanned[1]?.paragraphs, [{ text: 'ready', literal: false }]);
-    assert.deepEqual(scanned[1]?.checklists, [{ label: 'Confirmed.', selected: true, continuations: [] }]);
-});
-
 test('inline comments preserve actual indentation provenance for PR evidence', () => {
-    const scanned = scanSubmissionMarkdown('## Verification\n\n<!-- hint -->checks passed\n');
-    assert.deepEqual(scanned[1]?.paragraphs, [{ text: 'checks passed', literal: false }]);
-    const indented = scanSubmissionMarkdown('## Verification\n\n    <!-- hint -->checks passed\n');
-    assert.deepEqual(indented[1]?.paragraphs, [{ text: 'checks passed', literal: true }]);
     assert.equal(
         errors(
             compliantBody.replace(

@@ -76,6 +76,11 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/governance/commit-history.test.ts`,
 `tests/tooling/governance/commit-validation.test.ts`,
 `tests/tooling/quality/text-policy.test.ts`,
+`tests/tooling/releases/release-notes.test.ts`,
+`tests/tooling/releases/publication.test.ts`,
+`tests/tooling/submissions/markdown.test.ts`,
+`tests/tooling/submissions/pull-requests.test.ts`,
+`tests/tooling/submissions/issue-forms.test.ts`,
 `tests/gateway/owned-tool-arguments.test.ts`,
 `tests/host-plugins/payload-integrity.test.ts` and
 `tests/host-plugins/payload-filesystem.test.ts`, plus exactly

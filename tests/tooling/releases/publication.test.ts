@@ -4,17 +4,15 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { isRecord } from '../src/shared/errors.ts';
-import type { ReleaseIO } from '../tooling/release.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
+import type { ReleaseIO } from '../../../tooling/releases/publish-release.ts';
 import {
-    buildReleaseBody,
-    extractChangelog,
     GitHubApiError,
     parseReleaseTag,
+    publishRelease,
     releaseContext,
-    runRelease,
     verifyTagIdentity,
-} from '../tooling/release.ts';
+} from '../../../tooling/releases/publish-release.ts';
 
 const sha = 'a'.repeat(40);
 const tagObject = 'b'.repeat(40);
@@ -46,14 +44,7 @@ const changelog = `# Changelog
 
 - An older change.
 `;
-const changes = `### Added
 
-- Support **verified targets** and [documentation](https://example.com/docs).
-  Keep this continuation and \`code\` intact.
-
-### Security
-
-- Verify endpoint identity.`;
 const generated = `## What's Changed
 * A noisy PR title by @existing in https://github.com/example/project/pull/4
 
@@ -83,72 +74,6 @@ test('release tags require an exact release SemVer without leading zeros', () =>
         'v1.2.3\n',
     ]) {
         assert.throws(() => parseReleaseTag(value), /tag/i, value);
-    }
-});
-
-test('Changelog extraction preserves the selected version Markdown and excludes neighboring sections', () => {
-    assert.equal(extractChangelog(changelog, '1.2.3'), changes);
-    assert.equal(extractChangelog(changelog.replace('2026-10-01', '2024-02-29'), '1.2.3'), changes);
-    assert.throws(() => extractChangelog(changelog, '1.2.4'), /Changelog/i);
-});
-
-test('Changelog extraction rejects duplicate, empty, undated, or invalid-date release entries', () => {
-    for (const source of [
-        `${changelog}\n## [1.2.3] - 2026-10-01\n\n- Duplicate.\n`,
-        '## [1.2.3] - 2026-10-01\n\n### Added\n',
-        '## [1.2.3]\n\n- Missing date.\n',
-        '## [1.2.3] - 2026-02-29\n\n- Invalid leap day.\n',
-        '## [1.2.3] - 2026-13-01\n\n- Invalid month.\n',
-        '## [1.2.3] - 2026-04-31\n\n- Invalid day.\n',
-        '## [1.2.3] - tomorrow\n\n- Invalid date.\n',
-    ]) {
-        assert.throws(() => extractChangelog(source, '1.2.3'), /Changelog/i, source);
-    }
-});
-
-test('Changelog headings and fake changes inside fenced examples are not release evidence', () => {
-    const source = `## [Unreleased]
-\`\`\`markdown
-## [1.2.3] - 2026-10-01
-- Example only.
-\`\`\`
-## [1.2.3] - 2026-10-01
-### Added
-- Actual change.
-~~~markdown
-## [9.9.9] - 2026-10-01
-- An example inside the release entry.
-~~~
-## [1.2.2] - 2026-09-01
-- Older.
-`;
-    assert.equal(
-        extractChangelog(source, '1.2.3'),
-        '### Added\n- Actual change.\n~~~markdown\n## [9.9.9] - 2026-10-01\n- An example inside the release entry.\n~~~',
-    );
-    assert.throws(
-        () => extractChangelog('## [1.2.3] - 2026-10-01\n~~~\n- Example only.\n~~~\n', '1.2.3'),
-        /Changelog/i,
-    );
-});
-
-test('release body contains Changelog groups, only generated new contributors, and the selected comparison', () => {
-    assert.equal(
-        buildReleaseBody(changes, tag, generated, repository, 'v1.2.2'),
-        `## What's Changed\n\n${changes}\n\n## New Contributors\n\n* @newcomer made their first contribution in https://github.com/example/project/pull/5\n\n**Full Changelog**: https://github.com/example/project/compare/v1.2.2...v1.2.3\n`,
-    );
-});
-
-test('first releases use tag history and omit absent or empty new contributors', () => {
-    for (const notes of [
-        '',
-        "## What's Changed\n* A PR by @someone\n",
-        '## New Contributors\n\n**Full Changelog**: old',
-    ]) {
-        assert.equal(
-            buildReleaseBody(changes, tag, notes, repository),
-            `## What's Changed\n\n${changes}\n\n**Full Changelog**: https://github.com/example/project/commits/v1.2.3\n`,
-        );
     }
 });
 
@@ -274,12 +199,12 @@ for (const [version, prerelease, makeLatest] of [
             'packaging/shared/skills/debugging-cdp-targets/SKILL.md',
             '---\nmetadata:\n    version: "0.7.0"\n---\n',
         );
-        assert.deepEqual(await runRelease(input, f.io), { status: 'published', url: f.url });
+        assert.deepEqual(await publishRelease(input, f.io), { status: 'published', url: f.url });
     });
 
     test(`release orchestration creates a draft, then publishes with Changelog notes and no added assets (${version})`, async () => {
         const { io, calls, url } = fixture({ latest: true });
-        assert.deepEqual(await runRelease(input, io), { status: 'published', url });
+        assert.deepEqual(await publishRelease(input, io), { status: 'published', url });
         const writes = calls.filter(
             (call) => call.endpoint.endsWith('/releases') || call.endpoint.endsWith('/releases/17'),
         );
@@ -321,14 +246,14 @@ for (const [version, prerelease, makeLatest] of [
                 }
                 return request(method, endpoint, body);
             };
-            assert.equal((await runRelease(input, io)).status, 'published');
+            assert.equal((await publishRelease(input, io)).status, 'published');
             assert.ok(calls.filter((call) => call.method !== 'GET').every((call) => call.body?.tag_name === tag));
         }
     });
 
     test(`first release generation omits a previous tag and uses commit history (${version})`, async () => {
         const { io, calls } = fixture();
-        await runRelease(input, io);
+        await publishRelease(input, io);
         const generation = calls.find((call) => call.endpoint.endsWith('/generate-notes'));
         assert.equal(Object.hasOwn(generation?.body ?? {}, 'previous_tag_name'), false);
         assert.ok(
@@ -338,7 +263,7 @@ for (const [version, prerelease, makeLatest] of [
 
     test(`a matching published release is skipped without rewriting notes or creating a draft (${version})`, async () => {
         const { io, calls, url } = fixture({ existing: 'published' });
-        assert.deepEqual(await runRelease(input, io), { status: 'skipped', url });
+        assert.deepEqual(await publishRelease(input, io), { status: 'skipped', url });
         assert.ok(calls.every((call) => call.method === 'GET'));
         assert.equal(calls.filter((call) => call.endpoint.includes('/git/ref/')).length, 1);
         assert.equal(
@@ -349,7 +274,7 @@ for (const [version, prerelease, makeLatest] of [
 
     test(`a matching draft resumes without creating or deleting releases (${version})`, async () => {
         const { io, calls } = fixture({ existing: 'draft' });
-        await runRelease(input, io);
+        await publishRelease(input, io);
         assert.deepEqual(
             calls.filter((call) => call.method === 'PATCH').map((call) => call.body?.draft),
             [true, false],
@@ -388,7 +313,7 @@ for (const [version, prerelease, makeLatest] of [
             }
             return request(method, endpoint, body);
         };
-        assert.equal((await runRelease(input, io)).status, 'published');
+        assert.equal((await publishRelease(input, io)).status, 'published');
         assert.equal(secondPage, true);
         assert.equal(
             calls.some((call) => call.method === 'POST' && call.endpoint.endsWith('/releases')),
@@ -401,7 +326,7 @@ for (const [version, prerelease, makeLatest] of [
         const request = io.request;
         io.request = async (method, endpoint, body) =>
             endpoint.includes('/releases?') ? { releases: [] } : request(method, endpoint, body);
-        await assert.rejects(runRelease(input, io), /release/i);
+        await assert.rejects(publishRelease(input, io), /release/i);
         assert.equal(
             calls.some((call) => call.method === 'POST' && call.endpoint.endsWith('/releases')),
             false,
@@ -438,7 +363,7 @@ for (const [version, prerelease, makeLatest] of [
         for (const configure of cases) {
             const f = fixture();
             configure(f);
-            await assert.rejects(runRelease(input, f.io));
+            await assert.rejects(publishRelease(input, f.io));
             assert.equal(f.calls.length, 0);
         }
         const f = fixture();
@@ -453,7 +378,7 @@ for (const [version, prerelease, makeLatest] of [
             ' v1.2.3',
             'v1.2.3 ',
         ])
-            await assert.rejects(runRelease({ ...input, tag: invalidTag }, f.io), /tag/i);
+            await assert.rejects(publishRelease({ ...input, tag: invalidTag }, f.io), /tag/i);
         assert.equal(f.calls.length, 0);
     });
 
@@ -466,7 +391,7 @@ for (const [version, prerelease, makeLatest] of [
             endpoint.includes('/git/ref/')
                 ? { object: { type: 'tag', sha: 'c'.repeat(40) } }
                 : request(method, endpoint, body);
-        await assert.rejects(runRelease(input, io), /tag.*(?:object|identity)/i);
+        await assert.rejects(publishRelease(input, io), /tag.*(?:object|identity)/i);
         assert.equal(calls.length, 0);
     });
 
@@ -477,7 +402,7 @@ for (const [version, prerelease, makeLatest] of [
             `/repos/${repository}/releases/generate-notes`,
         ]) {
             const { io, calls } = fixture({ failure: endpoint });
-            await assert.rejects(runRelease(input, io), /unavailable/i);
+            await assert.rejects(publishRelease(input, io), /unavailable/i);
             assert.equal(
                 calls.some((call) => call.endpoint.endsWith('/releases') && call.method === 'POST'),
                 false,
@@ -496,7 +421,7 @@ for (const [version, prerelease, makeLatest] of [
                         : { body: null };
                 return request(method, endpoint, body);
             };
-            await assert.rejects(runRelease(input, io));
+            await assert.rejects(publishRelease(input, io));
             assert.equal(
                 calls.some((call) => call.endpoint.endsWith('/releases') && call.method === 'POST'),
                 false,
@@ -511,7 +436,7 @@ for (const [version, prerelease, makeLatest] of [
             if (method === 'PATCH' && body?.draft === false) throw new GitHubApiError(503, 'Publish unavailable');
             return request(method, endpoint, body);
         };
-        await assert.rejects(runRelease(input, io), /Publish unavailable/);
+        await assert.rejects(publishRelease(input, io), /Publish unavailable/);
         assert.equal(calls.filter((call) => call.endpoint.endsWith('/releases')).length, 1);
         assert.ok(calls.every((call) => ['GET', 'POST', 'PATCH'].includes(call.method)));
     });
@@ -526,7 +451,7 @@ for (const [version, prerelease, makeLatest] of [
         ]) {
             const f = fixture();
             f.files.set(file, file.endsWith('LICENSE') ? 'drift' : '{"version":"1.2.4"}');
-            await assert.rejects(runRelease(input, f.io), /metadata|version|license/i);
+            await assert.rejects(publishRelease(input, f.io), /metadata|version|license/i);
             assert.equal(f.calls.length, 0);
         }
     });
@@ -541,7 +466,7 @@ for (const [version, prerelease, makeLatest] of [
         ]) {
             const f = fixture();
             f.files.set(file, `{"version":"1.2.4","version":"${version}"}`);
-            await assert.rejects(runRelease(input, f.io), /unique|duplicate/i);
+            await assert.rejects(publishRelease(input, f.io), /unique|duplicate/i);
             assert.equal(f.calls.length, 0);
         }
     });
@@ -554,7 +479,7 @@ for (const [version, prerelease, makeLatest] of [
             assert.ok(isRecord(result));
             return endpoint.endsWith(`/releases/tags/${tag}`) ? { ...result, prerelease: !prerelease } : result;
         };
-        await assert.rejects(runRelease(input, io), /classification|prerelease/i);
+        await assert.rejects(publishRelease(input, io), /classification|prerelease/i);
         assert.ok(calls.every((call) => call.method === 'GET'));
     });
 
@@ -577,7 +502,7 @@ for (const [version, prerelease, makeLatest] of [
                     ];
                 return result;
             };
-            await runRelease(input, io);
+            await publishRelease(input, io);
             const writes = calls.filter((call) => call.method !== 'GET' && !call.endpoint.endsWith('/generate-notes'));
             assert.deepEqual(
                 writes.map((call) => [call.body?.draft, call.body?.prerelease]),
@@ -602,7 +527,7 @@ for (const [version, prerelease, makeLatest] of [
                 }
                 return result;
             };
-            await assert.rejects(runRelease(input, io), /draft|publication/i);
+            await assert.rejects(publishRelease(input, io), /draft|publication/i);
             assert.equal(
                 calls.filter((call) => call.method === 'PATCH' && call.body?.draft === false).length,
                 stage === 'draft' ? 0 : 1,
@@ -624,7 +549,7 @@ for (const [version, prerelease, makeLatest] of [
                     }
                     return result;
                 };
-                await assert.rejects(runRelease(input, io), /draft|publication/i);
+                await assert.rejects(publishRelease(input, io), /draft|publication/i);
                 assert.equal(calls.filter((call) => call.body?.draft === false).length, stage ? 0 : 1);
             }
         }
@@ -640,7 +565,7 @@ for (const [version, prerelease, makeLatest] of [
                     return { object: { type: 'tag', sha } };
                 return request(method, endpoint, body);
             };
-            await assert.rejects(runRelease(input, io), /Remote tag identity/i);
+            await assert.rejects(publishRelease(input, io), /Remote tag identity/i);
             assert.equal(calls.filter((call) => call.body?.draft === false).length, 0);
             assert.ok(calls.every((call) => ['GET', 'POST', 'PATCH'].includes(call.method)));
             if (existing) assert.ok(calls.every((call) => call.method === 'GET'));
@@ -663,7 +588,7 @@ for (const [version, prerelease, makeLatest] of [
                     ? `---\nmetadata:\n    version: "${version}+build"\n---\n`
                     : JSON.stringify({ version: `${version}+build` }),
             );
-            await assert.rejects(runRelease(input, io), /metadata|version/i);
+            await assert.rejects(publishRelease(input, io), /metadata|version/i);
             assert.equal(calls.length, 0);
         }
     });
@@ -685,7 +610,7 @@ for (const [version, prerelease, makeLatest] of [
                 assert.ok(isRecord(result) || Array.isArray(result));
                 return endpoint.endsWith('/releases/latest') ? { ...result, ...override } : result;
             };
-            await assert.rejects(runRelease(input, io), /previous|stable|tag/i);
+            await assert.rejects(publishRelease(input, io), /previous|stable|tag/i);
             assert.ok(calls.every((call) => call.method === 'GET'));
         }
     });
@@ -705,7 +630,7 @@ for (const [version, prerelease, makeLatest] of [
                       },
                   ]
                 : request(method, endpoint, body);
-        await runRelease(input, io);
+        await publishRelease(input, io);
         const generation = calls.find((call) => call.endpoint.endsWith('/generate-notes'));
         assert.equal(Object.hasOwn(generation?.body ?? {}, 'previous_tag_name'), false);
         assert.ok(
@@ -722,7 +647,7 @@ for (const [version, prerelease, makeLatest] of [
         ]) {
             const { io, calls, files } = fixture();
             files.set('CHANGELOG.md', source);
-            await assert.rejects(runRelease(input, io), /Changelog/i);
+            await assert.rejects(publishRelease(input, io), /Changelog/i);
             assert.equal(calls.length, 0);
         }
     });

@@ -269,12 +269,9 @@ Git hook tests remain contributor-tooling regressions.
   Complete original and GitHub-wrapped message fixtures exercise ordinary body
   labels, reserved footer boundaries and adjacent trailer groups. Disposable Git
   and PR entry points verify exact message and event bytes before and after audits.
-- `pull-request-policy.test.ts` checks template-derived sections, checklist order
-  and placement, selection and conditional N/A rules, placeholder paragraphs,
-  Unicode and fenced evidence. Structural examples in code, quotes, or comments
-  cannot satisfy missing sections/checks. Current PR CLI fixtures also verify
-  template rejection independently of header checks and full raw actual-commit
-  validation without altering history.
+- [tooling/submissions/](tooling/submissions/README.md) owns direct Markdown scanner,
+  supplied PR-template and Issue-form regressions, including literal evidence
+  provenance and adversarial structure/answer cases.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, exact lane commands and syntax plans. Parsed
   CI checks retain canonical versions and names, and require the latest-24
@@ -300,11 +297,6 @@ Git hook tests remain contributor-tooling regressions.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
   runnable root, explicit tooling/Gateway/Host or interactive lane and retains the
   four-file, eighteen-case interactive inventory without launching fixtures.
-- `issue-policy.test.ts` validates literal GitHub form bodies against the current
-  YAML, including label-only classification, required and optional answers,
-  exact dropdown options, H3 order/duplicates, fake structural headings, and
-  unsupported or malformed configuration. Mutated YAML fixtures prove that
-  labels and field requirements remain derived from the supplied source.
 - `issue-feedback.test.ts` exercises the actual fixed-origin REST adapter and
   CI publisher through fake HTTP: diagnosis, repair, ordinary exemption, trusted
   bot ownership, paginated comments, stale source rejection, known own label
@@ -340,11 +332,11 @@ Git hook tests remain contributor-tooling regressions.
   delayed startup before PID and signal-handler initialization.
 - `version-policy.test.ts` checks shared SemVer grammar, stable/release predicates,
   parser limits, arbitrary legal prerelease labels, and exact metadata agreement.
-- `release.test.ts` checks stable and prerelease tag/event identity, dated Changelog
-  extraction, English notes, paginated draft recovery, returned classification,
-  stable-only comparisons, and fail-closed publication with
-  simulated GitHub I/O and disposable Git fixtures. It never changes this
-  repository's tags or creates real GitHub Releases.
+- [tooling/releases/](tooling/releases/README.md) separates supplied-value Changelog
+  and English note regressions from stable/prerelease tag/event identity, paginated
+  draft recovery, returned classification, stable-only comparisons and fail-closed
+  publication. Publication uses simulated GitHub I/O and disposable Git fixtures;
+  it never changes this repository's tags or creates real GitHub Releases.
 - `supply-chain.test.ts` covers complete multi-document inventories, fail-closed
   audit/signature reports, strict dependency/exception SemVer, exact bounded exceptions,
   installed graphs, lockfile preflight and upstream review-before-install with fake
@@ -460,7 +452,7 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select nineteen entries: `tests/*.test.ts`, the five explicit
+command and `pnpm test:coverage` select twenty-four entries: `tests/*.test.ts`, the ten explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
 `tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit

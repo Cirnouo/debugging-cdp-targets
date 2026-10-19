@@ -43,6 +43,11 @@ const toolingCases = [
     'tests/tooling/governance/commit-history.test.ts',
     'tests/tooling/governance/commit-validation.test.ts',
     'tests/tooling/quality/text-policy.test.ts',
+    'tests/tooling/releases/publication.test.ts',
+    'tests/tooling/releases/release-notes.test.ts',
+    'tests/tooling/submissions/issue-forms.test.ts',
+    'tests/tooling/submissions/markdown.test.ts',
+    'tests/tooling/submissions/pull-requests.test.ts',
 ];
 
 const gatewayCases = [

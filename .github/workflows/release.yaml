@@ -49,6 +49,6 @@ jobs:
             -   name: Install dependencies after the security and quality gates
                 run: pnpm install --frozen-lockfile
             -   name: Validate, generate notes, and publish the release
-                run: node tooling/release.ts
+                run: node tooling/releases/publish-release.ts
                 env:
                     GH_TOKEN: ${{ github.token }}

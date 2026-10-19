@@ -4,7 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
-import { validatePullRequestBody } from '../pull-request-policy.ts';
+import { validatePullRequestBody } from '../submissions/pull-requests.ts';
 import { buildCommitCheckRequest, isZeroSha, resolveAuditBranch } from './commit-events.ts';
 import { validateBranchName } from './commit-grammar.ts';
 import { validateCommitMessage } from './commit-validation.ts';
