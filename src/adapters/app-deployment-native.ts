@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
     type DeploymentEntryPurpose,
     type DeploymentUnixRole,
+    hasDeploymentUnixEntryPermissions,
     validateDeploymentNativeEntry,
     validateDeploymentUnixEntry,
 } from '../domains/app-deployment.ts';
@@ -88,7 +89,35 @@ export async function openDeploymentNativeAuthority(directory: string, writing: 
             throw failure();
     }
 
-    async function entry(file: string, stats: BigIntStats, purpose: DeploymentEntryPurpose, ancestor = false) {
+    function documentReceipt(stats: BigIntStats) {
+        if (process.platform !== 'linux') return;
+        if (
+            account() !== ownerAccount ||
+            stats.dev !== root.dev ||
+            !hasDeploymentUnixEntryPermissions(
+                {
+                    uid: String(stats.uid),
+                    gid: String(stats.gid),
+                    mode: Number(stats.mode & 0o7777n),
+                    directory: stats.isDirectory(),
+                },
+                ownerAccount,
+                role,
+                'document',
+                false,
+            )
+        )
+            throw failure();
+    }
+
+    async function verifyEntry(
+        file: string,
+        stats: BigIntStats,
+        purpose: DeploymentEntryPurpose,
+        ancestor: boolean,
+        documentRead: boolean,
+    ) {
+        if (documentRead) documentReceipt(stats);
         if (
             (!stats.isDirectory() && !stats.isFile()) ||
             stats.isSymbolicLink() ||
@@ -135,6 +164,39 @@ export async function openDeploymentNativeAuthority(directory: string, writing: 
             if (process.platform === 'darwin' && account() !== ownerAccount) throw failure();
         }
         const after = await lstat(file, { bigint: true });
+        if (documentRead && process.platform === 'linux') {
+            function safeNamed(entry: BigIntStats) {
+                documentReceipt(entry);
+                if (
+                    !entry.isFile() ||
+                    entry.isSymbolicLink() ||
+                    entry.nlink !== 1n ||
+                    entry.dev !== root.dev ||
+                    entry.dev !== stats.dev ||
+                    entry.mode !== stats.mode ||
+                    entry.uid !== stats.uid ||
+                    entry.gid !== stats.gid
+                )
+                    throw failure();
+            }
+            function unchanged(first: BigIntStats, second: BigIntStats) {
+                return (
+                    first.dev === second.dev &&
+                    first.ino === second.ino &&
+                    first.nlink === second.nlink &&
+                    first.size === second.size &&
+                    first.ctimeNs === second.ctimeNs &&
+                    first.mtimeNs === second.mtimeNs
+                );
+            }
+            safeNamed(after);
+            if ((await realpath(file)) !== file) throw failure();
+            const final = await lstat(file, { bigint: true });
+            safeNamed(final);
+            if (!unchanged(stats, after) || !unchanged(after, final))
+                throw new Error('Deployment document identity changed.');
+            return;
+        }
         if (
             after.dev !== stats.dev ||
             after.ino !== stats.ino ||
@@ -151,6 +213,14 @@ export async function openDeploymentNativeAuthority(directory: string, writing: 
             throw failure();
     }
 
+    function entry(file: string, stats: BigIntStats, purpose: DeploymentEntryPurpose, ancestor = false) {
+        return verifyEntry(file, stats, purpose, ancestor, false);
+    }
+
+    function document(file: string, stats: BigIntStats) {
+        return verifyEntry(file, stats, 'document', false, true);
+    }
+
     async function ancestors() {
         const names: string[] = [];
         for (let current = path.dirname(directory); ; current = path.dirname(current)) {
@@ -162,5 +232,5 @@ export async function openDeploymentNativeAuthority(directory: string, writing: 
     await ancestors();
     await entry(directory, root, 'directory');
     if (writing) writer();
-    return Object.freeze({ role, entry, ancestors, writer });
+    return Object.freeze({ role, entry, documentReceipt, document, ancestors, writer });
 }

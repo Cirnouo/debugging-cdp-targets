@@ -67,18 +67,27 @@ async function readDocument<T>(
     file: string,
     maximum: number,
     parse: (value: unknown) => T,
-    verify: (file: string, entry: BigIntStats) => Promise<void>,
+    verify: Readonly<{
+        receipt: (entry: BigIntStats) => void;
+        native: (file: string, entry: BigIntStats) => Promise<void>;
+    }>,
 ): Promise<{ value: T; bytes: Buffer }> {
     const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    function fatalReceipt(entry: BigIntStats) {
+        if (!(entry.isFile() && !entry.isSymbolicLink() && entry.nlink === 0n)) regular(entry);
+        verify.receipt(entry);
+    }
     try {
         const before = await handle.stat({ bigint: true });
+        fatalReceipt(before);
         regularDocument(before);
         if (before.size < 1n || before.size > BigInt(maximum))
             throw new Error('Deployment document exceeds its bound.');
         const named = await lstat(file, { bigint: true });
+        fatalReceipt(named);
         regularDocument(named);
+        await verify.native(file, before);
         if (!unchanged(before, named)) throw new Error('Deployment document identity changed.');
-        await verify(file, before);
         const buffer = Buffer.alloc(maximum + 1);
         let bytesRead = 0;
         while (bytesRead < buffer.length) {
@@ -88,6 +97,11 @@ async function readDocument<T>(
         }
         const after = await handle.stat({ bigint: true });
         const current = await lstat(file, { bigint: true });
+        fatalReceipt(after);
+        fatalReceipt(current);
+        regularDocument(after);
+        regularDocument(current);
+        await verify.native(file, after);
         if (
             bytesRead > maximum ||
             BigInt(bytesRead) !== before.size ||
@@ -96,9 +110,6 @@ async function readDocument<T>(
             !unchanged(before, current)
         )
             throw new Error('Deployment document identity or bounded content changed.');
-        regularDocument(after);
-        regularDocument(current);
-        await verify(file, after);
         const bytes = buffer.subarray(0, bytesRead);
         const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
         const value = parse(JSON.parse(text));
@@ -161,7 +172,7 @@ async function openInstallation(
         await authority.entry(file, entry, name === 'operation.lock' ? 'operation' : 'use');
         fixedLeases.set(file, entry);
     }
-    const document = (file: string, entry: BigIntStats) => authority.entry(file, entry, 'document');
+    const document = Object.freeze({ receipt: authority.documentReceipt, native: authority.document });
     const original = await readDocument(installationFile, 65536, parseDeploymentInstallation, document);
     const installation: DeploymentInstallation = original.value;
     if (
