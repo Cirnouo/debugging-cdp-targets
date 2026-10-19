@@ -1,117 +1,13 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { applyChromePreset, createTargetHost } from '../src/adapters/target-host.ts';
+import { applyChromePreset } from '../../../src/adapters/target-host.ts';
+import { createTargetHostFixture } from '../../fixtures/target-host.ts';
 
 test('Chrome none never inserts an implicit data directory', () => {
     assert.ok(!applyChromePreset([]).some((argument) => argument.startsWith('--user-data-dir')));
 });
-
-test('Chrome managed binding uses the actual canonical directory and rejects an override before spawn', async (t) => {
-    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-chrome-binding-')));
-    t.after(() => rm(directory, { recursive: true, force: true }));
-    const f = fixture();
-    t.after(() => f.finish());
-    const isolation = {
-        mode: 'data-dir' as const,
-        directory: { kind: 'existing' as const, path: directory },
-        cleanup: 'retain' as const,
-    };
-    const target = await f.host.launch(
-        {
-            isolation,
-            targetKind: 'chrome',
-            launch: { executable: process.execPath, args: ['--user-data-dir={dataDir}'] },
-        },
-        { dataDirectory: directory },
-    );
-    assert.ok(f.launchedArguments[0]?.includes(`--user-data-dir=${directory}`));
-    await f.host.close(target);
-    for (const args of [
-        ['--user-data-dir=/other', '--data={dataDir}'],
-        ['--user-data-dir', '{dataDir}'],
-        ['--', '--user-data-dir={dataDir}'],
-        ['--user-data-dir={dataDir}', '--user-data-dir=/other'],
-    ])
-        await assert.rejects(
-            f.host.launch(
-                { isolation, targetKind: 'chrome', launch: { executable: process.execPath, args } },
-                { dataDirectory: directory },
-            ),
-            /profile|directory|user-data-dir/,
-        );
-    assert.equal(f.launchedArguments.length, 1);
-});
-
-function fixture(available: boolean | (() => Promise<boolean>) = true) {
-    const children: EventEmitter[] = [];
-    const inspected: string[] = [];
-    const launchedArguments: string[][] = [];
-    const host = createTargetHost({
-        profileAvailable:
-            typeof available === 'function'
-                ? available
-                : async (directory) => {
-                      inspected.push(directory);
-                      return available;
-                  },
-        platformAdapter: {
-            reservedRanges: async () => [],
-            validateNewRoot: () => {},
-            close: async (target) => {
-                children[target.processId - 40]?.emit('exit', 0);
-                return true;
-            },
-            snapshot: async (pid) => ({
-                root: {
-                    exists: true,
-                    executablePath: process.execPath,
-                    startedAtUtc: '2026-10-02T00:00:00Z',
-                    sessionId: 1,
-                },
-                currentSessionId: 1,
-                processIds: [pid],
-                listeners: [{ localAddress: '127.0.0.1', owningProcess: pid }],
-            }),
-        },
-        spawn: async (_executable, arguments_) => {
-            launchedArguments.push([...arguments_]);
-            const child = Object.assign(new EventEmitter(), { pid: 40 + children.length, exitCode: null });
-            children.push(child);
-            return child;
-        },
-        probe: async () => true,
-        getVersion: async (port) => ({
-            Browser: 'Chrome/153',
-            webSocketDebuggerUrl: `ws://127.0.0.1:${port}/devtools/browser/profile`,
-        }),
-    });
-    const launch = (directory?: string, signal?: AbortSignal) =>
-        host.launch(
-            {
-                isolation: { mode: 'none' },
-                targetKind: 'chrome',
-                launch: {
-                    executable: process.execPath,
-                    args: [...(directory ? [`--user-data-dir=${directory}`] : []), '--remote-debugging-port={port}'],
-                },
-            },
-            { ...(signal ? { signal } : {}) },
-        );
-    return {
-        host,
-        launch,
-        children,
-        inspected,
-        launchedArguments,
-        finish: () => {
-            for (const child of children) child.emit('exit');
-        },
-    };
-}
 
 test('Chrome preserves an explicit canonical directory argument without mutating the input', () => {
     const args = ['--user-data-dir=chosen profile'];
@@ -121,7 +17,7 @@ test('Chrome preserves an explicit canonical directory argument without mutating
 });
 
 test('Chrome launch disables updater scheduling and preserves the switch during exact recovery', async () => {
-    const f = fixture();
+    const f = createTargetHostFixture();
     const directory = path.join(os.tmpdir(), 'dct-updater-preset-fixture');
     try {
         const target = await f.launch(directory);
@@ -152,7 +48,7 @@ test('Chrome preset preserves an explicit updater scheduler switch without mutat
 test('Windows Chrome spawns the fixed screenshot feature and preserves exact recovery argv', {
     skip: process.platform !== 'win32',
 }, async () => {
-    const f = fixture();
+    const f = createTargetHostFixture();
     const directory = path.join(os.tmpdir(), 'dct-screenshot-preset-fixture');
     const launch = {
         executable: process.execPath,
@@ -188,7 +84,7 @@ test('Windows Chrome spawns the fixed screenshot feature and preserves exact rec
 test('Windows Chrome feature conflicts fail before profile acquisition and spawn and release the claimed port', {
     skip: process.platform !== 'win32',
 }, async () => {
-    const f = fixture();
+    const f = createTargetHostFixture();
     const directory = path.join(os.tmpdir(), 'dct-screenshot-conflict-fixture');
     try {
         await assert.rejects(
@@ -220,7 +116,7 @@ test('Windows Chrome feature conflicts fail before profile acquisition and spawn
 });
 
 test('generic CDP launch preserves caller feature choices without applying the Chrome preset', async () => {
-    const f = fixture();
+    const f = createTargetHostFixture();
     const args = ['--remote-debugging-port={port}', '--disable-features=CDPScreenshotNewSurface', '--label=中文'];
     try {
         const target = await f.host.launch({
@@ -254,7 +150,7 @@ for (const [label, option] of [
     test(`Windows Chrome rejects ${label} before profile/spawn and releases the claimed port`, {
         skip: process.platform !== 'win32',
     }, async () => {
-        const f = fixture();
+        const f = createTargetHostFixture();
         const directory = path.join(os.tmpdir(), 'dct-effective-feature-conflict-fixture');
         try {
             await assert.rejects(
@@ -287,7 +183,7 @@ for (const [label, option] of [
 test('Windows Chrome preserves FEFF positional args and legal parameter delimiters during exact recovery', {
     skip: process.platform !== 'win32',
 }, async () => {
-    const f = fixture();
+    const f = createTargetHostFixture();
     const directory = path.join(os.tmpdir(), 'dct-feature-feff-fixture');
     const args = [
         `--user-data-dir=${directory}`,
@@ -333,120 +229,24 @@ test('Windows Chrome preserves FEFF positional args and legal parameter delimite
     }
 });
 
-test('occupied profile is rejected before spawn, without substituting a temporary directory', async (t) => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-occupied-profile-')));
-    t.after(() => rm(root, { recursive: true, force: true }));
-    const actual = path.join(root, 'actual');
-    const alias = path.join(root, 'alias');
-    await mkdir(actual);
-    await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
-    const f = fixture(false);
-    try {
-        const directory = path.join(alias, 'profile');
-        await assert.rejects(f.launch(directory), /profile.*(occupied|unverifiable)/i);
-        assert.equal(f.children.length, 0);
-        assert.deepEqual(f.inspected, [path.join(actual, 'profile')]);
-        assert.deepEqual(f.launchedArguments, []);
-    } finally {
-        f.finish();
-    }
-});
+const preset = [
+    '--user-data-dir=feature-fixture',
+    '--remote-debugging-address=127.0.0.1',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-updater-scheduler',
+];
 
-test('independent hosts reserve profiles across concurrent launches and release them on exit', async () => {
-    const first = fixture();
-    const second = fixture();
-    const directory = path.join(os.tmpdir(), 'dct-profile-claim-fixture');
+test('non-Windows Chrome keeps existing feature choices outside the Windows compatibility rule', () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform');
+    assert.ok(original);
     try {
-        await first.launch(directory);
-        await assert.rejects(second.launch(directory), /profile.*occupied/i);
-        await second.launch(`${directory}-other`);
-        first.finish();
-        await second.launch(directory);
-        assert.equal(second.children.length, 2);
+        for (const platform of ['linux', 'darwin']) {
+            Object.defineProperty(process, 'platform', { value: platform });
+            const args = [...preset, '--disable-features=CDPScreenshotNewSurface', '--label=中文'];
+            assert.deepEqual(applyChromePreset(args), args);
+        }
     } finally {
-        first.finish();
-        second.finish();
+        Object.defineProperty(process, 'platform', original);
     }
-});
-
-test('normal Close releases a profile claim and failed occupancy checks do not retain claims', async () => {
-    const f = fixture();
-    const occupied = fixture(false);
-    const directory = path.join(os.tmpdir(), 'dct-profile-close-fixture');
-    try {
-        await assert.rejects(occupied.launch(directory), /profile/);
-        const target = await f.launch(directory);
-        assert.equal(await f.host.close(target), true);
-        await f.launch(directory);
-    } finally {
-        f.finish();
-        occupied.finish();
-    }
-});
-
-test('cancellation after profile availability resolves releases the late acquired profile without spawning', async () => {
-    const abort = new AbortController();
-    const first = fixture(async () => {
-        queueMicrotask(() => queueMicrotask(() => abort.abort(new Error('Profile acquisition cancelled.'))));
-        return true;
-    });
-    const second = fixture();
-    const directory = path.join(os.tmpdir(), 'dct-profile-late-cancel-fixture');
-    try {
-        await assert.rejects(first.launch(directory, abort.signal), /cancelled/);
-        assert.equal(first.children.length, 0);
-        const next = await second.launch(directory);
-        assert.equal(second.children.length, 1, 'The cancelled acquisition must release its eventual claim.');
-        await second.host.close(next);
-    } finally {
-        first.finish();
-        second.finish();
-    }
-});
-
-test('old repeated profile release cannot release a newer owner', async () => {
-    const { reserveProfile } = await import('../src/adapters/chrome-profile.ts');
-    const directory = path.join(os.tmpdir(), 'dct-profile-generation-fixture');
-    const oldRelease = await reserveProfile(directory, async () => true);
-    oldRelease();
-    const newRelease = await reserveProfile(directory, async () => true);
-    try {
-        oldRelease();
-        await assert.rejects(
-            reserveProfile(directory, async () => true),
-            /occupied/,
-        );
-    } finally {
-        newRelease();
-    }
-});
-
-test('a live Chrome profile remains reserved when cleanup is requested without actual exit', async () => {
-    const first = fixture();
-    const second = fixture();
-    const directory = path.join(os.tmpdir(), 'dct-profile-live-release-fixture');
-    try {
-        const target = await first.launch(directory);
-        target.releaseProfile?.();
-        await assert.rejects(second.launch(directory), /profile.*occupied/i);
-        first.finish();
-        const replacement = await second.launch(directory);
-        assert.equal(await second.host.close(replacement), true);
-    } finally {
-        first.finish();
-        second.finish();
-    }
-});
-
-test('unverifiable profile reports an actionable directory error and releases the reservation', async () => {
-    const { reserveProfile } = await import('../src/adapters/chrome-profile.ts');
-    const directory = path.join(os.tmpdir(), 'dct-profile-unverifiable-fixture');
-    await assert.rejects(
-        reserveProfile(directory, async () => {
-            throw new Error('permission denied');
-        }),
-        /unverifiable.*--user-data-dir/,
-    );
-    const release = await reserveProfile(directory, async () => true);
-    release();
 });

@@ -1,7 +1,8 @@
 # Gateway target models
 
 - `model/` owns pure endpoint identity validation and supplied target/resource
-    contracts; its local map describes the two delivered owners.
+    contracts, profile argument and screenshot composition, isolation intent and
+    structured launch values; its local map describes the six delivered owners.
 - `AGENTS.md` keeps this slice limited to those models and preserves the current
     acquisition, reservation, observation and cleanup owners.
 

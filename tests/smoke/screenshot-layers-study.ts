@@ -12,8 +12,8 @@ import { createPlatformAdapter, validateProcessIdentity } from '../../src/adapte
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { waitForClient } from '../../src/application/client-context.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
-import type { ApplicationLaunch } from '../../src/domains/launch-command.ts';
 import { validateCdpIdentity } from '../../src/gateway/targets/model/cdp-identity.ts';
+import type { ApplicationLaunch } from '../../src/gateway/targets/model/launch-command.ts';
 import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import { guiMutationArguments } from '../gui-authorization.ts';

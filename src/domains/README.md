@@ -27,25 +27,22 @@
 - `software-version.ts` owns strict node-semver parsing and precedence comparison
     for runtime decisions and the tooling facade; exact version-group agreement
     remains a tooling responsibility.
-- `launch-command.ts` validates structured launches, expands provided variables, and
-  checks port-source conflicts without executing a shell.
 - `cdp-target.ts` retains PortRange and the standalone candidate chooser with
     caller-supplied reserved ranges/probes. PortRange serves the native adapter;
     choosePort has two test cases and no production caller. Supplied endpoint/
     listener identity and target/resource contracts now belong to
     `gateway/targets/model/`. Actual claim-before-await admission and claim
     lifetime remain in the target host; this port residue is still unfinished.
-- `chromium-features.ts` composes the fixed Chrome screenshot feature immutably,
-  preserves unrelated ASCII lists and positional args, and rejects ambiguous conflicts.
 - `control-contract.ts` owns MCP lifecycle request/result unions, identities and
   pure diagnostic phase/outcome/elapsed value types and callback signature.
-- `data-isolation.ts` validates required isolation intent, directory operations,
-  cleanup policy and typed directory evidence.
 - `official-options.ts` validates reviewed official options and complete recipes,
   reserving browser attachment/launch options for the gateway.
 - `AGENTS.md` restricts this layer to deterministic rules.
 
 The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)
 adds pure required start intent, existing/new selection and cleanup validation,
-plus opaque {dataDir} binding in structured args/env. Filesystem and application
-support evidence comes from callers/adapters.
+plus opaque {dataDir} binding in structured args/env, now owned by
+[gateway/targets/model/](../gateway/targets/model/README.md). control-contract.ts
+consumes its parsers and value types; app-ui.ts consumes isolation evidence types.
+Only the exact isolation.ts and launch-command.ts model dependencies are permitted
+from this layer. Filesystem and application support evidence comes from callers/adapters.

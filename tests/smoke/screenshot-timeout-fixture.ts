@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domains/launch-command.ts';
+import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/gateway/targets/model/launch-command.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import type { McpRequestInterval } from './mcp-client.ts';
 import { cancelledPassiveSample } from './screenshot-capture-observer.ts';

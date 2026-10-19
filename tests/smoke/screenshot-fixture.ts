@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { withChromeScreenshotFeature } from '../../src/domains/chromium-features.ts';
-import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/domains/launch-command.ts';
+import { withChromeScreenshotFeature } from '../../src/gateway/targets/model/chromium-features.ts';
+import { type ApplicationLaunch, parseApplicationLaunch } from '../../src/gateway/targets/model/launch-command.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { assertWindowState, type WindowSample } from './window-evidence.ts';
 

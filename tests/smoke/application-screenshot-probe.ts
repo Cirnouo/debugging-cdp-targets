@@ -66,8 +66,9 @@ const helperNames = [
     '../../src/adapters/windows-launch.ts',
     '../../src/gateway/targets/model/cdp-identity.ts',
     '../../src/gateway/targets/model/target-contract.ts',
-    '../../src/domains/launch-command.ts',
-    '../../src/domains/chromium-features.ts',
+    '../../src/gateway/targets/model/launch-command.ts',
+    '../../src/shared/environment-key.ts',
+    '../../src/gateway/targets/model/chromium-features.ts',
     '../../src/domains/control-contract.ts',
     '../../src/shared/errors.ts',
 ];

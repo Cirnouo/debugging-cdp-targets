@@ -63,6 +63,15 @@ expectations must not be replaced with the implementation's own generated data.
     contract suites belong directly under `tests/gateway/`, corresponding to
     their real owners. Use `lifecycle`, `client-availability` and
     `lifecycle-contract` names rather than historical MCP/control-layer names.
+- Target value-model suites separate profile-argument parsing, isolation intent,
+    structured launch values and feature composition from profile binding/claim
+    lifetime and Chrome launch integration. Preserve all 59 original registrations,
+    assertion matrices and cleanup support. The bounded O4 slice may extract the
+    shared fake to intermediate `tests/fixtures/target-host.ts`. Later fixture-family
+    migration moves that same body and both `chrome-profile.test.ts` and
+    `chrome-launch.test.ts` consumer imports to final
+    `tests/fixtures/gateway/target-host.ts`; retain one implementation and list only
+    that final gateway fixture leaf in the target inventory.
 - Host tests use `host-policy`, `synchronize`, `user-intent` and `git-source`.
     Official tests distinguish `reviewed-catalog`, `execution` and `options`.
     Remove retired entry/disconnect wording where the actual behavior is Core
@@ -169,7 +178,7 @@ not a requirement for one PR per row or permission to skip content work.
 | O1 / PR #55 | Delivered: pure commit grammar versus actual message validation, pure text policy, three central tooling suites, five plans/two planning maps and precise historical-link repair. Main `2aa8e244` and its required CI passed. This does not complete source or remaining tooling/docs. |
 | O2 | First source delivery: pure Gateway owned-argument parser, then Host payload proof, at real callers/tests with exact role guards and actual maps. Keep mutable transactions in place. These cuts do not depend on unrelated pending native source. |
 | O3 / B2 | Actual bundled-notices owner and license/payload suite split; use a released producer base and preserve canonical inputs. |
-| O4 | Gateway pure/target/native rules and shared payload/environment key corrections. Coordinate actual callers, role guards, helper adjacency, source inputs and central target/platform suites. |
+| O4 | Gateway pure/target/native rules and shared payload/environment key corrections. Coordinate actual callers, role guards, helper adjacency, source inputs and central target/platform suites. The target value-model fixture follows the intermediate-to-final sequence in Central test content. |
 | O5 | Core composition, registry/cleanup, admission, managed connection/projection and observable lifecycle test content. Complete mutable-owner walkthroughs first. |
 | O6 | Official options/environment, package evidence, actual catalog/upstream and MCP request content; split mixed Official input/runtime/TEMP tests and preserve actual child argv. |
 | O7 | Host native clients/intent/Git/payload read-write/receipt/synchronization and tests, including the intermediate filesystem successor map. |
@@ -587,6 +596,7 @@ tests/fixtures/gateway/fake-cdp-target.ts
 tests/fixtures/gateway/http-gateway.ts
 tests/fixtures/gateway/native-close-runtime.ts
 tests/fixtures/gateway/official-child.ts
+tests/fixtures/gateway/target-host.ts
 tests/fixtures/native/README.md
 tests/fixtures/native/compile-native-window.ps1
 tests/fixtures/native/native-child.ts
@@ -660,6 +670,8 @@ tests/gateway/operations.test.ts
 tests/gateway/owned-tool-arguments.test.ts
 tests/gateway/registrations.test.ts
 tests/gateway/targets/README.md
+tests/gateway/targets/chrome-launch.test.ts
+tests/gateway/targets/chrome-profile-argument.test.ts
 tests/gateway/targets/chrome-profile.test.ts
 tests/gateway/targets/chromium-features.test.ts
 tests/gateway/targets/close-and-attachment.test.ts

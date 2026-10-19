@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { applyChromePreset } from '../src/adapters/target-host.ts';
-import { withChromeScreenshotFeature } from '../src/domains/chromium-features.ts';
+import test from 'node:test';
+import { withChromeScreenshotFeature } from '../../../src/gateway/targets/model/chromium-features.ts';
 
 const preset = [
     '--user-data-dir=feature-fixture',
@@ -141,20 +140,6 @@ test('Windows Chrome refuses non-ASCII feature values but preserves Unicode outs
         '文档.html',
         '--enable-features=CDPScreenshotNewSurface',
     ]);
-});
-
-test('non-Windows Chrome keeps existing feature choices outside the Windows compatibility rule', () => {
-    const original = Object.getOwnPropertyDescriptor(process, 'platform');
-    assert.ok(original);
-    try {
-        for (const platform of ['linux', 'darwin']) {
-            Object.defineProperty(process, 'platform', { value: platform });
-            const args = [...preset, '--disable-features=CDPScreenshotNewSurface', '--label=中文'];
-            assert.deepEqual(applyChromePreset(args), args);
-        }
-    } finally {
-        Object.defineProperty(process, 'platform', original);
-    }
 });
 
 const nativeWindowsWhitespace = [

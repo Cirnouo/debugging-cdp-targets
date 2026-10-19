@@ -1,12 +1,16 @@
-import type { ClientRequestContext } from '../shared/client-context.ts';
-import { isRecord } from '../shared/errors.ts';
-import { type DataIsolation, type DataIsolationEvidence, parseDataIsolation } from './data-isolation.ts';
+import {
+    type DataIsolation,
+    type DataIsolationEvidence,
+    parseDataIsolation,
+} from '../gateway/targets/model/isolation.ts';
 import {
     type ApplicationLaunch,
     type LaunchDefinition,
     type PreparedLaunchDefinition,
     parseApplicationLaunch,
-} from './launch-command.ts';
+} from '../gateway/targets/model/launch-command.ts';
+import type { ClientRequestContext } from '../shared/client-context.ts';
+import { isRecord } from '../shared/errors.ts';
 
 /** Bounded metadata only: no arguments, environment, URLs, page data or payloads. */
 export type Diagnostic = {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { inspect } from 'node:util';
-import type { ApplicationLaunch } from '../src/domains/launch-command.ts';
+import type { ApplicationLaunch } from '../src/gateway/targets/model/launch-command.ts';
 import {
     type ApplicationScreenshotFixture,
     type ApplicationScreenshotFixtureIO,
