@@ -14,7 +14,8 @@ The singleton App owns direct HTTP, management and native resources. The
     and complete resource-generation/directory-lease lifetime in `connections/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
-- `shared/`: request facilities, cross-layer types and constants.
+- `shared/`: request facilities, cross-layer types and constants, and supplied
+    portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
 [ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the

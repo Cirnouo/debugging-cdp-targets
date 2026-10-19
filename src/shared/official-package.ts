@@ -1,5 +1,6 @@
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from './constants.ts';
 import { isRecord } from './errors.ts';
+import { isPortablePayloadRelativePath } from './payload-path.ts';
 
 export interface OfficialReleaseFile {
     path: string;
@@ -24,24 +25,6 @@ function demand(condition: unknown, message: string): asserts condition {
 
 function fields(value: unknown, names: readonly string[]): asserts value is Record<string, unknown> {
     demand(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), 'evidence fields.');
-}
-
-export function isOfficialRelativePath(value: unknown): value is string {
-    return (
-        typeof value === 'string' &&
-        value.length > 0 &&
-        value
-            .split('/')
-            .every(
-                (part) =>
-                    part.length > 0 &&
-                    part !== '.' &&
-                    part !== '..' &&
-                    !/[\\:\x00-\x1f\x7f<>"|?*]/.test(part) &&
-                    !/[. ]$/.test(part) &&
-                    !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part),
-            )
-    );
 }
 
 export function parseOfficialReleaseEvidence(input: unknown): OfficialReleaseEvidence {
@@ -74,7 +57,7 @@ export function parseOfficialReleaseEvidence(input: unknown): OfficialReleaseEvi
     let previous = '';
     for (const file of input.files) {
         fields(file, ['path', 'sha256', 'bytes']);
-        demand(isOfficialRelativePath(file.path), 'unsafe relative path.');
+        demand(isPortablePayloadRelativePath(file.path), 'unsafe relative path.');
         demand(file.path > previous && !aliases.has(file.path.toLowerCase()), 'duplicate, alias or unsorted path.');
         demand(typeof file.sha256 === 'string' && /^[a-f0-9]{64}$/.test(file.sha256), 'SHA-256 digest.');
         demand(typeof file.bytes === 'number' && Number.isSafeInteger(file.bytes) && file.bytes >= 0, 'byte length.');
