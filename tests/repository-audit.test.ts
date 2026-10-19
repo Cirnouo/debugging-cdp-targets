@@ -578,6 +578,84 @@ test('optional require calls retain literal and computed dependency enforcement'
     );
 });
 
+test('domain consumers accept only the two supplied target value owners across dependency roles', () => {
+    const rejected: string[] = [];
+    for (const owner of ['isolation', 'launch-command']) {
+        const parser = owner === 'isolation' ? 'parseDataIsolation' : 'parseApplicationLaunch';
+        const value = owner === 'isolation' ? 'DataIsolation' : 'ApplicationLaunch';
+        for (const dependency of [
+            `../gateway/targets/model/${owner}.ts`,
+            `../gateway/targets/model/../model/${owner}.ts`,
+        ]) {
+            for (const source of [
+                `import { ${parser} } from '${dependency}'; ${parser}(input);`,
+                `import type { ${value} } from '${dependency}';`,
+                `export type { ${value} } from '${dependency}';`,
+                `export { ${parser} } from '${dependency}';`,
+                `export * from '${dependency}';`,
+                `type Value = import('${dependency}').${value};`,
+                `const value = import('${dependency}');`,
+                `const value = require('${dependency}');`,
+                `import Value = require('${dependency}');`,
+                `import type Value = require('${dependency}');`,
+            ])
+                for (const error of validateRuntimeSource('src/domains/control-contract.ts', source))
+                    rejected.push(`${source}: ${error}`);
+        }
+    }
+    assert.deepEqual(rejected, []);
+});
+
+test('target value dependency permission retains importer, exact path and boundary error restrictions', () => {
+    const roles = (dependency: string) => [
+        `import { value } from '${dependency}';`,
+        `import type { Value } from '${dependency}';`,
+        `export { value } from '${dependency}';`,
+        `export type { Value } from '${dependency}';`,
+        `type Value = import('${dependency}').Value;`,
+        `const value = import('${dependency}');`,
+        `const value = require('${dependency}');`,
+        `import type Value = require('${dependency}');`,
+    ];
+    for (const [file, boundary] of [
+        ['src/host-plugins/payload-integrity.ts', 'domains may depend only'],
+        ['src/shared/example.ts', 'shared cannot depend on other layers'],
+    ] as const) {
+        for (const owner of ['isolation', 'launch-command'])
+            for (const source of roles(`../gateway/targets/model/${owner}.ts`))
+                assert.ok(
+                    validateRuntimeSource(file, source).some((error) => error.includes(boundary)),
+                    source,
+                );
+    }
+    for (const dependency of [
+        '../gateway/targets/model/unknown.ts',
+        '../gateway/targets/model/target-contract.ts',
+        '../gateway/targets/model/cdp-identity.ts',
+        '../gateway/targets/model/../../diagnostics.ts',
+        '../gateway/targets/lifecycle.ts',
+        '../gateway/targets/model/../../../adapters/target-host.ts',
+        '../application/plugin-runtime.ts',
+        '../gateway/targets/model/../isolation.ts',
+        'node:fs',
+        '@modelcontextprotocol/core',
+    ]) {
+        for (const source of roles(dependency))
+            assert.ok(
+                validateRuntimeSource('src/domains/control-contract.ts', source).some((error) =>
+                    error.includes('domains may depend only'),
+                ),
+                source,
+            );
+    }
+    for (const file of ['src/domains/control-contract.ts', 'src/shared/example.ts', 'src/host-plugins/example.ts'])
+        for (const source of ['const value = import(moduleName);', 'const value = require(moduleName);'])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('computed module dependencies')),
+                source,
+            );
+});
+
 test('pure Gateway argument owner rejects filesystem imports', () => {
     assert.ok(
         validateRuntimeSource('src/gateway/owned-tool-arguments.ts', "import fs from 'node:fs';").some((error) =>
@@ -599,6 +677,10 @@ test('pure Gateway dependencies retain original TypeScript and indirect import e
         ['src/gateway/owned-tool-arguments.ts', '..'],
         ['src/gateway/targets/model/cdp-identity.ts', '../../..'],
         ['src/gateway/targets/model/target-contract.ts', '../../..'],
+        ['src/gateway/targets/model/chrome-profile-argument.ts', '../../..'],
+        ['src/gateway/targets/model/chromium-features.ts', '../../..'],
+        ['src/gateway/targets/model/isolation.ts', '../../..'],
+        ['src/gateway/targets/model/launch-command.ts', '../../..'],
     ] as const) {
         for (const source of [
             "import net from 'node:net';",
@@ -666,7 +748,7 @@ test('target identity and resource contracts accept their supplied-evidence mode
             'src/gateway/targets/model/target-contract.ts',
             [
                 "import type { TargetKind } from '../../../domains/control-contract.ts';",
-                "import type { LaunchDefinition } from '../../../domains/launch-command.ts';",
+                "import type { LaunchDefinition } from './launch-command.ts';",
                 "import { DetailedError } from '../../../shared/errors.ts';",
             ],
         ],
@@ -735,10 +817,15 @@ test('pure runtime owners reject ambient clock and process references through or
         'src/host-plugins/payload-integrity.ts',
         'src/domains/example.ts',
         'src/shared/example.ts',
+        'src/shared/environment-key.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/unreviewed.ts',
         'src/gateway/targets/model/cdp-identity.ts',
         'src/gateway/targets/model/target-contract.ts',
+        'src/gateway/targets/model/chrome-profile-argument.ts',
+        'src/gateway/targets/model/chromium-features.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/gateway/targets/model/launch-command.ts',
     ])
         for (const source of [
             'const value = performance.now();',
@@ -775,10 +862,15 @@ test('pure owners cannot import the Gateway clock through runtime reexport or er
         'src/host-plugins/payload-integrity.ts',
         'src/domains/control-contract.ts',
         'src/shared/example.ts',
+        'src/shared/environment-key.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/unreviewed.ts',
         'src/gateway/targets/model/cdp-identity.ts',
         'src/gateway/targets/model/target-contract.ts',
+        'src/gateway/targets/model/chrome-profile-argument.ts',
+        'src/gateway/targets/model/chromium-features.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/gateway/targets/model/launch-command.ts',
     ])
         for (const dependency of [
             file.startsWith('src/gateway/targets/model/')
@@ -801,7 +893,13 @@ test('pure owners cannot import the Gateway clock through runtime reexport or er
                 'const clock = import(moduleName);',
             ])
                 assert.ok(
-                    validateRuntimeSource(file, source.replaceAll('./diagnostics.ts', dependency)).length,
+                    validateRuntimeSource(file, source.replaceAll('./diagnostics.ts', dependency)).some((error) =>
+                        error.includes(
+                            source.includes('moduleName')
+                                ? 'computed module dependencies'
+                                : 'pure owners cannot depend on the diagnostic clock',
+                        ),
+                    ),
                     `${file}: ${source}`,
                 );
 });
@@ -818,7 +916,7 @@ test('Gateway diagnostic clock permission is exact and imports only its pure con
     for (const source of [
         "import { isRecord } from '../shared/errors.ts';",
         "import { parseOfficialToolArguments } from './owned-tool-arguments.ts';",
-        "import type { ApplicationLaunch } from '../domains/launch-command.ts';",
+        "import type { ApplicationLaunch } from './targets/model/launch-command.ts';",
         "export * from '../adapters/cdp-router.ts';",
         "import fs from 'node:fs';",
         "import type fs = require('node:fs');",
@@ -840,10 +938,15 @@ test('nested ambient roots cannot expose clock process network or global aliases
         'src/host-plugins/payload-integrity.ts',
         'src/domains/example.ts',
         'src/shared/example.ts',
+        'src/shared/environment-key.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/unreviewed.ts',
         'src/gateway/targets/model/cdp-identity.ts',
         'src/gateway/targets/model/target-contract.ts',
+        'src/gateway/targets/model/chrome-profile-argument.ts',
+        'src/gateway/targets/model/chromium-features.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/gateway/targets/model/launch-command.ts',
         'src/gateway/diagnostics.ts',
     ])
         for (const source of [
@@ -879,6 +982,10 @@ test('TypeScript method-signature declaration keys remain pure record names', ()
         'src/gateway/unreviewed.ts',
         'src/gateway/targets/model/cdp-identity.ts',
         'src/gateway/targets/model/target-contract.ts',
+        'src/gateway/targets/model/chrome-profile-argument.ts',
+        'src/gateway/targets/model/chromium-features.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/gateway/targets/model/launch-command.ts',
         'src/gateway/diagnostics.ts',
     ])
         for (const source of [
@@ -898,6 +1005,10 @@ test('computed TypeScript method keys and method bodies retain actual ambient re
         'src/gateway/unreviewed.ts',
         'src/gateway/targets/model/cdp-identity.ts',
         'src/gateway/targets/model/target-contract.ts',
+        'src/gateway/targets/model/chrome-profile-argument.ts',
+        'src/gateway/targets/model/chromium-features.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/gateway/targets/model/launch-command.ts',
         'src/gateway/diagnostics.ts',
     ])
         for (const source of [

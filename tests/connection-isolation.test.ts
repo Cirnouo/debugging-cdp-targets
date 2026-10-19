@@ -7,8 +7,8 @@ import { test } from 'node:test';
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import type { ConnectionStatus, ControlContext, LaunchOptions } from '../src/domains/control-contract.ts';
-import type { DataIsolationEvidence } from '../src/domains/data-isolation.ts';
-import { resolveLaunchDefinition } from '../src/domains/launch-command.ts';
+import type { DataIsolationEvidence } from '../src/gateway/targets/model/isolation.ts';
+import { resolveLaunchDefinition } from '../src/gateway/targets/model/launch-command.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { createCoreFixture } from './fixtures/core-runtime.ts';
 

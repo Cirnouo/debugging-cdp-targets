@@ -25,13 +25,13 @@ import {
     parseConnectionRoute,
     validateIdentity,
 } from '../domains/control-contract.ts';
-import { parseDataIsolation } from '../domains/data-isolation.ts';
+import { measured } from '../gateway/diagnostics.ts';
+import { parseDataIsolation } from '../gateway/targets/model/isolation.ts';
 import {
     bindPreparedLaunch,
     prepareLaunchDefinition,
     validateDataIsolationBinding,
-} from '../domains/launch-command.ts';
-import { measured } from '../gateway/diagnostics.ts';
+} from '../gateway/targets/model/launch-command.ts';
 import type { ClientPrincipal, ClientRequestContext } from '../shared/client-context.ts';
 import { DEFAULT_BASE_PORT } from '../shared/constants.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';

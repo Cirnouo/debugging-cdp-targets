@@ -1,7 +1,7 @@
 import { open, readlink, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { effectiveChromeProfileArgument } from '../domains/chrome-profile.ts';
+import { effectiveChromeProfileArgument } from '../gateway/targets/model/chrome-profile-argument.ts';
 import { errorCode } from '../shared/errors.ts';
 import { beginFixtureStage, emitFixtureEvent, type FixtureFields } from './fixture-diagnostics.ts';
 import { probeProcessExists } from './platform-process.ts';

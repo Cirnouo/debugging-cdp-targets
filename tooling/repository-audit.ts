@@ -292,7 +292,16 @@ export function validateRuntimeSource(file: string, source: string) {
         const payloadComparison = file === 'src/host-plugins/payload-integrity.ts' && specifier === 'node:util';
         const pureRelative =
             /^src\/(?:domains|shared)\//.test(resolved) || (hostPayload && resolved.startsWith('src/host-plugins/'));
-        if (domain && !versionParser && !payloadComparison && (!specifier.startsWith('.') || !pureRelative)) {
+        const targetValue =
+            layer === 'domains' &&
+            (resolved === 'src/gateway/targets/model/isolation.ts' ||
+                resolved === 'src/gateway/targets/model/launch-command.ts');
+        if (
+            domain &&
+            !versionParser &&
+            !payloadComparison &&
+            (!specifier.startsWith('.') || (!pureRelative && !targetValue))
+        ) {
             errors.push(`${file}: domains may depend only on domains and shared.`);
         }
         if (gateway && (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved)))

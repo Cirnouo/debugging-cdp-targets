@@ -8,16 +8,16 @@ The singleton App owns direct HTTP, management and native resources. The
 
 - `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
 - `application/`: independent target lifecycles and connection registry orchestration.
-- `domains/`: pure launch, HTTP admission and remaining port candidate rules.
+- `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
 - `gateway/`: pure explicit bearer/tool-argument extraction, target evidence/identity
-    models and bounded clock-backed diagnostics.
+    models, structured launch/isolation rules and bounded clock-backed diagnostics.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
 [ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the
-isolation boundary: domains validate directory intent and opaque binding;
+isolation boundary: gateway/targets/model/ validates directory intent and opaque binding;
 adapters acquire/reverify/remove real directories; application holds connection
 leases across restart and exposes directory evidence only through explicit
 operation metadata or selected configuration.

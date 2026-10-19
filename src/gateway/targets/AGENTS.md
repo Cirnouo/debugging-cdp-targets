@@ -2,7 +2,8 @@
 
 Apply root, [source](../../AGENTS.md) and [Gateway](../AGENTS.md) instructions
 cumulatively. This delivered target slice contains only the pure models in
-model/. Endpoint identity consumes supplied evidence; resource contracts describe
+model/. Launch/isolation and native argument rules consume only supplied values.
+Endpoint identity consumes supplied evidence; resource contracts describe
 existing capabilities and retained ownership without acquiring them.
 
 Keep port claims, launch acquisition, native observation, rollback, normal Close

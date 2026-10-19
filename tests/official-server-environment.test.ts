@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildServerArguments } from '../src/adapters/official-server.ts';
-import { mergeLaunchEnvironment } from '../src/domains/launch-command.ts';
+import { mergeLaunchEnvironment } from '../src/gateway/targets/model/launch-command.ts';
 
 const browserUrl = 'http://127.0.0.1:30000';
 const defaults = [

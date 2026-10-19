@@ -1,4 +1,4 @@
-import { isRecord } from '../shared/errors.ts';
+import { isRecord } from '../../../shared/errors.ts';
 
 export type DataDirectoryCleanup = 'retain' | 'delete-on-release';
 export type DataDirectorySelection =

@@ -16,8 +16,12 @@ local `AGENTS.md` files. READMEs describe current placement; AGENTS and policies
 govern implementation. The source retains technical layers alongside the delivered
 Gateway argument, supplied target model and diagnostic owners in `src/gateway/` and
 [Host payload proof](../../src/host-plugins/README.md) in `src/host-plugins/`.
-Argument rules and `gateway/targets/model/` identity/resource contracts remain
-pure. PortRange and the standalone chooser remain an explicitly unfinished
+Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
+isolation values and native argument composition remain pure. Domains may depend
+only on the exact relative isolation.ts and launch-command.ts model owners in
+addition to domains/shared; Host payload/shared gain no Gateway permission.
+Shared environment-key.ts serves actual target and Official consumers. PortRange
+and the standalone chooser remain an explicitly unfinished
 `domains/cdp-target.ts` residue; actual claim-before-await/lifetime stays in its
 current target host. Only `gateway/diagnostics.ts` reads its existing clock
 and depends on the pure current `domains/control-contract.ts` value/callback types.

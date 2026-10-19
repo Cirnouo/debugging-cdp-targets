@@ -5,13 +5,16 @@ Before changing App ownership or transport, read
 owns core resources and direct HTTP; host plugins are thin.
 
 
-Dependencies flow interface → application → domains/shared; application may
-use explicit adapters. Adapters may consume the delivered pure gateway argument
+Dependencies flow interface → application → pure domains/Gateway/shared;
+application may use explicit adapters. Adapters may consume the delivered pure gateway argument
 rules and target models, or its exact diagnostics clock, and never depend on
 application/interface.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
-including through erased syntax. Only gateway/diagnostics.ts may read its existing
+including through erased syntax. Domains may additionally consume only the exact
+relative target value owners gateway/targets/model/isolation.ts and
+gateway/targets/model/launch-command.ts; this grants no Host payload or shared
+permission to depend on Gateway. Only gateway/diagnostics.ts may read its existing
 performance.now() clock and depend on the pure domains/control-contract.ts.
 Domains and Gateway contain no environment, file, process, network or PowerShell
 I/O. Diagnostic value/callback types remain in the current domain contract; its
@@ -39,7 +42,7 @@ Never add persisted runtime state, plugin CLI or administrative control IPC.
 
 
 The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolation.md)
-requires pure isolation/launch validation in domains,
+requires pure isolation/launch validation in gateway/targets/model/,
 directory filesystem evidence and claims in adapters, and connection-level leases,
 release barriers and explicit operation evidence in application. Target and official resources have independent generation owners alongside the
 logical connection/router owner. Public session identity changes after either side

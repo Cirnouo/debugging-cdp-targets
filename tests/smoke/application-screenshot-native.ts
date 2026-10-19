@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { withChromeScreenshotFeature } from '../../src/domains/chromium-features.ts';
+import { withChromeScreenshotFeature } from '../../src/gateway/targets/model/chromium-features.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
 import type { ApplicationScreenshotFixture } from './application-screenshot-fixture.ts';
 import { readWindowSample, type WindowIdentity } from './window-evidence.ts';

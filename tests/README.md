@@ -92,7 +92,7 @@ Git hook tests remain contributor-tooling regressions.
   refusal before acquisition and actual launcher failure/exit behavior.
   Dirty development receipts require explicit opt-in; default acceptance
   rejects them. Seal verification is distinct from actual App GUI acceptance.
-- `data-isolation.test.ts`, `data-directory.test.ts` and
+- `gateway/targets/data-isolation.test.ts`, `data-directory.test.ts` and
   `data-directory-claims.test.ts` cover explicit isolation/binding validation,
   canonical root/ancestor claims, acquisition and release through controlled I/O.
 - `native-resource-ready.test.ts` checks the actual fixture PID-ready publisher's
@@ -101,6 +101,10 @@ Git hook tests remain contributor-tooling regressions.
   records, full identity, actual exit evidence and failure containment.
 - `codex-smoke-context.test.ts` checks temporary host Skill isolation against
   disabled duplicate metadata and unrelated paths or summaries.
+
+- `gateway/targets/chrome-profile-argument.test.ts` preserves the two pure native
+  canonical-profile argument cases; controlled profile/launch suites share
+  `fixtures/target-host.ts`. All six target value suites retain 59 registrations.
 
 - `gateway-core.test.ts` covers independent clients, registration authorization, immutable
     roots/launch snapshots, scoped restart and retained cleanup failure/retry.
@@ -203,9 +207,10 @@ Git hook tests remain contributor-tooling regressions.
   escaped fixture files, stale/malformed screenshot diagnostics and incorrect or
   transparent pixels; fixed-preset Chrome cannot masquerade as a raw comparison,
   and cleanup failure still initiates every peer Close.
-- `chromium-features.test.ts` checks immutable, idempotent screenshot feature
+- `gateway/targets/chromium-features.test.ts` checks immutable, idempotent screenshot feature
   composition, ASCII list/parameter preservation, exact positional boundaries and
-  strict switch/target conflicts. Non-Windows Chrome keeps existing feature choices.
+  strict switch/target conflicts. The runtime non-Windows restoration case lives
+  with `gateway/targets/chrome-launch.test.ts`.
 
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, candidate port selection and launch rollback using controlled
@@ -385,9 +390,10 @@ Git hook tests remain contributor-tooling regressions.
 - `target-events.test.ts` checks silent native exit observation, callback
   generation safety, terminal operations and isolated cleanup with retained
   resource/retry identity on failure.
-- `chrome-profile.test.ts` checks explicit directories without a fallback, occupancy
+- `gateway/targets/chrome-profile.test.ts` checks explicit directories without a fallback, occupancy
   rejection, concurrent reservations, cancelled late acquisition and release
-  generation safety with fake targets. Windows Chrome's fixed screenshot feature
+  generation safety with fake targets. `gateway/targets/chrome-launch.test.ts`
+  checks presets and platform behavior. Windows Chrome's fixed screenshot feature
   reaches spawned argv and exact recovery; conflicts precede profile/spawn and
   release the claimed port. Generic targets preserve their supplied feature choices.
 - `target-spawn.test.ts` checks visible GUI launch, detached lifetime and safe
@@ -395,7 +401,7 @@ Git hook tests remain contributor-tooling regressions.
 - `target-exit-reference.test.ts` checks real private Node subprocess exit waits,
   event-loop retention during EOF cleanup, independent waiter cancellation and
   reference release without target deadlines or process polling.
-- `structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
+- `gateway/targets/structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
 - `official-server-environment.test.ts` checks Windows/POSIX environment lookup,
     case-variant ordering, boolean defaults/validation and explicit mcpArgs precedence.
 - `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
@@ -447,7 +453,8 @@ Run `pnpm test` or a focused Node test for default regressions. The default
 command and `pnpm test:coverage` select `tests/*.test.ts` plus the five explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
-`tests/gateway/targets/port-and-endpoint-admission.test.ts`, and the two explicit
+`tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
+value suites in [Target tests](gateway/targets/README.md), and the two explicit
 Host suites in [Host plugin tests](host-plugins/README.md); they do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run

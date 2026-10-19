@@ -175,6 +175,15 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('src/gateway/diagnostics.ts'));
     assert.ok(built.inputs.includes('src/gateway/targets/model/cdp-identity.ts'));
     assert.ok(built.inputs.includes('src/gateway/targets/model/target-contract.ts'));
+    assert.ok(built.inputs.includes('src/gateway/targets/model/chrome-profile-argument.ts'));
+    assert.ok(built.inputs.includes('src/gateway/targets/model/chromium-features.ts'));
+    assert.ok(built.inputs.includes('src/gateway/targets/model/isolation.ts'));
+    assert.ok(built.inputs.includes('src/gateway/targets/model/launch-command.ts'));
+    assert.ok(built.inputs.includes('src/shared/environment-key.ts'));
+    assert.equal(built.inputs.includes('src/domains/chrome-profile.ts'), false);
+    assert.equal(built.inputs.includes('src/domains/chromium-features.ts'), false);
+    assert.equal(built.inputs.includes('src/domains/data-isolation.ts'), false);
+    assert.equal(built.inputs.includes('src/domains/launch-command.ts'), false);
     assert.equal(built.inputs.includes('src/domains/cdp-target.ts'), false);
     assert.ok(built.inputs.includes('src/domains/control-contract.ts'));
     assert.equal(built.inputs.includes('src/shared/diagnostics.ts'), false);

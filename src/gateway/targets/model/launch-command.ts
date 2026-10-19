@@ -1,4 +1,5 @@
-import { isRecord } from '../shared/errors.ts';
+import { findEnvironmentKey } from '../../../shared/environment-key.ts';
+import { isRecord } from '../../../shared/errors.ts';
 
 export interface ApplicationLaunch {
     executable: string;
@@ -22,18 +23,6 @@ export interface PreparedLaunchDefinition {
     readonly environment: Readonly<Record<string, string | undefined>>;
     readonly windowsEnvironment: boolean;
     readonly portPolicy: Readonly<{ kind: 'fixed'; port: number } | { kind: 'automatic'; basePort: number }>;
-}
-
-export function findEnvironmentKey(
-    environment: Readonly<Record<string, string | undefined>>,
-    name: string,
-    windows = false,
-): string | undefined {
-    return windows
-        ? Object.keys(environment).findLast((key) => key.toLowerCase() === name.toLowerCase())
-        : name in environment
-          ? name
-          : undefined;
 }
 
 export function mergeLaunchEnvironment(
