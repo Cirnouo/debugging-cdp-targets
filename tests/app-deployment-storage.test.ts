@@ -20,7 +20,7 @@ import filesystem, {
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { mock, test } from 'node:test';
+import { mock, type TestContext, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
     DeploymentCommitError,
@@ -831,7 +831,7 @@ for (const receipt of ['named', 'current'] as const) {
 
 test('named document hardlinks, nonregular entries, private-mode failures and absence remain fatal', {
     skip: !supported,
-}, async () => {
+}, async (context) => {
     for (const kind of ['hardlink', 'nonregular', 'permissions', 'absent'] as const) {
         const own = await fixture();
         const originalLstat = filesystem.lstat;
@@ -869,6 +869,7 @@ test('named document hardlinks, nonregular entries, private-mode failures and ab
                     ? error.message === 'Deployment native authority is unavailable or unsafe.'
                     : /regular file with one link/.test(error.message);
             });
+            context.diagnostic(JSON.stringify({ fatalControl: kind, result: 'passed' }));
         } finally {
             boundary.mock.restore();
             syncBuiltinESMExports();
@@ -978,3 +979,385 @@ test('stale root or lock identity and malformed bounded metadata fail without re
         await rm(moved, { recursive: true, force: true });
     }
 });
+
+type DocumentReadPhase = 'pre-read' | 'post-read';
+type DocumentReadInterval = 'canonical' | 'final' | 'named' | 'current';
+type DocumentReadCondition =
+    | 'replacement'
+    | 'unsafe-replacement'
+    | 'unknown-replacement'
+    | 'enoent-replacement'
+    | 'permissions'
+    | 'hardlink'
+    | 'nonregular'
+    | 'foreign-device';
+
+async function controlledDocumentRead(
+    context: TestContext,
+    control: Readonly<{
+        phase: DocumentReadPhase;
+        interval: DocumentReadInterval;
+        condition: DocumentReadCondition;
+        closeFailure?: boolean;
+    }>,
+) {
+    const own = await fixture();
+    const readerContext = new AsyncLocalStorage<boolean>();
+    const captured = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const originalOpen = filesystem.open;
+    const originalLstat = filesystem.lstat;
+    const originalStatfs = filesystem.statfs;
+    const originalRealpath = filesystem.realpath;
+    const originalParse = JSON.parse;
+    const stateFile = path.join(own.envelope, 'state.json');
+    const secondName = path.join(own.envelope, 'state-control-link.json');
+    const oldText = `${JSON.stringify(own.state)}\n`;
+    const root = await originalLstat(own.directory, { bigint: true });
+    const unknownFailure = Object.assign(new Error('Controlled document interval failure.'), {
+        code: control.condition === 'enoent-replacement' ? 'ENOENT' : 'EIO',
+    });
+    const closeFailure = new Error('Controlled document close failure.');
+    const events: string[] = [];
+    const nativeSequence: { stage: 'idle' | 'volume' | 'sampled' | 'canonical'; phase: DocumentReadPhase | undefined } =
+        {
+            stage: 'idle',
+            phase: undefined,
+        };
+    let paused = false;
+    let observing = true;
+    let pendingCurrent = false;
+    let readCalls = 0;
+    let parseCalls = 0;
+    let closeCalls = 0;
+    let failureInjected = false;
+    let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
+    let before: BigIntStats | undefined;
+    let held: BigIntStats | undefined;
+    let suppliedCurrent: BigIntStats | undefined;
+    let operation: DeploymentLease | undefined;
+    let use: DeploymentLease | undefined;
+    let settleRead: Promise<unknown> | undefined;
+    const phase = (): DocumentReadPhase => (readCalls === 0 ? 'pre-read' : 'post-read');
+    function invalidateNativeSequence(event: string) {
+        events.push(`${phase()}:${event}:${nativeSequence.stage}`);
+        nativeSequence.stage = 'idle';
+        nativeSequence.phase = undefined;
+    }
+    async function pauseAt(interval: DocumentReadInterval) {
+        if (paused || control.interval !== interval || control.phase !== phase()) return false;
+        paused = true;
+        events.push(`${phase()}:barrier:${interval}`);
+        captured.resolve();
+        await resume.promise;
+        return true;
+    }
+    function failUnknown() {
+        if (control.condition === 'unknown-replacement' || control.condition === 'enoent-replacement') {
+            failureInjected = true;
+            throw unknownFailure;
+        }
+    }
+    const openBoundary = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
+        const handle = await originalOpen(...args);
+        if (!observing || !readerContext.getStore() || args[0] !== stateFile || opened) return handle;
+        opened = handle;
+        return new Proxy(handle, {
+            get(target, key) {
+                if (key === 'stat')
+                    return async () => {
+                        // A handle receipt ends the native sequence. In particular, the old
+                        // reader's current lstat cannot be mistaken for a native final lstat.
+                        invalidateNativeSequence('handle-stat');
+                        if (readCalls > 0 && control.interval === 'current' && (await pauseAt('current')))
+                            pendingCurrent = true;
+                        const entry = await target.stat({ bigint: true });
+                        before ??= entry;
+                        if (readCalls > 0) held = entry;
+                        return entry;
+                    };
+                if (key === 'read')
+                    return (...values: unknown[]) => {
+                        readCalls++;
+                        invalidateNativeSequence('handle-read');
+                        return Reflect.apply(target.read, target, values);
+                    };
+                if (key === 'close')
+                    return async () => {
+                        closeCalls++;
+                        await target.close();
+                        if (control.closeFailure && paused) throw closeFailure;
+                    };
+                const value: unknown = Reflect.get(target, key, target);
+                return typeof value === 'function' ? value.bind(target) : value;
+            },
+        });
+    });
+    const volumeBoundary = mock.method(filesystem, 'statfs', async (...args: Parameters<typeof filesystem.statfs>) => {
+        const volume = await originalStatfs(...args);
+        if (observing && readerContext.getStore() && opened && args[0] === stateFile) {
+            nativeSequence.stage = 'volume';
+            nativeSequence.phase = phase();
+            events.push(`${phase()}:native-volume`);
+        }
+        return volume;
+    });
+    const namedBoundary = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
+        if (!observing || !readerContext.getStore() || !opened || args[0] !== stateFile) return originalLstat(...args);
+        assert.ok(isRecord(args[1]) && args[1].bigint === true, 'Document metadata must use bigint receipts.');
+        if (nativeSequence.stage === 'volume') {
+            const entry = await originalLstat(stateFile, { bigint: true });
+            nativeSequence.stage = 'sampled';
+            events.push(`${phase()}:native-first-sample`);
+            return entry;
+        }
+        if (nativeSequence.stage === 'canonical' && nativeSequence.phase === phase()) {
+            events.push(`${phase()}:native-final-sample`);
+            const reached = await pauseAt('final');
+            const entry = await originalLstat(stateFile, { bigint: true });
+            nativeSequence.stage = 'idle';
+            if (reached) failUnknown();
+            return entry;
+        }
+        if (control.interval === 'named' && readCalls === 0) await pauseAt('named');
+        const entry = await originalLstat(stateFile, { bigint: true });
+        if (!pendingCurrent) return entry;
+        pendingCurrent = false;
+        if (control.condition === 'nonregular') {
+            // Actual owned-directory metadata is controlled type evidence, not
+            // a claim of an atomic file-to-directory replacement.
+            suppliedCurrent = await originalLstat(own.envelope, { bigint: true });
+            return suppliedCurrent;
+        }
+        if (control.condition === 'foreign-device') {
+            // Only this adversarial negative field is modeled. This is not
+            // evidence of a cross-filesystem rename or a mount experiment.
+            suppliedCurrent = new Proxy(entry, {
+                get(target, key) {
+                    if (key === 'dev') return root.dev + 1n;
+                    const value: unknown = Reflect.get(target, key, target);
+                    return typeof value === 'function' ? value.bind(target) : value;
+                },
+            });
+            return suppliedCurrent;
+        }
+        suppliedCurrent = entry;
+        return entry;
+    });
+    const canonicalBoundary = mock.method(
+        filesystem,
+        'realpath',
+        async (...args: Parameters<typeof filesystem.realpath>) => {
+            const nativeCanonical =
+                observing &&
+                readerContext.getStore() &&
+                opened &&
+                args[0] === stateFile &&
+                nativeSequence.stage === 'sampled' &&
+                nativeSequence.phase === phase();
+            const reached = nativeCanonical && (await pauseAt('canonical'));
+            const resolved = await originalRealpath(...args);
+            if (nativeCanonical) {
+                nativeSequence.stage = 'canonical';
+                events.push(`${phase()}:native-canonical`);
+            }
+            if (reached) failUnknown();
+            return resolved;
+        },
+    );
+    const parseBoundary = mock.method(JSON, 'parse', (...args: Parameters<typeof JSON.parse>) => {
+        if (observing && readerContext.getStore() && args[0] === oldText) parseCalls++;
+        return originalParse(...args);
+    });
+    syncBuiltinESMExports();
+    try {
+        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
+        operation = await store.tryAcquire('operation');
+        use = await store.tryAcquire('use');
+        assert.ok(operation);
+        assert.ok(use);
+        const readerLease = use;
+        const reading = readerContext
+            .run(true, () => store.read(readerLease))
+            .then(
+                (value) => ({ value }),
+                (error: unknown) => ({ error }),
+            );
+        settleRead = reading;
+        const arrival = await Promise.race([
+            captured.promise.then(() => 'reached' as const),
+            reading.then(() => 'settled' as const),
+        ]);
+        context.diagnostic(
+            JSON.stringify({ ...control, arrival, events: [...events], readCalls, parseCalls, closeCalls }),
+        );
+        // Old code has no native final lstat. Intervening handle I/O resets the
+        // provenance above; a later reader receipt cannot satisfy this assertion.
+        assert.equal(
+            arrival,
+            'reached',
+            `Missing controlled native/receipt interval: ${control.phase}/${control.interval}; reader settled first.`,
+        );
+        assert.equal(phase(), control.phase);
+        assert.ok(opened);
+        assert.ok(before);
+        assert.equal(before.nlink, 1n);
+        let selected = own.state;
+        if (control.condition === 'permissions') {
+            await chmod(stateFile, 0o644);
+            const changed = await originalLstat(stateFile, { bigint: true });
+            assert.equal(changed.ino, before.ino);
+            assert.equal(changed.mode & 0o777n, 0o644n);
+            assert.notEqual(changed.ctimeNs, before.ctimeNs);
+        } else {
+            // Writer execution is outside readerContext and cannot enter the barrier.
+            selected = await store.commit(operation, own.state, next);
+            if (control.condition === 'unsafe-replacement') await chmod(stateFile, 0o644);
+            if (control.condition === 'hardlink') await filesystem.link(stateFile, secondName);
+            held = await opened.stat({ bigint: true });
+            const named = await originalLstat(stateFile, { bigint: true });
+            assert.equal(held.isFile(), true);
+            assert.equal(held.ino, before.ino);
+            assert.equal(held.nlink, 0n);
+            assert.notEqual(named.ino, held.ino);
+            assert.equal(named.dev, root.dev);
+            assert.equal(named.nlink, control.condition === 'hardlink' ? 2n : 1n);
+            assert.equal(named.mode & 0o777n, control.condition === 'unsafe-replacement' ? 0o644n : 0o600n);
+        }
+        resume.resolve();
+        const result = await reading;
+        observing = false;
+        context.diagnostic(
+            JSON.stringify({
+                ...control,
+                events,
+                readCalls,
+                parseCalls,
+                closeCalls,
+                heldLinks: held && String(held.nlink),
+                suppliedCurrentDevice: suppliedCurrent && String(suppliedCurrent.dev),
+                rootDevice: String(root.dev),
+                rejected: 'error' in result,
+                failureInjected,
+                message: 'error' in result && result.error instanceof Error ? result.error.message : undefined,
+            }),
+        );
+        assert.equal(closeCalls, 1);
+        await assert.rejects(opened.stat(), { code: 'EBADF' });
+        assert.ok('error' in result, 'Concurrent document change must refuse before returning the old selection.');
+        assert.ok(result.error instanceof Error);
+        if (control.closeFailure) assert.equal(result.error, closeFailure);
+        else if (control.condition === 'replacement')
+            assert.equal(result.error.message, 'Deployment document identity changed.');
+        else if (control.condition === 'unknown-replacement' || control.condition === 'enoent-replacement')
+            assert.equal(result.error, unknownFailure);
+        else if (control.condition === 'hardlink' || control.condition === 'nonregular')
+            assert.equal(result.error.message, 'Deployment metadata/lease must be a regular file with one link.');
+        else assert.equal(result.error.message, 'Deployment native authority is unavailable or unsafe.');
+        if (control.condition !== 'replacement')
+            assert.doesNotMatch(result.error.message, /document identity.*changed/);
+        assert.equal(parseCalls, 0);
+        if (control.condition === 'unknown-replacement' || control.condition === 'enoent-replacement')
+            assert.equal(failureInjected, true);
+        if (control.condition === 'foreign-device') {
+            assert.ok(held);
+            assert.equal(held.nlink, 0n);
+            assert.ok(suppliedCurrent);
+            assert.equal(suppliedCurrent.dev, root.dev + 1n);
+            assert.equal(suppliedCurrent.nlink, 1n);
+            assert.equal(suppliedCurrent.mode & 0o777n, 0o600n);
+        }
+        if (
+            !control.closeFailure &&
+            ['replacement', 'unknown-replacement', 'enoent-replacement'].includes(control.condition)
+        )
+            assert.deepEqual(await store.read(use), selected);
+    } finally {
+        observing = false;
+        resume.resolve();
+        await settleRead?.catch(() => {});
+        parseBoundary.mock.restore();
+        canonicalBoundary.mock.restore();
+        namedBoundary.mock.restore();
+        volumeBoundary.mock.restore();
+        openBoundary.mock.restore();
+        syncBuiltinESMExports();
+        readerContext.disable();
+        if (control.condition === 'permissions' || control.condition === 'unsafe-replacement')
+            await chmod(stateFile, 0o600);
+        if (control.condition === 'hardlink')
+            await unlink(secondName).catch((error: unknown) => {
+                if (!isRecord(error) || error.code !== 'ENOENT') throw error;
+            });
+        await use?.release();
+        await operation?.release();
+        await own.cleanup();
+    }
+}
+
+for (const phase of ['pre-read', 'post-read'] as const) {
+    for (const interval of ['canonical', 'final'] as const) {
+        for (const condition of ['replacement', 'unsafe-replacement', 'unknown-replacement'] as const) {
+            test(
+                `${phase} ${interval} native interval refuses ${condition} before old document parsing`,
+                {
+                    skip: !supported,
+                    timeout: 20000,
+                },
+                (context) => controlledDocumentRead(context, { phase, interval, condition }),
+            );
+        }
+    }
+}
+
+for (const [phase, interval] of [
+    ['pre-read', 'named'],
+    ['post-read', 'current'],
+] as const) {
+    test(
+        `${phase} observed private permissions take precedence over chmod ctime drift`,
+        {
+            skip: !supported,
+            timeout: 20000,
+        },
+        (context) => controlledDocumentRead(context, { phase, interval, condition: 'permissions' }),
+    );
+}
+
+for (const condition of ['unsafe-replacement', 'hardlink', 'nonregular', 'foreign-device'] as const) {
+    test(
+        `post-read held zero-link receipt cannot hide observed current ${condition}`,
+        {
+            skip: !supported,
+            timeout: 20000,
+        },
+        (context) => controlledDocumentRead(context, { phase: 'post-read', interval: 'current', condition }),
+    );
+}
+
+test(
+    'final native lstat preserves the original ENOENT Error after an actual replacement',
+    {
+        skip: !supported,
+        timeout: 20000,
+    },
+    (context) =>
+        controlledDocumentRead(context, { phase: 'post-read', interval: 'final', condition: 'enoent-replacement' }),
+);
+
+for (const condition of ['replacement', 'unknown-replacement'] as const) {
+    test(
+        `a real single close preserves its own fatal Error after final-native ${condition}`,
+        {
+            skip: !supported,
+            timeout: 20000,
+        },
+        (context) =>
+            controlledDocumentRead(context, {
+                phase: 'post-read',
+                interval: 'final',
+                condition,
+                closeFailure: true,
+            }),
+    );
+}

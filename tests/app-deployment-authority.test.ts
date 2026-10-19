@@ -153,3 +153,217 @@ test('Linux system readers do not gain root writer authority from installation k
             check({ uid: '0', gid: '0', mode: 0o755, directory: true, ...patch }, '1000', 'private', 'directory', true),
         );
 });
+
+test('Linux receipt permissions expose a pure predicate without granting native or writer authority', () => {
+    assert.ok('hasDeploymentUnixEntryPermissions' in deployment, 'Linux receipt permission predicate must exist');
+    const check = deployment.hasDeploymentUnixEntryPermissions;
+    assert.equal(typeof check, 'function');
+    if (typeof check !== 'function') throw new Error('Missing Linux receipt permission predicate.');
+    const cases: readonly {
+        name: string;
+        entry: { uid: string; gid: string; mode: number; directory: boolean };
+        account: string;
+        role: deployment.DeploymentUnixRole;
+        purpose: deployment.DeploymentEntryPurpose;
+        ancestor: boolean;
+        want: boolean;
+    }[] = [
+        {
+            name: 'private document',
+            entry: { uid: '1000', gid: '1000', mode: 0o600, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: true,
+        },
+        {
+            name: 'private directory',
+            entry: { uid: '1000', gid: '1000', mode: 0o700, directory: true },
+            account: '1000',
+            role: 'private',
+            purpose: 'directory',
+            ancestor: false,
+            want: true,
+        },
+        {
+            name: 'system document reader',
+            entry: { uid: '0', gid: '0', mode: 0o644, directory: false },
+            account: '1000',
+            role: 'system',
+            purpose: 'document',
+            ancestor: false,
+            want: true,
+        },
+        {
+            name: 'system shared use',
+            entry: { uid: '0', gid: '0', mode: 0o644, directory: false },
+            account: '1000',
+            role: 'system',
+            purpose: 'use',
+            ancestor: false,
+            want: true,
+        },
+        {
+            name: 'system operation',
+            entry: { uid: '0', gid: '0', mode: 0o600, directory: false },
+            account: '0',
+            role: 'system',
+            purpose: 'operation',
+            ancestor: false,
+            want: true,
+        },
+        {
+            name: 'safe root ancestor',
+            entry: { uid: '0', gid: '0', mode: 0o755, directory: true },
+            account: '1000',
+            role: 'private',
+            purpose: 'directory',
+            ancestor: true,
+            want: true,
+        },
+        {
+            name: 'private public mode',
+            entry: { uid: '1000', gid: '1000', mode: 0o644, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'foreign owner',
+            entry: { uid: '1001', gid: '1000', mode: 0o600, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'setuid',
+            entry: { uid: '1000', gid: '1000', mode: 0o4600, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'negative mode',
+            entry: { uid: '1000', gid: '1000', mode: -1, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'fractional mode',
+            entry: { uid: '1000', gid: '1000', mode: 384.5, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'out of range mode',
+            entry: { uid: '1000', gid: '1000', mode: 0o1000, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'malformed account',
+            entry: { uid: '1000', gid: '1000', mode: 0o600, directory: false },
+            account: '01000',
+            role: 'private',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'system foreign group',
+            entry: { uid: '0', gid: '1000', mode: 0o644, directory: false },
+            account: '1000',
+            role: 'system',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'system granting mode',
+            entry: { uid: '0', gid: '0', mode: 0o664, directory: false },
+            account: '1000',
+            role: 'system',
+            purpose: 'document',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'public operation mode',
+            entry: { uid: '0', gid: '0', mode: 0o644, directory: false },
+            account: '0',
+            role: 'system',
+            purpose: 'operation',
+            ancestor: false,
+            want: false,
+        },
+        {
+            name: 'writable ancestor',
+            entry: { uid: '0', gid: '0', mode: 0o775, directory: true },
+            account: '1000',
+            role: 'private',
+            purpose: 'directory',
+            ancestor: true,
+            want: false,
+        },
+        {
+            name: 'foreign ancestor',
+            entry: { uid: '1001', gid: '1000', mode: 0o755, directory: true },
+            account: '1000',
+            role: 'private',
+            purpose: 'directory',
+            ancestor: true,
+            want: false,
+        },
+        {
+            name: 'nondirectory ancestor',
+            entry: { uid: '0', gid: '0', mode: 0o600, directory: false },
+            account: '1000',
+            role: 'private',
+            purpose: 'directory',
+            ancestor: true,
+            want: false,
+        },
+    ];
+    for (const value of cases)
+        assert.equal(
+            check(value.entry, value.account, value.role, value.purpose, value.ancestor),
+            value.want,
+            value.name,
+        );
+    assert.doesNotThrow(() =>
+        deployment.validateDeploymentUnixEntry(
+            { uid: '1000', gid: '1000', mode: 0o600, directory: false },
+            '1000',
+            'private',
+            'document',
+            false,
+        ),
+    );
+    assert.throws(
+        () =>
+            deployment.validateDeploymentUnixEntry(
+                { uid: '1000', gid: '1000', mode: 0o644, directory: false },
+                '1000',
+                'private',
+                'document',
+                false,
+            ),
+        { message: 'Deployment entry lacks native account permissions.' },
+    );
+});

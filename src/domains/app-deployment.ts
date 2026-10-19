@@ -45,13 +45,13 @@ export type DeploymentUnixRole = 'private' | 'system';
 export type DeploymentEntryPurpose = 'directory' | 'document' | 'operation' | 'use';
 
 /** Linux POSIX ACL group-class mask bounds named grants too; this does not evaluate macOS ACLs. */
-export function validateDeploymentUnixEntry(
+export function hasDeploymentUnixEntryPermissions(
     entry: Readonly<{ uid: string; gid: string; mode: number; directory: boolean }>,
     account: string,
     role: DeploymentUnixRole,
     purpose: DeploymentEntryPurpose,
     ancestor: boolean,
-): void {
+): boolean {
     const owner = role === 'system' ? '0' : account;
     const expected =
         role === 'private' || purpose === 'operation'
@@ -61,7 +61,7 @@ export function validateDeploymentUnixEntry(
             : entry.directory
               ? 0o755
               : 0o644;
-    if (
+    return !(
         !/^(0|[1-9]\d{0,9})$/.test(account) ||
         !Number.isInteger(entry.mode) ||
         entry.mode < 0 ||
@@ -69,7 +69,17 @@ export function validateDeploymentUnixEntry(
         (ancestor
             ? !entry.directory || ![owner, '0'].includes(entry.uid) || (entry.mode & 0o022) !== 0
             : entry.uid !== owner || (role === 'system' && entry.gid !== '0') || entry.mode !== expected)
-    )
+    );
+}
+
+export function validateDeploymentUnixEntry(
+    entry: Readonly<{ uid: string; gid: string; mode: number; directory: boolean }>,
+    account: string,
+    role: DeploymentUnixRole,
+    purpose: DeploymentEntryPurpose,
+    ancestor: boolean,
+): void {
+    if (!hasDeploymentUnixEntryPermissions(entry, account, role, purpose, ancestor))
         throw new Error('Deployment entry lacks native account permissions.');
 }
 
