@@ -1,4 +1,5 @@
 import { isRecord } from '../shared/errors.ts';
+import { isOfficialRelativePath } from '../shared/official-package.ts';
 
 export type DeploymentInstallation = Readonly<{
     schemaVersion: 1;
@@ -9,6 +10,16 @@ export type DeploymentInstallation = Readonly<{
     root: Readonly<{ realPath: string; device: string; inode: string }>;
 }>;
 export type DeploymentSelection = Readonly<{ selectedBuildId: string; selectedManifestSha256: string }>;
+export type DeploymentPayloadEntry =
+    | Readonly<{ type: 'directory'; path: string; executableBits: number | null }>
+    | Readonly<{ type: 'file'; path: string; bytes: number; sha256: string; executableBits: number | null }>
+    | Readonly<{ type: 'symlink'; path: string; target: string }>;
+export type DeploymentPayloadManifest = Readonly<{
+    schemaVersion: 1;
+    platform: DeploymentInstallation['platform'];
+    architecture: DeploymentInstallation['architecture'];
+    entries: readonly DeploymentPayloadEntry[];
+}>;
 export type DeploymentState = DeploymentSelection &
     Readonly<{
         schemaVersion: 1;
@@ -26,6 +37,184 @@ function fields(value: unknown, keys: readonly string[]): asserts value is Recor
 
 function digest(value: unknown): value is string {
     return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+}
+
+function payloadDemand(condition: unknown): asserts condition {
+    if (!condition) throw new Error('Invalid deployment payload manifest.');
+}
+
+function payloadEncoding(manifest: DeploymentPayloadManifest): string {
+    const text = `${JSON.stringify(manifest)}\n`;
+    payloadDemand(new TextEncoder().encode(text).byteLength <= 16 * 1024 * 1024);
+    return text;
+}
+
+function payloadLinks(entries: ReadonlyMap<string, DeploymentPayloadEntry>): void {
+    const resolved = new Map<string, string>();
+    for (const entry of entries.values()) {
+        if (entry.type !== 'symlink') continue;
+        const parents = entry.path.split('/').slice(0, -1);
+        const appIndex = parents.findLastIndex((part) => part.endsWith('.app'));
+        payloadDemand(appIndex >= 0 && parents.some((part, index) => index > appIndex && part.endsWith('.framework')));
+        const app = parents.slice(0, appIndex + 1).join('/');
+        let current = [...parents];
+        const active = new Set([entry.path]);
+        const frames = [{ link: entry.path, parts: entry.target.split('/'), index: 0 }];
+        while (frames.length > 0) {
+            const frame = frames[frames.length - 1];
+            if (!frame) throw new Error('Invalid deployment payload link graph.');
+            const part = frame.parts[frame.index++];
+            if (part === undefined) {
+                const destination = current.join('/');
+                payloadDemand(entries.has(destination) && (destination === app || destination.startsWith(`${app}/`)));
+                resolved.set(frame.link, destination);
+                active.delete(frame.link);
+                frames.pop();
+                continue;
+            }
+            payloadDemand(current.length === 0 || entries.get(current.join('/'))?.type === 'directory');
+            if (part === '.') continue;
+            if (part === '..') {
+                payloadDemand(current.length > 0);
+                current.pop();
+                continue;
+            }
+            const name = [...current, part].join('/');
+            const target = entries.get(name);
+            payloadDemand(target);
+            if (target.type === 'symlink') {
+                payloadDemand(!active.has(name));
+                const cached = resolved.get(name);
+                if (cached !== undefined) current = cached.split('/');
+                else {
+                    active.add(name);
+                    frames.push({ link: name, parts: target.target.split('/'), index: 0 });
+                }
+            } else current.push(part);
+        }
+    }
+    if (resolved.size === 0) return;
+    const edges = new Map<string, string[]>();
+    for (const entry of entries.values()) {
+        const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
+        if (entry.path.includes('/')) {
+            const children = edges.get(parent) ?? [];
+            children.push(entry.path);
+            edges.set(parent, children);
+        }
+        const target = resolved.get(entry.path);
+        if (target !== undefined) edges.set(entry.path, [target]);
+    }
+    const colors = new Map<string, 'active' | 'done'>();
+    for (const name of entries.keys()) {
+        const pending = [{ name, finish: false }];
+        while (pending.length > 0) {
+            const step = pending.pop();
+            if (!step) throw new Error('Invalid deployment payload link graph.');
+            if (step.finish) colors.set(step.name, 'done');
+            else {
+                payloadDemand(colors.get(step.name) !== 'active');
+                if (colors.get(step.name) === 'done') continue;
+                colors.set(step.name, 'active');
+                pending.push({ name: step.name, finish: true });
+                for (const child of edges.get(step.name) ?? []) pending.push({ name: child, finish: false });
+            }
+        }
+    }
+}
+
+/** A complete explicit inventory is syntax/content input, never provenance or enrollment proof. */
+export function parseDeploymentPayloadManifest(value: unknown): DeploymentPayloadManifest {
+    fields(value, ['schemaVersion', 'platform', 'architecture', 'entries']);
+    const { schemaVersion, platform, architecture, entries: inputs } = value;
+    payloadDemand(Array.isArray(inputs));
+    const inputCount = inputs.length;
+    payloadDemand(
+        schemaVersion === 1 &&
+            (platform === 'win32' || platform === 'darwin' || platform === 'linux') &&
+            (architecture === 'x64' || architecture === 'arm64') &&
+            Number.isSafeInteger(inputCount) &&
+            inputCount >= 0 &&
+            inputCount <= 100000,
+    );
+    const entries: DeploymentPayloadEntry[] = [];
+    const byPath = new Map<string, DeploymentPayloadEntry>();
+    const aliases = new Set<string>();
+    let previous = '';
+    for (let index = 0; index < inputCount; index++) {
+        const input = inputs[index];
+        payloadDemand(isRecord(input));
+        const type = input.type;
+        fields(
+            input,
+            type === 'symlink'
+                ? ['type', 'path', 'target']
+                : type === 'file'
+                  ? ['type', 'path', 'bytes', 'sha256', 'executableBits']
+                  : ['type', 'path', 'executableBits'],
+        );
+        const name = input.path;
+        payloadDemand(isOfficialRelativePath(name) && name.isWellFormed() && name.normalize('NFC') === name);
+        const alias = name.toLowerCase().normalize('NFC');
+        payloadDemand(
+            name > previous && !aliases.has(alias) && name.split('/')[0]?.toLowerCase() !== 'payload-manifest.json',
+        );
+        const slash = name.lastIndexOf('/');
+        payloadDemand(slash < 0 || byPath.get(name.slice(0, slash))?.type === 'directory');
+        let entry: DeploymentPayloadEntry;
+        if (type === 'symlink') {
+            const target = input.target;
+            payloadDemand(platform === 'darwin' && typeof target === 'string' && target.isWellFormed());
+            payloadDemand(
+                target.length > 0 &&
+                    target.split('/').every((part) => part === '.' || part === '..' || isOfficialRelativePath(part)),
+            );
+            entry = Object.freeze({ type: 'symlink', path: name, target });
+        } else {
+            const bits = input.executableBits;
+            payloadDemand(bits === null || typeof bits === 'number');
+            payloadDemand(
+                platform === 'win32'
+                    ? bits === null
+                    : typeof bits === 'number' &&
+                          Number.isInteger(bits) &&
+                          bits >= 0 &&
+                          bits <= 0o111 &&
+                          (bits & 0o111) === bits,
+            );
+            if (type === 'file') {
+                const { bytes, sha256 } = input;
+                payloadDemand(typeof bytes === 'number' && Number.isSafeInteger(bytes) && bytes >= 0 && digest(sha256));
+                entry = Object.freeze({
+                    type: 'file',
+                    path: name,
+                    bytes,
+                    sha256,
+                    executableBits: bits,
+                });
+            } else {
+                payloadDemand(type === 'directory');
+                entry = Object.freeze({ type: 'directory', path: name, executableBits: bits });
+            }
+        }
+        entries.push(entry);
+        byPath.set(name, entry);
+        aliases.add(alias);
+        previous = name;
+    }
+    payloadLinks(byPath);
+    const manifest = Object.freeze({
+        schemaVersion: 1 as const,
+        platform,
+        architecture,
+        entries: Object.freeze(entries),
+    });
+    payloadEncoding(manifest);
+    return manifest;
+}
+
+export function encodeDeploymentPayloadManifest(value: unknown): string {
+    return payloadEncoding(parseDeploymentPayloadManifest(value));
 }
 
 function physicalPath(value: unknown, windows: boolean): value is string {

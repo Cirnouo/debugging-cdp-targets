@@ -4,6 +4,8 @@
   successor lease ACK. Syntax grants no file ownership or native lease proof.
 - `app-deployment.ts` strictly validates initial physical installation metadata,
   complete immutable selection identifiers and active/removing/removed transitions.
+  Its canonical payload inventory includes all directories/files and contained
+  Darwin framework links, with exact OS, architecture and executable bits.
   It grants no payload-verification, permission, enrollment or deletion authority.
 - `official-execution.ts` tracks one matching wire identity until real response/close.
 - `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
