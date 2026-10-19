@@ -24,6 +24,14 @@ Git hook tests remain contributor-tooling regressions.
   expected selections through real owned temporary files and controlled I/O.
   Darwin framework graph, executable-bit and race/error cases establish source
   behavior only, without native signing, reparse, permission or installer proof.
+- `app-stage.test.ts` checks literal canonical source composition and the actual
+  stage producer with controlled release-record I/O, real generated App/license
+  and unchanged original package owners, plus small inert owned ZIP files. Its
+  pre-spawn guard permits only exact file-only extractor invocations and blocks
+  every other external command. Foreign source identities, paths/types/aliases,
+  missing/extra/drift/selection cases and a self-consistent replaced output cannot
+  alter the expected source selection. These tests execute no App, target, native
+  permission helper or ACL query and establish no real archive/native acceptance.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   verified public native addon to test shared read-only use, independent operation
   writers, exclusive deletion barriers and persistent lock inode identity.
@@ -85,7 +93,10 @@ Git hook tests remain contributor-tooling regressions.
 - `app-distribution.test.ts` and `build-app.test.ts` cover immutable delivery
   metadata, sandboxed bundles, license closure and complete official-file copying.
 - `app-archive-extraction.test.ts` checks actual Windows ZIP extraction refusal
-  for traversal, aliases, duplicate destinations and nonregular entries before writing.
+  for foreign archive identities, traversal, aliases, duplicate destinations and
+  nonregular entries before writing. Small inert sources also check original
+  byte hashes, empty files/directories and source closure. Both archive and stage
+  suites share the exact file-only pre-spawn guard in `fixtures/app-archive.ts`.
 - `thin-plugin-cutover.test.ts` checks host-native direct HTTP manifests and
   excludes credentials, executable helpers and duplicated App runtime payloads.
 - `app-control-cutover.test.ts` checks the public lifecycle identities and actual

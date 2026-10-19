@@ -211,10 +211,24 @@ behavior and Linux multi-account/root execution remain native gates. No native
 installer/portable acceptance is implied by these branches or shipped helpers.
 
 Fresh create-only enrollment and initial installation/state publication remain
-unimplemented. The current stage builder verifies original inputs but still
-returns a flat local development stage; the complete payload verifier observes
-inventory agreement without establishing input provenance. A later producer
-must join those responsibilities before publishing an enrolled initial build.
+unimplemented. The Windows stage producer composes its complete expected payload
+from authenticated original ZIP entries, the selected original Node runtime,
+actual generated App buffers/licenses/native packages and the complete unchanged
+official release. The fixed extractor authenticates the same read-locked source
+stream that supplies ZIP entries and their original byte hashes. Expected content
+is composed before the fresh output is written; it is not discovered by scanning
+the output. The stage includes canonical `payload-manifest.json`, which excludes
+itself from its entries, and passes the complete read-only tree verifier against
+the independently source-derived selection before returning.
+`stageDesktopApp` returns the flat stage's `root`, canonical manifest, selection
+and descriptive original-source/build-input provenance. This result grants no
+runtime authority or protected publication capability. The tree verifier alone
+still establishes observed content agreement. macOS signed bundle/framework links
+and Unix executable bits need their actual source producers; the Windows producer
+fails closed for other platforms. A later enrollment consumer must join source
+production with native protected creation before publishing an initial build.
+The maintained Node runtime-file inventory currently enables Windows x64 only;
+other cells refuse staging until their actual source evidence is supplied.
 Ordinary startup neither creates nor repairs a missing or partial envelope.
 The installation schema, canonical identity formula and two persistent lease
 inodes are unchanged. App admission stays disabled until the complete producer,
@@ -236,9 +250,11 @@ pnpm build:app --portable --electron-archive <electron-zip> --node-archive <node
 ```
 
 The destination must not exist; same-version content is never overwritten.
-Launch its `electron.exe`. This is a local development stage, not an installer
-or publication. Windows x64 extraction/native-loader execution has been exercised;
-other recorded archive identities do not establish native acceptance. Signed
+Its executable remains `electron.exe` at that flat root. This is a local development
+stage, not an installer or publication. Earlier Windows x64 extraction/native-loader
+research predates the complete payload producer. The new producer's small inert ZIP
+fixtures do not establish real archive or native acceptance; other recorded
+archive identities also do not establish that acceptance. Signed
 installers, complete immutable version retention and managed uninstall remain
 separate deployment work. No background update service or rollback/pruning
 mechanism is introduced.
@@ -259,6 +275,11 @@ whole-file inventories. Study source launchers only verify and start the sealed
 ordinary Node; measured code verifies itself before native acquisition. The pure
 verification module imports no builder or esbuild runtime. Execution uses only
 this sealed closure.
+The production manifest is included in the research receipt's App file inventory.
+The thirteen research leaves and receipt algorithm remain independent and unchanged;
+adding those leaves deliberately makes the research stage exceed the production
+manifest, so it cannot pass production complete-tree verification. Older receipts
+are retained historical evidence and are not rewritten to claim the new producer.
 Dirty development seals cannot establish final acceptance; final native evidence
 requires a clean committed revision and fresh seal. Fixture cleanup/actual child
 exit, actual App GUI/singleton/exit, native target behavior, host HTTP execution,

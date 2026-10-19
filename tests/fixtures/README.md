@@ -1,5 +1,9 @@
 # Test fixtures
 
+`app-archive.ts` supplies small stored ZIPs of inert owned bytes and the exact
+file-only extractor pre-spawn guard shared by archive and stage regressions.
+It executes no native permission helper, target or App.
+
 `connection-directory-runtime.ts` exports createDirectoryRuntimeFixture, deferred,
 tick and route for the connection lifetime, operation evidence and directory
 admission suites. It composes real Core/DataDirectoryRegistry over controlled
