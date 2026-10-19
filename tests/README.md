@@ -69,9 +69,10 @@ Git hook tests remain contributor-tooling regressions.
 - `app-configuration.test.ts` and `app-configuration-storage.test.ts` cover
   validated migration chains, backup/atomic commit, invalid/future settings,
   singleton admission before I/O and desired versus effective cold settings.
-- `app-main-lifecycle.test.ts` and `app-core-construction.test.ts` exercise
-  startup/Quit races, late catalog acquisition, retained construction cleanup,
-  failure retry and refusal to admit HTTP before successful startup.
+- `app-main-lifecycle.test.ts` exercises startup/Quit races and refusal to admit
+  HTTP before successful startup. `gateway/connections/construction-cleanup.test.ts`
+  owns the three whole trusted cleanup capability, pending/late catalog acquisition
+  and retained construction cleanup/retry cases.
 - `app-ui.test.ts` checks fixed local renderer resources and narrow management
   actions/snapshots without exposing secrets or general filesystem/IPC authority.
 - `app-management.test.ts` exercises the real Core admin closure with controlled
@@ -286,9 +287,10 @@ Git hook tests remain contributor-tooling regressions.
   documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
   required portable MCP schema declarations, and allowlists.
-- `build-plugin.test.ts` checks complete transitive bundle license collection,
-  nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
-  and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
+- `tooling/licenses/` checks the actual bundled-notices collector, canonical
+  package boundaries, reviewed SDK/vendor evidence, default roots and import isolation.
+- `tooling/distribution/` checks complete thin-payload bytes, competing/missing/linked
+  inputs, read-only output synchronization and independent App/plugin versions.
 - `tooling/governance/` validates supplied commit events and Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
   These tests independently check raw PR titles and predicted squash headers with actual
@@ -373,7 +375,11 @@ Git hook tests remain contributor-tooling regressions.
   strict type-error rejection, and non-erasable syntax rejection.
 - `entry-lifecycle.test.ts` checks target-controller Keep/Close, confirmed exit retirement,
   live same-port restart and independent child observation for each launch.
-- `entry-runtime.test.ts` checks actual Core ownership, independent connections and upstream lifetime.
+- `entry-runtime.test.ts` keeps ten actual Core ownership, independent connection
+  and upstream lifetime cases. `gateway/connections/gateway-cleanup.test.ts` owns
+  the seven whole Gateway shutdown, rollback, catalog and retained disposal cases.
+  Both share controlled I/O and status support in `fixtures/core-runtime.ts`,
+  retaining every setup/status assertion and cleanup branch.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
   output validation and independent subprocess disposal. Actual Core/SDK HTTP
   tests preserve roots/form/progress, raw request/progress ID zero and unchanged
@@ -476,15 +482,17 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select twenty-six entries: `tests/*.test.ts`, the twelve explicit
+command and `pnpm test:coverage` select thirty entries: `tests/*.test.ts`, the fourteen explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
 `tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
-value suites in [Target tests](gateway/targets/README.md), the two
+value suites in [Target tests](gateway/targets/README.md), the four
 [Connections suites](gateway/connections/README.md) and target
 `directory-admission.test.ts`, plus the two explicit
-Host suites in [Host plugin tests](host-plugins/README.md). The eleven Gateway suites
-retain the original order with these three additions; default commands do not launch
+Host suites in [Host plugin tests](host-plugins/README.md). The thirteen Gateway suites
+retain all twenty-eight existing selectors in their original order, with
+`connections/construction-cleanup.test.ts` and `connections/gateway-cleanup.test.ts`
+appended once in that order; default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

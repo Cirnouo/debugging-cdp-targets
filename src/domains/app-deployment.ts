@@ -1,5 +1,5 @@
 import { isRecord } from '../shared/errors.ts';
-import { isOfficialRelativePath } from '../shared/official-package.ts';
+import { isPortablePayloadRelativePath } from '../shared/payload-path.ts';
 
 export type DeploymentInstallation = Readonly<{
     schemaVersion: 1;
@@ -311,7 +311,7 @@ export function parseDeploymentPayloadManifest(value: unknown): DeploymentPayloa
                   : ['type', 'path', 'executableBits'],
         );
         const name = input.path;
-        payloadDemand(isOfficialRelativePath(name) && name.isWellFormed() && name.normalize('NFC') === name);
+        payloadDemand(isPortablePayloadRelativePath(name) && name.isWellFormed() && name.normalize('NFC') === name);
         const alias = name.toLowerCase().normalize('NFC');
         payloadDemand(
             name > previous && !aliases.has(alias) && name.split('/')[0]?.toLowerCase() !== 'payload-manifest.json',
@@ -324,7 +324,9 @@ export function parseDeploymentPayloadManifest(value: unknown): DeploymentPayloa
             payloadDemand(platform === 'darwin' && typeof target === 'string' && target.isWellFormed());
             payloadDemand(
                 target.length > 0 &&
-                    target.split('/').every((part) => part === '.' || part === '..' || isOfficialRelativePath(part)),
+                    target
+                        .split('/')
+                        .every((part) => part === '.' || part === '..' || isPortablePayloadRelativePath(part)),
             );
             entry = Object.freeze({ type: 'symlink', path: name, target });
         } else {

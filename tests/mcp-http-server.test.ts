@@ -7,7 +7,7 @@ import { Client, ProtocolError, ProtocolErrorCode, StreamableHTTPClientTransport
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
 import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { createGatewayCore } from '../src/application/plugin-runtime.ts';
+import { createGatewayCore } from '../src/gateway/core.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 async function fixture() {

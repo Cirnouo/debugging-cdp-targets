@@ -9,4 +9,6 @@
 - `environment-key.ts` matches supplied environment keys for target expansion and
     Official boolean settings: last Windows case match, POSIX exact membership,
     including undefined values. It reads no host environment.
-- `official-package.ts` validates reviewed release evidence and package identity without I/O.
+- `official-package.ts` validates reviewed Official release evidence and package identity without I/O.
+- `payload-path.ts` validates supplied portable payload-relative component syntax
+    without I/O; it does not prove filesystem containment or Official provenance.

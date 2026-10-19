@@ -227,9 +227,12 @@ test('package, output and repository fixtures work with an aliased system tempor
                 '--test',
                 '--test-reporter=spec',
                 '--test-name-pattern=package verifier|installed pnpm|packaged resolver|build synchronization|only the fully verified official|assembly copies only approved icons|repository audit accepts AGENTS.md',
-                ...['official-package', 'build-plugin', 'icon-packaging', 'repository-audit'].map((name) =>
-                    fileURLToPath(new URL(`./${name}.test.ts`, import.meta.url)),
-                ),
+                ...[
+                    'official-package',
+                    'tooling/distribution/thin-plugin-payloads',
+                    'icon-packaging',
+                    'repository-audit',
+                ].map((name) => fileURLToPath(new URL(`./${name}.test.ts`, import.meta.url))),
             ],
             {
                 env: environment,
@@ -239,6 +242,12 @@ test('package, output and repository fixtures work with an aliased system tempor
             },
         );
         assert.match(result.stdout, /fail 0/);
+        assert.ok(
+            result.stdout.includes(
+                'build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs',
+            ),
+            result.stdout,
+        );
     } finally {
         assert.equal(path.dirname(root), temporaryBase);
         assert.ok(path.basename(root).startsWith('dct-aliased-temp-'));

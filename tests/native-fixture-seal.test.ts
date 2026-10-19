@@ -171,6 +171,9 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     );
     assert.ok(built.inputs.includes('tests/smoke/screenshot-layers-study.ts'));
     assert.ok(built.inputs.includes('tests/smoke/screenshot-timeout-study.ts'));
+    assert.ok(built.inputs.includes('src/gateway/core.ts'));
+    assert.ok(built.inputs.includes('src/gateway/registry.ts'));
+    assert.equal(built.inputs.includes('src/application/plugin-runtime.ts'), false);
     assert.ok(built.inputs.includes('src/gateway/connections/resource-owner.ts'));
     assert.ok(built.inputs.includes('src/gateway/connections/directory-lease.ts'));
     assert.equal(built.inputs.includes('src/application/connection-owner.ts'), false);
@@ -184,6 +187,8 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('src/gateway/targets/model/isolation.ts'));
     assert.ok(built.inputs.includes('src/gateway/targets/model/launch-command.ts'));
     assert.ok(built.inputs.includes('src/shared/environment-key.ts'));
+    assert.ok(built.inputs.includes('src/shared/official-package.ts'));
+    assert.ok(built.inputs.includes('src/shared/payload-path.ts'));
     assert.equal(built.inputs.includes('src/domains/chrome-profile.ts'), false);
     assert.equal(built.inputs.includes('src/domains/chromium-features.ts'), false);
     assert.equal(built.inputs.includes('src/domains/data-isolation.ts'), false);
@@ -201,6 +206,12 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
         ),
         false,
     );
+    for (const input of [
+        'tooling/licenses/bundled-notices.ts',
+        'tooling/licenses/canonical-inputs.ts',
+        'tooling/licenses/reviewed-vendors.json',
+    ])
+        assert.equal(built.inputs.includes(input), false, input);
     assert.ok(built.externalImports.every(isBuiltin), JSON.stringify(built.externalImports));
     for (const [file, bytes] of built.files) {
         if (/\.(?:ps1|cs)$/.test(file)) {

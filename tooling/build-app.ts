@@ -25,12 +25,9 @@ import {
     parseAppReleaseInputs,
 } from '../src/domains/app-release.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import {
-    isOfficialRelativePath,
-    type OfficialReleaseEvidence,
-    parseOfficialReleaseEvidence,
-} from '../src/shared/official-package.ts';
-import { collectBundledLicenses } from './build-plugin.ts';
+import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
+import { isPortablePayloadRelativePath } from '../src/shared/payload-path.ts';
+import { collectBundledLicenses } from './licenses/bundled-notices.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';
 import { isSemVer } from './version-policy.ts';
 
@@ -303,9 +300,10 @@ export async function generateAppFiles(options: AppBuild) {
         'pnpm-lock.yaml',
         'pnpm-workspace.yaml',
         'tooling/build-app.ts',
-        'tooling/build-plugin.ts',
+        'tooling/licenses/bundled-notices.ts',
+        'tooling/licenses/canonical-inputs.ts',
         'tooling/extract-app-zip.ps1',
-        'tooling/vendored-licenses.json',
+        'tooling/licenses/reviewed-vendors.json',
         'tooling/official-tool-catalog.json',
         ...['app-release-inputs.json', 'app-native-release.json', 'official-server-release.json'].map(
             (file) => `tooling/${file}`,
@@ -406,7 +404,7 @@ export async function stageDesktopApp(
                     if (['<define:__DCT_OFFICIAL_RELEASE__>', '<define:__DCT_TOOL_CATALOG__>'].includes(name)) continue;
                     const absolute = path.resolve(request.root, name);
                     const relative = path.relative(request.root, absolute).replaceAll('\\', '/');
-                    if (!isOfficialRelativePath(relative))
+                    if (!isPortablePayloadRelativePath(relative))
                         throw new Error('App generated source input is outside its repository.');
                     if (seen.has(relative)) continue;
                     seen.add(relative);

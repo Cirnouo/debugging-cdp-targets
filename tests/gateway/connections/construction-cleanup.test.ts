@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createGatewayCore, type GatewayConstructionCleanup } from '../src/application/plugin-runtime.ts';
+import { createGatewayCore, type GatewayConstructionCleanup } from '../../../src/gateway/core.ts';
 
 test('the trusted cleanup capability is handed out before resource acquisition and callback failure acquires nothing', async () => {
     let acquisitions = 0;

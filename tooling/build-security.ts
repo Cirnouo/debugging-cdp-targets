@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { isRecord } from '../src/shared/errors.ts';
-import { RUNTIME_LICENSE_INPUTS } from './runtime-license-policy.ts';
+import { RUNTIME_LICENSE_INPUTS } from './licenses/canonical-inputs.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const output = path.join(root, 'tooling/security/dist');

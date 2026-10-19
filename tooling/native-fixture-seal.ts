@@ -6,8 +6,8 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { readAppVersion, stageDesktopApp } from './build-app.ts';
-import { collectBundledLicenses } from './build-plugin.ts';
 import { readDistributionTree } from './distribution-audit.ts';
+import { collectBundledLicenses } from './licenses/bundled-notices.ts';
 import {
     NATIVE_FIXTURE_PATHS,
     type NativeFixtureSeal,

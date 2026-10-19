@@ -281,6 +281,56 @@ export function validateRuntimeSource(file: string, source: string) {
     const resourceOwner = file === 'src/gateway/connections/resource-owner.ts';
     const directoryLease = file === 'src/gateway/connections/directory-lease.ts';
     const connectionOwner = resourceOwner || directoryLease;
+    const core = file === 'src/gateway/core.ts';
+    const registry = file === 'src/gateway/registry.ts';
+    const gatewayService = core || registry;
+    const reviewedAmbient = new Set<Node>();
+    visit(ast, (node, parent, grandparent) => {
+        if (core && node.type === 'MemberExpression' && !node.computed && node.object.type === 'Identifier') {
+            const property = propertyName(node.property);
+            const read =
+                !(parent?.type === 'AssignmentExpression' && parent.left === node) &&
+                !(parent?.type === 'UpdateExpression' && parent.argument === node) &&
+                !(parent?.type === 'UnaryExpression' && parent.operator === 'delete');
+            if (
+                node.object.name === 'process' &&
+                ((property === 'env' &&
+                    parent?.type === 'SpreadElement' &&
+                    parent.argument === node &&
+                    grandparent?.type === 'ObjectExpression') ||
+                    (property === 'platform' &&
+                        read &&
+                        parent?.type === 'BinaryExpression' &&
+                        parent.operator === '===' &&
+                        parent.left === node &&
+                        parent.right.type === 'StringLiteral' &&
+                        parent.right.value === 'win32'))
+            )
+                reviewedAmbient.add(node.object);
+            if (
+                node.object.name === 'Date' &&
+                property === 'now' &&
+                parent?.type === 'LogicalExpression' &&
+                parent.operator === '??' &&
+                parent.right === node
+            )
+                reviewedAmbient.add(node.object);
+        }
+        if (
+            registry &&
+            node.type === 'CallExpression' &&
+            node.arguments.length === 1 &&
+            node.callee.type === 'MemberExpression' &&
+            !node.callee.computed &&
+            propertyName(node.callee.property) === 'write' &&
+            node.callee.object.type === 'MemberExpression' &&
+            !node.callee.object.computed &&
+            propertyName(node.callee.object.property) === 'stderr' &&
+            node.callee.object.object.type === 'Identifier' &&
+            node.callee.object.object.name === 'process'
+        )
+            reviewedAmbient.add(node.callee.object.object);
+    });
     const pure = domain || layer === 'shared' || gateway;
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
@@ -310,10 +360,67 @@ export function validateRuntimeSource(file: string, source: string) {
         const mutableConnection =
             resolved === 'src/gateway/connections/resource-owner.ts' ||
             resolved === 'src/gateway/connections/directory-lease.ts';
-        if (pure && !connectionOwner && mutableConnection)
+        const mutableGateway = resolved === 'src/gateway/core.ts' || resolved === 'src/gateway/registry.ts';
+        if (pure && !gatewayService && mutableGateway)
+            errors.push(`${file}: pure owners cannot depend on mutable Gateway services.`);
+        if (layer === 'adapters' && mutableGateway)
+            errors.push(`${file}: adapters cannot depend on mutable Gateway services.`);
+        if (pure && !connectionOwner && !gatewayService && mutableConnection)
             errors.push(`${file}: pure owners cannot depend on mutable connection owners.`);
         if (layer === 'adapters' && mutableConnection)
             errors.push(`${file}: adapters cannot depend on mutable connection owners.`);
+        if (gatewayService) {
+            const permittedValue = (
+                core
+                    ? [
+                          'node:crypto',
+                          'node:os',
+                          'node:path',
+                          '../adapters/cdp-router.ts',
+                          '../adapters/chrome-profile.ts',
+                          '../adapters/data-directory.ts',
+                          '../adapters/fixture-diagnostics.ts',
+                          '../adapters/mcp-bridge.ts',
+                          '../adapters/official-server.ts',
+                          '../adapters/port-reservation.ts',
+                          '../adapters/target-host.ts',
+                          '../adapters/tool-catalog.ts',
+                          '../domains/control-contract.ts',
+                          '../domains/request-failure.ts',
+                          './connections/directory-lease.ts',
+                          './diagnostics.ts',
+                          './targets/model/isolation.ts',
+                          './targets/model/launch-command.ts',
+                          '../shared/constants.ts',
+                          '../shared/errors.ts',
+                          '../application/client-context.ts',
+                          '../application/mcp-lifecycle.ts',
+                          '../application/registrations.ts',
+                          '../application/target-controller.ts',
+                          './registry.ts',
+                      ]
+                    : [
+                          './connections/resource-owner.ts',
+                          '../adapters/fixture-diagnostics.ts',
+                          '../domains/control-contract.ts',
+                          '../shared/errors.ts',
+                      ]
+            ).includes(specifier);
+            const permittedType =
+                typeOnly &&
+                (core
+                    ? ['@modelcontextprotocol/client', './connections/resource-owner.ts', '../shared/client-context.ts']
+                    : [
+                          './core.ts',
+                          './connections/directory-lease.ts',
+                          '../application/registrations.ts',
+                          '../application/mcp-lifecycle.ts',
+                          '../application/target-controller.ts',
+                          '../shared/client-context.ts',
+                      ]
+                ).includes(specifier);
+            if (!permittedValue && !permittedType) errors.push(`${file}: unapproved Core or registry dependency.`);
+        }
         if (connectionOwner) {
             const permittedType =
                 typeOnly &&
@@ -330,12 +437,18 @@ export function validateRuntimeSource(file: string, source: string) {
         if (
             gateway &&
             !connectionOwner &&
+            !gatewayService &&
             (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
         )
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);
         if (diagnosticClock && (!specifier.startsWith('.') || resolved !== 'src/domains/control-contract.ts'))
             errors.push(`${file}: Gateway diagnostics may depend only on the pure control contract.`);
-        if (pure && !diagnosticClock && (resolved === 'src/gateway/diagnostics.ts' || specifier === 'node:perf_hooks'))
+        if (
+            pure &&
+            !diagnosticClock &&
+            !core &&
+            (resolved === 'src/gateway/diagnostics.ts' || specifier === 'node:perf_hooks')
+        )
             errors.push(`${file}: pure owners cannot depend on the diagnostic clock.`);
         if (layer === 'adapters' && /^src\/(?:application|interface)\//.test(resolved))
             errors.push(`${file}: adapter depends on an upper layer.`);
@@ -383,7 +496,8 @@ export function validateRuntimeSource(file: string, source: string) {
                     errors.push(`${file}: cannot alias or compute ambient clock/process state.`);
                 ambient = property ?? ambient;
             }
-            if (ambient === 'process') errors.push(`${file}: ${layer} cannot access process state.`);
+            if (ambient === 'process' && !reviewedAmbient.has(node))
+                errors.push(`${file}: ${layer} cannot access process state.`);
             if (ambient === 'performance' || ambient === 'Date') {
                 const reviewedRead =
                     diagnosticClock &&
@@ -395,7 +509,7 @@ export function validateRuntimeSource(file: string, source: string) {
                     grandparent?.type === 'CallExpression' &&
                     grandparent.callee === parent &&
                     grandparent.arguments.length === 0;
-                if (!reviewedRead)
+                if (!reviewedRead && !reviewedAmbient.has(node))
                     errors.push(`${file}: cannot access ambient clock outside the reviewed diagnostic read.`);
             }
             if (['fetch', 'WebSocket', 'XMLHttpRequest'].includes(ambient))
@@ -446,7 +560,12 @@ export function validateRuntimeSource(file: string, source: string) {
             callee.name === 'require'
         )
             dependency(node.arguments[0]?.type === 'StringLiteral' ? node.arguments[0].value : undefined);
-        if ((domain || gateway) && object?.type === 'Identifier' && object.name === 'process')
+        if (
+            (domain || gateway) &&
+            object?.type === 'Identifier' &&
+            object.name === 'process' &&
+            !reviewedAmbient.has(object)
+        )
             errors.push(`${file}: ${layer} cannot access process state.`);
         if (
             !entry &&

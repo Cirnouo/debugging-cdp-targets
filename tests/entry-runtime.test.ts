@@ -1,155 +1,10 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
-import { mock, test } from 'node:test';
-import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
-import type { OfficialConnection } from '../src/adapters/mcp-bridge.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import type { ConnectionStatus, ControlHandler, LaunchOptions } from '../src/domains/control-contract.ts';
-import { RetainedTargetError } from '../src/gateway/targets/model/target-contract.ts';
+import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
-
-function connectionStatus(controller: ControlHandler, connectionId: string): ConnectionStatus {
-    const status = controller.status(connectionId);
-    assert.ok('connectionId' in status);
-    return status;
-}
-
-async function fixture({
-    failOfficialClose = false,
-    failCloseUntil = 2,
-    mismatchCatalog = false,
-    failLaunch = '',
-    retainLaunch = false,
-    failTargetClose = false,
-    waitForCancellation = false,
-    timeoutCall = false,
-} = {}) {
-    let connections = 0;
-    let closes = 0;
-    let calls = 0;
-    let routers = 0;
-    let routerCloses = 0;
-    const received: { url: string; arguments: Record<string, unknown> }[] = [];
-    const launches: LaunchOptions[] = [];
-    const exits: (() => void)[] = [];
-    const targets: EventEmitter[] = [];
-    let releaseLaunch: () => void = () => {};
-    let targetCloses = 0;
-    let targetCloseFails = failTargetClose;
-    const runtime = await createCoreFixture({
-        loadCatalog: async (tools = []) =>
-            createToolCatalog({
-                version: '1.11.0',
-                tools: tools.map((tool) => ({ name: tool.name, requires: {}, variants: [tool] })),
-            }),
-        createRouter: async () => ({
-            url: `http://127.0.0.1:${31000 + routers++}`,
-            isBusy: () => false,
-            setTarget: () => {},
-            clearTarget: () => {},
-            close: async () => {
-                routerCloses += 1;
-            },
-        }),
-        createHost: () => ({
-            launch: async (options, context) => {
-                if (options.launch.executable === 'wait-cleanup') {
-                    await new Promise<void>((resolve) => {
-                        releaseLaunch = resolve;
-                    });
-                    context?.signal?.throwIfAborted();
-                }
-                if (waitForCancellation && context?.signal) {
-                    const signal = context.signal;
-                    if (!signal.aborted)
-                        await new Promise<void>((resolve) =>
-                            signal.addEventListener('abort', () => resolve(), { once: true }),
-                        );
-                    throw signal.reason;
-                }
-                launches.push(options);
-                if (options.launch.executable === failLaunch && !retainLaunch) throw new Error('Launch failed.');
-                const child = Object.assign(new EventEmitter(), { exitCode: null as number | null, signalCode: null });
-                targets.push(child);
-                const target = {
-                    processId: 42 + targets.length,
-                    port: options.exactPort ?? 9222,
-                    executablePath: process.execPath,
-                    startedAtUtc: '2026-10-02T00:00:00Z',
-                    targetKind: 'chrome' as const,
-                    child,
-                    launchDefinition: {
-                        executablePath: process.execPath,
-                        arguments: ['--port=9222'],
-                        cwd: process.cwd(),
-                    },
-                };
-                context?.onCreated?.(target);
-                if (options.launch.executable === failLaunch && retainLaunch)
-                    throw new RetainedTargetError('Rollback failed.', target);
-                return target;
-            },
-            close: async (target) => {
-                targetCloses++;
-                if (targetCloseFails) return false;
-                const child = targets[target.processId - 43];
-                assert.ok(child);
-                Object.assign(child, { exitCode: 0 });
-                child.emit('exit', 0);
-                return true;
-            },
-        }),
-        createConnection: async (url): Promise<OfficialConnection> => {
-            connections += 1;
-            return {
-                tools: [
-                    {
-                        name: mismatchCatalog && connections > 1 ? 'changed_pages' : 'list_pages',
-                        inputSchema: { type: 'object', properties: {} },
-                    },
-                ],
-                call: async (_name, arguments_) => {
-                    received.push({ url, arguments: arguments_ });
-                    calls += 1;
-                    if (timeoutCall && url.endsWith(':31001'))
-                        throw new SdkError(SdkErrorCode.RequestTimeout, 'Request timed out.');
-                    return { content: [] };
-                },
-                close: async () => {
-                    closes += 1;
-                    if (failOfficialClose && closes >= 2 && closes <= failCloseUntil)
-                        throw new Error('Official normal close timed out.');
-                },
-                onExit: (listener) => {
-                    exits.push(listener);
-                },
-                rootsChanged: async () => {},
-            };
-        },
-    });
-    const controller = runtime.controller;
-    assert.ok(runtime);
-    return {
-        runtime,
-        controller,
-
-        targets,
-        exits,
-        received,
-        launches,
-        routerCloses: () => routerCloses,
-        counts: () => ({ connections, closes, calls }),
-        releaseLaunch: () => releaseLaunch(),
-        targetCloses: () => targetCloses,
-        allowTargetClose: () => {
-            targetCloseFails = false;
-        },
-    };
-}
+import { connectionStatus, createConnectionRuntimeFixture, createCoreFixture } from './fixtures/core-runtime.ts';
 
 test('Close ends upstream and later start reuses the entry without host reconnection', async () => {
-    const f = await fixture();
+    const f = await createConnectionRuntimeFixture();
     try {
         assert.deepEqual(f.counts(), { connections: 1, closes: 1, calls: 0 });
         const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
@@ -168,29 +23,8 @@ test('Close ends upstream and later start reuses the entry without host reconnec
     assert.equal(f.runtime.core.admin.cleanupState(), 'closed');
 });
 
-test('gateway disconnect begins cleanup of other connections while one permission operation still waits', async () => {
-    const f = await fixture();
-    await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'ready' } });
-    assert.ok(f.runtime.control);
-    await f.runtime.control({
-        isolation: { mode: 'none' },
-        action: 'start',
-        requestId: 'waiting',
-        launch: { executable: 'wait-cleanup' },
-    });
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    const closed = f.runtime.cleanup();
-    try {
-        await new Promise<void>((resolve) => setImmediate(resolve));
-        assert.equal(f.targetCloses(), 1);
-    } finally {
-        f.releaseLaunch();
-        await closed;
-    }
-});
-
 test('native cancellation that completed cleanup remains cancelled through the runtime boundary', async () => {
-    const f = await fixture({ waitForCancellation: true });
+    const f = await createConnectionRuntimeFixture({ waitForCancellation: true });
     try {
         assert.ok(f.runtime.control);
         const accepted = await f.runtime.control({
@@ -216,7 +50,7 @@ test('native cancellation that completed cleanup remains cancelled through the r
 });
 
 test('a settled official error does not close a healthy connection or invent an application exit', async () => {
-    const f = await fixture({ timeoutCall: true });
+    const f = await createConnectionRuntimeFixture({ timeoutCall: true });
     try {
         const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
@@ -257,41 +91,8 @@ test('a settled official error does not close a healthy connection or invent an 
     }
 });
 
-test('an official cleanup failure after actual target exit removes routing and retries through gateway cleanup', async () => {
-    const f = await fixture({ failOfficialClose: true });
-    try {
-        const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
-        assert.ok(active.sessionId);
-        await assert.rejects(
-            f.controller.stop({ connectionId: active.connectionId, sessionId: active.sessionId, disposition: 'Close' }),
-            /timed out/,
-        );
-        assert.throws(() => f.controller.status(active.connectionId), /closed/);
-        const other = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'next' } });
-        assert.notEqual(other.connectionId, active.connectionId);
-        await assert.rejects(
-            f.controller.stop({ connectionId: active.connectionId, sessionId: active.sessionId, disposition: 'Keep' }),
-            /closed/,
-        );
-        await assert.rejects(
-            f.controller.stop({
-                connectionId: active.connectionId,
-                sessionId: active.sessionId,
-                disposition: 'Close',
-            }),
-            /closed/,
-        );
-        assert.equal(f.counts().closes, 2, 'Closed routes must not retry failed resources automatically.');
-        assert.equal(connectionStatus(f.controller, other.connectionId).status, 'active');
-        await f.runtime.cleanup();
-        assert.equal(f.counts().closes, 4);
-    } finally {
-        await f.runtime.cleanup();
-    }
-});
-
 test('unexpected upstream exit gates calls without announcing process exit', async () => {
-    const f = await fixture();
+    const f = await createConnectionRuntimeFixture();
     try {
         const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         f.exits[0]?.();
@@ -351,7 +152,7 @@ test('catalog validation failure closes acquired resources without launching a t
 });
 
 test('one gateway allocates at least four independent connections', async () => {
-    const f = await fixture();
+    const f = await createConnectionRuntimeFixture();
     try {
         const started = await Promise.all(
             Array.from({ length: 4 }, (_, index) =>
@@ -368,7 +169,7 @@ test('one gateway allocates at least four independent connections', async () => 
 });
 
 test('parallel routes reach separate upstreams, strip routing, and preserve inputs', async () => {
-    const f = await fixture();
+    const f = await createConnectionRuntimeFixture();
     try {
         const started = await Promise.all(
             Array.from({ length: 4 }, (_, index) =>
@@ -415,7 +216,7 @@ test('parallel routes reach separate upstreams, strip routing, and preserve inpu
 });
 
 test('malformed and stale routes fail before official tool invocation', async () => {
-    const f = await fixture();
+    const f = await createConnectionRuntimeFixture();
     try {
         const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         for (const routing of [
@@ -438,7 +239,7 @@ test('malformed and stale routes fail before official tool invocation', async ()
 });
 
 test('failed startup rolls back one provisional connection while retained startup carries retry IDs', async () => {
-    const f = await fixture({ failLaunch: 'bad' });
+    const f = await createConnectionRuntimeFixture({ failLaunch: 'bad' });
     try {
         const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'good' } });
         await assert.rejects(
@@ -454,7 +255,11 @@ test('failed startup rolls back one provisional connection while retained startu
     } finally {
         await f.runtime.cleanup();
     }
-    const retained = await fixture({ failLaunch: 'bad', retainLaunch: true, failTargetClose: true });
+    const retained = await createConnectionRuntimeFixture({
+        failLaunch: 'bad',
+        retainLaunch: true,
+        failTargetClose: true,
+    });
     try {
         await retained.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'good' } });
         await assert.rejects(
@@ -490,7 +295,7 @@ test('failed startup rolls back one provisional connection while retained startu
 });
 
 test('live restart preserves the selected connection and original profile across independent target runs', async () => {
-    const f = await fixture();
+    const f = await createConnectionRuntimeFixture();
     try {
         const first = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
         const second = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'other' } });
@@ -531,124 +336,4 @@ test('live restart preserves the selected connection and original profile across
     } finally {
         await f.runtime.cleanup();
     }
-});
-
-test('disconnect cleanup continues across a failed official Close', async () => {
-    const f = await fixture({ failOfficialClose: true });
-    await Promise.all(
-        Array.from({ length: 4 }, () =>
-            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
-        ),
-    );
-    await assert.rejects(f.runtime.cleanup(), /cleanup failed/);
-    await f.runtime.cleanup();
-    assert.equal(f.counts().closes, 6, 'Gateway cleanup retries its failed official resource once.');
-    assert.equal(f.routerCloses(), 5);
-});
-
-test('target launch failure never acquires an official child or retains a public connection', async () => {
-    const f = await fixture({ failLaunch: 'bad', failOfficialClose: true });
-    try {
-        await assert.rejects(
-            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'bad' } }),
-            /Launch failed/,
-        );
-        const aggregate = f.controller.status();
-        assert.ok('connections' in aggregate);
-        assert.equal(aggregate.connections.length, 0);
-        assert.deepEqual(f.counts(), { connections: 1, closes: 1, calls: 0 });
-        assert.equal(f.launches.length, 1);
-        assert.equal(f.routerCloses(), 2);
-    } finally {
-        await f.runtime.cleanup();
-    }
-});
-
-test('a catalog mismatch retires its actual target and keeps failed upstream disposal in the gateway ledger', async () => {
-    const f = await fixture({ mismatchCatalog: true, failOfficialClose: true, failCloseUntil: 2 });
-    try {
-        await assert.rejects(
-            f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
-            /timed out/,
-        );
-        assert.equal(f.launches.length, 1);
-        assert.equal(f.targets[0]?.listenerCount('exit'), 0);
-        const aggregate = f.controller.status();
-        assert.ok('connections' in aggregate);
-        assert.equal(aggregate.connections.length, 0);
-        assert.equal(f.counts().closes, 2);
-        await f.runtime.cleanup();
-        assert.equal(f.counts().closes, 3);
-    } finally {
-        await f.runtime.cleanup();
-    }
-});
-
-test('catalog bootstrap attempts its router disposal even when official disposal needs a retry', async () => {
-    const events: string[] = [];
-    let closeAttempts = 0;
-    await assert.rejects(
-        createCoreFixture({
-            createRouter: async () => ({
-                url: 'http://127.0.0.1:31000',
-                isBusy: () => false,
-                setTarget: () => {},
-                clearTarget: () => {},
-                close: async () => {
-                    events.push('router-close');
-                },
-            }),
-            createConnection: async () => ({
-                tools: [],
-                call: async () => ({ content: [] }),
-                close: async () => {
-                    events.push('upstream-close');
-                    if (++closeAttempts === 1) throw new Error('Catalog normal close failed.');
-                },
-                onExit: () => {},
-                rootsChanged: async () => {},
-            }),
-        }),
-        /Catalog normal close failed/,
-    );
-    assert.equal(closeAttempts, 2);
-    assert.deepEqual(events, ['upstream-close', 'router-close', 'upstream-close']);
-});
-
-test('catalog cleanup reports a persistent official disposal failure after attempting its router', async () => {
-    let closeAttempts = 0;
-    let routerCloses = 0;
-    const diagnostics: string[] = [];
-    const observing = mock.method(process.stderr, 'write', (chunk: unknown) => {
-        diagnostics.push(String(chunk));
-        return true;
-    });
-    await assert.rejects(
-        createCoreFixture({
-            createRouter: async () => ({
-                url: 'http://127.0.0.1:31000',
-                isBusy: () => false,
-                setTarget: () => {},
-                clearTarget: () => {},
-                close: async () => {
-                    routerCloses += 1;
-                },
-            }),
-            createConnection: async () => ({
-                tools: [],
-                call: async () => ({ content: [] }),
-                close: async () => {
-                    closeAttempts += 1;
-                    throw new Error('Catalog close still failed.');
-                },
-                onExit: () => {},
-                rootsChanged: async () => {},
-            }),
-        }),
-        /Catalog close still failed/,
-    );
-    observing.mock.restore();
-    assert.equal(closeAttempts, 2);
-    assert.equal(routerCloses, 1);
-    assert.deepEqual(diagnostics, []);
 });
