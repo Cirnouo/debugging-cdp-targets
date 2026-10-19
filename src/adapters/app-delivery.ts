@@ -11,7 +11,7 @@ import {
 } from '../domains/app-deployment.ts';
 import type { AppReleaseFile } from '../domains/app-release.ts';
 import { isRecord } from '../shared/errors.ts';
-import { isOfficialRelativePath } from '../shared/official-package.ts';
+import { isPortablePayloadRelativePath } from '../shared/payload-path.ts';
 import { readRegularFile } from './file-evidence.ts';
 
 function matches(bytes: Buffer, evidence: { bytes: number; sha256: string }): boolean {
@@ -31,7 +31,7 @@ export async function verifyAppReleaseTree(directory: string, inventory: readonl
     const expected = new Map<string, AppReleaseFile>();
     const directories = new Set<string>();
     for (const file of inventory) {
-        if (!isOfficialRelativePath(file.path) || expected.has(file.path))
+        if (!isPortablePayloadRelativePath(file.path) || expected.has(file.path))
             throw new Error('Invalid App release inventory.');
         expected.set(file.path, file);
         for (let parent = path.posix.dirname(file.path); parent !== '.'; parent = path.posix.dirname(parent))
@@ -199,7 +199,7 @@ export async function verifyDeploymentPayload(
             if (prefix === '' && name === 'payload-manifest.json') continue;
             const relative = `${prefix}${name}`;
             const entry = inventory.get(relative);
-            if (!entry || !isOfficialRelativePath(name) || name.includes('/') || seen.has(relative))
+            if (!entry || !isPortablePayloadRelativePath(name) || name.includes('/') || seen.has(relative))
                 throw new Error('Unexpected, aliased or duplicate payload entry.');
             seen.add(relative);
             const full = path.join(current, name);

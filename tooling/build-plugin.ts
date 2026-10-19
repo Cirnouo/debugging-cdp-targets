@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { isOfficialRelativePath } from '../src/shared/official-package.ts';
+import { isPortablePayloadRelativePath } from '../src/shared/payload-path.ts';
 import {
     parsePluginMetadata,
     readDistributionTree,
@@ -122,7 +122,7 @@ export async function syncPluginFiles(
     options: { check?: boolean } = {},
 ) {
     for (const name of files.keys())
-        if (!isOfficialRelativePath(name)) throw new Error(`Unsafe generated output path: ${name}`);
+        if (!isPortablePayloadRelativePath(name)) throw new Error(`Unsafe generated output path: ${name}`);
     const owned = path.resolve(directory);
     if (!(await lstat(owned)).isDirectory() || path.relative(owned, await realpath(owned)) !== '')
         throw new Error('Generated output directory must not be linked.');
