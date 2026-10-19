@@ -16,6 +16,12 @@ local `AGENTS.md` files. READMEs describe current placement; AGENTS and policies
 govern implementation. The source retains technical layers alongside the delivered
 Gateway argument, supplied target model and diagnostic owners in `src/gateway/` and
 [Host payload proof](../../src/host-plugins/README.md) in `src/host-plugins/`.
+The exact `gateway/connections/resource-owner.ts` retains resource generations and
+`directory-lease.ts` retains the connection-level lease across sessions, pending
+acquisition, successor holds and cleanup retries. These complete mutable algorithms
+use only their exact reviewed type/adapter capabilities; unknown Gateway files
+remain pure. Core keeps registry, generation fences, execution/context and cleanup/
+retry joins; target-controller and adapters retain actual acquisition/exit and I/O.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend
 only on the exact relative isolation.ts and launch-command.ts model owners in

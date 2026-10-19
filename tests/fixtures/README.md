@@ -1,5 +1,18 @@
 # Test fixtures
 
+`connection-directory-runtime.ts` exports createDirectoryRuntimeFixture, deferred,
+tick and route for the connection lifetime, operation evidence and directory
+admission suites. It composes real Core/DataDirectoryRegistry over controlled
+ControllerHost/router/official boundaries, keeping Application private and all
+setup/support/teardown assertions and expectCleanupFailure cleanup branches.
+Regression-case assertion bodies remain in the three suites. This support differs
+from target-host.ts's real createTargetHost fake; neither fixture copies the other.
+The reviewed intermediate root location precedes the final
+`fixtures/gateway/connection-directory-runtime.ts` relocation in the maintained
+[content plan](../../.superpowers/plans/2026-10-18-repository-content-reorganization.md).
+That later move must update suite imports and both affected fixture maps together;
+core-runtime.ts stays at its current location until its own migration.
+
 `target-host.ts` exports createTargetHostFixture, the shared controlled target-host
 I/O boundary for the Gateway profile and launch suites. It preserves synthetic
 process/listener evidence, async profile availability, argv observations and

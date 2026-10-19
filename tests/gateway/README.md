@@ -4,10 +4,13 @@
     nonmutation, official route removal, original argument identity and malformed
     input refusal. Its fixtures are local literals; no I/O is required.
 
-- `targets/` owns seven explicit suites for supplied endpoint identity, pure
+- `connections/` owns twenty directory lifetime and five explicit operation
+    evidence cases over the real Core/DataDirectoryRegistry and controlled I/O.
+- `targets/` owns eight explicit suites for supplied endpoint identity, pure
     launch/isolation/native argument values and controlled profile/launch effects;
     candidate chooser and mutable target ownership keep their current owners.
+    directory-admission keeps its two complete pre-acquisition runtime cases.
 
-Both default and coverage commands select all eight exact suites once. HTTP admission
+Both default and coverage commands select all eleven exact suites once. HTTP admission
 remains in the root `mcp-http-policy.test.ts`; live authentication, continuation
 and execution remain covered by their existing integration suites.

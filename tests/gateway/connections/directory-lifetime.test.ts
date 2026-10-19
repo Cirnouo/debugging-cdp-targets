@@ -1,227 +1,9 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
-import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { test } from 'node:test';
-import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import type { ConnectionStatus, ControlContext, LaunchOptions } from '../src/domains/control-contract.ts';
-import type { DataIsolationEvidence } from '../src/gateway/targets/model/isolation.ts';
-import { resolveLaunchDefinition } from '../src/gateway/targets/model/launch-command.ts';
-import { isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
-
-function deferred() {
-    let resolve = () => {};
-    const promise = new Promise<void>((done) => {
-        resolve = done;
-    });
-    return { promise, resolve };
-}
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-
-class Application extends EventEmitter {
-    exitCode: number | null = null;
-    signalCode: string | null = null;
-    waitForResourcesClosed?: () => Promise<void>;
-    exit() {
-        this.exitCode = 0;
-        this.emit('exit');
-    }
-    onMonitorError(listener: () => void) {
-        this.on('monitor-error', listener);
-        return () => {
-            this.off('monitor-error', listener);
-        };
-    }
-}
-
-async function fixture(
-    t: import('node:test').TestContext,
-    options: {
-        directories?: DataDirectoryRegistry;
-        beforeCreation?: Promise<void>;
-        afterCreation?: Promise<void>;
-        replacementCreation?: Promise<void>;
-        failLaunch?: number;
-        failClose?: boolean;
-        failUpstreamClose?: boolean;
-        replacementRouter?: Promise<void>;
-        profileAvailable?: (directory: string) => Promise<boolean>;
-        resources?: (index: number) => Promise<void>;
-        expectCleanupFailure?: boolean;
-    } = {},
-) {
-    const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-isolation-runtime-')));
-
-    const launchEntered = deferred();
-    const applications: Application[] = [];
-    const launches: { options: LaunchOptions; directory?: string; arguments: string[] }[] = [];
-    const disposal: string[] = [];
-    const directories = options.directories ?? new DataDirectoryRegistry();
-    const tools = [{ name: 'list_pages', inputSchema: { type: 'object' as const, properties: {} } }];
-    let routers = 0;
-    let upstreams = 0;
-    let failClose = options.failClose ?? false;
-    let failUpstreamClose = options.failUpstreamClose ?? false;
-    const runtime = await createCoreFixture({
-        dataDirectories: directories,
-        ...(options.profileAvailable ? { profileAvailable: options.profileAvailable } : {}),
-        loadCatalog: async () =>
-            createToolCatalog({
-                version: '1.11.0',
-                tools: [{ name: 'list_pages', requires: {}, variants: tools }],
-            }),
-        createRouter: async () => {
-            routers++;
-            if (routers > 2) await options.replacementRouter;
-            return {
-                url: `http://127.0.0.1:${31000 + routers}`,
-                setTarget: () => {},
-                clearTarget: () => disposal.push('route-revoked'),
-                isBusy: () => false,
-                close: async () => {
-                    disposal.push('router');
-                },
-            };
-        },
-        createHost: () => ({
-            launch: async (launchOptions, context) => {
-                launchEntered.resolve();
-                await options.beforeCreation;
-                const args =
-                    context?.dataDirectory === undefined
-                        ? [...(launchOptions.launch.args ?? [])]
-                        : resolveLaunchDefinition(
-                              launchOptions.launch,
-                              launchOptions.exactPort ?? 9333,
-                              process.env,
-                              context.dataDirectory,
-                          ).arguments;
-                launches.push({
-                    options: launchOptions,
-                    ...(context?.dataDirectory === undefined ? {} : { directory: context.dataDirectory }),
-                    arguments: args,
-                });
-                if (options.failLaunch === launches.length) throw new Error('Launch failed before creation.');
-                const child = new Application();
-                if (options.resources) {
-                    const resources = options.resources(applications.length);
-                    child.waitForResourcesClosed = () => {
-                        disposal.push('target-resources');
-                        return resources;
-                    };
-                }
-                applications.push(child);
-                const target = {
-                    processId: 1000 + applications.length,
-                    port: launchOptions.exactPort ?? 9333,
-                    executablePath: process.execPath,
-                    startedAtUtc: '2026-10-07T00:00:00Z',
-                    targetKind: 'generic-cdp' as const,
-                    child,
-                    launchDefinition: { executablePath: process.execPath, arguments: args, cwd: process.cwd() },
-                };
-                context?.onCreated?.(target);
-                if (launches.length > 1) await options.replacementCreation;
-                await options.afterCreation;
-                context?.signal?.throwIfAborted();
-                return target;
-            },
-            close: async (target) => {
-                if (failClose) return false;
-                const child = applications[target.processId - 1001];
-                assert.ok(child);
-                child.exit();
-                return true;
-            },
-        }),
-        createConnection: async () => {
-            const catalog = ++upstreams === 1;
-            return {
-                tools,
-                call: async () => ({ content: [] }),
-                rootsChanged: async () => {},
-                onExit: () => {},
-                close: async () => {
-                    if (!catalog) disposal.push('upstream');
-                    if (!catalog && failUpstreamClose) throw new Error(`EACCES private path ${parent}`);
-                },
-            };
-        },
-    });
-    assert.ok(runtime);
-    assert.ok(runtime.control);
-    const control = runtime.control;
-    t.after(async () => {
-        failClose = false;
-        failUpstreamClose = false;
-        for (const child of applications) if (child.exitCode === null) child.exit();
-        if (options.expectCleanupFailure) await assert.rejects(runtime.cleanup(), /cleanup failed/);
-        else await runtime.cleanup();
-        await rm(parent, { recursive: true, force: true });
-    });
-    const evidence: DataIsolationEvidence[] = [];
-    const updates = new Set<() => void>();
-    const context: ControlContext = {
-        onIsolation: (value) => {
-            evidence.push(value);
-            for (const update of updates) update();
-        },
-    };
-    function dataOptions(cleanup: 'retain' | 'delete-on-release' = 'delete-on-release'): LaunchOptions {
-        return {
-            launch: { executable: process.execPath, args: ['--data={dataDir}'] },
-            isolation: { mode: 'data-dir', directory: { kind: 'new', parent, name: 'profile' }, cleanup },
-        };
-    }
-    async function waitState(state: string) {
-        const latest = evidence.at(-1);
-        if (latest?.mode === 'data-dir' && latest.state === state) return;
-        await new Promise<void>((resolve) => {
-            const update = () => {
-                const current = evidence.at(-1);
-                if (current?.mode === 'data-dir' && current.state === state) {
-                    updates.delete(update);
-                    resolve();
-                }
-            };
-            updates.add(update);
-            update();
-        });
-    }
-    return {
-        runtime,
-        directories,
-        disposal,
-
-        control,
-        parent,
-        applications,
-        launches,
-        context,
-        evidence,
-        dataOptions,
-        waitState,
-        state: () => {
-            const current = evidence.at(-1);
-            return current?.mode === 'data-dir' ? current.state : undefined;
-        },
-        launchEntered: launchEntered.promise,
-        allowUpstream: () => {
-            failUpstreamClose = false;
-        },
-        allowClose: () => {
-            failClose = false;
-        },
-    };
-}
-
-function route(connection: ConnectionStatus) {
-    assert.ok(connection.sessionId);
-    return { connectionId: connection.connectionId, sessionId: connection.sessionId };
-}
+import { DataDirectoryRegistry } from '../../../src/adapters/data-directory.ts';
+import { createDirectoryRuntimeFixture, deferred, route, tick } from '../../fixtures/connection-directory-runtime.ts';
 
 for (const action of ['close', 'keep', 'unexpected', 'disconnect'] as const) {
     test(`native descendant resources retain directory after root exit during ${action}`, {
@@ -229,7 +11,7 @@ for (const action of ['close', 'keep', 'unexpected', 'disconnect'] as const) {
     }, async (t) => {
         const resources = deferred();
         t.after(() => resources.resolve());
-        const f = await fixture(t, { resources: () => resources.promise });
+        const f = await createDirectoryRuntimeFixture(t, { resources: () => resources.promise });
         const active = await f.runtime.controller.start(f.dataOptions(), f.context);
         const held = f.evidence.at(-1);
         assert.ok(held?.mode === 'data-dir');
@@ -272,7 +54,9 @@ test('restart waits for old native resource users before creating its successor 
 }, async (t) => {
     const resources = deferred();
     t.after(() => resources.resolve());
-    const f = await fixture(t, { resources: (index) => (index === 0 ? resources.promise : Promise.resolve()) });
+    const f = await createDirectoryRuntimeFixture(t, {
+        resources: (index) => (index === 0 ? resources.promise : Promise.resolve()),
+    });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -300,7 +84,10 @@ test('late rollback after cancellation holds its native resource claim after act
         creation.resolve();
         resources.resolve();
     });
-    const f = await fixture(t, { beforeCreation: creation.promise, resources: () => resources.promise });
+    const f = await createDirectoryRuntimeFixture(t, {
+        beforeCreation: creation.promise,
+        resources: () => resources.promise,
+    });
     const abort = new AbortController();
     const pending = f.runtime.controller.start(f.dataOptions(), { ...f.context, signal: abort.signal });
     void pending.catch(() => {});
@@ -324,14 +111,14 @@ test('late rollback after cancellation holds its native resource claim after act
     await f.waitState('deleted');
 });
 
-test('failed native resource observation preserves a dead route and the held directory claim', {
+test('failed native resource observation removes the route and retains the held directory claim', {
     timeout: 10_000,
 }, async (t) => {
     let rejectResources: (error: Error) => void = () => {};
     const resources = new Promise<void>((_resolve, reject) => {
         rejectResources = reject;
     });
-    const f = await fixture(t, { resources: () => resources, expectCleanupFailure: true });
+    const f = await createDirectoryRuntimeFixture(t, { resources: () => resources, expectCleanupFailure: true });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -350,32 +137,6 @@ test('failed native resource observation preserves a dead route and the held dir
     assert.ok(!summary.includes(held.path));
 });
 
-test('prevalidation rejects missing binding and invalid official options before directory acquisition', async (t) => {
-    const f = await fixture(t);
-    const options = f.dataOptions();
-    await assert.rejects(
-        f.runtime.controller.start({ ...options, launch: { executable: process.execPath } }),
-        /binding|dataDir/i,
-    );
-    await assert.rejects(f.runtime.controller.start({ ...options, mcpArgs: ['--browserUrl=http://example.com'] }));
-    await assert.rejects(lstat(path.join(f.parent, 'profile')), { code: 'ENOENT' });
-    assert.equal(f.launches.length, 0);
-});
-
-test('cancellation before acquisition leaves no directory evidence or filesystem effects', async (t) => {
-    const f = await fixture(t);
-    const abort = new AbortController();
-    const reason = new Error('cancelled before start');
-    abort.abort(reason);
-    await assert.rejects(
-        f.runtime.controller.start(f.dataOptions(), { ...f.context, signal: abort.signal }),
-        (error: unknown) => error === reason,
-    );
-    assert.deepEqual(f.evidence, []);
-    assert.deepEqual(await readdir(f.parent), []);
-    assert.equal(f.launches.length, 0);
-});
-
 test('cancelled directory inspection holds acquisition until it settles without native launch', async (t) => {
     const gate = deferred();
     t.after(() => gate.resolve());
@@ -387,7 +148,7 @@ test('cancelled directory inspection holds acquisition until it settles without 
             },
         },
     });
-    const f = await fixture(t, { directories });
+    const f = await createDirectoryRuntimeFixture(t, { directories });
     const abort = new AbortController();
     const reason = new Error('cancelled during directory inspection');
     const pending = f.runtime.controller.start(f.dataOptions(), { ...f.context, signal: abort.signal });
@@ -407,27 +168,8 @@ test('cancelled directory inspection holds acquisition until it settles without 
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
 
-test('post-acquisition inspection failure preserves actual path and bounded cleanup evidence', async (t) => {
-    const directories = new DataDirectoryRegistry({
-        io: {
-            entries: async (directory) => {
-                throw new Error(`EACCES private inspection ${directory}`);
-            },
-        },
-    });
-    const f = await fixture(t, { directories });
-    await assert.rejects(f.runtime.controller.start(f.dataOptions(), f.context), /directory-inspection-failed/);
-    const result = f.evidence.at(-1);
-    assert.ok(result?.mode === 'data-dir');
-    assert.equal(result.path, path.join(f.parent, 'profile'));
-    assert.equal(result.state, 'deleted');
-    assert.equal(result.nonempty, undefined);
-    assert.equal(f.launches.length, 0);
-    await assert.rejects(lstat(result.path), { code: 'ENOENT' });
-});
-
 test('connection isolation is allocated once, held across restart and deleted after final Close', async (t) => {
-    const f = await fixture(t);
+    const f = await createDirectoryRuntimeFixture(t);
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -444,7 +186,7 @@ test('connection isolation is allocated once, held across restart and deleted af
 });
 
 test('Keep retains the lease until actual exit applies whole-directory policy', async (t) => {
-    const f = await fixture(t);
+    const f = await createDirectoryRuntimeFixture(t);
     const selected = path.join(f.parent, 'existing');
     await mkdir(selected);
     await writeFile(path.join(selected, 'prior'), 'pre-existing');
@@ -469,7 +211,7 @@ test('Keep retains the lease until actual exit applies whole-directory policy', 
 });
 
 test('failed restart retains directory until old resources successfully retry without restoring route', async (t) => {
-    const f = await fixture(t, { failUpstreamClose: true });
+    const f = await createDirectoryRuntimeFixture(t, { failUpstreamClose: true });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -483,7 +225,7 @@ test('failed restart retains directory until old resources successfully retry wi
 });
 
 test('failed successor with no live app releases the directory after restart finishes', async (t) => {
-    const f = await fixture(t, { failLaunch: 2 });
+    const f = await createDirectoryRuntimeFixture(t, { failLaunch: 2 });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -495,7 +237,7 @@ test('failed successor with no live app releases the directory after restart fin
 test('late created app after cancelled acquisition blocks deletion until rollback actual exit', async (t) => {
     const gate = deferred();
     t.after(() => gate.resolve());
-    const f = await fixture(t, { beforeCreation: gate.promise, failClose: true });
+    const f = await createDirectoryRuntimeFixture(t, { beforeCreation: gate.promise, failClose: true });
     const abort = new AbortController();
     const pending = f.runtime.controller.start(f.dataOptions(), { ...f.context, signal: abort.signal });
     void pending.catch(() => {});
@@ -514,7 +256,7 @@ test('late created app after cancelled acquisition blocks deletion until rollbac
 });
 
 test('unconfirmed observation and failed Close preserve ownership and directory evidence', async (t) => {
-    const f = await fixture(t, { failClose: true });
+    const f = await createDirectoryRuntimeFixture(t, { failClose: true });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -527,72 +269,10 @@ test('unconfirmed observation and failed Close preserve ownership and directory 
     await f.waitState('deleted');
 });
 
-test('none exposes only explicit mode and summaries omit directory and raw cleanup errors', async (t) => {
-    const f = await fixture(t, { failUpstreamClose: true });
-    const active = await f.runtime.controller.start(
-        { launch: { executable: process.execPath }, isolation: { mode: 'none' } },
-        f.context,
-    );
-    assert.deepEqual(f.evidence, [{ mode: 'none' }]);
-    assert.equal('isolation' in active, false);
-    assert.deepEqual(await import('node:fs/promises').then((fs) => fs.readdir(f.parent)), []);
-    f.applications[0]?.exit();
-    await tick();
-    await tick();
-    const text = JSON.stringify(await f.control({ action: 'status' }));
-    assert.ok(!text.includes(f.parent));
-    assert.ok(!text.includes('EACCES private'));
-});
-
-test('idempotent start keeps original directory metadata after terminal actual exit without another notice', async (t) => {
-    const f = await fixture(t);
-    const request = {
-        action: 'start' as const,
-        requestId: 'same-start',
-        ...f.dataOptions('retain'),
-    };
-    const accepted = await f.control(request);
-    assert.ok(typeof accepted.operationId === 'string');
-    let snapshot = accepted;
-    while (snapshot.state !== 'succeeded') {
-        const waited = await f.control({
-            action: 'wait',
-            operationId: accepted.operationId,
-            cursor: typeof snapshot.cursor === 'number' ? snapshot.cursor : 0,
-        });
-        assert.ok(isRecord(waited.operation));
-        snapshot = waited.operation;
-    }
-    assert.ok(isRecord(snapshot.isolation));
-    const original = structuredClone(snapshot);
-    const retry = await f.control(request);
-    assert.equal(retry.operationId, accepted.operationId);
-    assert.equal(f.launches.length, 1);
-    assert.ok(typeof snapshot.connectionId === 'string' && typeof snapshot.sessionId === 'string');
-    const selected = await f.control({
-        action: 'status',
-        connectionId: snapshot.connectionId,
-        include: ['configuration'],
-    });
-    assert.deepEqual(selected.isolation, snapshot.isolation);
-    f.applications[0]?.exit();
-    for (let attempt = 0; attempt < 50; attempt++) {
-        snapshot = await f.control({ action: 'status', operationId: accepted.operationId });
-        if (isRecord(snapshot.isolation) && snapshot.isolation.state === 'retained') break;
-        await tick();
-    }
-    assert.ok(isRecord(snapshot.isolation));
-    assert.equal(snapshot.isolation.state, 'retained');
-    assert.equal(snapshot.cursor, original.cursor);
-    assert.deepEqual(snapshot.result, original.result);
-    assert.equal(snapshot.state, original.state);
-    assert.equal(f.runtime.core.admin.operations().length, 1);
-});
-
 test('confirmed app exit while host acquisition is pending keeps the lease until launch settles', async (t) => {
     const gate = deferred();
     t.after(() => gate.resolve());
-    const f = await fixture(t, { afterCreation: gate.promise });
+    const f = await createDirectoryRuntimeFixture(t, { afterCreation: gate.promise });
     const pending = f.runtime.controller.start(f.dataOptions(), f.context);
     void pending.catch(() => {});
     await f.launchEntered;
@@ -611,7 +291,7 @@ test('confirmed app exit while host acquisition is pending keeps the lease until
 test('actual successor exit racing restart completion wins final release after the successor hold', async (t) => {
     const gate = deferred();
     t.after(() => gate.resolve());
-    const f = await fixture(t, { replacementCreation: gate.promise });
+    const f = await createDirectoryRuntimeFixture(t, { replacementCreation: gate.promise });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -631,7 +311,7 @@ test('actual successor exit racing restart completion wins final release after t
 test('cancelled restart in the successor gap releases only after pending replacement resources settle', async (t) => {
     const gate = deferred();
     t.after(() => gate.resolve());
-    const f = await fixture(t, { replacementRouter: gate.promise });
+    const f = await createDirectoryRuntimeFixture(t, { replacementRouter: gate.promise });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -662,7 +342,7 @@ test('directory deletion failure keeps original start evidence for gateway clean
             },
         },
     });
-    const f = await fixture(t, { directories });
+    const f = await createDirectoryRuntimeFixture(t, { directories });
     const active = await f.runtime.controller.start(f.dataOptions(), f.context);
     const held = f.evidence.at(-1);
     assert.ok(held?.mode === 'data-dir');
@@ -677,7 +357,7 @@ test('directory deletion failure keeps original start evidence for gateway clean
 
 test('failed Chrome startup never deletes an externally occupied selected directory', async (t) => {
     let occupied = true;
-    const f = await fixture(t, { failLaunch: 1, profileAvailable: async () => !occupied });
+    const f = await createDirectoryRuntimeFixture(t, { failLaunch: 1, profileAvailable: async () => !occupied });
     const selected = path.join(f.parent, 'external');
     await mkdir(selected);
     await writeFile(path.join(selected, 'prior'), 'external active data');
@@ -706,7 +386,7 @@ test('failed Chrome startup never deletes an externally occupied selected direct
 
 test('Chrome release rechecks external native profile occupancy after our application exits', async (t) => {
     let occupied = false;
-    const f = await fixture(t, { profileAvailable: async () => !occupied });
+    const f = await createDirectoryRuntimeFixture(t, { profileAvailable: async () => !occupied });
     const active = await f.runtime.controller.start(
         {
             ...f.dataOptions(),
@@ -725,38 +405,3 @@ test('Chrome release rechecks external native profile occupancy after our applic
     await f.runtime.cleanup();
     await assert.rejects(lstat(held.path), { code: 'ENOENT' });
 });
-
-for (const state of ['failed', 'cancelled'] as const) {
-    test(`${state} start preserves acquired path and authorized final cleanup in operation metadata`, async (t) => {
-        const gate = deferred();
-        t.after(() => gate.resolve());
-        const f = await fixture(t, state === 'failed' ? { failLaunch: 1 } : { beforeCreation: gate.promise });
-        const accepted = await f.control({
-            action: 'start',
-            requestId: `start-${state}`,
-            ...f.dataOptions(),
-        });
-        assert.ok(typeof accepted.operationId === 'string');
-        if (state === 'cancelled') {
-            await f.launchEntered;
-            await f.control({ action: 'cancel', operationId: accepted.operationId });
-            gate.resolve();
-        }
-        let snapshot = accepted;
-        while (!['succeeded', 'failed', 'cancelled'].includes(String(snapshot.state))) {
-            const waited = await f.control({
-                action: 'wait',
-                operationId: accepted.operationId,
-                cursor: typeof snapshot.cursor === 'number' ? snapshot.cursor : 0,
-            });
-            assert.ok(isRecord(waited.operation));
-            snapshot = waited.operation;
-        }
-        assert.equal(snapshot.state, state);
-        assert.ok(isRecord(snapshot.isolation));
-        assert.equal(snapshot.isolation.path, path.join(f.parent, 'profile'));
-        assert.equal(snapshot.isolation.state, 'deleted');
-        assert.ok(!String(JSON.stringify(snapshot.error)).includes(f.parent));
-        await assert.rejects(lstat(String(snapshot.isolation.path)), { code: 'ENOENT' });
-    });
-}

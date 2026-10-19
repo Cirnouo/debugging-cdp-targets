@@ -1,11 +1,11 @@
-import type { ManagedTarget } from '../gateway/targets/model/target-contract.ts';
+import type { ManagedTarget } from '../targets/model/target-contract.ts';
 
 export interface OwnedResource {
     close(): Promise<void>;
 }
 
-/** One in-memory owner for a target run and its unfinished acquisitions. */
-export function createConnectionOwner(sessionId: string, onSettled?: () => void) {
+/** One in-memory owner for a target, official, logical/router or catalog resource generation. */
+export function createResourceOwner(sessionId: string, onSettled?: () => void) {
     const work = new AbortController();
     const resources = new Map<string, OwnedResource>();
     const closing = new Map<string, Promise<void>>();
@@ -138,4 +138,4 @@ export function createConnectionOwner(sessionId: string, onSettled?: () => void)
     return owner;
 }
 
-export type ConnectionOwner = ReturnType<typeof createConnectionOwner>;
+export type ResourceOwner = ReturnType<typeof createResourceOwner>;

@@ -10,7 +10,8 @@ The singleton App owns direct HTTP, management and native resources. The
 - `application/`: independent target lifecycles and connection registry orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
 - `gateway/`: pure explicit bearer/tool-argument extraction, target evidence/identity
-    models, structured launch/isolation rules and bounded clock-backed diagnostics.
+    models, structured launch/isolation rules, bounded clock-backed diagnostics
+    and complete resource-generation/directory-lease lifetime in `connections/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants.
@@ -18,8 +19,8 @@ The singleton App owns direct HTTP, management and native resources. The
 
 [ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the
 isolation boundary: gateway/targets/model/ validates directory intent and opaque binding;
-adapters acquire/reverify/remove real directories; application holds connection
-leases across restart and exposes directory evidence only through explicit
+adapters acquire/reverify/remove real directories; gateway/connections holds leases
+across restart; application joins registry/cleanup and exposes evidence only through explicit
 operation metadata or selected configuration.
 
 `packaging/` owns maintained thin host inputs and shared Skill/documentation.
