@@ -8681,7 +8681,7 @@ async function checkSecurity(root, options = {}) {
       "pnpm-workspace.yaml",
       "pnpm-lock.yaml",
       ".npmrc",
-      "tooling/vendored-licenses.json",
+      "tooling/licenses/reviewed-vendors.json",
       "tooling/official-server-release.json",
       "tooling/security/upstream-pnpm-lock.yaml"
     ].includes(file)

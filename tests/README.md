@@ -256,9 +256,10 @@ Git hook tests remain contributor-tooling regressions.
   documentation that preserves the root README on GitHub.
 - `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
   required portable MCP schema declarations, and allowlists.
-- `build-plugin.test.ts` checks complete transitive bundle license collection,
-  nested module metadata, reviewed SDK vendored notices, unused-file exclusion,
-  and rejection of changed code/maps/licenses, unknown vendors or missing licenses.
+- `tooling/licenses/` checks the actual bundled-notices collector, canonical
+  package boundaries, reviewed SDK/vendor evidence, default roots and import isolation.
+- `tooling/distribution/` checks complete thin-payload bytes, competing/missing/linked
+  inputs, read-only output synchronization and independent App/plugin versions.
 - `tooling/governance/` validates supplied commit events and Git rules/topology,
   missing forced-push bases, invalid rewritten ancestors and incomplete checkouts.
   These tests independently check raw PR titles and predicted squash headers with actual

@@ -201,6 +201,12 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
         ),
         false,
     );
+    for (const input of [
+        'tooling/licenses/bundled-notices.ts',
+        'tooling/licenses/canonical-inputs.ts',
+        'tooling/licenses/reviewed-vendors.json',
+    ])
+        assert.equal(built.inputs.includes(input), false, input);
     assert.ok(built.externalImports.every(isBuiltin), JSON.stringify(built.externalImports));
     for (const [file, bytes] of built.files) {
         if (/\.(?:ps1|cs)$/.test(file)) {

@@ -1,16 +1,12 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, rmdir, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import {
-    assembleCodexPayload,
-    collectBundledLicenses,
-    generateHostPayloads,
-    generatePluginFiles,
-    syncPluginFiles,
-} from '../tooling/build-plugin.ts';
+import { fileURLToPath } from 'node:url';
+import { collectBundledLicenses } from '../../../tooling/licenses/bundled-notices.ts';
 
 test('bundle notices include transitive package licenses despite nested module metadata', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'dct-licenses-'));
@@ -55,7 +51,7 @@ test('actual-graph license collection rejects altered canonical semver and smol 
             assert.ok(name && version && license);
             const directory = path.join(root, 'node_modules', name);
             await mkdir(directory, { recursive: true });
-            const original = await readFile(new URL(`../node_modules/${name}/LICENSE`, import.meta.url));
+            const original = await readFile(new URL(`../../../node_modules/${name}/LICENSE`, import.meta.url));
             await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name, version, license }));
             await writeFile(path.join(directory, 'index.js'), '');
             await writeFile(path.join(directory, 'LICENSE'), original);
@@ -102,7 +98,7 @@ test('canonical parser package boundaries reject missing or malformed metadata i
                 await assert.rejects(collect(), /canonical.*license|canonical.*metadata/i, `${name}: ${String(value)}`);
             }
             await writeFile(metadata, JSON.stringify({ name, version, license }));
-            const original = await readFile(new URL(`../node_modules/${name}/LICENSE`, import.meta.url));
+            const original = await readFile(new URL(`../../../node_modules/${name}/LICENSE`, import.meta.url));
             await writeFile(path.join(directory, 'LICENSE'), original);
             await writeFile(path.join(directory, 'dist', 'package.json'), JSON.stringify({ name: 'fixture-decoy' }));
             await writeFile(path.join(directory, 'dist', 'LICENSE'), 'unrelated nested notice');
@@ -186,6 +182,10 @@ test('bundled SDK vendor licenses follow included source maps, deduplicate and e
         const notices = (
             await collectBundledLicenses([fixture.input, fixture.input], fixture.root, fixture.evidenceFile)
         ).toString();
+        assert.equal(
+            notices,
+            '@modelcontextprotocol/client — LICENSE\n\nSDK original license\n\nvendor@1.2.3 — LICENSE (vendored)\n\nVendor original license\n',
+        );
         assert.match(notices, /SDK original license/);
         assert.match(notices, /vendor@1.2.3.*LICENSE/);
         assert.equal(notices.match(/Vendor original license/g)?.length, 1);
@@ -268,151 +268,61 @@ test('SDK vendor collection rejects unreviewed bundles and malformed map invento
     }
 });
 
-test('build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-output-')));
+test('bundled notice collection excludes payload and build dependencies from a foreign cwd', async () => {
+    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-notices-isolation-')));
     try {
-        const files = new Map([
-            ['gateway.mjs', Buffer.from('gateway')],
-            ['official-server/a/same.js', Buffer.from('a')],
-            ['official-server/b/same.js', Buffer.from('b')],
-        ]);
-        await syncPluginFiles(files, root);
-        assert.equal((await readFile(path.join(root, 'official-server/a/same.js'))).toString(), 'a');
-        assert.equal((await readFile(path.join(root, 'official-server/b/same.js'))).toString(), 'b');
-        await syncPluginFiles(files, root, { check: true });
-        await writeFile(path.join(root, 'gateway.mjs'), 'stale');
-        await assert.rejects(syncPluginFiles(files, root, { check: true }), /Stale/);
-        assert.equal((await readFile(path.join(root, 'gateway.mjs'))).toString(), 'stale');
-        await rm(path.join(root, 'gateway.mjs'));
-        await assert.rejects(syncPluginFiles(files, root, { check: true }), /Missing/);
-        await writeFile(path.join(root, 'secret'), 'preserve');
-        await assert.rejects(syncPluginFiles(files, root), /Unexpected/);
-        assert.equal((await readFile(path.join(root, 'secret'))).toString(), 'preserve');
-        await rm(path.join(root, 'secret'));
-        await writeFile(path.join(root, 'hide-npm-console.cjs'), 'obsolete');
-        await assert.rejects(syncPluginFiles(files, root, { check: true }), /Unexpected/);
-        await syncPluginFiles(files, root);
-        await assert.rejects(readFile(path.join(root, 'hide-npm-console.cjs')), /ENOENT/);
-        await assert.rejects(syncPluginFiles(new Map([['../escape', Buffer.from('x')]]), root), /Unsafe/);
-    } finally {
-        await rm(root, { recursive: true, force: true });
-    }
-});
-
-test('Plugin generation assembles canonical packaging inputs and root license into the complete Codex payload', async () => {
-    const files = await generatePluginFiles();
-    const mappings = [
-        ['LICENSE', '../LICENSE'],
-        ['README.md', '../packaging/codex/plugin-README.md'],
-        ['.codex-plugin/plugin.json', '../packaging/codex/.codex-plugin/plugin.json'],
-        ['mcp.json', '../packaging/codex/mcp.json'],
-        ['skills/debugging-cdp-targets/SKILL.md', '../packaging/shared/skills/debugging-cdp-targets/SKILL.md'],
-        ...[
-            'README.md',
-            'question-contract.md',
-            'questions.zh.md',
-            'questions.en.md',
-            'tool-configuration.md',
-            'screenshot-compatibility.md',
-            'recovery-and-events.md',
-        ].map((file) => [
-            `skills/debugging-cdp-targets/references/${file}`,
-            `../packaging/shared/skills/debugging-cdp-targets/references/${file}`,
-        ]),
-    ];
-    for (const [destination, input] of mappings) {
-        assert.ok(destination && input);
-        const bytes = files.get(destination);
-        assert.ok(bytes, destination);
-        assert.ok(bytes.equals(await readFile(new URL(input, import.meta.url))), destination);
-    }
-    assert.ok([...files.keys()].every((file) => !file.startsWith('dist/') && !file.startsWith('hooks/')));
-});
-
-test('payload assembly rejects unexpected host inputs that could compete with shared sources', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-packaging-')));
-    try {
-        await cp(new URL('../packaging', import.meta.url), path.join(root, 'packaging'), { recursive: true });
-        await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
-        for (const file of ['LICENSE', 'dist/README.md', 'skills/debugging-cdp-targets/SKILL.md']) {
-            const competing = path.join(root, 'packaging/codex', file);
-            await mkdir(path.dirname(competing), { recursive: true });
-            await writeFile(competing, 'competing bytes');
-            await assert.rejects(assembleCodexPayload(root), /Unexpected packaging input/);
-            await rm(competing);
-            if (file.startsWith('dist/')) await rmdir(path.dirname(competing));
-            if (file.startsWith('skills/')) await rm(path.join(root, 'packaging/codex/skills'), { recursive: true });
-        }
-        for (const file of [
-            'README.md',
-            'question-contract.md',
-            'questions.zh.md',
-            'questions.en.md',
-            'tool-configuration.md',
-            'screenshot-compatibility.md',
-            'recovery-and-events.md',
-        ]) {
-            const reference = path.join(root, 'packaging/shared/skills/debugging-cdp-targets/references', file);
-            const original = await readFile(reference);
-            await rm(reference);
-            await assert.rejects(assembleCodexPayload(root), /Missing Plugin file/);
-            await writeFile(`${reference}.renamed`, original);
-            await assert.rejects(assembleCodexPayload(root), /Unexpected Plugin file/);
-            await rm(`${reference}.renamed`);
-            await writeFile(reference, original);
-        }
-    } finally {
-        await rm(root, { recursive: true, force: true });
-    }
-});
-
-test('payload assembly rejects a linked canonical input root', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-packaging-link-')));
-    try {
-        await mkdir(path.join(root, 'packaging'));
-        await cp(new URL('../packaging/shared', import.meta.url), path.join(root, 'packaging/shared'), {
-            recursive: true,
+        const owner = new URL('../../../tooling/licenses/bundled-notices.ts', import.meta.url).href;
+        const script = [
+            "import assert from 'node:assert/strict';",
+            "import { registerHooks } from 'node:module';",
+            "registerHooks({ resolve(specifier, context, next) { if (specifier === 'yaml' || specifier === 'esbuild' || specifier.startsWith('@babel/') || specifier === 'node:child_process' || specifier === 'child_process') throw new Error('Forbidden ' + specifier); return next(specifier, context); } });",
+            'const { collectBundledLicenses } = await import(' + JSON.stringify(owner) + ');',
+            'assert.deepEqual(await collectBundledLicenses([]), Buffer.from([10]));',
+            "assert.deepEqual(await collectBundledLicenses(['src/not-a-dependency.ts']), Buffer.from([10]));",
+        ].join('\n');
+        const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+            cwd: directory,
+            windowsHide: true,
+            encoding: 'utf8',
+            timeout: 10000,
         });
-        await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
-        await symlink(path.resolve('packaging/codex'), path.join(root, 'packaging/codex'), 'junction');
-        await assert.rejects(assembleCodexPayload(root), /Packaging input.*linked/);
+        assert.equal(result.error, undefined);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout, '');
     } finally {
-        await rm(root, { recursive: true, force: true });
+        await rm(directory, { recursive: true, force: true });
     }
 });
 
-test('payload assembly maps host user documentation without shipping source directory documentation', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-packaging-docs-')));
+test('bundled notices resolve default repository evidence independently of a foreign working directory', async () => {
+    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-notices-defaults-')));
     try {
-        await cp(new URL('../packaging', import.meta.url), path.join(root, 'packaging'), { recursive: true });
-        await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
-        await writeFile(path.join(root, 'packaging/codex/README.md'), '# Maintained inputs\n');
-        await writeFile(path.join(root, 'packaging/codex/plugin-README.md'), '# Installed plugin\n');
-        const files = await assembleCodexPayload(root);
-        assert.equal(files.get('README.md')?.toString(), '# Installed plugin\n');
-        assert.equal(files.has('plugin-README.md'), false);
+        const owner = new URL('../../../tooling/licenses/bundled-notices.ts', import.meta.url).href;
+        const input = 'node_modules/@modelcontextprotocol/client/dist/ajvProvider-97rDpkRx.mjs';
+        const absolute = path.join(fileURLToPath(new URL('../../../', import.meta.url)), input);
+        const script = [
+            "import assert from 'node:assert/strict';",
+            'const { collectBundledLicenses } = await import(' + JSON.stringify(owner) + ');',
+            'const defaults = await collectBundledLicenses(' + JSON.stringify([input]) + ');',
+            'const override = await collectBundledLicenses(' +
+                JSON.stringify([absolute]) +
+                ', ' +
+                JSON.stringify(directory) +
+                ');',
+            'assert.deepEqual(override, defaults);',
+            "assert.ok(defaults.toString().includes('ajv@8.18.0 — LICENSE (vendored)'));",
+            "assert.ok(defaults.toString().includes('@modelcontextprotocol/client — LICENSE'));",
+        ].join('\n');
+        const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+            cwd: directory,
+            windowsHide: true,
+            encoding: 'utf8',
+            timeout: 10000,
+        });
+        assert.equal(result.error, undefined);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout, '');
     } finally {
-        await rm(root, { recursive: true, force: true });
-    }
-});
-
-test('host build accepts independent App version and rejects maintained plugin drift', async () => {
-    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-version-build-')));
-    try {
-        await cp(new URL('../packaging', import.meta.url), path.join(root, 'packaging'), { recursive: true });
-        await cp(new URL('../LICENSE', import.meta.url), path.join(root, 'LICENSE'));
-        await writeFile(path.join(root, 'package.json'), JSON.stringify({ version: '2.3.4' }));
-        assert.equal((await generateHostPayloads(root)).size, 2);
-        const manifest = path.join(root, 'packaging/claude-code/.claude-plugin/plugin.json');
-        const original = await readFile(manifest, 'utf8');
-        const data = JSON.parse(original);
-        await writeFile(manifest, JSON.stringify({ ...data, version: '0.2.0' }));
-        await assert.rejects(generateHostPayloads(root), /version/i);
-        await writeFile(manifest, original);
-        const skill = path.join(root, 'packaging/shared/skills/debugging-cdp-targets/SKILL.md');
-        await writeFile(skill, (await readFile(skill, 'utf8')).replace(/version:.*0\.1\.0.*/, 'version: 0.2.0'));
-        await assert.rejects(generateHostPayloads(root), /version/i);
-    } finally {
-        await rm(root, { recursive: true, force: true });
+        await rm(directory, { recursive: true, force: true });
     }
 });

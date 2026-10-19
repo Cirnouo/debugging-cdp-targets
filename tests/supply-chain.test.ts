@@ -777,7 +777,8 @@ test('public gate reports both full trees and rejects evidence changing during a
         await mkdir(path.join(root, 'src'), { recursive: true });
         await mkdir(path.join(root, 'plugins/fixture'), { recursive: true });
         await mkdir(path.join(root, 'tooling'), { recursive: true });
-        const vendorEvidence = path.join(root, 'tooling/vendored-licenses.json');
+        await mkdir(path.join(root, 'tooling/licenses'), { recursive: true });
+        const vendorEvidence = path.join(root, 'tooling/licenses/reviewed-vendors.json');
         await mkdir(path.join(root, 'tooling/security'), { recursive: true });
         await writeFile(path.join(root, 'tooling/official-server-release.json'), JSON.stringify(OFFICIAL_RELEASE));
         await writeFile(path.join(root, 'tooling/security/upstream-pnpm-lock.yaml'), upstreamLock);

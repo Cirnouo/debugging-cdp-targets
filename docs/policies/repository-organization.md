@@ -48,6 +48,12 @@ retains raw commit/PR fixtures. The invoked Issue feedback transaction and REST
 adapter remain at root tooling with their root suites and HTTP preload;
 other tooling and test owners retain their current placement.
 
+[Bundled notices](../../tooling/licenses/README.md) owns the actual graph-to-notice
+collector shared by App and research fixture builds, separately from pure canonical
+license identities and fixed reviewed vendor data. Central license and thin-payload
+suites preserve their complete cases; thin payload assembly remains in root tooling.
+Standalone security notices keep their own original-byte formatter.
+
 The selected direction is source roots named for cohesive domain responsibilities,
 with subdomains or technical boundaries inside them when needed; central root
 `tests/` corresponding to those responsibilities; and tooling organized by its

@@ -35,6 +35,9 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         },
     });
     for (const input of [
+        'tooling/licenses/bundled-notices.ts',
+        'tooling/licenses/canonical-inputs.ts',
+        'tooling/licenses/reviewed-vendors.json',
         'src/gateway/connections/resource-owner.ts',
         'src/gateway/connections/directory-lease.ts',
         'src/gateway/owned-tool-arguments.ts',
@@ -68,6 +71,9 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         false,
     );
     for (const oldInput of [
+        'tooling/build-plugin.ts',
+        'tooling/runtime-license-policy.ts',
+        'tooling/vendored-licenses.json',
         'src/application/connection-owner.ts',
         'src/application/connection-directory.ts',
         'src/domains/chrome-profile.ts',
