@@ -10,6 +10,7 @@ import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { requireGuiAuthorization } from '../gui-authorization.ts';
 import {
+    createChromeProfileObservations,
     createChromeSmokeLaunch,
     inspectChromeSmokeDirectory,
     inspectChromeSmokeTarget,
@@ -58,6 +59,7 @@ const failures = createSmokeFailures(artifacts);
 const currentCollection = artifacts.snapshot();
 const controlledDiagnostics =
     !!outputDirectory && currentCollection.collectionId !== null && !currentCollection.collectionRejected;
+const profileObservations = createChromeProfileObservations(controlledDiagnostics && !startupStudy, artifacts);
 if (startupStudy && (!controlledDiagnostics || currentCollection.collectionId !== fixtureOutputCollectionId(args))) {
     const error = new Error('Startup study requires a current accepted diagnostics collection.');
     failures.primary(error, 'prerequisites');
@@ -210,6 +212,7 @@ try {
     const firstFixture = await inspectChromeSmokeTarget(first, chrome);
     const firstDirectory = await inspectChromeSmokeDirectory(tool, first, firstFixture);
     managedDirectories.add(firstDirectory);
+    await profileObservations.register('first', firstDirectory);
     console.log(JSON.stringify({ first }));
     if (!startupStudy) {
         const pagesOne = await tool('list_pages', route(first));
@@ -237,8 +240,12 @@ try {
             disposition: 'Close',
         });
         active = undefined;
-        await assert.rejects(lstat(firstDirectory), { code: 'ENOENT' });
+        await assert.rejects(
+            profileObservations.observeCheck(firstDirectory, 'after-close', lstat(firstDirectory, { bigint: true })),
+            { code: 'ENOENT' },
+        );
         await emptyGateway();
+        await profileObservations.sample('first', 'before-second-start');
         const second = await control({
             action: 'start',
             requestId: randomUUID(),
@@ -249,9 +256,11 @@ try {
         assert.notEqual(second.connectionId, first.connectionId);
         assert.notEqual(second.sessionId, first.sessionId);
         active = second;
+        await profileObservations.sample('first', 'after-second-start');
         const secondFixture = await inspectChromeSmokeTarget(second, chrome);
         const secondDirectory = await inspectChromeSmokeDirectory(tool, second, secondFixture);
         managedDirectories.add(secondDirectory);
+        await profileObservations.register('second', secondDirectory);
         console.log(JSON.stringify({ second }));
         const pagesTwo = await tool('list_pages', route(second));
         assert.notEqual(pagesTwo.isError, true, JSON.stringify(pagesTwo));
@@ -265,7 +274,10 @@ try {
             disposition: 'Close',
         });
         active = undefined;
-        await assert.rejects(lstat(secondDirectory), { code: 'ENOENT' });
+        await assert.rejects(
+            profileObservations.observeCheck(secondDirectory, 'after-close', lstat(secondDirectory, { bigint: true })),
+            { code: 'ENOENT' },
+        );
         await emptyGateway();
         console.log(
             'Official tools, CSS styles and extensions through a reusable entry, Close, and later start passed.',
@@ -286,12 +298,22 @@ try {
             }),
         );
     }
+    await profileObservations.sampleAll('before-gateway-close');
     await failures.cleanup('gateway-close', async () => {
-        await client.close();
-        if (startupStudy) assert.equal(client.child.exitCode, 0, 'The study gateway must exit normally.');
+        try {
+            await client.close();
+            if (startupStudy) assert.equal(client.child.exitCode, 0, 'The study gateway must exit normally.');
+        } finally {
+            await profileObservations.sampleAll('after-gateway-close');
+        }
     });
     for (const directory of managedDirectories)
-        await failures.cleanup('profile-cleanup', () => assert.rejects(lstat(directory), { code: 'ENOENT' }));
+        await failures.cleanup('profile-cleanup', () =>
+            assert.rejects(
+                profileObservations.observeCheck(directory, 'final-check', lstat(directory, { bigint: true })),
+                { code: 'ENOENT' },
+            ),
+        );
     if (monitor) {
         await failures.cleanup('window-monitor', async () => {
             await writeFile(stopFile, 'stop');

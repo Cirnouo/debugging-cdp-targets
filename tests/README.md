@@ -11,6 +11,12 @@ Git hook tests remain contributor-tooling regressions.
   context/ACK parsing, read-only exact-parent evidence and restart lease overlap,
   uncertain child retention and cleanup retry. It supplies no native execution
   evidence, and the preparatory modules are not imported by App startup.
+- `app-parent-watch.test.ts` exercises Windows native-output transcripts and
+  narrow Linux/Darwin I/O, exact birth/account/path refusal, method-specific
+  terminal proof, zombies, helper timeout and actual-exit disposal. The fixed
+  Darwin script runs only with controlled ObjC/native buffers in a Node VM.
+  These tests execute no native helper or real process observation and establish
+  no platform acceptance, JXA binding availability or App/worker integration.
 - `app-deployment.test.ts` rejects malformed/future/foreign metadata, incomplete
   immutable selections and invalid removal-fence transitions.
 - `app-deployment-payload.test.ts` checks literal canonical content identities,

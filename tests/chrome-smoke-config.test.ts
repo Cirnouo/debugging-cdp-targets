@@ -7,7 +7,440 @@ import path from 'node:path';
 import test from 'node:test';
 import type { ControlRequest, ControlResult } from '../src/domains/control-contract.ts';
 import type { ProcessTarget } from '../src/gateway/targets/model/target-contract.ts';
+import type { ProfileStat } from './smoke/chrome-host.ts';
+import {
+    createFixtureArtifacts,
+    createSmokeFailures,
+    type ProfileDirectoryRecord,
+    validateProfileDirectoryRecord,
+} from './smoke/fixture-artifacts.ts';
 import { closeSmokeConnection } from './smoke/lifecycle-client.ts';
+
+function profileStat(
+    dev: bigint,
+    ino: bigint,
+    kind: 'directory' | 'file' | 'symlink' | 'other' = 'directory',
+): ProfileStat {
+    return {
+        dev,
+        ino,
+        isDirectory: () => kind === 'directory',
+        isFile: () => kind === 'file',
+        isSymbolicLink: () => kind === 'symlink',
+    };
+}
+
+function profileSink() {
+    const rows: Readonly<ProfileDirectoryRecord>[] = [];
+    let rejected = 0;
+    return {
+        rows,
+        get rejectedCount() {
+            return rejected;
+        },
+        profileDirectory(value: unknown) {
+            const safe = validateProfileDirectoryRecord(value);
+            assert.ok(safe);
+            rows.push(safe);
+        },
+        rejected() {
+            rejected++;
+        },
+    };
+}
+
+test('profile observations retain first directory identity, classify replacements and never rebaseline', async () => {
+    const { createChromeProfileObservations } = await host();
+    const sink = profileSink();
+    let value = profileStat(10n, 101n);
+    let clock = 100;
+    const paths: string[] = [];
+    const observer = createChromeProfileObservations(true, sink, {
+        inspect: async (file) => {
+            paths.push(file);
+            return value;
+        },
+        now: () => clock++,
+    });
+    await observer.sample('first', 'after-close');
+    await observer.register('first', 'PRIVATE_FIRST');
+    await observer.register('first', 'PRIVATE_REPLACEMENT');
+    await observer.sample('first', 'before-second-start');
+    value = profileStat(10n, 102n);
+    await observer.sample('first', 'after-second-start');
+    await observer.sample('first', 'registered');
+    value = profileStat(10n, 101n, 'file');
+    await observer.sample('first', 'before-gateway-close');
+    value = profileStat(11n, 101n);
+    await observer.sample('first', 'after-gateway-close');
+    value = profileStat(10n, 101n);
+    await observer.sample('first', 'final-check');
+    assert.deepEqual(
+        sink.rows.map((row) => [row.point, row.entryKind, row.matchesBaseline]),
+        [
+            ['registered', 'directory', true],
+            ['before-second-start', 'directory', true],
+            ['after-second-start', 'directory', false],
+            ['registered', 'directory', false],
+            ['before-gateway-close', 'file', false],
+            ['after-gateway-close', 'directory', false],
+            ['final-check', 'directory', true],
+        ],
+    );
+    assert.deepEqual(paths, Array(7).fill('PRIVATE_FIRST'));
+    assert.equal(sink.rejectedCount, 1);
+    assert.deepEqual(
+        sink.rows.map((row) => [row.elapsedMs, row.readDurationMs]),
+        [
+            [2, 1],
+            [4, 1],
+            [6, 1],
+            [8, 1],
+            [10, 1],
+            [12, 1],
+            [14, 1],
+        ],
+    );
+    assert.doesNotMatch(JSON.stringify(sink.rows), /PRIVATE|dev|ino/);
+});
+
+test('profile observations classify own error codes and keep unavailable or nondirectory baselines unknown', async () => {
+    const { createChromeProfileObservations } = await host();
+    for (const initial of [new Error('PRIVATE'), profileStat(1n, 2n, 'file')]) {
+        const sink = profileSink();
+        let value: ProfileStat | Error = initial;
+        let clock = 0;
+        const observer = createChromeProfileObservations(true, sink, {
+            inspect: async () => {
+                if (value instanceof Error) throw value;
+                return value;
+            },
+            now: () => clock++,
+        });
+        await observer.register('first', 'PRIVATE');
+        value = profileStat(1n, 2n);
+        await observer.sample('first', 'final-check');
+        assert.equal(sink.rows[1]?.matchesBaseline, null);
+        await observer.sample('first', 'registered');
+        assert.equal(sink.rows[2]?.matchesBaseline, null);
+    }
+    let reads = 0;
+    const getterError = Object.defineProperty(new Error('PRIVATE'), 'code', {
+        get() {
+            reads++;
+            return 'ENOENT';
+        },
+    });
+    const sink = profileSink();
+    let clock = 0;
+    let error: unknown = Object.assign(new Error('PRIVATE'), { code: 'ENOENT' });
+    const observer = createChromeProfileObservations(true, sink, {
+        inspect: async () => {
+            throw error;
+        },
+        now: () => clock++,
+    });
+    await observer.register('first', 'PRIVATE');
+    for (const next of [
+        Object.assign(new Error('PRIVATE'), { code: 'EACCES' }),
+        Object.assign(new Error('PRIVATE'), { code: 'EPERM' }),
+        getterError,
+        Object.create({ code: 'ENOENT' }),
+    ]) {
+        error = next;
+        await observer.sample('first', 'after-close');
+    }
+    assert.deepEqual(
+        sink.rows.map((row) => [row.result, row.entryKind, row.matchesBaseline, row.readError]),
+        [
+            ['absent', 'none', null, 'none'],
+            ['unavailable', 'unknown', null, 'denied'],
+            ['unavailable', 'unknown', null, 'denied'],
+            ['unavailable', 'unknown', null, 'other'],
+            ['unavailable', 'unknown', null, 'other'],
+        ],
+    );
+    assert.equal(reads, 0);
+});
+
+test('ordinary profile boundaries produce twelve rows in role order without duplicating assertion reads', async () => {
+    const { createChromeProfileObservations } = await host();
+    const sink = profileSink();
+    const inspected: string[] = [];
+    let clock = 0;
+    const observer = createChromeProfileObservations(true, sink, {
+        inspect: async (file) => {
+            inspected.push(file);
+            return profileStat(3n, file === 'first' ? 1n : 2n);
+        },
+        now: () => clock++,
+    });
+    const missing = Object.assign(new Error('PRIVATE'), { code: 'ENOENT' });
+    await observer.register('first', 'first');
+    await assert.rejects(observer.observeCheck('first', 'after-close', Promise.reject(missing)), { code: 'ENOENT' });
+    await observer.sample('first', 'before-second-start');
+    await observer.sample('first', 'after-second-start');
+    await observer.register('second', 'second');
+    await assert.rejects(observer.observeCheck('second', 'after-close', Promise.reject(missing)), { code: 'ENOENT' });
+    await observer.sampleAll('before-gateway-close');
+    await observer.sampleAll('after-gateway-close');
+    for (const file of new Set(['first', 'second']))
+        await assert.rejects(observer.observeCheck(file, 'final-check', Promise.reject(missing)), { code: 'ENOENT' });
+    assert.deepEqual(inspected, ['first', 'first', 'first', 'second', 'first', 'second', 'first', 'second']);
+    assert.deepEqual(
+        sink.rows.map((row) => [row.role, row.point]),
+        [
+            ['first', 'registered'],
+            ['first', 'after-close'],
+            ['first', 'before-second-start'],
+            ['first', 'after-second-start'],
+            ['second', 'registered'],
+            ['second', 'after-close'],
+            ['first', 'before-gateway-close'],
+            ['second', 'before-gateway-close'],
+            ['first', 'after-gateway-close'],
+            ['second', 'after-gateway-close'],
+            ['first', 'final-check'],
+            ['second', 'final-check'],
+        ],
+    );
+});
+
+test('profile observations distinguish symlinks and other entries from the captured directory', async () => {
+    const { createChromeProfileObservations } = await host();
+    const sink = profileSink();
+    let value = profileStat(1n, 2n);
+    let clock = 0;
+    const observer = createChromeProfileObservations(true, sink, {
+        inspect: async () => value,
+        now: () => clock++,
+    });
+    await observer.register('first', 'PRIVATE');
+    value = profileStat(1n, 2n, 'symlink');
+    await observer.sample('first', 'after-close');
+    value = profileStat(1n, 2n, 'other');
+    await observer.sample('first', 'final-check');
+    assert.deepEqual(
+        sink.rows.map((row) => [row.entryKind, row.matchesBaseline]),
+        [
+            ['directory', true],
+            ['symlink', false],
+            ['other', false],
+        ],
+    );
+});
+
+test('a racing sample cannot replace the registration baseline while its first read is pending', async () => {
+    const { createChromeProfileObservations } = await host();
+    const sink = profileSink();
+    let resolveRegistration: (value: ProfileStat) => void = () => {
+        assert.fail('Registration read was not started.');
+    };
+    const pending = new Promise<ProfileStat>((resolve) => {
+        resolveRegistration = resolve;
+    });
+    let reads = 0;
+    let clock = 0;
+    const observer = createChromeProfileObservations(true, sink, {
+        inspect: async () => (++reads === 1 ? pending : profileStat(4n, 99n)),
+        now: () => clock++,
+    });
+    const registering = observer.register('first', 'PRIVATE');
+    await observer.sample('first', 'registered');
+    resolveRegistration(profileStat(4n, 10n));
+    await registering;
+    const value = profileStat(4n, 10n);
+    assert.equal(await observer.observeCheck('PRIVATE', 'final-check', Promise.resolve(value)), value);
+    assert.deepEqual(
+        sink.rows.map((row) => row.matchesBaseline),
+        [null, true, true],
+    );
+});
+
+test('official smoke wires only controlled ordinary profile observations around unchanged acceptance checks', async () => {
+    const source = await readFile(new URL('./smoke/official-server.ts', import.meta.url), 'utf8');
+    assert.match(source, /createChromeProfileObservations\(controlledDiagnostics && !startupStudy, artifacts\)/);
+    for (const role of ['first', 'second']) {
+        assert.match(
+            source,
+            new RegExp(
+                `managedDirectories\\.add\\(${role}Directory\\);\\s*await profileObservations\\.register\\('${role}', ${role}Directory\\)`,
+            ),
+        );
+        assert.match(
+            source,
+            new RegExp(
+                `assert\\.rejects\\(\\s*profileObservations\\.observeCheck\\(${role}Directory, 'after-close', lstat\\(${role}Directory, \\{ bigint: true \\}\\)\\),\\s*\\{ code: 'ENOENT' \\}`,
+            ),
+        );
+    }
+    assert.match(
+        source,
+        /await emptyGateway\(\);\s*await profileObservations\.sample\('first', 'before-second-start'\);\s*const second = await control/,
+    );
+    assert.match(
+        source,
+        /active = second;\s*await profileObservations\.sample\('first', 'after-second-start'\);\s*const secondFixture/,
+    );
+    assert.match(
+        source,
+        /await profileObservations\.sampleAll\('before-gateway-close'\);\s*await failures\.cleanup\('gateway-close', async \(\) => \{\s*try \{/,
+    );
+    assert.match(source, /finally \{\s*await profileObservations\.sampleAll\('after-gateway-close'\);/);
+    assert.match(
+        source,
+        /for \(const directory of managedDirectories\)\s*await failures\.cleanup\('profile-cleanup', \(\) =>\s*assert\.rejects\(\s*profileObservations\.observeCheck\(directory, 'final-check', lstat\(directory, \{ bigint: true \}\)\),\s*\{ code: 'ENOENT' \}/,
+    );
+    assert.equal(source.match(/profileObservations\.observeCheck\(/g)?.length, 3);
+    assert.equal(source.match(/lstat\(/g)?.length, 3);
+    assert.ok(
+        source.indexOf("sampleAll('before-gateway-close')") > source.indexOf("failures.cleanup('target-cleanup'"),
+    );
+});
+
+test('profile observation disabled mode does no I/O or clock work and returns the existing check promise', async () => {
+    const { createChromeProfileObservations } = await host();
+    const fail = () => {
+        assert.fail('Disabled diagnostics must do no optional work.');
+    };
+    const observer = createChromeProfileObservations(
+        false,
+        { profileDirectory: fail, rejected: fail },
+        { inspect: fail, now: fail },
+    );
+    await observer.register('first', 'PRIVATE');
+    await observer.sample('first', 'after-close');
+    await observer.sampleAll('before-gateway-close');
+    const value = profileStat(1n, 2n);
+    const pending = Promise.resolve(value);
+    assert.equal(observer.observeCheck('PRIVATE', 'after-close', pending), pending);
+    assert.equal(await pending, value);
+});
+
+test('profile checks preserve exact outcomes through bad clocks, inspect and throwing diagnostic sinks', async () => {
+    const { createChromeProfileObservations } = await host();
+    for (const clock of [
+        () => Number.NaN,
+        () => {
+            throw new Error('PRIVATE_CLOCK');
+        },
+        (() => {
+            let now = 10;
+            return () => now--;
+        })(),
+    ]) {
+        let rejected = 0;
+        const sink = {
+            profileDirectory() {
+                assert.fail('Invalid clock cannot fabricate a record.');
+            },
+            rejected() {
+                rejected++;
+            },
+        };
+        const value = profileStat(1n, 2n);
+        const observer = createChromeProfileObservations(true, sink, { inspect: async () => value, now: clock });
+        await observer.register('first', 'PRIVATE');
+        assert.equal(await observer.observeCheck('PRIVATE', 'final-check', Promise.resolve(value)), value);
+        assert.ok(rejected > 0);
+    }
+    let clock = 0;
+    const value = profileStat(1n, 2n);
+    const observer = createChromeProfileObservations(
+        true,
+        {
+            profileDirectory() {
+                throw new Error('PRIVATE_WRITE');
+            },
+            rejected() {
+                throw new Error('PRIVATE_REJECT');
+            },
+        },
+        {
+            inspect: async () => {
+                throw new Error('PRIVATE_IO');
+            },
+            now: () => clock++,
+        },
+    );
+    await observer.register('first', 'PRIVATE');
+    await observer.sampleAll('before-gateway-close');
+    assert.equal(await observer.observeCheck('PRIVATE', 'after-close', Promise.resolve(value)), value);
+    const error = Object.assign(new Error('PRIVATE_ASSERTION'), { code: 'ENOENT' });
+    await assert.rejects(
+        observer.observeCheck('PRIVATE', 'final-check', Promise.reject(error)),
+        (actual) => actual === error,
+    );
+});
+
+test('profile final presence preserves the real first AssertionError and still checks the second profile', async (t) => {
+    const { createChromeProfileObservations } = await host();
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-profile-acceptance-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const artifacts = createFixtureArtifacts(directory, 'official-server');
+    const failures = createSmokeFailures(artifacts);
+    let clock = 0;
+    let inspections = 0;
+    const observer = createChromeProfileObservations(true, artifacts, {
+        inspect: async (file) => {
+            inspections++;
+            return file === 'PRIVATE_FIRST' ? profileStat(7n, 10n) : profileStat(7n, 20n);
+        },
+        now: () => clock++,
+    });
+    const managedDirectories = new Set(['PRIVATE_FIRST', 'PRIVATE_SECOND']);
+    await observer.register('first', 'PRIVATE_FIRST');
+    await observer.register('second', 'PRIVATE_SECOND');
+    const missing = Object.assign(new Error('PRIVATE'), { code: 'ENOENT' });
+    await assert.rejects(observer.observeCheck('PRIVATE_FIRST', 'after-close', Promise.reject(missing)), {
+        code: 'ENOENT',
+    });
+    const checked: string[] = [];
+    let primary: unknown;
+    for (const file of managedDirectories)
+        await failures.cleanup('profile-cleanup', async () => {
+            checked.push(file);
+            try {
+                await assert.rejects(
+                    observer.observeCheck(
+                        file,
+                        'final-check',
+                        file === 'PRIVATE_FIRST'
+                            ? Promise.resolve(profileStat(7n, 99n, 'file'))
+                            : Promise.reject(missing),
+                    ),
+                    { code: 'ENOENT' },
+                );
+            } catch (error) {
+                primary = error;
+                throw error;
+            }
+        });
+    assert.ok(primary instanceof assert.AssertionError);
+    assert.throws(
+        () => failures.finish(),
+        (error) => error === primary,
+    );
+    assert.deepEqual(checked, ['PRIVATE_FIRST', 'PRIVATE_SECOND']);
+    assert.equal(inspections, 2, 'The four acceptance reads must not cause another inspect.');
+    const rows = (await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => validateProfileDirectoryRecord(JSON.parse(line)))
+        .filter((row) => row !== undefined);
+    assert.deepEqual(
+        rows.map((row) => [row.role, row.point, row.result, row.entryKind, row.matchesBaseline]),
+        [
+            ['first', 'registered', 'present', 'directory', true],
+            ['second', 'registered', 'present', 'directory', true],
+            ['first', 'after-close', 'absent', 'none', null],
+            ['first', 'final-check', 'present', 'file', false],
+            ['second', 'final-check', 'absent', 'none', null],
+        ],
+    );
+    assert.equal(artifacts.snapshot().primary?.stage, 'profile-cleanup');
+    assert.equal(artifacts.snapshot().secondary.length, 0);
+});
 
 test('an explicit smoke Close waits for busy CDP without changing target identity', async () => {
     const request = {

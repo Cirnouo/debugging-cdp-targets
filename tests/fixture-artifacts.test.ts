@@ -9,6 +9,185 @@ import { fileURLToPath } from 'node:url';
 
 const collectorUrl = new URL('./smoke/fixture-artifacts.ts', import.meta.url);
 
+const profileRow = {
+    kind: 'profile-directory',
+    role: 'first',
+    point: 'registered',
+    elapsedMs: 1,
+    readDurationMs: 0.5,
+    result: 'present',
+    entryKind: 'directory',
+    matchesBaseline: true,
+    readError: 'none',
+};
+
+test('profile progress rejects malformed, crossed and private rows without changing gateway progress', async (t) => {
+    const { readFixtureProgress } = await import('./smoke/fixture-artifacts.ts');
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-profile-progress-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const rows = [
+        profileRow,
+        { ...profileRow, elapsedMs: -1 },
+        { ...profileRow, role: 'second', point: 'before-second-start' },
+        { ...profileRow, privatePath: 'PRIVATE_PATH' },
+        { ...profileRow, result: 'absent' },
+        { ...profileRow, entryKind: 'file' },
+    ];
+    await writeFile(
+        path.join(directory, 'official-server.events.ndjson'),
+        rows.map((row) => JSON.stringify(row)).join('\n'),
+    );
+    const progress = readFixtureProgress(directory, 'official-server');
+    assert.equal(progress.invalidEvents, 5);
+    assert.equal(progress.events, 6);
+    assert.equal(progress.lastStage, null);
+    assert.equal(progress.lastOperationId, null);
+    assert.equal(progress.gatewayEvents, 0);
+});
+
+test('profile progress retains seventeenth-row overflow in final incomplete reconstruction', async (t) => {
+    const { readFixtureProgress } = await import('./smoke/fixture-artifacts.ts');
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-profile-progress-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const file = path.join(directory, 'official-server.events.ndjson');
+    await writeFile(file, Array.from({ length: 16 }, () => JSON.stringify(profileRow)).join('\n'));
+    assert.equal(readFixtureProgress(directory, 'official-server').invalidEvents, 0);
+    await writeFile(file, Array.from({ length: 17 }, () => JSON.stringify(profileRow)).join('\n'));
+    const progress = readFixtureProgress(directory, 'official-server');
+    assert.equal(progress.invalidEvents, 1);
+    assert.equal(progress.incomplete, true);
+});
+
+test('profile validator detaches exactly nine data keys without reading accessors or private state', async () => {
+    const { validateProfileDirectoryRecord } = await import('./smoke/fixture-artifacts.ts');
+    let reads = 0;
+    const inherited = Object.assign(Object.create({ toJSON: () => 'PRIVATE' }), profileRow);
+    const safe = validateProfileDirectoryRecord(inherited);
+    assert.deepEqual(safe, profileRow);
+    assert.equal(Object.isFrozen(safe), true);
+    assert.equal(Object.getPrototypeOf(safe), Object.prototype);
+    inherited.role = 'PRIVATE';
+    assert.equal(safe?.role, 'first');
+    const accessor = { ...profileRow };
+    Object.defineProperty(accessor, 'role', {
+        get: () => {
+            reads++;
+            return 'PRIVATE';
+        },
+    });
+    for (const invalid of [
+        accessor,
+        { ...profileRow, [Symbol('PRIVATE')]: true },
+        { ...profileRow, path: 'PRIVATE' },
+        { ...profileRow, elapsedMs: Infinity },
+        { ...profileRow, readDurationMs: Number.NaN },
+        { ...profileRow, role: 'third' },
+        { ...profileRow, point: 'unknown' },
+        { ...profileRow, role: 'second', point: 'after-second-start' },
+        { ...profileRow, result: 'present', entryKind: 'none' },
+        { ...profileRow, result: 'present', readError: 'denied' },
+        { ...profileRow, entryKind: 'symlink', matchesBaseline: true },
+        { ...profileRow, result: 'absent', entryKind: 'none', matchesBaseline: false },
+        { ...profileRow, result: 'unavailable', entryKind: 'unknown', matchesBaseline: null, readError: 'none' },
+    ])
+        assert.equal(validateProfileDirectoryRecord(invalid), undefined);
+    assert.equal(reads, 0);
+    for (const valid of [
+        { ...profileRow, entryKind: 'file', matchesBaseline: false },
+        { ...profileRow, entryKind: 'symlink', matchesBaseline: null },
+        { ...profileRow, entryKind: 'other', matchesBaseline: false },
+        { ...profileRow, result: 'absent', entryKind: 'none', matchesBaseline: null },
+        { ...profileRow, result: 'unavailable', entryKind: 'unknown', matchesBaseline: null, readError: 'denied' },
+        { ...profileRow, result: 'unavailable', entryKind: 'unknown', matchesBaseline: null, readError: 'other' },
+    ])
+        assert.deepEqual(validateProfileDirectoryRecord(valid), valid);
+    assert.doesNotMatch(JSON.stringify(safe), /PRIVATE/);
+});
+
+test('profile writer enforces its cap and ownership while preserving gateway correlation and events-only details', async (t) => {
+    const { createFixtureArtifacts, readFixtureProgress } = await import('./smoke/fixture-artifacts.ts');
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-profile-writer-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const artifacts = createFixtureArtifacts(directory, 'official-server');
+    const operationId = '11111111-1111-4111-8111-111111111111';
+    artifacts.gateway({
+        stage: 'spawn',
+        event: 'begin',
+        outcome: 'started',
+        timestampMs: 1,
+        durationMs: 0,
+        operationId,
+    });
+    const preload = createFixtureArtifacts(directory, 'official-server', {
+        streamOnly: true,
+        collectionId: artifacts.snapshot().collectionId,
+    });
+    const before = await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8');
+    preload.profileDirectory(profileRow);
+    assert.equal(await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8'), before);
+    let getterReads = 0;
+    artifacts.profileDirectory(
+        Object.defineProperty({ ...profileRow }, 'role', {
+            get() {
+                getterReads++;
+                return 'PRIVATE';
+            },
+        }),
+    );
+    assert.equal(getterReads, 0);
+    for (let i = 0; i < 17; i++) artifacts.profileDirectory(profileRow);
+    artifacts.profileDirectory({ ...profileRow, path: 'PRIVATE' });
+    const failure = new Error('PRIVATE');
+    artifacts.failure('profile-cleanup', failure, true);
+    const progress = readFixtureProgress(directory, 'official-server');
+    assert.equal(progress.invalidEvents, 3);
+    assert.equal(progress.gatewayEvents, 1);
+    assert.equal(progress.lastStage, 'spawn');
+    assert.equal(progress.lastOperationId, operationId);
+    artifacts.finish(true);
+    const stream = await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8');
+    assert.equal(stream.split('\n').filter((line) => line.includes('"kind":"profile-directory"')).length, 16);
+    assert.doesNotMatch(stream, /PRIVATE/);
+    const snapshot = artifacts.snapshot();
+    assert.equal(snapshot.primary?.operationId, operationId);
+    assert.equal(snapshot.primary?.runtimeStage, 'spawn');
+    assert.equal(snapshot.invalidEvents, 3);
+    assert.equal('profileDirectory' in snapshot, false);
+    assert.equal('profileDirectories' in snapshot, false);
+    const refused = createFixtureArtifacts(directory, 'official-server');
+    refused.profileDirectory(profileRow);
+    assert.equal(await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8'), stream);
+    const other = createFixtureArtifacts(directory, 'entry-recovery');
+    other.profileDirectory(profileRow);
+    assert.equal(await readFile(path.join(directory, 'entry-recovery.events.ndjson'), 'utf8'), '');
+});
+
+test('profile rows share global truncation and optional writer failure limitations', async (t) => {
+    const { createFixtureArtifacts } = await import('./smoke/fixture-artifacts.ts');
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-profile-bounds-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const artifacts = createFixtureArtifacts(directory, 'official-server');
+    for (let i = 0; i < 2000; i++)
+        artifacts.gateway({ stage: 'spawn', event: 'begin', outcome: 'started', timestampMs: i, durationMs: 0 });
+    artifacts.profileDirectory(profileRow);
+    const stream = await readFile(path.join(directory, 'official-server.events.ndjson'), 'utf8');
+    assert.match(stream, /"kind":"truncated"/);
+    assert.doesNotMatch(stream, /profile-directory/);
+    assert.ok(Buffer.byteLength(stream) <= 1_048_576);
+    assert.ok(stream.split('\n').every((row) => Buffer.byteLength(row) <= 4096));
+    const failing = createFixtureArtifacts(path.join(directory, 'writer'), 'official-server', {
+        append() {
+            throw new Error('PRIVATE');
+        },
+    });
+    failing.profileDirectory(profileRow);
+    assert.equal(failing.snapshot().writeFailed, true);
+    assert.doesNotMatch(
+        await readFile(path.join(directory, 'writer', 'official-server.events.ndjson'), 'utf8'),
+        /PRIVATE/,
+    );
+});
+
 test('controlled fixture collector exists before smoke execution is changed', async () => {
     const implementation = await import(collectorUrl.href).catch(() => undefined);
     assert.ok(implementation?.createFixtureArtifacts, 'Missing bounded streaming fixture collector.');

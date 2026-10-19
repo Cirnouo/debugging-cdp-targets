@@ -228,6 +228,32 @@ public static class DctNative
         if (handle == IntPtr.Zero) throw Error();
         try { return Identify(handle, pid, false); } catch { CloseHandle(handle); throw; }
     }
+    private static string AccountSid(IntPtr process)
+    {
+        IntPtr token;
+        if (!OpenProcessToken(process, 8, out token)) throw Error();
+        try {
+            using (WindowsIdentity account = new WindowsIdentity(token)) {
+                if (account.User == null) throw new InvalidDataException("Native account SID is unavailable.");
+                return account.User.Value;
+            }
+        } finally { CloseHandle(token); }
+    }
+    public static Hashtable ParentWatchEvidence(DctNativeProcess process)
+    {
+        string account = AccountSid(process.Handle);
+        string observer = AccountSid(GetCurrentProcess());
+        int session, ownSession;
+        if (!ProcessIdToSessionId(process.ProcessId, out session) ||
+            !ProcessIdToSessionId(Process.GetCurrentProcess().Id, out ownSession)) throw Error();
+        if (account != observer || session != ownSession)
+            throw new InvalidDataException("Read-only parent account or session differs.");
+        uint waited = WaitForSingleObject(process.Handle, 0);
+        if (waited == UInt32.MaxValue) throw Error();
+        if (waited != 258) throw new InvalidDataException("Read-only parent is not alive before readiness.");
+        return new Hashtable { { "accountSid", account }, { "observerAccountSid", observer },
+            { "sessionId", session }, { "observerSessionId", ownSession } };
+    }
     public static DctNativeProcess ElevateHelper(string executable, string arguments) {
         ShellExecuteInfo information = new ShellExecuteInfo {
             Size = Marshal.SizeOf(typeof(ShellExecuteInfo)), Mask = 0x40 | 0x100 | 0x400,
