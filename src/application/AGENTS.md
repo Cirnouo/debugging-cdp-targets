@@ -3,6 +3,8 @@
 Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
+These complete lifecycle obligations also govern gateway/core.ts and
+gateway/registry.ts through their explicit before-editing instruction trigger.
 
 Create logical, target-generation and official-generation owners before their
 respective acquisitions. The logical connection owns its stable router and

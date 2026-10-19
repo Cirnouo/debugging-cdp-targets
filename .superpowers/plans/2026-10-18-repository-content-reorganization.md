@@ -89,6 +89,23 @@ expectations must not be replaced with the implementation's own generated data.
     `tests/fixtures/gateway/connection-directory-runtime.ts`, recomputes relative
     imports and updates `tests/fixtures/gateway/README.md` with the relocation.
     Keep one implementation and inventory only that final Gateway fixture leaf.
+- A subsequent bounded O5 Core/registry cut may move Core to `src/gateway/core.ts`
+    and the complete route-retirement/retained-resource/final-cleanup authority to
+    `src/gateway/registry.ts`. Keep the original complete ManagedConnection type
+    with its Core transaction; registry may consume its exact exported TYPE with
+    no runtime cycle or duplicated capability shape. Any temporary TYPE edges to
+    current application service owners require exact reviewed roles/instructions.
+    Managed connection, admission, workspace and projection content remain future
+    obligations until their actual transactions/supplied inputs move coherently.
+- Move the seven reviewed `entry-runtime.test.ts` final-cleanup cases and three
+    `app-core-construction.test.ts` cases to the already inventoried Gateway
+    gateway-cleanup/construction-cleanup suites. Share the unchanged controlled
+    connection setup and status support assertion through current
+    `tests/fixtures/core-runtime.ts`, retaining its real-Core composition and all
+    setup/cleanup assertions. Later relocate that one body and all consumer
+    imports to already inventoried `tests/fixtures/gateway/core-runtime.ts`.
+    Keep directory-runtime support and the O4 target-host fake distinct.
+
 - Host tests use `host-policy`, `synchronize`, `user-intent` and `git-source`.
     Official tests distinguish `reviewed-catalog`, `execution` and `options`.
     Remove retired entry/disconnect wording where the actual behavior is Core

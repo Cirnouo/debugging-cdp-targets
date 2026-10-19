@@ -31,7 +31,10 @@ explicit rejected concurrent evidence, and normally exits after the final sample
 `core-runtime.ts` composes the actual reusable Core with one explicit test
 registration, attached client and request-scoped facilities. It supplies private
 controller/control/invoke/cleanup conveniences without restoring a production
-stdio entry or implicit owner.
+stdio entry or implicit owner. It also exports createConnectionRuntimeFixture
+and connectionStatus: the shared controlled host/router/official setup and status
+support for entry-runtime and Gateway cleanup, preserving every support assertion
+and teardown branch. Regression-case bodies remain in their suites.
 
 `http-gateway.ts` exposes that actual Core through the production SDK HTTP adapter
 in a test-owned child. Calls use explicit registration bearers; start/restart
@@ -47,13 +50,11 @@ The sealed receipt/builder contract belongs to
 HTTP regression, sealed native execution and actual GUI App acceptance are
 separate evidence.
 
-`issue-feedback-http.ts` replaces only subprocess `fetch` with a private fake
-GitHub boundary for the actual CI entry test. It records request methods/routes
-in a disposable transcript and cannot send network traffic; the test confirms
-feedback publication precedes an invalid exit without printing body or token.
-
-[submissions/](submissions/README.md) owns literal current PR bodies and original
-squash-message evidence used by governance and commitlint regressions.
+[submissions/](submissions/README.md) owns three literal current PR/commit inputs
+used by governance and commitlint, and the private `issue-feedback-http.ts`
+subprocess fetch boundary. It records request methods/routes without network;
+actual publisher regressions check awaited invalid feedback and sanitized
+zero-request admission failures.
 
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
 `native-close-runtime.ts` composes the real Core, explicit registration/request

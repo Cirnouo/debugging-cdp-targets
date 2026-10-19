@@ -69,7 +69,7 @@ export const dialog={showMessageBox:async(options)=>{if(options.type!=='warning'
 export class Tray{constructor(){throw Error('No OS tray in this I/O fixture')}}
 `;
     const coreModule = `
-import { createGatewayCore as actualCore } from ${JSON.stringify(path.join(root, 'src/application/plugin-runtime.ts'))};
+import { createGatewayCore as actualCore } from ${JSON.stringify(path.join(root, 'src/gateway/core.ts'))};
 import { createToolCatalog } from ${JSON.stringify(path.join(root, 'src/adapters/tool-catalog.ts'))};
 import { state } from 'app-test-state';
 export async function createGatewayCore(options){return actualCore({...options,
@@ -81,7 +81,7 @@ loadCatalog:async()=>{if(state.catalogFails)throw Error('Catalog failed');return
     const modules: Record<string, string> = {
         electron: `export { app, Menu, nativeImage, Tray, dialog } from 'app-test-state';`,
         'app-test-state': stateModule,
-        '../application/plugin-runtime.ts': coreModule,
+        '../gateway/core.ts': coreModule,
         '../application/app-host-management.ts': `import{state}from'app-test-state';export function createAppHostManagement(){return{snapshot:()=>[],assertConfigurable(){},configure(){},run:async()=>{state.counts.hostStarts++;if(state.counts.http===0)throw Error('Host sync before bind');if(state.mode==='host-pending')await state.hosts.promise},close:async()=>{if(state.mode==='host-pending')await state.hosts.promise}}}`,
         '../adapters/app-native.ts': `import{state}from'app-test-state';export async function loadAppAdvisoryLock(){state.signalNative();if(state.mode==='native-pending')await state.native.promise;return()=>true}`,
         '../adapters/app-singleton.ts': `import{state}from'app-test-state';export function acquireAppSingleton(){state.counts.locks++;return{ownsSingleton:state.mode!=='unavailable-owner',paths:{activation:'fixture-only'}}}`,

@@ -1171,3 +1171,157 @@ test('computed TypeScript method keys and method bodies retain actual ambient re
                 `${file}: ${source}`,
             );
 });
+
+test('Core registry inverse edges reject mutable authority in every supported dependency form', () => {
+    for (const [file, prefix] of [
+        ['src/gateway/unreviewed.ts', '.'],
+        ['src/gateway/targets/model/unreviewed.ts', '../..'],
+        ['src/adapters/unreviewed.ts', '../gateway'],
+        ['src/domains/unreviewed.ts', '../gateway'],
+        ['src/shared/unreviewed.ts', '../gateway'],
+        ['src/host-plugins/unreviewed.ts', '../gateway'],
+        ['src/gateway/connections/resource-owner.ts', '..'],
+        ['src/gateway/connections/directory-lease.ts', '..'],
+    ] as const)
+        for (const owner of ['core', 'registry'])
+            for (const { source } of connectionDependencyForms(`${prefix}/${owner}.ts`)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+                assert.ok(errors.length, `${file}: ${source}`);
+            }
+});
+
+test('Core registry exact roles retain only their supplied dependency capabilities', () => {
+    for (const [file, values, types] of [
+        [
+            'src/gateway/core.ts',
+            [
+                'node:crypto',
+                'node:os',
+                'node:path',
+                '../adapters/cdp-router.ts',
+                '../adapters/chrome-profile.ts',
+                '../adapters/data-directory.ts',
+                '../adapters/fixture-diagnostics.ts',
+                '../adapters/mcp-bridge.ts',
+                '../adapters/official-server.ts',
+                '../adapters/port-reservation.ts',
+                '../adapters/target-host.ts',
+                '../adapters/tool-catalog.ts',
+                '../domains/control-contract.ts',
+                '../domains/request-failure.ts',
+                './connections/directory-lease.ts',
+                './diagnostics.ts',
+                './targets/model/isolation.ts',
+                './targets/model/launch-command.ts',
+                '../shared/constants.ts',
+                '../shared/errors.ts',
+                '../application/client-context.ts',
+                '../application/mcp-lifecycle.ts',
+                '../application/registrations.ts',
+                '../application/target-controller.ts',
+                './registry.ts',
+            ],
+            ['@modelcontextprotocol/client', './connections/resource-owner.ts', '../shared/client-context.ts'],
+        ],
+        [
+            'src/gateway/registry.ts',
+            [
+                './connections/resource-owner.ts',
+                '../adapters/fixture-diagnostics.ts',
+                '../domains/control-contract.ts',
+                '../shared/errors.ts',
+            ],
+            [
+                './core.ts',
+                './connections/directory-lease.ts',
+                '../application/registrations.ts',
+                '../application/mcp-lifecycle.ts',
+                '../application/target-controller.ts',
+                '../shared/client-context.ts',
+            ],
+        ],
+    ] as const) {
+        for (const dependency of [...values, ...types])
+            for (const { source, erased } of connectionDependencyForms(dependency)) {
+                const errors = validateRuntimeSource(file, source);
+                if ((values as readonly string[]).includes(dependency) || erased)
+                    assert.deepEqual(errors, [], `${file}: ${source}`);
+                else assert.ok(errors.length, `${file}: ${source}`);
+            }
+        for (const dependency of [
+            'node:fs',
+            'node:net',
+            'node:child_process',
+            '@modelcontextprotocol/core',
+            'ws',
+            '../interface/app-main.ts',
+            '../adapters/unknown.ts',
+            '../application/operations.ts',
+            './unknown.ts',
+            '../domains/unknown.ts',
+            '../shared/unknown.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+        for (const source of ['const value = import(moduleName);', 'const value = require?.(moduleName);'])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('computed module dependencies')),
+                source,
+            );
+    }
+});
+
+test('Core registry ambient capabilities apply only to exact reviewed expressions and files', () => {
+    for (const [file, source] of [
+        [
+            'src/gateway/core.ts',
+            'const ambient = { ...process.env }; const windows = process.platform === "win32"; const timestamp = now ?? Date.now;',
+        ],
+        ['src/gateway/registry.ts', 'process.stderr.write("Connection cleanup failed\\n");'],
+    ] as const)
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+    for (const file of ['src/gateway/core.ts', 'src/gateway/registry.ts', 'src/gateway/unreviewed.ts']) {
+        for (const source of [
+            'const state = process;',
+            'const state = globalThis.process;',
+            'const state = global.process;',
+            'const state = globalThis;',
+            'const state = globalThis[key];',
+            'const state = process.env;',
+            'const state = process["platform"];',
+            'process.platform = "win32";',
+            'const state = process.platform();',
+            'use(...process.env);',
+            'const state = { ...process["env"] };',
+            'const state = { ...globalThis.process.env };',
+            'const timestamp = Date.now();',
+            'const clock = Date;',
+            'const clock = globalThis.Date.now;',
+            'const clock = Date["now"];',
+            'const clock = performance.now();',
+            'const sink = process.stderr.write;',
+            'process["stderr"].write("x");',
+            'process.stderr["write"]("x");',
+            'process.stderr.write?.("x");',
+            'process.stdout.write("x");',
+            'process.exit(0);',
+            'fetch("http://localhost");',
+            'new WebSocket("ws://localhost");',
+        ])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+    assert.ok(validateRuntimeSource('src/gateway/core.ts', 'process.stderr.write("x");').length);
+    for (const source of [
+        'const env = { ...process.env };',
+        'const platform = process.platform;',
+        'const timestamp = Date.now;',
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/registry.ts', source).length, source);
+    for (const source of [
+        'const env = { ...process.env };',
+        'process.stderr.write("x");',
+        'const timestamp = Date.now;',
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/unreviewed.ts', source).length, source);
+});

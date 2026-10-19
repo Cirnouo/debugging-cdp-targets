@@ -14,8 +14,8 @@ import {
 } from '../src/adapters/mcp-bridge.ts';
 import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { createGatewayCore } from '../src/application/plugin-runtime.ts';
 import type { Diagnostic } from '../src/domains/control-contract.ts';
+import { createGatewayCore } from '../src/gateway/core.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 const first: Tool = {

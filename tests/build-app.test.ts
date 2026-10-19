@@ -35,6 +35,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         },
     });
     for (const input of [
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
         'tooling/licenses/bundled-notices.ts',
         'tooling/licenses/canonical-inputs.ts',
         'tooling/licenses/reviewed-vendors.json',
@@ -71,6 +73,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         false,
     );
     for (const oldInput of [
+        'src/application/plugin-runtime.ts',
         'tooling/build-plugin.ts',
         'tooling/runtime-license-policy.ts',
         'tooling/vendored-licenses.json',
@@ -86,6 +89,15 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
             false,
             oldInput,
         );
+    for (const name of [
+        'windows-deployment-authority.ps1',
+        'windows-deployment-authority.cs',
+        'macos-deployment-authority.jxa',
+    ]) {
+        assert.ok(files.has(name), `Missing fixed deployment helper: ${name}`);
+        assert.ok(files.get(name)?.equals(await readFile(new URL(`../src/adapters/${name}`, import.meta.url))));
+        assert.ok(actualInputs.includes(`src/adapters/${name}`), `Missing helper source input: ${name}`);
+    }
     for (const name of ['semver', 'smol-toml'])
         assert.ok(
             actualInputs.some((input) => input.replaceAll('\\', '/').includes(`/node_modules/${name}/`)),

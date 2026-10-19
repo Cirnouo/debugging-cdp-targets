@@ -1,4 +1,4 @@
-# Submission value regressions
+# Submission regressions
 
 - `markdown.test.ts` directly checks lazy checklist wrapping, all five structure
   stops, literal TAP without section splitting, selected H3 depth with deeper
@@ -15,9 +15,16 @@
   unsupported or malformed configuration. Mutated YAML fixtures prove that
   labels and field requirements remain derived from the supplied source.
 
-The safe default and coverage commands select each suite once. Scanner observations
-remain separate from PR policy outcomes; supplied form policy retains its complete
-YAML-profile cases. Literal commit and PR CLI evidence lives in
-[submission fixtures](../../fixtures/submissions/README.md) and is consumed by
-[governance tests](../governance/README.md). Root feedback/workflow suites and their
-HTTP preload retain their current entry. Ancestor [test rules](../../AGENTS.md) apply.
+- `issue-feedback.test.ts` exercises the actual REST/transaction/publisher through
+  fake HTTP: ownership, pagination, stale fences, partial failure/rerun recovery,
+  sanitized errors, local-I/O import isolation and zero-request admission failure.
+  The controlled publisher child proves awaited label-before-comment publication,
+  module-rooted forms from unrelated cwd, and invalid exit without body/token logs.
+- `issue-workflow.test.ts` parses the actual workflow for trusted same-SHA checkout,
+  reviewed Actions/toolchain, minimal writer permission, prerequisite gate,
+  step-scoped token and diagnostic-label recursion exclusion.
+
+The safe default and coverage commands select all five suites once. Literal commit
+and PR CLI evidence plus the HTTP preload live in
+[submission fixtures](../../fixtures/submissions/README.md); governance also consumes
+the literal evidence. Ancestor [test rules](../../AGENTS.md) apply.

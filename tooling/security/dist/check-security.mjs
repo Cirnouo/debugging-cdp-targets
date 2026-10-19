@@ -8673,7 +8673,7 @@ async function checkSecurity(root, options = {}) {
     options.now
   );
   const code = paths.filter(
-    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1)$/.test(file) || PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/official-server/`))
+    (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1|jxa|cs)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1|jxa|cs)$/.test(file) || PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/official-server/`))
   );
   const configuration = paths.filter(
     (file) => /^\.github\/workflows\/.*\.ya?ml$/.test(file) || /^(?:plugins|packaging)\/.*\.(?:json|ya?ml)$/.test(file) || /^\.agents\/plugins\/.*\.json$/.test(file) || PLUGIN_HOSTS.some((host) => file === host.marketplace) || [

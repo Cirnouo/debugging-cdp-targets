@@ -5,12 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { issueFeedbackContext, runIssueFeedback } from '../tooling/issue-feedback.ts';
-import { createGitHubIssueRequest } from '../tooling/issue-github.ts';
+import { createGitHubIssueRequest } from '../../../tooling/submissions/github-issues.ts';
+import { issueFeedbackContext, runIssueFeedback } from '../../../tooling/submissions/issue-feedback.ts';
 
 const forms = {
-    bugReport: readFileSync(new URL('../.github/ISSUE_TEMPLATE/bug_report.yaml', import.meta.url), 'utf8'),
-    featureRequest: readFileSync(new URL('../.github/ISSUE_TEMPLATE/feature_request.yaml', import.meta.url), 'utf8'),
+    bugReport: readFileSync(new URL('../../../.github/ISSUE_TEMPLATE/bug_report.yaml', import.meta.url), 'utf8'),
+    featureRequest: readFileSync(
+        new URL('../../../.github/ISSUE_TEMPLATE/feature_request.yaml', import.meta.url),
+        'utf8',
+    ),
 };
 const body = `### Problem or use case
 
@@ -492,10 +495,12 @@ test('actual CI entry publishes feedback before invalid exit and keeps body and 
             process.execPath,
             [
                 '--import',
-                new URL('./fixtures/issue-feedback-http.ts', import.meta.url).href,
-                fileURLToPath(new URL('../tooling/issue-feedback.ts', import.meta.url)),
+                new URL('../../fixtures/submissions/issue-feedback-http.ts', import.meta.url).href,
+                fileURLToPath(new URL('../../../tooling/submissions/publish-issue-feedback.ts', import.meta.url)),
             ],
             {
+                cwd: temporary,
+                maxBuffer: 1024 * 1024,
                 env: {
                     ...process.env,
                     ...environment,
@@ -525,6 +530,133 @@ test('actual CI entry publishes feedback before invalid exit and keeps body and 
                 { method: 'POST', path: `${issuePath}/comments` },
             ],
         );
+    } finally {
+        assert.equal(path.dirname(path.resolve(temporary)), path.resolve(os.tmpdir()));
+        rmSync(temporary, { recursive: true, force: true });
+    }
+});
+
+test('supplied Issue feedback imports without local I/O and ignores diagnostic events without requests', () => {
+    const transaction = new URL('../../../tooling/submissions/issue-feedback.ts', import.meta.url).href;
+    const source = [
+        "import assert from 'node:assert/strict';",
+        "import { registerHooks } from 'node:module';",
+        'registerHooks({ resolve(specifier, context, nextResolve) {',
+        "    if (['fs', 'node:fs', 'fs/promises', 'node:fs/promises', 'child_process', 'node:child_process'].includes(specifier)) throw new Error('Forbidden feedback dependency: ' + specifier);",
+        '    return nextResolve(specifier, context);',
+        '} });',
+        'const transaction = await import(' + JSON.stringify(transaction) + ');',
+        'const environment = ' + JSON.stringify(environment) + ';',
+        'const event = ' + JSON.stringify({ ...event, action: 'labeled', label: { name: 'template: invalid' } }) + ';',
+        'const context = transaction.issueFeedbackContext(environment, event);',
+        'assert.equal(context.ignore, true);',
+        "assert.deepEqual(await transaction.runIssueFeedback(context, { bugReport: '', featureRequest: '' }, async () => { assert.fail('Unexpected feedback request.'); }), { status: 'ignored', feedback: 'unchanged' });",
+    ].join('\n');
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', source], {
+        cwd: os.tmpdir(),
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 10_000,
+        maxBuffer: 1024 * 1024,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('publisher admission failures are sanitized and make zero feedback requests', () => {
+    const temporary = mkdtempSync(path.join(os.tmpdir(), 'issue-entry-admission-'));
+    try {
+        const eventFile = path.join(temporary, 'event.json');
+        const fixtureFile = path.join(temporary, 'http.json');
+        const transcript = path.join(temporary, 'calls.json');
+        const identityError = 'Issue feedback requires a matching Issue event and trusted default-branch identity.';
+        const admissionError = 'Issue feedback requires its GitHub Actions event and built-in token.';
+        const cases = [
+            {
+                name: 'extra argv',
+                args: ['unexpected'],
+                token: 'private-token',
+                eventPath: eventFile,
+                eventText: JSON.stringify(event),
+                message: admissionError,
+            },
+            {
+                name: 'missing token',
+                args: [],
+                token: '',
+                eventPath: eventFile,
+                eventText: JSON.stringify(event),
+                message: admissionError,
+            },
+            {
+                name: 'missing event path',
+                args: [],
+                token: 'private-token',
+                eventPath: '',
+                eventText: JSON.stringify(event),
+                message: admissionError,
+            },
+            {
+                name: 'malformed event JSON',
+                args: [],
+                token: 'private-token',
+                eventPath: eventFile,
+                eventText: 'private-invalid-json',
+                message: 'Configuration or unexpected processing failure.',
+            },
+            {
+                name: 'mismatched identity',
+                args: [],
+                token: 'private-token',
+                eventPath: eventFile,
+                eventText: JSON.stringify({
+                    ...event,
+                    repository: { ...event.repository, full_name: 'other/project' },
+                }),
+                message: identityError,
+            },
+        ];
+        for (const row of cases) {
+            writeFileSync(eventFile, row.eventText, 'utf8');
+            writeFileSync(transcript, '[]', 'utf8');
+            writeFileSync(
+                fixtureFile,
+                JSON.stringify({ issue: issue({ body: 'private-body-that-is-invalid' }), transcript }),
+                'utf8',
+            );
+            const result = spawnSync(
+                process.execPath,
+                [
+                    '--import',
+                    new URL('../../fixtures/submissions/issue-feedback-http.ts', import.meta.url).href,
+                    fileURLToPath(new URL('../../../tooling/submissions/publish-issue-feedback.ts', import.meta.url)),
+                    ...row.args,
+                ],
+                {
+                    cwd: temporary,
+                    env: {
+                        ...process.env,
+                        ...environment,
+                        GH_TOKEN: row.token,
+                        GITHUB_EVENT_PATH: row.eventPath,
+                        DCT_ISSUE_HTTP_STATE: fixtureFile,
+                    },
+                    encoding: 'utf8',
+                    timeout: 10_000,
+                    windowsHide: true,
+                    maxBuffer: 1024 * 1024,
+                },
+            );
+            assert.ifError(result.error);
+            assert.equal(result.status, 1, row.name);
+            assert.equal(result.stdout, '', row.name);
+            assert.equal(result.stderr.trim(), 'Issue feedback automation failed: ' + row.message, row.name);
+            assert.doesNotMatch(
+                result.stdout + result.stderr,
+                /private-token|private-body-that-is-invalid|private-invalid-json/,
+            );
+            assert.deepEqual(JSON.parse(readFileSync(transcript, 'utf8')), [], row.name);
+        }
     } finally {
         assert.equal(path.dirname(path.resolve(temporary)), path.resolve(os.tmpdir()));
         rmSync(temporary, { recursive: true, force: true });

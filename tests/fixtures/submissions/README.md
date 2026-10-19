@@ -1,4 +1,4 @@
-# Literal submission evidence
+# Submission fixtures
 
 `unwrapped-squash-message.json` preserves a malformed squash message as negative
 input for strict body-length validation, including a formerly exempt identity.
@@ -17,6 +17,10 @@ long review prose, wide tables, fenced evidence and adjacent trailer-looking tex
 actual commits still receive complete strict validation. Its declared checks are
 synthetic fixture input.
 
-These are controlled literal inputs, not an implementation of submission policy.
-The governance suite reads their original bytes; the fixture declarations do not
-establish actual executed checks. Ancestor [test rules](../../AGENTS.md) apply.
+`issue-feedback-http.ts` replaces only subprocess `fetch` for actual publisher
+regressions. It refuses unexpected routes and records method/path calls in a
+private transcript; it cannot send network traffic or implement submission policy.
+
+The three literal inputs remain original evidence for governance and commitlint;
+their declared checks do not establish executed verification.
+Ancestor [test rules](../../AGENTS.md) apply.

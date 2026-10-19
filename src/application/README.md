@@ -20,10 +20,6 @@
     retries can complete synchronization without repeating a native update.
     A stale candidate also permits URL sync of a verified newer managed copy.
     `app-host-management.ts` owns the App integration and independent work accounting.
-- `plugin-runtime.ts` owns the gateway registry, independent target connections,
-  transport-free MCP dispatch, monitoring and independent official Server lifetimes.
-    The direct HTTP App owns final cleanup; detached core clients retain resources.
-    [Shared core contract](../../docs/shared-core.md) documents the seam.
 - `mcp-lifecycle.ts` validates current identities and serializes per-connection
   lifecycle mutations through idempotent asynchronous operations.
 - `operations.ts` owns memory-only requests, replayable bounded events, waits,
@@ -34,8 +30,9 @@
 
 [ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) adds
 connection-level directory ownership in [Gateway connections](../gateway/connections/README.md)
-alongside resource generations. Core enrolls owners and retains registry/cleanup/
-retry joins and original actual-execution context; the lease spans
+alongside resource generations. [Gateway Core](../gateway/core.ts) enrolls owners
+and retains original actual-execution context; [registry](../gateway/registry.ts)
+owns route membership and retained cleanup/retry joins; the lease spans
 restart, tracks late acquisition and releases only after all app/resource users
 are gone. Explicit start metadata retains directory evidence through failed
 startup and cleanup retries. Metadata updates preserve terminal operation state,
