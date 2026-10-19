@@ -30,6 +30,163 @@ export type DeploymentTransition =
     | (Readonly<{ type: 'select' }> & DeploymentSelection)
     | Readonly<{ type: 'begin-removal' | 'cancel-removal' | 'finish-removal' }>;
 
+export type DeploymentNativeIdentity = Readonly<{
+    platform: 'win32' | 'darwin';
+    account: string;
+    path: string;
+    device: string;
+    inode: string;
+    links: string;
+    size: string;
+    directory: boolean;
+}>;
+
+export type DeploymentUnixRole = 'private' | 'system';
+export type DeploymentEntryPurpose = 'directory' | 'document' | 'operation' | 'use';
+
+/** Linux POSIX ACL group-class mask bounds named grants too; this does not evaluate macOS ACLs. */
+export function hasDeploymentUnixEntryPermissions(
+    entry: Readonly<{ uid: string; gid: string; mode: number; directory: boolean }>,
+    account: string,
+    role: DeploymentUnixRole,
+    purpose: DeploymentEntryPurpose,
+    ancestor: boolean,
+): boolean {
+    const owner = role === 'system' ? '0' : account;
+    const expected =
+        role === 'private' || purpose === 'operation'
+            ? entry.directory
+                ? 0o700
+                : 0o600
+            : entry.directory
+              ? 0o755
+              : 0o644;
+    return !(
+        !/^(0|[1-9]\d{0,9})$/.test(account) ||
+        !Number.isInteger(entry.mode) ||
+        entry.mode < 0 ||
+        entry.mode > 0o777 ||
+        (ancestor
+            ? !entry.directory || ![owner, '0'].includes(entry.uid) || (entry.mode & 0o022) !== 0
+            : entry.uid !== owner || (role === 'system' && entry.gid !== '0') || entry.mode !== expected)
+    );
+}
+
+export function validateDeploymentUnixEntry(
+    entry: Readonly<{ uid: string; gid: string; mode: number; directory: boolean }>,
+    account: string,
+    role: DeploymentUnixRole,
+    purpose: DeploymentEntryPurpose,
+    ancestor: boolean,
+): void {
+    if (!hasDeploymentUnixEntryPermissions(entry, account, role, purpose, ancestor))
+        throw new Error('Deployment entry lacks native account permissions.');
+}
+
+/** Deterministic native-output validation, not an authority issuer or a caller role selector. */
+export function validateDeploymentNativeEntry(
+    value: unknown,
+    expected: DeploymentNativeIdentity,
+    ancestor = false,
+): void {
+    const common = ['platform', 'account', 'owner', 'path', 'device', 'inode', 'links', 'size', 'directory'];
+    fields(value, [
+        ...common,
+        ...(expected.platform === 'win32'
+            ? ['protected', 'reparse', 'dacl', 'filesystem', 'volumeFlags', 'driveType']
+            : ['mode', 'acl', 'filesystem', 'mountFlags', 'lockCapabilities']),
+    ]);
+    function fail(): never {
+        throw new Error('Deployment native authority is unavailable or unsafe.');
+    }
+    for (const name of [
+        'platform',
+        'account',
+        'path',
+        'device',
+        'inode',
+        'directory',
+        ...(!expected.directory ? (['links', 'size'] as const) : []),
+    ] as const)
+        if (value[name] !== expected[name]) fail();
+    for (const name of ['device', 'inode', 'links', 'size'] as const)
+        if (
+            typeof value[name] !== 'string' ||
+            !/^(0|[1-9]\d{0,19})$/.test(value[name]) ||
+            BigInt(value[name]) > 18446744073709551615n
+        )
+            fail();
+    if (value.inode === '0' || (!expected.directory && value.links !== '1')) fail();
+    if (expected.platform === 'win32') {
+        if (
+            !/^S-1-(?:\d+-)+\d+$/.test(expected.account) ||
+            BigInt(expected.device) > 4294967295n ||
+            value.reparse !== false ||
+            value.filesystem !== 'NTFS' ||
+            value.driveType !== 3 ||
+            typeof value.volumeFlags !== 'number' ||
+            !Number.isInteger(value.volumeFlags) ||
+            value.volumeFlags < 0 ||
+            value.volumeFlags > 4294967295 ||
+            (value.volumeFlags & 8) === 0 ||
+            (value.volumeFlags & 0x80000) !== 0 ||
+            (!ancestor && expected.directory && value.protected !== true) ||
+            typeof value.protected !== 'boolean' ||
+            !Array.isArray(value.dacl) ||
+            value.dacl.length === 0 ||
+            value.dacl.length > 128
+        )
+            fail();
+        const principals = new Set([expected.account, 'S-1-5-18', 'S-1-5-32-544']);
+        if (!principals.has(String(value.owner)) || (!ancestor && value.owner !== expected.account)) fail();
+        let accountFull = false;
+        if (!Array.isArray(value.dacl)) fail();
+        for (const ace of value.dacl) {
+            fields(ace, ['sid', 'mask', 'flags', 'type']);
+            if (
+                typeof ace.sid !== 'string' ||
+                !/^S-1-(?:\d+-)+\d+$/.test(ace.sid) ||
+                typeof ace.mask !== 'string' ||
+                !/^(0|[1-9]\d{0,9})$/.test(ace.mask) ||
+                BigInt(ace.mask) > 0x1f01ffn ||
+                (BigInt(ace.mask) & ~0x1f01ffn) !== 0n ||
+                ace.type !== 0 ||
+                ![0, 3, 16, 19].includes(Number(ace.flags)) ||
+                typeof ace.flags !== 'number'
+            )
+                fail();
+            const mask = BigInt(String(ace.mask));
+            if (!ancestor && expected.directory && ace.flags !== 3 && ace.flags !== 19) fail();
+            if (!ancestor && value.protected === false && ace.flags !== 16) fail();
+            if (!principals.has(String(ace.sid)) && (!ancestor || (mask & ~0x1200a9n) !== 0n)) fail();
+            if (ace.sid === expected.account && mask === 0x1f01ffn) accountFull = true;
+        }
+        if (!ancestor && !accountFull) fail();
+    } else {
+        if (
+            !/^(0|[1-9]\d{0,9})$/.test(expected.account) ||
+            (value.owner !== expected.account && (!ancestor || value.owner !== '0')) ||
+            typeof value.mode !== 'number' ||
+            !Number.isInteger(value.mode) ||
+            value.mode < 0 ||
+            value.mode > 0o777 ||
+            (ancestor ? (value.mode & 0o022) !== 0 : value.mode !== (expected.directory ? 0o700 : 0o600)) ||
+            !['absent', 'empty', ...(ancestor ? ['deny-only'] : [])].includes(String(value.acl)) ||
+            value.filesystem !== 'apfs' ||
+            typeof value.mountFlags !== 'number' ||
+            !Number.isInteger(value.mountFlags) ||
+            value.mountFlags < 0 ||
+            value.mountFlags > 4294967295 ||
+            (value.mountFlags & 0x1000) === 0 ||
+            // A trusted ancestor can live on macOS's sealed read-only System volume.
+            // Managed entries must stay writable; ownership-disabled mounts never qualify.
+            (value.mountFlags & (0x200000 | (ancestor ? 0 : 1))) !== 0 ||
+            value.lockCapabilities !== true
+        )
+            fail();
+    }
+}
+
 function fields(value: unknown, keys: readonly string[]): asserts value is Record<string, unknown> {
     if (!isRecord(value) || Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key)))
         throw new Error('Malformed deployment fields.');

@@ -75,16 +75,24 @@ test('C# evidence step rejects archives without the native helper', {
     assert.equal(evidence.shell, 'pwsh');
     const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-codeql-evidence-'));
     try {
-        for (const [entry, expected] of [
-            ['C/repository/src/adapters/windows-native-process.cs', 0],
-            ['C/repository/tests/fixtures/native-window.cs', 1],
+        for (const [entries, expected] of [
+            [
+                [
+                    'C/repository/src/adapters/windows-native-process.cs',
+                    'C/repository/src/adapters/windows-deployment-authority.cs',
+                ],
+                0,
+            ],
+            [['C/repository/src/adapters/windows-native-process.cs'], 1],
+            [['C/repository/src/adapters/windows-deployment-authority.cs'], 1],
+            [['C/repository/tests/fixtures/native-window.cs'], 1],
         ] as const) {
-            const archiveFolder = path.join(folder, expected === 0 ? 'owned' : 'unrelated');
+            const archiveFolder = path.join(folder, `source-${entries.length}-${entries[0]?.split('/').at(-1)}`);
             const setup = `
                 Add-Type -AssemblyName System.IO.Compression.FileSystem
                 [IO.Directory]::CreateDirectory((Join-Path $env:DCT_CODEQL_DATABASE_ROOT 'csharp')) | Out-Null
                 $fixtureArchive = [IO.Compression.ZipFile]::Open((Join-Path $env:DCT_CODEQL_DATABASE_ROOT 'csharp/src.zip'), 'Create')
-                $fixtureArchive.CreateEntry($env:DCT_TEST_SOURCE_ENTRY) | Out-Null
+                foreach ($entry in ($env:DCT_TEST_SOURCE_ENTRIES | ConvertFrom-Json)) { $fixtureArchive.CreateEntry($entry) | Out-Null }
                 $fixtureArchive.Dispose()
             `;
             const result: SpawnSyncReturns<string> = spawnSync(
@@ -93,7 +101,11 @@ test('C# evidence step rejects archives without the native helper', {
                 {
                     encoding: 'utf8',
                     windowsHide: true,
-                    env: { ...process.env, DCT_CODEQL_DATABASE_ROOT: archiveFolder, DCT_TEST_SOURCE_ENTRY: entry },
+                    env: {
+                        ...process.env,
+                        DCT_CODEQL_DATABASE_ROOT: archiveFolder,
+                        DCT_TEST_SOURCE_ENTRIES: JSON.stringify(entries),
+                    },
                 },
             );
             assert.equal(result.status, expected, result.stdout + result.stderr);

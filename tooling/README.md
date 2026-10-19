@@ -13,6 +13,10 @@
   renderer, collects actual graph licenses and stages verified original native
   archives without overwriting an existing stage. `extract-app-zip.ps1` rejects
   unsafe archive paths, duplicate destinations and link entries before extraction.
+  The exact helper/source-input inventory also includes the fixed read-only
+  Windows deployment authority C#/PowerShell and macOS JXA source. They are
+  repository-owned MIT inputs, with no new third-party runtime or notice.
+  Copying these sources does not enable deployment admission or enrollment.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed
@@ -76,16 +80,10 @@
   against the current template only for PR events; commit body/footer rules do
   not apply to it. Every actual non-merge commit in the selected range or ancestry
   is validated directly without message normalization or commit-specific exceptions.
-- [submissions/](submissions/README.md) owns supplied Markdown scanning, current
-  PR-template policy and Issue-form policy, consumed by governance and feedback.
-- `issue-feedback.ts` is the CI-only Issue publisher: it validates trusted event
-  and live Issue identity, consumes current form YAML through the pure policy,
-  paginates owned bot comments, checks stale snapshots and publishes recoverable
-  diagnostic labels/comments. Invalid content fails only after feedback completes.
-  Closed Issues and diagnostic-label events are skipped; ordinary Issues are exempt
-  and stale owned diagnosis is cleared. It has no package command or local hook.
-- `issue-github.ts` owns the fixed public GitHub REST boundary for Issue feedback,
-  bounded requests, redirect refusal, token headers and sanitized transport errors.
+- [submissions/](submissions/README.md) owns supplied Markdown/PR/Issue-form
+  policies, the injected recoverable Issue feedback transaction, fixed public
+  REST adapter and invoked CI publisher. Governance and feedback consume the
+  value policies; invocation alone owns event/forms/credentials and awaited exit.
 - `test-windows-interactive.ts` is the command-line-only GUI lane runner. Without
   `--allow-gui` it returns a successful explicit skip before selecting files. With
   authorization it runs all four interactive files through native `node:test.run`,
@@ -110,7 +108,7 @@ and update the central [host metadata record](../docs/evidence/host-plugin-resea
 Keep selected current fields in the [Host metadata reference](../docs/reference/host-metadata.md)
 linked to that evidence.
 Use package scripts for supported checks. Pure validators never mutate user state
-or publish artifacts. The explicit Issue workflow runs `node tooling/issue-feedback.ts`
+or publish artifacts. The explicit Issue workflow runs `node tooling/submissions/publish-issue-feedback.ts`
 with its trusted Issue event and step-scoped built-in token to update only owned
 diagnostic labels/comments. Ordinary checks and tests never invoke that CI entry
 against GitHub. The separate Release workflow runs `node tooling/releases/publish-release.ts`

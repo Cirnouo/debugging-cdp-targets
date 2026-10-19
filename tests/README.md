@@ -32,6 +32,25 @@ Git hook tests remain contributor-tooling regressions.
   through real owned temporary files. Linux private-account/local-filesystem
   cases skip explicitly elsewhere; unsupported native roles refuse before writes.
   These GUI-free tests do not establish installer or six-cell native acceptance.
+  Linux-only reader-context resample barriers exercise pre-read/post-read real
+  replacements, mixed unsafe permissions and unknown failures; their R1
+  classification correction and Linux execution remain pending.
+- `app-deployment-authority.test.ts` covers strict native SID/UID, protected and
+  inherited ACL templates, ancestors, unsigned identities, APFS/NTFS evidence
+  and Linux private/system mode rules through literal pure inputs.
+- `app-deployment-capabilities.test.ts` exercises the real store with controlled
+  account/native-output/filesystem boundaries: reader refusal, writer authority
+  changes, exact descriptor modes, fixed lease identity, partial-envelope refusal
+  and commit/removal outcomes. Its Windows fixtures block native process creation
+  before spawn, including custom-promisify bypasses. Linux role fixtures replace
+  real/effective UID and filesystem evidence. A controlled macOS full ancestor
+  chain separates a sealed read-only System root from writable Data controls.
+  These fixtures supply no native proof.
+- `app-deployment-native-source.test.ts` executes the fixed macOS source only in
+  a Node VM with controlled ObjC, buffers, descriptors and errno. It checks full
+  unsigned identity precision, separate volume requests, ACL absence versus
+  errors, pinned XNU actual volume-result masks/bounds, identity changes and
+  descriptor closure. Request-only `ATTR_VOL_INFO` is excluded from actual results.
 - `app-singleton.test.ts`, `app-activation.test.ts` and `app-storage.test.ts`
   cover the account-wide advisory lease, bounded activation-only channel,
   installed/portable data selection and refusal to acquire data without ownership.
@@ -271,8 +290,9 @@ Git hook tests remain contributor-tooling regressions.
   labels, reserved footer boundaries and adjacent trailer groups. Disposable Git
   and PR entry points verify exact message and event bytes before and after audits.
 - [tooling/submissions/](tooling/submissions/README.md) owns direct Markdown scanner,
-  supplied PR-template and Issue-form regressions, including literal evidence
-  provenance and adversarial structure/answer cases.
+  supplied PR-template/Issue-form regressions and recoverable Issue feedback,
+  REST/publisher effects and actual workflow trust. Literal evidence provenance,
+  adversarial structure/answer cases and local-I/O isolation remain distinct.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, exact lane commands and syntax plans. Parsed
   CI checks retain canonical versions and names, and require the latest-24
@@ -298,13 +318,6 @@ Git hook tests remain contributor-tooling regressions.
 - `test-lanes.test.ts` recursively classifies every maintained test file into a
   runnable root, explicit tooling/Gateway/Host or interactive lane and retains the
   four-file, eighteen-case interactive inventory without launching fixtures.
-- `issue-feedback.test.ts` exercises the actual fixed-origin REST adapter and
-  CI publisher through fake HTTP: diagnosis, repair, ordinary exemption, trusted
-  bot ownership, paginated comments, stale source rejection, known own label
-  mutation, malformed responses and sanitized failures. No GitHub writes occur.
-- `issue-workflow.test.ts` parses actual workflow YAML to verify trusted same-SHA
-  checkout, reviewed Actions, pinned toolchain, read-only supply-chain gates,
-  minimal writer permissions, step-scoped token and diagnostic recursion exclusion.
 - `hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
   It also verifies staged YAML case-variant routing through the actual lint-staged
@@ -457,7 +470,7 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select twenty-six entries: `tests/*.test.ts`, the ten explicit
+command and `pnpm test:coverage` select twenty-eight entries: `tests/*.test.ts`, the twelve explicit
 tooling suites listed in [tooling tests](tooling/README.md), exactly
 `tests/gateway/owned-tool-arguments.test.ts` and
 `tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
@@ -465,7 +478,7 @@ value suites in [Target tests](gateway/targets/README.md), the four
 [Connections suites](gateway/connections/README.md) and target
 `directory-admission.test.ts`, plus the two explicit
 Host suites in [Host plugin tests](host-plugins/README.md). The thirteen Gateway suites
-retain all twenty-four existing selectors in their original order, with
+retain all twenty-six existing selectors in their original order, with
 `connections/construction-cleanup.test.ts` and `connections/gateway-cleanup.test.ts`
 appended once in that order; default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns

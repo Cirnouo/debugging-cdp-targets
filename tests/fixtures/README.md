@@ -50,13 +50,11 @@ The sealed receipt/builder contract belongs to
 HTTP regression, sealed native execution and actual GUI App acceptance are
 separate evidence.
 
-`issue-feedback-http.ts` replaces only subprocess `fetch` with a private fake
-GitHub boundary for the actual CI entry test. It records request methods/routes
-in a disposable transcript and cannot send network traffic; the test confirms
-feedback publication precedes an invalid exit without printing body or token.
-
-[submissions/](submissions/README.md) owns literal current PR bodies and original
-squash-message evidence used by governance and commitlint regressions.
+[submissions/](submissions/README.md) owns three literal current PR/commit inputs
+used by governance and commitlint, and the private `issue-feedback-http.ts`
+subprocess fetch boundary. It records request methods/routes without network;
+actual publisher regressions check awaited invalid feedback and sanitized
+zero-request admission failures.
 
 `fake-cdp-target.ts` starts a browser-level loopback CDP endpoint for process ownership tests.
 `native-close-runtime.ts` composes the real Core, explicit registration/request

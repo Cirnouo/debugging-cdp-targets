@@ -81,6 +81,8 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/submissions/markdown.test.ts`,
 `tests/tooling/submissions/pull-requests.test.ts`,
 `tests/tooling/submissions/issue-forms.test.ts`,
+`tests/tooling/submissions/issue-feedback.test.ts`,
+`tests/tooling/submissions/issue-workflow.test.ts`,
 `tests/gateway/owned-tool-arguments.test.ts`,
 `tests/host-plugins/payload-integrity.test.ts` and
 `tests/host-plugins/payload-filesystem.test.ts`, plus exactly
@@ -95,7 +97,7 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/connections/directory-operation-evidence.test.ts` and
 `tests/gateway/targets/directory-admission.test.ts`,
 `tests/gateway/connections/construction-cleanup.test.ts` and
-`tests/gateway/connections/gateway-cleanup.test.ts`. These twenty-six selectors
+`tests/gateway/connections/gateway-cleanup.test.ts`. These twenty-eight selectors
 include thirteen Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
@@ -401,8 +403,9 @@ for the fixed protocol, metrics and manual command.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at
-01:47 UTC. C# uses Windows with build-mode none and must prove extraction of the
-native helper from its database source archive. No product build or project
+01:47 UTC. C# uses Windows with build-mode none and must prove extraction of both
+the native process helper and deployment authority helper from its database
+source archive. No product build or project
 dependency install is run. CodeQL Actions use the independently reviewed official
 v4 commit; only analysis jobs can write security events. Generated distribution
 and unchanged upstream directories retain their distribution, integrity and

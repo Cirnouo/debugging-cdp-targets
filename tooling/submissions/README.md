@@ -1,4 +1,4 @@
-# Supplied submission values
+# Submission policy and Issue feedback
 
 - `markdown.ts` scans submission sections at a selected heading depth,
   logical wrapped checkbox labels, adjacent continuations, and content paragraphs.
@@ -17,8 +17,17 @@
   forms throw a distinct configuration error. Ordinary unlabeled Issues are exempt.
   This pure policy has no CLI or local submission hook.
 
-These validators consume supplied strings and labels. The scanner retains literal
-provenance and structural boundaries; each policy owns its distinct template
-semantics. Governance loads the current PR template, and the root Issue feedback
-entry loads form YAML. Feedback execution and its REST adapter remain in the
-parent tooling directory. Ancestor [tooling rules](../AGENTS.md) apply.
+- `issue-feedback.ts` owns the injected recoverable Issue feedback transaction:
+  trusted event/live identity, complete comment discovery, stale snapshots and
+  confirmed diagnostic label/comment changes share one expected snapshot.
+- `github-issues.ts` owns fixed public GitHub REST, bounded requests, redirect
+  refusal, token headers and sanitized failures.
+- `publish-issue-feedback.ts` is the invoked CI entry. It reads event/form files
+  and credentials, awaits the transaction, and fails invalid content only after
+  feedback completes. It has no package command or local hook.
+
+The three value validators consume supplied strings and labels. The scanner
+retains literal provenance; each policy owns its distinct template semantics.
+Governance loads the current PR template. The publisher loads module-rooted form
+YAML and credentials; the transaction receives context/forms/request explicitly.
+Ancestor [tooling rules](../AGENTS.md) apply.

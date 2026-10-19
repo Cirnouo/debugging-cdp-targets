@@ -1,5 +1,8 @@
 # Supply-chain audit tooling
 
+- `../check-security.ts` selects maintained/generated code and configuration
+  inventories before audits. Native PowerShell, JXA and C# helper sources belong
+  to its code inventory, including the sources loaded by other helper wrappers.
 - `audit-policy.ts` validates every pnpm lockfile document, full audit and
   signature reports, and narrowly reviewed vulnerability exceptions. Dependency
   and exception versions use the shared strict version wrapper, including its

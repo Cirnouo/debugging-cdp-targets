@@ -6,6 +6,8 @@
   complete immutable selection identifiers and active/removing/removed transitions.
   Its canonical payload inventory includes all directories/files and contained
   Darwin framework links, with exact OS, architecture and executable bits.
+  Deterministic native identity/permission predicates validate supplied facts
+  without issuing native authority.
   It grants no payload-verification, permission, enrollment or deletion authority.
 - `official-execution.ts` tracks one matching wire identity until real response/close.
 - `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
