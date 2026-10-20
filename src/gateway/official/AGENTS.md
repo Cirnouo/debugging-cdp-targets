@@ -1,4 +1,4 @@
-# Official supplied rules and complete package-file proof
+# Official supplied rules, package-file proof and launch inputs
 
 Apply root, [source](../../AGENTS.md) and [Gateway](../AGENTS.md) instructions
 cumulatively. The options, execution and release-evidence owners operate only on
@@ -11,9 +11,9 @@ options.ts owns reviewed flags, aliases, safe option parsing, complete recipes a
 buildOfficialServerArguments with four explicit inputs. Pass the original supplied
 environment object: no copy, normalization or default reads. Preserve URL refusal,
 selected Windows/POSIX getter semantics, boolean-validation-before-option ordering,
-PWA refusal and original token/output order. The effectful buildServerArguments
-entry in adapters/official-server.ts still owns actual invocation-time defaults;
-its child environment snapshot is a separate later boundary.
+PWA refusal and original token/output order. The effectful buildOfficialLaunchArguments
+entry in server-launch.ts owns actual invocation-time defaults;
+its child environment snapshot remains a separate later boundary.
 
 execution.ts owns only one supplied wire id and once-only terminal latch. Preserve
 exact id type, single assignment, response/result-error XOR, close idempotence and
@@ -36,7 +36,22 @@ build-input-only shim treatment; runtime/delivery permit no shim exception. The
 shared regular-file reader remains in its adapter for fingerprint consumers.
 This role grants no ambient environment/process/clock/network or live-child
 authority. Pure siblings and unknown Gateway owners cannot depend on it, including
-erased imports/reexports/import()/require; actual adapters consume it directly.
+erased imports/reexports/import()/require; actual adapters and only the exact
+server-launch.ts Gateway owner consume it directly.
+
+server-launch.ts owns the complete captureOfficialServerEnvironment,
+buildOfficialLaunchArguments and resolveVerifiedOfficialServerBin functions. Its
+five exact direct dependencies are node:path, ./options.ts, ./release-evidence.ts,
+./package-files.ts and ../../shared/errors.ts. Only environment=process.env at
+parameter0 of captureOfficialServerEnvironment or parameter1 of
+buildOfficialLaunchArguments, and windowsEnvironment=process.platform==='win32'
+at parameter3 of the latter, may read ambient state. Preserve invocation timing,
+original supplied-object getter/spread semantics and separate later child capture.
+No top-level/body/alias/computed reads, clock, network, SDK, native or child-process
+authority is granted. Pure/unknown owners, registry, connections and package-files
+cannot acquire this owner through any value or erased dependency form. Core's
+closed role and actual adapters consume it; complete child/catalog/wire/disposal
+transactions remain in their existing adapters.
 
 Before changing a consumer of target launch/isolation contracts, read the
 [target model instructions](../targets/model/AGENTS.md) and
@@ -51,4 +66,5 @@ live child/catalog or MCP continuation responsibility here, read the canonical
 [instruction disclosure policy](../../../docs/policies/documentation.md#instruction-progressive-disclosure),
 and review cumulative roles with the runtime-source auditor. Pure ownership grants
 none of those additional capabilities; the exact package-file role grants no
-permission to split a transaction or widen its five dependencies.
+permission to split a transaction or widen its five dependencies. The exact launch
+role likewise grants only its named defaults and five dependencies.

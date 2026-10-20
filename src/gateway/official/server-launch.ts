@@ -1,14 +1,14 @@
 import path from 'node:path';
-import { buildOfficialServerArguments } from '../gateway/official/options.ts';
-import { verifyOfficialPackageFiles } from '../gateway/official/package-files.ts';
-import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../gateway/official/release-evidence.ts';
-import { errorMessage } from '../shared/errors.ts';
+import { errorMessage } from '../../shared/errors.ts';
+import { buildOfficialServerArguments } from './options.ts';
+import { verifyOfficialPackageFiles } from './package-files.ts';
+import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from './release-evidence.ts';
 
-export function snapshotOfficialEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function captureOfficialServerEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
     return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1', CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1' };
 }
 
-export function buildServerArguments(
+export function buildOfficialLaunchArguments(
     browserUrl: string,
     environment = process.env,
     mcpArgs: string[] = [],
@@ -18,7 +18,7 @@ export function buildServerArguments(
 }
 
 /** Trusted explicit input only. Missing App/runtime location never discovers another installation. */
-export async function resolveServerBin(options?: {
+export async function resolveVerifiedOfficialServerBin(options?: {
     directory: string;
     release: OfficialReleaseEvidence;
     pnpmInstalled?: boolean;

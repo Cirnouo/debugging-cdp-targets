@@ -162,7 +162,7 @@ test('installed pnpm bin shims are excluded only by the explicit build-input bou
 
 test('Server resolution requires explicit verified input independent of caller cwd, without default discovery', async () => {
     const execute = promisify(execFile);
-    const module = new URL('../../../src/adapters/official-server.ts', import.meta.url).href;
+    const module = new URL('../../../src/gateway/official/server-launch.ts', import.meta.url).href;
     const directory = await realpath(
         path.dirname(createRequire(import.meta.url).resolve('chrome-devtools-mcp/package.json')),
     );
@@ -172,7 +172,7 @@ test('Server resolution requires explicit verified input independent of caller c
         [
             '--input-type=module',
             '--eval',
-            `import { readFile } from 'node:fs/promises'; import { resolveServerBin } from ${JSON.stringify(module)}; const release = JSON.parse(await readFile(${JSON.stringify(releasePath)}, 'utf8')); console.log(await resolveServerBin({directory:${JSON.stringify(directory)}, release, pnpmInstalled:true}));`,
+            `import { readFile } from 'node:fs/promises'; import { resolveVerifiedOfficialServerBin } from ${JSON.stringify(module)}; const release = JSON.parse(await readFile(${JSON.stringify(releasePath)}, 'utf8')); console.log(await resolveVerifiedOfficialServerBin({directory:${JSON.stringify(directory)}, release, pnpmInstalled:true}));`,
         ],
         { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false },
     );
@@ -183,7 +183,7 @@ test('Server resolution requires explicit verified input independent of caller c
             [
                 '--input-type=module',
                 '--eval',
-                `import { resolveServerBin } from ${JSON.stringify(module)}; await resolveServerBin();`,
+                `import { resolveVerifiedOfficialServerBin } from ${JSON.stringify(module)}; await resolveVerifiedOfficialServerBin();`,
             ],
             { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false },
         ),
@@ -203,7 +203,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
         await build({
             stdin: {
                 contents:
-                    "export { resolveServerBin } from './src/adapters/official-server.ts'; export { createOfficialConnection } from './src/adapters/mcp-bridge.ts';",
+                    "export { resolveVerifiedOfficialServerBin } from './src/gateway/official/server-launch.ts'; export { createOfficialConnection } from './src/adapters/mcp-bridge.ts';",
                 resolveDir: fileURLToPath(new URL('../../..', import.meta.url)),
             },
             outfile: output,
@@ -219,7 +219,11 @@ test('packaged resolver verifies every call and rejects missing or changed conte
         const options = { cwd: os.tmpdir(), timeout: 5000, windowsHide: true, shell: false };
         const result = await execute(
             process.execPath,
-            ['--input-type=module', '--eval', `${prelude} console.log(await m.resolveServerBin(explicit));`],
+            [
+                '--input-type=module',
+                '--eval',
+                `${prelude} console.log(await m.resolveVerifiedOfficialServerBin(explicit));`,
+            ],
             options,
         );
         assert.equal(
@@ -233,7 +237,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.resolveServerBin(explicit); const fs = await import('node:fs/promises'); await fs.writeFile(${JSON.stringify(changed)}, 'changed'); await m.resolveServerBin(explicit);`,
+                    `${prelude} await m.resolveVerifiedOfficialServerBin(explicit); const fs = await import('node:fs/promises'); await fs.writeFile(${JSON.stringify(changed)}, 'changed'); await m.resolveVerifiedOfficialServerBin(explicit);`,
                 ],
                 options,
             ),
@@ -245,7 +249,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveServerBin(explicit)});`,
+                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
                 ],
                 options,
             ),
@@ -259,7 +263,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveServerBin(explicit)});`,
+                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
                 ],
                 options,
             ),

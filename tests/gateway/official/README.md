@@ -2,14 +2,14 @@
 
 - `options.test.ts` retains three option/alias/reserved-argument registrations.
 - `execution.test.ts` retains six expanded typed-wire-id/terminal registrations.
-- `server-arguments.test.ts` retains two effectful-default cases and controls
+- `server-arguments.test.ts` retains seven registrations for effectful launch defaults and controls
     selected/inherited/undefined/poisoned environment getters, refusal ordering and
     the bridge's composition-before-await/explicit-args short circuit.
 - `server-arguments-environment.test.ts` retains seven Windows/POSIX case/default/
     validation/precedence cases and all original matrices against supplied inputs.
 
 - `package-files.test.ts` retains six complete release/path/link/shim and explicit
-    source/packaged resolver registrations, one private seven-file fixture, original
+    source/packaged `server-launch.ts` resolver registrations, one private seven-file fixture, original
     byte/digest/mutation/cleanup matrices and the pre-spawn marker refusal.
 
 Default and coverage select these five suites once. Frozen input agreement and

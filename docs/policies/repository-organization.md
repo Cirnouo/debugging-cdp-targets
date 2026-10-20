@@ -43,9 +43,14 @@ consumers. `gateway/official/` owns supplied options/recipes/argument compositio
 wire-terminal values and strict release/manifest evidence. The exact
 `gateway/official/package-files.ts` owns the complete filesystem proof with only
 crypto, filesystem, path, release-evidence and regular-file-reader dependencies;
-pure siblings and unknown Gateway files cannot import it. Existing adapters retain
-invocation-time ambient defaults, child environment/bin verification, actual
-catalog publication and upstream disposal. Core and
+pure siblings and unknown Gateway files cannot import it. The exact
+`gateway/official/server-launch.ts` owns the three complete invocation-time default,
+child environment capture and verified public-bin functions, consuming package
+proof under its five-dependency role. Its only ambient reads are the two named
+environment default RHS expressions and the argument builder's Windows platform
+default. Pure/unknown, registry, connection and package-file owners cannot acquire
+launch authority; Core uses its exact edge and adapters consume it directly.
+Existing adapters retain actual catalog publication, child/wire and upstream disposal. Core and
 bridge keep their original default/capture/await ordering; pure extraction grants
 no new ambient or mutable authority. The package/input/TEMP tests now have separate runtime, security and quality
 owners with an explicit seven-title alias-child oracle. Remaining Official/MCP

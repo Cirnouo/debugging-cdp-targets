@@ -8,19 +8,23 @@ owns core resources and direct HTTP; host plugins are thin.
 Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
 rules, target models and pure Official options/execution/release evidence, the
-exact complete Official package-file proof, or its
+exact complete Official package-file proof and launch-input owner, or its
 exact diagnostics clock, and never depend on
 application/interface or either mutable Gateway service.
 The pure Official owners contain no ambient defaults, package reads, live catalog
-or child/context lifetime authority. Their actual environment default capture,
-child snapshot and verified bin resolution remain in adapters/official-server.ts.
+or child/context lifetime authority. The exact gateway/official/server-launch.ts owns invocation-time environment/
+platform defaults, child snapshots and verified public-bin resolution; live catalog
+and child/context lifetime remain in adapters.
 Before editing these Official owners, read their cumulative
 [Official instructions](gateway/official/AGENTS.md).
 Only gateway/official/package-files.ts owns complete filesystem package verification;
 its exact dependencies are node:crypto, node:fs/promises, node:path,
 ./release-evidence.ts and ../../adapters/file-evidence.ts. It gains no ambient
 process/environment/clock/network authority. Pure owners, including erased syntax,
-cannot depend on that effectful owner; unknown Official siblings remain pure.
+cannot depend on that effectful owner except the exact server-launch.ts consumer;
+unknown Official siblings remain pure. Launch capabilities are limited by the
+cumulative Official instructions, including erased syntax; pure owners, registry,
+connections and package-files cannot acquire launch authority.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact
@@ -42,8 +46,9 @@ Only gateway/core.ts owns the existing managed-connection transaction and actual
 execution/context. Its exact application value providers are client-context.ts,
 mcp-lifecycle.ts, registrations.ts and target-controller.ts. Its reviewed adapters
 remain cdp-router, chrome-profile, data-directory, fixture-diagnostics, mcp-bridge,
-official-server, port-reservation, target-host and tool-catalog; its node imports
-remain crypto, os and path. SDK client, resource-owner and shared client-context
+port-reservation, target-host and tool-catalog; its node imports
+remain crypto, os and path. Core consumes the exact ./official/server-launch.ts
+owner in place of the retired Official adapter. SDK client, resource-owner and shared client-context
 are TYPE-only. Core retains its existing process.env spread, process.platform
 reads and supplied-now fallback to the Date.now reference; it gains no general
 ambient I/O, SDK value dependency or clock-call permission.

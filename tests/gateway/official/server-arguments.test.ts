@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createOfficialConnection } from '../../../src/adapters/mcp-bridge.ts';
-import { buildServerArguments } from '../../../src/adapters/official-server.ts';
 import { buildOfficialServerArguments } from '../../../src/gateway/official/options.ts';
+import { buildOfficialLaunchArguments } from '../../../src/gateway/official/server-launch.ts';
 
-const builders = [buildServerArguments, buildOfficialServerArguments];
+const builders = [buildOfficialLaunchArguments, buildOfficialServerArguments];
 
 test('official server receives a stable browser URL and privacy-safe defaults', () => {
-    assert.deepEqual(buildServerArguments('http://127.0.0.1:30000', {}), [
+    assert.deepEqual(buildOfficialLaunchArguments('http://127.0.0.1:30000', {}), [
         '--browserUrl=http://127.0.0.1:30000',
         '--categoryExtensions=true',
         '--no-usage-statistics',
@@ -17,7 +17,7 @@ test('official server receives a stable browser URL and privacy-safe defaults', 
 
 test('official server switches require explicit boolean environment overrides', () => {
     assert.deepEqual(
-        buildServerArguments('http://127.0.0.1:30000', {
+        buildOfficialLaunchArguments('http://127.0.0.1:30000', {
             DCT_EXTENSIONS: 'false',
             DCT_USAGE_STATISTICS: 'true',
             DCT_PERFORMANCE_CRUX: 'true',
@@ -29,7 +29,7 @@ test('official server switches require explicit boolean environment overrides', 
             '--performance-crux',
         ],
     );
-    assert.throws(() => buildServerArguments('http://127.0.0.1:30000', { DCT_EXTENSIONS: 'yes' }), /boolean/i);
+    assert.throws(() => buildOfficialLaunchArguments('http://127.0.0.1:30000', { DCT_EXTENSIONS: 'yes' }), /boolean/i);
 });
 
 test('official argument composition reads only selected getters in order and preserves inherited POSIX settings', () => {

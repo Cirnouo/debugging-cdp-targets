@@ -68,10 +68,9 @@
 - `tool-catalog.ts` exposes the fixed official catalog, parameter variants,
   complete reviewed Tool validation, actual connection enablement and configuration
   recipes/workspace sources.
-- `official-server.ts` captures invocation-time environment/platform argument defaults,
-    snapshots the child environment and verifies the explicit public Server bin.
-    Deterministic argument composition is supplied to `gateway/official/options.ts`;
-    its current default boundary remains here until the complete launch-owner cut.
+- `gateway/official/server-launch.ts` owns invocation-time environment/platform
+    defaults, child environment capture and explicit verified public-bin resolution;
+    adapters consume that exact owner without changing their preflight/spawn order.
 - Complete official package-file verification is owned by
   `gateway/official/package-files.ts`; runtime and launch adapters consume that proof.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects

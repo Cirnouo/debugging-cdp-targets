@@ -14,17 +14,20 @@ Only diagnostics.ts may read its existing performance.now() clock and import its
 pure Diagnostic/Diagnose contract from domains/control-contract.ts. No other
 clock, environment, filesystem, process, network, native or external-package
 access is permitted to pure owners. The exact Core, registry and directory-lease
-capabilities below and the exact Official package-file role are bounded exceptions,
+capabilities below and the exact Official package-file and launch-input roles are bounded exceptions,
 not Gateway-wide permissions. The same dependency restrictions apply to erased syntax.
 
-Before editing official/ values or filesystem package proof, read its
+Before editing official/ values, filesystem proof or launch inputs, read its
 [cumulative Official instructions](official/AGENTS.md). Only official/package-files.ts
 may import node:crypto, node:fs/promises, node:path, ./release-evidence.ts and
 ../../adapters/file-evidence.ts. Pure owners cannot depend on this effectful proof,
-even through erased syntax; unknown siblings gain none of these rights.
-Ambient Official defaults, child snapshot/bin resolution, actual catalog publication
-and child disposal remain with their existing adapters. The complete package-file
-proof grants only its exact filesystem capabilities and no ambient state authority.
+even through erased syntax; only the exact official/server-launch.ts adds a proof
+consumer. That launch owner retains invocation-time defaults, child environment
+capture and verified bin resolution under its closed dependency/default role.
+Core consumes it through its exact ./official/server-launch.ts edge. Pure owners,
+registry, connections and package-files cannot depend on launch; unknown siblings
+gain none of these rights. Actual catalog publication and child disposal remain
+with their existing adapters. Package-file proof gains no ambient state authority.
 
 BEFORE editing core.ts or registry.ts, read all of the canonical
 [application lifecycle instructions](../application/AGENTS.md), cumulatively with
@@ -75,5 +78,5 @@ Before adding a mutable Gateway responsibility or changing this boundary, read
 [repository organization](../../docs/policies/repository-organization.md) and
 [instruction progressive disclosure](../../docs/policies/documentation.md#instruction-progressive-disclosure),
 then review these rules and the runtime-source auditor together. This slice
-provides no authority beyond the exact Core, registry, connection and package-file
+provides no authority beyond the exact Core, registry, connection, package-file and launch-input
 roles described.

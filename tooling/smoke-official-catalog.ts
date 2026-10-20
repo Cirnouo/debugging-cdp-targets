@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAppOfficialRuntime } from '../src/adapters/app-official-runtime.ts';
 import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
-import { resolveServerBin } from '../src/adapters/official-server.ts';
+import { resolveVerifiedOfficialServerBin } from '../src/gateway/official/server-launch.ts';
 import { OFFICIAL_RELEASE } from './official-release.ts';
 import { isStableVersion } from './version-policy.ts';
 
@@ -45,7 +45,7 @@ export async function smokeOfficialCatalog(source: Source) {
               })
             : {
                   nodeExecutable: process.execPath,
-                  bin: await resolveServerBin({
+                  bin: await resolveVerifiedOfficialServerBin({
                       directory: await realpath(
                           fileURLToPath(new URL('../node_modules/chrome-devtools-mcp/', import.meta.url)),
                       ),
