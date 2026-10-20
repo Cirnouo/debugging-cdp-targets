@@ -210,8 +210,12 @@ contracts only. Actual Windows permission/ACL readback, macOS 15 JXA/Ref/errno
 behavior and Linux multi-account/root execution remain native gates. No native
 installer/portable acceptance is implied by these branches or shipped helpers.
 
-Fresh create-only enrollment and initial installation/state publication remain
-unimplemented. The Windows stage producer composes its complete expected payload
+The explicit contributor-only `stageFreshDesktopInstallation` source composition
+supports Windows x64 fresh enrollment and state-last initial publication. It
+consumes the actual verified stage producer and owns a finite private build-only
+query/create support lifetime. This does not enable default App admission,
+restart-worker or installer integration, and establishes no native acceptance.
+The Windows stage producer composes its complete expected payload
 from authenticated original ZIP entries, the selected original Node runtime,
 actual generated App buffers/licenses/native packages and the complete unchanged
 official release. The fixed extractor authenticates the same read-locked source
@@ -225,8 +229,9 @@ and descriptive original-source/build-input provenance. This result grants no
 runtime authority or protected publication capability. The tree verifier alone
 still establishes observed content agreement. macOS signed bundle/framework links
 and Unix executable bits need their actual source producers; the Windows producer
-fails closed for other platforms. A later enrollment consumer must join source
-production with native protected creation before publishing an initial build.
+fails closed for other platforms. The explicit fresh source consumer joins this
+production with native protected creation before publishing an initial build;
+actual platform permission, compiler/runtime and installer acceptance remain pending.
 The maintained Node runtime-file inventory currently enables Windows x64 only;
 other cells refuse staging until their actual source evidence is supplied.
 Ordinary startup neither creates nor repairs a missing or partial envelope.

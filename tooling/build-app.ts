@@ -1,20 +1,31 @@
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import type { BigIntStats } from 'node:fs';
+import { type FileHandle, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { identifyDeploymentPayload, verifyDeploymentPayload } from '../src/adapters/app-delivery.ts';
-import { verifyAppNativeInputs } from '../src/adapters/app-native.ts';
+import {
+    createFreshDeploymentInstallation,
+    type DeploymentLease,
+    identifyDeploymentInstallation,
+} from '../src/adapters/app-deployment.ts';
+import { loadAppAdvisoryLock, verifyAppNativeInputs } from '../src/adapters/app-native.ts';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
+import {
+    packWindowsDeploymentQueries,
+    preflightWindowsDeploymentCopy,
+} from '../src/adapters/windows-deployment-protocol.ts';
 import {
     type DeploymentPayloadEntry,
     type DeploymentPayloadManifest,
     type DeploymentSelection,
     parseDeploymentPayloadManifest,
+    parseDeploymentState,
 } from '../src/domains/app-deployment.ts';
 import { type AppDistribution, parseAppDistribution } from '../src/domains/app-distribution.ts';
 import {
@@ -55,6 +66,367 @@ export type StagedDesktopApp = Readonly<
 
 function fileIdentity(name: string, bytes: Buffer): AppReleaseFile {
     return Object.freeze({ path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
+}
+
+export class FreshDeploymentError extends Error {
+    readonly outcome: 'not-published' | 'indeterminate';
+    constructor(outcome: 'not-published' | 'indeterminate', cause: unknown) {
+        super(`Fresh deployment ${outcome}; retained objects must not be adopted or automatically replayed.`, {
+            cause,
+        });
+        this.outcome = outcome;
+    }
+}
+
+/** Explicit contributor build only. The source producer is internal and cannot be replaced by caller evidence. */
+export async function stageFreshDesktopInstallation(
+    options: AppBuild & { electronArchive: string; nodeArchive: string; output: string },
+): Promise<Readonly<DeploymentSelection & { installationRoot: string; buildRoot: string; executablePath: string }>> {
+    const request = Object.freeze({
+        root: options.root,
+        kind: options.kind,
+        platform: options.platform,
+        architecture: options.architecture,
+        electronArchive: options.electronArchive,
+        nodeArchive: options.nodeArchive,
+        output: options.output,
+        ...(options.onInputs ? { onInputs: options.onInputs } : {}),
+    });
+    if (
+        process.platform !== 'win32' ||
+        process.arch !== 'x64' ||
+        request.platform !== 'win32' ||
+        request.architecture !== 'x64'
+    )
+        throw new Error('Fresh build enrollment supports Windows x64 only; other native cells remain pending.');
+    parseAppDistribution(
+        { schemaVersion: 1, kind: request.kind, platform: request.platform, architecture: request.architecture },
+        request,
+    );
+    if (!path.isAbsolute(request.output) || path.resolve(request.output) !== request.output)
+        throw new Error('Fresh installation destination must be a canonical absolute new leaf.');
+    const scratch = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-app-enrollment-')));
+    const scratchIdentity = await lstat(scratch, { bigint: true });
+    let operation: FileHandle | undefined;
+    let nativeLifetime: Awaited<ReturnType<typeof createFreshDeploymentInstallation>> | undefined;
+    let use: DeploymentLease | undefined;
+    let stateAttempted = false;
+    let failed = false;
+    let problem: unknown;
+    let result:
+        | Readonly<DeploymentSelection & { installationRoot: string; buildRoot: string; executablePath: string }>
+        | undefined;
+    const record = (error: unknown) => {
+        problem = failed ? new AggregateError([problem, error], 'Fresh transaction/resource failures.') : error;
+        failed = true;
+    };
+    try {
+        const source = await stageDesktopApp({ ...request, output: path.join(scratch, 'source') });
+        const canonicalManifest = Buffer.from(source.canonicalManifest, 'utf8');
+        // First consumer baseline only: no claim of a retained producer-original inode.
+        const sourceIdentity = await lstat(source.root, { bigint: true });
+        const selection = Object.freeze({
+            selectedBuildId: source.selectedBuildId,
+            selectedManifestSha256: source.selectedManifestSha256,
+            platform: request.platform,
+            architecture: request.architecture,
+        });
+        const root = request.output;
+        const nonce = randomUUID();
+        const relativeStage = path.join('.staging', nonce, 'payload');
+        const relativeBuild = path.join('builds', selection.selectedBuildId);
+        preflightWindowsDeploymentCopy(
+            root,
+            relativeStage.split(path.sep).join('/'),
+            source.manifest.entries,
+            canonicalManifest,
+        );
+        // All actually planned fresh/control/stage/final names must fit the real query reply codec
+        // before root creation. This is representability only, never permission evidence.
+        const planned = new Set<string>([root]);
+        for (const relative of [
+            '.deployment',
+            'builds',
+            '.staging',
+            path.join('.staging', nonce),
+            relativeStage,
+            relativeBuild,
+            path.join('.deployment', 'operation.lock'),
+            path.join('.deployment', 'use.lock'),
+            path.join('.deployment', `.installation-${nonce}.json`),
+            path.join('.deployment', `.state-${nonce}.json`),
+            path.join('.deployment', 'installation.json'),
+            path.join('.deployment', 'state.json'),
+        ])
+            planned.add(path.join(root, relative));
+        for (const base of [relativeStage, relativeBuild])
+            for (const relative of [...source.manifest.entries.map((entry) => entry.path), 'payload-manifest.json'])
+                planned.add(path.join(root, base, ...relative.split('/')));
+        packWindowsDeploymentQueries([...planned]);
+        const native = await createFreshDeploymentInstallation(root);
+        nativeLifetime = native;
+        for (const relative of ['.deployment', 'builds', '.staging']) await native.createDirectory(relative);
+        const same = (a: BigIntStats, b: BigIntStats) => a.dev === b.dev && a.ino === b.ino;
+        const regular = (stats: BigIntStats) => {
+            if (!stats.isFile() || stats.isSymbolicLink() || stats.nlink !== 1n)
+                throw new Error('Fresh file must be regular one-link.');
+        };
+        const identities = new Map<string, BigIntStats>();
+        async function check(file: string, expected: BigIntStats) {
+            const stats = await lstat(file, { bigint: true });
+            if (!same(stats, expected)) throw new Error('Fresh object identity changed.');
+            await native.entry(file, stats);
+            return stats;
+        }
+        async function writeNew(file: string, bytes: Buffer, maximum = bytes.length) {
+            if (bytes.length > maximum) throw new Error('Fresh file exceeds its bound.');
+            await native.verifyParent(file);
+            const handle = await open(file, 'wx+');
+            let before: BigIntStats | undefined;
+            let writeError: unknown;
+            let writeFailed = false;
+            try {
+                before = await handle.stat({ bigint: true });
+                regular(before);
+                if (before.size !== 0n) throw new Error('Fresh file is not empty at creation.');
+                await check(file, before);
+                await handle.writeFile(bytes);
+                await handle.sync();
+                const after = await handle.stat({ bigint: true });
+                regular(after);
+                if (!same(before, after) || after.size !== BigInt(bytes.length))
+                    throw new Error('Fresh write identity/length changed.');
+                await check(file, after);
+            } catch (error) {
+                writeFailed = true;
+                writeError = error;
+            }
+            try {
+                await handle.close();
+            } catch (error) {
+                throw writeFailed ? new AggregateError([writeError, error], 'Fresh write and close failed.') : error;
+            }
+            if (writeFailed) throw writeError;
+            if (!before) throw new Error('Fresh write has no actual object identity.');
+            const readback = await open(file, 'r');
+            let readError: unknown;
+            let readFailed = false;
+            try {
+                const named = await check(file, before),
+                    opened = await readback.stat({ bigint: true });
+                regular(named);
+                regular(opened);
+                if (!same(named, opened) || opened.size !== BigInt(bytes.length))
+                    throw new Error('Fresh readback identity/length changed.');
+                const buffer = Buffer.alloc(bytes.length + 1);
+                let used = 0;
+                while (used < buffer.length) {
+                    const read = await readback.read(buffer, used, buffer.length - used, used);
+                    if (read.bytesRead === 0) break;
+                    used += read.bytesRead;
+                }
+                const after = await readback.stat({ bigint: true });
+                regular(after);
+                if (
+                    !same(opened, after) ||
+                    opened.ctimeNs !== after.ctimeNs ||
+                    opened.mtimeNs !== after.mtimeNs ||
+                    after.size !== opened.size ||
+                    !buffer.subarray(0, used).equals(bytes)
+                )
+                    throw new Error('Fresh canonical readback bytes changed.');
+                const current = await check(file, before);
+                if (
+                    current.ctimeNs !== after.ctimeNs ||
+                    current.mtimeNs !== after.mtimeNs ||
+                    current.size !== after.size
+                )
+                    throw new Error('Fresh named readback changed.');
+                identities.set(file, after);
+            } catch (error) {
+                readFailed = true;
+                readError = error;
+            }
+            try {
+                await readback.close();
+            } catch (error) {
+                throw readFailed ? new AggregateError([readError, error], 'Fresh readback and close failed.') : error;
+            }
+            if (readFailed) throw readError;
+        }
+        const operationName = path.join(root, '.deployment/operation.lock');
+        const useName = path.join(root, '.deployment/use.lock');
+        await writeNew(operationName, Buffer.alloc(0));
+        await writeNew(useName, Buffer.alloc(0));
+        const tryLock = await loadAppAdvisoryLock({ schemaVersion: 1, packages: source.provenance.nativePackages });
+        operation = await open(operationName, 'r+');
+        const opened = await operation.stat({ bigint: true });
+        regular(opened);
+        const fixedOperation = identities.get(operationName),
+            fixedUse = identities.get(useName);
+        if (!fixedOperation || !fixedUse || !same(opened, fixedOperation))
+            throw new Error('Fresh operation inode changed.');
+        const fixedLeases: readonly (readonly [string, BigIntStats])[] = [
+            [operationName, fixedOperation],
+            [useName, fixedUse],
+        ];
+        await check(operationName, fixedOperation);
+        if (!tryLock(operation.fd, { shared: false })) throw new Error('Fresh operation lock is unavailable.');
+        async function fixed() {
+            if (!operation) throw new Error('Missing fresh operation descriptor.');
+            const actual = await operation.stat({ bigint: true });
+            regular(actual);
+            if (!same(actual, opened) || actual.size !== 0n) throw new Error('Fresh operation descriptor changed.');
+            const checks = [];
+            for (const [file, expected] of fixedLeases) {
+                const stats = await lstat(file, { bigint: true });
+                regular(stats);
+                if (!same(stats, expected) || stats.size !== 0n) throw new Error('Fresh fixed lease changed.');
+                checks.push({ file, stats });
+            }
+            await native.entries(checks);
+        }
+        await native.createDirectory(path.join('.staging', nonce));
+        await native.createDirectory(relativeStage);
+        const stage = path.join(root, relativeStage);
+        identities.set(stage, await lstat(stage, { bigint: true }));
+        const copied = await native.copyPayload(
+            source.root,
+            sourceIdentity,
+            relativeStage,
+            source.manifest.entries,
+            canonicalManifest,
+        );
+        for (const entry of copied) {
+            const file = path.join(stage, ...entry.path.split('/'));
+            const actual = await lstat(file, { bigint: true });
+            if (String(actual.dev) !== entry.device || String(actual.ino) !== entry.inode)
+                throw new Error('Fresh copied identity changed before its consumer baseline.');
+            identities.set(file, actual);
+        }
+        async function payloadSweep(directory: string) {
+            const checks = [];
+            for (const [file, identity] of identities) {
+                if (file !== stage && !file.startsWith(`${stage}${path.sep}`)) continue;
+                const current = directory + file.slice(stage.length),
+                    stats = await lstat(current, { bigint: true });
+                if (!same(stats, identity)) throw new Error('Fresh payload identity changed.');
+                checks.push({ file: current, stats });
+            }
+            await native.entries(checks);
+        }
+        async function payload(directory: string) {
+            // Each complete sweep has new facts; none survive the actual content read or publication.
+            await payloadSweep(directory);
+            await verifyDeploymentPayload(directory, selection);
+            await payloadSweep(directory);
+            await fixed();
+        }
+        await payload(stage);
+        await native.publish(relativeStage, relativeBuild);
+        const buildRoot = path.join(root, relativeBuild);
+        await payload(buildRoot);
+        const identified = identifyDeploymentInstallation({
+            schemaVersion: 1,
+            installationId: randomUUID(),
+            kind: request.kind,
+            platform: request.platform,
+            architecture: request.architecture,
+            root: { realPath: root, device: String(native.root.dev), inode: String(native.root.ino) },
+        });
+        const installationBytes = Buffer.from(`${JSON.stringify(identified.installation)}\n`, 'utf8');
+        const state = parseDeploymentState(
+            {
+                schemaVersion: 1,
+                installationIdentity: identified.identity,
+                phase: 'active',
+                selectedBuildId: selection.selectedBuildId,
+                selectedManifestSha256: selection.selectedManifestSha256,
+            },
+            identified.identity,
+        );
+        const installationPrepared = path.join('.deployment', `.installation-${nonce}.json`);
+        const statePrepared = path.join('.deployment', `.state-${nonce}.json`);
+        const stateBytes = Buffer.from(`${JSON.stringify(state)}\n`, 'utf8');
+        await writeNew(path.join(root, installationPrepared), installationBytes, 65536);
+        await writeNew(path.join(root, statePrepared), stateBytes, 1024);
+        async function prepared(relative: string, bytes: Buffer) {
+            const file = path.join(root, relative),
+                expected = identities.get(file);
+            if (!expected) throw new Error('Missing owned prepared identity.');
+            const actual = await check(file, expected);
+            regular(actual);
+            if (
+                actual.size !== expected.size ||
+                actual.mtimeNs !== expected.mtimeNs ||
+                actual.ctimeNs !== expected.ctimeNs ||
+                !(await readRegularFile(file)).equals(bytes)
+            )
+                throw new Error('Prepared canonical document changed.');
+        }
+        await fixed();
+        await payload(buildRoot);
+        await prepared(installationPrepared, installationBytes);
+        await native.publish(installationPrepared, path.join('.deployment', 'installation.json'));
+        await fixed();
+        await payload(buildRoot);
+        await prepared(statePrepared, stateBytes);
+        stateAttempted = true;
+        await native.publish(statePrepared, path.join('.deployment', 'state.json'));
+        const reader = await native.openReader(tryLock);
+        if (reader.identity !== identified.identity) throw new Error('Fresh read admission identity disagrees.');
+        use = await reader.tryAcquire('use');
+        if (!use || JSON.stringify(await reader.read(use)) !== JSON.stringify(state))
+            throw new Error('Fresh read admission failed.');
+        await fixed();
+        await payload(buildRoot);
+        result = Object.freeze({
+            selectedBuildId: selection.selectedBuildId,
+            selectedManifestSha256: selection.selectedManifestSha256,
+            installationRoot: root,
+            buildRoot,
+            executablePath: path.join(buildRoot, 'electron.exe'),
+        });
+    } catch (error) {
+        record(error);
+    } finally {
+        if (use) {
+            try {
+                await use.release();
+            } catch (error) {
+                record(error);
+            }
+        }
+        if (operation) {
+            try {
+                await operation.close();
+            } catch (error) {
+                record(error);
+            }
+        }
+        if (nativeLifetime) {
+            try {
+                await nativeLifetime.close();
+            } catch (error) {
+                record(error);
+            }
+        }
+    }
+    if (failed) throw new FreshDeploymentError(stateAttempted ? 'indeterminate' : 'not-published', problem);
+    if (!result) throw new FreshDeploymentError('indeterminate', new Error('Missing fresh result.'));
+    try {
+        const current = await lstat(scratch, { bigint: true });
+        if (
+            current.dev !== scratchIdentity.dev ||
+            current.ino !== scratchIdentity.ino ||
+            (await realpath(scratch)) !== scratch
+        )
+            throw new Error('Source scratch identity changed; retained.');
+        await rm(scratch, { recursive: true });
+    } catch (error) {
+        throw new FreshDeploymentError('indeterminate', error);
+    }
+    return result;
 }
 function demandSourceFiles(files: ReadonlyMap<string, Buffer>, expected: readonly AppReleaseFile[]) {
     if (files.size !== expected.length) throw new Error('App payload original source inventory changed.');
@@ -281,8 +653,6 @@ export async function generateAppFiles(options: AppBuild) {
         'windows-cdp-helper.ps1',
         'windows-native-helper.ps1',
         'windows-native-process.cs',
-        'windows-deployment-authority.ps1',
-        'windows-deployment-authority.cs',
         'macos-deployment-authority.jxa',
     ])
         files.set(file, await readRegularFile(path.join(root, 'src/adapters', file)));
@@ -319,8 +689,6 @@ export async function generateAppFiles(options: AppBuild) {
             'windows-cdp-helper.ps1',
             'windows-native-helper.ps1',
             'windows-native-process.cs',
-            'windows-deployment-authority.ps1',
-            'windows-deployment-authority.cs',
             'macos-deployment-authority.jxa',
         ].map((file) => `src/adapters/${file}`),
     ]);

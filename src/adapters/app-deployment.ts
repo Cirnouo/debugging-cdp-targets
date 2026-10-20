@@ -10,7 +10,7 @@ import {
     transitionDeploymentState,
 } from '../domains/app-deployment.ts';
 import { errorCode } from '../shared/errors.ts';
-import { openDeploymentNativeAuthority } from './app-deployment-native.ts';
+import { createFreshDeploymentRoot, openDeploymentNativeAuthority } from './app-deployment-native.ts';
 import type { AdvisoryLock } from './app-singleton.ts';
 
 export type DeploymentLeaseKind = 'operation' | 'use' | 'deletion';
@@ -61,6 +61,15 @@ function unchanged(first: BigIntStats, second: BigIntStats) {
         first.mtimeNs === second.mtimeNs &&
         first.ctimeNs === second.ctimeNs
     );
+}
+
+/** Canonical content identity only; native admission and source provenance are separate. */
+export function identifyDeploymentInstallation(value: unknown) {
+    const installation = parseDeploymentInstallation(value);
+    return Object.freeze({
+        installation,
+        identity: createHash('sha256').update(JSON.stringify(installation)).digest('hex'),
+    });
 }
 
 async function readDocument<T>(
@@ -127,6 +136,7 @@ async function openInstallation(
     directory: string,
     options: { tryLock: AdvisoryLock; stateIO?: StateIO },
     writingAuthority: boolean,
+    freshAuthority?: Awaited<ReturnType<typeof openDeploymentNativeAuthority>>,
 ) {
     if (
         !path.isAbsolute(directory) ||
@@ -134,7 +144,7 @@ async function openInstallation(
         (await realpath(directory)) !== directory
     )
         throw new Error('Deployment root identity must be its canonical absolute directory.');
-    const authority = await openDeploymentNativeAuthority(directory, writingAuthority);
+    const authority = freshAuthority ?? (await openDeploymentNativeAuthority(directory, writingAuthority));
     const envelope = path.join(directory, '.deployment');
     const rootIdentity = await lstat(directory, { bigint: true });
     const envelopeIdentity = await lstat(envelope, { bigint: true });
@@ -145,6 +155,26 @@ async function openInstallation(
     let deletionAcquisitions = 0;
 
     async function verifyRoot() {
+        if (process.platform === 'win32') {
+            const checks = await authority.ancestorChecks();
+            for (const [file, identity] of [
+                [directory, rootIdentity],
+                [envelope, envelopeIdentity],
+            ] as const) {
+                const stats = await lstat(file, { bigint: true });
+                if (
+                    !stats.isDirectory() ||
+                    stats.isSymbolicLink() ||
+                    !sameIdentity(identity, stats) ||
+                    (await realpath(file)) !== file
+                )
+                    throw new Error('Deployment root/envelope identity changed.');
+                checks.push({ file, stats, purpose: 'directory' });
+            }
+            await authority.entries(checks);
+            if (rootIdentity.dev !== envelopeIdentity.dev) throw new Error('Deployment envelope crosses filesystems.');
+            return;
+        }
         await authority.ancestors();
         for (const [name, identity] of [
             [directory, rootIdentity],
@@ -164,14 +194,18 @@ async function openInstallation(
     }
     await verifyRoot();
     const fixedLeases = new Map<string, BigIntStats>();
+    const initialFixed: Parameters<typeof authority.entries>[0][number][] = [];
     for (const name of ['operation.lock', 'use.lock'] as const) {
         const file = path.join(envelope, name);
         const entry = await lstat(file, { bigint: true });
         regular(entry);
         if (entry.size !== 0n || entry.dev !== rootIdentity.dev) throw new Error('Deployment fixed lease is invalid.');
-        await authority.entry(file, entry, name === 'operation.lock' ? 'operation' : 'use');
+        if (process.platform === 'win32')
+            initialFixed.push({ file, stats: entry, purpose: name === 'operation.lock' ? 'operation' : 'use' });
+        else await authority.entry(file, entry, name === 'operation.lock' ? 'operation' : 'use');
         fixedLeases.set(file, entry);
     }
+    if (process.platform === 'win32') await authority.entries(initialFixed);
     const document = Object.freeze({ receipt: authority.documentReceipt, native: authority.document });
     const original = await readDocument(installationFile, 65536, parseDeploymentInstallation, document);
     const installation: DeploymentInstallation = original.value;
@@ -185,17 +219,25 @@ async function openInstallation(
         throw new Error('Deployment installation has foreign physical root identity.');
     if (authority.role === 'system' && installation.kind !== 'installed')
         throw new Error('System deployment metadata must describe an installed distribution.');
-    const identity = createHash('sha256').update(JSON.stringify(installation)).digest('hex');
+    const { identity } = identifyDeploymentInstallation(installation);
 
     async function verifyInstallation() {
         await verifyRoot();
+        const checks: Parameters<typeof authority.entries>[0][number][] = [];
         for (const [file, identity] of fixedLeases) {
             const entry = await lstat(file, { bigint: true });
             regular(entry);
             if (!sameIdentity(identity, entry) || entry.size !== 0n)
                 throw new Error('Deployment fixed lease identity changed.');
-            await authority.entry(file, entry, path.basename(file) === 'operation.lock' ? 'operation' : 'use');
+            if (process.platform === 'win32')
+                checks.push({
+                    file,
+                    stats: entry,
+                    purpose: path.basename(file) === 'operation.lock' ? 'operation' : 'use',
+                });
+            else await authority.entry(file, entry, path.basename(file) === 'operation.lock' ? 'operation' : 'use');
         }
+        if (process.platform === 'win32') await authority.entries(checks);
         if (
             !(await readDocument(installationFile, 65536, parseDeploymentInstallation, document)).bytes.equals(
                 original.bytes,
@@ -427,8 +469,7 @@ async function openInstallation(
 }
 
 /** Normal App/bridge admission: no operation, deletion or state-write capability. */
-export async function openDeploymentInstallation(directory: string, options: { tryLock: AdvisoryLock }) {
-    const store = await openInstallation(directory, options, false);
+function readerView(store: Awaited<ReturnType<typeof openInstallation>>) {
     return Object.freeze({
         installation: store.installation,
         identity: store.identity,
@@ -437,6 +478,20 @@ export async function openDeploymentInstallation(directory: string, options: { t
             if (kind !== 'use') throw new Error('Deployment reader requires writer authority for that operation.');
             return store.tryAcquire(kind);
         },
+    });
+}
+
+export async function openDeploymentInstallation(directory: string, options: { tryLock: AdvisoryLock }) {
+    return readerView(await openInstallation(directory, options, false));
+}
+
+/** Concrete contributor build lifetime. Every reader open resamples actual native facts. */
+export async function createFreshDeploymentInstallation(directory: string) {
+    const native = await createFreshDeploymentRoot(directory);
+    return Object.freeze({
+        ...native,
+        openReader: async (tryLock: AdvisoryLock) =>
+            readerView(await openInstallation(directory, { tryLock }, false, await native.openReaderAuthority())),
     });
 }
 
