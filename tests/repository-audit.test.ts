@@ -162,7 +162,7 @@ test('runtime parser approvals belong only to their exact reviewed consumers', (
         [],
     );
     assert.deepEqual(
-        validateRuntimeSource('src/adapters/host-user-intent.ts', "import { parse } from 'smol-toml';"),
+        validateRuntimeSource('src/host-plugins/user-intent.ts', "import { parse } from 'smol-toml';"),
         [],
     );
     for (const [file, specifier] of [
@@ -170,9 +170,215 @@ test('runtime parser approvals belong only to their exact reviewed consumers', (
         ['src/domains/software-version.ts', 'semver'],
         ['src/domains/software-version.ts', 'node:fs'],
         ['src/adapters/other.ts', 'smol-toml'],
+        ['src/adapters/host-user-intent.ts', 'smol-toml'],
         ['src/domains/other.ts', 'smol-toml'],
     ])
         assert.ok(validateRuntimeSource(file ?? '', `import x from '${specifier}';`).length);
+});
+
+test('Host intent roles admit only the exact parser and selected-file reader capabilities', () => {
+    for (const [file, dependency, onlyType] of [
+        ['src/host-plugins/user-intent.ts', 'smol-toml', false],
+        ['src/host-plugins/user-intent.ts', '../domains/host-management.ts', false],
+        ['src/host-plugins/user-intent.ts', '../shared/errors.ts', false],
+        ['src/host-plugins/native/user-intent-file.ts', 'node:fs/promises', false],
+        ['src/host-plugins/native/user-intent-file.ts', 'node:path', false],
+        ['src/host-plugins/native/user-intent-file.ts', '../../domains/host-management.ts', true],
+        ['src/host-plugins/native/user-intent-file.ts', '../../shared/errors.ts', false],
+        ['src/host-plugins/native/user-intent-file.ts', '../../adapters/file-evidence.ts', false],
+        ['src/host-plugins/native/user-intent-file.ts', '../user-intent.ts', false],
+        ['src/adapters/native-host-plugins.ts', '../host-plugins/user-intent.ts', false],
+        ['src/adapters/native-host-plugins.ts', '../host-plugins/native/user-intent-file.ts', false],
+    ] as const)
+        for (const { source, erased } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            if (!onlyType || erased) assert.deepEqual(errors, [], `${file}: ${source}`);
+            else
+                assert.ok(
+                    errors.some((error) => !error.includes('invalid source')),
+                    `${file}: ${source}`,
+                );
+        }
+});
+
+test('Host intent roles reject undeclared capabilities and retired parser grants in every dependency form', () => {
+    for (const [file, dependencies] of [
+        [
+            'src/host-plugins/user-intent.ts',
+            [
+                'node:fs/promises',
+                'node:path',
+                'node:util',
+                '../adapters/file-evidence.ts',
+                '../adapters/native-host-plugins.ts',
+                './native/user-intent-file.ts',
+                './payload-integrity.ts',
+                '../domains/unknown.ts',
+                '../shared/unknown.ts',
+                '../gateway/core.ts',
+                '../gateway/diagnostics.ts',
+                '@modelcontextprotocol/core',
+            ],
+        ],
+        [
+            'src/host-plugins/native/user-intent-file.ts',
+            [
+                'smol-toml',
+                'node:fs',
+                'node:child_process',
+                'node:http',
+                'node:util',
+                '../../adapters/native-host-plugins.ts',
+                '../../adapters/verified-plugin-files.ts',
+                '../../domains/unknown.ts',
+                '../../shared/unknown.ts',
+                '../payload-integrity.ts',
+                '../../gateway/core.ts',
+                '../../gateway/diagnostics.ts',
+                '@modelcontextprotocol/core',
+            ],
+        ],
+        ['src/adapters/host-user-intent.ts', ['smol-toml']],
+        ['src/host-plugins/payload-integrity.ts', ['smol-toml']],
+        ['src/host-plugins/unreviewed.ts', ['smol-toml', 'node:fs', '../adapters/file-evidence.ts']],
+        ['src/host-plugins/native/unreviewed.ts', ['smol-toml', 'node:path', '../../adapters/file-evidence.ts']],
+    ] as const)
+        for (const dependency of dependencies)
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(
+                    validateRuntimeSource(file, source).some((error) => !error.includes('invalid source')),
+                    `${file}: ${source}`,
+                );
+});
+
+test('Host intent incoming edges reject pure and unknown callers including erased and normalized paths', () => {
+    for (const [file, prefix] of [
+        ['src/domains/unreviewed.ts', '../host-plugins'],
+        ['src/shared/unreviewed.ts', '../host-plugins'],
+        ['src/gateway/unreviewed.ts', '../host-plugins'],
+        ['src/host-plugins/payload-integrity.ts', '.'],
+        ['src/host-plugins/unreviewed.ts', '.'],
+        ['src/host-plugins/native/unreviewed.ts', '..'],
+        ['src/adapters/unreviewed.ts', '../host-plugins'],
+        ['src/application/unreviewed.ts', '../host-plugins'],
+        ['src/interface/unreviewed.ts', '../host-plugins'],
+        ['src/interface/app-renderer.ts', '../host-plugins'],
+    ] as const)
+        for (const target of [
+            'user-intent.ts',
+            'native/user-intent-file.ts',
+            './native/../user-intent.ts',
+            'native/../native/user-intent-file.ts',
+        ])
+            for (const { source } of connectionDependencyForms(`${prefix}/${target}`))
+                assert.ok(
+                    validateRuntimeSource(file, source).some((error) => !error.includes('invalid source')),
+                    `${file}: ${source}`,
+                );
+    for (const file of ['src/host-plugins/user-intent.ts', 'src/host-plugins/native/user-intent-file.ts'])
+        for (const { source } of connectionDependencyForms(
+            file.endsWith('/user-intent.ts')
+                ? './native/../native/user-intent-file.ts'
+                : '../native/../native/user-intent-file.ts',
+        ))
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const dependency of [
+        '../host-plugins/./user-intent.ts',
+        '../host-plugins/native/../native/user-intent-file.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource('src/adapters/native-host-plugins.ts', source), [], source);
+});
+
+test('Host intent exact roles cannot be acquired by near names or prototype keys', () => {
+    for (const file of [
+        'src/host-plugins/user-intents.ts',
+        'src/host-plugins/native/user-intent-files.ts',
+        'src/host-plugins/toString',
+        'src/host-plugins/constructor',
+        'src/host-plugins/__proto__',
+        'src/host-plugins/native/toString',
+        'src/host-plugins/native/constructor',
+        'src/host-plugins/native/__proto__',
+    ])
+        for (const dependency of ['smol-toml', 'node:fs/promises', 'node:path'])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const dependency of [
+        '../../domains/./host-management.ts',
+        '../../adapters/./file-evidence.ts',
+        '../native/../user-intent.ts',
+    ])
+        for (const { source, erased } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource('src/host-plugins/native/user-intent-file.ts', source);
+            if (!dependency.includes('host-management') || erased) assert.deepEqual(errors, [], source);
+            else assert.ok(errors.length, source);
+        }
+});
+
+test('Host intent reader and pure siblings retain computed-module and ambient I/O guards', () => {
+    for (const file of [
+        'src/host-plugins/user-intent.ts',
+        'src/host-plugins/native/user-intent-file.ts',
+        'src/host-plugins/unreviewed.ts',
+        'src/host-plugins/native/unreviewed.ts',
+    ]) {
+        for (const source of [
+            'const value = import(moduleName);',
+            'const value = require?.(moduleName);',
+            'const value = (require as (name: string) => unknown)?.(moduleName);',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('computed module dependencies')),
+                `${file}: ${source}`,
+            );
+        assert.deepEqual(
+            validateRuntimeSource(
+                file,
+                'interface RecordValue { performance(): number; Date(): number; process(): string; }',
+            ),
+            [],
+            file,
+        );
+        for (const source of [
+            'const value = process.env;',
+            'const value = process?.env;',
+            'const value = (process as {env: unknown})["env"];',
+            'const {env} = process;',
+            'const value = process.argv;',
+            'const value = Date.now();',
+            'const clock = Date;',
+            'const value = new Date();',
+            'const value = performance.now();',
+            'const {now} = performance;',
+            'const value = globalThis.global.process.env;',
+            'const value = global?.globalThis?.Date.now();',
+            'const value = globalThis?.["globalThis"]?.["performance"]?.now();',
+            'const ambient = globalThis.global; const value = ambient.process.env;',
+            'const {performance: clock} = globalThis.globalThis;',
+            'const value = fetch(url);',
+            'const value = new WebSocket(url);',
+            'const value = new XMLHttpRequest();',
+            'const value = globalThis.global["fetch"](url);',
+            'interface RecordValue { [performance](): number; }',
+            'const record = { performance() { return process.env; } };',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => !error.includes('invalid source')),
+                `${file}: ${source}`,
+            );
+    }
+});
+
+test('Host intent roles accept both complete sources and their actual native consumer', async () => {
+    for (const file of [
+        'src/host-plugins/user-intent.ts',
+        'src/host-plugins/native/user-intent-file.ts',
+        'src/adapters/native-host-plugins.ts',
+    ]) {
+        const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+        assert.deepEqual(validateRuntimeSource(file, source), [], file);
+    }
 });
 
 test('gateway imports only public split SDK entry points', () => {

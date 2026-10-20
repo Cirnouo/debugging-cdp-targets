@@ -11,9 +11,11 @@ Unreleased, with no production stable candidate or feed.
     selections, cached summaries and actual native-job barriers, not payload proof.
 - [Host Plugin manager](../../src/application/host-plugin-manager.ts) owns inspect,
     update/checkpoint, receipt restoration and URL synchronization as one transaction.
-- [Native host adapters](../../src/adapters/native-host-plugins.ts) and
-    [user intent](../../src/adapters/host-user-intent.ts) own concrete CLI/config
-    evidence and refusal boundaries. [Git source](../../src/adapters/git-plugin-source.ts)
+- [Native host adapters](../../src/adapters/native-host-plugins.ts) retain concrete
+    CLI/receipt authority and publication order. [User intent](../../src/host-plugins/user-intent.ts)
+    owns supplied parsing and transition validation without I/O;
+    [selected-file evidence](../../src/host-plugins/native/user-intent-file.ts)
+    owns bounded configuration acquisition and refusal. [Git source](../../src/adapters/git-plugin-source.ts)
     verifies immutable source. [Host payload integrity](../../src/host-plugins/payload-integrity.ts)
     owns pure byte-map proof, endpoint evidence and the own URL literal overlay.
     [Verified Plugin files](../../src/adapters/verified-plugin-files.ts) owns

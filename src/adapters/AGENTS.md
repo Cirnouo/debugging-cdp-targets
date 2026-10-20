@@ -4,6 +4,13 @@ Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
 
+Before editing `native-host-plugins.ts` intent observations or native transitions,
+read cumulative [Host instructions](../host-plugins/AGENTS.md),
+[selected-file instructions](../host-plugins/native/AGENTS.md) and the
+[accepted singleton plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md).
+The native adapter retains complete command/receipt ownership and publication
+order; supplied intent validation and selected-file acquisition have those owners.
+
 Node child processes use shell:false. Portable target launches use windowsHide:false,
 detached:true and ignored stdio. Windows native support preserves normal GUI show
 state while suppressing auxiliary consoles; fixed helpers remain hidden.

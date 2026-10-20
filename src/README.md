@@ -14,7 +14,8 @@ The singleton App owns direct HTTP, management and native resources. The
     models, structured launch/isolation rules, bounded clock-backed diagnostics
     and complete resource-generation/directory-lease lifetime in `connections/`,
     plus supplied Official options, wire-terminal values and release evidence in `official/`.
-- `host-plugins/`: pure payload byte proof and own-endpoint overlays.
+- `host-plugins/`: pure payload byte proof, own-endpoint overlays and supplied
+    user-intent parsing/transition validation, plus selected-file evidence in `native/`.
 - `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.

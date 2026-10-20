@@ -176,11 +176,10 @@ Git hook tests remain contributor-tooling regressions.
     independent partial failures and candidate-free URL sync of newer managed copies.
 - `native-host-plugins.test.ts` exercises the two actual command/output contracts
     through process I/O fixtures, safe scope/path resolution and hidden user pins.
-- `host-user-intent.test.ts` checks standard TOML forms, strict own intent,
-    duplicate/prototype rejection and preservation of unrelated configuration.
 - `host-plugins/` separates pure payload proof and real disposable-filesystem
     endpoint writes/readback, links and Claude's researched installed lease
-    directory; see its [suite inventory](host-plugins/README.md).
+    directory, plus supplied user-intent parsing/privacy and pinned refusal;
+    see its [suite inventory](host-plugins/README.md).
 - `managed-plugin-receipts.test.ts` checks persistent management metadata,
     secret-free round trips, corruption/future schemas, forged offsets, links and
     complete source hash revalidation across fresh manager instances.
@@ -504,14 +503,14 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select forty-three entries: `tests/*.test.ts`, the
-twenty-three explicit [tooling suites](tooling/README.md), two explicit
+command and `pnpm test:coverage` select forty-four entries: `tests/*.test.ts`, the
+twenty-three explicit [tooling suites](tooling/README.md), three explicit
 [Host suites](host-plugins/README.md) and seventeen Gateway suites. Gateway selection
 retains argument parsing, seven [Target suites](gateway/targets/README.md), five
 [connection/directory suites](gateway/connections/README.md) and the four explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
-append once in that order. Default commands do not launch
+append once in that order, followed once by Host user-intent. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
