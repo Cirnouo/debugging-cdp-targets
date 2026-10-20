@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { buildOfficialServerArguments } from '../gateway/official/options.ts';
+import { verifyOfficialPackageFiles } from '../gateway/official/package-files.ts';
 import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../gateway/official/release-evidence.ts';
 import { errorMessage } from '../shared/errors.ts';
-import { verifyOfficialPackage } from './official-package.ts';
 
 export function snapshotOfficialEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
     return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1', CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1' };
@@ -27,7 +27,9 @@ export async function resolveServerBin(options?: {
         if (!options || !path.isAbsolute(options.directory))
             throw new Error('Explicit verified runtime location is required.');
         const evidence = parseOfficialReleaseEvidence(options.release);
-        await verifyOfficialPackage(options.directory, evidence, { pnpmInstalled: options.pnpmInstalled === true });
+        await verifyOfficialPackageFiles(options.directory, evidence, {
+            pnpmInstalled: options.pnpmInstalled === true,
+        });
         return path.join(options.directory, evidence.bin);
     } catch (error) {
         throw new Error(

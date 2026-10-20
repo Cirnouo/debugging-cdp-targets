@@ -284,6 +284,7 @@ export function validateRuntimeSource(file: string, source: string) {
     const core = file === 'src/gateway/core.ts';
     const registry = file === 'src/gateway/registry.ts';
     const gatewayService = core || registry;
+    const officialPackageFiles = file === 'src/gateway/official/package-files.ts';
     const reviewedAmbient = new Set<Node>();
     visit(ast, (node, parent, grandparent) => {
         if (core && node.type === 'MemberExpression' && !node.computed && node.object.type === 'Identifier') {
@@ -369,6 +370,19 @@ export function validateRuntimeSource(file: string, source: string) {
             errors.push(`${file}: pure owners cannot depend on mutable connection owners.`);
         if (layer === 'adapters' && mutableConnection)
             errors.push(`${file}: adapters cannot depend on mutable connection owners.`);
+        if (
+            officialPackageFiles &&
+            ![
+                'node:crypto',
+                'node:fs/promises',
+                'node:path',
+                './release-evidence.ts',
+                '../../adapters/file-evidence.ts',
+            ].includes(specifier)
+        )
+            errors.push(`${file}: unapproved Official package-file proof dependency.`);
+        if (pure && !officialPackageFiles && resolved === 'src/gateway/official/package-files.ts')
+            errors.push(`${file}: pure owners cannot depend on Official package files.`);
         if (gatewayService) {
             const permittedValue = (
                 core
@@ -438,6 +452,7 @@ export function validateRuntimeSource(file: string, source: string) {
             gateway &&
             !connectionOwner &&
             !gatewayService &&
+            !officialPackageFiles &&
             (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
         )
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);

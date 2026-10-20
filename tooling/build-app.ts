@@ -9,7 +9,6 @@ import { build } from 'esbuild';
 import { identifyDeploymentPayload, verifyDeploymentPayload } from '../src/adapters/app-delivery.ts';
 import { verifyAppNativeInputs } from '../src/adapters/app-native.ts';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import {
     type DeploymentPayloadEntry,
     type DeploymentPayloadManifest,
@@ -24,6 +23,7 @@ import {
     parseAppNativeEvidence,
     parseAppReleaseInputs,
 } from '../src/domains/app-release.ts';
+import { verifyOfficialPackageFiles } from '../src/gateway/official/package-files.ts';
 import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
@@ -187,7 +187,7 @@ export async function readAppVersion(root: string) {
 }
 export async function readAppOfficialFiles(root: string) {
     const { release } = await verifyOfficialInputs(root);
-    return verifyOfficialPackage(await realpath(path.join(root, 'node_modules', release.name)), release, {
+    return verifyOfficialPackageFiles(await realpath(path.join(root, 'node_modules', release.name)), release, {
         pnpmInstalled: true,
     });
 }

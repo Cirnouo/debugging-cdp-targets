@@ -237,6 +237,14 @@ only clock-backed `measured` moves to `src/gateway/diagnostics.ts`. The final
 pending until the actual App UI and CDP domain consumers move coherently. This
 interim placement does not complete O4 or the whole Gateway target.
 
+The bounded O6 package-file cut owns complete filesystem proof in
+`gateway/official/package-files.ts` as `verifyOfficialPackageFiles`, with five exact
+dependencies and pure-sibling inverse guards. Its nine original mixed regressions
+are split into six runtime, two tooling security and one real TEMP alias case;
+seven explicit executed-title observations retain the complete child oracle.
+Both safe lanes explicitly select all three destinations. Ambient launch defaults,
+full server launch, live catalog/upstream and MCP continuation remain unfinished.
+
 ## Per-batch workflow and complete-task gates
 
 Use an independent managed worktree, test-first meaningful regressions, focused

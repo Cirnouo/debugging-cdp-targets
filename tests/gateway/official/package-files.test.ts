@@ -9,83 +9,15 @@ import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
-import { parseOfficialReleaseEvidence } from '../src/gateway/official/release-evidence.ts';
-import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../src/shared/constants.ts';
-import { isRecord } from '../src/shared/errors.ts';
-import { readLockInventory } from '../tooling/security/audit-policy.ts';
-import { verifyOfficialInputs } from '../tooling/security/official-inputs.ts';
-
-test('reviewed official release agrees with exact build dependency and isolated lock', async () => {
-    const manifest: unknown = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-    assert.ok(isRecord(manifest) && isRecord(manifest.devDependencies));
-    assert.equal(manifest.devDependencies[PACKAGE_NAME], PACKAGE_VERSION);
-    const release: unknown = JSON.parse(
-        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
-    );
-    assert.ok(isRecord(release));
-    assert.equal(release.name, PACKAGE_NAME);
-    assert.equal(release.version, PACKAGE_VERSION);
-    assert.equal(release.registry, NPM_REGISTRY);
-    assert.equal(release.tarball, `${NPM_REGISTRY}/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz`);
-    assert.equal(
-        release.integrity,
-        'sha512-CytJ/5tnzrS+J/74be2P5aCOsS/mmGRHys/Si+IYC4ucrbnWAmES/dYdxGJjeUCECRcoFUilZAysdjlwqUjXIA==',
-    );
-    assert.equal(release.bin, 'build/src/bin/chrome-devtools-mcp.js');
-    assert.ok(Array.isArray(release.files) && release.files.length > 0);
-    for (const [file, group] of [
-        ['../pnpm-lock.yaml', 'devDependencies'],
-        ['../tooling/security/upstream-pnpm-lock.yaml', 'dependencies'],
-    ] as const) {
-        const inventory = readLockInventory(await readFile(new URL(file, import.meta.url), 'utf8'));
-        const importer = inventory.documents.find((document) => document.importers['.']?.[group]?.[PACKAGE_NAME]);
-        assert.equal(importer?.importers['.']?.[group]?.[PACKAGE_NAME]?.specifier, PACKAGE_VERSION);
-        const official = inventory.packages.filter((item) => item.name === PACKAGE_NAME);
-        assert.equal(official.length, 1);
-        assert.equal(official[0]?.version, release.version);
-        assert.equal(official[0]?.integrity, release.integrity);
-    }
-});
-
-test('build input verification rejects drift in root declarations, snapshot identity and release integrity', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'dct-official-inputs-'));
-    const names = [
-        'package.json',
-        'pnpm-lock.yaml',
-        'tooling/official-server-release.json',
-        'tooling/security/upstream-pnpm-lock.yaml',
-    ];
-    try {
-        for (const name of names) {
-            await mkdir(path.dirname(path.join(root, name)), { recursive: true });
-            await writeFile(path.join(root, name), await readFile(new URL(`../${name}`, import.meta.url)));
-        }
-        await verifyOfficialInputs(root);
-        for (const name of [
-            'package.json',
-            'tooling/security/upstream-pnpm-lock.yaml',
-            'tooling/official-server-release.json',
-        ]) {
-            const original = await readFile(path.join(root, name), 'utf8');
-            const changed = name.endsWith('.yaml')
-                ? original.replaceAll('1.11.0', '1.10.0')
-                : name === 'package.json'
-                  ? original.replace('"chrome-devtools-mcp": "1.11.0"', '"chrome-devtools-mcp": "1.10.0"')
-                  : original.replace('sha512-CytJ', 'sha512-AytJ');
-            await writeFile(path.join(root, name), changed);
-            await assert.rejects(verifyOfficialInputs(root), /official|importer|identity|integrity/i);
-            await writeFile(path.join(root, name), original);
-        }
-    } finally {
-        await rm(root, { recursive: true, force: true });
-    }
-});
+import { verifyOfficialPackageFiles } from '../../../src/gateway/official/package-files.ts';
+import { parseOfficialReleaseEvidence } from '../../../src/gateway/official/release-evidence.ts';
+import { PACKAGE_NAME, PACKAGE_VERSION } from '../../../src/shared/constants.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 async function packageFixture(launchMarker = false) {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-official-package-')));
     const release: unknown = JSON.parse(
-        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(release));
     const contents = new Map([
@@ -169,23 +101,23 @@ test('package verifier preserves exact nested bytes and rejects changed, missing
     const fixture = await packageFixture();
     try {
         const evidence = parseOfficialReleaseEvidence(fixture.input);
-        const files = await verifyOfficialPackage(fixture.root, evidence);
+        const files = await verifyOfficialPackageFiles(fixture.root, evidence);
         assert.deepEqual([...files.keys()].sort(), [...fixture.contents.keys()].sort());
         for (const [file, bytes] of fixture.contents) assert.equal(files.get(file)?.toString(), bytes);
         await writeFile(path.join(fixture.root, 'build/src/resource.json'), 'changed');
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /digest|length|changed/i);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /digest|length|changed/i);
         await writeFile(
             path.join(fixture.root, 'build/src/resource.json'),
             fixture.contents.get('build/src/resource.json') ?? '',
         );
         await rm(path.join(fixture.root, 'LICENSE'));
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /missing/i);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /missing/i);
         await writeFile(path.join(fixture.root, 'LICENSE'), 'Apache License\n');
         await writeFile(path.join(fixture.root, 'extra'), 'extra');
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /extra|unexpected/i);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /extra|unexpected/i);
         await rm(path.join(fixture.root, 'extra'));
         await mkdir(path.join(fixture.root, 'extra-directory'));
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /extra|unexpected/i);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /extra|unexpected/i);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }
@@ -197,61 +129,17 @@ test('package verifier rejects internal links and a linked package root', async 
     try {
         const evidence = parseOfficialReleaseEvidence(fixture.input);
         await symlink(fixture.root, path.join(container, 'package'), 'junction');
-        await assert.rejects(verifyOfficialPackage(path.join(container, 'package'), evidence), /link/i);
+        await assert.rejects(verifyOfficialPackageFiles(path.join(container, 'package'), evidence), /link/i);
         await symlink(path.dirname(fixture.root), path.join(container, 'parent'), 'junction');
         await assert.rejects(
-            verifyOfficialPackage(path.join(container, 'parent', path.basename(fixture.root)), evidence),
+            verifyOfficialPackageFiles(path.join(container, 'parent', path.basename(fixture.root)), evidence),
             /linked or aliased parent/i,
         );
         await symlink(container, path.join(fixture.root, 'build/src/linked'), 'junction');
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /link/i);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /link/i);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
         await rm(container, { recursive: true, force: true });
-    }
-});
-
-test('package, output and repository fixtures work with an aliased system temporary directory', async () => {
-    const temporaryBase = await realpath(os.tmpdir());
-    const root = await mkdtemp(path.join(temporaryBase, 'dct-aliased-temp-'));
-    try {
-        const directory = path.join(root, 'real');
-        const alias = path.join(root, 'alias');
-        await mkdir(directory);
-        await symlink(directory, alias, 'junction');
-        const environment: NodeJS.ProcessEnv = { ...process.env, TEMP: alias, TMP: alias, TMPDIR: alias };
-        delete environment.NODE_TEST_CONTEXT;
-        const result = await promisify(execFile)(
-            process.execPath,
-            [
-                '--test',
-                '--test-reporter=spec',
-                '--test-name-pattern=package verifier|installed pnpm|packaged resolver|build synchronization|only the fully verified official|assembly copies only approved icons|repository audit accepts AGENTS.md',
-                ...[
-                    'official-package',
-                    'tooling/distribution/thin-plugin-payloads',
-                    'icon-packaging',
-                    'repository-audit',
-                ].map((name) => fileURLToPath(new URL(`./${name}.test.ts`, import.meta.url))),
-            ],
-            {
-                env: environment,
-                timeout: 30_000,
-                windowsHide: true,
-                shell: false,
-            },
-        );
-        assert.match(result.stdout, /fail 0/);
-        assert.ok(
-            result.stdout.includes(
-                'build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs',
-            ),
-            result.stdout,
-        );
-    } finally {
-        assert.equal(path.dirname(root), temporaryBase);
-        assert.ok(path.basename(root).startsWith('dct-aliased-temp-'));
-        await rm(root, { recursive: true, force: true });
     }
 });
 
@@ -261,12 +149,12 @@ test('installed pnpm bin shims are excluded only by the explicit build-input bou
         const evidence = parseOfficialReleaseEvidence(fixture.input);
         await mkdir(path.join(fixture.root, 'node_modules/.bin'), { recursive: true });
         await writeFile(path.join(fixture.root, 'node_modules/.bin/chrome-devtools-mcp.cmd'), 'manager shim');
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence), /Unexpected/);
-        const files = await verifyOfficialPackage(fixture.root, evidence, { pnpmInstalled: true });
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /Unexpected/);
+        const files = await verifyOfficialPackageFiles(fixture.root, evidence, { pnpmInstalled: true });
         assert.equal(files.size, fixture.contents.size);
         assert.ok(!files.has('node_modules/.bin/chrome-devtools-mcp.cmd'));
         await writeFile(path.join(fixture.root, 'node_modules/.bin/extra'), 'extra');
-        await assert.rejects(verifyOfficialPackage(fixture.root, evidence, { pnpmInstalled: true }), /Unexpected/);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence, { pnpmInstalled: true }), /Unexpected/);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }
@@ -274,11 +162,11 @@ test('installed pnpm bin shims are excluded only by the explicit build-input bou
 
 test('Server resolution requires explicit verified input independent of caller cwd, without default discovery', async () => {
     const execute = promisify(execFile);
-    const module = new URL('../src/adapters/official-server.ts', import.meta.url).href;
+    const module = new URL('../../../src/adapters/official-server.ts', import.meta.url).href;
     const directory = await realpath(
         path.dirname(createRequire(import.meta.url).resolve('chrome-devtools-mcp/package.json')),
     );
-    const releasePath = fileURLToPath(new URL('../tooling/official-server-release.json', import.meta.url));
+    const releasePath = fileURLToPath(new URL('../../../tooling/official-server-release.json', import.meta.url));
     const result = await execute(
         process.execPath,
         [
@@ -316,7 +204,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
             stdin: {
                 contents:
                     "export { resolveServerBin } from './src/adapters/official-server.ts'; export { createOfficialConnection } from './src/adapters/mcp-bridge.ts';",
-                resolveDir: fileURLToPath(new URL('..', import.meta.url)),
+                resolveDir: fileURLToPath(new URL('../../..', import.meta.url)),
             },
             outfile: output,
             bundle: true,

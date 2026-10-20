@@ -72,7 +72,8 @@
     snapshots the child environment and verifies the explicit public Server bin.
     Deterministic argument composition is supplied to `gateway/official/options.ts`;
     its current default boundary remains here until the complete launch-owner cut.
-- `official-package.ts` verifies the complete official release tree and returns its original bytes.
+- Complete official package-file verification is owned by
+  `gateway/official/package-files.ts`; runtime and launch adapters consume that proof.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
   path/metadata changes and closes the descriptor on success or failure.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client,

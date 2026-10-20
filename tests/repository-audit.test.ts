@@ -1352,7 +1352,7 @@ test('Official pure owners reject I/O and mutable authorities through runtime an
         for (const dependency of [
             'node:fs',
             '@modelcontextprotocol/client',
-            '../../adapters/official-package.ts',
+            './package-files.ts',
             '../../application/client-context.ts',
             '../core.ts',
             '../registry.ts',
@@ -1384,4 +1384,95 @@ test('Official pure owners reject process environment clocks and ambient aliases
         ])
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
+});
+
+test('Official package-file role accepts only its five complete proof dependencies', () => {
+    for (const dependency of [
+        'node:crypto',
+        'node:fs/promises',
+        'node:path',
+        './release-evidence.ts',
+        '../../adapters/file-evidence.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource('src/gateway/official/package-files.ts', source), [], source);
+});
+
+test('Official package-file role rejects unrelated dependencies in runtime and erased forms', () => {
+    for (const dependency of [
+        'node:fs',
+        'node:net',
+        'node:process',
+        'node:child_process',
+        'node:perf_hooks',
+        '@modelcontextprotocol/client',
+        'ws',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        '../../adapters/official-server.ts',
+        '../../adapters/target-host.ts',
+        '../../shared/errors.ts',
+        './options.ts',
+        '../core.ts',
+        '../registry.ts',
+        '../connections/resource-owner.ts',
+        '../connections/directory-lease.ts',
+        '../diagnostics.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/official/package-files.ts', source).length, source);
+});
+
+test('Official package-file rights cannot leak to pure or unknown owners through any dependency form', () => {
+    for (const file of [
+        'src/gateway/official/options.ts',
+        'src/gateway/official/execution.ts',
+        'src/gateway/official/release-evidence.ts',
+        'src/gateway/official/unknown.ts',
+        'src/gateway/unknown.ts',
+        'src/gateway/owned-tool-arguments.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/domains/unknown.ts',
+        'src/shared/unknown.ts',
+        'src/host-plugins/unknown.ts',
+        'src/gateway/connections/resource-owner.ts',
+        'src/gateway/connections/directory-lease.ts',
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
+    ]) {
+        const relative = path.posix.relative(path.posix.dirname(file), 'src/gateway/official/package-files.ts');
+        const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+    for (const dependency of ['node:crypto', 'node:fs/promises', 'node:path', '../../adapters/file-evidence.ts'])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/official/unknown.ts', source).length, source);
+    for (const { source } of connectionDependencyForms('../gateway/official/package-files.ts'))
+        assert.deepEqual(validateRuntimeSource('src/adapters/example.ts', source), [], source);
+});
+
+test('Official package-file proof retains computed dependency and ambient state refusal', () => {
+    for (const source of [
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+        'const value = process.env;',
+        'const value = process.platform;',
+        'const { env } = process;',
+        'const value = globalThis.process;',
+        'const value = globalThis[key];',
+        'const ambient = globalThis.global;',
+        'const value = Date.now;',
+        'const value = new Date();',
+        'const value = performance.now();',
+        'fetch("http://localhost");',
+        'new WebSocket("ws://localhost");',
+        'type Value = { [process.platform](): void };',
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/official/package-files.ts', source).length, source);
+});
+
+test('Official package-file role accepts its complete actual proof source', async () => {
+    const file = 'src/gateway/official/package-files.ts';
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
 });

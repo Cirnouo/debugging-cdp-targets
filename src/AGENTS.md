@@ -7,14 +7,20 @@ owns core resources and direct HTTP; host plugins are thin.
 
 Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
-rules, target models and pure Official options/execution/release evidence, or its
+rules, target models and pure Official options/execution/release evidence, the
+exact complete Official package-file proof, or its
 exact diagnostics clock, and never depend on
 application/interface or either mutable Gateway service.
 The pure Official owners contain no ambient defaults, package reads, live catalog
 or child/context lifetime authority. Their actual environment default capture,
 child snapshot and verified bin resolution remain in adapters/official-server.ts.
-Before editing those pure owners, read their cumulative
+Before editing these Official owners, read their cumulative
 [Official instructions](gateway/official/AGENTS.md).
+Only gateway/official/package-files.ts owns complete filesystem package verification;
+its exact dependencies are node:crypto, node:fs/promises, node:path,
+./release-evidence.ts and ../../adapters/file-evidence.ts. It gains no ambient
+process/environment/clock/network authority. Pure owners, including erased syntax,
+cannot depend on that effectful owner; unknown Official siblings remain pure.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact

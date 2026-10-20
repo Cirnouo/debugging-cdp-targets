@@ -1,4 +1,4 @@
-# Official option and execution contracts
+# Official option, execution and package-file contracts
 
 - `options.test.ts` retains three option/alias/reserved-argument registrations.
 - `execution.test.ts` retains six expanded typed-wire-id/terminal registrations.
@@ -8,8 +8,13 @@
 - `server-arguments-environment.test.ts` retains seven Windows/POSIX case/default/
     validation/precedence cases and all original matrices against supplied inputs.
 
-Default and coverage commands select these four suites explicitly once. They use
-controlled values and runtime refusal before a child can spawn. The mixed root
-`official-package.test.ts` still owns nine original input/runtime/TEMP cases and
-the actual thin-plugin child synchronization oracle; catalog/upstream/HTTP suites
-retain their current owners until their whole transaction/content migrations.
+- `package-files.test.ts` retains six complete release/path/link/shim and explicit
+    source/packaged resolver registrations, one private seven-file fixture, original
+    byte/digest/mutation/cleanup matrices and the pre-spawn marker refusal.
+
+Default and coverage select these five suites once. Frozen input agreement and
+drift are in [tooling security](../../tooling/security/README.md); the real aliased
+TEMP child and all seven executed-title assertions are in
+[tooling quality](../../tooling/quality/README.md), including the complete thin-plugin
+synchronization oracle. Catalog/upstream/HTTP suites retain their current owners
+until their whole transaction/content migrations.
