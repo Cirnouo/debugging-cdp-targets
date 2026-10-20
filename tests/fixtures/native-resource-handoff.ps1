@@ -88,7 +88,8 @@ try {
         $writer.WriteLine('observed')
         $helper.WaitForExit()
         $rootExit = [DctNative]::WaitForExit($target)
-        [IO.File]::WriteAllText((Join-Path $Directory 'handoff-root-exited'), [string] $rootExit)
+        [IO.File]::WriteAllText((Join-Path $Directory 'handoff-root-exited.pending'), [string] $rootExit)
+        [IO.File]::Move((Join-Path $Directory 'handoff-root-exited.pending'), (Join-Path $Directory 'handoff-root-exited'))
         $closed = [DctNative]::WaitForResourcesClosed($target)
         [Console]::Out.WriteLine((@{ rootExit = $rootExit; closed = $closed; active = [DctNative]::QueryActiveProcesses($resources); creatorQueryError = $reply.queryError; creatorExit = $helper.ExitCode } | ConvertTo-Json -Compress))
     }
