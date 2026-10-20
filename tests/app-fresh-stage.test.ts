@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { mock, type TestContext, test } from 'node:test';
@@ -57,7 +58,17 @@ async function controlled(context: TestContext) {
     };
     const own = await stageFixture();
     const originalExec = childProcess.execFile;
-    const compiler = await ownedWindowsDeploymentCompiler(context);
+    let compiler: Awaited<ReturnType<typeof ownedWindowsDeploymentCompiler>>;
+    try {
+        compiler = await ownedWindowsDeploymentCompiler(context);
+    } catch (setupError) {
+        try {
+            await own.cleanup();
+        } catch (cleanupError) {
+            throw new AggregateError([setupError, cleanupError], 'Controlled fixture setup and cleanup failed.');
+        }
+        throw setupError;
+    }
     const compilerExec = childProcess.execFile;
     const originalSpawn = childProcess.spawn;
     const originalOpen = fs.open;
@@ -384,6 +395,167 @@ async function controlled(context: TestContext) {
         },
     };
 }
+
+test('stage fixture admits exact captured temporary owners across controlled raw and canonical spelling', async (context) => {
+    const original = { mkdtemp: fs.mkdtemp, realpath: fs.realpath, rm: fs.rm };
+    const canonical = await original.realpath(os.tmpdir());
+    const raw = path.join(canonical, 'dct-controlled-raw-temp');
+    const allocations: { prefix: string; directory: string }[] = [];
+    let own: Awaited<ReturnType<typeof stageFixture>> | undefined;
+    let compiler: Awaited<ReturnType<typeof ownedWindowsDeploymentCompiler>> | undefined;
+    const temporary = mock.method(os, 'tmpdir', () => raw);
+    const canonicalize = mock.method(fs, 'realpath', async (file: Parameters<typeof fs.realpath>[0]) =>
+        String(file) === raw ? canonical : original.realpath(file),
+    );
+    const allocate = mock.method(fs, 'mkdtemp', async (prefix: string) => {
+        let physical: string;
+        if (prefix === path.join(raw, 'dct-payload-stage-')) physical = path.join(canonical, 'dct-payload-stage-');
+        else if (prefix === path.join(raw, 'dct-deployment-support-'))
+            physical = path.join(canonical, 'dct-deployment-support-');
+        else if (
+            prefix === path.join(canonical, 'dct-owned-compiler-') ||
+            (own && prefix === path.join(path.dirname(own.options.output), 'dct-app-enrollment-'))
+        )
+            physical = prefix;
+        else throw new Error('Unexpected controlled allocator request.');
+        const directory = await original.mkdtemp(physical);
+        allocations.push({ prefix, directory });
+        return directory;
+    });
+    syncBuiltinESMExports();
+    try {
+        own = await stageFixture();
+        compiler = await ownedWindowsDeploymentCompiler(context);
+        assert.deepEqual(
+            allocations.map((value) => value.prefix),
+            [path.join(raw, 'dct-payload-stage-'), path.join(canonical, 'dct-owned-compiler-')],
+        );
+        assert.equal(compiler.root, allocations[1]?.directory);
+        const enrollment = await fs.mkdtemp(path.join(raw, 'dct-app-enrollment-'));
+        assert.equal(path.dirname(enrollment), path.dirname(own.options.output));
+        const support = await fs.mkdtemp(path.join(raw, 'dct-deployment-support-'));
+        assert.equal(path.dirname(support), canonical);
+        const scratch = await fs.mkdtemp(path.join(raw, 'dct-app-stage-'));
+        assert.equal(scratch, path.join(path.dirname(own.options.output), 'dct-app-stage-controlled'));
+        const before = allocations.length;
+        for (const prefix of [
+            path.join(raw, 'dct-owned-compiler-'),
+            path.join(canonical, 'dct-app-enrollment-'),
+            path.join(canonical, 'unrelated-owner-'),
+            path.join(canonical, 'outside', 'dct-owned-compiler-'),
+            path.join(canonical, 'dct-owned-compiler-extra-'),
+            path.join(raw, 'dct-payload-stage-'),
+        ])
+            await assert.rejects(fs.mkdtemp(prefix), /Unexpected temporary owner/);
+        assert.equal(allocations.length, before);
+    } finally {
+        await compiler?.cleanup();
+        await own?.cleanup();
+        allocate.mock.restore();
+        canonicalize.mock.restore();
+        temporary.mock.restore();
+        syncBuiltinESMExports();
+        for (const allocation of allocations) await original.rm(allocation.directory, { recursive: true, force: true });
+    }
+});
+
+async function compilerSetupFailure(cleanupError?: Error) {
+    const original = { open: fs.open, lstat: fs.lstat, readFile: fs.readFile, mkdtemp: fs.mkdtemp, rm: fs.rm };
+    const descriptor = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
+    assert.ok(descriptor);
+    const canonical = await fs.realpath(os.tmpdir());
+    const setupError = new Error('controlled compiler setup failure');
+    const directories: string[] = [];
+    let compilerRequests = 0;
+    let cleanupCalls = 0;
+    const temporary = mock.method(os, 'tmpdir', () => canonical);
+    const allocate = mock.method(fs, 'mkdtemp', async (prefix: string) => {
+        if (prefix === path.join(canonical, 'dct-owned-compiler-')) {
+            compilerRequests++;
+            throw setupError;
+        }
+        assert.equal(prefix, path.join(canonical, 'dct-payload-stage-'));
+        const directory = await original.mkdtemp(prefix);
+        directories.push(directory);
+        return directory;
+    });
+    const remove = cleanupError
+        ? mock.method(fs, 'rm', async (...args: Parameters<typeof fs.rm>) => {
+              assert.ok(directories.includes(String(args[0])));
+              cleanupCalls++;
+              await original.rm(...args);
+              throw cleanupError;
+          })
+        : undefined;
+    syncBuiltinESMExports();
+    const expected = { open: fs.open, lstat: fs.lstat, readFile: fs.readFile, mkdtemp: fs.mkdtemp };
+    return {
+        setupError,
+        directories,
+        compilerRequests: () => compilerRequests,
+        cleanupCalls: () => cleanupCalls,
+        assertRestored() {
+            assert.equal(fs.open, expected.open);
+            assert.equal(fs.lstat, expected.lstat);
+            assert.equal(fs.readFile, expected.readFile);
+            assert.equal(fs.mkdtemp, expected.mkdtemp);
+            assert.deepEqual(Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn'), descriptor);
+        },
+        async assertRemoved() {
+            assert.equal(directories.length, 1);
+            await assert.rejects(original.lstat(String(directories[0])), { code: 'ENOENT' });
+        },
+        async restore() {
+            // Restore only this test's captured I/O after assertions, including an expected RED.
+            Object.assign(fs, original);
+            Object.defineProperty(ChildProcess.prototype, 'spawn', descriptor);
+            remove?.mock.restore();
+            allocate.mock.restore();
+            temporary.mock.restore();
+            syncBuiltinESMExports();
+            for (const directory of directories) await original.rm(directory, { recursive: true, force: true });
+        },
+    };
+}
+
+test('fresh fixture construction restores guards and owned stage after compiler setup failure', async (context) => {
+    const fault = await compilerSetupFailure();
+    try {
+        await assert.rejects(controlled(context), (error: unknown) => error === fault.setupError);
+        assert.equal(fault.compilerRequests(), 1);
+        fault.assertRestored();
+        await fault.assertRemoved();
+        const subsequent = await stageFixture();
+        try {
+            assert.ok((await fs.lstat(subsequent.options.electronArchive)).isFile());
+        } finally {
+            await subsequent.cleanup();
+        }
+        fault.assertRestored();
+    } finally {
+        await fault.restore();
+    }
+});
+
+test('fresh fixture construction preserves original setup and cleanup errors in order', async (context) => {
+    const cleanupError = new Error('controlled owned stage cleanup failure');
+    const fault = await compilerSetupFailure(cleanupError);
+    try {
+        await assert.rejects(controlled(context), (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.equal(error.errors.length, 2);
+            assert.equal(error.errors[0], fault.setupError);
+            assert.equal(error.errors[1], cleanupError);
+            return true;
+        });
+        assert.equal(fault.compilerRequests(), 1);
+        assert.equal(fault.cleanupCalls(), 1);
+        fault.assertRestored();
+        await fault.assertRemoved();
+    } finally {
+        await fault.restore();
+    }
+});
 
 test('fresh transaction uses actual source producer, protected manifest and state-last publication then read admission', {
     skip: process.platform !== 'win32',

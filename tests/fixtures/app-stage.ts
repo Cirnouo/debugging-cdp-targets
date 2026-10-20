@@ -13,9 +13,11 @@ const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).
 
 export async function stageFixture() {
     const root = fileURLToPath(new URL('../..', import.meta.url));
+    const temporaryRoot = os.tmpdir();
+    const canonicalTemporaryRoot = await realpath(temporaryRoot);
     // Start only the existing trusted build compiler before the strict process guard.
     await app.generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
-    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-payload-stage-')));
+    const directory = await realpath(await mkdtemp(path.join(temporaryRoot, 'dct-payload-stage-')));
     const metadataName = path.join(root, 'tooling/app-release-inputs.json');
     const fixtureMetadata = path.join(directory, 'release.json');
     const electronArchive = path.join(directory, 'electron-owned.zip');
@@ -94,14 +96,14 @@ export async function stageFixture() {
     });
     Object.defineProperty(fs, 'mkdtemp', {
         value: async (prefix: string) => {
-            if (prefix === path.join(os.tmpdir(), 'dct-app-enrollment-'))
+            if (prefix === path.join(temporaryRoot, 'dct-app-enrollment-'))
                 return originalTemporary(path.join(directory, 'dct-app-enrollment-'));
             if (
-                prefix === path.join(os.tmpdir(), 'dct-owned-compiler-') ||
-                prefix === path.join(os.tmpdir(), 'dct-deployment-support-')
+                prefix === path.join(canonicalTemporaryRoot, 'dct-owned-compiler-') ||
+                prefix === path.join(temporaryRoot, 'dct-deployment-support-')
             )
                 return originalTemporary(prefix);
-            if (prefix !== path.join(os.tmpdir(), 'dct-app-stage-')) throw new Error('Unexpected temporary owner.');
+            if (prefix !== path.join(temporaryRoot, 'dct-app-stage-')) throw new Error('Unexpected temporary owner.');
             await fs.mkdir(scratch);
             return scratch;
         },
