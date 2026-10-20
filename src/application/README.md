@@ -30,8 +30,9 @@
 
 [ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) adds
 connection-level directory ownership in [Gateway connections](../gateway/connections/README.md)
-alongside resource generations. [Gateway Core](../gateway/core.ts) enrolls owners
-and retains original actual-execution context; [registry](../gateway/registry.ts)
+alongside resource generations. [Gateway Core](../gateway/core.ts) composes registrations/catalog/cleanup;
+[managed connections](../gateway/connections/managed-connection.ts) enroll owners
+and retain original actual-execution context; [registry](../gateway/registry.ts)
 owns route membership and retained cleanup/retry joins; the lease spans
 restart, tracks late acquisition and releases only after all app/resource users
 are gone. Explicit start metadata retains directory evidence through failed

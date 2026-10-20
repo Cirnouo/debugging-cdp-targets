@@ -6,8 +6,8 @@ import { type ConnectionRoute, type ConnectionStatus, validateIdentity } from '.
 import type { ClientPrincipal } from '../shared/client-context.ts';
 import { errorMessage } from '../shared/errors.ts';
 import type { ConnectionDirectoryLease } from './connections/directory-lease.ts';
+import type { ManagedConnection } from './connections/managed-connection.ts';
 import { createResourceOwner, type ResourceOwner } from './connections/resource-owner.ts';
-import type { ManagedConnection } from './core.ts';
 
 export function createGatewayRegistry({
     entryId,

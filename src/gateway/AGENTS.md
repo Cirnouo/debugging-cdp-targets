@@ -12,40 +12,45 @@ type-only imports/exports or type `import()`. Unknown Gateway files remain pure.
 Only diagnostics.ts may read its existing performance.now() clock and import its
 pure Diagnostic/Diagnose contract from domains/control-contract.ts. No other
 clock, environment, filesystem, process, network, native or external-package
-access is permitted to pure owners. The exact Core, registry and directory-lease
+access is permitted to pure owners. The exact Core, registry, managed-connection and directory-lease
 capabilities below are bounded exceptions, not Gateway-wide permissions. The same dependency restrictions apply to erased syntax.
 
 Before editing official/ values, read its [pure Official instructions](official/AGENTS.md).
 Ambient Official defaults, child snapshot/bin resolution, actual catalog publication
 and child disposal remain with their existing adapters; this slice grants no I/O.
 
-BEFORE editing core.ts or registry.ts, read all of the canonical
+BEFORE editing core.ts, registry.ts or connections/managed-connection.ts, read all of the canonical
 [application lifecycle instructions](../application/AGENTS.md), cumulatively with
 root and source instructions. Preserve their complete ownership, admission,
 execution, construction, actual-exit, cleanup and isolation obligations.
 
 connections/workspace-policy.ts describes supplied official arguments, negotiated
 roots support and a required temporary-directory snapshot through official/options.ts.
-Core supplies that snapshot from before its original roots suspension. The pure
+The managed owner supplies that snapshot from before its original roots suspension. The pure
 calculation has no ambient fallback, mutable grants or lifecycle authority.
 
-core.ts owns the complete managed-connection transaction, including generation
-pointers, active official-call accounting and original execution facilities.
-Its four application value providers are client-context.ts, mcp-lifecycle.ts,
-registrations.ts and target-controller.ts. Source instructions enumerate its
-existing adapter/node capabilities; only SDK client types may enter Core. Its
-ambient expressions remain direct process.env spread, process.platform reads and
-the supplied-now fallback Date.now reference, never ambient clock calls or aliases.
+core.ts retains substantive registration, registry and fixed-catalog composition,
+trusted construction cleanup and real defaults. Its only ambient expression is
+now ?? Date.now; no environment/platform reads or clock calls are permitted.
+connections/managed-connection.ts owns the complete transaction, admission, live
+projection, generation pointers, actual official-call accounting and original
+execution facilities. Source instructions enumerate exact value and TYPE ports.
+It alone retains process.env spread and direct process.platform === 'win32'; it
+receives timestamp and has no Date fallback/read/call. Its synchronous factory
+creates one lifecycle/port/host composition at the original point, without I/O.
+Core's readCatalog is a live synchronous provider, read only at original validation,
+post-lifecycle status and invocation-requirements points; never cache or capture it
+across awaits. The registry/managed dependency cycle is TYPE-only.
 registry.ts owns the seven route/resource/job collections and one retained cleanup
 state authority. Value dependencies are ./connections/resource-owner.ts,
 ../adapters/fixture-diagnostics.ts, ../domains/control-contract.ts and
-../shared/errors.ts. TYPE-only dependencies are ./core.ts's original
+../shared/errors.ts. TYPE-only dependencies are ./connections/managed-connection.ts's original
 ManagedConnection, ./connections/directory-lease.ts, ../shared/client-context.ts
 and the exact ../application/registrations.ts, mcp-lifecycle.ts and
 target-controller.ts service types. No duplicate interface or runtime back edge is
 permitted. Its only ambient expression is the existing direct process.stderr.write
 cleanup diagnostic. Unknown files gain none of these rights; pure owners and
-adapters cannot import either service, including erased imports/reexports.
+adapters cannot import any of these mutable services, including erased imports/reexports.
 
 Only connections/resource-owner.ts owns resource generations: its sole dependency
 is TYPE-only ../targets/model/target-contract.ts. Only connections/directory-lease.ts
@@ -65,9 +70,9 @@ models only validate supplied values/evidence or describe existing resource capa
 port claims, acquisition, observation, rollback, normal Close and actual-exit
 release remain with their current adapter/application owners. Keep
 registration, continuation, execution and resource state with their current owners.
-The two mutable connections owners hold complete generation/resource and directory-lease
+The two resource/directory lifetime owners hold complete generation/resource and directory-lease
 algorithms; registry.ts retains route membership and cleanup/retry joins, while
-Core retains generation fences and actual execution/context.
+the managed owner retains generation fences and actual execution/context.
 
 Before adding a mutable Gateway responsibility or changing this boundary, read
 [repository organization](../../docs/policies/repository-organization.md) and

@@ -9,7 +9,7 @@ Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
 rules, target models and pure Official options/execution/release evidence, or its
 exact diagnostics clock, and never depend on
-application/interface or either mutable Gateway service.
+application/interface or any mutable Gateway service.
 The pure Official owners contain no ambient defaults, package reads, live catalog
 or child/context lifetime authority. Their actual environment default capture,
 child snapshot and verified bin resolution remain in adapters/official-server.ts.
@@ -32,28 +32,40 @@ clock, filesystem, network, native or external-package access. Pure owners canno
 depend on either mutable role, including through erased syntax; unknown Gateway
 files remain pure. Before changing these lifetime owners, read their cumulative
 [connections instructions](gateway/connections/AGENTS.md).
-Only gateway/core.ts owns the existing managed-connection transaction and actual
-execution/context. Its exact application value providers are client-context.ts,
-mcp-lifecycle.ts, registrations.ts and target-controller.ts. Its reviewed adapters
-remain cdp-router, chrome-profile, data-directory, fixture-diagnostics, mcp-bridge,
-official-server, port-reservation, target-host and tool-catalog; its node imports
-remain crypto, os and path. SDK client, resource-owner and shared client-context
-are TYPE-only. Core retains its existing process.env spread, process.platform
-reads and supplied-now fallback to the Date.now reference; it gains no general
-ambient I/O, SDK value dependency or clock-call permission.
+Only gateway/core.ts owns registration/registry/catalog composition and trusted
+construction cleanup. Its value capabilities are crypto, the existing cdp-router,
+chrome-profile, data-directory, mcp-bridge and tool-catalog adapters, application
+client-context/registrations, shared errors and the registry/managed factory.
+SDK Tool, ControllerHost, request/diagnostic/client-context and the original moved
+RuntimeRouter are TYPE-only. Its sole ambient capability is the supplied-now
+fallback Date.now reference, never a clock call.
+Only gateway/connections/managed-connection.ts owns the complete managed-connection
+transaction, start admission, live view, generations and actual execution/context.
+Its exact value providers are crypto/os/path, fixture-diagnostics, mcp-bridge,
+official-server, port-reservation, target-host, application client-context,
+mcp-lifecycle and target-controller, current domain/shared contracts, directory-lease,
+workspace-policy, diagnostics and target isolation/launch values. SDK client,
+chrome-profile/data-directory/tool-catalog, registrations, registry, resource-owner
+and shared client-context are TYPE-only. It alone retains the existing process.env
+spread and process.platform comparisons; it receives timestamp and gains no Date
+fallback, clock call or general ambient I/O. The synchronous factory creates one
+original lifecycle/port/host composition, without acquisition or catalog reads.
+Core supplies the live synchronous readCatalog reader; use it only at the original
+validation, post-lifecycle status guard and optional invocation-requirements points,
+never captured across await or cached. The registry/managed cycle is erased only.
 The pure gateway/connections/workspace-policy.ts describes only supplied workspace
 arguments, negotiated-roots support and a required temporary directory through
-official/options.ts. Core alone captures that directory before awaiting roots;
+official/options.ts. The managed owner alone captures that directory before awaiting roots;
 the calculation gains no ambient defaults, grants or connection authority.
 Only gateway/registry.ts owns route membership and the retained cleanup ledger:
 its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
 domains/control-contract and shared/errors. TYPE-only dependencies are the original
-Core ManagedConnection, connections/directory-lease, shared/client-context and the
+managed owner ManagedConnection, connections/directory-lease, shared/client-context and the
 three exact application registrations/mcp-lifecycle/target-controller ports. Its
 sole ambient capability is the existing direct process.stderr.write diagnostic.
-Neither service grants permissions to siblings, pure owners, adapters or unknown
+None of these service roles grants permissions to siblings, pure owners, adapters or unknown
 Gateway files. Type imports, reexports, import() and require obey the same exact
-role boundaries. Before editing Core or registry, read the cumulative
+role boundaries. Before editing Core, registry or managed-connection, read the cumulative
 [Gateway instructions](gateway/AGENTS.md) and their application lifecycle trigger.
 Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.
@@ -83,7 +95,7 @@ The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolati
 requires pure isolation/launch validation in gateway/targets/model/,
 directory filesystem evidence and claims in adapters, and connection-level lease
 lifetime/release barriers in gateway/connections/. Gateway registry owns route
-membership and retained cleanup/retry joins; Core retains explicit operation evidence. Target and official resources have independent generation owners alongside the
+membership and retained cleanup/retry joins; the managed owner retains explicit operation evidence. Target and official resources have independent generation owners alongside the
 logical connection/router owner. Public session identity changes after either side
 restarts and is distinct from those internal generations. Start requires explicit isolation; no fixed profile fallback
 or automatic path disclosure through Hooks/default summaries is permitted.

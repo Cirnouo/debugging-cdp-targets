@@ -1,12 +1,12 @@
 # Gateway Core, registry, arguments and connection lifetimes
 
-- `core.ts` owns transport-free dispatch, independent managed connections,
-    generation pointers and original official execution facilities. Start, restart,
-    stop, admission, pre-roots temporary-directory capture and projections remain
-    complete transactions.
+- `core.ts` owns substantive registration/registry/fixed-catalog composition,
+    real defaults and trusted construction cleanup. Its synchronous managed factory
+    runs at the original port/host position, before catalog acquisition; the live
+    catalog reader never captures a catalog across awaits.
 - `registry.ts` owns route membership, resource/directory enrollment and retained
     cleanup/retry joins with one ledger and definitive barriers. It consumes the
-    original Core ManagedConnection type without a runtime cycle or duplicate state.
+    original managed-owner ManagedConnection type without a runtime cycle or duplicate state.
 - `owned-tool-arguments.ts` owns `parseRegistrationBearerArguments` and
     `parseOfficialToolArguments`: syntactic explicit bearer extraction and
     complete removal of official `_dct` routing from the remaining arguments.
@@ -20,22 +20,24 @@
     Target acquisition, claims, observation and cleanup stay with current owners.
 - `connections/` owns complete resource-generation retention/disposal and
     connection-level directory-lease barriers through their exact adapter capabilities,
+    the complete managed state/admission/execution/transfer/live-view closure,
     plus pure workspace-policy description from explicit supplied inputs.
 - `official/` owns pure reviewed options/recipes and supplied argument composition,
     wire identity/terminal tracking and strict release evidence. Ambient default
     capture, child environment/bin verification, live catalog and upstream remain
     with existing adapters; see its [current inventory](official/README.md).
 - `AGENTS.md` keeps argument and target rules pure and limits the exact diagnostics owner
-    to its clock read and pure contract dependency, with exact Core, registry and
+    to its clock read and pure contract dependency, with exact Core, registry, managed-connection and
     connection roles and the mandatory application lifecycle instruction trigger.
 
 The HTTP server still consumes admission from `domains/mcp-http.ts`; the
 request handler consumes these parsers before real Core authentication. This
 argument owner holds no registration, live-route, continuation or execution state.
-Core retains original actual execution facilities; registry joins route membership
-and retained cleanup/retry ownership; the two mutable connections owners retain
-their complete lifetimes. The workspace policy holds no mutable ownership.
+The managed owner retains original actual execution facilities; registry joins route membership
+and retained cleanup/retry ownership; the two resource/directory owners retain
+their complete lifetimes. The workspace policy holds no mutable ownership. Separate admission/view leaves
+remain pending; the complete transactions stay in managed-connection.ts for now.
 The remaining controller, registrations and lifecycle services keep their current
-technical-layer placement and exact transitional Core/registry dependencies.
+technical-layer placement and exact transitional Core/registry/managed dependencies.
 The complete lifecycle-contract path and symbol migration remains pending until
 the actual App UI and CDP domain consumers move with it.

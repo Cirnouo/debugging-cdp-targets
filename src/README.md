@@ -9,7 +9,8 @@ The singleton App owns direct HTTP, management and native resources. The
 - `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
 - `application/`: existing target controller, lifecycle/registration and App orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
-- `gateway/`: complete Core transaction and retained registry/cleanup ownership,
+- `gateway/`: Core registration/catalog composition and retained registry/cleanup ownership,
+    complete managed admission/execution/view transactions in connections/,
     pure explicit bearer/tool-argument extraction, target evidence/identity
     models, structured launch/isolation rules, bounded clock-backed diagnostics
     complete resource-generation/directory-lease lifetime and pure supplied

@@ -3,11 +3,11 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { Tool } from '@modelcontextprotocol/client';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { describeWorkspacePolicy } from '../src/gateway/connections/workspace-policy.ts';
-import { isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
+import { createMcpHttpServer } from '../../../src/adapters/mcp-http-server.ts';
+import { createToolCatalog } from '../../../src/adapters/tool-catalog.ts';
+import { describeWorkspacePolicy } from '../../../src/gateway/connections/workspace-policy.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
+import { createCoreFixture } from '../../fixtures/gateway/core-runtime.ts';
 
 test('connections keep independent actual catalogs and explicit restart invalidates only its old session', async () => {
     const routed: Tool = {

@@ -1187,7 +1187,7 @@ test('Core registry inverse edges reject mutable authority in every supported de
         ['src/gateway/connections/resource-owner.ts', '..'],
         ['src/gateway/connections/directory-lease.ts', '..'],
     ] as const)
-        for (const owner of ['core', 'registry'])
+        for (const owner of ['core', 'registry', 'connections/managed-connection'])
             for (const { source } of connectionDependencyForms(`${prefix}/${owner}.ts`)) {
                 const errors = validateRuntimeSource(file, source);
                 assert.ok(!errors.some((error) => error.includes('invalid source')), source);
@@ -1201,33 +1201,58 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
             'src/gateway/core.ts',
             [
                 'node:crypto',
-                'node:os',
-                'node:path',
                 '../adapters/cdp-router.ts',
                 '../adapters/chrome-profile.ts',
                 '../adapters/data-directory.ts',
-                '../adapters/fixture-diagnostics.ts',
                 '../adapters/mcp-bridge.ts',
-                '../adapters/official-server.ts',
-                '../adapters/port-reservation.ts',
-                '../adapters/target-host.ts',
                 '../adapters/tool-catalog.ts',
-                '../domains/control-contract.ts',
-                '../domains/request-failure.ts',
-                './connections/directory-lease.ts',
-                './connections/workspace-policy.ts',
-                './diagnostics.ts',
-                './targets/model/isolation.ts',
-                './targets/model/launch-command.ts',
-                '../shared/constants.ts',
                 '../shared/errors.ts',
                 '../application/client-context.ts',
-                '../application/mcp-lifecycle.ts',
                 '../application/registrations.ts',
-                '../application/target-controller.ts',
+                './connections/managed-connection.ts',
                 './registry.ts',
             ],
-            ['@modelcontextprotocol/client', './connections/resource-owner.ts', '../shared/client-context.ts'],
+            [
+                '@modelcontextprotocol/client',
+                '../application/target-controller.ts',
+                '../domains/control-contract.ts',
+                '../shared/client-context.ts',
+            ],
+        ],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            [
+                'node:crypto',
+                'node:os',
+                'node:path',
+                '../../adapters/fixture-diagnostics.ts',
+                '../../adapters/mcp-bridge.ts',
+                '../../adapters/official-server.ts',
+                '../../adapters/port-reservation.ts',
+                '../../adapters/target-host.ts',
+                '../../application/client-context.ts',
+                '../../application/mcp-lifecycle.ts',
+                '../../application/target-controller.ts',
+                '../../domains/control-contract.ts',
+                '../../domains/request-failure.ts',
+                '../../shared/constants.ts',
+                '../../shared/errors.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
+                '../diagnostics.ts',
+                '../targets/model/isolation.ts',
+                '../targets/model/launch-command.ts',
+            ],
+            [
+                '@modelcontextprotocol/client',
+                '../../adapters/chrome-profile.ts',
+                '../../adapters/data-directory.ts',
+                '../../adapters/tool-catalog.ts',
+                '../../application/registrations.ts',
+                '../registry.ts',
+                './resource-owner.ts',
+                '../../shared/client-context.ts',
+            ],
         ],
         [
             'src/gateway/registry.ts',
@@ -1238,7 +1263,7 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 '../shared/errors.ts',
             ],
             [
-                './core.ts',
+                './connections/managed-connection.ts',
                 './connections/directory-lease.ts',
                 '../application/registrations.ts',
                 '../application/mcp-lifecycle.ts',
@@ -1275,18 +1300,34 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 source,
             );
     }
+    for (const { source } of connectionDependencyForms('./core.ts'))
+        assert.ok(validateRuntimeSource('src/gateway/registry.ts', source).length, source);
+    for (const dependency of [
+        '../core.ts',
+        '../../adapters/unknown.ts',
+        '../../interface/app-main.ts',
+        '../../application/operations.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/connections/managed-connection.ts', source).length, source);
 });
 
 test('Core registry ambient capabilities apply only to exact reviewed expressions and files', () => {
     for (const [file, source] of [
+        ['src/gateway/core.ts', 'const timestamp = now ?? Date.now;'],
         [
-            'src/gateway/core.ts',
-            'const ambient = { ...process.env }; const windows = process.platform === "win32"; const timestamp = now ?? Date.now;',
+            'src/gateway/connections/managed-connection.ts',
+            'const ambient = { ...process.env }; const windows = process.platform === "win32";',
         ],
         ['src/gateway/registry.ts', 'process.stderr.write("Connection cleanup failed\\n");'],
     ] as const)
         assert.deepEqual(validateRuntimeSource(file, source), [], source);
-    for (const file of ['src/gateway/core.ts', 'src/gateway/registry.ts', 'src/gateway/unreviewed.ts']) {
+    for (const file of [
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
+        'src/gateway/connections/managed-connection.ts',
+        'src/gateway/unreviewed.ts',
+    ]) {
         for (const source of [
             'const state = process;',
             'const state = globalThis.process;',
@@ -1317,6 +1358,12 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
     assert.ok(validateRuntimeSource('src/gateway/core.ts', 'process.stderr.write("x");').length);
+    for (const source of ['const ambient = { ...process.env };', 'const windows = process.platform === "win32";'])
+        assert.ok(validateRuntimeSource('src/gateway/core.ts', source).length, source);
+    assert.ok(
+        validateRuntimeSource('src/gateway/connections/managed-connection.ts', 'const timestamp = now ?? Date.now;')
+            .length,
+    );
     for (const source of [
         'const env = { ...process.env };',
         'const platform = process.platform;',
@@ -1331,6 +1378,18 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
         assert.ok(validateRuntimeSource('src/gateway/unreviewed.ts', source).length, source);
 });
 
+test('managed connection role accepts its original client lifecycle provider', () => {
+    for (const { source } of connectionDependencyForms('../../application/client-context.ts'))
+        assert.deepEqual(validateRuntimeSource('src/gateway/connections/managed-connection.ts', source), [], source);
+});
+
+test('managed connection inverse edge rejects erased authority in unknown pure owners', () => {
+    const source = "import type { ManagedConnection } from './connections/managed-connection.ts';";
+    const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
+    assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+    assert.ok(errors.length, source);
+});
+
 test('workspace policy accepts supplied option parsing without gaining connection authority', async () => {
     const file = 'src/gateway/connections/workspace-policy.ts';
     for (const { source } of connectionDependencyForms('../official/options.ts'))
@@ -1339,6 +1398,7 @@ test('workspace policy accepts supplied option parsing without gaining connectio
     for (const dependency of [
         '../core.ts',
         '../registry.ts',
+        './managed-connection.ts',
         './resource-owner.ts',
         './directory-lease.ts',
         '../diagnostics.ts',

@@ -15,7 +15,7 @@ The reviewed intermediate root location precedes the final
 `fixtures/gateway/connection-directory-runtime.ts` relocation in the maintained
 [content plan](../../.superpowers/plans/2026-10-18-repository-content-reorganization.md).
 That later move must update suite imports and both affected fixture maps together;
-core-runtime.ts stays at its current location until its own migration.
+the shared Core support now lives in gateway/core-runtime.ts.
 
 `target-host.ts` exports createTargetHostFixture, the shared controlled target-host
 I/O boundary for the Gateway profile and launch suites. It preserves synthetic
@@ -32,13 +32,15 @@ production control endpoint; IPC disconnection closes its owned descriptors.
 separate writer replaces selections. It reports complete admitted identities or
 explicit rejected concurrent evidence, and normally exits after the final sample.
 
-`core-runtime.ts` composes the actual reusable Core with one explicit test
+`gateway/core-runtime.ts` composes the actual reusable Core with one explicit test
 registration, attached client and request-scoped facilities. It supplies private
 controller/control/invoke/cleanup conveniences without restoring a production
 stdio entry or implicit owner. It also exports createConnectionRuntimeFixture
 and connectionStatus: the shared controlled host/router/official setup and status
 support for entry-runtime and Gateway cleanup, preserving every support assertion
-and teardown branch. Regression-case bodies remain in their suites.
+and teardown branch. The same owner now holds the complete managed fixture and
+bounded wait for five connection suites; [gateway/](gateway/README.md) owns its
+current inventory. Regression-case bodies remain in their suites.
 
 `http-gateway.ts` exposes that actual Core through the production SDK HTTP adapter
 in a test-owned child. Calls use explicit registration bearers; start/restart

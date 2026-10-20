@@ -5,9 +5,17 @@ transport-independent core and fixed official catalog. It attaches no client and
 launches no target. Catalog discovery owns a short-lived verified official child
 and router and disposes both before returning. The separately composed Electron
 App owns direct SDK HTTP and final cleanup; thin Plugins never launch a core.
-Core owns the complete managed-connection generation/execution object;
+Core retains substantive registration/registry/catalog and construction-cleanup
+composition. Its synchronous createManagedConnections factory owns the complete
+transaction and generation/execution object in
+`src/gateway/connections/managed-connection.ts`;
 `src/gateway/registry.ts` owns route membership and retained cleanup joins over
 those same objects, with no runtime back edge or duplicated capability shape.
+The factory runs at the original port/host point without acquisition or catalog
+reads. Core supplies a synchronous live readCatalog provider at the original
+validation/status/requirements regions, never cached or captured across an await.
+The registry/managed cycle is erased TYPE-only. Admission/live view stay within
+that complete owner until their separate content cuts.
 See [App runtime](app-runtime.md) for bootstrap, storage and request lifetime.
 
 ## Client and registration boundary

@@ -43,6 +43,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/gateway/connections/resource-owner.ts',
         'src/gateway/connections/directory-lease.ts',
         'src/gateway/connections/workspace-policy.ts',
+        'src/gateway/connections/managed-connection.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/diagnostics.ts',
         'src/gateway/targets/model/cdp-identity.ts',

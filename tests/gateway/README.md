@@ -5,13 +5,16 @@
     input refusal. Its fixtures are local literals; no I/O is required.
 
 - `connections/` owns construction and retained Gateway cleanup cases alongside
-    twenty directory lifetime and five explicit operation evidence cases over the
+    twenty directory lifetime and five explicit operation evidence cases, plus
+    32 whole managed/options cases grouped by their observable ownership contracts, over the
     real Core/DataDirectoryRegistry and controlled I/O.
 - `targets/` owns eight explicit suites for supplied endpoint identity, pure
     launch/isolation/native argument values and controlled profile/launch effects;
     candidate chooser and mutable target ownership keep their current owners.
     directory-admission keeps its two complete pre-acquisition runtime cases.
 
-Both default and coverage commands select all thirteen exact suites once. HTTP admission
+- `official/` owns four supplied options, wire execution and argument/environment suites.
+
+Both default and coverage commands select all twenty-three exact suites once. HTTP admission
 remains in the root `mcp-http-policy.test.ts`; live authentication, continuation
 and execution remain covered by their existing integration suites.

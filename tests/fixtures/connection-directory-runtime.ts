@@ -8,7 +8,7 @@ import { createToolCatalog } from '../../src/adapters/tool-catalog.ts';
 import type { ConnectionStatus, ControlContext, LaunchOptions } from '../../src/domains/control-contract.ts';
 import type { DataIsolationEvidence } from '../../src/gateway/targets/model/isolation.ts';
 import { resolveLaunchDefinition } from '../../src/gateway/targets/model/launch-command.ts';
-import { createCoreFixture } from './core-runtime.ts';
+import { createCoreFixture } from './gateway/core-runtime.ts';
 
 export function deferred() {
     let resolve = () => {};

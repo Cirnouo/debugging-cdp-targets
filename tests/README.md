@@ -143,9 +143,10 @@ Git hook tests remain contributor-tooling regressions.
   canonical-profile argument cases; controlled profile/launch suites share
   `fixtures/target-host.ts`. All six target value suites retain 59 registrations.
 
-- `gateway-core.test.ts` covers independent clients, registration authorization, immutable
-    roots/launch snapshots, pre-roots temporary-directory capture, selected workspace
-    copy/privacy and scoped restart/transfer retention, plus cleanup failure/retry.
+- `gateway/connections/` groups the 27 original Core cases by cleanup, roots
+    admission, scoped restart, execution detachment and registration administration.
+    Their complete matrices, snapshots, callback bodies and cleanup share the one
+    managed fixture in `fixtures/gateway/core-runtime.ts`.
 - `client-context.test.ts`, `registrations.test.ts` and `gateway/official/execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
 - `host-management.test.ts` checks absent/corrupt/incompatible latest records,
@@ -378,7 +379,7 @@ Git hook tests remain contributor-tooling regressions.
 - `entry-runtime.test.ts` keeps ten actual Core ownership, independent connection
   and upstream lifetime cases. `gateway/connections/gateway-cleanup.test.ts` owns
   the seven whole Gateway shutdown, rollback, catalog and retained disposal cases.
-  Both share controlled I/O and status support in `fixtures/core-runtime.ts`,
+  Both share controlled I/O and status support in `fixtures/gateway/core-runtime.ts`,
   retaining every setup/status assertion and cleanup branch.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
   output validation and independent subprocess disposal. Actual Core/SDK HTTP
@@ -437,7 +438,7 @@ Git hook tests remain contributor-tooling regressions.
 - `gateway/official/` owns safe options/recipes, exact wire-terminal values and
     argument/environment contracts, preserving all original cases and matrices;
     see its [suite inventory](gateway/official/README.md).
-- `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
+- `tool-catalog.test.ts` and `gateway/connections/connection-options.test.ts` verify activation recipes,
     variants and independent configuration. The latter retains its whole HTTP/catalog
     integration case and tests supplied workspace defaults, ordered aliases,
     unrestricted-path facts and closed option rejection.
@@ -485,14 +486,16 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select forty-three entries: `tests/*.test.ts`, the
+command and `pnpm test:coverage` select forty-nine entries: `tests/*.test.ts`, the
 twenty-three explicit [tooling suites](tooling/README.md), two explicit
-[Host suites](host-plugins/README.md) and seventeen Gateway suites. Gateway selection
+[Host suites](host-plugins/README.md) and twenty-three Gateway suites. Gateway selection
 retains argument parsing, seven [Target suites](gateway/targets/README.md), five
 [connection/directory suites](gateway/connections/README.md) and the four explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
-append once in that order. Default commands do not launch
+append once in that order; the six managed-connection suites then append once as
+cleanup, connection-options, execution-detachment, registration-administration,
+roots-admission and scoped-restart. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
