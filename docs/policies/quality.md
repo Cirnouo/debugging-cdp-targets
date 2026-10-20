@@ -84,7 +84,16 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/submissions/issue-feedback.test.ts`,
 `tests/tooling/submissions/issue-workflow.test.ts`,
 `tests/tooling/licenses/bundled-notices.test.ts`,
+`tests/tooling/distribution/host-distribution.test.ts`,
+`tests/tooling/distribution/host-metadata.test.ts`,
+`tests/tooling/distribution/icon-packaging.test.ts`,
+`tests/tooling/distribution/physical-payloads.test.ts`,
+`tests/tooling/distribution/plugin-distribution.test.ts`,
+`tests/tooling/distribution/skill-presentation.test.ts`,
+`tests/tooling/distribution/skill-questions.test.ts`,
+`tests/tooling/distribution/thin-plugin-metadata.test.ts`,
 `tests/tooling/distribution/thin-plugin-payloads.test.ts`,
+`tests/tooling/distribution/version-agreement.test.ts`,
 `tests/gateway/owned-tool-arguments.test.ts`,
 `tests/host-plugins/payload-integrity.test.ts` and
 `tests/host-plugins/payload-filesystem.test.ts`, plus exactly
@@ -103,11 +112,17 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/options.test.ts`,
 `tests/gateway/official/execution.test.ts`,
 `tests/gateway/official/server-arguments.test.ts` and
-`tests/gateway/official/server-arguments-environment.test.ts`. These thirty-four selectors
+`tests/gateway/official/server-arguments-environment.test.ts`. These forty-three selectors
 include seventeen Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.
+
+Changes to default or coverage selection must update both independent contracts:
+[tests/toolchain-config.test.ts](../../tests/toolchain-config.test.ts) keeps the two
+literal command expectations; [tests/test-lanes.test.ts](../../tests/test-lanes.test.ts)
+keeps the safe inventory, GUI and coverage contracts. Update both with package
+scripts and the current test map, preserving sequential files and coverage floors.
 
 GUI-opening tests must skip successfully in default local hooks, scripts and
 direct Node invocations. Authorization comes only from the exact command-line

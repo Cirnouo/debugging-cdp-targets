@@ -7871,7 +7871,7 @@ function errorCode(error) {
   return isRecord(error) && typeof error.code === "string" ? error.code : void 0;
 }
 
-// tooling/host-policy.ts
+// tooling/distribution/host-descriptors.ts
 var CODEX_HOST = Object.freeze({
   id: "codex",
   inputRoot: "packaging/codex",

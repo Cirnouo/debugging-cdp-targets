@@ -230,7 +230,7 @@ test('package, output and repository fixtures work with an aliased system tempor
                 ...[
                     'official-package',
                     'tooling/distribution/thin-plugin-payloads',
-                    'icon-packaging',
+                    'tooling/distribution/icon-packaging',
                     'repository-audit',
                 ].map((name) => fileURLToPath(new URL(`./${name}.test.ts`, import.meta.url))),
             ],
@@ -245,6 +245,12 @@ test('package, output and repository fixtures work with an aliased system tempor
         assert.ok(
             result.stdout.includes(
                 'build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs',
+            ),
+            result.stdout,
+        );
+        assert.ok(
+            result.stdout.includes(
+                'assembly copies only approved icons and rejects missing, unexpected and malformed PNG inputs',
             ),
             result.stdout,
         );

@@ -1,6 +1,4 @@
-import { isSemVer } from '../src/domains/software-version.ts';
-
-export { isReleaseVersion, isSemVer, isStableVersion } from '../src/domains/software-version.ts';
+import { isSemVer } from '../../src/domains/software-version.ts';
 
 export function validateVersionAgreement(appVersion: unknown, pluginVersion: unknown, skillVersion: unknown) {
     return isSemVer(appVersion) && isSemVer(skillVersion) && pluginVersion === skillVersion
