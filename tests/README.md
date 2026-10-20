@@ -35,6 +35,12 @@ Git hook tests remain contributor-tooling regressions.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   verified public native addon to test shared read-only use, independent operation
   writers, exclusive deletion barriers and persistent lock inode identity.
+- `app-fresh-stage.test.ts` exercises the actual source builder and fresh
+  transaction with controlled native-process/addon I/O, exact file-only owned ZIP
+  extraction, protected manifest failures and state publication outcomes. Native
+  permission helper execution is blocked before spawn, and dlopen is replaced
+  before entering native code. It establishes no Windows permissions, DACL,
+  no-replace/locking acceptance or runnable admitted App claim.
 - `app-deployment-storage.test.ts` tests enrolled-root and lease ownership,
   bounded canonical state, atomic failure/readback outcomes and retained fences
   through real owned temporary files. Linux private-account/local-filesystem
@@ -46,14 +52,30 @@ Git hook tests remain contributor-tooling regressions.
 - `app-deployment-authority.test.ts` covers strict native SID/UID, protected and
   inherited ACL templates, ancestors, unsigned identities, APFS/NTFS evidence
   and Linux private/system mode rules through literal pure inputs.
-- `app-deployment-capabilities.test.ts` exercises the real store with controlled
-  account/native-output/filesystem boundaries: reader refusal, writer authority
+- `app-deployment-capabilities.test.ts` exercises the real store with a controlled
+  Linux-private POSIX filesystem/UID profile on every host: reader refusal, writer authority
   changes, exact descriptor modes, fixed lease identity, partial-envelope refusal
-  and commit/removal outcomes. Its Windows fixtures block native process creation
-  before spawn, including custom-promisify bypasses. Linux role fixtures replace
+  and commit/removal outcomes. Process creation/dlopen/chmod are blocked or replaced
+  before native code, including custom-promisify bypasses. Linux role fixtures replace
   real/effective UID and filesystem evidence. A controlled macOS full ancestor
   chain separates a sealed read-only System root from writable Data controls.
   These fixtures supply no native proof.
+- `deployment-support-build.test.ts` consumes the actual fixed source builder and
+  fresh Windows composition through controlled compiler/process I/O and real owned
+  files. Receipt/source/output drift, collisions, replacement/close errors,
+  fresh reader account/ACL/volume/identity fences and unsafe second chunks reject.
+  `windows-deployment-protocol.test.ts` uses independent golden frames and dual
+  byte/count bounds. `windows-deployment-stream.test.ts` covers backpressure,
+  drain/EOF, early rejection, EPIPE, cancellation and retained actual terminals.
+  Inert PE-shaped fixtures are never executed or claimed as native acceptance.
+- `app-deployment-copy.test.ts` consumes the real Node source-file feeder and
+  fixed-support lifetime with owned file-only copy streams. It checks two passes
+  of one descriptor, private manifest bytes, root/file replacement, hash/EOF
+  failures, read/close aggregation, early results, retained child terminals and
+  target readback drift. Deep multi-chunk sweeps reject unsafe later records and
+  newly changed facts on another call. It never executes C# or evaluates native
+  permissions. Fresh transaction fixtures count each named query/create/copy/
+  publish boundary and preserve no-state/indeterminate publication assertions.
 - `app-deployment-native-source.test.ts` executes the fixed macOS source only in
   a Node VM with controlled ObjC, buffers, descriptors and errno. It checks full
   unsigned identity precision, separate volume requests, ACL absence versus
@@ -98,7 +120,7 @@ Git hook tests remain contributor-tooling regressions.
   nonregular entries before writing. Small inert sources also check original
   byte hashes, empty files/directories and source closure. Both archive and stage
   suites share the exact file-only pre-spawn guard in `fixtures/app-archive.ts`.
-- `thin-plugin-cutover.test.ts` checks host-native direct HTTP manifests and
+- `tooling/distribution/thin-plugin-metadata.test.ts` checks host-native direct HTTP manifests and
   excludes credentials, executable helpers and duplicated App runtime payloads.
 - `app-control-cutover.test.ts` checks the public lifecycle identities and actual
   SDK schema validation of explicit bearer inputs versus missing or retired fields.
@@ -252,21 +274,22 @@ Git hook tests remain contributor-tooling regressions.
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, candidate port selection and launch rollback using controlled
   targets. The original pure identity case lives in `gateway/targets/`.
-- `plugin-distribution.test.ts` validates portable manifests and inventory.
-- `icon-packaging.test.ts` checks exact host artwork metadata and delivery,
+- `tooling/distribution/plugin-distribution.test.ts` validates portable manifests and inventory.
+- `tooling/distribution/icon-packaging.test.ts` checks exact host artwork metadata and delivery,
   rejects missing/unexpected assets, and exercises PNG size, dimensions, CRCs,
   truncated streams and row filters with independently constructed fixtures.
-- `host-distribution.test.ts` covers both complete thin host inventories, manifest/MCP
-  and Marketplace routing, shared bytes, installed-relative Skill reference links,
-  independent version/license/resource drift,
-  duplicate metadata, linked inputs/roots and read-only build checks.
-- `skill-presentation.test.ts` rejects malformed or duplicate YAML, unknown and
+- tooling/distribution/host-distribution.test.ts covers complete peer assembly,
+  literal exact inventories, shared bytes, installed-relative links and read-only
+  output checks. host-metadata.test.ts covers exact manifest/MCP/Marketplace rules
+  and supplied-value import isolation. physical-payloads.test.ts retains the whole
+  independent audit, version/license drift, strict trees and linked-root refusal.
+- `tooling/distribution/skill-presentation.test.ts` rejects malformed or duplicate YAML, unknown and
   mistyped Skill fields, invalid icon references and missing/changed/linked PNGs.
   It checks assembly before copying and every shared Skill input against both
   hosts, including matching peer drift that cannot prove maintained identity and
   stale delivered files after maintained shared inputs, including nested question
   and conditional operation references, are deleted or renamed.
-- `skill-questions.test.ts` parses the common question contract and both language
+- `tooling/distribution/skill-questions.test.ts` parses the common question contract and both language
   catalogues separately, reconstructs their shared bilingual contract and checks
   explicit roles, finite fact slots, action order, directory delegation and
   cleanup scope, required input fields and lifecycle event mapping, with duplicate/malformed YAML
@@ -287,8 +310,6 @@ Git hook tests remain contributor-tooling regressions.
 - `repository-audit.test.ts` tests AST boundaries, repository traversal, YAML
   filenames including generated output and exact exceptions, and directory
   documentation that preserves the root README on GitHub.
-- `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
-  required portable MCP schema declarations, and allowlists.
 - `tooling/licenses/` checks the actual bundled-notices collector, canonical
   package boundaries, reviewed SDK/vendor evidence, default roots and import isolation.
 - `tooling/distribution/` checks complete thin-payload bytes, competing/missing/linked
@@ -358,8 +379,8 @@ Git hook tests remain contributor-tooling regressions.
   IPC readiness before their unchanged failure deadlines. Resistant coverage
   records the actual ready child, TERM/KILL requests and native close, including
   delayed startup before PID and signal-handler initialization.
-- `version-policy.test.ts` checks shared SemVer grammar, stable/release predicates,
-  parser limits, arbitrary legal prerelease labels, and exact metadata agreement.
+- `software-version.test.ts` retains strict SemVer/stable/release limits and comparison;
+  `tooling/distribution/version-agreement.test.ts` checks exact metadata agreement.
 - [tooling/releases/](tooling/releases/README.md) separates supplied-value Changelog
   and English note regressions from stable/prerelease tag/event identity, paginated
   draft recovery, returned classification, stable-only comparisons and fail-closed
@@ -485,8 +506,8 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select thirty-seven entries: `tests/*.test.ts`, the
-sixteen explicit [tooling suites](tooling/README.md), two explicit
+command and `pnpm test:coverage` select forty-six entries: `tests/*.test.ts`, the
+twenty-five explicit [tooling suites](tooling/README.md), two explicit
 [Host suites](host-plugins/README.md) and eighteen Gateway suites. Gateway selection
 retains argument parsing, seven [Target suites](gateway/targets/README.md), five
 [connection/directory suites](gateway/connections/README.md) and the five explicit
@@ -503,6 +524,13 @@ execution with individual authorization skips. GUI authorization comes only from
 verification of changed GUI tests may opt in explicitly; default hooks and scripts
 remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
 integration requires the same flag and must not touch existing user targets.
+
+Default and coverage selection have two independent contract owners:
+[tests/toolchain-config.test.ts](toolchain-config.test.ts) keeps both literal
+command expectations; [tests/test-lanes.test.ts](test-lanes.test.ts) keeps the
+safe inventory, GUI and coverage contracts. Update both with package scripts
+and this map when selectors change. The ten distribution suites expand the
+existing thin-payload selector in place; the four Official suites remain appended.
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen

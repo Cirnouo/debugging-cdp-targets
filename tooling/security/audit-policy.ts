@@ -1,5 +1,5 @@
 import { parseAllDocuments } from 'yaml';
-import { isSemVer } from '../version-policy.ts';
+import { isSemVer } from '../../src/domains/software-version.ts';
 
 export type Severity = 'info' | 'low' | 'moderate' | 'high' | 'critical';
 export type AuditScope = 'repository' | 'upstream';

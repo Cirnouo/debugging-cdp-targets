@@ -6,7 +6,7 @@
 - `app-native-release.json` records canonical registry tarball integrity and
   every original regular file in the native advisory-lock loading closure,
   including all original licenses and platform prebuilds.
-- `build-plugin.ts` assembles thin Codex and Claude Code payloads from
+- `distribution/build-plugin.ts` assembles thin Codex and Claude Code payloads from
   `packaging/` and root `LICENSE`, retaining complete assembly and read-only checks.
 - `build-app.ts` builds the synchronous bootstrap, main, sandboxed preload and
   renderer, collects actual graph licenses and stages verified original native
@@ -16,10 +16,29 @@
   descriptive source provenance. `extract-app-zip.ps1` authenticates and inventories
   the same opened read-locked ZIP stream; unsafe paths, aliases and non-regular
   entries refuse before extraction. Other platform source producers remain pending.
-  The exact helper/source-input inventory also includes the fixed read-only
-  Windows deployment authority C#/PowerShell and macOS JXA source. They are
-  repository-owned MIT inputs, with no new third-party runtime or notice.
-  Copying these sources does not enable deployment admission or enrollment.
+  The generated App helper inventory includes macOS deployment JXA source.
+  Windows deployment query/create C# and their fixed compiler-produced EXEs
+  belong to the contributor build lifetime in the native adapter, and are
+  excluded from generated App delivery. All remain repository-owned MIT inputs,
+  with no new third-party runtime or notice. App admission remains unconnected.
+  Its separate `stageFreshDesktopInstallation` explicit contributor entry owns
+  the Windows x64 current-account source-to-protected-root transaction, two fixed
+  lease inodes, exact canonical manifest, no-replace build and state-last initial
+  publication followed by read admission. It internally invokes the real source
+  producer; caller manifests, digests and callbacks cannot replace it. All planned
+  paths and exact finite copy framing are preflighted before fresh root effects.
+  Payload creation uses one fixed copy child and two passes of each same opened
+  source file; the R1 self-manifest uses the captured producer buffer twice.
+  First source-root sampling is a consumer baseline, not a retained original
+  producer inode; same-account scratch prehistory remains a stated limitation.
+  Each of five payload checkpoints performs fresh permission sweeps before and
+  after the complete tree verifier. Child count follows the real count-and-byte
+  query packer at every boundary, plus ten fixed mutating/copy children; no
+  payload file or ancestor starts its own child. The fixed
+  mutation/query C# helpers are build-only MIT repository inputs, excluded
+  from generated App delivery and its runtime notices. Default CLI/research flat
+  staging remains the unpublished intermediate path. App/worker integration,
+  nested portable data, real native acceptance and installers remain pending.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed
@@ -39,28 +58,11 @@
   production safety, consuming shared text rules from `quality/`.
 - `quality/` owns pure text style and YAML filename rules reused by the repository
   walker and staged text checker.
-- `distribution-audit.ts` checks each physical Plugin inventory, host manifest,
-  direct HTTP format, Marketplace pointer and byte-identical packaging into a disposable directory;
-  this is not a host install claim.
-  It parses Codex Skill presentation YAML with duplicate-key rejection and
-  validates its exact interface and PluginShared icon reference against regular
-  approved PNG bytes. Shared Skill identity derives from every maintained shared
-  input in both directions, excluding only exact host-declared overlay files;
-  host inventories independently enforce Codex-only additions.
-- `host-policy.ts` owns filesystem-free host descriptors and canonical input/output paths.
-- `payload-policy.ts` owns the exact thin Plugin file allowlist.
-- `icon-policy.ts` owns approved artwork paths and PNG evidence validation.
-    The repository's approved artwork profile is static square PNG, at least
-    48 and at most 4096 pixels, at most 5 MiB, with noninterlaced 8-bit RGBA.
-    These selected quality bounds remain project requirements; public-submission
-    artwork rules are not a local runtime contract. The profile is narrower than the
-    [PNG specification](https://www.w3.org/TR/png-3/). Validation checks chunk CRCs,
-    a complete bounded pixel stream, and valid row filters. Build assembly checks
-    the exact shared asset inventory and copies only each host's delivery icons.
-    Delivery PNGs use only IHDR, consecutive IDAT and IEND chunks. Source artwork
-    may additionally retain its original `caBX` Content Credentials before IDAT.
-    [Host metadata](../docs/evidence/host-plugin-research.md) owns researched consumer support and
-    limits for Claude's listing icon and Codex's retained dark composer key.
+- [distribution/](distribution/README.md) owns supplied host metadata, import-free
+  descriptors, closed inventories, approved PNG policy and version agreement,
+  separate strict tree operations and complete thin builder/independent auditor.
+  Audits retain both Marketplaces and two-way maintained Skill identity, including
+  matching stale peer refusal; this is not a host installation claim.
 - `official-tool-catalog.ts` verifies the fixed public tools/list configuration
   matrix; `--write` deliberately regenerates tool metadata for the verified release.
 - `official-tool-catalog.json` records complete names, schema variants, activation
@@ -69,8 +71,6 @@
   source tag/commit, tarball integrity and every published file digest and length.
 - `governance/` owns pure commit grammar, original-line footer policy and supplied
   event/ref construction, actual commitlint execution and the Git/history audit command.
-- `version-policy.ts` re-exports the pure domain version predicates and owns exact
-  Package/Plugin/Skill string agreement. It also supplies security identity validation.
 - [releases/](releases/README.md) separates supplied-value Markdown note extraction
   and body construction from the complete tag/remote/draft/publication transaction.
   Its publisher validates maintained/generated metadata and new tag-push identity,
@@ -129,8 +129,8 @@ Numeric prerelease identifiers may exceed that integer limit within the total
 length limit. Stable classification requires empty prerelease and build arrays;
 release eligibility allows arbitrary legal prerelease identifiers but no build
 metadata. Metadata agreement compares original strings, including build identifiers.
-The pure runtime owner is `src/domains/software-version.ts`; `version-policy.ts`
-re-exports its predicates for tooling. The host-management service consumes its
+The pure owner is `src/domains/software-version.ts`; tooling predicate callers import it directly.
+`distribution/version-agreement.ts` owns the distinct metadata equality rule. The host-management service consumes its
 strict comparison, while App build entries do not yet import that service.
 The standalone audit bundles the parser with its original ISC notice. App notices
 follow actual bundle inputs when management is composed; installing a dependency

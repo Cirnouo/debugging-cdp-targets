@@ -6,10 +6,10 @@ import { parse } from '@babel/parser';
 import { isReferenced, type Node } from '@babel/types';
 import { parse as parseYaml } from 'yaml';
 import { errorMessage, isRecord } from '../src/shared/errors.ts';
-import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
-import { isApprovedIconPath, validateIconPng } from './icon-policy.ts';
+import { isApprovedIconPath, validateIconPng } from './distribution/artwork-policy.ts';
+import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './distribution/host-descriptors.ts';
+import { validateVersionAgreement } from './distribution/version-agreement.ts';
 import { validateTextStyle, validateYamlFilename } from './quality/text-policy.ts';
-import { validateVersionAgreement } from './version-policy.ts';
 
 const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/adapters/app-native.ts', ['fs-native-extensions']],

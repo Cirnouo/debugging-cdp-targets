@@ -1,4 +1,4 @@
-import { isSemVer } from '../version-policy.ts';
+import { isSemVer } from '../../src/domains/software-version.ts';
 
 export const COMMIT_TYPES = Object.freeze([
     'build',

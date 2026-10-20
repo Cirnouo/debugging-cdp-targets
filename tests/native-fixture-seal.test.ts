@@ -214,6 +214,14 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
         'tooling/licenses/bundled-notices.ts',
         'tooling/licenses/canonical-inputs.ts',
         'tooling/licenses/reviewed-vendors.json',
+        'tooling/distribution/build-plugin.ts',
+        'tooling/distribution/audit-plugins.ts',
+        'tooling/distribution/host-metadata.ts',
+        'tooling/distribution/host-descriptors.ts',
+        'tooling/distribution/payload-inventory.ts',
+        'tooling/distribution/artwork-policy.ts',
+        'tooling/distribution/regular-file-tree.ts',
+        'tooling/distribution/version-agreement.ts',
     ])
         assert.equal(built.inputs.includes(input), false, input);
     assert.ok(built.externalImports.every(isBuiltin), JSON.stringify(built.externalImports));

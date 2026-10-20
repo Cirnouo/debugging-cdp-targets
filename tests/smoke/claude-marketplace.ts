@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution-audit.ts';
+import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution/regular-file-tree.ts';
 import { captureAppInitialization } from './app-http.ts';
 import { claudeRequest, claudeSse, record } from './claude-host.ts';
 import { claudeCli, claudeHost, sandbox } from './claude-process.ts';

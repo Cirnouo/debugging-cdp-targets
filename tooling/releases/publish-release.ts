@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { isReleaseVersion, isStableVersion } from '../../src/domains/software-version.ts';
 import { errorMessage, isRecord } from '../../src/shared/errors.ts';
-import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from '../host-policy.ts';
-import { isReleaseVersion, isStableVersion, validateVersionAgreement } from '../version-policy.ts';
+import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from '../distribution/host-descriptors.ts';
+import { validateVersionAgreement } from '../distribution/version-agreement.ts';
 import { buildReleaseBody, extractChangelog } from './release-notes.ts';
 
 export interface ReleaseInput {

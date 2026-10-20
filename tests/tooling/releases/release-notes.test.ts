@@ -121,7 +121,7 @@ test('imports and exercises supplied-value release notes without publication or 
         "import assert from 'node:assert/strict';",
         "import { registerHooks } from 'node:module';",
         'registerHooks({ resolve(specifier, context, nextResolve) {',
-        "    if (/^(?:node:)?(?:fs|child_process|process|http|https|http2|net|tls|dns|dgram)(?:\\/|$)/.test(specifier) || ['yaml', 'semver'].includes(specifier) || /(?:host-policy|version-policy|publish-release)\\.ts$/.test(specifier)) throw new Error('Forbidden release-notes dependency: ' + specifier);",
+        "    if (/^(?:node:)?(?:fs|child_process|process|http|https|http2|net|tls|dns|dgram)(?:\\/|$)/.test(specifier) || ['yaml', 'semver'].includes(specifier) || /(?:host-policy|version-policy|host-descriptors|version-agreement|software-version|publish-release)\\.ts$/.test(specifier)) throw new Error('Forbidden release-notes dependency: ' + specifier);",
         '    return nextResolve(specifier, context);',
         '} });',
         `const notes = await import(${JSON.stringify(notes)});`,

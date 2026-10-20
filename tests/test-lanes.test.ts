@@ -38,7 +38,16 @@ const interactiveCases = {
 };
 
 const toolingCases = [
+    'tests/tooling/distribution/host-distribution.test.ts',
+    'tests/tooling/distribution/host-metadata.test.ts',
+    'tests/tooling/distribution/icon-packaging.test.ts',
+    'tests/tooling/distribution/physical-payloads.test.ts',
+    'tests/tooling/distribution/plugin-distribution.test.ts',
+    'tests/tooling/distribution/skill-presentation.test.ts',
+    'tests/tooling/distribution/skill-questions.test.ts',
+    'tests/tooling/distribution/thin-plugin-metadata.test.ts',
     'tests/tooling/distribution/thin-plugin-payloads.test.ts',
+    'tests/tooling/distribution/version-agreement.test.ts',
     'tests/tooling/governance/commit-events.test.ts',
     'tests/tooling/governance/commit-grammar.test.ts',
     'tests/tooling/governance/commit-history.test.ts',

@@ -4,8 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
-import { PLUGIN_ROOT } from '../tooling/payload-policy.ts';
+import { PLUGIN_HOSTS, PLUGIN_ROOT } from '../tooling/distribution/host-descriptors.ts';
 import { auditRepository, validateRuntimeSource } from '../tooling/repository-audit.ts';
 
 function connectionDependencyForms(specifier: string) {

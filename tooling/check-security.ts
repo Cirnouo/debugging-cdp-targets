@@ -4,7 +4,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { errorMessage } from '../src/shared/errors.ts';
-import { PLUGIN_HOSTS } from './host-policy.ts';
+import { PLUGIN_HOSTS } from './distribution/host-descriptors.ts';
 import type { AuditScope, FindingDecision, Fingerprints } from './security/audit-policy.ts';
 import { evaluateFindings, readLockInventory, validateExceptions } from './security/audit-policy.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';

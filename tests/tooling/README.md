@@ -6,7 +6,7 @@
   temporary-directory child/cleanup contract.
 - [security/](security/README.md) owns frozen official build-input agreement and drift.
 - [licenses/](licenses/README.md) checks bundled notices and reviewed input boundaries.
-- [distribution/](distribution/README.md) checks complete thin-payload assembly and output effects.
+- [distribution/](distribution/README.md) checks complete thin delivery, supplied metadata, independent audits and output effects.
 - [releases/](releases/README.md) separates pure release-note behavior and import
   isolation from the complete publication transaction with controlled I/O.
 - [submissions/](submissions/README.md) owns direct Markdown scanner observations,
@@ -20,7 +20,7 @@ The safe default and coverage commands explicitly select
 `releases/publication.test.ts`, `submissions/markdown.test.ts`,
 `submissions/pull-requests.test.ts`, `submissions/issue-forms.test.ts`,
 `submissions/issue-feedback.test.ts`, `submissions/issue-workflow.test.ts`,
-`licenses/bundled-notices.test.ts`, `distribution/thin-plugin-payloads.test.ts`,
+`licenses/bundled-notices.test.ts` and the ten explicit `distribution/` suites listed in its map,
 `security/official-inputs.test.ts` and `quality/temporary-directory-alias.test.ts` once each.
 They retain root regressions and exclude interactive/smoke entrypoints.
 Ancestor [test rules](../AGENTS.md) apply.
