@@ -16,10 +16,29 @@
   descriptive source provenance. `extract-app-zip.ps1` authenticates and inventories
   the same opened read-locked ZIP stream; unsafe paths, aliases and non-regular
   entries refuse before extraction. Other platform source producers remain pending.
-  The exact helper/source-input inventory also includes the fixed read-only
-  Windows deployment authority C#/PowerShell and macOS JXA source. They are
-  repository-owned MIT inputs, with no new third-party runtime or notice.
-  Copying these sources does not enable deployment admission or enrollment.
+  The generated App helper inventory includes macOS deployment JXA source.
+  Windows deployment query/create C# and their fixed compiler-produced EXEs
+  belong to the contributor build lifetime in the native adapter, and are
+  excluded from generated App delivery. All remain repository-owned MIT inputs,
+  with no new third-party runtime or notice. App admission remains unconnected.
+  Its separate `stageFreshDesktopInstallation` explicit contributor entry owns
+  the Windows x64 current-account source-to-protected-root transaction, two fixed
+  lease inodes, exact canonical manifest, no-replace build and state-last initial
+  publication followed by read admission. It internally invokes the real source
+  producer; caller manifests, digests and callbacks cannot replace it. All planned
+  paths and exact finite copy framing are preflighted before fresh root effects.
+  Payload creation uses one fixed copy child and two passes of each same opened
+  source file; the R1 self-manifest uses the captured producer buffer twice.
+  First source-root sampling is a consumer baseline, not a retained original
+  producer inode; same-account scratch prehistory remains a stated limitation.
+  Each of five payload checkpoints performs fresh permission sweeps before and
+  after the complete tree verifier. Child count follows the real count-and-byte
+  query packer at every boundary, plus ten fixed mutating/copy children; no
+  payload file or ancestor starts its own child. The fixed
+  mutation/query C# helpers are build-only MIT repository inputs, excluded
+  from generated App delivery and its runtime notices. Default CLI/research flat
+  staging remains the unpublished intermediate path. App/worker integration,
+  nested portable data, real native acceptance and installers remain pending.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed

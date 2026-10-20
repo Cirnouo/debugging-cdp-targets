@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import childProcess, { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { BigIntStats } from 'node:fs';
-import fs, { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import fs, { lstat, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,25 +12,47 @@ import * as deployment from '../src/adapters/app-deployment.ts';
 import { openDeploymentNativeAuthority } from '../src/adapters/app-deployment-native.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
-// These fixtures replace permission/account/volume evidence. No native helper,
-// lock addon, ACL query, chmod, installer or actual platform admission runs.
+// Generic store cases use a synthetic Linux-private filesystem/UID profile on every host.
+// Windows native fences are exercised separately through the actual fresh-context factory.
+// No native helper, lock addon, ACL query, chmod, installer or platform admission runs.
 function metadata(stats: BigIntStats, patch: Partial<BigIntStats>): BigIntStats {
     return new Proxy(stats, {
         get: (target, key) => (Object.hasOwn(patch, key) ? Reflect.get(patch, key) : Reflect.get(target, key)),
     });
 }
 async function fixture() {
-    const directory = await fs.realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-authority-controlled-')));
-    const envelope = path.join(directory, '.deployment');
-    await mkdir(envelope);
-    const stats = await lstat(directory, { bigint: true });
+    // POSIX names and private UID evidence are controlled, including chmod: no OS permission API runs.
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const getuid = Object.getOwnPropertyDescriptor(process, 'getuid');
+    const geteuid = Object.getOwnPropertyDescriptor(process, 'geteuid');
+    const originalSpawn = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
+    assert.ok(originalSpawn);
+    Object.defineProperty(ChildProcess.prototype, 'spawn', {
+        ...originalSpawn,
+        value: () => {
+            throw new Error('Native process creation is forbidden in controlled authority tests.');
+        },
+    });
+    const helper = mock.method(childProcess, 'execFile', () => {
+        throw new Error('Native execution forbidden.');
+    });
+    const native = mock.method(process, 'dlopen', () => {
+        throw new Error('Native loading forbidden.');
+    });
+    const physical = await fs.realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-authority-controlled-')));
+    const actualPath = { join: path.join, dirname: path.dirname, basename: path.basename };
+    const original = { ...fs };
+    const directory = `/controlled/${actualPath.basename(physical)}`;
+    const envelope = `${directory}/.deployment`;
+    const template = await lstat(physical, { bigint: true });
+    await original.mkdir(actualPath.join(physical, '.deployment'));
     const installation = {
         schemaVersion: 1,
         installationId: '0dd7224c-51a2-41b3-914d-01171c139ac2',
         kind: 'portable',
-        platform: 'win32',
+        platform: 'linux',
         architecture: process.arch,
-        root: { realPath: directory, device: String(stats.dev), inode: String(stats.ino) },
+        root: { realPath: directory, device: String(template.dev), inode: String(template.ino) },
     };
     const identity = createHash('sha256').update(JSON.stringify(installation)).digest('hex');
     const state = {
@@ -47,129 +69,115 @@ async function fixture() {
         ['use.lock', ''],
     ]) {
         assert.ok(name !== undefined && content !== undefined);
-        await writeFile(path.join(envelope, name), content);
+        await original.writeFile(actualPath.join(physical, '.deployment', name), content);
     }
-    let account = 'S-1-5-21-1-2-3-1000';
-    let unsafe = '';
-    let reply: (name: string, value: Record<string, unknown>) => unknown = (_name, value) => value;
+    let uid = 1000,
+        unsafe = '';
     const descriptors: { file: string; flags: string | number }[] = [];
     const handles: Awaited<ReturnType<typeof fs.open>>[] = [];
-    const originalStat = fs.lstat;
-    const originalOpen = fs.open;
-    const stat = (name: string, value: BigIntStats) => {
-        const managed = name === directory || name.startsWith(`${directory}${path.sep}`);
-        return metadata(value, {
-            uid: managed ? 1000n : 0n,
-            gid: managed ? 1000n : 0n,
-            mode: value.isDirectory() ? (name === unsafe ? 0o40777n : managed ? 0o40700n : 0o40755n) : 0o100600n,
-        });
+    const map = (file: unknown) => {
+        const name = String(file);
+        if (name === directory) return physical;
+        if (name.startsWith(`${directory}/`))
+            return actualPath.join(physical, ...name.slice(directory.length + 1).split('/'));
+        throw new Error('Controlled private fixture path escaped.');
     };
-    const named = mock.method(fs, 'lstat', async (...args: Parameters<typeof fs.lstat>) =>
-        stat(String(args[0]), await originalStat(args[0], { bigint: true })),
+    const stat = (name: string, value: BigIntStats) =>
+        metadata(value, {
+            uid: name === '/' || name === '/controlled' ? 0n : 1000n,
+            gid: name === '/' || name === '/controlled' ? 0n : 1000n,
+            mode: value.isDirectory()
+                ? name === unsafe
+                    ? 0o40777n
+                    : name === '/' || name === '/controlled'
+                      ? 0o40755n
+                      : 0o40700n
+                : 0o100600n,
+        });
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    Object.defineProperty(process, 'getuid', { value: () => uid, configurable: true });
+    Object.defineProperty(process, 'geteuid', { value: () => uid, configurable: true });
+    const mocks: { mock: { restore(): void } }[] = [helper, native];
+    for (const key of ['join', 'resolve', 'dirname', 'basename', 'relative', 'isAbsolute', 'normalize'] as const)
+        mocks.push(mock.method(path, key, path.posix[key]));
+    const sep = Object.getOwnPropertyDescriptor(path, 'sep');
+    Object.defineProperty(path, 'sep', { value: '/', configurable: true });
+    mocks.push(
+        mock.method(fs, 'lstat', async (...args: Parameters<typeof fs.lstat>) => {
+            const name = String(args[0]);
+            return stat(
+                name,
+                name === '/' || name === '/controlled'
+                    ? template
+                    : await original.lstat(map(args[0]), { bigint: true }),
+            );
+        }),
     );
-    const opened = mock.method(fs, 'open', async (...args: Parameters<typeof fs.open>) => {
-        descriptors.push({ file: String(args[0]), flags: args[1] ?? 'r' });
-        const handle = await originalOpen(...args);
-        handles.push(handle);
-        const original = handle.stat.bind(handle);
-        mock.method(handle, 'stat', async () => stat(String(args[0]), await original({ bigint: true })));
-        return handle;
-    });
-    const volume = mock.method(fs, 'statfs', async () => ({ type: 0xef53n }));
-    // execFile's custom promisify can retain its original executor across a mock.
-    // Block the actual native spawn method before any fixture/helper can run.
-    const originalSpawn = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
-    assert.ok(originalSpawn);
-    Object.defineProperty(ChildProcess.prototype, 'spawn', {
-        ...originalSpawn,
-        value: () => {
-            throw new Error('Native process creation is forbidden in controlled authority tests.');
-        },
-    });
-    const helper = mock.method(childProcess, 'execFile', (...args: unknown[]) => {
-        const argv = args[1];
-        assert.ok(Array.isArray(argv));
-        const name = argv[argv.length - 1];
-        assert.equal(typeof name, 'string');
-        const callback = args.at(-1);
-        assert.equal(typeof callback, 'function');
-        if (typeof callback !== 'function' || typeof name !== 'string') throw new Error('Malformed helper call.');
-        assert.ok(argv.includes('-NoProfile') && argv.includes('-NonInteractive'));
-        const options = args[2];
-        assert.ok(
-            typeof options === 'object' &&
-                options !== null &&
-                'shell' in options &&
-                'windowsHide' in options &&
-                'env' in options,
-        );
-        assert.equal(options.shell, false);
-        assert.equal(options.windowsHide, true);
-        void originalStat(name, { bigint: true }).then(
-            (value) => {
-                const result = {
-                    platform: 'win32',
-                    account,
-                    owner: 'S-1-5-21-1-2-3-1000',
-                    path: name,
-                    device: String(value.dev),
-                    inode: String(value.ino),
-                    links: String(value.nlink),
-                    size: String(value.isDirectory() ? 0 : value.size),
-                    directory: value.isDirectory(),
-                    protected: true,
-                    reparse: false,
-                    filesystem: 'NTFS',
-                    driveType: 3,
-                    volumeFlags: 8,
-                    dacl: [
-                        {
-                            sid: name === unsafe ? 'S-1-1-0' : 'S-1-5-21-1-2-3-1000',
-                            mask: '2032127',
-                            flags: value.isDirectory() ? 3 : 0,
-                            type: 0,
-                        },
-                    ],
-                };
-                callback(null, `${JSON.stringify(reply(name, result))}\n`, '');
-            },
-            (error: unknown) => callback(error, '', ''),
-        );
-        return new ChildProcess();
-    });
+    mocks.push(
+        mock.method(fs, 'open', async (...args: Parameters<typeof fs.open>) => {
+            const name = String(args[0]);
+            descriptors.push({ file: name, flags: args[1] ?? 'r' });
+            const handle = await original.open(map(args[0]), args[1], args[2]);
+            handles.push(handle);
+            const opened = handle.stat.bind(handle);
+            mocks.push(mock.method(handle, 'stat', async () => stat(name, await opened({ bigint: true }))));
+            mocks.push(mock.method(handle, 'chmod', async () => {}));
+            return handle;
+        }),
+    );
+    mocks.push(mock.method(fs, 'realpath', async (name: Parameters<typeof fs.realpath>[0]) => String(name)));
+    mocks.push(mock.method(fs, 'statfs', async () => ({ type: 0xef53n })));
+    mocks.push(
+        mock.method(fs, 'readFile', (...args: Parameters<typeof fs.readFile>) =>
+            original.readFile(map(args[0]), args[1]),
+        ),
+    );
+    mocks.push(
+        mock.method(fs, 'writeFile', (...args: Parameters<typeof fs.writeFile>) =>
+            original.writeFile(map(args[0]), args[1], args[2]),
+        ),
+    );
+    mocks.push(mock.method(fs, 'unlink', (name: Parameters<typeof fs.unlink>[0]) => original.unlink(map(name))));
+    mocks.push(
+        mock.method(fs, 'readdir', (...args: Parameters<typeof fs.readdir>) => original.readdir(map(args[0]), args[1])),
+    );
+    mocks.push(
+        mock.method(fs, 'rename', (from: Parameters<typeof fs.rename>[0], to: Parameters<typeof fs.rename>[1]) =>
+            original.rename(map(from), map(to)),
+        ),
+    );
     syncBuiltinESMExports();
     return {
         directory,
         envelope,
         state,
         descriptors,
-        reply: (value: typeof reply) => {
-            reply = value;
-        },
         setUid: (value: number) => {
-            account = `S-1-5-21-1-2-3-${value}`;
+            uid = value;
         },
         unsafe: (name: string) => {
             unsafe = name;
         },
         async cleanup() {
             for (const handle of handles) await handle.close();
-            named.mock.restore();
-            opened.mock.restore();
-            volume.mock.restore();
-            helper.mock.restore();
+            for (const item of mocks.reverse()) item.mock.restore();
+            if (sep) Object.defineProperty(path, 'sep', sep);
+            if (platform) Object.defineProperty(process, 'platform', platform);
+            for (const [name, descriptor] of [
+                ['getuid', getuid],
+                ['geteuid', geteuid],
+            ] as const) {
+                if (descriptor) Object.defineProperty(process, name, descriptor);
+                else delete process[name];
+            }
             Object.defineProperty(ChildProcess.prototype, 'spawn', originalSpawn);
             syncBuiltinESMExports();
-            assert.equal(path.dirname(directory), await fs.realpath(os.tmpdir()));
-            assert.ok(path.basename(directory).startsWith('dct-authority-controlled-'));
-            await rm(directory, { recursive: true });
+            await original.rm(physical, { recursive: true });
         },
     };
 }
 
-test('reader exposes only shared-use admission and cannot request operation, deletion or commit', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('controlled Linux-private reader exposes only shared-use admission and cannot request operation, deletion or commit', async () => {
     const own = await fixture();
     try {
         const reader = await deployment.openDeploymentInstallation(own.directory, { tryLock: () => true });
@@ -185,9 +193,7 @@ test('reader exposes only shared-use admission and cannot request operation, del
     }
 });
 
-test('missing, malformed, noncanonical and foreign initial documents remain unusable without adoption', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('controlled Linux-private missing, malformed, noncanonical and foreign initial documents remain unusable without adoption', async () => {
     for (const scenario of ['missing-installation', 'missing-state', 'future-state', 'noncanonical', 'foreign-root']) {
         const own = await fixture();
         try {
@@ -213,16 +219,14 @@ test('missing, malformed, noncanonical and foreign initial documents remain unus
     }
 });
 
-test('custom-promisify bypass is rejected before native process creation even when helper source exists', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('custom-promisify bypass is rejected before native process creation even when helper source exists', async () => {
     const own = await fixture();
     try {
         await assert.rejects(
             async () => promisify(childProcess.execFile)(process.execPath, ['--version']),
             /Native process creation is forbidden/,
         );
-        // The real production factory must still work through the controlled callback executor.
+        // Generic admission still consumes the controlled Linux-private filesystem boundary.
         const reader = await deployment.openDeploymentInstallation(own.directory, { tryLock: () => true });
         assert.equal(reader.installation.root.realPath, own.directory);
     } finally {
@@ -230,9 +234,7 @@ test('custom-promisify bypass is rejected before native process creation even wh
     }
 });
 
-test('trusted writer derives actual account authority and refuses changed account or unsafe ancestors before effects', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('controlled Linux-private writer refuses changed UID or unsafe ancestors before effects', async () => {
     const own = await fixture();
     try {
         assert.ok('openDeploymentWriterInstallation' in deployment);
@@ -254,9 +256,7 @@ test('trusted writer derives actual account authority and refuses changed accoun
     }
 });
 
-test('partial envelope with either missing fixed lease refuses read admission without repair', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('controlled Linux-private partial envelope with either missing fixed lease refuses read admission without repair', async () => {
     for (const name of ['operation.lock', 'use.lock']) {
         const own = await fixture();
         try {
@@ -269,9 +269,7 @@ test('partial envelope with either missing fixed lease refuses read admission wi
     }
 });
 
-test('exact shared and writable lease descriptors retain removal fences and report uncertain replacement', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('controlled Linux-private exact shared and writable lease descriptors retain removal fences and report uncertain replacement', async () => {
     const own = await fixture();
     try {
         const reader = await deployment.openDeploymentInstallation(own.directory, { tryLock: () => true });
@@ -317,23 +315,9 @@ test('exact shared and writable lease descriptors retain removal fences and repo
     }
 });
 
-test('native result success cannot hide changed object identity, granting ACL or unknown fields', {
-    skip: process.platform !== 'win32',
-}, async () => {
+test('controlled Linux-private reader refuses replacement of its held fixed inode', async () => {
     const own = await fixture();
     try {
-        for (const patch of [
-            { inode: '18446744073709551615' },
-            { reparse: true },
-            { filesystem: 'SMB' },
-            { trusted: true },
-            { owner: 'S-1-5-21-1-2-3-1001' },
-            { dacl: null },
-        ]) {
-            own.reply((_name, value) => ({ ...value, ...patch }));
-            await assert.rejects(deployment.openDeploymentInstallation(own.directory, { tryLock: () => true }));
-        }
-        own.reply((_name, value) => value);
         const reader = await deployment.openDeploymentInstallation(own.directory, { tryLock: () => true });
         const lease = await reader.tryAcquire('use');
         assert.ok(lease);

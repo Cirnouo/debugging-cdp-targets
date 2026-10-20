@@ -8,18 +8,41 @@
   or a macOS libproc/JXA source candidate. No App startup/worker wiring or native
   acceptance is established. Both macOS architectures still require actual ABI,
   JXA loading, buffer and errno proof; helpers never request parent Close.
-- `app-deployment.ts` opens only already enrolled installation metadata and
-  holds exactly operation and use lock inodes. Normal open exposes read/shared
-  use; the separate trusted writer open can commit or acquire operation/deletion
-  after native validation. Its bounded canonical state store preserves removal
-  fences, changed-document refusal and pre-commit versus indeterminate outcomes.
-  It stages/removes no payload and remains outside App startup.
-- `app-deployment-native.ts` obtains actual account, ancestor, object and volume
-  evidence for Linux private/system roles and Windows/macOS source candidates.
-  Caller metadata or helper success alone never grants writer authority.
-- `windows-deployment-authority.cs` and `windows-deployment-authority.ps1` provide
-  fixed read-only handle/SID/DACL/local-NTFS evidence; no elevation or mutation
-  entry is included in this slice.
+- `app-deployment.ts` opens enrolled installation metadata and holds exactly
+  operation and use lock inodes. Normal open exposes read/shared use; the separate
+  trusted writer validates native authority before operation, commit or deletion.
+  Its bounded canonical state store preserves removal fences, changed-document
+  refusal and pre-commit versus indeterminate outcomes. It remains outside App startup.
+- Its explicit fresh contributor composition owns the concrete native build
+  lifetime and reopens readers with newly sampled facts. Normal Windows admission
+  fails closed while delivered query binaries remain pending; no runtime build
+  fallback, caller receipt, backend or authority registration exists.
+- `app-deployment-native.ts` produces actual native account/entry evidence and
+  fixed Windows x64 current-account fresh directory/no-replace operations for
+  the explicit contributor builder. Same-boundary Windows path collections use
+  bounded fresh batches; dedup never weakens managed-entry purpose predicates.
+  Fresh payload sweeps union all recorded entries and parent chains per boundary,
+  with a new complete permission sweep on each side of content verification.
+  Windows reader root/envelope and fixed-inode collections coalesce only within
+  their original boundaries; document reads and lease effects retain their order.
+  `windows-deployment-create.cs` is its separate build-only mutation entry,
+  reusing the read-only `windows-deployment-authority.cs` inspector/query entry.
+  Protected DACLs are supplied at creation; source handles and parent handles
+  remain held during no-replace rename. Its finite copy entry owns only payload
+  directory/file creation, write/flush/checked close/reopen/readback. Each file
+  boundary resamples the unchanged native permission predicates while holding
+  actual parent handles; Node retains content provenance and publication order. No existing ACL repair or elevation is
+  provided. Common ancestor DACL admission, actual native behavior and other OS
+  creation remain unaccepted; these sources do not enable App admission.
+- `windows-deployment-support.ts` owns the fixed Windows x64 compiler/source/
+  reference recipe, inert PE structure checks, actual output receipt, exclusive
+  materialization and finite invocation lifetime. It accepts no caller helper
+  path or receipt. `windows-deployment-protocol.ts` owns strict finite UTF-8 wire
+  framing and actual byte/count query packing; `windows-deployment-stream.ts`
+  drains both pipes during backpressured input and retains child/stdio terminal
+  ownership after failures. These build-only EXEs and C# inputs are excluded
+  from generated App delivery. Compilation, runtime/signing and native admission
+  remain separate gates.
 - `macos-deployment-authority.jxa` provides read-only descriptor/UID/ACL/local-APFS
   source evidence with exact returned masks. Controlled source checks do not
   establish native acceptance on either architecture. Filesystem IDs bound the

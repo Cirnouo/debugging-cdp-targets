@@ -35,6 +35,12 @@ Git hook tests remain contributor-tooling regressions.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   verified public native addon to test shared read-only use, independent operation
   writers, exclusive deletion barriers and persistent lock inode identity.
+- `app-fresh-stage.test.ts` exercises the actual source builder and fresh
+  transaction with controlled native-process/addon I/O, exact file-only owned ZIP
+  extraction, protected manifest failures and state publication outcomes. Native
+  permission helper execution is blocked before spawn, and dlopen is replaced
+  before entering native code. It establishes no Windows permissions, DACL,
+  no-replace/locking acceptance or runnable admitted App claim.
 - `app-deployment-storage.test.ts` tests enrolled-root and lease ownership,
   bounded canonical state, atomic failure/readback outcomes and retained fences
   through real owned temporary files. Linux private-account/local-filesystem
@@ -46,14 +52,30 @@ Git hook tests remain contributor-tooling regressions.
 - `app-deployment-authority.test.ts` covers strict native SID/UID, protected and
   inherited ACL templates, ancestors, unsigned identities, APFS/NTFS evidence
   and Linux private/system mode rules through literal pure inputs.
-- `app-deployment-capabilities.test.ts` exercises the real store with controlled
-  account/native-output/filesystem boundaries: reader refusal, writer authority
+- `app-deployment-capabilities.test.ts` exercises the real store with a controlled
+  Linux-private POSIX filesystem/UID profile on every host: reader refusal, writer authority
   changes, exact descriptor modes, fixed lease identity, partial-envelope refusal
-  and commit/removal outcomes. Its Windows fixtures block native process creation
-  before spawn, including custom-promisify bypasses. Linux role fixtures replace
+  and commit/removal outcomes. Process creation/dlopen/chmod are blocked or replaced
+  before native code, including custom-promisify bypasses. Linux role fixtures replace
   real/effective UID and filesystem evidence. A controlled macOS full ancestor
   chain separates a sealed read-only System root from writable Data controls.
   These fixtures supply no native proof.
+- `deployment-support-build.test.ts` consumes the actual fixed source builder and
+  fresh Windows composition through controlled compiler/process I/O and real owned
+  files. Receipt/source/output drift, collisions, replacement/close errors,
+  fresh reader account/ACL/volume/identity fences and unsafe second chunks reject.
+  `windows-deployment-protocol.test.ts` uses independent golden frames and dual
+  byte/count bounds. `windows-deployment-stream.test.ts` covers backpressure,
+  drain/EOF, early rejection, EPIPE, cancellation and retained actual terminals.
+  Inert PE-shaped fixtures are never executed or claimed as native acceptance.
+- `app-deployment-copy.test.ts` consumes the real Node source-file feeder and
+  fixed-support lifetime with owned file-only copy streams. It checks two passes
+  of one descriptor, private manifest bytes, root/file replacement, hash/EOF
+  failures, read/close aggregation, early results, retained child terminals and
+  target readback drift. Deep multi-chunk sweeps reject unsafe later records and
+  newly changed facts on another call. It never executes C# or evaluates native
+  permissions. Fresh transaction fixtures count each named query/create/copy/
+  publish boundary and preserve no-state/indeterminate publication assertions.
 - `app-deployment-native-source.test.ts` executes the fixed macOS source only in
   a Node VM with controlled ObjC, buffers, descriptors and errno. It checks full
   unsigned identity precision, separate volume requests, ACL absence versus
