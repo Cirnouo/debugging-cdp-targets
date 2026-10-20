@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import childProcess, { ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import type { BigIntStats } from 'node:fs';
+import { type BigIntStats, constants } from 'node:fs';
 import fs, { lstat, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
@@ -275,11 +275,17 @@ test('controlled Linux-private exact shared and writable lease descriptors retai
         const reader = await deployment.openDeploymentInstallation(own.directory, { tryLock: () => true });
         const use = await reader.tryAcquire('use');
         assert.ok(use);
-        assert.equal(own.descriptors.find((entry) => entry.file.endsWith('use.lock'))?.flags, 0);
+        assert.equal(
+            own.descriptors.find((entry) => entry.file.endsWith('use.lock'))?.flags,
+            constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+        );
         const writer = await deployment.openDeploymentWriterInstallation(own.directory, { tryLock: () => true });
         const operation = await writer.tryAcquire('operation');
         assert.ok(operation);
-        assert.equal(own.descriptors.find((entry) => entry.file.endsWith('operation.lock'))?.flags, 2);
+        assert.equal(
+            own.descriptors.find((entry) => entry.file.endsWith('operation.lock'))?.flags,
+            constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+        );
         const removing = await writer.commit(operation, own.state, { type: 'begin-removal' });
         assert.equal(removing.phase, 'removing');
         await assert.rejects(reader.tryAcquire('use'), /fenced/);
