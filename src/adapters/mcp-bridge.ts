@@ -23,8 +23,12 @@ import type { Diagnose } from '../domains/control-contract.ts';
 import { RequestFailure } from '../domains/request-failure.ts';
 import { measured } from '../gateway/diagnostics.ts';
 import { createOfficialExecution } from '../gateway/official/execution.ts';
+import {
+    buildOfficialLaunchArguments,
+    captureOfficialServerEnvironment,
+    resolveVerifiedOfficialServerBin,
+} from '../gateway/official/server-launch.ts';
 import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
-import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from './official-server.ts';
 
 export type OfficialConnectionResource = {
     readonly processId?: number;
@@ -75,15 +79,15 @@ export async function createOfficialConnection(
     } = {},
 ): Promise<OfficialConnection> {
     options.signal?.throwIfAborted();
-    const arguments_ = options.args ?? buildServerArguments(browserUrl);
-    const bin = options.bin ?? (await resolveServerBin());
+    const arguments_ = options.args ?? buildOfficialLaunchArguments(browserUrl);
+    const bin = options.bin ?? (await resolveVerifiedOfficialServerBin());
     options.signal?.throwIfAborted();
     const child = spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
         shell: false,
         windowsHide: true,
         cwd: options.cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: snapshotOfficialEnvironment(options.environment),
+        env: captureOfficialServerEnvironment(options.environment),
     });
     const listeners = new Set<() => void>();
     let exited = false;

@@ -88,7 +88,11 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
                         specifier.local.name === name,
                 ),
         );
-    if (!imports('spawn', 'node:child_process') || !imports('resolveServerBin', './official-server.ts')) return allowed;
+    if (
+        !imports('spawn', 'node:child_process') ||
+        !imports('resolveVerifiedOfficialServerBin', '../gateway/official/server-launch.ts')
+    )
+        return allowed;
     const declaration = ast.program.body.find(
         (node) =>
             node.type === 'ExportNamedDeclaration' &&
@@ -113,7 +117,7 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
         fallback.type !== 'AwaitExpression' ||
         fallback.argument.type !== 'CallExpression' ||
         fallback.argument.callee.type !== 'Identifier' ||
-        fallback.argument.callee.name !== 'resolveServerBin' ||
+        fallback.argument.callee.name !== 'resolveVerifiedOfficialServerBin' ||
         fallback.argument.arguments.length !== 0
     )
         return allowed;
@@ -164,7 +168,7 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
         return allowed;
     const expected = new Map([
         ['spawn', 1],
-        ['resolveServerBin', 1],
+        ['resolveVerifiedOfficialServerBin', 1],
         ['child', 1],
         ['bin', 1],
         ['process', 0],
@@ -284,8 +288,43 @@ export function validateRuntimeSource(file: string, source: string) {
     const core = file === 'src/gateway/core.ts';
     const registry = file === 'src/gateway/registry.ts';
     const gatewayService = core || registry;
+    const officialPackageFiles = file === 'src/gateway/official/package-files.ts';
+    const officialLaunch = file === 'src/gateway/official/server-launch.ts';
     const reviewedAmbient = new Set<Node>();
     visit(ast, (node, parent, grandparent) => {
+        if (officialLaunch && node.type === 'FunctionDeclaration') {
+            const name = node.id?.name;
+            for (const [index, parameter] of node.params.entries()) {
+                if (parameter.type !== 'AssignmentPattern' || parameter.left.type !== 'Identifier') continue;
+                const value = parameter.right;
+                if (
+                    parameter.left.name === 'environment' &&
+                    ((name === 'captureOfficialServerEnvironment' && index === 0) ||
+                        (name === 'buildOfficialLaunchArguments' && index === 1)) &&
+                    value.type === 'MemberExpression' &&
+                    !value.computed &&
+                    value.object.type === 'Identifier' &&
+                    value.object.name === 'process' &&
+                    propertyName(value.property) === 'env'
+                )
+                    reviewedAmbient.add(value.object);
+                if (
+                    name === 'buildOfficialLaunchArguments' &&
+                    index === 3 &&
+                    parameter.left.name === 'windowsEnvironment' &&
+                    value.type === 'BinaryExpression' &&
+                    value.operator === '===' &&
+                    value.left.type === 'MemberExpression' &&
+                    !value.left.computed &&
+                    value.left.object.type === 'Identifier' &&
+                    value.left.object.name === 'process' &&
+                    propertyName(value.left.property) === 'platform' &&
+                    value.right.type === 'StringLiteral' &&
+                    value.right.value === 'win32'
+                )
+                    reviewedAmbient.add(value.left.object);
+            }
+        }
         if (core && node.type === 'MemberExpression' && !node.computed && node.object.type === 'Identifier') {
             const property = propertyName(node.property);
             const read =
@@ -369,6 +408,32 @@ export function validateRuntimeSource(file: string, source: string) {
             errors.push(`${file}: pure owners cannot depend on mutable connection owners.`);
         if (layer === 'adapters' && mutableConnection)
             errors.push(`${file}: adapters cannot depend on mutable connection owners.`);
+        if (
+            officialPackageFiles &&
+            ![
+                'node:crypto',
+                'node:fs/promises',
+                'node:path',
+                './release-evidence.ts',
+                '../../adapters/file-evidence.ts',
+            ].includes(specifier)
+        )
+            errors.push(`${file}: unapproved Official package-file proof dependency.`);
+        if (
+            officialLaunch &&
+            ![
+                'node:path',
+                './options.ts',
+                './release-evidence.ts',
+                './package-files.ts',
+                '../../shared/errors.ts',
+            ].includes(specifier)
+        )
+            errors.push(`${file}: unapproved Official launch-input dependency.`);
+        if (pure && !core && !officialLaunch && resolved === 'src/gateway/official/server-launch.ts')
+            errors.push(`${file}: pure owners cannot depend on Official launch inputs.`);
+        if (pure && !officialPackageFiles && !officialLaunch && resolved === 'src/gateway/official/package-files.ts')
+            errors.push(`${file}: pure owners cannot depend on Official package files.`);
         if (gatewayService) {
             const permittedValue = (
                 core
@@ -381,7 +446,7 @@ export function validateRuntimeSource(file: string, source: string) {
                           '../adapters/data-directory.ts',
                           '../adapters/fixture-diagnostics.ts',
                           '../adapters/mcp-bridge.ts',
-                          '../adapters/official-server.ts',
+                          './official/server-launch.ts',
                           '../adapters/port-reservation.ts',
                           '../adapters/target-host.ts',
                           '../adapters/tool-catalog.ts',
@@ -438,6 +503,8 @@ export function validateRuntimeSource(file: string, source: string) {
             gateway &&
             !connectionOwner &&
             !gatewayService &&
+            !officialPackageFiles &&
+            !officialLaunch &&
             (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
         )
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);

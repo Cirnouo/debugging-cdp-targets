@@ -20,12 +20,14 @@
 - `connections/` owns complete resource-generation retention/disposal and
     connection-level directory-lease barriers through their exact adapter capabilities.
 - `official/` owns pure reviewed options/recipes and supplied argument composition,
-    wire identity/terminal tracking and strict release evidence. Ambient default
-    capture, child environment/bin verification, live catalog and upstream remain
-    with existing adapters; see its [current inventory](official/README.md).
+    wire identity/terminal tracking and strict release evidence, alongside the complete
+    filesystem package-file proof and invocation-time defaults, child environment
+    capture and verified public-bin resolution under exact five-dependency roles.
+    Live catalog, child/wire/disposal and upstream remain with existing adapters;
+    see its [current inventory](official/README.md).
 - `AGENTS.md` keeps argument and target rules pure and limits the exact diagnostics owner
     to its clock read and pure contract dependency, with exact Core, registry and
-    connection roles and the mandatory application lifecycle instruction trigger.
+    connection, package-file and launch-input roles and the mandatory application lifecycle instruction trigger.
 
 The HTTP server still consumes admission from `domains/mcp-http.ts`; the
 request handler consumes these parsers before real Core authentication. This

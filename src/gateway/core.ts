@@ -7,7 +7,6 @@ import { profileAvailable as nativeProfileAvailable } from '../adapters/chrome-p
 import { DataDirectoryRegistry } from '../adapters/data-directory.ts';
 import { emitFixtureEvent } from '../adapters/fixture-diagnostics.ts';
 import { createOfficialConnection, type OfficialConnection } from '../adapters/mcp-bridge.ts';
-import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from '../adapters/official-server.ts';
 import { createPortReservations } from '../adapters/port-reservation.ts';
 import { createTargetHost } from '../adapters/target-host.ts';
 import { loadOfficialToolCatalog, workspaceSources } from '../adapters/tool-catalog.ts';
@@ -37,6 +36,11 @@ import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '
 import { type ConnectionDirectoryLease, createConnectionDirectoryLease } from './connections/directory-lease.ts';
 import type { ResourceOwner } from './connections/resource-owner.ts';
 import { measured } from './diagnostics.ts';
+import {
+    buildOfficialLaunchArguments,
+    captureOfficialServerEnvironment,
+    resolveVerifiedOfficialServerBin,
+} from './official/server-launch.ts';
 import { createGatewayRegistry } from './registry.ts';
 import { parseDataIsolation } from './targets/model/isolation.ts';
 import {
@@ -150,7 +154,11 @@ export async function createGatewayCore({
         if (connection.officialOwner.retired) connection.officialOwner = newOwner(randomUUID(), connection.directory);
         const owner = connection.officialOwner;
         owner.assertOpen();
-        const args = buildServerArguments(connection.router.url, connection.officialEnvironment, connection.mcpArgs);
+        const args = buildOfficialLaunchArguments(
+            connection.router.url,
+            connection.officialEnvironment,
+            connection.mcpArgs,
+        );
         connection.mcpArgs = args.slice(1);
         const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
         const acquiring = createConnection(connection.router.url, {
@@ -222,7 +230,7 @@ export async function createGatewayCore({
             : registry.admissionSignal;
         options = structuredClone(options);
         const ambient = { ...process.env };
-        const officialEnvironment = snapshotOfficialEnvironment(ambient);
+        const officialEnvironment = captureOfficialServerEnvironment(ambient);
         const temporaryDirectory = os.tmpdir();
         options.preparedLaunch = prepareLaunchDefinition(
             options.launch,
@@ -250,7 +258,7 @@ export async function createGatewayCore({
         }
         const connectionId = randomUUID();
         const sessionId = randomUUID();
-        const initialArgs = buildServerArguments('http://127.0.0.1:1', ambient, options.mcpArgs).slice(1);
+        const initialArgs = buildOfficialLaunchArguments('http://127.0.0.1:1', ambient, options.mcpArgs).slice(1);
         const directory = createConnectionDirectoryLease(
             dataDirectories,
             isolation,
@@ -274,7 +282,8 @@ export async function createGatewayCore({
         try {
             context.onIdentity?.({ connectionId, sessionId });
             context.onPhase?.('validating-official-server');
-            if (createConnection === createOfficialConnection && !runtimeLocation) await resolveServerBin();
+            if (createConnection === createOfficialConnection && !runtimeLocation)
+                await resolveVerifiedOfficialServerBin();
             context.signal?.throwIfAborted();
             if (registry.closing) throw new Error('The gateway is closing.');
             context.onPhase?.('acquiring-data-directory');
@@ -613,7 +622,7 @@ export async function createGatewayCore({
                     ...(request.toolNames
                         ? {
                               toolAvailability: fullCatalog.describe(
-                                  buildServerArguments('http://127.0.0.1:1').slice(1),
+                                  buildOfficialLaunchArguments('http://127.0.0.1:1').slice(1),
                                   undefined,
                                   request.toolNames,
                               ),

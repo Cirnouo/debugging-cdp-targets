@@ -3,8 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAppOfficialRuntime } from '../../src/adapters/app-official-runtime.ts';
 import { createMcpHttpServer } from '../../src/adapters/mcp-http-server.ts';
-import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
 import { createGatewayCore } from '../../src/gateway/core.ts';
+import { verifyOfficialPackageFiles } from '../../src/gateway/official/package-files.ts';
 import { parseOfficialReleaseEvidence } from '../../src/gateway/official/release-evidence.ts';
 import { guiAuthorization } from '../gui-authorization.ts';
 
@@ -29,7 +29,7 @@ async function runtime() {
         JSON.parse(await readFile(path.join(root, 'tooling/official-server-release.json'), 'utf8')),
     );
     const official = await realpath(path.join(root, 'node_modules', release.name));
-    await verifyOfficialPackage(official, release, { pnpmInstalled: true });
+    await verifyOfficialPackageFiles(official, release, { pnpmInstalled: true });
     return { nodeExecutable: process.execPath, bin: path.join(official, release.bin) };
 }
 const core = await createGatewayCore({ officialRuntime: await runtime() });

@@ -52,6 +52,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/gateway/targets/model/launch-command.ts',
         'src/shared/environment-key.ts',
         'src/gateway/official/release-evidence.ts',
+        'src/gateway/official/package-files.ts',
+        'src/gateway/official/server-launch.ts',
         'src/shared/payload-path.ts',
         'src/domains/control-contract.ts',
         'src/domains/mcp-http.ts',
@@ -76,6 +78,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
     );
     for (const oldInput of [
         'src/application/plugin-runtime.ts',
+        'src/adapters/official-package.ts',
+        'src/adapters/official-server.ts',
         'tooling/build-plugin.ts',
         'tooling/distribution/build-plugin.ts',
         'tooling/distribution/audit-plugins.ts',

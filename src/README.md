@@ -13,9 +13,10 @@ The singleton App owns direct HTTP, management and native resources. The
     pure explicit bearer/tool-argument extraction, target evidence/identity
     models, structured launch/isolation rules, bounded clock-backed diagnostics
     and complete resource-generation/directory-lease lifetime in `connections/`,
-    plus supplied Official options, wire-terminal values and release evidence in `official/`.
+    plus supplied Official options, wire-terminal values, release evidence and the
+    complete filesystem package-file proof and bounded launch-input authority in `official/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
-- `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
+- `adapters/`: CDP transport, complete official child/catalog transactions and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.

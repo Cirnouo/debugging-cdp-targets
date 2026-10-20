@@ -296,8 +296,10 @@ Git hook tests remain contributor-tooling regressions.
   mappings and mutated instruction fixtures. Static checks
   establish the instruction contract, not model compliance; independent model
   scenario sampling is separate acceptance evidence.
-- `official-package.test.ts` checks frozen input agreement, exact release evidence,
-  path/link rejection, complete file verification and source/packaged resolution.
+- `gateway/official/package-files.test.ts` checks exact release evidence, path/link
+  rejection, complete byte proof and source/packaged resolution. Frozen input agreement
+  and drift are in `tooling/security/official-inputs.test.ts`; the real TEMP alias
+  child and seven executed-title oracle are in `tooling/quality/temporary-directory-alias.test.ts`.
 - `file-evidence.test.ts` reproduces path replacement and in-place mutation during
   integrity reads, checks exact bytes and confirms descriptor cleanup on failures.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
@@ -456,7 +458,7 @@ Git hook tests remain contributor-tooling regressions.
   reference release without target deadlines or process polling.
 - `gateway/targets/structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
 - `gateway/official/` owns safe options/recipes, exact wire-terminal values and
-    argument/environment contracts, preserving all original cases and matrices;
+    argument/environment and complete package-file contracts, preserving all original cases and matrices;
     see its [suite inventory](gateway/official/README.md).
 - `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
     variants and independent configuration.
@@ -504,14 +506,15 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select forty-three entries: `tests/*.test.ts`, the
-twenty-three explicit [tooling suites](tooling/README.md), two explicit
-[Host suites](host-plugins/README.md) and seventeen Gateway suites. Gateway selection
+command and `pnpm test:coverage` select forty-six entries: `tests/*.test.ts`, the
+twenty-five explicit [tooling suites](tooling/README.md), two explicit
+[Host suites](host-plugins/README.md) and eighteen Gateway suites. Gateway selection
 retains argument parsing, seven [Target suites](gateway/targets/README.md), five
-[connection/directory suites](gateway/connections/README.md) and the four explicit
+[connection/directory suites](gateway/connections/README.md) and the five explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
-append once in that order. Default commands do not launch
+append once in that order, followed by package-files, security/official-inputs and
+quality/temporary-directory-alias. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

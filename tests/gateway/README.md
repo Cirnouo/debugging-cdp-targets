@@ -12,6 +12,9 @@
     candidate chooser and mutable target ownership keep their current owners.
     directory-admission keeps its two complete pre-acquisition runtime cases.
 
-Both default and coverage commands select all thirteen exact suites once. HTTP admission
+- `official/` owns supplied options/execution/argument contracts and complete
+    package-file proof and resolver regressions under its [suite map](official/README.md).
+
+Both default and coverage commands select all eighteen exact suites once. HTTP admission
 remains in the root `mcp-http-policy.test.ts`; live authentication, continuation
 and execution remain covered by their existing integration suites.
