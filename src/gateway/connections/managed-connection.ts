@@ -1,49 +1,33 @@
 import { randomUUID } from 'node:crypto';
-import os from 'node:os';
-import path from 'node:path';
 import type { CallToolResult, ListRootsResult } from '@modelcontextprotocol/client';
 import type { profileAvailable as nativeProfileAvailable } from '../../adapters/chrome-profile.ts';
 import type { DataDirectoryRegistry } from '../../adapters/data-directory.ts';
-import { emitFixtureEvent } from '../../adapters/fixture-diagnostics.ts';
-import { createOfficialConnection, type OfficialConnection } from '../../adapters/mcp-bridge.ts';
-import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from '../../adapters/official-server.ts';
+import type { createOfficialConnection, OfficialConnection } from '../../adapters/mcp-bridge.ts';
+import { buildServerArguments } from '../../adapters/official-server.ts';
 import { createPortReservations } from '../../adapters/port-reservation.ts';
 import { createTargetHost } from '../../adapters/target-host.ts';
 import type { loadOfficialToolCatalog } from '../../adapters/tool-catalog.ts';
 import { waitForClient } from '../../application/client-context.ts';
 import { createLifecycleService } from '../../application/mcp-lifecycle.ts';
 import type { createRegistrationRegistry } from '../../application/registrations.ts';
-import {
-    type ControllerHost,
-    type ControllerRouter,
-    createTargetController,
-} from '../../application/target-controller.ts';
+import type { ControllerHost, ControllerRouter, createTargetController } from '../../application/target-controller.ts';
 import type { Diagnose, Diagnostic } from '../../domains/control-contract.ts';
 import {
-    type ConnectionStatus,
     type ControlContext,
     type ControlHandler,
     type CoreControlRequest,
-    connectionSummary,
-    type GatewayStatus,
-    lifecycleFailureEvidence,
     parseConnectionRoute,
 } from '../../domains/control-contract.ts';
 import { RequestFailure } from '../../domains/request-failure.ts';
 import type { ClientRequestContext } from '../../shared/client-context.ts';
-import { DEFAULT_BASE_PORT } from '../../shared/constants.ts';
-import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../../shared/errors.ts';
+import { isRecord } from '../../shared/errors.ts';
 import { measured } from '../diagnostics.ts';
 import type { createGatewayRegistry } from '../registry.ts';
-import { parseDataIsolation } from '../targets/model/isolation.ts';
-import {
-    bindPreparedLaunch,
-    prepareLaunchDefinition,
-    validateDataIsolationBinding,
-} from '../targets/model/launch-command.ts';
-import { type ConnectionDirectoryLease, createConnectionDirectoryLease } from './directory-lease.ts';
+import { createConnectionView } from './connection-view.ts';
+import type { ConnectionDirectoryLease } from './directory-lease.ts';
 import type { ResourceOwner } from './resource-owner.ts';
-import { describeWorkspacePolicy } from './workspace-policy.ts';
+import { createStartAdmission } from './start-admission.ts';
+import type { describeWorkspacePolicy } from './workspace-policy.ts';
 
 export type RuntimeRouter = ControllerRouter & { url: string; close(): Promise<void> };
 type Controller = ReturnType<typeof createTargetController>;
@@ -121,35 +105,13 @@ export function createManagedConnections({
     >;
     readCatalog: () => Awaited<ReturnType<typeof loadOfficialToolCatalog>> | undefined;
 }) {
-    const { retryDirectory, newOwner, selected, routed, disposeResources, trackRetirement } = registry;
+    const { retryDirectory, newOwner, selected, routed, disposeResources } = registry;
     const portReservations = createPortReservations();
     const makeHost = createHost ?? (() => createTargetHost({ portReservations }));
-    function statusOf(connection: ManagedConnection): ConnectionStatus {
-        const state = connection.controller.status();
-        const upstreamStatus = connection.quarantined
-            ? 'quarantined'
-            : connection.upstream
-              ? 'connected'
-              : 'disconnected';
-        const enabledTools =
-            upstreamStatus === 'connected' ? (connection.upstream?.tools.map((tool) => tool.name) ?? []) : [];
-        return {
-            ...state,
-            connectionId: connection.connectionId,
-            upstreamStatus,
-            enabledToolCount: enabledTools.length,
-            enabledTools,
-        };
-    }
-    function summary(connection: ManagedConnection) {
-        return connectionSummary(statusOf(connection));
-    }
-    function status(): GatewayStatus;
-    function status(connectionId: string): ConnectionStatus;
-    function status(connectionId?: string): GatewayStatus | ConnectionStatus {
-        if (connectionId !== undefined) return statusOf(selected(connectionId));
-        return { connections: [...registry.connectionReferences()].filter((item) => !item.owner.retired).map(summary) };
-    }
+    const { statusOf, summary, status, projectControlResult, connections } = createConnectionView({
+        registry,
+        readCatalog,
+    });
     async function closeUpstream(connection: ManagedConnection, owner = connection.officialOwner) {
         if (connection.officialOwner === owner) delete connection.upstream;
         try {
@@ -223,226 +185,26 @@ export function createManagedConnections({
             connection.controller.officialDisconnected();
         });
     }
-    async function start(
-        options: Parameters<Controller['start']>[0],
-        context: ControlContext = {},
-    ): Promise<ConnectionStatus> {
-        if (registry.closing) throw new Error('The gateway is closing.');
-        const principal = context.client?.principal;
-        if (!principal) throw new Error('Start requires an authenticated originating client.');
-        registrations.check(principal);
-        context.signal?.throwIfAborted();
-        const admissionSignal = context.signal
-            ? AbortSignal.any([registry.admissionSignal, context.signal])
-            : registry.admissionSignal;
-        options = structuredClone(options);
-        const ambient = { ...process.env };
-        const officialEnvironment = snapshotOfficialEnvironment(ambient);
-        const temporaryDirectory = os.tmpdir();
-        options.preparedLaunch = prepareLaunchDefinition(
-            options.launch,
-            options.basePort ?? DEFAULT_BASE_PORT,
-            ambient,
-            process.platform === 'win32',
-        );
-        const roots = context.client
-            ? await waitForClient(context.client.readRoots(admissionSignal), admissionSignal)
-            : { roots: [] };
-        admissionSignal.throwIfAborted();
-        const isolation = parseDataIsolation(options.isolation);
-        validateDataIsolationBinding(options.launch, isolation.mode, ambient, process.platform === 'win32');
-        const host = makeHost();
-        host.validateLaunch?.(options);
-        if (isolation.mode === 'data-dir') {
-            const prepared = options.preparedLaunch;
-            const parsed = bindPreparedLaunch(
-                prepared,
-                prepared.portPolicy.kind === 'fixed' ? prepared.portPolicy.port : prepared.portPolicy.basePort,
-                '{dataDir}',
-            );
-            if (!path.isAbsolute(parsed.executablePath) || (parsed.cwd !== undefined && !path.isAbsolute(parsed.cwd)))
-                throw new Error('Application executable and working directory must be absolute.');
-        }
-        const connectionId = randomUUID();
-        const sessionId = randomUUID();
-        const initialArgs = buildServerArguments('http://127.0.0.1:1', ambient, options.mcpArgs).slice(1);
-        const directory = createConnectionDirectoryLease(
-            dataDirectories,
-            isolation,
-            context.onIsolation,
-            options.targetKind === 'chrome' ? profileAvailable : undefined,
-        );
-        registry.enrollDirectory(connectionId, principal, directory);
-        const owner = newOwner(randomUUID(), directory);
-        const logicalOwner = newOwner(randomUUID(), directory);
-        const officialOwner = newOwner(randomUUID(), directory);
-        owner.expectedOperationId = context.operationId;
-        let connection: ManagedConnection | undefined;
-        const diagnostics: (Diagnostic & { sessionId: string })[] = [];
-        function diagnoseFor(selectedOwner: ResourceOwner): Diagnose {
-            return (event) => {
-                if (selectedOwner.retired || (connection && connection.owner !== selectedOwner)) return;
-                diagnostics.push({ ...event, sessionId: selectedOwner.sessionId });
-                if (diagnostics.length > 64) diagnostics.shift();
-            };
-        }
-        try {
-            context.onIdentity?.({ connectionId, sessionId });
-            context.onPhase?.('validating-official-server');
-            if (createConnection === createOfficialConnection && !runtimeLocation) await resolveServerBin();
-            context.signal?.throwIfAborted();
-            if (registry.closing) throw new Error('The gateway is closing.');
-            context.onPhase?.('acquiring-data-directory');
-            await directory.acquire();
-            context.signal?.throwIfAborted();
-            if (registry.closing) throw new Error('The gateway is closing.');
-            const diagnose = diagnoseFor(owner);
-            context.onPhase?.('creating-router');
-            const router = await createRouter({ diagnose });
-            logicalOwner.register('router', router);
-            context.signal?.throwIfAborted();
-            if (registry.closing) throw new Error('The gateway is closing.');
-            const managed: ManagedConnection = {
-                connectionId,
-                sessionId,
-                owner,
-                logicalOwner,
-                officialOwner,
-                directory,
-                router,
-                diagnostics,
-                diagnose,
-                mcpArgs: initialArgs,
-                roots: structuredClone(roots),
-                rootsNegotiated: context.client?.capabilities.roots ?? false,
-                officialEnvironment,
-                workspace: describeWorkspacePolicy(
-                    initialArgs,
-                    context.client?.capabilities.roots ?? false,
-                    temporaryDirectory,
-                ),
-                activeCalls: 0,
-                quarantined: false,
-                controller: createTargetController({
-                    entryId,
-                    host,
-                    router: {
-                        setTarget: (target) => managed.router.setTarget(target),
-                        clearTarget: () => managed.router.clearTarget(),
-                        isBusy: () => managed.router.isBusy(),
-                        pause: () => managed.router.pause?.(),
-                        resume: () => managed.router.resume?.(),
-                    },
-                    createOwner: async () => {
-                        if (!managed.owner.target && !managed.owner.retired) return managed.owner;
-                        const replacement = newOwner(randomUUID(), directory);
-                        managed.owner = replacement;
-                        delete managed.quarantine;
-                        managed.quarantined = false;
-                        managed.diagnose = diagnoseFor(replacement);
-                        replacement.assertOpen();
-                        return replacement;
-                    },
-                    onProcessExit: (event) => registry.observeExit(managed, event, lifecycle),
-                    onObservationFailure: (id) => {
-                        if (managed.owner.sessionId !== id) return;
-                        managed.quarantined = true;
-                        trackRetirement(closeUpstream(managed));
-                    },
-                    server: {
-                        ensure: (_options, context) => ensureUpstream(managed, context),
-                        close: async (selectedOwner = managed.owner) => {
-                            const errors: unknown[] = [];
-                            async function disposeSide(owner: ResourceOwner) {
-                                try {
-                                    await disposeResources(owner);
-                                } catch (error) {
-                                    errors.push(error);
-                                }
-                            }
-                            if (managed.restartScope !== 'target') {
-                                managed.officialOwner.retire(new Error('The official generation is closing.'));
-                                delete managed.upstream;
-                                await disposeSide(managed.officialOwner);
-                            }
-                            if (!managed.restartScope) {
-                                managed.logicalOwner.retire(new Error('The connection is closing.'));
-                                await disposeSide(managed.logicalOwner);
-                            }
-                            await disposeSide(selectedOwner);
-                            if (errors.length === 1) throw errors[0];
-                            if (errors.length) throw new AggregateError(errors, 'Connection resource disposal failed.');
-                        },
-                    },
-                }),
-            };
-            connection = managed;
-            registry.publishConnection(connectionId, managed);
-            await managed.controller.start(options, sessionId, {
-                ...context,
-                ...(directory.path === undefined ? {} : { dataDirectory: directory.path }),
-            });
-            managed.owner.assertOpen();
-            managed.establishedAt = timestamp();
-            managed.lastRealOperationAt = managed.establishedAt;
-            return summary(managed);
-        } catch (error) {
-            const primaryEvidence = {
-                ...lifecycleFailureEvidence(errorDetails(error) ?? {}),
-                ...(errorCode(error) === undefined ? {} : { code: errorCode(error) }),
-            };
-            directory.requestRelease();
-            const managed = connection;
-            const failedOwner = managed?.owner ?? owner;
-            if (!failedOwner.target || failedOwner.exited) {
-                failedOwner.retire(error);
-                try {
-                    const cleanup = await Promise.allSettled([
-                        disposeResources(failedOwner),
-                        disposeResources(officialOwner),
-                        disposeResources(logicalOwner),
-                    ]);
-                    const failure = cleanup.find((result) => result.status === 'rejected');
-                    if (failure?.status === 'rejected') throw failure.reason;
-                } catch (cleanupError) {
-                    emitFixtureEvent('resource-disposal', 'decision', { outcome: 'failed' }, cleanupError);
-                    const failure = new DetailedError(errorMessage(error), { cause: error });
-                    failure.details = {
-                        ...primaryEvidence,
-                        entryId,
-                        connectionId,
-                        sessionId: connection?.sessionId ?? sessionId,
-                        cleanupError: errorMessage(cleanupError),
-                    };
-                    registry.removeConnection(connectionId);
-                    throw failure;
-                }
-                registry.removeConnection(connectionId);
-            }
-            if (
-                context.signal?.aborted &&
-                error === context.signal.reason &&
-                (!failedOwner.target || failedOwner.exited)
-            )
-                throw context.signal.reason;
-            const failure = new DetailedError(errorMessage(error), { cause: error });
-            failure.details = {
-                ...primaryEvidence,
-                entryId,
-                connectionId,
-                sessionId: connection?.sessionId ?? sessionId,
-                ...(managed ? connectionSummary(statusOf(managed)) : {}),
-                processExited: failedOwner.exited,
-            };
-            throw failure;
-        } finally {
-            await retryDirectory(directory).catch(() => {});
-        }
-    }
+    const start = createStartAdmission({
+        entryId,
+        timestamp,
+        runtimeLocation,
+        dataDirectories,
+        profileAvailable,
+        createRouter,
+        createConnection,
+        makeHost,
+        registrations,
+        registry,
+        ensureUpstream,
+        closeUpstream,
+        statusOf,
+        summary,
+    });
     const handler: ControlHandler = {
         status,
         start: (options, context) => {
-            const job = start(options, context);
+            const job = start(options, context, lifecycle);
             return registry.trackStart(job);
         },
         restart: (request, context = {}) => {
@@ -586,52 +348,7 @@ export function createManagedConnections({
     ): Promise<Record<string, unknown>> {
         if (client) registrations.check(client.principal);
         const result = await lifecycle.control(request, signal, client);
-        if (request.action !== 'status' || request.operationId) return result;
-        const fullCatalog = readCatalog();
-        if (!fullCatalog) return result;
-        const connection = request.connectionId ? selected(request.connectionId) : undefined;
-        if (!connection)
-            return {
-                ...result,
-                ...(request.toolNames
-                    ? {
-                          toolAvailability: fullCatalog.describe(
-                              buildServerArguments('http://127.0.0.1:1').slice(1),
-                              undefined,
-                              request.toolNames,
-                          ),
-                      }
-                    : {}),
-            };
-        return {
-            ...connectionSummary(statusOf(connection)),
-            ...(request.toolNames ? {} : { enabledTools: statusOf(connection).enabledTools ?? [] }),
-            ...(request.toolNames
-                ? {
-                      ...(connection.upstream?.toolCatalog ? { toolCatalog: connection.upstream.toolCatalog } : {}),
-                      toolAvailability: fullCatalog.describe(
-                          connection.mcpArgs,
-                          !connection.quarantined ? connection.upstream?.tools : undefined,
-                          request.toolNames,
-                      ),
-                  }
-                : {}),
-            ...(request.include?.includes('configuration')
-                ? {
-                      mcpArgs: [...connection.mcpArgs],
-                      workspace: structuredClone(connection.workspace),
-                      roots: structuredClone(connection.roots),
-                      launch: connection.controller.configuration(),
-                      official: {
-                          generation: connection.officialOwner.sessionId,
-                          processId: connection.upstream?.processId,
-                          ...(connection.upstream?.toolCatalog ? { toolCatalog: connection.upstream.toolCatalog } : {}),
-                      },
-                      isolation: connection.directory.evidence(),
-                  }
-                : {}),
-            ...(request.include?.includes('diagnostics') ? { diagnostics: [...connection.diagnostics] } : {}),
-        };
+        return projectControlResult(request, result);
     }
     async function invoke(
         name: string,
@@ -726,16 +443,6 @@ export function createManagedConnections({
                 ),
         );
         registry.adoptTransferredPrincipal(connectionId, principal);
-    }
-    function connections() {
-        return [...registry.connectionReferences()].map((connection) => ({
-            ...summary(connection),
-            registrationId: registry.registrationPrincipal(connection.connectionId)?.registrationId,
-            establishedAt: connection.establishedAt,
-            lastRealOperationAt: connection.lastRealOperationAt,
-            targetGeneration: connection.owner.sessionId,
-            officialGeneration: connection.officialOwner.sessionId,
-        }));
     }
     function adminControl(request: CoreControlRequest) {
         if (request.action === 'start') return Promise.reject(new Error('Administration cannot create targets.'));

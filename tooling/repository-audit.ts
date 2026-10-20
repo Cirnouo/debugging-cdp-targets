@@ -284,11 +284,13 @@ export function validateRuntimeSource(file: string, source: string) {
     const core = file === 'src/gateway/core.ts';
     const registry = file === 'src/gateway/registry.ts';
     const managed = file === 'src/gateway/connections/managed-connection.ts';
-    const gatewayService = core || registry || managed;
+    const admission = file === 'src/gateway/connections/start-admission.ts';
+    const connectionView = file === 'src/gateway/connections/connection-view.ts';
+    const gatewayService = core || registry || managed || admission || connectionView;
     const reviewedAmbient = new Set<Node>();
     visit(ast, (node, parent, grandparent) => {
         if (
-            (core || managed) &&
+            (core || admission) &&
             node.type === 'MemberExpression' &&
             !node.computed &&
             node.object.type === 'Identifier'
@@ -299,7 +301,7 @@ export function validateRuntimeSource(file: string, source: string) {
                 !(parent?.type === 'UpdateExpression' && parent.argument === node) &&
                 !(parent?.type === 'UnaryExpression' && parent.operator === 'delete');
             if (
-                managed &&
+                admission &&
                 node.object.name === 'process' &&
                 ((property === 'env' &&
                     parent?.type === 'SpreadElement' &&
@@ -371,7 +373,9 @@ export function validateRuntimeSource(file: string, source: string) {
         const mutableGateway =
             resolved === 'src/gateway/core.ts' ||
             resolved === 'src/gateway/registry.ts' ||
-            resolved === 'src/gateway/connections/managed-connection.ts';
+            resolved === 'src/gateway/connections/managed-connection.ts' ||
+            resolved === 'src/gateway/connections/start-admission.ts' ||
+            resolved === 'src/gateway/connections/connection-view.ts';
         if (pure && !gatewayService && mutableGateway)
             errors.push(`${file}: pure owners cannot depend on mutable Gateway services.`);
         if (layer === 'adapters' && mutableGateway)
@@ -399,32 +403,44 @@ export function validateRuntimeSource(file: string, source: string) {
                     : managed
                       ? [
                             'node:crypto',
-                            'node:os',
-                            'node:path',
-                            '../../adapters/fixture-diagnostics.ts',
-                            '../../adapters/mcp-bridge.ts',
                             '../../adapters/official-server.ts',
                             '../../adapters/port-reservation.ts',
                             '../../adapters/target-host.ts',
                             '../../application/client-context.ts',
                             '../../application/mcp-lifecycle.ts',
-                            '../../application/target-controller.ts',
                             '../../domains/control-contract.ts',
                             '../../domains/request-failure.ts',
-                            '../../shared/constants.ts',
                             '../../shared/errors.ts',
-                            './directory-lease.ts',
-                            './workspace-policy.ts',
                             '../diagnostics.ts',
-                            '../targets/model/isolation.ts',
-                            '../targets/model/launch-command.ts',
+                            './connection-view.ts',
+                            './start-admission.ts',
                         ]
-                      : [
-                            './connections/resource-owner.ts',
-                            '../adapters/fixture-diagnostics.ts',
-                            '../domains/control-contract.ts',
-                            '../shared/errors.ts',
-                        ]
+                      : admission
+                        ? [
+                              'node:crypto',
+                              'node:os',
+                              'node:path',
+                              '../../adapters/fixture-diagnostics.ts',
+                              '../../adapters/mcp-bridge.ts',
+                              '../../adapters/official-server.ts',
+                              '../../application/client-context.ts',
+                              '../../application/target-controller.ts',
+                              '../../domains/control-contract.ts',
+                              '../../shared/constants.ts',
+                              '../../shared/errors.ts',
+                              '../targets/model/isolation.ts',
+                              '../targets/model/launch-command.ts',
+                              './directory-lease.ts',
+                              './workspace-policy.ts',
+                          ]
+                        : connectionView
+                          ? ['../../adapters/official-server.ts', '../../domains/control-contract.ts']
+                          : [
+                                './connections/resource-owner.ts',
+                                '../adapters/fixture-diagnostics.ts',
+                                '../domains/control-contract.ts',
+                                '../shared/errors.ts',
+                            ]
             ).includes(specifier);
             const permittedType =
                 typeOnly &&
@@ -440,20 +456,37 @@ export function validateRuntimeSource(file: string, source: string) {
                             '@modelcontextprotocol/client',
                             '../../adapters/chrome-profile.ts',
                             '../../adapters/data-directory.ts',
+                            '../../adapters/mcp-bridge.ts',
                             '../../adapters/tool-catalog.ts',
+                            '../../application/target-controller.ts',
                             '../../application/registrations.ts',
                             '../registry.ts',
                             './resource-owner.ts',
                             '../../shared/client-context.ts',
+                            './directory-lease.ts',
+                            './workspace-policy.ts',
                         ]
-                      : [
-                            './connections/managed-connection.ts',
-                            './connections/directory-lease.ts',
-                            '../application/registrations.ts',
-                            '../application/mcp-lifecycle.ts',
-                            '../application/target-controller.ts',
-                            '../shared/client-context.ts',
-                        ]
+                      : admission
+                        ? [
+                              '../../adapters/chrome-profile.ts',
+                              '../../adapters/data-directory.ts',
+                              '../../application/mcp-lifecycle.ts',
+                              '../../application/registrations.ts',
+                              '../registry.ts',
+                              './managed-connection.ts',
+                              './resource-owner.ts',
+                              './connection-view.ts',
+                          ]
+                        : connectionView
+                          ? ['../../adapters/tool-catalog.ts', '../registry.ts', './managed-connection.ts']
+                          : [
+                                './connections/managed-connection.ts',
+                                './connections/directory-lease.ts',
+                                '../application/registrations.ts',
+                                '../application/mcp-lifecycle.ts',
+                                '../application/target-controller.ts',
+                                '../shared/client-context.ts',
+                            ]
                 ).includes(specifier);
             if (!permittedValue && !permittedType) errors.push(`${file}: unapproved Core or registry dependency.`);
         }

@@ -1186,8 +1186,17 @@ test('Core registry inverse edges reject mutable authority in every supported de
         ['src/host-plugins/unreviewed.ts', '../gateway'],
         ['src/gateway/connections/resource-owner.ts', '..'],
         ['src/gateway/connections/directory-lease.ts', '..'],
+        ['src/gateway/owned-tool-arguments.ts', '.'],
+        ['src/gateway/official/options.ts', '..'],
+        ['src/gateway/official/execution.ts', '..'],
     ] as const)
-        for (const owner of ['core', 'registry', 'connections/managed-connection'])
+        for (const owner of [
+            'core',
+            'registry',
+            'connections/managed-connection',
+            'connections/start-admission',
+            'connections/connection-view',
+        ])
             for (const { source } of connectionDependencyForms(`${prefix}/${owner}.ts`)) {
                 const errors = validateRuntimeSource(file, source);
                 assert.ok(!errors.some((error) => error.includes('invalid source')), source);
@@ -1223,36 +1232,67 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
             'src/gateway/connections/managed-connection.ts',
             [
                 'node:crypto',
-                'node:os',
-                'node:path',
-                '../../adapters/fixture-diagnostics.ts',
-                '../../adapters/mcp-bridge.ts',
                 '../../adapters/official-server.ts',
                 '../../adapters/port-reservation.ts',
                 '../../adapters/target-host.ts',
                 '../../application/client-context.ts',
                 '../../application/mcp-lifecycle.ts',
-                '../../application/target-controller.ts',
                 '../../domains/control-contract.ts',
                 '../../domains/request-failure.ts',
-                '../../shared/constants.ts',
                 '../../shared/errors.ts',
-                './directory-lease.ts',
-                './workspace-policy.ts',
                 '../diagnostics.ts',
-                '../targets/model/isolation.ts',
-                '../targets/model/launch-command.ts',
+                './connection-view.ts',
+                './start-admission.ts',
             ],
             [
                 '@modelcontextprotocol/client',
                 '../../adapters/chrome-profile.ts',
                 '../../adapters/data-directory.ts',
+                '../../adapters/mcp-bridge.ts',
                 '../../adapters/tool-catalog.ts',
+                '../../application/target-controller.ts',
                 '../../application/registrations.ts',
                 '../registry.ts',
                 './resource-owner.ts',
                 '../../shared/client-context.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
             ],
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            [
+                'node:crypto',
+                'node:os',
+                'node:path',
+                '../../adapters/fixture-diagnostics.ts',
+                '../../adapters/mcp-bridge.ts',
+                '../../adapters/official-server.ts',
+                '../../application/client-context.ts',
+                '../../application/target-controller.ts',
+                '../../domains/control-contract.ts',
+                '../../shared/constants.ts',
+                '../../shared/errors.ts',
+                '../targets/model/isolation.ts',
+                '../targets/model/launch-command.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
+            ],
+            [
+                '../../adapters/chrome-profile.ts',
+                '../../adapters/data-directory.ts',
+                '../../application/mcp-lifecycle.ts',
+                '../../application/registrations.ts',
+                '../registry.ts',
+                './managed-connection.ts',
+                './resource-owner.ts',
+                './connection-view.ts',
+            ],
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            ['../../adapters/official-server.ts', '../../domains/control-contract.ts'],
+            ['../../adapters/tool-catalog.ts', '../registry.ts', './managed-connection.ts'],
         ],
         [
             'src/gateway/registry.ts',
@@ -1316,7 +1356,7 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
     for (const [file, source] of [
         ['src/gateway/core.ts', 'const timestamp = now ?? Date.now;'],
         [
-            'src/gateway/connections/managed-connection.ts',
+            'src/gateway/connections/start-admission.ts',
             'const ambient = { ...process.env }; const windows = process.platform === "win32";',
         ],
         ['src/gateway/registry.ts', 'process.stderr.write("Connection cleanup failed\\n");'],
@@ -1326,6 +1366,8 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
         'src/gateway/core.ts',
         'src/gateway/registry.ts',
         'src/gateway/connections/managed-connection.ts',
+        'src/gateway/connections/start-admission.ts',
+        'src/gateway/connections/connection-view.ts',
         'src/gateway/unreviewed.ts',
     ]) {
         for (const source of [
@@ -1359,7 +1401,12 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
     }
     assert.ok(validateRuntimeSource('src/gateway/core.ts', 'process.stderr.write("x");').length);
     for (const source of ['const ambient = { ...process.env };', 'const windows = process.platform === "win32";'])
-        assert.ok(validateRuntimeSource('src/gateway/core.ts', source).length, source);
+        for (const file of [
+            'src/gateway/core.ts',
+            'src/gateway/connections/managed-connection.ts',
+            'src/gateway/connections/connection-view.ts',
+        ])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     assert.ok(
         validateRuntimeSource('src/gateway/connections/managed-connection.ts', 'const timestamp = now ?? Date.now;')
             .length,
@@ -1388,6 +1435,58 @@ test('managed connection inverse edge rejects erased authority in unknown pure o
     const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
     assert.ok(!errors.some((error) => error.includes('invalid source')), source);
     assert.ok(errors.length, source);
+});
+
+test('admission and view roles admit only their supplied service capabilities', () => {
+    for (const [file, dependency] of [
+        ['src/gateway/connections/start-admission.ts', '../../application/client-context.ts'],
+        ['src/gateway/connections/start-admission.ts', '../../adapters/mcp-bridge.ts'],
+        ['src/gateway/connections/connection-view.ts', '../../adapters/official-server.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+});
+
+test('admission and view inverse edges reject erased mutable authority in pure owners', () => {
+    for (const owner of ['start-admission', 'connection-view']) {
+        const source = `import type { Service } from './connections/${owner}.ts';`;
+        const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
+        assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+        assert.ok(errors.length, source);
+    }
+});
+
+test('managed and view roles cannot retain transferred admission capabilities', () => {
+    for (const file of ['src/gateway/connections/managed-connection.ts', 'src/gateway/connections/connection-view.ts'])
+        for (const dependency of [
+            'node:os',
+            'node:path',
+            '../../adapters/fixture-diagnostics.ts',
+            '../../shared/constants.ts',
+            '../targets/model/isolation.ts',
+            '../targets/model/launch-command.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const dependency of [
+        '../../adapters/mcp-bridge.ts',
+        '../../application/target-controller.ts',
+        './directory-lease.ts',
+        './workspace-policy.ts',
+    ])
+        for (const { source, erased } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource('src/gateway/connections/managed-connection.ts', source);
+            if (erased) assert.deepEqual(errors, [], source);
+            else assert.ok(errors.length, source);
+        }
+    for (const file of ['src/gateway/connections/start-admission.ts', 'src/gateway/connections/connection-view.ts'])
+        for (const dependency of [
+            '../../adapters/port-reservation.ts',
+            '../../adapters/target-host.ts',
+            '../diagnostics.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
 });
 
 test('workspace policy accepts supplied option parsing without gaining connection authority', async () => {

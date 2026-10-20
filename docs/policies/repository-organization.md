@@ -22,17 +22,21 @@ acquisition, successor holds and cleanup retries. These complete mutable algorit
 use only their exact reviewed type/adapter capabilities; unknown Gateway files
 remain pure. The exact gateway/core.ts owns substantive registration/registry/catalog composition
 and trusted construction cleanup; gateway/connections/managed-connection.ts owns
-the complete state, admission, handler/lifecycle, generation fences, execution/context,
-control/transfer and live view; gateway/registry.ts owns route
+the state, handler/lifecycle, generation fences, execution/context and control/transfer;
+gateway/connections/start-admission.ts owns the whole start, persistent callbacks,
+rollback and final directory retry; connection-view.ts owns live status/configuration,
+guarded catalog projection and admin inventory. gateway/registry.ts owns route
 membership and retained cleanup/retry joins, including all seven collections and
 definitive cleanup barriers. It uses the original managed-owner ManagedConnection TYPE and
 only the three reviewed application TYPE ports, without a runtime cycle or copied
 capability contract. Core and managed ownership use only their exact reviewed value/TYPE ports;
 registry and managed have an erased-only type cycle, with no runtime back edge.
-Target-controller and adapters retain actual acquisition/exit and I/O. Admission and projection remain coherent content within that whole managed owner
-until their separate complete ownership cuts; no new await or snapshot is introduced.
+Target-controller and adapters retain actual acquisition/exit and I/O. Admission
+receives the same lifecycle at invocation; both new factories execute no providers
+at construction. View preserves live reads and current unselected adapter defaults
+at the original guarded branch. No new await, wrapper, cache or snapshot is introduced.
 The pure `gateway/connections/workspace-policy.ts` owns the complete supplied
-workspace calculation; the managed owner retains its actual pre-roots temporary-directory
+workspace calculation; start admission retains its actual pre-roots temporary-directory
 capture and invokes it with three explicit inputs at the original construction point.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend

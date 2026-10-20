@@ -19,25 +19,31 @@ Before editing official/ values, read its [pure Official instructions](official/
 Ambient Official defaults, child snapshot/bin resolution, actual catalog publication
 and child disposal remain with their existing adapters; this slice grants no I/O.
 
-BEFORE editing core.ts, registry.ts or connections/managed-connection.ts, read all of the canonical
+BEFORE editing core.ts, registry.ts, connections/managed-connection.ts,
+connections/start-admission.ts or connections/connection-view.ts, read all of the canonical
 [application lifecycle instructions](../application/AGENTS.md), cumulatively with
 root and source instructions. Preserve their complete ownership, admission,
 execution, construction, actual-exit, cleanup and isolation obligations.
 
 connections/workspace-policy.ts describes supplied official arguments, negotiated
 roots support and a required temporary-directory snapshot through official/options.ts.
-The managed owner supplies that snapshot from before its original roots suspension. The pure
+Start admission supplies that snapshot from before its original roots suspension. The pure
 calculation has no ambient fallback, mutable grants or lifecycle authority.
 
 core.ts retains substantive registration, registry and fixed-catalog composition,
 trusted construction cleanup and real defaults. Its only ambient expression is
 now ?? Date.now; no environment/platform reads or clock calls are permitted.
-connections/managed-connection.ts owns the complete transaction, admission, live
-projection, generation pointers, actual official-call accounting and original
-execution facilities. Source instructions enumerate exact value and TYPE ports.
-It alone retains process.env spread and direct process.platform === 'win32'; it
-receives timestamp and has no Date fallback/read/call. Its synchronous factory
-creates one lifecycle/port/host composition at the original point, without I/O.
+connections/managed-connection.ts retains state, generation pointers, handler and
+one lifecycle, actual official-call accounting, original execution facilities,
+authorization and transfer. connections/start-admission.ts owns the whole start,
+persistent callbacks, rollback and final retry; it alone retains process.env spread
+and direct process.platform === 'win32'. connections/connection-view.ts owns live
+status/configuration, administration inventory and guarded synchronous post-control
+projection. Source instructions enumerate each exact value/TYPE role. All receive
+supplied services/timestamp and have no Date fallback/read/call. The managed factory
+creates one lifecycle/port/host composition at the original point; admission receives
+that same lifecycle only at invocation. View/admission construction executes no
+provider, cache, getter or I/O; preserve invocation-time unselected catalog defaults.
 Core's readCatalog is a live synchronous provider, read only at original validation,
 post-lifecycle status and invocation-requirements points; never cache or capture it
 across awaits. The registry/managed dependency cycle is TYPE-only.

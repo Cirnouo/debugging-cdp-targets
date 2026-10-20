@@ -39,23 +39,38 @@ client-context/registrations, shared errors and the registry/managed factory.
 SDK Tool, ControllerHost, request/diagnostic/client-context and the original moved
 RuntimeRouter are TYPE-only. Its sole ambient capability is the supplied-now
 fallback Date.now reference, never a clock call.
-Only gateway/connections/managed-connection.ts owns the complete managed-connection
-transaction, start admission, live view, generations and actual execution/context.
-Its exact value providers are crypto/os/path, fixture-diagnostics, mcp-bridge,
-official-server, port-reservation, target-host, application client-context,
-mcp-lifecycle and target-controller, current domain/shared contracts, directory-lease,
-workspace-policy, diagnostics and target isolation/launch values. SDK client,
-chrome-profile/data-directory/tool-catalog, registrations, registry, resource-owner
-and shared client-context are TYPE-only. It alone retains the existing process.env
-spread and process.platform comparisons; it receives timestamp and gains no Date
-fallback, clock call or general ambient I/O. The synchronous factory creates one
-original lifecycle/port/host composition, without acquisition or catalog reads.
+Only gateway/connections/managed-connection.ts owns managed state, generation
+pointers, handler/lifecycle, actual execution/context, authorization and transfer.
+Its exact value providers are crypto, official-server, port-reservation, target-host,
+application client-context/mcp-lifecycle, domain control-contract/request-failure,
+shared/errors, diagnostics and the start-admission/connection-view factories.
+SDK client, chrome-profile/data-directory/mcp-bridge/tool-catalog, target-controller,
+registrations, registry, resource-owner, directory-lease, workspace-policy and shared
+client-context are TYPE-only. Its synchronous factory creates one original
+lifecycle/port/host composition, without acquisition or catalog reads.
+Only gateway/connections/start-admission.ts owns the whole start transaction,
+persistent callbacks, rollback and final directory retry. Its value providers are
+crypto/os/path, fixture-diagnostics, mcp-bridge, official-server, application
+client-context/target-controller, domain control-contract, shared constants/errors,
+target isolation/launch, directory-lease and workspace-policy. Chrome-profile,
+data-directory, lifecycle/registrations, registry, original managed types,
+resource-owner and connection-view are TYPE-only. It alone retains the existing
+process.env spread and process.platform comparisons. Pass the same lifecycle at
+start invocation; never add a getter, second instance, wrapper, await or snapshot.
+Only gateway/connections/connection-view.ts owns live status, selected configuration,
+guarded post-control catalog projection and administration inventory. Its value
+providers are only official-server and domain control-contract; tool-catalog,
+registry and original managed types are TYPE-only. Preserve the live bounded
+reader, original branches/order and invocation-time ambient defaults for unselected
+tool discovery. It gains no direct ambient, mutation, lifecycle or I/O capability.
+All three use supplied services and gain no Date fallback, clock call
+or general ambient I/O. View/admission factories execute no providers at construction.
 Core supplies the live synchronous readCatalog reader; use it only at the original
 validation, post-lifecycle status guard and optional invocation-requirements points,
 never captured across await or cached. The registry/managed cycle is erased only.
 The pure gateway/connections/workspace-policy.ts describes only supplied workspace
 arguments, negotiated-roots support and a required temporary directory through
-official/options.ts. The managed owner alone captures that directory before awaiting roots;
+official/options.ts. Start admission captures that directory before awaiting roots;
 the calculation gains no ambient defaults, grants or connection authority.
 Only gateway/registry.ts owns route membership and the retained cleanup ledger:
 its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
@@ -65,7 +80,8 @@ three exact application registrations/mcp-lifecycle/target-controller ports. Its
 sole ambient capability is the existing direct process.stderr.write diagnostic.
 None of these service roles grants permissions to siblings, pure owners, adapters or unknown
 Gateway files. Type imports, reexports, import() and require obey the same exact
-role boundaries. Before editing Core, registry or managed-connection, read the cumulative
+role boundaries. Before editing Core, registry, managed-connection, start-admission or
+connection-view, read the cumulative
 [Gateway instructions](gateway/AGENTS.md) and their application lifecycle trigger.
 Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.

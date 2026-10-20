@@ -20,7 +20,7 @@
     Target acquisition, claims, observation and cleanup stay with current owners.
 - `connections/` owns complete resource-generation retention/disposal and
     connection-level directory-lease barriers through their exact adapter capabilities,
-    the complete managed state/admission/execution/transfer/live-view closure,
+    managed state/execution/transfer, whole start admission and live view services,
     plus pure workspace-policy description from explicit supplied inputs.
 - `official/` owns pure reviewed options/recipes and supplied argument composition,
     wire identity/terminal tracking and strict release evidence. Ambient default
@@ -35,8 +35,11 @@ request handler consumes these parsers before real Core authentication. This
 argument owner holds no registration, live-route, continuation or execution state.
 The managed owner retains original actual execution facilities; registry joins route membership
 and retained cleanup/retry ownership; the two resource/directory owners retain
-their complete lifetimes. The workspace policy holds no mutable ownership. Separate admission/view leaves
-remain pending; the complete transactions stay in managed-connection.ts for now.
+their complete lifetimes. The workspace policy holds no mutable ownership.
+start-admission.ts holds the complete start/callback/rollback transaction;
+connection-view.ts projects live status/configuration/catalog and admin inventory.
+The managed owner retains the same state and lifecycle, passing that lifecycle at
+start invocation. No new await, provider execution at construction or cache is added.
 The remaining controller, registrations and lifecycle services keep their current
 technical-layer placement and exact transitional Core/registry/managed dependencies.
 The complete lifecycle-contract path and symbol migration remains pending until

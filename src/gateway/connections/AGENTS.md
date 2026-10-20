@@ -9,22 +9,31 @@ read [ADR 0015](../../../docs/adr/0015-explicit-data-directory-isolation.md),
 workspace-policy.ts describes only supplied workspace arguments, negotiated-roots
 support and a required temporary directory, using ../official/options.ts. Keep its
 five-field result and parser semantics; it has no ambient defaults, path resolution,
-I/O, mutable grants or connection authority. The managed owner retains the pre-roots snapshot
+I/O, mutable grants or connection authority. Start admission retains the pre-roots snapshot
 and original construction/capture order. This pure leaf gains none of the mutable
 exceptions below, including through erased syntax.
 
-BEFORE editing managed-connection.ts, read the canonical
+BEFORE editing managed-connection.ts, start-admission.ts or connection-view.ts, read the canonical
 [application lifecycle instructions](../../application/AGENTS.md) cumulatively.
-It owns the entire managed state, admission, handler, scoped restart, actual invoke,
-transfer and live projection closure. Preserve all callbacks, awaits, generation
-fences, finally barriers and original facilities together. Its only ambient rights
-are the original process.env spread, process.platform === 'win32' and explicit
-crypto/os/path imports; timestamp is supplied. Use only the exact parent-reviewed
-value/TYPE ports. readCatalog remains a synchronous live read at the original
-regions, never a cache, setter or captured reference across await. Registry is a
-TYPE-only dependency, and its original ManagedConnection edge back is erased.
-Separate admission/view leaves remain pending; do not fragment their transaction
-or materialize snapshots/forwarders to anticipate them.
+managed-connection.ts retains the original state, generations, execution/context,
+handler, one lifecycle, scoped restart, actual invoke, authorization and transfer.
+start-admission.ts owns the whole start, all persistent callbacks, rollback and
+final directory retry. Preserve the same managed object, lifecycle supplied at
+start invocation, original context/defaults, roots/environment/temp capture and
+acquisition order. No getter, proxy, second lifecycle, wrapper or extra await.
+Only admission retains process.env spread, process.platform === 'win32' and explicit
+crypto/os/path access. The managed owner retains crypto; all timestamps are supplied.
+connection-view.ts owns live status/configuration/catalog projection and admin
+inventory. Preserve all guards, repeated controller/status reads, clones, private
+evidence branches and summary-before-principal/clocks/generation order. Its only
+value imports are official-server and control-contract, with tool-catalog, registry
+and original managed TYPEs. Unselected tool discovery computes current adapter
+defaults only at the original guarded branch; the view is live, not a pure mirror.
+Use only the exact parent-reviewed value/TYPE ports. readCatalog remains a live
+synchronous read at the original four regions, never a cache, setter or captured
+reference across await. View/admission factories invoke no providers at construction.
+Registry, admission and view consume original ManagedConnection through TYPE-only
+edges; no runtime back edge, copied interface or second state authority is allowed.
 
 resource-owner.ts owns one target, official, logical/router or catalog resource
 generation, including pending acquisitions and retryable failed disposal. Enroll
