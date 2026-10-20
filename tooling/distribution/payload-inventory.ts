@@ -1,7 +1,6 @@
-import type { HostDescriptor } from './host-policy.ts';
-import { CODEX_HOST } from './host-policy.ts';
+import type { HostDescriptor } from './host-descriptors.ts';
+import { CODEX_HOST } from './host-descriptors.ts';
 
-export { PLUGIN_NAME, PLUGIN_ROOT } from './host-policy.ts';
 export function requiredPayloadFiles(host: HostDescriptor = CODEX_HOST) {
     return Object.freeze([
         'LICENSE',

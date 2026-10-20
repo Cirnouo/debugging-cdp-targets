@@ -84,7 +84,16 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/submissions/issue-feedback.test.ts`,
 `tests/tooling/submissions/issue-workflow.test.ts`,
 `tests/tooling/licenses/bundled-notices.test.ts`,
+`tests/tooling/distribution/host-distribution.test.ts`,
+`tests/tooling/distribution/host-metadata.test.ts`,
+`tests/tooling/distribution/icon-packaging.test.ts`,
+`tests/tooling/distribution/physical-payloads.test.ts`,
+`tests/tooling/distribution/plugin-distribution.test.ts`,
+`tests/tooling/distribution/skill-presentation.test.ts`,
+`tests/tooling/distribution/skill-questions.test.ts`,
+`tests/tooling/distribution/thin-plugin-metadata.test.ts`,
 `tests/tooling/distribution/thin-plugin-payloads.test.ts`,
+`tests/tooling/distribution/version-agreement.test.ts`,
 `tests/gateway/owned-tool-arguments.test.ts`,
 `tests/host-plugins/payload-integrity.test.ts` and
 `tests/host-plugins/payload-filesystem.test.ts`, plus exactly
@@ -99,7 +108,7 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/connections/directory-operation-evidence.test.ts` and
 `tests/gateway/targets/directory-admission.test.ts`,
 `tests/gateway/connections/construction-cleanup.test.ts` and
-`tests/gateway/connections/gateway-cleanup.test.ts`. These thirty selectors
+`tests/gateway/connections/gateway-cleanup.test.ts`. These thirty-nine selectors
 include thirteen Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions

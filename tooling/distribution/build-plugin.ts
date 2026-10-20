@@ -2,23 +2,23 @@ import { lstat, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { readRegularFile } from '../src/adapters/file-evidence.ts';
-import { isRecord } from '../src/shared/errors.ts';
-import { isPortablePayloadRelativePath } from '../src/shared/payload-path.ts';
+import { readRegularFile } from '../../src/adapters/file-evidence.ts';
+import { isRecord } from '../../src/shared/errors.ts';
+import { isPortablePayloadRelativePath } from '../../src/shared/payload-path.ts';
+import { SHARED_ASSET_FILES, validateIconPng } from './artwork-policy.ts';
+import type { HostDescriptor } from './host-descriptors.ts';
+import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-descriptors.ts';
 import {
     parsePluginMetadata,
-    readDistributionTree,
     validateCodexSkillPresentation,
     validateHostManifest,
     validateMcpEntries,
-} from './distribution-audit.ts';
-import type { HostDescriptor } from './host-policy.ts';
-import { CLAUDE_CODE_HOST, CODEX_HOST, PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
-import { SHARED_ASSET_FILES, validateIconPng } from './icon-policy.ts';
-import { validatePayloadFileInventory } from './payload-policy.ts';
-import { validateVersionAgreement } from './version-policy.ts';
+} from './host-metadata.ts';
+import { validatePayloadFileInventory } from './payload-inventory.ts';
+import { readDistributionTree } from './regular-file-tree.ts';
+import { validateVersionAgreement } from './version-agreement.ts';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('../..', import.meta.url));
 
 async function verifyPackagingPath(packagingRoot: string, relative: string, directory: boolean) {
     const owned = path.resolve(packagingRoot);

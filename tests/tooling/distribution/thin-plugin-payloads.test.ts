@@ -3,7 +3,11 @@ import { cp, mkdir, mkdtemp, readFile, realpath, rm, rmdir, symlink, writeFile }
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { assembleCodexPayload, generateHostPayloads, syncPluginFiles } from '../../../tooling/build-plugin.ts';
+import {
+    assembleCodexPayload,
+    generateHostPayloads,
+    syncPluginFiles,
+} from '../../../tooling/distribution/build-plugin.ts';
 
 test('build synchronization preserves nested paths and check mode never changes stale, missing or extra outputs', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-output-')));

@@ -87,7 +87,7 @@ Git hook tests remain contributor-tooling regressions.
   metadata, sandboxed bundles, license closure and complete official-file copying.
 - `app-archive-extraction.test.ts` checks actual Windows ZIP extraction refusal
   for traversal, aliases, duplicate destinations and nonregular entries before writing.
-- `thin-plugin-cutover.test.ts` checks host-native direct HTTP manifests and
+- `tooling/distribution/thin-plugin-metadata.test.ts` checks host-native direct HTTP manifests and
   excludes credentials, executable helpers and duplicated App runtime payloads.
 - `app-control-cutover.test.ts` checks the public lifecycle identities and actual
   SDK schema validation of explicit bearer inputs versus missing or retired fields.
@@ -241,21 +241,22 @@ Git hook tests remain contributor-tooling regressions.
 - `plugin-runtime.test.ts` covers structured launches, routing, lifecycle,
   Server options, candidate port selection and launch rollback using controlled
   targets. The original pure identity case lives in `gateway/targets/`.
-- `plugin-distribution.test.ts` validates portable manifests and inventory.
-- `icon-packaging.test.ts` checks exact host artwork metadata and delivery,
+- `tooling/distribution/plugin-distribution.test.ts` validates portable manifests and inventory.
+- `tooling/distribution/icon-packaging.test.ts` checks exact host artwork metadata and delivery,
   rejects missing/unexpected assets, and exercises PNG size, dimensions, CRCs,
   truncated streams and row filters with independently constructed fixtures.
-- `host-distribution.test.ts` covers both complete thin host inventories, manifest/MCP
-  and Marketplace routing, shared bytes, installed-relative Skill reference links,
-  independent version/license/resource drift,
-  duplicate metadata, linked inputs/roots and read-only build checks.
-- `skill-presentation.test.ts` rejects malformed or duplicate YAML, unknown and
+- tooling/distribution/host-distribution.test.ts covers complete peer assembly,
+  literal exact inventories, shared bytes, installed-relative links and read-only
+  output checks. host-metadata.test.ts covers exact manifest/MCP/Marketplace rules
+  and supplied-value import isolation. physical-payloads.test.ts retains the whole
+  independent audit, version/license drift, strict trees and linked-root refusal.
+- `tooling/distribution/skill-presentation.test.ts` rejects malformed or duplicate YAML, unknown and
   mistyped Skill fields, invalid icon references and missing/changed/linked PNGs.
   It checks assembly before copying and every shared Skill input against both
   hosts, including matching peer drift that cannot prove maintained identity and
   stale delivered files after maintained shared inputs, including nested question
   and conditional operation references, are deleted or renamed.
-- `skill-questions.test.ts` parses the common question contract and both language
+- `tooling/distribution/skill-questions.test.ts` parses the common question contract and both language
   catalogues separately, reconstructs their shared bilingual contract and checks
   explicit roles, finite fact slots, action order, directory delegation and
   cleanup scope, required input fields and lifecycle event mapping, with duplicate/malformed YAML
@@ -274,8 +275,6 @@ Git hook tests remain contributor-tooling regressions.
 - `repository-audit.test.ts` tests AST boundaries, repository traversal, YAML
   filenames including generated output and exact exceptions, and directory
   documentation that preserves the root README on GitHub.
-- `distribution-audit.test.ts` tests packaging comparisons, single direct HTTP manifests,
-  required portable MCP schema declarations, and allowlists.
 - `tooling/licenses/` checks the actual bundled-notices collector, canonical
   package boundaries, reviewed SDK/vendor evidence, default roots and import isolation.
 - `tooling/distribution/` checks complete thin-payload bytes, competing/missing/linked
@@ -345,8 +344,8 @@ Git hook tests remain contributor-tooling regressions.
   IPC readiness before their unchanged failure deadlines. Resistant coverage
   records the actual ready child, TERM/KILL requests and native close, including
   delayed startup before PID and signal-handler initialization.
-- `version-policy.test.ts` checks shared SemVer grammar, stable/release predicates,
-  parser limits, arbitrary legal prerelease labels, and exact metadata agreement.
+- `software-version.test.ts` retains strict SemVer/stable/release limits and comparison;
+  `tooling/distribution/version-agreement.test.ts` checks exact metadata agreement.
 - [tooling/releases/](tooling/releases/README.md) separates supplied-value Changelog
   and English note regressions from stable/prerelease tag/event identity, paginated
   draft recovery, returned classification, stable-only comparisons and fail-closed

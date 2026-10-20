@@ -12,10 +12,10 @@ import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import { type AppDistribution, parseAppDistribution } from '../src/domains/app-distribution.ts';
 import { parseAppNativeEvidence, parseAppReleaseInputs } from '../src/domains/app-release.ts';
+import { isSemVer } from '../src/domains/software-version.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { collectBundledLicenses } from './licenses/bundled-notices.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';
-import { isSemVer } from './version-policy.ts';
 
 type AppBuild = Omit<AppDistribution, 'schemaVersion'> & {
     root: string;

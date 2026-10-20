@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { parseDocument, stringify } from 'yaml';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
-const references = new URL('../packaging/shared/skills/debugging-cdp-targets/references/', import.meta.url);
+const references = new URL('../../../packaging/shared/skills/debugging-cdp-targets/references/', import.meta.url);
 
 async function readSources(): Promise<[string, string, string]> {
     const [contract, zh, en] = await Promise.all([

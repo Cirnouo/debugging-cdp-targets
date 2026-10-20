@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { verifyAppOfficialRuntime } from '../src/adapters/app-official-runtime.ts';
 import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
 import { resolveServerBin } from '../src/adapters/official-server.ts';
+import { isStableVersion } from '../src/domains/software-version.ts';
 import { OFFICIAL_RELEASE } from './official-release.ts';
-import { isStableVersion } from './version-policy.ts';
 
 type Source = { kind: 'installed' } | { kind: 'stage'; directory: string };
 export function parseOfficialSmokeArguments(args: string[]): Source {

@@ -5,12 +5,12 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { assembleCodexPayload, syncPluginFiles } from '../tooling/build-plugin.ts';
-import { validateHostManifest } from '../tooling/distribution-audit.ts';
-import { CLAUDE_CODE_HOST, CODEX_HOST } from '../tooling/host-policy.ts';
-import { validateIconPng } from '../tooling/icon-policy.ts';
+import { validateIconPng } from '../../../tooling/distribution/artwork-policy.ts';
+import { assembleCodexPayload, syncPluginFiles } from '../../../tooling/distribution/build-plugin.ts';
+import { CLAUDE_CODE_HOST, CODEX_HOST } from '../../../tooling/distribution/host-descriptors.ts';
+import { validateHostManifest } from '../../../tooling/distribution/host-metadata.ts';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('../../..', import.meta.url));
 
 function pngChunk(type: string, data: Buffer) {
     const chunk = Buffer.alloc(data.length + 12);

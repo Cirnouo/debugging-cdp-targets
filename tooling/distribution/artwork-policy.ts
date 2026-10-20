@@ -1,6 +1,6 @@
 import { inflateSync } from 'node:zlib';
-import { isRecord } from '../src/shared/errors.ts';
-import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-policy.ts';
+import { isRecord } from '../../src/shared/errors.ts';
+import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from './host-descriptors.ts';
 
 export const SHARED_ASSET_FILES = Object.freeze([
     'README.md',

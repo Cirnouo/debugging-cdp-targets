@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
-import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution-audit.ts';
+import { compareDistributionTrees, readDistributionTree } from '../../tooling/distribution/regular-file-tree.ts';
 import { isolateCodexSkills, isolatedCodexEnvironment } from './codex-host.ts';
 import { createStdioClient } from './mcp-client.ts';
 

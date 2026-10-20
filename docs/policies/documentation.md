@@ -103,7 +103,7 @@ relative links that work from the installed Skill root, without prerequisite
 reference chains. Installed guides link repository documentation with absolute
 GitHub URLs. Edit the shared maintained source and declared host inputs; rebuild
 both complete host payloads. Include every referenced instruction file and its
-README in the exact explicit inventory in `tooling/payload-policy.ts` and in
+README in the exact explicit inventory in `tooling/distribution/payload-inventory.ts` and in
 independent exact directory expectations. Preserve maintained-source-to-host
 equality in both directions, excluding only declared host overlays. Do not derive
 an allowlist dynamically from copied output. Missing/extra files, deletion/rename,
