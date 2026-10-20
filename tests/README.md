@@ -144,7 +144,8 @@ Git hook tests remain contributor-tooling regressions.
   `fixtures/target-host.ts`. All six target value suites retain 59 registrations.
 
 - `gateway-core.test.ts` covers independent clients, registration authorization, immutable
-    roots/launch snapshots, scoped restart and retained cleanup failure/retry.
+    roots/launch snapshots, pre-roots temporary-directory capture, selected workspace
+    copy/privacy and scoped restart/transfer retention, plus cleanup failure/retry.
 - `client-context.test.ts`, `registrations.test.ts` and `gateway/official/execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
 - `host-management.test.ts` checks absent/corrupt/incompatible latest records,
@@ -437,7 +438,9 @@ Git hook tests remain contributor-tooling regressions.
     argument/environment contracts, preserving all original cases and matrices;
     see its [suite inventory](gateway/official/README.md).
 - `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
-    variants and independent configuration.
+    variants and independent configuration. The latter retains its whole HTTP/catalog
+    integration case and tests supplied workspace defaults, ordered aliases,
+    unrestricted-path facts and closed option rejection.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous owner/identity/deduplication/cursor/cancel behavior,
   terminal result/error snapshots and actual SDK HTTP lifecycle validation.

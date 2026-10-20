@@ -27,8 +27,11 @@ definitive cleanup barriers. It uses the original Core ManagedConnection TYPE an
 only the three reviewed application TYPE ports, without a runtime cycle or copied
 capability contract. Core uses the four existing application service providers.
 Target-controller and adapters retain actual acquisition/exit and I/O. Admission,
-managed connection, workspace policy and projection remain coherent Core content
+managed connection and projection remain coherent Core content
 until their complete ownership cuts; no new await or snapshot is introduced.
+The pure `gateway/connections/workspace-policy.ts` owns the complete supplied
+workspace calculation; Core retains its actual pre-roots temporary-directory
+capture and invokes it with three explicit inputs at the original construction point.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend
 only on the exact relative isolation.ts and launch-command.ts model owners in

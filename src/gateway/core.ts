@@ -10,7 +10,7 @@ import { createOfficialConnection, type OfficialConnection } from '../adapters/m
 import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from '../adapters/official-server.ts';
 import { createPortReservations } from '../adapters/port-reservation.ts';
 import { createTargetHost } from '../adapters/target-host.ts';
-import { loadOfficialToolCatalog, workspaceSources } from '../adapters/tool-catalog.ts';
+import { loadOfficialToolCatalog } from '../adapters/tool-catalog.ts';
 import { createClientContext, waitForClient } from '../application/client-context.ts';
 import { createLifecycleService } from '../application/mcp-lifecycle.ts';
 import { createRegistrationRegistry } from '../application/registrations.ts';
@@ -36,6 +36,7 @@ import { DEFAULT_BASE_PORT } from '../shared/constants.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage, isRecord } from '../shared/errors.ts';
 import { type ConnectionDirectoryLease, createConnectionDirectoryLease } from './connections/directory-lease.ts';
 import type { ResourceOwner } from './connections/resource-owner.ts';
+import { describeWorkspacePolicy } from './connections/workspace-policy.ts';
 import { measured } from './diagnostics.ts';
 import { createGatewayRegistry } from './registry.ts';
 import { parseDataIsolation } from './targets/model/isolation.ts';
@@ -62,7 +63,7 @@ export type ManagedConnection = {
     roots: ListRootsResult;
     rootsNegotiated: boolean;
     officialEnvironment: NodeJS.ProcessEnv;
-    workspace: ReturnType<typeof workspaceSources>;
+    workspace: ReturnType<typeof describeWorkspacePolicy>;
     establishedAt?: number;
     lastRealOperationAt?: number;
     executionContext?: ClientRequestContext;
@@ -301,7 +302,7 @@ export async function createGatewayCore({
                 roots: structuredClone(roots),
                 rootsNegotiated: context.client?.capabilities.roots ?? false,
                 officialEnvironment,
-                workspace: workspaceSources(
+                workspace: describeWorkspacePolicy(
                     initialArgs,
                     context.client?.capabilities.roots ?? false,
                     temporaryDirectory,

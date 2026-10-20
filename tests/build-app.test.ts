@@ -42,6 +42,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'tooling/licenses/reviewed-vendors.json',
         'src/gateway/connections/resource-owner.ts',
         'src/gateway/connections/directory-lease.ts',
+        'src/gateway/connections/workspace-policy.ts',
         'src/gateway/owned-tool-arguments.ts',
         'src/gateway/diagnostics.ts',
         'src/gateway/targets/model/cdp-identity.ts',

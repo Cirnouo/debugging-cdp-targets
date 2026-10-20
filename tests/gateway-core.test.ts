@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
@@ -438,6 +439,86 @@ test('negotiated roots failure precedes all connection acquisitions while unsupp
     }
 });
 
+test('workspace configuration retains the pre-roots temporary snapshot and returns private independent copies', async (t) => {
+    const f = await fixture();
+    const a = f.client('workspace-owner');
+    let temporaryDirectory = '/policy-before-roots';
+    const temporary = t.mock.method(os, 'tmpdir', () => temporaryDirectory);
+    let resolveRoots: (value: { roots: { uri: string }[] }) => void = () => {};
+    const roots = new Promise<{ roots: { uri: string }[] }>((resolve) => {
+        resolveRoots = resolve;
+    });
+    let entered = () => {};
+    const reading = new Promise<void>((resolve) => {
+        entered = resolve;
+    });
+    const context = a.handle.request({
+        requestId: 0,
+        capabilities: { roots: true, formElicitation: false },
+        readRoots: () => {
+            entered();
+            return roots;
+        },
+    });
+    const starting = f.core.controller.start(
+        { isolation: { mode: 'none' }, launch: { executable: 'fixture' } },
+        { client: context },
+    );
+    try {
+        await bounded(reading, 'Workspace roots request did not enter.');
+        temporaryDirectory = '/policy-after-roots';
+        resolveRoots({ roots: [{ uri: 'file:///policy-original-root' }] });
+        const connection = await starting;
+        const request = {
+            action: 'status' as const,
+            connectionId: connection.connectionId,
+            include: ['configuration' as const],
+        };
+        const selected = await f.core.control(request, context);
+        assert.deepEqual(selected.workspace, {
+            officialDirectories: ['/policy-before-roots'],
+            officialSource: 'system-temporary-directory',
+            clientRoots: 'immutable-start-snapshot',
+            unrestrictedPaths: false,
+            cwdGrantsAccess: false,
+        });
+        assert.deepEqual(selected.roots, { roots: [{ uri: 'file:///policy-original-root' }] });
+        for (const summary of [
+            await f.core.control({ action: 'status' }, context),
+            await f.core.control({ action: 'status', connectionId: connection.connectionId }, context),
+        ]) {
+            assert.equal(Object.hasOwn(summary, 'workspace'), false);
+            assert.equal(Object.hasOwn(summary, 'roots'), false);
+            assert.doesNotMatch(JSON.stringify(summary), /policy-before-roots|policy-after-roots|policy-original-root/);
+        }
+        assert.ok(isRecord(selected.workspace) && Array.isArray(selected.workspace.officialDirectories));
+        selected.workspace.officialDirectories[0] = '/caller-mutated-workspace';
+        assert.ok(isRecord(selected.roots) && Array.isArray(selected.roots.roots));
+        assert.ok(isRecord(selected.roots.roots[0]));
+        selected.roots.roots[0].uri = 'file:///caller-mutated-root';
+        const reread = await f.core.control(request, context);
+        assert.deepEqual(reread.workspace, {
+            officialDirectories: ['/policy-before-roots'],
+            officialSource: 'system-temporary-directory',
+            clientRoots: 'immutable-start-snapshot',
+            unrestrictedPaths: false,
+            cwdGrantsAccess: false,
+        });
+        assert.deepEqual(reread.roots, { roots: [{ uri: 'file:///policy-original-root' }] });
+    } finally {
+        resolveRoots({ roots: [] });
+        try {
+            await starting;
+        } finally {
+            try {
+                await f.core.cleanup();
+            } finally {
+                temporary.mock.restore();
+            }
+        }
+    }
+});
+
 for (const scope of ['target', 'official', 'both'] as const) {
     test(`${scope} restart retains admitted roots, launch/environment and official configuration after mutation and transfer`, async () => {
         const previous = process.env.DCT_TEST_SNAPSHOT;
@@ -454,16 +535,35 @@ for (const scope of ['target', 'official', 'both'] as const) {
         const options = {
             isolation: { mode: 'none' as const },
             launch: { executable: 'fixture', args: ['--remote-debugging-port={port}', '%DCT_TEST_SNAPSHOT%', '9222'] },
-            mcpArgs: ['--categoryNetwork=false'],
+            mcpArgs: ['--categoryNetwork=false', '--workspace=/admitted-workspace', '--allowUnrestrictedPaths'],
         };
         try {
             const original = await f.core.controller.start(options, { client: context });
+            async function assertAdmittedConfiguration(client: ClientRequestContext) {
+                const selected = await f.core.control(
+                    { action: 'status', connectionId: original.connectionId, include: ['configuration'] },
+                    client,
+                );
+                assert.deepEqual(selected.workspace, {
+                    officialDirectories: ['/admitted-workspace'],
+                    officialSource: 'explicit-workspace',
+                    clientRoots: 'immutable-start-snapshot',
+                    unrestrictedPaths: true,
+                    cwdGrantsAccess: false,
+                });
+                assert.deepEqual(selected.roots, { roots: [{ uri: 'file:///original' }] });
+            }
+            await assertAdmittedConfiguration(context);
             options.launch.args[1] = 'changed';
             options.mcpArgs[0] = '--slim';
+            options.mcpArgs[1] = '--workspace=/changed-workspace';
+            options.mcpArgs[2] = '--allowUnrestrictedPaths=false';
             process.env.DCT_TEST_SNAPSHOT = 'changed';
             assert.ok(roots.roots[0]);
             roots.roots[0].uri = 'file:///changed';
+            await assertAdmittedConfiguration(context);
             f.core.admin.transfer(original.connectionId, b.registration.principal.registrationId);
+            await assertAdmittedConfiguration(b.context());
             const result = await f.core.controller.restart({
                 connectionId: original.connectionId,
                 sessionId: original.sessionId ?? '',
@@ -474,6 +574,7 @@ for (const scope of ['target', 'official', 'both'] as const) {
             assert.equal(f.officialInputs.at(-1)?.environment.DCT_TEST_SNAPSHOT, 'original');
             assert.ok(f.officialInputs.at(-1)?.args.includes('--categoryNetwork=false'));
             assert.equal(f.officialInputs.at(-1)?.args.includes('--slim'), false);
+            await assertAdmittedConfiguration(b.context());
             const response = await f.core.invoke(
                 'echo',
                 { _dct: { connectionId: result.connectionId, sessionId: result.sessionId } },

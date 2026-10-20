@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import type { Tool } from '@modelcontextprotocol/client';
 import { ListToolsResultSchema } from '@modelcontextprotocol/core';
 import { parseMcpArgs, suggestMcpArgs } from '../gateway/official/options.ts';
@@ -155,14 +154,4 @@ export async function loadOfficialToolCatalog(_defaults?: Tool[]) {
             ? __DCT_TOOL_CATALOG__
             : JSON.parse(await readFile(new URL('../../tooling/official-tool-catalog.json', import.meta.url), 'utf8'));
     return createToolCatalog(value);
-}
-export function workspaceSources(mcpArgs: string[], supportsRoots: boolean, temporaryDirectory = os.tmpdir()) {
-    const args = parseMcpArgs(mcpArgs);
-    return {
-        officialDirectories: args.get('filesystemRoot')?.values ?? [temporaryDirectory],
-        officialSource: args.has('filesystemRoot') ? 'explicit-workspace' : 'system-temporary-directory',
-        clientRoots: supportsRoots ? 'immutable-start-snapshot' : 'not-negotiated',
-        unrestrictedPaths: args.get('allowUnrestrictedPaths')?.values[0] === true,
-        cwdGrantsAccess: false,
-    };
 }

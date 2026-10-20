@@ -388,6 +388,7 @@ export function validateRuntimeSource(file: string, source: string) {
                           '../domains/control-contract.ts',
                           '../domains/request-failure.ts',
                           './connections/directory-lease.ts',
+                          './connections/workspace-policy.ts',
                           './diagnostics.ts',
                           './targets/model/isolation.ts',
                           './targets/model/launch-command.ts',

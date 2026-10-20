@@ -41,6 +41,10 @@ remain crypto, os and path. SDK client, resource-owner and shared client-context
 are TYPE-only. Core retains its existing process.env spread, process.platform
 reads and supplied-now fallback to the Date.now reference; it gains no general
 ambient I/O, SDK value dependency or clock-call permission.
+The pure gateway/connections/workspace-policy.ts describes only supplied workspace
+arguments, negotiated-roots support and a required temporary directory through
+official/options.ts. Core alone captures that directory before awaiting roots;
+the calculation gains no ambient defaults, grants or connection authority.
 Only gateway/registry.ts owns route membership and the retained cleanup ledger:
 its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
 domains/control-contract and shared/errors. TYPE-only dependencies are the original

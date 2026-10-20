@@ -5,7 +5,7 @@ Gateway slice owns Core transactions, registry cleanup, deterministic argument
 parsing, pure Official options/execution/release evidence, supplied target identity and
 resource models, structured launch/isolation rules, native argument composition,
 the existing bounded one-shot diagnostic clock and the exact connection resource/
-directory lifetime owners below. Pure argument
+directory lifetime owners below, plus pure supplied workspace-policy calculation. Pure argument
 rules and target models may use relative dependencies in
 gateway, domains and shared, but must not import diagnostics, including through
 type-only imports/exports or type `import()`. Unknown Gateway files remain pure.
@@ -23,6 +23,11 @@ BEFORE editing core.ts or registry.ts, read all of the canonical
 [application lifecycle instructions](../application/AGENTS.md), cumulatively with
 root and source instructions. Preserve their complete ownership, admission,
 execution, construction, actual-exit, cleanup and isolation obligations.
+
+connections/workspace-policy.ts describes supplied official arguments, negotiated
+roots support and a required temporary-directory snapshot through official/options.ts.
+Core supplies that snapshot from before its original roots suspension. The pure
+calculation has no ambient fallback, mutable grants or lifecycle authority.
 
 core.ts owns the complete managed-connection transaction, including generation
 pointers, active official-call accounting and original execution facilities.
@@ -60,7 +65,7 @@ models only validate supplied values/evidence or describe existing resource capa
 port claims, acquisition, observation, rollback, normal Close and actual-exit
 release remain with their current adapter/application owners. Keep
 registration, continuation, execution and resource state with their current owners.
-The two connections owners hold complete generation/resource and directory-lease
+The two mutable connections owners hold complete generation/resource and directory-lease
 algorithms; registry.ts retains route membership and cleanup/retry joins, while
 Core retains generation fences and actual execution/context.
 

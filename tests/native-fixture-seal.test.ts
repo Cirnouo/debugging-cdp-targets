@@ -176,6 +176,7 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.equal(built.inputs.includes('src/application/plugin-runtime.ts'), false);
     assert.ok(built.inputs.includes('src/gateway/connections/resource-owner.ts'));
     assert.ok(built.inputs.includes('src/gateway/connections/directory-lease.ts'));
+    assert.ok(built.inputs.includes('src/gateway/connections/workspace-policy.ts'));
     assert.equal(built.inputs.includes('src/application/connection-owner.ts'), false);
     assert.equal(built.inputs.includes('src/application/connection-directory.ts'), false);
     assert.ok(built.inputs.includes('src/gateway/owned-tool-arguments.ts'));

@@ -1,10 +1,17 @@
-# Resource generations and directory leases
+# Resource generations, directory leases and supplied workspace policy
 
 Apply root, [source](../../AGENTS.md) and [Gateway](../AGENTS.md) instructions
 cumulatively. Before changing acquisition, lifetime, cleanup or explicit evidence,
 read [ADR 0015](../../../docs/adr/0015-explicit-data-directory-isolation.md),
 [ADR 0017](../../../docs/adr/0017-singleton-desktop-app.md) and
 [ADR 0018](../../../docs/adr/0018-mcp-protocol-compatibility.md).
+
+workspace-policy.ts describes only supplied workspace arguments, negotiated-roots
+support and a required temporary directory, using ../official/options.ts. Keep its
+five-field result and parser semantics; it has no ambient defaults, path resolution,
+I/O, mutable grants or connection authority. Core retains the pre-roots snapshot
+and original construction/capture order. This pure leaf gains neither mutable
+exception below, including through erased syntax.
 
 resource-owner.ts owns one target, official, logical/router or catalog resource
 generation, including pending acquisitions and retryable failed disposal. Enroll

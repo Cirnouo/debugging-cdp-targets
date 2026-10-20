@@ -2,7 +2,8 @@
 
 - `core.ts` owns transport-free dispatch, independent managed connections,
     generation pointers and original official execution facilities. Start, restart,
-    stop, admission, workspace policy and projections remain complete transactions.
+    stop, admission, pre-roots temporary-directory capture and projections remain
+    complete transactions.
 - `registry.ts` owns route membership, resource/directory enrollment and retained
     cleanup/retry joins with one ledger and definitive barriers. It consumes the
     original Core ManagedConnection type without a runtime cycle or duplicate state.
@@ -18,7 +19,8 @@
     profile arguments, screenshot feature composition, isolation and structured launch values.
     Target acquisition, claims, observation and cleanup stay with current owners.
 - `connections/` owns complete resource-generation retention/disposal and
-    connection-level directory-lease barriers through their exact adapter capabilities.
+    connection-level directory-lease barriers through their exact adapter capabilities,
+    plus pure workspace-policy description from explicit supplied inputs.
 - `official/` owns pure reviewed options/recipes and supplied argument composition,
     wire identity/terminal tracking and strict release evidence. Ambient default
     capture, child environment/bin verification, live catalog and upstream remain
@@ -31,7 +33,8 @@ The HTTP server still consumes admission from `domains/mcp-http.ts`; the
 request handler consumes these parsers before real Core authentication. This
 argument owner holds no registration, live-route, continuation or execution state.
 Core retains original actual execution facilities; registry joins route membership
-and retained cleanup/retry ownership; the two connections owners retain their complete lifetimes.
+and retained cleanup/retry ownership; the two mutable connections owners retain
+their complete lifetimes. The workspace policy holds no mutable ownership.
 The remaining controller, registrations and lifecycle services keep their current
 technical-layer placement and exact transitional Core/registry dependencies.
 The complete lifecycle-contract path and symbol migration remains pending until

@@ -1215,6 +1215,7 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 '../domains/control-contract.ts',
                 '../domains/request-failure.ts',
                 './connections/directory-lease.ts',
+                './connections/workspace-policy.ts',
                 './diagnostics.ts',
                 './targets/model/isolation.ts',
                 './targets/model/launch-command.ts',
@@ -1328,6 +1329,49 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
         'const timestamp = Date.now;',
     ])
         assert.ok(validateRuntimeSource('src/gateway/unreviewed.ts', source).length, source);
+});
+
+test('workspace policy accepts supplied option parsing without gaining connection authority', async () => {
+    const file = 'src/gateway/connections/workspace-policy.ts';
+    for (const { source } of connectionDependencyForms('../official/options.ts'))
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
+    for (const dependency of [
+        '../core.ts',
+        '../registry.ts',
+        './resource-owner.ts',
+        './directory-lease.ts',
+        '../diagnostics.ts',
+        '../../adapters/tool-catalog.ts',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        'node:os',
+        'node:fs',
+        'node:net',
+        'node:child_process',
+        '@modelcontextprotocol/client',
+    ])
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, `${file}: ${source}`);
+        }
+    for (const source of [
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+        'const value = (require as (name: string) => unknown)?.(moduleName);',
+        'const value = process.env;',
+        'const value = process.platform;',
+        'const value = globalThis.process;',
+        'const { env } = process;',
+        'const value = Date.now;',
+        'const value = new Date();',
+        'const value = performance.now();',
+        'const value = globalThis.globalThis["process"].env;',
+        'const value = globalThis[key];',
+        'fetch("http://localhost");',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
 });
 
 test('Official pure owners accept supplied shared rules and real adapter consumers', () => {
