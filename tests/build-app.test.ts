@@ -196,3 +196,16 @@ test('App delivery copies every official published file at its complete relative
     }
     assert.equal(files.size, release.files.length);
 });
+
+test('compile-free App composition includes an unbound ordinary worker with no delivered query or compiler runtime', async () => {
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const files = await generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
+    const worker = files.get('deployment-worker.mjs');
+    assert.ok(worker && worker.length > 0);
+    assert.match(worker.toString('utf8'), /unbound/);
+    assert.equal(files.has('windows-deployment-query.exe'), false);
+    assert.doesNotMatch(
+        worker.toString('utf8'),
+        /DctDeploymentCreateProgram|Framework64|dct-deployment-support-|createFreshDeploymentRoot|copyPayload|createGatewayCore/,
+    );
+});

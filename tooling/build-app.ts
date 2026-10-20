@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import type { BigIntStats } from 'node:fs';
 import { type FileHandle, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from 'node:fs/promises';
@@ -20,6 +20,8 @@ import {
     packWindowsDeploymentQueries,
     preflightWindowsDeploymentCopy,
 } from '../src/adapters/windows-deployment-protocol.ts';
+import { runWindowsDeploymentStream } from '../src/adapters/windows-deployment-stream.ts';
+import { buildWindowsDeploymentSupport } from '../src/adapters/windows-deployment-support.ts';
 import {
     type DeploymentPayloadEntry,
     type DeploymentPayloadManifest,
@@ -60,6 +62,16 @@ export type StagedDesktopApp = Readonly<
             official: OfficialReleaseEvidence;
             nativePackages: readonly AppNativePackage[];
             generatedInputs: readonly AppReleaseFile[];
+            deploymentQuery: Awaited<ReturnType<typeof buildWindowsDeploymentSupport>>['receipt'] & {
+                ownedQueryIdentity: Readonly<{
+                    device: string;
+                    inode: string;
+                    links: string;
+                    bytes: string;
+                    mtimeNs: string;
+                    ctimeNs: string;
+                }>;
+            };
         }>;
     }
 >;
@@ -380,6 +392,75 @@ export async function stageFreshDesktopInstallation(
             throw new Error('Fresh read admission failed.');
         await fixed();
         await payload(buildRoot);
+        const workerFile = path.join(buildRoot, 'resources/app/deployment-worker.mjs');
+        const nodeFile = path.join(buildRoot, 'resources/node/node.exe');
+        const executionInputs = [
+            workerFile,
+            nodeFile,
+            path.join(buildRoot, 'resources/app/windows-deployment-query.exe'),
+        ].map((file) => {
+            const relative = path.relative(buildRoot, file).split(path.sep).join('/');
+            const expected = source.manifest.entries.find((entry) => entry.path === relative);
+            const identity = identities.get(path.join(stage, ...relative.split('/')));
+            if (!expected || expected.type !== 'file' || !identity)
+                throw new Error('Missing source-owned execution evidence.');
+            return { file, expected, identity };
+        });
+        async function executionCurrent() {
+            for (const { file, expected, identity } of executionInputs) {
+                const before = await lstat(file, { bigint: true });
+                regular(before);
+                if (!same(before, identity) || (await realpath(file)) !== file)
+                    throw new Error('Fresh worker/Node identity changed.');
+                const bytes = await readRegularFile(file);
+                const after = await lstat(file, { bigint: true });
+                if (
+                    !same(before, after) ||
+                    before.mtimeNs !== after.mtimeNs ||
+                    before.ctimeNs !== after.ctimeNs ||
+                    before.size !== after.size ||
+                    bytes.length !== expected.bytes ||
+                    fileIdentity('', bytes).sha256 !== expected.sha256
+                )
+                    throw new Error('Fresh worker/Node producer bytes changed.');
+            }
+        }
+        await executionCurrent();
+        // Retain parent operation/shared descriptors, but retire temporary query authority exactly once.
+        const closingSupport = nativeLifetime;
+        nativeLifetime = undefined;
+        if (!closingSupport) throw new Error('Missing temporary support lifetime.');
+        await closingSupport.close();
+        await executionCurrent();
+        const child = spawn(nodeFile, [workerFile], {
+            shell: false,
+            windowsHide: true,
+            cwd: path.dirname(workerFile),
+            env: { SystemRoot: 'C:\\Windows', WINDIR: 'C:\\Windows' },
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        async function* noInput() {}
+        const pending = runWindowsDeploymentStream(child, noInput(), { stdout: 1024, stderr: 65536 }).then(
+            (bytes) => ({ bytes, error: undefined }),
+            (error: unknown) => ({ bytes: undefined, error }),
+        );
+        let workerFailure: unknown;
+        try {
+            await executionCurrent();
+        } catch (error) {
+            workerFailure = error;
+        }
+        const terminal = await pending;
+        if (terminal.error)
+            workerFailure = workerFailure ? new AggregateError([workerFailure, terminal.error]) : terminal.error;
+        try {
+            await executionCurrent();
+        } catch (error) {
+            workerFailure = workerFailure ? new AggregateError([workerFailure, error]) : error;
+        }
+        if (workerFailure) throw workerFailure;
+        if (!terminal.bytes?.equals(stateBytes))
+            throw new Error('Fresh worker canonical state disagrees with retained expected state.');
         result = Object.freeze({
             selectedBuildId: selection.selectedBuildId,
             selectedManifestSha256: selection.selectedManifestSha256,
@@ -564,6 +645,26 @@ export async function readAppOfficialFiles(root: string) {
     });
 }
 export async function generateAppFiles(options: AppBuild) {
+    return composeAppFiles(options);
+}
+
+async function composeAppFiles(
+    options: AppBuild,
+    query?: Awaited<ReturnType<Awaited<ReturnType<typeof buildWindowsDeploymentSupport>>['captureQuery']>>,
+) {
+    const capturedQuery = query ? Buffer.from(query.bytes) : undefined;
+    const queryBinding = query
+        ? {
+              kind: 'bound',
+              platform: 'win32',
+              architecture: 'x64',
+              name: 'windows-deployment-query.exe',
+              bytes: query.bytes.length,
+              sha256: query.sha256,
+              machine: query.machine,
+              runtime: query.runtime,
+          }
+        : { kind: 'unbound' };
     const { root } = options;
     const version = await readAppVersion(root);
     const distribution = parseAppDistribution(
@@ -579,20 +680,32 @@ export async function generateAppFiles(options: AppBuild) {
         ['app-main', 'node', 'esm', 'app-main.mjs'],
         ['app-preload', 'node', 'cjs', 'app-preload.cjs'],
         ['app-renderer', 'browser', 'iife', 'app-renderer.js'],
+        ['deployment-worker', 'node', 'esm', 'deployment-worker.mjs'],
     ] as const) {
         const result = await build({
             absWorkingDir: root,
-            entryPoints: [path.join(root, `src/interface/${entry}.ts`)],
+            entryPoints: [
+                path.join(
+                    root,
+                    entry === 'deployment-worker' ? 'tooling/deployment-worker.ts' : `src/interface/${entry}.ts`,
+                ),
+            ],
             outfile: path.join(root, output),
             bundle: true,
             platform,
             format,
             target: platform === 'node' ? 'node24' : 'chrome144',
-            external: platform === 'node' ? ['electron', 'fs-native-extensions'] : [],
+            external:
+                entry === 'deployment-worker'
+                    ? ['fs-native-extensions']
+                    : platform === 'node'
+                      ? ['electron', 'fs-native-extensions']
+                      : [],
             define: {
                 __DCT_OFFICIAL_RELEASE__: JSON.stringify(release),
                 __DCT_TOOL_CATALOG__: JSON.stringify(catalog),
                 __DCT_APP_VERSION__: JSON.stringify(version),
+                __DCT_DEPLOYMENT_QUERY__: JSON.stringify(queryBinding),
                 'process.env.NODE_ENV': '"production"',
                 'process.env.WS_NO_BUFFER_UTIL': '"1"',
                 'process.env.WS_NO_UTF_8_VALIDATE': '"1"',
@@ -608,7 +721,7 @@ export async function generateAppFiles(options: AppBuild) {
                     },
                 },
             ],
-            ...(entry === 'app-main'
+            ...(['app-main', 'deployment-worker'].includes(entry)
                 ? {
                       banner: {
                           js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
@@ -620,15 +733,26 @@ export async function generateAppFiles(options: AppBuild) {
             legalComments: 'none',
             logLevel: 'warning',
         });
-        for (const file of result.outputFiles) files.set(path.basename(file.path), Buffer.from(file.contents));
+        for (const file of result.outputFiles) {
+            if (
+                entry === 'deployment-worker' &&
+                /DctDeploymentCreateProgram|buildWindowsDeploymentSupport|windows-deployment-create|dct-deployment-support-|Framework64|copyPayload|createFreshDeploymentRoot|createGatewayCore|from ["']electron["']/.test(
+                    file.text,
+                )
+            )
+                throw new Error('Deployment worker emitted build/create/copy or unrelated runtime behavior.');
+            files.set(path.basename(file.path), Buffer.from(file.contents));
+        }
         const selectedExternals = new Set(
             entry === 'app-main'
                 ? ['electron', 'fs-native-extensions']
-                : entry === 'app-bootstrap'
-                  ? ['electron', './app-main.mjs']
-                  : entry === 'app-preload'
-                    ? ['electron']
-                    : [],
+                : entry === 'deployment-worker'
+                  ? ['fs-native-extensions']
+                  : entry === 'app-bootstrap'
+                    ? ['electron', './app-main.mjs']
+                    : entry === 'app-preload'
+                      ? ['electron']
+                      : [],
         );
         for (const emitted of Object.values(result.metafile.outputs))
             for (const imported of emitted.imports)
@@ -636,6 +760,7 @@ export async function generateAppFiles(options: AppBuild) {
                     throw new Error(`App bundle has an undeclared external import: ${imported.path}`);
         for (const input of Object.keys(result.metafile.inputs)) inputs.add(input);
     }
+    if (capturedQuery) files.set('windows-deployment-query.exe', capturedQuery);
     for (const file of ['app.html', 'app.css'])
         files.set(file, await readRegularFile(path.join(root, 'src/interface', file)));
     files.set('icon.png', await readRegularFile(path.join(root, 'packaging/shared/assets/icon.png')));
@@ -681,6 +806,13 @@ export async function generateAppFiles(options: AppBuild) {
         ...['app-release-inputs.json', 'app-native-release.json', 'official-server-release.json'].map(
             (file) => `tooling/${file}`,
         ),
+        ...(query
+            ? [
+                  'src/adapters/windows-deployment-support.ts',
+                  'src/adapters/windows-deployment-authority.cs',
+                  'src/adapters/windows-deployment-create.cs',
+              ]
+            : []),
         'src/interface/app.html',
         'src/interface/app.css',
         'packaging/shared/assets/icon.png',
@@ -708,7 +840,12 @@ export async function stageDesktopApp(
         output: options.output,
         onInputs: options.onInputs,
     });
-    if (process.platform !== 'win32' || request.platform !== 'win32')
+    if (
+        process.platform !== 'win32' ||
+        process.arch !== 'x64' ||
+        request.platform !== 'win32' ||
+        request.architecture !== 'x64'
+    )
         throw new Error('This native stage extractor currently supports Windows; other native cells remain pending.');
     const distribution = parseAppDistribution(
         { schemaVersion: 1, kind: request.kind, platform: request.platform, architecture: request.architecture },
@@ -767,24 +904,53 @@ export async function stageDesktopApp(
             node.runtimeFiles.map((file) => ({ ...file, path: file.destination })),
         );
         const generatedInputs: AppReleaseFile[] = [];
-        const files = await generateAppFiles({
-            ...request,
-            onInputs: async (names) => {
-                const seen = new Set<string>();
-                for (const name of names) {
-                    if (['<define:__DCT_OFFICIAL_RELEASE__>', '<define:__DCT_TOOL_CATALOG__>'].includes(name)) continue;
-                    const absolute = path.resolve(request.root, name);
-                    const relative = path.relative(request.root, absolute).replaceAll('\\', '/');
-                    if (!isPortablePayloadRelativePath(relative))
-                        throw new Error('App generated source input is outside its repository.');
-                    if (seen.has(relative)) continue;
-                    seen.add(relative);
-                    generatedInputs.push(fileIdentity(relative, await readRegularFile(absolute)));
-                }
-                generatedInputs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-                await request.onInputs?.(names);
+        const support = await buildWindowsDeploymentSupport();
+        let query: Awaited<ReturnType<typeof support.captureQuery>> | undefined;
+        let queryFailure: unknown,
+            queryFailed = false;
+        try {
+            query = await support.captureQuery();
+        } catch (error) {
+            queryFailure = error;
+            queryFailed = true;
+        }
+        try {
+            await support.release();
+        } catch (close) {
+            throw queryFailed
+                ? new AggregateError([queryFailure, close], 'Query capture and producer close failed.')
+                : close;
+        }
+        if (queryFailed) throw queryFailure;
+        if (!query) throw new Error('Missing actual produced query.');
+        const files = await composeAppFiles(
+            {
+                ...request,
+                onInputs: async (names) => {
+                    const seen = new Set<string>();
+                    for (const name of names) {
+                        if (
+                            [
+                                '<define:__DCT_OFFICIAL_RELEASE__>',
+                                '<define:__DCT_TOOL_CATALOG__>',
+                                '<define:__DCT_DEPLOYMENT_QUERY__>',
+                            ].includes(name)
+                        )
+                            continue;
+                        const absolute = path.resolve(request.root, name);
+                        const relative = path.relative(request.root, absolute).replaceAll('\\', '/');
+                        if (!isPortablePayloadRelativePath(relative))
+                            throw new Error('App generated source input is outside its repository.');
+                        if (seen.has(relative)) continue;
+                        seen.add(relative);
+                        generatedInputs.push(fileIdentity(relative, await readRegularFile(absolute)));
+                    }
+                    generatedInputs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+                    await request.onInputs?.(names);
+                },
             },
-        });
+            query,
+        );
         const original = await readAppOfficialFiles(request.root);
         const deliveredArchives = parseAppReleaseInputs(
             JSON.parse(files.get('delivery/app-release-inputs.json')?.toString('utf8') ?? 'null'),
@@ -857,6 +1023,17 @@ export async function stageDesktopApp(
                 official,
                 nativePackages: native.packages,
                 generatedInputs: Object.freeze(generatedInputs),
+                deploymentQuery: Object.freeze({
+                    ...support.receipt,
+                    ownedQueryIdentity: Object.freeze({
+                        device: String(query.identity.dev),
+                        inode: String(query.identity.ino),
+                        links: String(query.identity.nlink),
+                        bytes: String(query.identity.size),
+                        mtimeNs: String(query.identity.mtimeNs),
+                        ctimeNs: String(query.identity.ctimeNs),
+                    }),
+                }),
             }),
         });
     } finally {

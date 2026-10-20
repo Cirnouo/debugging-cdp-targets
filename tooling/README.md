@@ -17,9 +17,11 @@
   the same opened read-locked ZIP stream; unsafe paths, aliases and non-regular
   entries refuse before extraction. Other platform source producers remain pending.
   The generated App helper inventory includes macOS deployment JXA source.
-  Windows deployment query/create C# and their fixed compiler-produced EXEs
-  belong to the contributor build lifetime in the native adapter, and are
-  excluded from generated App delivery. All remain repository-owned MIT inputs,
+  Fixed Windows deployment query/create C# production belongs to the native
+  contributor build lifetime. A supported stage captures Q before buffers or
+  observers and privately binds its digest into the worker/App composition, then
+  inventories actual Q and worker bytes in the manifest. Creator EXEs, compiler
+  references and C# sources remain excluded from delivery. All remain repository-owned MIT inputs,
   with no new third-party runtime or notice. App admission remains unconnected.
   Its separate `stageFreshDesktopInstallation` explicit contributor entry owns
   the Windows x64 current-account source-to-protected-root transaction, two fixed
@@ -35,10 +37,20 @@
   after the complete tree verifier. Child count follows the real count-and-byte
   query packer at every boundary, plus ten fixed mutating/copy children; no
   payload file or ancestor starts its own child. The fixed
-  mutation/query C# helpers are build-only MIT repository inputs, excluded
-  from generated App delivery and its runtime notices. Default CLI/research flat
-  staging remains the unpublished intermediate path. App/worker integration,
-  nested portable data, real native acceptance and installers remain pending.
+  mutation/query C# sources remain build-only MIT repository inputs; only the
+  intrinsically bound read-only query executable enters supported delivery. Default CLI/research flat
+  staging remains an intermediate development path. The fresh transaction closes
+  temporary support once before its fixed ordinary-Node worker, waits for exact
+  state plus actual child/all-stdio settlement, then releases parent descriptors.
+  Default App admission, nested portable data, native acceptance and installers
+  remain pending.
+- `deployment-worker.ts` owns only fresh post-publication ordinary-reader/shared-use
+  verification, complete own-build payload/native checks, repeated state/identity
+  and successful release before canonical output. Its fixed module/Node placement
+  comes from executing code, never caller/state/env selectors. No Electron,
+  Gateway, MCP, target, compiler, creator or copy behavior enters its emitted graph.
+  `generateAppFiles`/`check:app` stay compilation-free and emit an explicitly
+  unbound worker that refuses before I/O; real staging supplies only actual Q.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed

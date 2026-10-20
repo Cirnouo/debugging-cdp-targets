@@ -13,15 +13,9 @@ import {
     encodeWindowsDeploymentMutation,
     packWindowsDeploymentQueries,
 } from './windows-deployment-protocol.ts';
+import { inspectWindowsDeploymentExecutable } from './windows-deployment-query.ts';
 import { runWindowsDeploymentStream } from './windows-deployment-stream.ts';
 
-const helperDirectory = fileURLToPath(new URL('.', import.meta.url));
-// This explicit build-only toolchain profile has no PATH/env/compiler fallback.
-const compilerDirectory = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319';
-const compiler = path.join(compilerDirectory, 'csc.exe');
-const referenceNames = ['mscorlib.dll', 'System.dll', 'System.Core.dll'] as const;
-const sourceNames = ['windows-deployment-authority.cs', 'windows-deployment-create.cs'] as const;
-const outputNames = ['windows-deployment-query.exe', 'windows-deployment-create.exe'] as const;
 type Record = Readonly<{ name: string; stats: BigIntStats; bytes: Buffer; sha256: string; singleLink: boolean }>;
 const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 const same = (a: BigIntStats, b: BigIntStats) => a.dev === b.dev && a.ino === b.ino;
@@ -121,6 +115,14 @@ async function fixedInputs(names: readonly string[], maximum: number, singleLink
 
 /** Actual build producer; no inputs permit a caller to select helper source, compiler, receipt or executable. */
 export async function buildWindowsDeploymentSupport() {
+    const helperDirectory = fileURLToPath(new URL('.', import.meta.url));
+    // This explicit build-only toolchain profile has no PATH/env/compiler fallback.
+    const compilerDirectory = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319';
+    const compiler = path.join(compilerDirectory, 'csc.exe');
+    const referenceNames = ['mscorlib.dll', 'System.dll', 'System.Core.dll'] as const;
+    const sourceNames = ['windows-deployment-authority.cs', 'windows-deployment-create.cs'] as const;
+    const outputNames = ['windows-deployment-query.exe', 'windows-deployment-create.exe'] as const;
+
     if (process.platform !== 'win32' || process.arch !== 'x64')
         throw new Error('Deployment support build requires the Windows x64 fixed compiler profile.');
     const reservationName = path.join(helperDirectory, '.windows-deployment-build.lock');
@@ -375,6 +377,23 @@ export async function buildWindowsDeploymentSupport() {
         }
         return Object.freeze({
             receipt,
+            async captureQuery() {
+                if (closed || active) throw new Error('Deployment build lifetime is closed or busy.');
+                const artifact = artifacts[0];
+                if (!artifact) throw new Error('Missing produced deployment query.');
+                active = true;
+                try {
+                    await current(artifact);
+                    return Object.freeze({
+                        bytes: Buffer.from(artifact.bytes),
+                        sha256: artifact.sha256,
+                        identity: artifact.stats,
+                        ...inspectWindowsDeploymentExecutable(artifact.bytes),
+                    });
+                } finally {
+                    active = false;
+                }
+            },
             async query(names: readonly string[]) {
                 const result: unknown[] = [];
                 for (const batch of packWindowsDeploymentQueries(names)) {
@@ -487,68 +506,4 @@ export async function buildWindowsDeploymentSupport() {
         }
         throw error;
     }
-}
-
-/** Structure only; compilation and runtime/native acceptance are distinct gates. */
-export function inspectWindowsDeploymentExecutable(bytes: Buffer) {
-    const fail = () => {
-        throw new Error('Invalid Windows x64 CLR4 deployment executable.');
-    };
-    const bound = (offset: number, length: number) => {
-        if (!Number.isSafeInteger(offset) || offset < 0 || offset + length > bytes.length) fail();
-    };
-    const word = (offset: number) => {
-        bound(offset, 2);
-        return bytes.readUInt16LE(offset);
-    };
-    const uint = (offset: number) => {
-        bound(offset, 4);
-        return bytes.readUInt32LE(offset);
-    };
-    if (bytes.length > 16 * 1024 * 1024 || word(0) !== 0x5a4d) fail();
-    const pe = uint(0x3c);
-    if (uint(pe) !== 0x4550 || word(pe + 4) !== 0x8664) fail();
-    const count = word(pe + 6),
-        optionalSize = word(pe + 20),
-        characteristics = word(pe + 22);
-    if (count < 1 || count > 96 || optionalSize < 240 || (characteristics & 2) === 0 || characteristics & 0x2000)
-        fail();
-    const optional = pe + 24;
-    bound(optional, optionalSize);
-    if (word(optional) !== 0x20b || word(optional + 68) !== 3 || uint(optional + 108) < 15) fail();
-    const sections = optional + optionalSize;
-    bound(sections, 40 * count);
-    function fileOffset(rva: number, size: number) {
-        const matches: number[] = [];
-        for (let index = 0; index < count; index++) {
-            const section = sections + 40 * index;
-            const virtual = uint(section + 12),
-                rawSize = uint(section + 16),
-                raw = uint(section + 20);
-            if (rva >= virtual && rva + size <= virtual + rawSize) {
-                bound(raw + rva - virtual, size);
-                matches.push(raw + rva - virtual);
-            }
-        }
-        if (matches.length !== 1 || matches[0] === undefined) return fail();
-        return matches[0];
-    }
-    const cliSize = uint(optional + 228);
-    if (cliSize < 72) fail();
-    const cli = fileOffset(uint(optional + 224), cliSize);
-    const token = uint(cli + 20);
-    if (uint(cli) < 72 || uint(cli + 16) !== 1 || token >>> 24 !== 6 || (token & 0xffffff) === 0) fail();
-    const metadataSize = uint(cli + 12);
-    if (metadataSize < 28) fail();
-    const metadata = fileOffset(uint(cli + 8), metadataSize);
-    const versionSize = uint(metadata + 12);
-    if (uint(metadata) !== 0x424a5342 || versionSize < 11 || versionSize > 64 || 16 + versionSize > metadataSize)
-        fail();
-    const version = bytes.subarray(metadata + 16, metadata + 16 + versionSize);
-    if (
-        !version.subarray(0, 11).equals(Buffer.from('v4.0.30319\0')) ||
-        version.subarray(11).some((value) => value !== 0)
-    )
-        fail();
-    return Object.freeze({ machine: 'x64', runtime: 'v4.0.30319' });
 }

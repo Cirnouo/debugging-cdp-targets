@@ -8,7 +8,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
-import type { TestContext } from 'node:test';
+import { mock, type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { decodeWindowsDeploymentCopyHeader } from '../../src/adapters/windows-deployment-protocol.ts';
 
@@ -42,7 +42,7 @@ export function ownedDeploymentPe() {
     return bytes;
 }
 
-export async function ownedWindowsDeploymentCompiler(t: TestContext) {
+export async function ownedWindowsDeploymentCompiler(t?: TestContext) {
     const temporaryRoot = await fs.realpath(os.tmpdir());
     const root = await fs.realpath(await fs.mkdtemp(path.join(temporaryRoot, 'dct-owned-compiler-')));
     const helper = fileURLToPath(new URL('../../src/adapters/', import.meta.url));
@@ -78,7 +78,8 @@ export async function ownedWindowsDeploymentCompiler(t: TestContext) {
     });
     fs.unlink = (file: PathLike) => original.unlink(map(file));
     let compiles = 0;
-    t.mock.method(
+    const previousExecutor = childProcess.execFile;
+    const executor = (t?.mock ?? mock).method(
         childProcess,
         'execFile',
         (
@@ -87,6 +88,8 @@ export async function ownedWindowsDeploymentCompiler(t: TestContext) {
             _options: unknown,
             callback: (error: Error | null, stdout: string, stderr: string) => void,
         ) => {
+            if (executable !== path.join(compilerRoot, 'csc.exe'))
+                return Reflect.apply(previousExecutor, childProcess, [executable, args, _options, callback]);
             assert.equal(executable, path.join(compilerRoot, 'csc.exe'));
             const output = args.find((value) => value.startsWith('/out:'))?.slice(5);
             assert.ok(output);
@@ -95,7 +98,7 @@ export async function ownedWindowsDeploymentCompiler(t: TestContext) {
             compiles++;
             assert.deepEqual(
                 sources.map((file) => path.basename(file)),
-                compiles === 1
+                compiles % 2 === 1
                     ? ['windows-deployment-authority.cs']
                     : ['windows-deployment-authority.cs', 'windows-deployment-create.cs'],
             );
@@ -110,14 +113,15 @@ export async function ownedWindowsDeploymentCompiler(t: TestContext) {
     async function cleanup() {
         if (closed) return;
         closed = true;
-        t.mock.restoreAll();
+        if (t) t.mock.restoreAll();
+        else executor.mock.restore();
         Object.assign(fs, original);
         syncBuiltinESMExports();
         assert.equal(path.dirname(root), temporaryRoot);
         assert.ok(path.basename(root).startsWith('dct-owned-compiler-'));
         await fs.rm(root, { recursive: true });
     }
-    t.after(cleanup);
+    t?.after(cleanup);
     return { root, outputs, compiles: () => compiles, cleanup };
 }
 

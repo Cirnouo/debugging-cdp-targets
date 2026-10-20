@@ -519,3 +519,28 @@ test('macOS trusted sealed-System ancestry admits writable Data controls and ref
         syncBuiltinESMExports();
     }
 });
+
+test('ordinary Windows writer refusal precedes filesystem and native I/O without borrowing fresh authority', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    assert.ok(platform);
+    const guards = [
+        mock.method(fs, 'lstat', () => {
+            throw new Error('Writer performed filesystem I/O.');
+        }),
+        mock.method(childProcess, 'spawn', () => {
+            throw new Error('Writer performed native I/O.');
+        }),
+    ];
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
+    syncBuiltinESMExports();
+    try {
+        await assert.rejects(
+            openDeploymentNativeAuthority('C:\\unselected', true),
+            /Ordinary Windows deployment writing remains unavailable/,
+        );
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+        for (const guard of guards) guard.mock.restore();
+        syncBuiltinESMExports();
+    }
+});

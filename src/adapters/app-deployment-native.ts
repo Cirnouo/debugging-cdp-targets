@@ -18,6 +18,7 @@ import {
     packWindowsDeploymentQueries,
     preflightWindowsDeploymentCopy,
 } from './windows-deployment-protocol.ts';
+import { openWindowsDeploymentQuery } from './windows-deployment-query.ts';
 import { buildWindowsDeploymentSupport } from './windows-deployment-support.ts';
 
 type WindowsSupport = Awaited<ReturnType<typeof buildWindowsDeploymentSupport>>;
@@ -33,7 +34,7 @@ function account(): string {
     return String(real);
 }
 
-async function snapshot(file: string, support?: WindowsSupport): Promise<unknown> {
+async function snapshot(file: string, support?: Pick<WindowsSupport, 'query'>): Promise<unknown> {
     let executable: string;
     let args: string[];
     let env: NodeJS.ProcessEnv;
@@ -70,7 +71,7 @@ async function snapshot(file: string, support?: WindowsSupport): Promise<unknown
 }
 
 /** Concrete OS evidence for this enrolled root only. No JSON, role flag or environment grants writes. */
-async function openAuthority(directory: string, writing: boolean, support?: WindowsSupport) {
+async function openAuthority(directory: string, writing: boolean, support?: Pick<WindowsSupport, 'query'>) {
     if (!['linux', 'win32', 'darwin'].includes(process.platform))
         throw new Error('Deployment native role is unsupported.');
     if (process.platform === 'win32' && !support)
@@ -289,6 +290,10 @@ async function openAuthority(directory: string, writing: boolean, support?: Wind
 
 /** Concrete enrolled-root admission. No caller source, helper, receipt or evidence input exists. */
 export async function openDeploymentNativeAuthority(directory: string, writing: boolean) {
+    if (process.platform === 'win32') {
+        if (writing) throw new Error('Ordinary Windows deployment writing remains unavailable.');
+        return openAuthority(directory, false, await openWindowsDeploymentQuery());
+    }
     return openAuthority(directory, writing);
 }
 

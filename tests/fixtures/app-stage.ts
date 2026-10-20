@@ -8,10 +8,11 @@ import { fileURLToPath } from 'node:url';
 import { isRecord } from '../../src/shared/errors.ts';
 import * as app from '../../tooling/build-app.ts';
 import { guardAppArchiveExtraction as archiveGuard, storedAppZip as zip } from './app-archive.ts';
+import { ownedWindowsDeploymentCompiler } from './deployment-support.ts';
 
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-export async function stageFixture() {
+export async function stageFixture(options: { compiler?: false } = {}) {
     const root = fileURLToPath(new URL('../..', import.meta.url));
     const temporaryRoot = os.tmpdir();
     const canonicalTemporaryRoot = await realpath(temporaryRoot);
@@ -133,6 +134,41 @@ export async function stageFixture() {
             ]),
         );
     const restoreGuard = archiveGuard(allowed);
+    let compiler: Awaited<ReturnType<typeof ownedWindowsDeploymentCompiler>> | undefined;
+    async function cleanup() {
+        let compilerError: unknown;
+        try {
+            await compiler?.cleanup();
+        } catch (error) {
+            compilerError = error;
+        }
+        restoreGuard();
+        fs.open = originalOpen;
+        fs.lstat = originalStat;
+        fs.readFile = originalRead;
+        fs.mkdtemp = originalTemporary;
+        syncBuiltinESMExports();
+        assert.equal(path.dirname(directory), await realpath(os.tmpdir()));
+        assert.ok(path.basename(directory).startsWith('dct-payload-stage-'));
+        try {
+            await rm(directory, { recursive: true });
+        } catch (error) {
+            throw compilerError
+                ? new AggregateError([compilerError, error], 'Stage compiler and owned cleanup failed.')
+                : error;
+        }
+        if (compilerError) throw compilerError;
+    }
+    try {
+        if (options.compiler !== false) compiler = await ownedWindowsDeploymentCompiler();
+    } catch (setupError) {
+        try {
+            await cleanup();
+        } catch (cleanupError) {
+            throw new AggregateError([setupError, cleanupError], 'Stage fixture setup and cleanup failed.');
+        }
+        throw setupError;
+    }
     return {
         options: {
             root,
@@ -151,16 +187,6 @@ export async function stageFixture() {
             laterMetadata = path.join(directory, 'later-release.json');
             await writeFile(laterMetadata, JSON.stringify(value));
         },
-        async cleanup() {
-            restoreGuard();
-            fs.open = originalOpen;
-            fs.lstat = originalStat;
-            fs.readFile = originalRead;
-            fs.mkdtemp = originalTemporary;
-            syncBuiltinESMExports();
-            assert.equal(path.dirname(directory), await realpath(os.tmpdir()));
-            assert.ok(path.basename(directory).startsWith('dct-payload-stage-'));
-            await rm(directory, { recursive: true });
-        },
+        cleanup,
     };
 }

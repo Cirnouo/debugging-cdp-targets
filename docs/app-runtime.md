@@ -214,7 +214,17 @@ The explicit contributor-only `stageFreshDesktopInstallation` source composition
 supports Windows x64 fresh enrollment and state-last initial publication. It
 consumes the actual verified stage producer and owns a finite private build-only
 query/create support lifetime. This does not enable default App admission,
-restart-worker or installer integration, and establishes no native acceptance.
+restart/update/installer integration, and establishes no native acceptance.
+The supported Windows stage produces and privately captures its actual query Q
+before App/worker buffers and observer callbacks. Its intrinsic
+`__DCT_DEPLOYMENT_QUERY__` expectation fixes platform/architecture, sibling name,
+complete bytes/digest and PE/CLR structure. Q precedes buffers, manifest and build
+identity; no state, caller digest/backend, old executable or runtime compiler
+supplies trust. Creator/compiler/reference provenance remains separate from
+runtime files. `generateAppFiles` and `check:app` are compile-free and explicitly
+unbound; that worker refuses before file/native/process I/O. Unsupported native
+cells refuse without architecture substitution.
+
 The Windows stage producer composes its complete expected payload
 from authenticated original ZIP entries, the selected original Node runtime,
 actual generated App buffers/licenses/native packages and the complete unchanged
@@ -234,6 +244,23 @@ production with native protected creation before publishing an initial build;
 actual platform permission, compiler/runtime and installer acceptance remain pending.
 The maintained Node runtime-file inventory currently enables Windows x64 only;
 other cells refuse staging until their actual source evidence is supplied.
+After protected state-last publication and temporary reader/fixed/payload checks,
+the fresh transaction retains operation/shared-use descriptors and successfully
+closes temporary support once. It never calls that old reader/query again. The
+parent verifies retained producer bytes/identities for fixed Node, query and
+worker, then owns one hidden shell-free ordinary Node child and all stdio before
+awaiting. The worker captures its own module/Node paths before awaits, requires
+canonical installationRoot/builds/<64-hex>/resources/app placement, verifies the
+original Node/native loader, ordinary read/shared-use, own-build selection, whole
+payload and repeated native/state/identity checks, and releases its own use before
+canonical output. Parent success requires the exact retained state and actual
+successful child/all-stdio settlement; response, EOF and deadlines are not exit.
+No early lease release, kill, replay, rollback or new global ledger is added.
+Close/spawn/read/output/release failures after publication remain indeterminate.
+Normal Windows writers remain unavailable even in bound builds. Executing code
+and original native loading remain trust boundaries; hashes do not establish OS
+image-selection atomicity, permissions or native execution acceptance.
+
 Ordinary startup neither creates nor repairs a missing or partial envelope.
 The installation schema, canonical identity formula and two persistent lease
 inodes are unchanged. App admission stays disabled until the complete producer,

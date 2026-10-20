@@ -59,6 +59,7 @@ export async function generateNativeFixtureFiles(root: string) {
             define: {
                 __DCT_FIXTURE_STAGE__: 'true',
                 __DCT_SEALED_STUDY__: 'true',
+                __DCT_DEPLOYMENT_QUERY__: JSON.stringify({ kind: 'unbound' }),
                 __DCT_OFFICIAL_RELEASE__: JSON.stringify(release),
                 __DCT_TOOL_CATALOG__: JSON.stringify(catalog),
                 __DCT_APP_VERSION__: JSON.stringify(await readAppVersion(root)),
@@ -147,7 +148,14 @@ export async function buildNativeFixtureStage(options: {
     for (const file of sourcePaths) {
         // esbuild reports object defines as virtual modules. Their exact reviewed JSON inputs
         // are already recorded above, alongside the resulting bundle and delivered evidence.
-        if (['<define:__DCT_OFFICIAL_RELEASE__>', '<define:__DCT_TOOL_CATALOG__>'].includes(file)) continue;
+        if (
+            [
+                '<define:__DCT_OFFICIAL_RELEASE__>',
+                '<define:__DCT_TOOL_CATALOG__>',
+                '<define:__DCT_DEPLOYMENT_QUERY__>',
+            ].includes(file)
+        )
+            continue;
         const absolute = path.resolve(options.root, file);
         const relative = path.relative(options.root, absolute).replaceAll('\\', '/');
         requireValue(relative && !relative.startsWith('../') && !path.isAbsolute(relative));

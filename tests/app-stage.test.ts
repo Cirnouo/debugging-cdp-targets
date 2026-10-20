@@ -265,3 +265,45 @@ test('non-Windows production stages fail closed before any external execution or
         restore();
     }
 });
+
+test('real stage privately binds its produced query into worker code before observers and complete manifest selection', {
+    skip: process.platform !== 'win32',
+}, async () => {
+    const fixture = await stageFixture();
+    let observed = false;
+    Reflect.set(fixture.options, '__DCT_DEPLOYMENT_QUERY__', { kind: 'bound', sha256: '0'.repeat(64) });
+    Reflect.set(fixture.options, 'onInputs', async (names: readonly string[]) => {
+        observed = true;
+        assert.ok(names.includes('src/adapters/windows-deployment-authority.cs'));
+        assert.ok(names.includes('src/adapters/windows-deployment-create.cs'));
+    });
+    try {
+        const stage = await app.stageDesktopApp(fixture.options);
+        assert.equal(observed, true);
+        const query = await readFile(path.join(stage.root, 'resources/app/windows-deployment-query.exe'));
+        const worker = await readFile(path.join(stage.root, 'resources/app/deployment-worker.mjs'), 'utf8');
+        const expected = stage.manifest.entries.find(
+            (entry) => entry.path === 'resources/app/windows-deployment-query.exe',
+        );
+        assert.ok(expected?.type === 'file');
+        assert.equal(expected.sha256, hash(query));
+        assert.ok(worker.includes(hash(query)));
+        assert.doesNotMatch(
+            worker,
+            /DctDeploymentCreateProgram|Framework64|dct-deployment-support-|createFreshDeploymentRoot|copyPayload|createGatewayCore|from ["']electron["']/,
+        );
+        assert.equal(stage.provenance.deploymentQuery.outputs.length, 2);
+        assert.equal(stage.provenance.deploymentQuery.outputs[0]?.sha256, hash(query));
+        for (const name of [
+            'resources/app/windows-deployment-create.exe',
+            'resources/app/windows-deployment-authority.cs',
+            'resources/app/windows-deployment-create.cs',
+        ])
+            assert.equal(
+                stage.manifest.entries.some((entry) => entry.path === name),
+                false,
+            );
+    } finally {
+        await fixture.cleanup();
+    }
+});

@@ -332,6 +332,7 @@ src/deployment/native/windows/README.md
 src/deployment/native/windows/authority.cs
 src/deployment/native/windows/create.cs
 src/deployment/native/windows/protocol.ts
+src/deployment/native/windows/query.ts
 src/deployment/native/windows/stream.ts
 src/deployment/native/windows/support.ts
 src/deployment/official-runtime.ts
@@ -765,6 +766,7 @@ tests/tooling/app-delivery/README.md
 tests/tooling/app-delivery/app-bundles.test.ts
 tests/tooling/app-delivery/app-stage.test.ts
 tests/tooling/app-delivery/archive-extraction.test.ts
+tests/tooling/app-delivery/deployment-worker.test.ts
 tests/tooling/app-delivery/fresh-installation.test.ts
 tests/tooling/app-delivery/payload-composition.test.ts
 tests/tooling/distribution/README.md
@@ -834,6 +836,7 @@ tooling/app-delivery/app-bundles.ts
 tooling/app-delivery/app-stage.ts
 tooling/app-delivery/archive-extraction.ts
 tooling/app-delivery/build-app.ts
+tooling/app-delivery/deployment-worker.ts
 tooling/app-delivery/extract-app-zip.ps1
 tooling/app-delivery/fresh-installation.ts
 tooling/app-delivery/original-archives.json
