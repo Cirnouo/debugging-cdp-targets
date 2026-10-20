@@ -1,4 +1,4 @@
-import { isRecord } from '../shared/errors.ts';
+import { isRecord } from '../../shared/errors.ts';
 
 /** One actual request identity. A client wait or SDK timeout cannot settle it. */
 export function createOfficialExecution() {

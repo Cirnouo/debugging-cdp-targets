@@ -108,11 +108,21 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/connections/directory-operation-evidence.test.ts` and
 `tests/gateway/targets/directory-admission.test.ts`,
 `tests/gateway/connections/construction-cleanup.test.ts` and
-`tests/gateway/connections/gateway-cleanup.test.ts`. These thirty-nine selectors
-include thirteen Gateway suites and run files sequentially
+`tests/gateway/connections/gateway-cleanup.test.ts`, plus exactly
+`tests/gateway/official/options.test.ts`,
+`tests/gateway/official/execution.test.ts`,
+`tests/gateway/official/server-arguments.test.ts` and
+`tests/gateway/official/server-arguments-environment.test.ts`. These forty-three selectors
+include seventeen Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.
+
+Changes to default or coverage selection must update both independent contracts:
+[tests/toolchain-config.test.ts](../../tests/toolchain-config.test.ts) keeps the two
+literal command expectations; [tests/test-lanes.test.ts](../../tests/test-lanes.test.ts)
+keeps the safe inventory, GUI and coverage contracts. Update both with package
+scripts and the current test map, preserving sequential files and coverage floors.
 
 GUI-opening tests must skip successfully in default local hooks, scripts and
 direct Node invocations. Authorization comes only from the exact command-line

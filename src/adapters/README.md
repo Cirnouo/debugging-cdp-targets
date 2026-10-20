@@ -68,7 +68,10 @@
 - `tool-catalog.ts` exposes the fixed official catalog, parameter variants,
   complete reviewed Tool validation, actual connection enablement and configuration
   recipes/workspace sources.
-- `official-server.ts` validates the delivered release before resolving its public Server bin and validates options.
+- `official-server.ts` captures invocation-time environment/platform argument defaults,
+    snapshots the child environment and verifies the explicit public Server bin.
+    Deterministic argument composition is supplied to `gateway/official/options.ts`;
+    its current default boundary remains here until the complete launch-owner cut.
 - `official-package.ts` verifies the complete official release tree and returns its original bytes.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
   path/metadata changes and closes the descriptor on success or failure.

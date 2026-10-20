@@ -2,7 +2,7 @@
 
 Apply root and [source instructions](../AGENTS.md) cumulatively. This delivered
 Gateway slice owns Core transactions, registry cleanup, deterministic argument
-parsing, supplied target identity and
+parsing, pure Official options/execution/release evidence, supplied target identity and
 resource models, structured launch/isolation rules, native argument composition,
 the existing bounded one-shot diagnostic clock and the exact connection resource/
 directory lifetime owners below. Pure argument
@@ -14,6 +14,10 @@ pure Diagnostic/Diagnose contract from domains/control-contract.ts. No other
 clock, environment, filesystem, process, network, native or external-package
 access is permitted to pure owners. The exact Core, registry and directory-lease
 capabilities below are bounded exceptions, not Gateway-wide permissions. The same dependency restrictions apply to erased syntax.
+
+Before editing official/ values, read its [pure Official instructions](official/AGENTS.md).
+Ambient Official defaults, child snapshot/bin resolution, actual catalog publication
+and child disposal remain with their existing adapters; this slice grants no I/O.
 
 BEFORE editing core.ts or registry.ts, read all of the canonical
 [application lifecycle instructions](../application/AGENTS.md), cumulatively with

@@ -51,7 +51,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/gateway/targets/model/isolation.ts',
         'src/gateway/targets/model/launch-command.ts',
         'src/shared/environment-key.ts',
-        'src/shared/official-package.ts',
+        'src/gateway/official/release-evidence.ts',
         'src/shared/payload-path.ts',
         'src/domains/control-contract.ts',
         'src/domains/mcp-http.ts',

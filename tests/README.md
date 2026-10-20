@@ -24,6 +24,14 @@ Git hook tests remain contributor-tooling regressions.
   expected selections through real owned temporary files and controlled I/O.
   Darwin framework graph, executable-bit and race/error cases establish source
   behavior only, without native signing, reparse, permission or installer proof.
+- `app-stage.test.ts` checks literal canonical source composition and the actual
+  stage producer with controlled release-record I/O, real generated App/license
+  and unchanged original package owners, plus small inert owned ZIP files. Its
+  pre-spawn guard permits only exact file-only extractor invocations and blocks
+  every other external command. Foreign source identities, paths/types/aliases,
+  missing/extra/drift/selection cases and a self-consistent replaced output cannot
+  alter the expected source selection. These tests execute no App, target, native
+  permission helper or ACL query and establish no real archive/native acceptance.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   verified public native addon to test shared read-only use, independent operation
   writers, exclusive deletion barriers and persistent lock inode identity.
@@ -86,7 +94,10 @@ Git hook tests remain contributor-tooling regressions.
 - `app-distribution.test.ts` and `build-app.test.ts` cover immutable delivery
   metadata, sandboxed bundles, license closure and complete official-file copying.
 - `app-archive-extraction.test.ts` checks actual Windows ZIP extraction refusal
-  for traversal, aliases, duplicate destinations and nonregular entries before writing.
+  for foreign archive identities, traversal, aliases, duplicate destinations and
+  nonregular entries before writing. Small inert sources also check original
+  byte hashes, empty files/directories and source closure. Both archive and stage
+  suites share the exact file-only pre-spawn guard in `fixtures/app-archive.ts`.
 - `tooling/distribution/thin-plugin-metadata.test.ts` checks host-native direct HTTP manifests and
   excludes credentials, executable helpers and duplicated App runtime payloads.
 - `app-control-cutover.test.ts` checks the public lifecycle identities and actual
@@ -134,7 +145,7 @@ Git hook tests remain contributor-tooling regressions.
 
 - `gateway-core.test.ts` covers independent clients, registration authorization, immutable
     roots/launch snapshots, scoped restart and retained cleanup failure/retry.
-- `client-context.test.ts`, `registrations.test.ts` and `official-execution.test.ts`
+- `client-context.test.ts`, `registrations.test.ts` and `gateway/official/execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
 - `host-management.test.ts` checks absent/corrupt/incompatible latest records,
     immutable sources, SemVer decisions and effective App URL boundaries.
@@ -422,10 +433,11 @@ Git hook tests remain contributor-tooling regressions.
   event-loop retention during EOF cleanup, independent waiter cancellation and
   reference release without target deadlines or process polling.
 - `gateway/targets/structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
-- `official-server-environment.test.ts` checks Windows/POSIX environment lookup,
-    case-variant ordering, boolean defaults/validation and explicit mcpArgs precedence.
-- `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
-  verify safe options, activation recipes, variants and independent configuration.
+- `gateway/official/` owns safe options/recipes, exact wire-terminal values and
+    argument/environment contracts, preserving all original cases and matrices;
+    see its [suite inventory](gateway/official/README.md).
+- `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
+    variants and independent configuration.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous owner/identity/deduplication/cursor/cancel behavior,
   terminal result/error snapshots and actual SDK HTTP lifecycle validation.
@@ -470,17 +482,14 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select thirty entries: `tests/*.test.ts`, the fourteen explicit
-tooling suites listed in [tooling tests](tooling/README.md), exactly
-`tests/gateway/owned-tool-arguments.test.ts` and
-`tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
-value suites in [Target tests](gateway/targets/README.md), the four
-[Connections suites](gateway/connections/README.md) and target
-`directory-admission.test.ts`, plus the two explicit
-Host suites in [Host plugin tests](host-plugins/README.md). The thirteen Gateway suites
-retain all twenty-eight existing selectors in their original order, with
-`connections/construction-cleanup.test.ts` and `connections/gateway-cleanup.test.ts`
-appended once in that order; default commands do not launch
+command and `pnpm test:coverage` select forty-three entries: `tests/*.test.ts`, the
+twenty-three explicit [tooling suites](tooling/README.md), two explicit
+[Host suites](host-plugins/README.md) and seventeen Gateway suites. Gateway selection
+retains argument parsing, seven [Target suites](gateway/targets/README.md), five
+[connection/directory suites](gateway/connections/README.md) and the four explicit
+[Official suites](gateway/official/README.md). The original thirty selectors retain
+their order; options, execution, server-arguments and server-arguments-environment
+append once in that order. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
@@ -490,6 +499,13 @@ execution with individual authorization skips. GUI authorization comes only from
 verification of changed GUI tests may opt in explicitly; default hooks and scripts
 remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
 integration requires the same flag and must not touch existing user targets.
+
+Default and coverage selection have two independent contract owners:
+[tests/toolchain-config.test.ts](toolchain-config.test.ts) keeps both literal
+command expectations; [tests/test-lanes.test.ts](test-lanes.test.ts) keeps the
+safe inventory, GUI and coverage contracts. Update both with package scripts
+and this map when selectors change. The ten distribution suites expand the
+existing thin-payload selector in place; the four Official suites remain appended.
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen

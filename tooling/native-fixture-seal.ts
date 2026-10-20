@@ -124,7 +124,7 @@ export async function buildNativeFixtureStage(options: {
             .length > 0;
     requireValue(!dirty || options.allowDirty === true);
     const sourcePaths = new Set<string>(['tooling/native-fixture-seal.ts']);
-    const output = await stageDesktopApp({
+    const stage = await stageDesktopApp({
         ...options,
         platform: 'win32',
         kind: 'portable',
@@ -132,6 +132,9 @@ export async function buildNativeFixtureStage(options: {
             for (const input of inputs) sourcePaths.add(input);
         },
     });
+    // The production manifest is part of appFiles. The thirteen research leaves
+    // remain a separate receipt inventory and intentionally exceed that manifest.
+    const output = stage.root;
     const appFiles = fileEntries(await readDistributionTree(output));
     const fixture = await generateNativeFixtureFiles(options.root);
     for (const input of fixture.inputs) sourcePaths.add(input);

@@ -10,8 +10,12 @@
   `packaging/` and root `LICENSE`, retaining complete assembly and read-only checks.
 - `build-app.ts` builds the synchronous bootstrap, main, sandboxed preload and
   renderer, collects actual graph licenses and stages verified original native
-  archives without overwriting an existing stage. `extract-app-zip.ps1` rejects
-  unsafe archive paths, duplicate destinations and link entries before extraction.
+  archives without overwriting an existing stage. It composes the complete expected
+  Windows payload from actual verified source producers, emits its canonical
+  manifest, verifies the actual complete tree and returns root/selection with
+  descriptive source provenance. `extract-app-zip.ps1` authenticates and inventories
+  the same opened read-locked ZIP stream; unsafe paths, aliases and non-regular
+  entries refuse before extraction. Other platform source producers remain pending.
   The exact helper/source-input inventory also includes the fixed read-only
   Windows deployment authority C#/PowerShell and macOS JXA source. They are
   repository-owned MIT inputs, with no new third-party runtime or notice.
@@ -20,6 +24,8 @@
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed
   inventories without importing builder dependencies into study execution.
+  The production manifest joins App files; thirteen separate research leaves and
+  the receipt algorithm remain unchanged and exceed the production manifest.
   Dirty development receipts cannot establish final native acceptance.
 - `official-release.ts` owns the canonical official release evidence independently
   of thin Plugin delivery.

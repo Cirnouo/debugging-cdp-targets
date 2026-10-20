@@ -39,7 +39,14 @@ and the standalone chooser remain an explicitly unfinished
 current target host. Only `gateway/diagnostics.ts` reads its existing clock
 and depends on the pure current `domains/control-contract.ts` value/callback types.
 The complete lifecycle-contract move remains pending with its App UI/CDP domain
-consumers. Existing layer, pure-model and I/O rules remain in force for all current owners.
+consumers. `gateway/official/` owns supplied options/recipes/argument composition,
+wire-terminal values and strict release/manifest evidence. Existing adapters retain
+invocation-time ambient defaults, child environment/bin verification, complete
+package-file reads, actual catalog publication and upstream disposal. Core and
+bridge keep their original default/capture/await ordering; pure extraction grants
+no new ambient or mutable authority. The mixed package/TEMP suite and remaining
+Official/MCP transactions await their complete content cuts. Existing layer,
+pure-model and I/O rules remain in force for all current owners.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.
