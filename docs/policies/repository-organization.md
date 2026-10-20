@@ -39,7 +39,14 @@ and the standalone chooser remain an explicitly unfinished
 current target host. Only `gateway/diagnostics.ts` reads its existing clock
 and depends on the pure current `domains/control-contract.ts` value/callback types.
 The complete lifecycle-contract move remains pending with its App UI/CDP domain
-consumers. Existing layer, pure-model and I/O rules remain in force for all current owners.
+consumers. `gateway/official/` owns supplied options/recipes/argument composition,
+wire-terminal values and strict release/manifest evidence. Existing adapters retain
+invocation-time ambient defaults, child environment/bin verification, complete
+package-file reads, actual catalog publication and upstream disposal. Core and
+bridge keep their original default/capture/await ordering; pure extraction grants
+no new ambient or mutable authority. The mixed package/TEMP suite and remaining
+Official/MCP transactions await their complete content cuts. Existing layer,
+pure-model and I/O rules remain in force for all current owners.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.
@@ -59,7 +66,10 @@ Other tooling and test owners retain their current placement.
 [Bundled notices](../../tooling/licenses/README.md) owns the actual graph-to-notice
 collector shared by App and research fixture builds, separately from pure canonical
 license identities and fixed reviewed vendor data. Central license and thin-payload
-suites preserve their complete cases; thin payload assembly remains in root tooling.
+suites preserve their complete cases. [Thin delivery](../../tooling/distribution/README.md)
+owns supplied metadata/descriptors/inventories/artwork/agreement, strict tree I/O and
+the complete builder and independent audit transactions. Its ten central suites
+preserve exact inventories, source equality and separate version predicates.
 Standalone security notices keep their own original-byte formatter.
 
 The selected direction is source roots named for cohesive domain responsibilities,

@@ -5,11 +5,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { isRecord } from '../src/shared/errors.ts';
-import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from '../tooling/host-policy.ts';
-import { isSemVer, validateVersionAgreement } from '../tooling/version-policy.ts';
+import { isSemVer } from '../../../src/domains/software-version.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
+import { PLUGIN_HOSTS, SHARED_PACKAGING_ROOT } from '../../../tooling/distribution/host-descriptors.ts';
+import { validateVersionAgreement } from '../../../tooling/distribution/version-agreement.ts';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('../../..', import.meta.url));
 const pluginRoot = path.join(root, 'plugins', 'codex', 'debugging-cdp-targets');
 
 async function assertPortableRegistration(repositoryRoot: string) {

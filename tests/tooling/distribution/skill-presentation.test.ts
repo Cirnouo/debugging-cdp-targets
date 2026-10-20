@@ -4,15 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { assembleCodexPayload } from '../tooling/build-plugin.ts';
-import {
-    auditDistribution,
-    readDistributionTree,
-    validateCodexSkillPresentation,
-} from '../tooling/distribution-audit.ts';
-import { CODEX_HOST, PLUGIN_HOSTS } from '../tooling/host-policy.ts';
+import { auditDistribution } from '../../../tooling/distribution/audit-plugins.ts';
+import { assembleCodexPayload } from '../../../tooling/distribution/build-plugin.ts';
+import { CODEX_HOST, PLUGIN_HOSTS } from '../../../tooling/distribution/host-descriptors.ts';
+import { validateCodexSkillPresentation } from '../../../tooling/distribution/host-metadata.ts';
+import { readDistributionTree } from '../../../tooling/distribution/regular-file-tree.ts';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('../../..', import.meta.url));
 const presentation = 'skills/debugging-cdp-targets/agents/openai.yaml';
 const valid = `interface:
     display_name: "Debugging CDP Targets"

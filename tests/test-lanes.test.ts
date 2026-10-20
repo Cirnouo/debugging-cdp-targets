@@ -38,7 +38,16 @@ const interactiveCases = {
 };
 
 const toolingCases = [
+    'tests/tooling/distribution/host-distribution.test.ts',
+    'tests/tooling/distribution/host-metadata.test.ts',
+    'tests/tooling/distribution/icon-packaging.test.ts',
+    'tests/tooling/distribution/physical-payloads.test.ts',
+    'tests/tooling/distribution/plugin-distribution.test.ts',
+    'tests/tooling/distribution/skill-presentation.test.ts',
+    'tests/tooling/distribution/skill-questions.test.ts',
+    'tests/tooling/distribution/thin-plugin-metadata.test.ts',
     'tests/tooling/distribution/thin-plugin-payloads.test.ts',
+    'tests/tooling/distribution/version-agreement.test.ts',
     'tests/tooling/governance/commit-events.test.ts',
     'tests/tooling/governance/commit-grammar.test.ts',
     'tests/tooling/governance/commit-history.test.ts',
@@ -59,6 +68,10 @@ const gatewayCases = [
     'tests/gateway/connections/directory-lifetime.test.ts',
     'tests/gateway/connections/directory-operation-evidence.test.ts',
     'tests/gateway/connections/gateway-cleanup.test.ts',
+    'tests/gateway/official/execution.test.ts',
+    'tests/gateway/official/options.test.ts',
+    'tests/gateway/official/server-arguments-environment.test.ts',
+    'tests/gateway/official/server-arguments.test.ts',
     'tests/gateway/owned-tool-arguments.test.ts',
     'tests/gateway/targets/chrome-launch.test.ts',
     'tests/gateway/targets/chrome-profile-argument.test.ts',

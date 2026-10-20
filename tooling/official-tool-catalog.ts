@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { Tool } from '@modelcontextprotocol/client';
 import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
 import { resolveServerBin } from '../src/adapters/official-server.ts';
-import { CATALOG_FLAGS } from '../src/domains/official-options.ts';
+import { CATALOG_FLAGS } from '../src/gateway/official/options.ts';
 import { OFFICIAL_RELEASE } from './official-release.ts';
 
 type Entry = { name: string; requires: Record<string, boolean>; variants: Tool[] };

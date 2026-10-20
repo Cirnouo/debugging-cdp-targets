@@ -4,8 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { PLUGIN_HOSTS } from '../tooling/host-policy.ts';
-import { PLUGIN_ROOT } from '../tooling/payload-policy.ts';
+import { PLUGIN_HOSTS, PLUGIN_ROOT } from '../tooling/distribution/host-descriptors.ts';
 import { auditRepository, validateRuntimeSource } from '../tooling/repository-audit.ts';
 
 function connectionDependencyForms(specifier: string) {
@@ -1329,4 +1328,59 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
         'const timestamp = Date.now;',
     ])
         assert.ok(validateRuntimeSource('src/gateway/unreviewed.ts', source).length, source);
+});
+
+test('Official pure owners accept supplied shared rules and real adapter consumers', () => {
+    for (const owner of ['options', 'execution', 'release-evidence']) {
+        const file = `src/gateway/official/${owner}.ts`;
+        for (const dependency of [
+            '../../shared/constants.ts',
+            '../../shared/errors.ts',
+            '../../shared/payload-path.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+        for (const { source } of connectionDependencyForms(`../gateway/official/${owner}.ts`))
+            assert.deepEqual(validateRuntimeSource('src/adapters/example.ts', source), [], source);
+    }
+});
+
+test('Official pure owners reject I/O and mutable authorities through runtime and erased dependency forms', () => {
+    for (const owner of ['options', 'execution', 'release-evidence']) {
+        const file = `src/gateway/official/${owner}.ts`;
+        for (const dependency of [
+            'node:fs',
+            '@modelcontextprotocol/client',
+            '../../adapters/official-package.ts',
+            '../../application/client-context.ts',
+            '../core.ts',
+            '../registry.ts',
+            '../connections/resource-owner.ts',
+            '../connections/directory-lease.ts',
+            '../diagnostics.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+        for (const source of ['const value = import(moduleName);', 'const value = require?.(moduleName);'])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+});
+
+test('Official pure owners reject process environment clocks and ambient aliases without widening roles', () => {
+    for (const owner of ['options', 'execution', 'release-evidence']) {
+        const file = `src/gateway/official/${owner}.ts`;
+        for (const source of [
+            'const value = process.env;',
+            'const value = process.platform;',
+            'const value = globalThis.process;',
+            'const value = global.process;',
+            'const value = globalThis[key];',
+            'const value = Date.now;',
+            'const value = performance.now();',
+            'fetch("http://localhost");',
+            'new WebSocket("ws://localhost");',
+            'type Value = { [process.platform](): void };',
+        ])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
 });

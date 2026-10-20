@@ -187,7 +187,7 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('src/gateway/targets/model/isolation.ts'));
     assert.ok(built.inputs.includes('src/gateway/targets/model/launch-command.ts'));
     assert.ok(built.inputs.includes('src/shared/environment-key.ts'));
-    assert.ok(built.inputs.includes('src/shared/official-package.ts'));
+    assert.ok(built.inputs.includes('src/gateway/official/release-evidence.ts'));
     assert.ok(built.inputs.includes('src/shared/payload-path.ts'));
     assert.equal(built.inputs.includes('src/domains/chrome-profile.ts'), false);
     assert.equal(built.inputs.includes('src/domains/chromium-features.ts'), false);
@@ -210,6 +210,14 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
         'tooling/licenses/bundled-notices.ts',
         'tooling/licenses/canonical-inputs.ts',
         'tooling/licenses/reviewed-vendors.json',
+        'tooling/distribution/build-plugin.ts',
+        'tooling/distribution/audit-plugins.ts',
+        'tooling/distribution/host-metadata.ts',
+        'tooling/distribution/host-descriptors.ts',
+        'tooling/distribution/payload-inventory.ts',
+        'tooling/distribution/artwork-policy.ts',
+        'tooling/distribution/regular-file-tree.ts',
+        'tooling/distribution/version-agreement.ts',
     ])
         assert.equal(built.inputs.includes(input), false, input);
     assert.ok(built.externalImports.every(isBuiltin), JSON.stringify(built.externalImports));

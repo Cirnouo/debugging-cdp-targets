@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../../src/shared/official-package.ts';
+import {
+    type OfficialReleaseEvidence,
+    parseOfficialReleaseEvidence,
+} from '../../src/gateway/official/release-evidence.ts';
 import { type LockInventory, readLockInventory } from './audit-policy.ts';
 import { verifyLockManifest } from './security-evidence.ts';
 

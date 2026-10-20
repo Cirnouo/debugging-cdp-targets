@@ -1,21 +1,11 @@
 import path from 'node:path';
-import { parseMcpArgs } from '../domains/official-options.ts';
-import { findEnvironmentKey } from '../shared/environment-key.ts';
+import { buildOfficialServerArguments } from '../gateway/official/options.ts';
+import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../gateway/official/release-evidence.ts';
 import { errorMessage } from '../shared/errors.ts';
-import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../shared/official-package.ts';
 import { verifyOfficialPackage } from './official-package.ts';
 
 export function snapshotOfficialEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
     return { ...environment, CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: '1', CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY: '1' };
-}
-
-function booleanSetting(environment: NodeJS.ProcessEnv, name: string, fallback: boolean, windows: boolean) {
-    const key = findEnvironmentKey(environment, name, windows);
-    const value = key === undefined ? undefined : environment[key];
-    if (value === undefined) return fallback;
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    throw new Error(`${name} must be a boolean: true or false.`);
 }
 
 export function buildServerArguments(
@@ -24,25 +14,7 @@ export function buildServerArguments(
     mcpArgs: string[] = [],
     windowsEnvironment = process.platform === 'win32',
 ) {
-    const url = new URL(browserUrl);
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') {
-        throw new Error('The official Server must connect to a local loopback browser URL.');
-    }
-    const extensions = booleanSetting(environment, 'DCT_EXTENSIONS', true, windowsEnvironment);
-    const statistics = booleanSetting(environment, 'DCT_USAGE_STATISTICS', false, windowsEnvironment);
-    const crux = booleanSetting(environment, 'DCT_PERFORMANCE_CRUX', false, windowsEnvironment);
-    const provided = parseMcpArgs(mcpArgs);
-    if (provided.get('categoryPwa')?.values[0] === true)
-        throw new Error(
-            'Official PWA tools require a pipe-launched browser and cannot use a gateway-managed CDP endpoint.',
-        );
-    return [
-        `--browserUrl=${browserUrl}`,
-        ...(provided.has('categoryExtensions') ? [] : [`--categoryExtensions=${extensions}`]),
-        ...(provided.has('usageStatistics') ? [] : [statistics ? '--usage-statistics' : '--no-usage-statistics']),
-        ...(provided.has('performanceCrux') ? [] : [crux ? '--performance-crux' : '--no-performance-crux']),
-        ...mcpArgs,
-    ];
+    return buildOfficialServerArguments(browserUrl, environment, mcpArgs, windowsEnvironment);
 }
 
 /** Trusted explicit input only. Missing App/runtime location never discovers another installation. */

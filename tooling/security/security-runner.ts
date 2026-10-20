@@ -5,9 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parse, stringify } from 'yaml';
+import { parseOfficialReleaseEvidence } from '../../src/gateway/official/release-evidence.ts';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../../src/shared/constants.ts';
 import { errorCode, errorMessage, isRecord } from '../../src/shared/errors.ts';
-import { parseOfficialReleaseEvidence } from '../../src/shared/official-package.ts';
 import type { AuditCommandResult, Finding, LockInventory } from './audit-policy.ts';
 import { type OfficialInputs, verifyOfficialInputs, verifyOfficialLock } from './official-inputs.ts';
 
