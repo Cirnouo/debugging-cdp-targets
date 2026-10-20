@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createOperationRegistry } from '../src/application/operations.ts';
-import { createTargetController } from '../src/application/target-controller.ts';
-import { DetailedError, errorDetails } from '../src/shared/errors.ts';
+import { createOperationRegistry } from '../../../src/application/operations.ts';
+import { createTargetLifecycle } from '../../../src/gateway/targets/target-lifecycle.ts';
+import { DetailedError, errorDetails } from '../../../src/shared/errors.ts';
 
-test('failed normal close preserves native diagnostics and exact retry identity', async () => {
+test('failed normal Close preserves native diagnostics and retry identity through operation results', async () => {
     const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const controller = createTargetController({
+    const controller = createTargetLifecycle({
         entryId,
         router: { isBusy: () => false, setTarget: () => {}, clearTarget: () => {} },
         host: {

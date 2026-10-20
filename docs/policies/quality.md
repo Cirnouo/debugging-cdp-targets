@@ -112,8 +112,12 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/options.test.ts`,
 `tests/gateway/official/execution.test.ts`,
 `tests/gateway/official/server-arguments.test.ts` and
-`tests/gateway/official/server-arguments-environment.test.ts`. These forty-three selectors
-include seventeen Gateway suites and run files sequentially
+`tests/gateway/official/server-arguments-environment.test.ts`, plus exactly
+`tests/gateway/targets/target-lifecycle.test.ts`,
+`tests/gateway/targets/lifecycle-rollback.test.ts`,
+`tests/gateway/targets/observer-cleanup.test.ts` and
+`tests/gateway/targets/close-diagnostics.test.ts`. These forty-seven selectors
+include twenty-one Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.

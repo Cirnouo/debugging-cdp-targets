@@ -24,9 +24,12 @@ remain pure. The exact gateway/core.ts owns the full managed-connection transact
 generation fences and original execution/context; gateway/registry.ts owns route
 membership and retained cleanup/retry joins, including all seven collections and
 definitive cleanup barriers. It uses the original Core ManagedConnection TYPE and
-only the three reviewed application TYPE ports, without a runtime cycle or copied
-capability contract. Core uses the four existing application service providers.
-Target-controller and adapters retain actual acquisition/exit and I/O. Admission,
+only the two reviewed application TYPE ports, without a runtime cycle or copied
+capability contract. Core uses the three existing application service providers.
+The complete gateway/targets/target-lifecycle.ts owns target attachment, admission,
+health, normal-Close reuse, rollback, actual-exit callbacks and retirement through
+its exact supplied capabilities. Core and registry consume only the factory/ports
+and exit-event TYPE respectively; adapters retain actual acquisition/exit and I/O. Admission,
 managed connection, workspace policy and projection remain coherent Core content
 until their complete ownership cuts; no new await or snapshot is introduced.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/

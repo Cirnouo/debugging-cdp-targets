@@ -73,7 +73,7 @@ expectations must not be replaced with the implementation's own generated data.
     `tests/fixtures/gateway/target-host.ts`; retain one implementation and list only
     that final gateway fixture leaf in the target inventory.
 - Connection-directory suites share real Core/DataDirectoryRegistry setup over
-    controlled ControllerHost, router and official boundaries, distinct from the
+    controlled TargetLifecycleHost, router and official boundaries, distinct from the
     O4 target-host fake. The bounded O5 cut may extract that setup to intermediate
     `tests/fixtures/connection-directory-runtime.ts`, keeping current
     `core-runtime.ts` in place. Export only `createDirectoryRuntimeFixture`,
@@ -236,6 +236,19 @@ only clock-backed `measured` moves to `src/gateway/diagnostics.ts`. The final
 `gateway/lifecycle-contract.ts` and complete symbol/caller migration above remain
 pending until the actual App UI and CDP domain consumers move coherently. This
 interim placement does not complete O4 or the whole Gateway target.
+
+The bounded O4 target lifecycle cut keeps the complete launch attachment,
+admission, health, normal-Close reuse, rollback, actual-exit and retirement
+transaction together in `gateway/targets/target-lifecycle.ts`. Its actual factory,
+host/router ports, exit event and explicit owner cleanup use lifecycle names;
+target acquisition/native I/O, Core and registry retain their distinct owners.
+Central target lifecycle coverage combines all seven former entry-lifecycle cases
+and the two former plugin-runtime Close/attachment cases in target-lifecycle;
+lifecycle-rollback retains all three rollback cases, observer-cleanup both cases,
+and close-diagnostics its complete operation-result case. These four suites own
+all fifteen original bodies; no separate close-and-attachment leaf is required.
+The pure interim contract and remaining target/native content cuts stay pending;
+this allocation does not complete O4 or the whole reorganization.
 
 ## Per-batch workflow and complete-task gates
 
@@ -709,9 +722,8 @@ tests/gateway/targets/chrome-launch.test.ts
 tests/gateway/targets/chrome-profile-argument.test.ts
 tests/gateway/targets/chrome-profile.test.ts
 tests/gateway/targets/chromium-features.test.ts
-tests/gateway/targets/close-and-attachment.test.ts
 tests/gateway/targets/close-diagnostics.test.ts
-tests/gateway/targets/controller-rollback.test.ts
+tests/gateway/targets/lifecycle-rollback.test.ts
 tests/gateway/targets/data-directory-claims.test.ts
 tests/gateway/targets/data-directory.test.ts
 tests/gateway/targets/data-isolation.test.ts

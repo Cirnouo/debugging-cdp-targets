@@ -14,6 +14,11 @@ owns per-request capabilities, modern roots/form continuation, active-response
 progress and private upstream catalog freshness. Explicit registration ownership
 and the operation wait/result path apply to both eras.
 
+The complete [target lifecycle](../src/gateway/targets/target-lifecycle.ts)
+implements supplied launch, rollback, normal Close and actual-exit handling.
+Its cleanup method is an explicit Core/registry owner operation; transport or
+Agent disconnect does not request resource cleanup.
+
 ## Requests and status selectors
 
 The gateway exposes seven lifecycle/operation tools alongside the fixed reviewed

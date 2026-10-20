@@ -7,11 +7,12 @@ The singleton App owns direct HTTP, management and native resources. The
 [runtime contract](../docs/app-runtime.md) describes its startup and cleanup.
 
 - `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
-- `application/`: existing target controller, lifecycle/registration and App orchestration.
+- `application/`: lifecycle/registration and App orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
 - `gateway/`: complete Core transaction and retained registry/cleanup ownership,
     pure explicit bearer/tool-argument extraction, target evidence/identity
-    models, structured launch/isolation rules, bounded clock-backed diagnostics
+    models, structured launch/isolation rules, complete supplied-capability target
+    lifecycle in `targets/`, bounded clock-backed diagnostics
     and complete resource-generation/directory-lease lifetime in `connections/`,
     plus supplied Official options, wire-terminal values and release evidence in `official/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.

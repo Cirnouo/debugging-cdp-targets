@@ -1,4 +1,4 @@
-# Target value and endpoint admission regressions
+# Target lifecycle, value and endpoint admission regressions
 
 - `port-and-endpoint-admission.test.ts` preserves supplied endpoint/product,
     foreign listener, exposed listener and wrong-port identity checks.
@@ -18,7 +18,17 @@
     evidence or filesystem effects. It shares `fixtures/connection-directory-runtime.ts`
     with the connection suites, separately from the target-host fixture.
 
-Both default and coverage commands explicitly select all eight suites once, with
+- `target-lifecycle.test.ts` keeps nine complete Keep/Close, actual-exit,
+    restart/health, explicit owner-cleanup, busy-router and attachment cases.
+- `lifecycle-rollback.test.ts` keeps three complete attachment/replacement and
+    typed retained-target rollback cases, without serializing launch evidence.
+- `observer-cleanup.test.ts` keeps both observer/profile cases through failed
+    Close, explicit owner cleanup and actual-exit release.
+- `close-diagnostics.test.ts` keeps the complete native-details/retry identity
+    case through operation results. These four suites conserve fifteen callbacks
+    and their original fixtures; plugin-runtime retains its eleven other cases.
+
+Both default and coverage commands explicitly select all twelve suites once, with
 file concurrency 1. The six value suites conserve all 59 original registrations,
 inner assertions and cleanup. Both runtime suites share the controlled
 [target host fixture](../../fixtures/target-host.ts); no real target launches.

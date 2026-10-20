@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { createTargetController, type TargetEvent } from '../src/application/target-controller.ts';
-import type { LaunchOptions } from '../src/domains/control-contract.ts';
-import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
+import type { LaunchOptions } from '../../../src/domains/control-contract.ts';
+import type { ManagedTarget } from '../../../src/gateway/targets/model/target-contract.ts';
+import { createTargetLifecycle, type TargetExitEvent } from '../../../src/gateway/targets/target-lifecycle.ts';
+import { DetailedError, isRecord } from '../../../src/shared/errors.ts';
 
 const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 type FixtureChild = EventEmitter & { exitCode: number | null; signalCode: string | null };
 function fixture() {
     const children: FixtureChild[] = [];
-    const exits: TargetEvent[] = [];
+    const exits: TargetExitEvent[] = [];
     const launches: LaunchOptions[] = [];
     let health = 'healthy';
     let closeSucceeds = true;
@@ -17,7 +19,7 @@ function fixture() {
     let serverCloses = 0;
     let cleared = 0;
     let processId = 42;
-    const controller = createTargetController({
+    const controller = createTargetLifecycle({
         entryId,
         onProcessExit: (event) => exits.push(event),
         router: {
@@ -98,7 +100,7 @@ function fixture() {
     };
 }
 
-test('Keep preserves both sides across tasks; Close retires the session and reuses its entry', async () => {
+test('Keep preserves target and upstream; Close retires the session and permits a fresh start', async () => {
     const f = fixture();
     const first = await f.controller.start({
         isolation: { mode: 'none' },
@@ -115,7 +117,7 @@ test('Keep preserves both sides across tasks; Close retires the session and reus
     assert.notEqual(second.sessionId, first.sessionId);
     await assert.rejects(f.controller.stop({ sessionId: first.sessionId, disposition: 'Close' }), /session/i);
     assert.equal(f.controller.status().status, 'active');
-    await f.controller.cleanupOnDisconnect();
+    await f.controller.cleanup();
 });
 
 test('manual exit invalidates routes once, retires the dead session and permits a fresh start', async () => {
@@ -142,10 +144,10 @@ test('manual exit invalidates routes once, retires the dead session and permits 
     f.exit(0);
     assert.equal(f.controller.status().status, 'active');
     assert.equal(f.controller.status().sessionId, next.sessionId);
-    await f.controller.cleanupOnDisconnect();
+    await f.controller.cleanup();
 });
 
-test('live lost session restarts using its exact port and launch evidence after confirmed close', async () => {
+test('a live unavailable target restarts with its exact port and launch evidence after confirmed exit', async () => {
     const f = fixture();
     const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
@@ -165,7 +167,7 @@ test('live lost session restarts using its exact port and launch evidence after 
     f.exit(0);
     assert.equal(f.controller.status().status, 'active');
     assert.equal(f.controller.status().sessionId, restarted.sessionId);
-    await f.controller.cleanupOnDisconnect();
+    await f.controller.cleanup();
 });
 
 test('connection unavailability gates tools while process monitoring stays active', async () => {
@@ -177,10 +179,10 @@ test('connection unavailability gates tools while process monitoring stays activ
     assert.equal(f.controller.status().reason, 'target-unavailable');
     f.exit();
     assert.equal(f.controller.status().reason, 'process-exited');
-    await f.controller.cleanupOnDisconnect();
+    await f.controller.cleanup();
 });
 
-test('failed normal close keeps evidence and official connection for retry', async () => {
+test('failed normal Close retains target identity and upstream for retry', async () => {
     const f = fixture();
     const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
@@ -198,16 +200,16 @@ test('failed normal close keeps evidence and official connection for retry', asy
     assert.equal(f.counts().serverCloses, 1);
 });
 
-test('disconnect retains the live owned identity when normal close is rejected', async () => {
+test('explicit lifecycle cleanup retains live identity when normal Close is rejected', async () => {
     const f = fixture();
     await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     f.failClose();
-    assert.deepEqual(await f.controller.cleanupOnDisconnect(), { processId: 42, port: 9227 });
+    assert.deepEqual(await f.controller.cleanup(), { processId: 42, port: 9227 });
     assert.equal(f.children[0]?.exitCode, null);
     assert.equal(f.exits.length, 0);
 });
 
-test('retirement forgets an exited owned process without closing the replacement at its old port', async () => {
+test('retiring an exited target sends no further Close request', async () => {
     const f = fixture();
     const active = await f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
     assert.ok(active.sessionId);
@@ -219,4 +221,93 @@ test('retirement forgets an exited owned process without closing the replacement
     assert.equal(result.status, 'idle');
     assert.equal(f.counts().closes, 0);
     assert.equal(f.counts().serverCloses, 1);
+});
+
+const pluginEntryId = randomUUID();
+function targetFixture(port: number, processId = 42): ManagedTarget {
+    return {
+        port,
+        processId,
+        targetKind: 'generic-cdp',
+        executablePath: process.execPath,
+        startedAtUtc: '2026-09-30T00:00:00Z',
+    };
+}
+
+test('failed normal Close pauses and resumes routing while preserving identity despite busy CDP', async () => {
+    const events: string[] = [];
+    let busy = false;
+    const controller = createTargetLifecycle({
+        entryId: pluginEntryId,
+        router: {
+            isBusy: () => busy,
+            pause: () => {
+                events.push('pause');
+            },
+            resume: () => {
+                events.push('resume');
+            },
+            setTarget: () => {
+                events.push('route');
+            },
+            clearTarget: () => {
+                events.push('clear');
+            },
+        },
+        host: {
+            launch: async () => targetFixture(9222),
+            close: async () => {
+                events.push('close');
+                return false;
+            },
+        },
+        server: {
+            ensure: async () => {},
+            close: async () => {
+                events.push('official-close');
+            },
+        },
+    });
+    const active = await controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
+    assert.ok(active.sessionId);
+    busy = true;
+    await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), (error: unknown) => {
+        assert.ok(error instanceof DetailedError && isRecord(error.details));
+        assert.deepEqual(error.details.retainedTargets, [{ processId: 42, port: 9222 }]);
+        return true;
+    });
+    assert.deepEqual(events, ['route', 'pause', 'close', 'resume']);
+    busy = false;
+    assert.equal(controller.status().sessionId, active.sessionId);
+    assert.equal(controller.status().status, 'active');
+});
+
+test('failed route attachment normally closes only the newly launched target', async () => {
+    const closed: number[] = [];
+    const child = new EventEmitter();
+    const controller = createTargetLifecycle({
+        entryId: pluginEntryId,
+        router: {
+            isBusy: () => false,
+            setTarget: () => {
+                throw new Error('route failed');
+            },
+            clearTarget: () => {},
+        },
+        host: {
+            launch: async () => ({ ...targetFixture(9222), child }),
+            close: async (target) => {
+                closed.push(target.processId);
+                child.emit('exit');
+                return true;
+            },
+        },
+        server: { ensure: async () => {}, close: async () => {} },
+    });
+    await assert.rejects(
+        controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
+        /route failed/,
+    );
+    assert.deepEqual(closed, [42]);
+    assert.equal(controller.status().status, 'idle');
 });
