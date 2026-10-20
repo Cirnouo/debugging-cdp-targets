@@ -24,8 +24,11 @@ import {
     parseAppNativeEvidence,
     parseAppReleaseInputs,
 } from '../src/domains/app-release.ts';
+import {
+    type OfficialReleaseEvidence,
+    parseOfficialReleaseEvidence,
+} from '../src/gateway/official/release-evidence.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { type OfficialReleaseEvidence, parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import { isPortablePayloadRelativePath } from '../src/shared/payload-path.ts';
 import { collectBundledLicenses } from './licenses/bundled-notices.ts';
 import { verifyOfficialInputs } from './security/official-inputs.ts';

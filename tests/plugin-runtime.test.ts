@@ -31,7 +31,6 @@ const { createTargetController } = await import('../src/application/target-contr
 const { choosePort } = await import('../src/domains/cdp-target.ts');
 const { createTargetHost } = await import('../src/adapters/target-host.ts');
 const { applyChromePreset } = await import('../src/adapters/target-host.ts');
-const { buildServerArguments } = await import('../src/adapters/official-server.ts');
 const entryId = randomUUID();
 
 test('CDP router rewrites discovery URLs and forwards WebSocket frames', async (context) => {
@@ -267,32 +266,6 @@ test('Chrome rejects every duplicate or non-loopback debugging address before la
     ])
         assert.throws(() => applyChromePreset(arguments_), /loopback|Duplicate/);
     assert.ok(applyChromePreset(['--remote-debugging-address', '127.0.0.1']).includes('127.0.0.1'));
-});
-
-test('official server receives a stable browser URL and privacy-safe defaults', () => {
-    assert.deepEqual(buildServerArguments('http://127.0.0.1:30000', {}), [
-        '--browserUrl=http://127.0.0.1:30000',
-        '--categoryExtensions=true',
-        '--no-usage-statistics',
-        '--no-performance-crux',
-    ]);
-});
-
-test('official server switches require explicit boolean environment overrides', () => {
-    assert.deepEqual(
-        buildServerArguments('http://127.0.0.1:30000', {
-            DCT_EXTENSIONS: 'false',
-            DCT_USAGE_STATISTICS: 'true',
-            DCT_PERFORMANCE_CRUX: 'true',
-        }),
-        [
-            '--browserUrl=http://127.0.0.1:30000',
-            '--categoryExtensions=false',
-            '--usage-statistics',
-            '--performance-crux',
-        ],
-    );
-    assert.throws(() => buildServerArguments('http://127.0.0.1:30000', { DCT_EXTENSIONS: 'yes' }), /boolean/i);
 });
 
 test('controller normal Close pauses routing and preserves identity on failure even while CDP is busy', async () => {

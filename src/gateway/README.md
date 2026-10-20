@@ -19,6 +19,10 @@
     Target acquisition, claims, observation and cleanup stay with current owners.
 - `connections/` owns complete resource-generation retention/disposal and
     connection-level directory-lease barriers through their exact adapter capabilities.
+- `official/` owns pure reviewed options/recipes and supplied argument composition,
+    wire identity/terminal tracking and strict release evidence. Ambient default
+    capture, child environment/bin verification, live catalog and upstream remain
+    with existing adapters; see its [current inventory](official/README.md).
 - `AGENTS.md` keeps argument and target rules pure and limits the exact diagnostics owner
     to its clock read and pure contract dependency, with exact Core, registry and
     connection roles and the mandatory application lifecycle instruction trigger.

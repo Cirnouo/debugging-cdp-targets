@@ -5,7 +5,7 @@ import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
     validateOfficialManifest,
-} from '../shared/official-package.ts';
+} from '../gateway/official/release-evidence.ts';
 import { readRegularFile } from './file-evidence.ts';
 
 /** Return only the independently verified release bytes; never follow package links. */

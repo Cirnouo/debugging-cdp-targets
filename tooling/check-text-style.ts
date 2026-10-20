@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
+import { parseOfficialReleaseEvidence } from '../src/gateway/official/release-evidence.ts';
 import { errorMessage } from '../src/shared/errors.ts';
-import { parseOfficialReleaseEvidence } from '../src/shared/official-package.ts';
 import { PLUGIN_HOSTS } from './host-policy.ts';
 import { validateTextStyle, validateYamlFilename } from './quality/text-policy.ts';
 

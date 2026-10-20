@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { parseAppReleaseInputs } from '../domains/app-release.ts';
-import { parseOfficialReleaseEvidence } from '../shared/official-package.ts';
+import { parseOfficialReleaseEvidence } from '../gateway/official/release-evidence.ts';
 import { verifyAppReleaseTree } from './app-delivery.ts';
 import { readRegularFile } from './file-evidence.ts';
 import { verifyOfficialPackage } from './official-package.ts';

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseMcpArgs, suggestMcpArgs } from '../src/domains/official-options.ts';
+import { parseMcpArgs, suggestMcpArgs } from '../../../src/gateway/official/options.ts';
 
 test('official configuration accepts literal values, canonical aliases and explicit boolean overrides', () => {
     const options = parseMcpArgs([

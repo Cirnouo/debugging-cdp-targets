@@ -145,7 +145,7 @@ Git hook tests remain contributor-tooling regressions.
 
 - `gateway-core.test.ts` covers independent clients, registration authorization, immutable
     roots/launch snapshots, scoped restart and retained cleanup failure/retry.
-- `client-context.test.ts`, `registrations.test.ts` and `official-execution.test.ts`
+- `client-context.test.ts`, `registrations.test.ts` and `gateway/official/execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
 - `host-management.test.ts` checks absent/corrupt/incompatible latest records,
     immutable sources, SemVer decisions and effective App URL boundaries.
@@ -434,10 +434,11 @@ Git hook tests remain contributor-tooling regressions.
   event-loop retention during EOF cleanup, independent waiter cancellation and
   reference release without target deadlines or process polling.
 - `gateway/targets/structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
-- `official-server-environment.test.ts` checks Windows/POSIX environment lookup,
-    case-variant ordering, boolean defaults/validation and explicit mcpArgs precedence.
-- `official-options.test.ts`, `tool-catalog.test.ts` and `connection-options.test.ts`
-  verify safe options, activation recipes, variants and independent configuration.
+- `gateway/official/` owns safe options/recipes, exact wire-terminal values and
+    argument/environment contracts, preserving all original cases and matrices;
+    see its [suite inventory](gateway/official/README.md).
+- `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
+    variants and independent configuration.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous owner/identity/deduplication/cursor/cancel behavior,
   terminal result/error snapshots and actual SDK HTTP lifecycle validation.
@@ -482,17 +483,14 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select thirty entries: `tests/*.test.ts`, the fourteen explicit
-tooling suites listed in [tooling tests](tooling/README.md), exactly
-`tests/gateway/owned-tool-arguments.test.ts` and
-`tests/gateway/targets/port-and-endpoint-admission.test.ts`, the six explicit
-value suites in [Target tests](gateway/targets/README.md), the four
-[Connections suites](gateway/connections/README.md) and target
-`directory-admission.test.ts`, plus the two explicit
-Host suites in [Host plugin tests](host-plugins/README.md). The thirteen Gateway suites
-retain all twenty-eight existing selectors in their original order, with
-`connections/construction-cleanup.test.ts` and `connections/gateway-cleanup.test.ts`
-appended once in that order; default commands do not launch
+command and `pnpm test:coverage` select thirty-four entries: `tests/*.test.ts`, the
+fourteen explicit [tooling suites](tooling/README.md), two explicit
+[Host suites](host-plugins/README.md) and seventeen Gateway suites. Gateway selection
+retains argument parsing, seven [Target suites](gateway/targets/README.md), five
+[connection/directory suites](gateway/connections/README.md) and the four explicit
+[Official suites](gateway/official/README.md). The original thirty selectors retain
+their order; options, execution, server-arguments and server-arguments-environment
+append once in that order. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

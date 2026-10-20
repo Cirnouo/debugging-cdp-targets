@@ -9,7 +9,6 @@
   Deterministic native identity/permission predicates validate supplied facts
   without issuing native authority.
   It grants no payload-verification, permission, enrollment or deletion authority.
-- `official-execution.ts` tracks one matching wire identity until real response/close.
 - `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
   explicit host selections and desired/effective hot/cold settings. Unpublished
   pre-schema-1 formats have no production migration promise.
@@ -37,8 +36,6 @@
     lifetime remain in the target host; this port residue is still unfinished.
 - `control-contract.ts` owns MCP lifecycle request/result unions, identities and
   pure diagnostic phase/outcome/elapsed value types and callback signature.
-- `official-options.ts` validates reviewed official options and complete recipes,
-  reserving browser attachment/launch options for the gateway.
 - `AGENTS.md` restricts this layer to deterministic rules.
 
 The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isolation.md)

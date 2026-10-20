@@ -1,3 +1,5 @@
+import { findEnvironmentKey } from '../../shared/environment-key.ts';
+
 // Explicitly reviewed options from the delivered official 1.11.0 public server.
 // Browser creation/attachment, config files and CLI mode remain gateway-owned.
 export const CATALOG_FLAGS = [
@@ -105,4 +107,45 @@ export function suggestMcpArgs(args: readonly string[], required: Record<string,
     for (const [key, value] of Object.entries(required))
         options.set(key, { values: [value], args: [`--${key}=${value}`] });
     return [...options.values()].flatMap((option) => option.args);
+}
+
+function booleanSetting(
+    environment: Readonly<Record<string, string | undefined>>,
+    name: string,
+    fallback: boolean,
+    windows: boolean,
+) {
+    const key = findEnvironmentKey(environment, name, windows);
+    const value = key === undefined ? undefined : environment[key];
+    if (value === undefined) return fallback;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    throw new Error(`${name} must be a boolean: true or false.`);
+}
+
+export function buildOfficialServerArguments(
+    browserUrl: string,
+    environment: Readonly<Record<string, string | undefined>>,
+    mcpArgs: readonly string[],
+    windowsEnvironment: boolean,
+) {
+    const url = new URL(browserUrl);
+    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') {
+        throw new Error('The official Server must connect to a local loopback browser URL.');
+    }
+    const extensions = booleanSetting(environment, 'DCT_EXTENSIONS', true, windowsEnvironment);
+    const statistics = booleanSetting(environment, 'DCT_USAGE_STATISTICS', false, windowsEnvironment);
+    const crux = booleanSetting(environment, 'DCT_PERFORMANCE_CRUX', false, windowsEnvironment);
+    const provided = parseMcpArgs(mcpArgs);
+    if (provided.get('categoryPwa')?.values[0] === true)
+        throw new Error(
+            'Official PWA tools require a pipe-launched browser and cannot use a gateway-managed CDP endpoint.',
+        );
+    return [
+        `--browserUrl=${browserUrl}`,
+        ...(provided.has('categoryExtensions') ? [] : [`--categoryExtensions=${extensions}`]),
+        ...(provided.has('usageStatistics') ? [] : [statistics ? '--usage-statistics' : '--no-usage-statistics']),
+        ...(provided.has('performanceCrux') ? [] : [crux ? '--performance-crux' : '--no-performance-crux']),
+        ...mcpArgs,
+    ];
 }
