@@ -163,6 +163,13 @@ test('native seal rejects missing runtime boundaries, byte drift, extras, links 
 test('real research bundles consume only the sealed subjects and unchanged native closure without builder runtime imports', async () => {
     const repository = fileURLToPath(new URL('..', import.meta.url));
     const built = await generateNativeFixtureFiles(repository);
+    assert.equal(
+        built.inputs.some((input) =>
+            /cfWorkerProvider-|shimsBrowser\.mjs|shimsWorkerd\.mjs|validators[\\/]cfWorker\.mjs/.test(input),
+        ),
+        false,
+        'Optional browser/workerd SDK providers must stay outside the independent research graph.',
+    );
     assert.deepEqual(
         [...built.files.keys()].sort(),
         snapshot()

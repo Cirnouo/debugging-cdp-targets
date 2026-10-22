@@ -14,6 +14,15 @@ owns per-request capabilities, modern roots/form continuation, active-response
 progress and private upstream catalog freshness. Explicit registration ownership
 and the operation wait/result path apply to both eras.
 
+Both eras admit at most 1 MiB of actual UTF-8 request bytes, 10,000 cumulative
+object members plus array elements and 64 container levels including the root.
+The complete envelope is checked before SDK classification and dispatch,
+including metadata, capabilities and inputResponses. Strings count toward bytes;
+their characters are not structural elements. Malformed JSON returns 400 and
+exceeding a budget returns 413 with a fixed message, without echoing input or
+consuming a pending continuation. These request limits do not limit responses
+or close an existing session, connection or actual official execution.
+
 ## Requests and status selectors
 
 The gateway exposes seven lifecycle/operation tools alongside the fixed reviewed

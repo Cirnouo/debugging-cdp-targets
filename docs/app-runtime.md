@@ -96,6 +96,18 @@ Public SDK Node Streamable HTTP binds only `127.0.0.1`, checks exact effective-p
 Host, fixed `/mcp`, bounded JSON body, methods, content type and Origin. Forwarded
 headers confer no authority. Missing, expired or unknown bearers fail before
 owned reads or effects. Rejections never include raw requests, tokens or paths.
+Each POST is limited to 1 MiB of actual UTF-8 bytes, including chunked bodies,
+10,000 cumulative object members plus array elements, and 64 nested containers
+including the root. The Node adapter bounds bytes before one JSON parse; an
+iterative whole-envelope check runs before SDK era classification, schema checks
+or App dispatch. Metadata, capabilities and continuation replies share these
+limits. Malformed JSON returns a closed 400 response and budget excess a closed
+413 response. Strings consume bytes, not one structural member per character.
+An admitted body is passed unchanged through the public parsedBody option.
+Refusal does not consume a pending form reply or close a healthy legacy session,
+peer request or owned Core resource. These per-request work limits do not cap
+responses, impose a connection count or establish complete denial-of-service
+protection. Larger requests require less input in one envelope.
 After authentication, known busy and originating-client facility failures carry
 a closed code and fixed actionable explanation. Unknown upstream errors remain
 generic; the App never projects arbitrary exception text. A locally known facility
@@ -153,7 +165,7 @@ acquisitions. A detached official response wait retains its execution slot until
 the actual response or definitive upstream close. It does not replay, restart or
 quarantine a healthy upstream.
 
-Public SDK 2.2.0 has a wire limit: cancellation notifications retain the original
+Public SDK 2.3.1 has a wire limit: cancellation notifications retain the original
 relatedRequestId, while Node HTTP removes that response's stream mapping after
 the accepted response ends. Cancellation over that ended SSE is best-effort and
 cannot promise abortion of the remote roots handler. Local termination and zero

@@ -125,18 +125,22 @@ Git hook tests remain contributor-tooling regressions.
 - `app-control-cutover.test.ts` checks the public lifecycle identities and actual
   SDK schema validation of explicit bearer inputs versus missing or retired fields.
 - `mcp-http-policy.test.ts` checks exact loopback authority/Origin/path/method
-  and bounded unambiguous bodies.
+  and unambiguous body headers, exact byte boundaries and iterative cumulative
+  member/container-depth budgets with large legitimate strings/arrays.
 - `gateway/` owns pure explicit bearer/tool-argument and supplied target endpoint
   admission suites.
 - `mcp-http-server.test.ts` covers actual SDK HTTP clients, originating roots,
   elicitation/progress, client cancellation versus owned work, boundary rejection
-  and explicit shutdown over the real Core with controlled native/official I/O.
+  and explicit shutdown over the real Core with controlled native/official I/O,
+  plus fixed/chunked UTF-8 limits and healthy own/peer sessions after rejection.
 - `mcp-http-modern.test.ts` covers the actual pinned 2026-07-28 SDK wire,
   strict era routing, the fixed catalog and authenticated roots continuation
   before resource acquisition, while retaining sessionful legacy behavior. It
   also covers form continuation without replay, validated one-time rounds,
   active-response progress tokens, expiry, real Core cancellation/busy ownership
-  and raw SSE socket disconnection without resource cleanup.
+  and raw SSE socket disconnection without resource cleanup. Whole-envelope
+  budget cases include metadata/capabilities/replies/batches, resumable original
+  form flows after refusal and overlapping clients with colliding request IDs.
 - `official-catalog-refresh.test.ts` covers public SDK stdio catalog notification,
   uncapped pagination, complete schema validation, atomic snapshot/admission and
   Close/scoped-restart races with controlled target/native I/O, preserving fixed

@@ -116,6 +116,7 @@ async function fixture() {
     });
     const http = await createMcpHttpServer({ port: 0, core });
     const clients: Client[] = [];
+    const transports: StreamableHTTPClientTransport[] = [];
     const inboundMethods: string[] = [];
     let rootsReplySent: () => void = () => {};
     const rootsReplied = new Promise<void>((resolve) => {
@@ -128,6 +129,7 @@ async function fixture() {
         );
         clients.push(selected);
         const transport = new StreamableHTTPClientTransport(new URL(http.url));
+        transports.push(transport);
         await selected.connect(transport);
         const send = transport.send.bind(transport);
         transport.send = async (message, options) => {
@@ -146,6 +148,7 @@ async function fixture() {
         core,
         http,
         client,
+        transports,
         inboundMethods,
         acquired,
         rootsReplied,
@@ -477,6 +480,115 @@ test('HTTP socket enforces endpoint headers, bounded streamed bodies and explici
         await assert.rejects(createMcpHttpServer({ port, core: selected.core }), { code: 'EADDRINUSE' });
     } finally {
         await selected.close();
+    }
+});
+
+test('HTTP raw UTF-8 boundaries cover content lengths and chunked bytes without closing healthy legacy sessions', async () => {
+    const f = await fixture();
+    const acquiredBefore = { ...f.acquired };
+    try {
+        assert.deepEqual(acquiredBefore, { directory: 0, router: 1, target: 0, official: 1 });
+        const own = await f.client();
+        const peer = await f.client();
+        const session = f.transports[0]?.sessionId;
+        assert.ok(session);
+        const post = (body: Buffer, chunked: boolean) =>
+            new Promise<{ status: number; body: string }>((resolve, reject) => {
+                const request = httpRequest(
+                    f.http.url,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json, text/event-stream',
+                            'MCP-Protocol-Version': '2025-06-18',
+                            'MCP-Session-Id': session,
+                            ...(!chunked ? { 'Content-Length': String(body.length) } : {}),
+                        },
+                    },
+                    (response) => {
+                        let text = '';
+                        response.on('data', (chunk: Buffer) => {
+                            text += chunk.toString();
+                        });
+                        response.once('end', () => resolve({ status: response.statusCode ?? 0, body: text }));
+                    },
+                );
+                request.once('error', reject);
+                if (chunked) {
+                    request.write(body.subarray(0, 71));
+                    request.write(body.subarray(71, 700001));
+                    request.end(body.subarray(700001));
+                } else request.end(body);
+            });
+        const empty = JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'ping', params: { _meta: { padding: '' } } });
+        for (const chunked of [false, true]) {
+            for (const [bytes, status] of [
+                [1048575, 200],
+                [1048576, 200],
+                [1048577, 413],
+            ] as const) {
+                const paddingBytes = bytes - Buffer.byteLength(empty);
+                const padding = `${'é'.repeat(Math.floor(paddingBytes / 2))}${paddingBytes % 2 ? 'x' : ''}`;
+                const body = Buffer.from(
+                    JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'ping', params: { _meta: { padding } } }),
+                );
+                assert.equal(body.length, bytes);
+                const result = await post(body, chunked);
+                assert.equal(result.status, status, result.body);
+                if (status === 413) assert.doesNotMatch(result.body, /padding|é/);
+            }
+        }
+        const malformed = await post(Buffer.from('{"private":"do-not-echo"'), true);
+        assert.equal(malformed.status, 400);
+        assert.doesNotMatch(malformed.body, /private|do-not-echo/);
+        const overflow = await post(
+            Buffer.from(
+                JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 7,
+                    method: 'ping',
+                    params: { _meta: { values: Array(10001).fill(null) } },
+                }),
+            ),
+            false,
+        );
+        assert.equal(overflow.status, 413);
+        // Four envelope members, params._meta and _meta.values use six members before the array.
+        for (const [elements, status] of [
+            [9993, 200],
+            [9994, 200],
+            [9995, 413],
+        ] as const) {
+            const result = await post(
+                Buffer.from(
+                    JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 7,
+                        method: 'ping',
+                        params: { _meta: { values: Array(elements).fill(null) } },
+                    }),
+                ),
+                false,
+            );
+            assert.equal(result.status, status, result.body);
+        }
+        // Envelope, params and _meta precede the first array container.
+        for (const [arrays, status] of [
+            [60, 200],
+            [61, 200],
+            [62, 413],
+        ] as const) {
+            const body = `{"jsonrpc":"2.0","id":7,"method":"ping","params":{"_meta":{"values":${'['.repeat(arrays)}${']'.repeat(arrays)}}}}`;
+            const result = await post(Buffer.from(body), true);
+            assert.equal(result.status, status, result.body);
+        }
+        assert.deepEqual((await own.listTools()).tools, (await peer.listTools()).tools);
+        assert.equal(f.launched(), 0);
+        assert.equal(f.officialCalls(), 0);
+        assert.deepEqual(f.acquired, acquiredBefore);
+    } finally {
+        await f.close();
     }
 });
 

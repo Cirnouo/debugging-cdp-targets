@@ -137,7 +137,11 @@ Version 0.1.0 remains under development; no release has been published.
 ### Security
 
 - Explicit bearer ownership on every owned HTTP request, exact loopback Host,
-    Origin, path, method and body boundaries, and no implicit MCP-session owner.
+    Origin, path and method boundaries, and no implicit MCP-session owner.
+    Whole-envelope admission bounds actual UTF-8 requests to 1 MiB, cumulative
+    object members/array elements to 10,000 and container depth to 64 before
+    SDK dispatch, without consuming refused continuations or closing healthy
+    sessions and owned work.
 - Verified ordinary Node and complete original native loading closure in the App,
     with original licenses, archive provenance and no runtime package fallback.
 - A sandboxed local management renderer with fixed assets, restrictive CSP and

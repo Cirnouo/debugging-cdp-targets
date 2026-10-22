@@ -34,6 +34,13 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
             actualInputs = inputs;
         },
     });
+    assert.equal(
+        actualInputs.some((input) =>
+            /cfWorkerProvider-|shimsBrowser\.mjs|shimsWorkerd\.mjs|validators[\\/]cfWorker\.mjs/.test(input),
+        ),
+        false,
+        'Optional browser/workerd SDK providers must stay outside the actual App graph.',
+    );
     for (const input of [
         'src/gateway/core.ts',
         'src/gateway/registry.ts',

@@ -109,3 +109,31 @@ The [host metadata record](../evidence/host-plugin-research.md#mcp-protocol-comp
 records Codex 0.163.0's legacy default and Claude Code 2.1.302's documented modern
 runtime with its capture limits. Preserve default compatibility and the wait
 path; no experimental host flag or personal configuration is required.
+
+## Accepted HTTP admission security amendment — 2026-10-23
+
+The App now pins client/core/server SDK 2.3.1 with compatible Node adapter 2.1.0.
+This supersedes the original SDK 2.2.0 selection and 4 MiB request limit above;
+the earlier dated decision and observations remain historical context.
+The SDK fixes [cross-client response delivery](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-jm63-cq47-j5jp)
+and [validation memory amplification](https://github.com/modelcontextprotocol/typescript-sdk/security/advisories/GHSA-46jr-4wx8-v453).
+The App retains a fresh modern Server per request and independent legacy Server/
+transport per session. Upgrading alone supplies no low-level Server element
+budget: the optional upstream maxToolInputElements belongs to McpServer.
+
+Bound actual request bytes to 1 MiB before parsing, including chunked bodies.
+Parse once and iteratively admit at most 10,000 cumulative object members plus
+array elements and 64 nested containers including the root. Inspect the complete
+envelope before isLegacyRequest, SDK validation or App recursive processing;
+metadata, client capabilities and inputResponses cannot bypass admission. Long
+strings consume bytes rather than one element per character. Forward the same
+accepted object using public parsedBody options to either era. Return closed
+400 for malformed JSON and 413 for budget excess without reflecting input.
+
+Keep authentication, request abort/options/context, original facility ownership,
+pending continuations and actual official execution unchanged. A refused reply
+does not consume its pending input round; healthy own/peer sessions remain usable.
+No McpServer conversion, OAuth middleware, redirect override, custom codec or
+resource disposal is introduced. These are explicit compatibility/work limits
+per request, not MCP guarantees, response limits or a fixed connection count.
+Source regressions do not establish native App or host acceptance.

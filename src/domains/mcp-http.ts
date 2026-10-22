@@ -1,10 +1,39 @@
-export const MCP_MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
+export const MCP_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 type HttpRequestEvidence = Readonly<{
     method: string | undefined;
     url: string | undefined;
     headers: Readonly<Record<string, unknown>>;
 }>;
 type HttpRejection = Readonly<{ status: 400 | 403 | 404 | 405 | 413 | 415; message: string }>;
+
+/** Called only with parsed JSON; walk one member at a time without recursive or wide child collections. */
+export function mcpJsonRejection(value: unknown): HttpRejection | undefined {
+    function* children(container: object): Generator<unknown> {
+        if (Array.isArray(container)) {
+            for (let index = 0; index < container.length; index++) yield container[index];
+        } else {
+            for (const key in container)
+                if (Object.hasOwn(container, key)) yield (container as Record<string, unknown>)[key];
+        }
+    }
+    const stack: Iterator<unknown>[] = [];
+    if (value !== null && typeof value === 'object') stack.push(children(value));
+    let members = 0;
+    while (stack.length > 0) {
+        const next = stack[stack.length - 1]?.next();
+        if (!next || next.done) {
+            stack.pop();
+            continue;
+        }
+        members++;
+        if (members > 10000) return { status: 413, message: 'Request JSON exceeds the structural limit.' };
+        if (next.value !== null && typeof next.value === 'object') {
+            if (stack.length >= 64) return { status: 413, message: 'Request JSON exceeds the structural limit.' };
+            stack.push(children(next.value));
+        }
+    }
+    return undefined;
+}
 
 /** Closed messages never reflect request URLs, headers, bearer material or arguments. */
 export function mcpHttpRejection(request: HttpRequestEvidence, effectivePort: number): HttpRejection | undefined {
