@@ -43,12 +43,21 @@ current target host. Only `gateway/diagnostics.ts` reads its existing clock
 and depends on the pure current `domains/control-contract.ts` value/callback types.
 The complete lifecycle-contract move remains pending with its App UI/CDP domain
 consumers. `gateway/official/` owns supplied options/recipes/argument composition,
-wire-terminal values and strict release/manifest evidence. Existing adapters retain
-invocation-time ambient defaults, child environment/bin verification, complete
-package-file reads, actual catalog publication and upstream disposal. Core and
+wire-terminal values and strict release/manifest evidence. The exact
+`gateway/official/package-files.ts` owns the complete filesystem proof with only
+crypto, filesystem, path, release-evidence and regular-file-reader dependencies;
+pure siblings and unknown Gateway files cannot import it. The exact
+`gateway/official/server-launch.ts` owns the three complete invocation-time default,
+child environment capture and verified public-bin functions, consuming package
+proof under its five-dependency role. Its only ambient reads are the two named
+environment default RHS expressions and the argument builder's Windows platform
+default. Pure/unknown, registry, connection and package-file owners cannot acquire
+launch authority; Core uses its exact edge and adapters consume it directly.
+Existing adapters retain actual catalog publication, child/wire and upstream disposal. Core and
 bridge keep their original default/capture/await ordering; pure extraction grants
-no new ambient or mutable authority. The mixed package/TEMP suite and remaining
-Official/MCP transactions await their complete content cuts. Existing layer,
+no new ambient or mutable authority. The package/input/TEMP tests now have separate runtime, security and quality
+owners with an explicit seven-title alias-child oracle. Remaining Official/MCP
+transactions await their complete content cuts. Existing layer,
 pure-model and I/O rules remain in force for all current owners.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit

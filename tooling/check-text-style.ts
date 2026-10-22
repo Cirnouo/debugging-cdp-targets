@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
+import { verifyOfficialPackageFiles } from '../src/gateway/official/package-files.ts';
 import { parseOfficialReleaseEvidence } from '../src/gateway/official/release-evidence.ts';
 import { errorMessage } from '../src/shared/errors.ts';
 import { PLUGIN_HOSTS } from './distribution/host-descriptors.ts';
@@ -19,7 +19,7 @@ export async function checkTextStyle(root: string, arguments_: readonly string[]
         const release = parseOfficialReleaseEvidence(
             JSON.parse(await readFile(path.join(root, 'tooling/official-server-release.json'), 'utf8')),
         );
-        const files = await verifyOfficialPackage(path.join(root, officialPrefix), release);
+        const files = await verifyOfficialPackageFiles(path.join(root, officialPrefix), release);
         for (const file of files.keys()) verified.add(officialPrefix + file);
     }
     const errors = [];

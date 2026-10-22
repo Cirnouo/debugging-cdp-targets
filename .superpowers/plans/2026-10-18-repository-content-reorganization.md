@@ -250,6 +250,19 @@ all fifteen original bodies; no separate close-and-attachment leaf is required.
 The pure interim contract and remaining target/native content cuts stay pending;
 this allocation does not complete O4 or the whole reorganization.
 
+The bounded O6 package-file cut owns complete filesystem proof in
+`gateway/official/package-files.ts` as `verifyOfficialPackageFiles`, with five exact
+dependencies and pure-sibling inverse guards. Its nine original mixed regressions
+are split into six runtime, two tooling security and one real TEMP alias case;
+seven explicit executed-title observations retain the complete child oracle.
+Both safe lanes explicitly select all three destinations. The subsequent bounded
+launch-input cut transfers the whole three-function owner to
+`gateway/official/server-launch.ts`: captureOfficialServerEnvironment,
+buildOfficialLaunchArguments and resolveVerifiedOfficialServerBin. Preserve actual
+default/capture/await order, exact five dependencies and original caller context.
+Live catalog/upstream, complete child/wire/disposal and MCP continuation remain
+unfinished with their current transaction owners.
+
 ## Per-batch workflow and complete-task gates
 
 Use an independent managed worktree, test-first meaningful regressions, focused

@@ -112,12 +112,15 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/options.test.ts`,
 `tests/gateway/official/execution.test.ts`,
 `tests/gateway/official/server-arguments.test.ts` and
-`tests/gateway/official/server-arguments-environment.test.ts`, plus exactly
+`tests/gateway/official/server-arguments-environment.test.ts`, followed by exactly
+`tests/gateway/official/package-files.test.ts`,
+`tests/tooling/security/official-inputs.test.ts` and
+`tests/tooling/quality/temporary-directory-alias.test.ts`, plus exactly
 `tests/gateway/targets/target-lifecycle.test.ts`,
 `tests/gateway/targets/lifecycle-rollback.test.ts`,
 `tests/gateway/targets/observer-cleanup.test.ts` and
-`tests/gateway/targets/close-diagnostics.test.ts`. These forty-seven selectors
-include twenty-one Gateway suites and run files sequentially
+`tests/gateway/targets/close-diagnostics.test.ts`. These fifty selectors
+include twenty-two Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.
@@ -428,9 +431,10 @@ for the fixed protocol, metrics and manual command.
 
 Advanced CodeQL scans maintained JavaScript/TypeScript, native C# and GitHub
 Actions with security-extended queries, on main pushes, PRs and Mondays at
-01:47 UTC. C# uses Windows with build-mode none and must prove extraction of both
-the native process helper and deployment authority helper from its database
-source archive. No product build or project
+01:47 UTC. C# uses Windows with build-mode none and must prove unique extraction
+of the native process, deployment inspector/query and deployment creator sources
+from its database source archive. Source extraction does not compile their fixed
+entry points or establish native execution. No product build or project
 dependency install is run. CodeQL Actions use the independently reviewed official
 v4 commit; only analysis jobs can write security events. Generated distribution
 and unchanged upstream directories retain their distribution, integrity and

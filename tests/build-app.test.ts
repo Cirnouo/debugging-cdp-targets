@@ -53,6 +53,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/gateway/targets/model/launch-command.ts',
         'src/shared/environment-key.ts',
         'src/gateway/official/release-evidence.ts',
+        'src/gateway/official/package-files.ts',
+        'src/gateway/official/server-launch.ts',
         'src/shared/payload-path.ts',
         'src/domains/control-contract.ts',
         'src/domains/mcp-http.ts',
@@ -78,6 +80,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
     for (const oldInput of [
         'src/application/plugin-runtime.ts',
         'src/application/target-controller.ts',
+        'src/adapters/official-package.ts',
+        'src/adapters/official-server.ts',
         'tooling/build-plugin.ts',
         'tooling/distribution/build-plugin.ts',
         'tooling/distribution/audit-plugins.ts',
@@ -101,15 +105,24 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
             false,
             oldInput,
         );
-    for (const name of [
-        'windows-deployment-authority.ps1',
-        'windows-deployment-authority.cs',
-        'macos-deployment-authority.jxa',
-    ]) {
+    for (const name of ['macos-deployment-authority.jxa']) {
         assert.ok(files.has(name), `Missing fixed deployment helper: ${name}`);
         assert.ok(files.get(name)?.equals(await readFile(new URL(`../src/adapters/${name}`, import.meta.url))));
         assert.ok(actualInputs.includes(`src/adapters/${name}`), `Missing helper source input: ${name}`);
     }
+    for (const name of [
+        'windows-deployment-authority.ps1',
+        'windows-deployment-create.ps1',
+        'windows-deployment-authority.cs',
+        'windows-deployment-create.cs',
+        'windows-deployment-query.exe',
+        'windows-deployment-create.exe',
+    ]) {
+        assert.equal(files.has(name), false, `Build-only deployment input was delivered: ${name}`);
+        assert.equal(actualInputs.includes(`src/adapters/${name}`), false);
+    }
+    for (const bytes of files.values())
+        assert.doesNotMatch(bytes.toString(), /dct-deployment-support-|Framework64\\\\v4\.0\.30319/);
     for (const name of ['semver', 'smol-toml'])
         assert.ok(
             actualInputs.some((input) => input.replaceAll('\\', '/').includes(`/node_modules/${name}/`)),

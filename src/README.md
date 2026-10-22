@@ -14,9 +14,10 @@ The singleton App owns direct HTTP, management and native resources. The
     models, structured launch/isolation rules, complete supplied-capability target
     lifecycle in `targets/`, bounded clock-backed diagnostics
     and complete resource-generation/directory-lease lifetime in `connections/`,
-    plus supplied Official options, wire-terminal values and release evidence in `official/`.
+    plus supplied Official options, wire-terminal values, release evidence and the
+    complete filesystem package-file proof and bounded launch-input authority in `official/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
-- `adapters/`: CDP transport, official Server/catalog and native process/OS I/O.
+- `adapters/`: CDP transport, complete official child/catalog transactions and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
@@ -38,7 +39,11 @@ Deployment metadata and permission validation live in `domains/app-deployment.ts
 `adapters/app-deployment.ts` owns the canonical documents and both persistent
 lease inodes, exposing separate reader and trusted writer opens.
 `adapters/app-deployment-native.ts` supplies concrete native account, ancestor,
-volume and object evidence. Its fixed Windows C#/PowerShell and macOS JXA
-helpers perform read-only queries; source checks do not establish native
-acceptance. These deployment modules remain outside App entry composition.
-Create-only enrollment awaits the complete verified payload producer.
+volume and object evidence. The read-only macOS JXA remains a source candidate.
+Windows contributor builds use fixed query/create C# sources through the private
+build-only support lifetime; generated App delivery contains neither deployment
+C# sources nor support EXEs. The explicit Windows x64 fresh stage composes the
+complete verified source producer, protected creation and state-last publication.
+These source-only operations remain outside App entry composition; default
+admission, installers and native acceptance are separate pending gates. There is
+no runtime compiler fallback.

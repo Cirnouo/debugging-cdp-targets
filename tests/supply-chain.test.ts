@@ -397,6 +397,7 @@ test('security code inventory fingerprints native JXA and C# names, lengths and 
         'src/adapters/macos-deployment-authority.jxa',
         'src/adapters/macos-parent-identity.jxa',
         'src/adapters/windows-deployment-authority.cs',
+        'src/adapters/windows-deployment-create.cs',
         'src/adapters/windows-native-process.cs',
     ];
     const execute: PnpmExecutor = async (args) =>

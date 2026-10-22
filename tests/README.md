@@ -35,6 +35,12 @@ Git hook tests remain contributor-tooling regressions.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   verified public native addon to test shared read-only use, independent operation
   writers, exclusive deletion barriers and persistent lock inode identity.
+- `app-fresh-stage.test.ts` exercises the actual source builder and fresh
+  transaction with controlled native-process/addon I/O, exact file-only owned ZIP
+  extraction, protected manifest failures and state publication outcomes. Native
+  permission helper execution is blocked before spawn, and dlopen is replaced
+  before entering native code. It establishes no Windows permissions, DACL,
+  no-replace/locking acceptance or runnable admitted App claim.
 - `app-deployment-storage.test.ts` tests enrolled-root and lease ownership,
   bounded canonical state, atomic failure/readback outcomes and retained fences
   through real owned temporary files. Linux private-account/local-filesystem
@@ -46,14 +52,30 @@ Git hook tests remain contributor-tooling regressions.
 - `app-deployment-authority.test.ts` covers strict native SID/UID, protected and
   inherited ACL templates, ancestors, unsigned identities, APFS/NTFS evidence
   and Linux private/system mode rules through literal pure inputs.
-- `app-deployment-capabilities.test.ts` exercises the real store with controlled
-  account/native-output/filesystem boundaries: reader refusal, writer authority
+- `app-deployment-capabilities.test.ts` exercises the real store with a controlled
+  Linux-private POSIX filesystem/UID profile on every host: reader refusal, writer authority
   changes, exact descriptor modes, fixed lease identity, partial-envelope refusal
-  and commit/removal outcomes. Its Windows fixtures block native process creation
-  before spawn, including custom-promisify bypasses. Linux role fixtures replace
+  and commit/removal outcomes. Process creation/dlopen/chmod are blocked or replaced
+  before native code, including custom-promisify bypasses. Linux role fixtures replace
   real/effective UID and filesystem evidence. A controlled macOS full ancestor
   chain separates a sealed read-only System root from writable Data controls.
   These fixtures supply no native proof.
+- `deployment-support-build.test.ts` consumes the actual fixed source builder and
+  fresh Windows composition through controlled compiler/process I/O and real owned
+  files. Receipt/source/output drift, collisions, replacement/close errors,
+  fresh reader account/ACL/volume/identity fences and unsafe second chunks reject.
+  `windows-deployment-protocol.test.ts` uses independent golden frames and dual
+  byte/count bounds. `windows-deployment-stream.test.ts` covers backpressure,
+  drain/EOF, early rejection, EPIPE, cancellation and retained actual terminals.
+  Inert PE-shaped fixtures are never executed or claimed as native acceptance.
+- `app-deployment-copy.test.ts` consumes the real Node source-file feeder and
+  fixed-support lifetime with owned file-only copy streams. It checks two passes
+  of one descriptor, private manifest bytes, root/file replacement, hash/EOF
+  failures, read/close aggregation, early results, retained child terminals and
+  target readback drift. Deep multi-chunk sweeps reject unsafe later records and
+  newly changed facts on another call. It never executes C# or evaluates native
+  permissions. Fresh transaction fixtures count each named query/create/copy/
+  publish boundary and preserve no-state/indeterminate publication assertions.
 - `app-deployment-native-source.test.ts` executes the fixed macOS source only in
   a Node VM with controlled ObjC, buffers, descriptors and errno. It checks full
   unsigned identity precision, separate volume requests, ACL absence versus
@@ -274,8 +296,10 @@ Git hook tests remain contributor-tooling regressions.
   mappings and mutated instruction fixtures. Static checks
   establish the instruction contract, not model compliance; independent model
   scenario sampling is separate acceptance evidence.
-- `official-package.test.ts` checks frozen input agreement, exact release evidence,
-  path/link rejection, complete file verification and source/packaged resolution.
+- `gateway/official/package-files.test.ts` checks exact release evidence, path/link
+  rejection, complete byte proof and source/packaged resolution. Frozen input agreement
+  and drift are in `tooling/security/official-inputs.test.ts`; the real TEMP alias
+  child and seven executed-title oracle are in `tooling/quality/temporary-directory-alias.test.ts`.
 - `file-evidence.test.ts` reproduces path replacement and in-place mutation during
   integrity reads, checks exact bytes and confirms descriptor cleanup on failures.
 - `platform-evidence.test.ts` covers Unix socket recovery, Darwin path
@@ -436,7 +460,7 @@ Git hook tests remain contributor-tooling regressions.
   reference release without target deadlines or process polling.
 - `gateway/targets/structured-launch.test.ts` checks literal argv/env boundaries and port expansion.
 - `gateway/official/` owns safe options/recipes, exact wire-terminal values and
-    argument/environment contracts, preserving all original cases and matrices;
+    argument/environment and complete package-file contracts, preserving all original cases and matrices;
     see its [suite inventory](gateway/official/README.md).
 - `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
     variants and independent configuration.
@@ -485,14 +509,15 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select forty-seven entries: `tests/*.test.ts`, the
-twenty-three explicit [tooling suites](tooling/README.md), two explicit
-[Host suites](host-plugins/README.md) and twenty-one Gateway suites. Gateway selection
+command and `pnpm test:coverage` select fifty entries: `tests/*.test.ts`, the
+twenty-five explicit [tooling suites](tooling/README.md), two explicit
+[Host suites](host-plugins/README.md) and twenty-two Gateway suites. Gateway selection
 retains argument parsing, eleven [Target suites](gateway/targets/README.md), five
-[connection/directory suites](gateway/connections/README.md) and the four explicit
+[connection/directory suites](gateway/connections/README.md) and the five explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
-append once in that order, followed by target-lifecycle, lifecycle-rollback,
+append once in that order, followed by package-files, security/official-inputs and
+quality/temporary-directory-alias, then target-lifecycle, lifecycle-rollback,
 observer-cleanup and close-diagnostics. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
