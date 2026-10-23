@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { createTargetHost } from '../src/adapters/target-host.ts';
-import { createTargetController } from '../src/application/target-controller.ts';
-import { type ManagedTarget, RetainedTargetError } from '../src/gateway/targets/model/target-contract.ts';
-import { DetailedError, errorDetails } from '../src/shared/errors.ts';
+import { createTargetHost } from '../../../src/adapters/target-host.ts';
+import { type ManagedTarget, RetainedTargetError } from '../../../src/gateway/targets/model/target-contract.ts';
+import { createTargetLifecycle } from '../../../src/gateway/targets/target-lifecycle.ts';
+import { DetailedError, errorDetails } from '../../../src/shared/errors.ts';
 
 const entryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 function fixture() {
@@ -13,7 +13,7 @@ function fixture() {
     let routeFails = true;
     const closed: number[] = [];
     const children = new Map<number, EventEmitter & { exitCode: number | null }>();
-    const controller = createTargetController({
+    const controller = createTargetLifecycle({
         entryId,
         router: {
             isBusy: () => false,
@@ -71,7 +71,7 @@ function fixture() {
     };
 }
 
-test('failed attachment and failed rollback retain a gated session until explicit Close succeeds', async () => {
+test('failed attachment and rollback retain a gated target until explicit Close succeeds', async () => {
     const f = fixture();
     await assert.rejects(
         f.controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
@@ -95,11 +95,11 @@ test('failed attachment and failed rollback retain a gated session until explici
     assert.deepEqual(f.closed, [42, 42]);
 });
 
-test('restart rollback retains the new failed target and never overwrites it with the previous session', async () => {
+test('failed replacement rollback retains the new target despite old exit callbacks', async () => {
     let launches = 0;
     const children = new Map<number, EventEmitter & { exitCode: number | null }>();
     let allowFailedClose = false;
-    const controller = createTargetController({
+    const controller = createTargetLifecycle({
         entryId,
         router: {
             isBusy: () => false,
@@ -153,7 +153,7 @@ test('restart rollback retains the new failed target and never overwrites it wit
     assert.equal(controller.status().status, 'idle');
 });
 
-test('unverified host startup with failed normal cleanup retains typed identity without serializing launch evidence', async () => {
+test('unverified startup with failed normal cleanup retains typed identity without serializing launch evidence', async () => {
     let clock = 0;
     let launches = 0;
     let closeSucceeds = false;
@@ -193,7 +193,7 @@ test('unverified host startup with failed normal cleanup retains typed identity 
             clock += 25_000;
         },
     });
-    const controller = createTargetController({
+    const controller = createTargetLifecycle({
         entryId,
         router: { isBusy: () => false, setTarget: () => {}, clearTarget: () => {} },
         host,

@@ -1,13 +1,13 @@
 import { beginFixtureStage, runFixtureCleanup } from '../adapters/fixture-diagnostics.ts';
 import type { createLifecycleService } from '../application/mcp-lifecycle.ts';
 import type { createRegistrationRegistry } from '../application/registrations.ts';
-import type { TargetEvent } from '../application/target-controller.ts';
 import { type ConnectionRoute, type ConnectionStatus, validateIdentity } from '../domains/control-contract.ts';
 import type { ClientPrincipal } from '../shared/client-context.ts';
 import { errorMessage } from '../shared/errors.ts';
 import type { ConnectionDirectoryLease } from './connections/directory-lease.ts';
 import { createResourceOwner, type ResourceOwner } from './connections/resource-owner.ts';
 import type { ManagedConnection } from './core.ts';
+import type { TargetExitEvent } from './targets/target-lifecycle.ts';
 
 export function createGatewayRegistry({
     entryId,
@@ -85,7 +85,7 @@ export function createGatewayRegistry({
     }
     function observeExit(
         connection: ManagedConnection,
-        event: TargetEvent,
+        event: TargetExitEvent,
         lifecycle: Pick<ReturnType<typeof createLifecycleService>, 'cancelRoute'>,
     ) {
         const owner = connection.owner;
@@ -126,7 +126,7 @@ export function createGatewayRegistry({
             connection.owner.abortWork(new Error('The gateway is closing.'));
             connection.router.clearTarget();
             closing.push(
-                connection.controller.cleanupOnDisconnect().then((retained) => {
+                connection.controller.cleanup().then((retained) => {
                     if (retained)
                         throw new Error(
                             'Gateway cleanup failed: the application did not close normally; live ownership is retained.',

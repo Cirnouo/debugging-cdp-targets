@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { emitFixtureEvent } from '../adapters/fixture-diagnostics.ts';
+import { emitFixtureEvent } from '../../adapters/fixture-diagnostics.ts';
 import type {
     ControlContext,
     Disposition,
     LaunchContext,
     LaunchOptions,
     TargetStatus,
-} from '../domains/control-contract.ts';
-import { createResourceOwner, type ResourceOwner } from '../gateway/connections/resource-owner.ts';
-import { type ManagedTarget, RetainedTargetError } from '../gateway/targets/model/target-contract.ts';
-import { DetailedError, errorCode, errorDetails, errorMessage } from '../shared/errors.ts';
+} from '../../domains/control-contract.ts';
+import { DetailedError, errorCode, errorDetails, errorMessage } from '../../shared/errors.ts';
+import { createResourceOwner, type ResourceOwner } from '../connections/resource-owner.ts';
+import { type ManagedTarget, RetainedTargetError } from './model/target-contract.ts';
 
-export interface ControllerRouter {
+export interface TargetLifecycleRouter {
     setTarget(target: ManagedTarget): void;
     clearTarget(): void;
     isBusy(): boolean;
@@ -23,7 +23,7 @@ export interface TargetLaunchContext extends LaunchContext {
     onCreated?: (target: ManagedTarget) => void;
     onRollback?: (target: ManagedTarget) => void;
 }
-export interface ControllerHost {
+export interface TargetLifecycleHost {
     validateLaunch?(options: LaunchOptions): void;
     launch(options: LaunchOptions, context?: TargetLaunchContext): Promise<ManagedTarget>;
     close(target: ManagedTarget, options?: { requireListener?: boolean }): Promise<boolean>;
@@ -31,7 +31,7 @@ export interface ControllerHost {
     waitForExit?(target: ManagedTarget, signal?: AbortSignal): Promise<void>;
     health?(target: ManagedTarget): Promise<TargetHealth>;
 }
-export type TargetEvent = {
+export type TargetExitEvent = {
     sessionId: string;
     generation?: string;
     reason: 'process-exited';
@@ -77,7 +77,7 @@ function waitWithSignal<T>(wait: Promise<T>, signal?: AbortSignal): Promise<T> {
     });
 }
 
-export function createTargetController({
+export function createTargetLifecycle({
     entryId,
     router,
     host,
@@ -87,13 +87,13 @@ export function createTargetController({
     createOwner,
 }: {
     entryId: string;
-    router: ControllerRouter;
-    host: ControllerHost;
+    router: TargetLifecycleRouter;
+    host: TargetLifecycleHost;
     server: {
         ensure(options: LaunchOptions, context?: LaunchContext): Promise<void>;
         close(owner?: ResourceOwner): Promise<void>;
     };
-    onProcessExit?: (event: TargetEvent) => void;
+    onProcessExit?: (event: TargetExitEvent) => void;
     onObservationFailure?: (sessionId: string) => void;
     createOwner?: (sessionId: string) => Promise<ResourceOwner>;
 }) {
@@ -481,7 +481,7 @@ export function createTargetController({
         checking = { owner: selected.owner, job };
         return job;
     }
-    async function cleanupOnDisconnect(expected: 'disconnect' | 'rollback' = 'disconnect') {
+    async function cleanup(expected: 'disconnect' | 'rollback' = 'disconnect') {
         const selected = current;
         gate();
 
@@ -512,7 +512,7 @@ export function createTargetController({
         stop,
         retireExited,
         checkHealth,
-        cleanupOnDisconnect,
+        cleanup,
         officialDisconnected: () => {
             if (current) lose(current, 'official-disconnected');
         },

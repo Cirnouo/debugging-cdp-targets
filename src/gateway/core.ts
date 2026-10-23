@@ -13,11 +13,6 @@ import { loadOfficialToolCatalog, workspaceSources } from '../adapters/tool-cata
 import { createClientContext, waitForClient } from '../application/client-context.ts';
 import { createLifecycleService } from '../application/mcp-lifecycle.ts';
 import { createRegistrationRegistry } from '../application/registrations.ts';
-import {
-    type ControllerHost,
-    type ControllerRouter,
-    createTargetController,
-} from '../application/target-controller.ts';
 import type { Diagnose, Diagnostic } from '../domains/control-contract.ts';
 import {
     type ConnectionStatus,
@@ -48,9 +43,14 @@ import {
     prepareLaunchDefinition,
     validateDataIsolationBinding,
 } from './targets/model/launch-command.ts';
+import {
+    createTargetLifecycle,
+    type TargetLifecycleHost,
+    type TargetLifecycleRouter,
+} from './targets/target-lifecycle.ts';
 
-type RuntimeRouter = ControllerRouter & { url: string; close(): Promise<void> };
-type Controller = ReturnType<typeof createTargetController>;
+type RuntimeRouter = TargetLifecycleRouter & { url: string; close(): Promise<void> };
+type Controller = ReturnType<typeof createTargetLifecycle>;
 export type ManagedConnection = {
     connectionId: string;
     sessionId: string;
@@ -83,7 +83,7 @@ export type GatewayDependencies = {
     dataDirectories?: DataDirectoryRegistry;
     profileAvailable?: typeof nativeProfileAvailable;
     createRouter?: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
-    createHost?: () => ControllerHost;
+    createHost?: () => TargetLifecycleHost;
     createConnection?: typeof createOfficialConnection;
     loadCatalog?: typeof loadOfficialToolCatalog;
     now?: () => number;
@@ -317,7 +317,7 @@ export async function createGatewayCore({
                 ),
                 activeCalls: 0,
                 quarantined: false,
-                controller: createTargetController({
+                controller: createTargetLifecycle({
                     entryId,
                     host,
                     router: {
@@ -480,7 +480,7 @@ export async function createGatewayCore({
                     if (request.scope === 'official') {
                         delete connection.restartScope;
                         try {
-                            await connection.controller.cleanupOnDisconnect('rollback');
+                            await connection.controller.cleanup('rollback');
                         } catch {
                             /* Retained failed disposal remains owned for explicit cleanup retry. */
                         }

@@ -28,6 +28,141 @@ function connectionDependencyForms(specifier: string) {
     ];
 }
 
+test('target lifecycle exact capabilities admit only named original dependencies', () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    for (const source of [
+        "import { randomUUID } from 'node:crypto';",
+        "import { emitFixtureEvent } from '../../adapters/fixture-diagnostics.ts';",
+        "import type { ControlContext, Disposition, LaunchContext, LaunchOptions, TargetStatus } from '../../domains/control-contract.ts';",
+        "import { createResourceOwner, type ResourceOwner } from '../connections/resource-owner.ts';",
+        "import { RetainedTargetError, type ManagedTarget } from './model/target-contract.ts';",
+        "import { DetailedError, errorCode, errorDetails, errorMessage } from '../../shared/errors.ts';",
+    ])
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+});
+
+for (const specifier of ['toString', 'constructor', '__proto__'])
+    for (const typeOnly of [false, true])
+        test(`target lifecycle prototype module name ${specifier} returns diagnostics for ${typeOnly ? 'type' : 'value'} imports`, () => {
+            const file = 'src/gateway/targets/target-lifecycle.ts';
+            const source = `import ${typeOnly ? 'type ' : ''}{ Value } from '${specifier}';`;
+            let errors: string[] = [];
+            assert.doesNotThrow(() => {
+                errors = validateRuntimeSource(file, source);
+            });
+            assert.ok(errors.includes(`${file}: unapproved target lifecycle dependency or binding.`), source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+        });
+
+test('target lifecycle exact capabilities deny dependency substitutions and all sixteen unbound forms', () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    for (const dependency of [
+        'node:crypto',
+        '../../adapters/fixture-diagnostics.ts',
+        '../../domains/control-contract.ts',
+        '../connections/resource-owner.ts',
+        './model/target-contract.ts',
+        '../../shared/errors.ts',
+        'node:fs',
+        'node:net',
+        'node:child_process',
+        '@modelcontextprotocol/client',
+        '../../adapters/target-host.ts',
+        '../../application/mcp-lifecycle.ts',
+        '../core.ts',
+        '../registry.ts',
+        '../connections/directory-lease.ts',
+        './model/isolation.ts',
+        './unknown.ts',
+        '../diagnostics.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, source);
+        }
+    for (const source of [
+        "import { randomBytes } from 'node:crypto';",
+        "import { randomUUID as uuid } from 'node:crypto';",
+        "import { LaunchOptions } from '../../domains/control-contract.ts';",
+        "import { ManagedTarget } from './model/target-contract.ts';",
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
+});
+
+test('target lifecycle exact capabilities keep the sole direct exit timestamp and deny ambient escalation', () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    assert.deepEqual(validateRuntimeSource(file, 'const exitedAt = new Date().toISOString();'), []);
+    for (const source of [
+        'const value = new Date();',
+        'const value = new Date(0).toISOString();',
+        'const value = new Date().toISOString;',
+        'const value = new Date()["toISOString"]();',
+        'const value = Date.now();',
+        'const value = Date;',
+        'const value = globalThis.Date.now;',
+        'const value = performance.now();',
+        'const value = process.env;',
+        'const value = process.argv;',
+        'const value = globalThis.process;',
+        'const value = globalThis[key];',
+        'fetch("http://localhost");',
+        'new WebSocket("ws://localhost");',
+        'process.kill(1, "SIGTERM");',
+        'child.kill("SIGTERM");',
+        'child.kill("SIGKILL");',
+        'const value = { [process.platform](): void {} };',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
+    for (const file of ['src/gateway/targets/unknown.ts', 'src/gateway/targets/model/unknown.ts'])
+        assert.ok(validateRuntimeSource(file, 'const value = new Date().toISOString();').length, file);
+});
+
+test('target lifecycle exact capabilities fence Core registry and retired application grants', () => {
+    for (const [file, source] of [
+        [
+            'src/gateway/core.ts',
+            "import { createTargetLifecycle, type TargetLifecycleHost, type TargetLifecycleRouter } from './targets/target-lifecycle.ts';",
+        ],
+        ['src/gateway/registry.ts', "import type { TargetExitEvent } from './targets/target-lifecycle.ts';"],
+        ['src/gateway/registry.ts', "import { type TargetExitEvent } from './targets/target-lifecycle.ts';"],
+    ] as const)
+        assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    for (const file of ['src/gateway/core.ts', 'src/gateway/registry.ts']) {
+        for (const { source } of connectionDependencyForms('../application/target-controller.ts'))
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+        for (const { source } of connectionDependencyForms('./targets/target-lifecycle.ts'))
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+    for (const source of [
+        "import { TargetExitEvent } from './targets/target-lifecycle.ts';",
+        "import type { TargetLifecycleHost } from './targets/target-lifecycle.ts';",
+        "export type { TargetExitEvent } from './targets/target-lifecycle.ts';",
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/registry.ts', source).length, source);
+});
+
+test('target lifecycle exact capabilities reject inverse authority in all sixteen dependency forms', () => {
+    for (const [file, dependency] of [
+        ['src/gateway/unknown.ts', './targets/target-lifecycle.ts'],
+        ['src/gateway/targets/unknown.ts', './target-lifecycle.ts'],
+        ['src/gateway/targets/model/unknown.ts', '../target-lifecycle.ts'],
+        ['src/gateway/official/options.ts', '../targets/target-lifecycle.ts'],
+        ['src/gateway/connections/resource-owner.ts', '../targets/target-lifecycle.ts'],
+        ['src/domains/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+        ['src/shared/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+        ['src/adapters/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+        ['src/host-plugins/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, `${file}: ${source}`);
+        }
+});
+
 test('connection resource roles accept only their exact adapter and erased contract capabilities', () => {
     for (const [file, dependency, onlyType] of [
         ['src/gateway/connections/directory-lease.ts', '../../adapters/data-directory.ts', false],
@@ -1223,7 +1358,6 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 '../application/client-context.ts',
                 '../application/mcp-lifecycle.ts',
                 '../application/registrations.ts',
-                '../application/target-controller.ts',
                 './registry.ts',
             ],
             ['@modelcontextprotocol/client', './connections/resource-owner.ts', '../shared/client-context.ts'],
@@ -1241,7 +1375,6 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 './connections/directory-lease.ts',
                 '../application/registrations.ts',
                 '../application/mcp-lifecycle.ts',
-                '../application/target-controller.ts',
                 '../shared/client-context.ts',
             ],
         ],
@@ -1383,6 +1516,11 @@ test('Official pure owners reject process environment clocks and ambient aliases
         ])
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
+});
+
+test('target lifecycle exact capabilities accept the complete actual lifecycle source', async () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
 });
 
 test('Official package-file role accepts only its five complete proof dependencies', () => {
