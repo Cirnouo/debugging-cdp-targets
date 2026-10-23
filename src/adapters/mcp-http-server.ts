@@ -1,13 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { toNodeHandler } from '@modelcontextprotocol/node';
+import { type NodeIncomingMessageLike, toNodeHandler } from '@modelcontextprotocol/node';
 import {
     createMcpHandler,
     isLegacyRequest,
     WebStandardStreamableHTTPServerTransport,
 } from '@modelcontextprotocol/server';
-import { MCP_MAX_REQUEST_BODY_BYTES, mcpHttpRejection } from '../domains/mcp-http.ts';
+import { MCP_MAX_REQUEST_BODY_BYTES, mcpHttpRejection, mcpJsonRejection } from '../domains/mcp-http.ts';
 import { createMcpRequestHandler, type McpHttpCore } from './mcp-request-handler.ts';
 
 /** Only transports live here. Client/session close never disposes the application-owned core. */
@@ -62,12 +62,32 @@ export async function createMcpHttpServer(options: { port: number; core: McpHttp
     const nodeHandler = toNodeHandler(
         {
             async fetch(request, fetchOptions) {
+                let checkedOptions = fetchOptions;
+                if (request.method === 'POST') {
+                    let parsedBody: unknown;
+                    try {
+                        parsedBody =
+                            fetchOptions?.parsedBody !== undefined ? fetchOptions.parsedBody : await request.json();
+                    } catch {
+                        return Response.json(
+                            { error: 'Invalid JSON request.' },
+                            { status: 400, headers: { 'Cache-Control': 'no-store' } },
+                        );
+                    }
+                    const rejection = mcpJsonRejection(parsedBody);
+                    if (rejection)
+                        return Response.json(
+                            { error: rejection.message },
+                            { status: rejection.status, headers: { 'Cache-Control': 'no-store' } },
+                        );
+                    checkedOptions = { ...fetchOptions, parsedBody };
+                }
                 if (
-                    !(await isLegacyRequest(request, fetchOptions?.parsedBody, {
+                    !(await isLegacyRequest(request, checkedOptions?.parsedBody, {
                         maxRequestBodySize: MCP_MAX_REQUEST_BODY_BYTES,
                     }))
                 )
-                    return modern.fetch(request, fetchOptions);
+                    return modern.fetch(request, checkedOptions);
                 const id = request.headers.get('mcp-session-id');
                 let selected = id ? sessions.get(id) : undefined;
                 if (id && !selected) return new Response(null, { status: 404 });
@@ -75,7 +95,7 @@ export async function createMcpHttpServer(options: { port: number; core: McpHttp
                 await selected.connected;
                 try {
                     return await requestLifetime.run(request.signal, () =>
-                        selected.transport.handleRequest(request, fetchOptions),
+                        selected.transport.handleRequest(request, checkedOptions),
                     );
                 } finally {
                     if (!selected.transport.sessionId) await selected.server.close();
@@ -132,7 +152,18 @@ export async function createMcpHttpServer(options: { port: number; core: McpHttp
             const selected = sessions.get(String(request.headers['mcp-session-id']));
             if (request.method === 'GET') response.once('close', () => selected?.disconnect());
             if (!request.method || !request.url) throw new Error('Invalid HTTP request.');
-            await nodeHandler(Object.assign(request, { method: request.method, url: request.url }), response);
+            const original = request as NodeIncomingMessageLike;
+            await nodeHandler(
+                {
+                    method: request.method,
+                    url: request.url,
+                    headers: request.headers,
+                    ...(original.auth !== undefined && { auth: original.auth }),
+                    // Early iterator return must not destroy the socket before the SDK writes its refusal.
+                    [Symbol.asyncIterator]: () => request.iterator({ destroyOnReturn: false }),
+                },
+                response,
+            );
         })().catch(() => {
             if (!response.headersSent) response.writeHead(500, { 'Content-Type': 'application/json' });
             response.end('{"error":"MCP request failed."}');

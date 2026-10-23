@@ -81,7 +81,7 @@ response. The original context remains associated with actual execution until a
 real outcome, and unavailable progress/elicitation never goes to a later client.
 Official successful results remain unchanged and have no second public archive.
 
-SDK 2.2.0 has no public option to disable its execution timer. The bridge uses the
+SDK 2.3.1 has no public option to disable its execution timer. The bridge uses the
 maximum safe Node timer, 2,147,483,647 milliseconds. That deadline can still send
 `notifications/cancelled` and remove SDK response handlers. A single matching wire
 identity ledger therefore remains occupied after SDK timeout until a real result,
