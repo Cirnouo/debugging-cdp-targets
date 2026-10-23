@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { request as httpRequest } from 'node:http';
+import {
+    type ClientRequest,
+    createServer,
+    request as httpRequest,
+    type IncomingMessage,
+    type ServerResponse,
+} from 'node:http';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client, ProtocolError, ProtocolErrorCode, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
@@ -9,6 +15,285 @@ import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createGatewayCore } from '../src/gateway/core.ts';
 import { isRecord } from '../src/shared/errors.ts';
+
+function httpStatus(
+    url: string,
+    headers: Record<string, string>,
+    chunks: string[],
+    options: { expectRefusal?: boolean; timeoutMs?: number; observeRequest?: (request: ClientRequest) => void } = {},
+) {
+    return new Promise<number>((resolve, reject) => {
+        const started = performance.now();
+        const events: { ms: number; event: string; value?: number | string }[] = [];
+        const body: Buffer[] = [];
+        let request: ClientRequest;
+        let response: IncomingMessage | undefined;
+        let bytes = 0;
+        let requestClosed = false;
+        let responseEnded = false;
+        let responseClosed = false;
+        let responseAborted = false;
+        let settled = false;
+        let failure: string | undefined;
+        let timer: ReturnType<typeof setTimeout>;
+        function record(event: string, value?: number | string) {
+            if (events.length < 48)
+                events.push({
+                    ms: Math.round((performance.now() - started) * 1000) / 1000,
+                    event,
+                    ...(value === undefined ? {} : { value }),
+                });
+            else fail('event-limit');
+        }
+        function settle(force = false) {
+            if (settled || (!force && (!requestClosed || (!failure && !responseClosed)))) return;
+            if (!failure && (!responseEnded || !response?.complete || responseAborted)) failure = 'incomplete-response';
+            if (!failure && options.expectRefusal) {
+                if (response?.statusCode !== 413) failure = 'wrong-status';
+                else if (response.headers.connection !== 'close') failure = 'missing-connection-close';
+                else if (response.headers['content-type']?.split(';')[0] !== 'application/json')
+                    failure = 'wrong-content-type';
+                else {
+                    try {
+                        const parsed: unknown = JSON.parse(Buffer.concat(body).toString('utf8'));
+                        assert.deepEqual(parsed, {
+                            jsonrpc: '2.0',
+                            error: {
+                                code: -32000,
+                                message: 'Payload Too Large: Request body must not exceed 1048576 bytes',
+                            },
+                            id: null,
+                        });
+                    } catch {
+                        failure = 'invalid-refusal-body';
+                    }
+                }
+            }
+            settled = true;
+            clearTimeout(timer);
+            if (failure) {
+                reject(
+                    new Error(
+                        `HTTP exchange failed: ${failure}; ${JSON.stringify({ requestClosed, responseEnded, responseClosed, responseAborted, complete: response?.complete ?? false, status: response?.statusCode ?? null, bytes, events })}`,
+                    ),
+                );
+            } else resolve(response?.statusCode ?? 0);
+        }
+        function fail(reason: string) {
+            failure ??= reason;
+            request.destroy();
+            settle();
+        }
+        function requestError(error: unknown) {
+            const code =
+                isRecord(error) && (error.code === 'EPIPE' || error.code === 'ECONNRESET') ? error.code : 'OTHER';
+            record('request.error', code);
+            if (!options.expectRefusal || code === 'OTHER') fail('request-error');
+        }
+        request = httpRequest(url, { method: 'POST', headers }, (incoming) => {
+            response = incoming;
+            record('response.headers', incoming.statusCode);
+            incoming.on('data', (chunk: Buffer) => {
+                bytes += chunk.length;
+                record('response.data', chunk.length);
+                if (bytes > 16384) fail('body-limit');
+                else body.push(chunk);
+            });
+            incoming.once('end', () => {
+                responseEnded = true;
+                record('response.end');
+                settle();
+            });
+            incoming.once('aborted', () => {
+                responseAborted = true;
+                record('response.aborted');
+                fail('response-aborted');
+            });
+            incoming.on('error', () => {
+                record('response.error');
+                fail('response-error');
+            });
+            incoming.once('close', () => {
+                responseClosed = true;
+                record('response.close');
+                if (!responseEnded || !incoming.complete) fail('incomplete-response');
+                settle();
+            });
+        });
+        request.on('error', requestError);
+        request.once('finish', () => record('request.finish'));
+        request.once('close', () => {
+            requestClosed = true;
+            record('request.close');
+            settle();
+        });
+        timer = setTimeout(() => {
+            record('timeout');
+            fail('timeout');
+            settle(true);
+        }, options.timeoutMs ?? 2000);
+        try {
+            options.observeRequest?.(request);
+            for (const chunk of chunks) {
+                record('request.write', Buffer.byteLength(chunk));
+                request.write(chunk, (error) => {
+                    record('request.write-callback');
+                    if (error) requestError(error);
+                });
+            }
+            record('request.end');
+            request.end();
+        } catch {
+            fail('write-threw');
+        }
+    });
+}
+
+async function refusalResponse(
+    respond: (request: IncomingMessage, response: ServerResponse) => void,
+    options: Parameters<typeof httpStatus>[3] = {},
+) {
+    const server = createServer(respond);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+        const address = server.address();
+        assert.ok(address && typeof address !== 'string');
+        return await httpStatus(`http://127.0.0.1:${address.port}/mcp`, { 'Content-Type': 'application/json' }, [' '], {
+            expectRefusal: true,
+            ...options,
+        });
+    } finally {
+        await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
+}
+
+test('HTTP refusal observation retains upload error before complete response', async () => {
+    const result = await refusalResponse(
+        (_request, response) => {
+            response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+            response.end(
+                '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+            );
+        },
+        {
+            observeRequest(request) {
+                request.once('socket', () =>
+                    request.emit('error', Object.assign(new Error('upload refused'), { code: 'EPIPE' })),
+                );
+            },
+        },
+    );
+    assert.equal(result, 413);
+});
+
+test('HTTP refusal observation retains request reset before complete response', async () => {
+    assert.equal(
+        await refusalResponse(
+            (_request, response) => {
+                response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+                response.end(
+                    '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+                );
+            },
+            {
+                observeRequest(request) {
+                    request.once('socket', () =>
+                        request.emit('error', Object.assign(new Error('upload refused'), { code: 'ECONNRESET' })),
+                    );
+                },
+            },
+        ),
+        413,
+    );
+});
+
+for (const [name, status, body, connection, contentType, reason] of [
+    ['wrong status', 400, '{}', 'close', 'application/json', 'wrong-status'],
+    ['echoed body', 413, '{"private":"do-not-echo"}', 'close', 'application/json', 'invalid-refusal-body'],
+    ['invalid JSON', 413, '{', 'close', 'application/json', 'invalid-refusal-body'],
+    ['unbounded body', 413, 'x'.repeat(16385), 'close', 'application/json', 'body-limit'],
+    ['open connection', 413, '{}', 'keep-alive', 'application/json', 'missing-connection-close'],
+    ['wrong content type', 413, '{}', 'close', 'text/plain', 'wrong-content-type'],
+] as const) {
+    test(`HTTP refusal observation rejects ${name}`, async () => {
+        await assert.rejects(
+            refusalResponse((_request, response) => {
+                response.writeHead(status, { 'Content-Type': contentType, Connection: connection });
+                response.end(body);
+            }),
+            new RegExp(`HTTP exchange failed: ${reason};`),
+        );
+    });
+}
+
+test('HTTP refusal observation rejects truncated 413 and response abort', async () => {
+    await assert.rejects(
+        refusalResponse((_request, response) => {
+            response.writeHead(413, {
+                'Content-Type': 'application/json',
+                Connection: 'close',
+                'Content-Length': '125',
+            });
+            response.end('{');
+        }),
+        /HTTP exchange failed: (response-aborted|response-error|incomplete-response);/,
+    );
+});
+
+for (const code of ['EPIPE', 'ECONNRESET']) {
+    test(`HTTP refusal observation rejects ${code} without a response at its deadline`, async () => {
+        await assert.rejects(
+            refusalResponse(() => {}, {
+                timeoutMs: 30,
+                observeRequest(request) {
+                    request.once('socket', () =>
+                        request.emit('error', Object.assign(new Error('upload refused'), { code })),
+                    );
+                },
+            }),
+            /HTTP exchange failed: timeout;/,
+        );
+    });
+}
+
+test('HTTP refusal observation rejects a reset socket without inferred 413', async () => {
+    await assert.rejects(
+        refusalResponse((request) => request.socket.destroy(), { timeoutMs: 30 }),
+        /HTTP exchange failed: timeout;/,
+    );
+});
+
+test('HTTP refusal observation rejects an exchange that never responds', async () => {
+    await assert.rejects(
+        refusalResponse(() => {}, { timeoutMs: 30 }),
+        /HTTP exchange failed: timeout;/,
+    );
+});
+
+for (const side of ['request', 'response'] as const) {
+    test(`HTTP refusal observation rejects ${side} error after complete response before request close`, async () => {
+        await assert.rejects(
+            refusalResponse(
+                (_request, response) => {
+                    response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+                    response.end(
+                        '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+                    );
+                },
+                {
+                    observeRequest(request) {
+                        request.once('response', (response) => {
+                            response.once('end', () => {
+                                (side === 'request' ? request : response).emit('error', new Error('unrelated failure'));
+                            });
+                        });
+                    },
+                },
+            ),
+            new RegExp(`HTTP exchange failed: ${side}-error;`),
+        );
+    });
+}
 
 async function fixture() {
     const tool = { name: 'echo', inputSchema: { type: 'object' as const, properties: {} } };
@@ -444,16 +729,8 @@ test('actual SDK HTTP keeps delayed originating roots after an accepted start an
 
 test('HTTP socket enforces endpoint headers, bounded streamed bodies and explicit port conflict', async () => {
     const selected = await fixture();
-    const status = (headers: Record<string, string>, chunks: string[]) =>
-        new Promise<number>((resolve, reject) => {
-            const request = httpRequest(selected.http.url, { method: 'POST', headers }, (response) => {
-                response.resume();
-                response.once('end', () => resolve(response.statusCode ?? 0));
-            });
-            request.once('error', reject);
-            for (const chunk of chunks) request.write(chunk);
-            request.end();
-        });
+    const status = (headers: Record<string, string>, chunks: string[], expectRefusal = false) =>
+        httpStatus(selected.http.url, headers, chunks, { expectRefusal });
     try {
         for (const [headers, expected] of [
             [{ Host: 'attacker.invalid' }, 403],
@@ -468,12 +745,13 @@ test('HTTP socket enforces endpoint headers, bounded streamed bodies and explici
             body: ' '.repeat(4 * 1024 * 1024 + 1),
         });
         assert.equal(tooLarge.status, 413);
+        assert.deepEqual(await tooLarge.json(), { error: 'Request body exceeds the limit.' });
         assert.equal(
-            await status({ 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, [
-                ' '.repeat(2 * 1024 * 1024),
-                ' '.repeat(2 * 1024 * 1024),
-                ' ',
-            ]),
+            await status(
+                { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+                [' '.repeat(2 * 1024 * 1024), ' '.repeat(2 * 1024 * 1024), ' '],
+                true,
+            ),
             413,
         );
         const port = Number(new URL(selected.http.url).port);
