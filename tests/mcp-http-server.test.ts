@@ -420,32 +420,70 @@ async function refusalResponse(
 
 test('HTTP bounded flooding refusal distinguishes a physically closed upload from client JSON', async (t) => {
     let client: ClientRequest | undefined;
-    const server = createServer((_request, response) => {
-        response.once('finish', () =>
-            client?.destroy(Object.assign(new Error('peer upload failed'), { code: 'EPIPE' })),
-        );
-        response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
-        response.end(
+    let serverResponse: ServerResponse | undefined;
+    let writeCompleted = false;
+    let responseStarted = false;
+    let responseFinished = false;
+    let injected = false;
+    let restoreWrite = () => {};
+    function respond() {
+        if (!serverResponse || !writeCompleted || responseStarted) return;
+        responseStarted = true;
+        serverResponse.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+        serverResponse.end(
             '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
         );
+    }
+    const server = createServer((_request, response) => {
+        serverResponse = response;
+        response.once('finish', () => {
+            responseFinished = true;
+            if (client) {
+                client.destroy(Object.assign(new Error('peer upload failed'), { code: 'EPIPE' }));
+                injected = true;
+            }
+        });
+        respond();
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     try {
         const address = server.address();
         assert.ok(address && typeof address !== 'string');
-        const outcome = await boundedFloodRefusal(
-            t,
-            `http://127.0.0.1:${address.port}/mcp`,
-            [' '.repeat(2 * 1024 * 1024)],
-            {
-                holdEnd: true,
-                observeRequest: (request) => {
-                    client = request;
-                },
+        const outcome = await boundedFloodRefusal(t, `http://127.0.0.1:${address.port}/mcp`, [' '], {
+            holdEnd: true,
+            observeRequest: (request) => {
+                client = request;
+                const originalWrite = request.write;
+                const spy = t.mock.method(
+                    request,
+                    'write',
+                    function (this: ClientRequest, ...args: Parameters<ClientRequest['write']>) {
+                        const forwarded: unknown[] = [...args];
+                        const callbackIndex = forwarded.length - 1;
+                        const callback = forwarded[callbackIndex];
+                        if (typeof callback === 'function') {
+                            forwarded[callbackIndex] = function (this: unknown, ...callbackArgs: unknown[]) {
+                                const result = Reflect.apply(callback, this, callbackArgs);
+                                if (callbackArgs[0] === undefined || callbackArgs[0] === null) {
+                                    writeCompleted = true;
+                                    respond();
+                                }
+                                return result;
+                            };
+                        }
+                        return Reflect.apply(originalWrite, this, forwarded);
+                    },
+                );
+                restoreWrite = () => spy.mock.restore();
             },
-        );
+        });
         assert.deepEqual(outcome, { kind: 'upload-terminated' });
+        assert.equal(writeCompleted, true);
+        assert.equal(responseFinished, true);
+        assert.equal(injected, true);
     } finally {
+        restoreWrite();
+        serverResponse = undefined;
         client?.destroy();
         await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     }
