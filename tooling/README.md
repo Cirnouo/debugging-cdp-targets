@@ -139,7 +139,8 @@ Generic security identities accept any legal prerelease/build. App versions are
 independent of the exact shared Skill and four peer Plugin manifest version group.
 
 Vendored notice evidence is build-only and adds no runtime dependency. For SDK
-2.2.0, every SDK input used by esbuild was independently compared with its original
+2.3.1 client/core/server and the retained Node adapter 2.1.0, every SDK input used
+by esbuild is bound to its original
 npm tarball after checking the registry SHA-512 integrity. The included source maps
 identify ajv 8.18.0, ajv-formats 3.0.1, content-type 1.0.5, fast-deep-equal 3.1.3,
 fast-uri 3.1.0 and json-schema-traverse 1.0.0. Their nonempty executable sources

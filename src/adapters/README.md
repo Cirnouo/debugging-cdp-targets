@@ -104,7 +104,8 @@
   SDK listChanged drives uncapped serialized private reviewed snapshots, freshness,
   fail-closed admission and captured Tool output validation.
 - `mcp-http-server.ts` composes the public SDK Node Streamable HTTP transport,
-  validates loopback HTTP boundaries and routes strict modern requests beside
+  validates loopback HTTP/raw-body boundaries, parses once and applies the whole
+  JSON envelope budget before routing strict modern requests beside
   sessionful legacy connections through one shared Core.
 - `mcp-request-handler.ts` owns the common fixed declarations, authenticated
   dispatch using the pure `gateway/owned-tool-arguments.ts` parsers, modern roots
@@ -144,7 +145,7 @@ and generic application occupancy require the Agent's read-only prelaunch gate;
 the runtime does not guess their identity or a universal lock convention.
 
 The App uses public `@modelcontextprotocol/client`, `server` and `core` SDK
-2.2.0 and Node HTTP transport 2.1.0. The original official child retains its
+2.3.1 and Node HTTP transport 2.1.0. The original official child retains its
 public stdio interface. Host HTTP requests supply their own roots, form
 elicitation, progress and cancellation facilities. Catalog pages are walked
 without the SDK aggregate page cap; output schemas remain original. See the

@@ -14,6 +14,24 @@ owns per-request capabilities, modern roots/form continuation, active-response
 progress and private upstream catalog freshness. Explicit registration ownership
 and the operation wait/result path apply to both eras.
 
+Both eras admit at most 1 MiB of actual UTF-8 request bytes, 10,000 cumulative
+object members plus array elements and 64 container levels including the root.
+The complete envelope is checked before SDK classification and dispatch,
+including metadata, capabilities and inputResponses. Strings count toward bytes;
+their characters are not structural elements. Malformed JSON returns 400 and
+exceeding a budget returns 413 with a fixed message, without echoing input or
+consuming a pending continuation. These request limits do not limit responses
+or close an existing session, connection or actual official execution.
+Cooperative and exact-boundary requests retain complete closed client JSON
+refusals. For flooding or deliberately incomplete uploads, the server must emit
+the bounded real 413 headers and fixed JSON bytes, end and locally finish the
+response, then close the actual request socket without dispatch or acquisition.
+The client may receive that complete response or a known closed-upload transport
+error before its deadline. These are distinct outcomes: local finish does not
+prove client delivery, and an error alone, partial response or timeout is not
+refusal evidence. No unbounded drain or additional TCP shutdown protocol is
+part of this contract.
+
 The complete [target lifecycle](../src/gateway/targets/target-lifecycle.ts)
 implements supplied launch, rollback, normal Close and actual-exit handling.
 Its cleanup method is an explicit Core/registry owner operation; transport or
