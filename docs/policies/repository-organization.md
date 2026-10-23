@@ -80,6 +80,15 @@ owns supplied metadata/descriptors/inventories/artwork/agreement, strict tree I/
 the complete builder and independent audit transactions. Its ten central suites
 preserve exact inventories, source equality and separate version predicates.
 Standalone security notices keep their own original-byte formatter.
+[Security tooling](../../tooling/security/README.md) separates pure lock, report,
+review and installation policy from actual installed-tree reads and descriptor
+fingerprints. The pure review owner owns Fingerprints and explicit review time;
+the effectful hasher consumes only its TYPE. One scan owns its disposable
+workspace/config/store lifetime; one gate owns initial/review/final evidence and
+post-exception-read fallback time. Nine explicitly selected central suites retain
+whole integration callbacks, matrices and cleanup; seven share only controlled
+setup in tests/fixtures/security-audit.ts. Official inputs and standalone generation
+keep their complete existing build contracts and dependency-free preflight.
 
 The selected direction is source roots named for cohesive domain responsibilities,
 with subdomains or technical boundaries inside them when needed; central root

@@ -3,10 +3,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { isRecord } from '../src/shared/errors.ts';
-import { RUNTIME_LICENSE_INPUTS } from './licenses/canonical-inputs.ts';
+import { isRecord } from '../../src/shared/errors.ts';
+import { RUNTIME_LICENSE_INPUTS } from '../licenses/canonical-inputs.ts';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
+const root = fileURLToPath(new URL('../..', import.meta.url));
 const output = path.join(root, 'tooling/security/dist');
 
 export async function readSecurityNotices(dependencies: string) {
@@ -34,7 +34,7 @@ export async function readSecurityNotices(dependencies: string) {
 export async function generateSecurityFiles() {
     const result = await build({
         absWorkingDir: root,
-        entryPoints: [path.join(root, 'tooling/check-security.ts')],
+        entryPoints: [path.join(root, 'tooling/security/check-security.ts')],
         outfile: path.join(output, 'check-security.mjs'),
         bundle: true,
         platform: 'node',

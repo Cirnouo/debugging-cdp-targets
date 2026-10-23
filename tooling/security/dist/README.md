@@ -5,6 +5,8 @@
 - `THIRD-PARTY-NOTICES.txt` preserves the original complete YAML ISC license,
   followed by the identified semver ISC license. Type declarations are not distributed.
 
+The maintained producer is `../build-standalone.ts`, bundling
+`../check-security.ts`; the public commands retain their existing meanings.
 Generate with `pnpm build:security`; verify without writing with
 `pnpm check:security:build`. Do not edit generated files. `--root` is required
 for both the source and generated CLI, for example `--phase lockfile --root .` from the

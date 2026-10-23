@@ -230,6 +230,13 @@ not a requirement for one PR per row or permission to skip content work.
 | B8 | Remaining reviewed-data/canonical-license placement and complete independent fingerprint/input coverage. |
 | F1–F7 | Separate pending feature source: physical state/leases; module restart; immutable payload snapshot; exact parent watch; native writer authority; flat-stage producer; fresh contributor transaction/current docs. Integrate newer main effects; source-only is not native adoption or default cutover. |
 
+The bounded B5 security cut shares only the original controlled audit setup in
+`tests/fixtures/security-audit.ts` across its seven policy/scan suites. Preserve
+its required-value and lock-only assertions, finite exports and private
+AuditFixture; regression callbacks and gate-local tree setup stay in suites.
+The nine security suites retain all original matrices, cleanup and subprocess
+contracts; the fixture does not copy production policy or export an oracle.
+
 The interim O4 diagnostic cut keeps the actual pure contract at
 `src/domains/control-contract.ts`, including `Diagnostic` and `Diagnose`, while
 only clock-backed `measured` moves to `src/gateway/diagnostics.ts`. The final
@@ -631,6 +638,7 @@ tests/desktop/renderer/README.md
 tests/desktop/renderer/app-manager-rendering.test.ts
 tests/desktop/renderer/elapsed.test.ts
 tests/fixtures/README.md
+tests/fixtures/security-audit.ts
 tests/fixtures/deployment/README.md
 tests/fixtures/deployment/app-archive.ts
 tests/fixtures/deployment/app-stage.ts

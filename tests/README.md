@@ -401,13 +401,11 @@ Git hook tests remain contributor-tooling regressions.
   draft recovery, returned classification, stable-only comparisons and fail-closed
   publication. Publication uses simulated GitHub I/O and disposable Git fixtures;
   it never changes this repository's tags or creates real GitHub Releases.
-- `supply-chain.test.ts` covers complete multi-document inventories, fail-closed
-  audit/signature reports, strict dependency/exception SemVer, exact bounded exceptions,
-  installed graphs, lockfile preflight and upstream review-before-install with fake
-  process execution; it never downloads.
-- `security-build.test.ts` checks the standalone auditor without node_modules,
-  valid-YAML version rejection, original bundled licenses and metadata contracts,
-  CLI rejection and read-only generated-artifact comparison.
+- [tooling/security/](tooling/security/README.md) owns nine explicit suites for
+  complete inventories/reports/reviews/install policy, installed graph and
+  descriptor fingerprints, disposable scans/gate and standalone/official inputs.
+  Whole integration callbacks, matrices, subprocesses and cleanup remain intact;
+  seven suites share only controlled setup in `fixtures/security-audit.ts`.
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
@@ -521,15 +519,16 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select forty-six entries: `tests/*.test.ts`, the
-twenty-five explicit [tooling suites](tooling/README.md), two explicit
+command and `pnpm test:coverage` select fifty-four entries: `tests/*.test.ts`,
+thirty-three explicit [tooling suites](tooling/README.md), two explicit
 [Host suites](host-plugins/README.md) and eighteen Gateway suites. Gateway selection
-retains argument parsing, seven [Target suites](gateway/targets/README.md), five
-[connection/directory suites](gateway/connections/README.md) and the five explicit
-[Official suites](gateway/official/README.md). The original thirty selectors retain
-their order; options, execution, server-arguments and server-arguments-environment
-append once in that order, followed by package-files, security/official-inputs and
-quality/temporary-directory-alias. Default commands do not launch
+covers argument parsing, seven [Target suites](gateway/targets/README.md), five
+[connection/directory suites](gateway/connections/README.md) and five explicit
+[Official suites](gateway/official/README.md). Files run sequentially with
+`--test-concurrency=1`. The exact current selector order, including all nine
+[security suites](tooling/security/README.md) before the final quality alias suite,
+is listed in the [verification policy](../docs/policies/quality.md#verification).
+Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop
@@ -544,8 +543,8 @@ Default and coverage selection have two independent contract owners:
 [tests/toolchain-config.test.ts](toolchain-config.test.ts) keeps both literal
 command expectations; [tests/test-lanes.test.ts](test-lanes.test.ts) keeps the
 safe inventory, GUI and coverage contracts. Update both with package scripts
-and this map when selectors change. The ten distribution suites expand the
-existing thin-payload selector in place; the four Official suites remain appended.
+and this map when selectors change. The safe lane explicitly selects all ten
+distribution suites, five Official suites and nine security suites once each.
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen

@@ -3,14 +3,20 @@ import { existsSync } from 'node:fs';
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { errorMessage } from '../src/shared/errors.ts';
-import { PLUGIN_HOSTS } from './distribution/host-descriptors.ts';
-import type { AuditScope, FindingDecision, Fingerprints } from './security/audit-policy.ts';
-import { evaluateFindings, readLockInventory, validateExceptions } from './security/audit-policy.ts';
-import { verifyOfficialInputs } from './security/official-inputs.ts';
-import { fingerprintInputs } from './security/security-evidence.ts';
-import type { PnpmExecutor, ScanResult } from './security/security-runner.ts';
-import { scanRepository, scanUpstream } from './security/security-runner.ts';
+import { errorMessage } from '../../src/shared/errors.ts';
+import { PLUGIN_HOSTS } from '../distribution/host-descriptors.ts';
+import type { PnpmExecutor, ScanResult } from './dependency-scan.ts';
+import { scanRepository, scanUpstream } from './dependency-scan.ts';
+import { fingerprintInputs } from './fingerprints.ts';
+import { readLockInventory } from './lock-inventory.ts';
+import { verifyOfficialInputs } from './official-inputs.ts';
+import {
+    type AuditScope,
+    evaluateFindings,
+    type FindingDecision,
+    type Fingerprints,
+    validateExceptions,
+} from './vulnerability-reviews.ts';
 
 type SecurityOptions = { phase?: string; now?: Date; execute?: PnpmExecutor; temporaryRoot?: string };
 type ScopeResult = FindingDecision & { signatures: ScanResult['signatures']; fingerprints: Fingerprints };
@@ -31,7 +37,7 @@ export async function checkSecurity(root: string, options: SecurityOptions = {})
     ];
     const exceptions = validateExceptions(
         JSON.parse(await readFile(path.join(root, 'docs/policies/security-exceptions.json'), 'utf8')),
-        options.now,
+        options.now ?? new Date(),
     );
     const code = paths.filter(
         (file) =>

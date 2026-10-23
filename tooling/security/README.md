@@ -1,28 +1,40 @@
 # Supply-chain audit tooling
 
-- `../check-security.ts` selects maintained/generated code and configuration
-  inventories before audits. Native PowerShell, JXA and C# helper sources belong
-  to its code inventory, including the sources loaded by other helper wrappers.
-- `audit-policy.ts` validates every pnpm lockfile document, full audit and
-  signature reports, and narrowly reviewed vulnerability exceptions. Dependency
-  and exception versions use the shared strict version wrapper, including its
-  documented node-semver length/core-number limits and arbitrary legal prerelease/build.
-- `security-evidence.ts` checks installation policy, manifest/lock agreement and installed graph
-  completeness, and computes code/configuration/dependency SHA-256 evidence.
-  File fingerprints use the same descriptor-based regular-file reader as release verification.
-- `security-runner.ts` executes pnpm without a shell and audits both the
-  repository and a disposable, script-disabled official Server dependency tree;
-  upstream vulnerability review precedes actual installation.
+- `lock-inventory.ts` validates every pnpm YAML document and registry identity,
+  configuration dependencies and complete importer/snapshot references. It also
+  owns deterministic lock-evidence canonicalization, preserving arrays.
+- `registry-reports.ts` validates closed vulnerability/signature reports against
+  the independently derived full inventory, including coverage and exit status.
+- `vulnerability-reviews.ts` owns scoped findings, the pure Fingerprints shape,
+  exact bounded exceptions and review decisions. Review time is required input;
+  UTC parsing uses only supplied evidence. Dependency/exception versions retain
+  shared strict SemVer limits and arbitrary legal prerelease/build identities.
+- `installation-policy.ts` owns the frozen installation policy and supplied-value
+  configuration refusals, without file, process or network reads.
+- `installed-tree.ts` retains manifest/lock and included development/optional
+  graph comparison with the complete actual installation read transaction.
+- `fingerprints.ts` retains sorted path/byte-length/content SHA-256 framing and
+  the descriptor-backed regular-file reader shared with release verification.
+  It imports the pure Fingerprints shape from vulnerability reviews as TYPE.
+- `dependency-scan.ts` owns shell-free bounded pnpm calls, repository preflight
+  and one disposable upstream workspace/config/store lifetime. Frozen lock-only
+  validation and complete audits precede review; review precedes actual install.
   All pnpm calls disable pnpmfile hooks and configuration-dependency loading.
-- `dist/` contains the committed standalone checker and original YAML/semver licenses
-  so CI can audit before installing project dependencies.
-- `upstream-pnpm-lock.yaml` freezes the isolated official release dependency graph.
+- `check-security.ts` owns Git-derived code/configuration selection and the full
+  initial/review/final evidence transaction. Native PowerShell, JXA and C# sources
+  remain included; exception-file read and JSON parsing precede fallback time.
+- `build-standalone.ts` owns generation and nonwriting comparison of both
+  standalone outputs, with original YAML-first and identified semver notices.
 - `official-inputs.ts` binds root declarations/lock, release evidence and isolated
-  snapshot identity and integrity before builds and complete audits.
+  snapshot identity/integrity before builds and complete audits.
+- `dist/` contains the committed dependency-free checker and original notices.
+- `upstream-pnpm-lock.yaml` freezes the isolated official release dependency graph.
 - `AGENTS.md` defines fail-closed implementation and test requirements.
 
-Run `pnpm check:security` for full installed-tree checks, or the standalone
-entry with `--phase lockfile --root .` for repository-only pre-install checks.
-Use `pnpm build:security` to generate and `pnpm check:security:build` to verify
-the bundle without writing. These modules are not
-Plugin runtime code and do not belong in the installable payload.
+The four pure policy owners use only their exact supplied-value dependencies;
+none imports installed evidence, hashing or scans, including erased TYPE edges.
+The gate and scan keep their independent complete transaction lifetimes.
+Run `pnpm check:security` for the explicit network gate; the standalone entry's
+`--phase lockfile --root .` supports pre-install checks without upstream reads.
+`pnpm build:security` generates and `pnpm check:security:build` compares offline.
+These modules are tooling, never installable Plugin runtime content.

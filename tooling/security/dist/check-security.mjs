@@ -112,17 +112,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path5) {
-      const ctrl = callVisitor(key, node, visitor, path5);
+    function visit_(key, node, visitor, path6) {
+      const ctrl = callVisitor(key, node, visitor, path6);
       if (identity2.isNode(ctrl) || identity2.isPair(ctrl)) {
-        replaceNode(key, path5, ctrl);
-        return visit_(key, ctrl, visitor, path5);
+        replaceNode(key, path6, ctrl);
+        return visit_(key, ctrl, visitor, path6);
       }
       if (typeof ctrl !== "symbol") {
         if (identity2.isCollection(node)) {
-          path5 = Object.freeze(path5.concat(node));
+          path6 = Object.freeze(path6.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path5);
+            const ci = visit_(i, node.items[i], visitor, path6);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -133,13 +133,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity2.isPair(node)) {
-          path5 = Object.freeze(path5.concat(node));
-          const ck = visit_("key", node.key, visitor, path5);
+          path6 = Object.freeze(path6.concat(node));
+          const ck = visit_("key", node.key, visitor, path6);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path5);
+          const cv = visit_("value", node.value, visitor, path6);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -160,17 +160,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path5) {
-      const ctrl = await callVisitor(key, node, visitor, path5);
+    async function visitAsync_(key, node, visitor, path6) {
+      const ctrl = await callVisitor(key, node, visitor, path6);
       if (identity2.isNode(ctrl) || identity2.isPair(ctrl)) {
-        replaceNode(key, path5, ctrl);
-        return visitAsync_(key, ctrl, visitor, path5);
+        replaceNode(key, path6, ctrl);
+        return visitAsync_(key, ctrl, visitor, path6);
       }
       if (typeof ctrl !== "symbol") {
         if (identity2.isCollection(node)) {
-          path5 = Object.freeze(path5.concat(node));
+          path6 = Object.freeze(path6.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path5);
+            const ci = await visitAsync_(i, node.items[i], visitor, path6);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -181,13 +181,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity2.isPair(node)) {
-          path5 = Object.freeze(path5.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path5);
+          path6 = Object.freeze(path6.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path6);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path5);
+          const cv = await visitAsync_("value", node.value, visitor, path6);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -214,23 +214,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path5) {
+    function callVisitor(key, node, visitor, path6) {
       if (typeof visitor === "function")
-        return visitor(key, node, path5);
+        return visitor(key, node, path6);
       if (identity2.isMap(node))
-        return visitor.Map?.(key, node, path5);
+        return visitor.Map?.(key, node, path6);
       if (identity2.isSeq(node))
-        return visitor.Seq?.(key, node, path5);
+        return visitor.Seq?.(key, node, path6);
       if (identity2.isPair(node))
-        return visitor.Pair?.(key, node, path5);
+        return visitor.Pair?.(key, node, path6);
       if (identity2.isScalar(node))
-        return visitor.Scalar?.(key, node, path5);
+        return visitor.Scalar?.(key, node, path6);
       if (identity2.isAlias(node))
-        return visitor.Alias?.(key, node, path5);
+        return visitor.Alias?.(key, node, path6);
       return void 0;
     }
-    function replaceNode(key, path5, node) {
-      const parent = path5[path5.length - 1];
+    function replaceNode(key, path6, node) {
+      const parent = path6[path6.length - 1];
       if (identity2.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity2.isPair(parent)) {
@@ -842,10 +842,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity2 = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path5, value) {
+    function collectionFromPath(schema, path6, value) {
       let v = value;
-      for (let i = path5.length - 1; i >= 0; --i) {
-        const k = path5[i];
+      for (let i = path6.length - 1; i >= 0; --i) {
+        const k = path6[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -864,7 +864,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path5) => path5 == null || typeof path5 === "object" && !!path5[Symbol.iterator]().next().done;
+    var isEmptyPath = (path6) => path6 == null || typeof path6 === "object" && !!path6[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -894,11 +894,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path5, value) {
-        if (isEmptyPath(path5))
+      addIn(path6, value) {
+        if (isEmptyPath(path6))
           this.add(value);
         else {
-          const [key, ...rest] = path5;
+          const [key, ...rest] = path6;
           const node = this.get(key, true);
           if (identity2.isCollection(node))
             node.addIn(rest, value);
@@ -912,8 +912,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path5) {
-        const [key, ...rest] = path5;
+      deleteIn(path6) {
+        const [key, ...rest] = path6;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -927,8 +927,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path5, keepScalar) {
-        const [key, ...rest] = path5;
+      getIn(path6, keepScalar) {
+        const [key, ...rest] = path6;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity2.isScalar(node) ? node.value : node;
@@ -946,8 +946,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path5) {
-        const [key, ...rest] = path5;
+      hasIn(path6) {
+        const [key, ...rest] = path6;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -957,8 +957,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path5, value) {
-        const [key, ...rest] = path5;
+      setIn(path6, value) {
+        const [key, ...rest] = path6;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -2703,12 +2703,12 @@ ${cn.comment}` : item.comment;
             } else
               throw new TypeError(`Expected [key, value] tuple: ${it}`);
           } else if (it && it instanceof Object) {
-            const keys2 = Object.keys(it);
-            if (keys2.length === 1) {
-              key = keys2[0];
+            const keys3 = Object.keys(it);
+            if (keys3.length === 1) {
+              key = keys3[0];
               value = it[key];
             } else {
-              throw new TypeError(`Expected tuple with one key, not ${keys2.length} keys`);
+              throw new TypeError(`Expected tuple with one key, not ${keys3.length} keys`);
             }
           } else {
             key = it;
@@ -3254,8 +3254,8 @@ var require_tags = __commonJS({
         if (Array.isArray(customTags))
           tags = [];
         else {
-          const keys2 = Array.from(schemas.keys()).filter((key) => key !== "yaml11").map((key) => JSON.stringify(key)).join(", ");
-          throw new Error(`Unknown schema "${schemaName}"; use one of ${keys2} or define customTags array`);
+          const keys3 = Array.from(schemas.keys()).filter((key) => key !== "yaml11").map((key) => JSON.stringify(key)).join(", ");
+          throw new Error(`Unknown schema "${schemaName}"; use one of ${keys3} or define customTags array`);
         }
       }
       if (Array.isArray(customTags)) {
@@ -3270,8 +3270,8 @@ var require_tags = __commonJS({
         const tagObj = typeof tag === "string" ? tagsByName[tag] : tag;
         if (!tagObj) {
           const tagName = JSON.stringify(tag);
-          const keys2 = Object.keys(tagsByName).map((key) => JSON.stringify(key)).join(", ");
-          throw new Error(`Unknown custom tag ${tagName}; use one of ${keys2}`);
+          const keys3 = Object.keys(tagsByName).map((key) => JSON.stringify(key)).join(", ");
+          throw new Error(`Unknown custom tag ${tagName}; use one of ${keys3}`);
         }
         if (!tags2.includes(tagObj))
           tags2.push(tagObj);
@@ -3473,9 +3473,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path5, value) {
+      addIn(path6, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path5, value);
+          this.contents.addIn(path6, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -3550,14 +3550,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path5) {
-        if (Collection.isEmptyPath(path5)) {
+      deleteIn(path6) {
+        if (Collection.isEmptyPath(path6)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path5) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path6) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -3572,10 +3572,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path5, keepScalar) {
-        if (Collection.isEmptyPath(path5))
+      getIn(path6, keepScalar) {
+        if (Collection.isEmptyPath(path6))
           return !keepScalar && identity2.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity2.isCollection(this.contents) ? this.contents.getIn(path5, keepScalar) : void 0;
+        return identity2.isCollection(this.contents) ? this.contents.getIn(path6, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -3586,10 +3586,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path5) {
-        if (Collection.isEmptyPath(path5))
+      hasIn(path6) {
+        if (Collection.isEmptyPath(path6))
           return this.contents !== void 0;
-        return identity2.isCollection(this.contents) ? this.contents.hasIn(path5) : false;
+        return identity2.isCollection(this.contents) ? this.contents.hasIn(path6) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -3606,13 +3606,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path5, value) {
-        if (Collection.isEmptyPath(path5)) {
+      setIn(path6, value) {
+        if (Collection.isEmptyPath(path6)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path5), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path6), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path5, value);
+          this.contents.setIn(path6, value);
         }
       }
       /**
@@ -5573,9 +5573,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path5) => {
+    visit.itemAtPath = (cst, path6) => {
       let item = cst;
-      for (const [field, index] of path5) {
+      for (const [field, index] of path6) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -5584,23 +5584,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path5) => {
-      const parent = visit.itemAtPath(cst, path5.slice(0, -1));
-      const field = path5[path5.length - 1][0];
+    visit.parentCollection = (cst, path6) => {
+      const parent = visit.itemAtPath(cst, path6.slice(0, -1));
+      const field = path6[path6.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path5, item, visitor) {
-      let ctrl = visitor(item, path5);
+    function _visit(path6, item, visitor) {
+      let ctrl = visitor(item, path6);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path5.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path6.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -5611,10 +5611,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path5);
+            ctrl = ctrl(item, path6);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path5) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path6) : ctrl;
     }
     exports.visit = visit;
   }
@@ -7853,11 +7853,11 @@ var require_parse = __commonJS({
   }
 });
 
-// tooling/check-security.ts
+// tooling/security/check-security.ts
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { lstat as lstat3, readFile as readFile4 } from "node:fs/promises";
-import path4 from "node:path";
+import path5 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/shared/errors.ts
@@ -7909,327 +7909,14 @@ var CLAUDE_CODE_HOST = Object.freeze({
 var PLUGIN_HOSTS = Object.freeze([CODEX_HOST, CLAUDE_CODE_HOST]);
 var PLUGIN_ROOT = CODEX_HOST.payloadRoot;
 
-// tooling/security/audit-policy.ts
-var import_yaml = __toESM(require_dist(), 1);
-
-// src/domains/software-version.ts
-var import_parse = __toESM(require_parse(), 1);
-function parseStrictVersion(value) {
-  if (typeof value !== "string" || value !== value.trim() || value.startsWith("v") || value.startsWith("V"))
-    return null;
-  return (0, import_parse.default)(value, { loose: false });
-}
-function isSemVer(value) {
-  return parseStrictVersion(value) !== null;
-}
-
-// tooling/security/audit-policy.ts
-var SEVERITIES = ["info", "low", "moderate", "high", "critical"];
-var SCOPES = ["repository", "upstream"];
-var PACKAGE = /^(?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+$/;
-var GHSA = /^GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}$/;
-var MAX_REVIEW_MS = 30 * 24 * 60 * 60 * 1e3;
-function demand(condition, message) {
-  if (!condition) throw new Error(message);
-}
-function object(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-function keys(value, expected, context) {
-  demand(
-    object(value) && Object.keys(value).sort().join() === [...expected].sort().join(),
-    `Invalid ${context} fields.`
-  );
-}
-function nonempty(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-function identity(key) {
-  const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+)@([^()]+)(?:\(.*\))?$/.exec(key);
-  demand(
-    match?.[1] && match[2] && PACKAGE.test(match[1]) && isSemVer(match[2]),
-    `Non-registry or unpinned dependency: ${key}`
-  );
-  return { name: match[1], version: match[2] };
-}
-function validateConfigurationDependencies(value) {
-  demand(
-    value === void 0 || object(value) && Object.keys(value).length === 0,
-    "Unreviewed configuration dependencies are prohibited."
-  );
-}
-function readLockInventory(source) {
-  const parsed = (0, import_yaml.parseAllDocuments)(source);
-  demand(parsed.length > 0 && parsed.every((doc) => doc.errors.length === 0), "Malformed lockfile YAML.");
-  const values = parsed.map((doc) => doc.toJS());
-  const documents = [];
-  const all = /* @__PURE__ */ new Map();
-  for (const doc of values) {
-    demand(
-      object(doc) && doc.lockfileVersion === "9.0" && object(doc.importers) && object(doc.importers["."]) && object(doc.packages) && object(doc.snapshots),
-      "Incomplete lockfile inventory."
-    );
-    validateConfigurationDependencies(doc.configDependencies);
-    const packageKeys = /* @__PURE__ */ new Set();
-    for (const [key, value] of Object.entries(doc.packages)) {
-      const { name, version } = identity(key);
-      demand(object(value) && object(value.resolution), `Invalid resolution: ${key}`);
-      const integrity = value.resolution.integrity;
-      demand(
-        nonempty(integrity) && /^sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}$/.test(integrity),
-        `Missing registry integrity: ${key}`
-      );
-      demand(
-        !value.resolution.tarball || typeof value.resolution.tarball === "string" && value.resolution.tarball.startsWith("https://registry.npmjs.org/"),
-        `Non-standard dependency source: ${key}`
-      );
-      const previous = all.get(`${name}@${version}`);
-      demand(!previous || previous.integrity === integrity, `Conflicting dependency integrity: ${key}`);
-      all.set(`${name}@${version}`, { name, version, integrity });
-      packageKeys.add(`${name}@${version}`);
-    }
-    const snapshotKeys = new Set(
-      Object.keys(doc.snapshots).map((key) => {
-        const item = identity(key);
-        const plain = `${item.name}@${item.version}`;
-        demand(packageKeys.has(plain), `Snapshot missing from inventory: ${key}`);
-        return plain;
-      })
-    );
-    demand(snapshotKeys.size === packageKeys.size, "Lockfile graph omits packages.");
-    for (const snapshot of Object.values(doc.snapshots)) {
-      demand(object(snapshot), "Invalid dependency snapshot.");
-      for (const field of ["dependencies", "optionalDependencies"]) {
-        const dependencies = snapshot[field] ?? {};
-        demand(object(dependencies), "Invalid snapshot dependencies.");
-        for (const [name, version] of Object.entries(dependencies)) {
-          demand(typeof version === "string", "Invalid dependency version.");
-          const item = identity(`${name}@${version}`);
-          demand(
-            packageKeys.has(`${item.name}@${item.version}`),
-            `Graph references missing dependency: ${name}@${version}`
-          );
-        }
-      }
-    }
-    for (const importer of Object.values(doc.importers)) {
-      demand(object(importer), "Invalid lock importer.");
-      validateConfigurationDependencies(importer.configDependencies);
-      for (const field of [
-        "dependencies",
-        "devDependencies",
-        "optionalDependencies",
-        "packageManagerDependencies"
-      ]) {
-        const dependencies = importer[field] ?? {};
-        demand(object(dependencies), "Invalid importer dependencies.");
-        for (const [name, value] of Object.entries(dependencies)) {
-          demand(
-            object(value) && typeof value.version === "string" && (value.specifier === void 0 || typeof value.specifier === "string"),
-            "Invalid importer reference."
-          );
-          const item = identity(`${name}@${value.version}`);
-          demand(
-            packageKeys.has(`${item.name}@${item.version}`),
-            `Importer references missing dependency: ${name}`
-          );
-        }
-      }
-    }
-    documents.push({
-      ...doc,
-      lockfileVersion: "9.0",
-      importers: doc.importers,
-      packages: doc.packages,
-      snapshots: doc.snapshots
-    });
-  }
-  demand(all.size > 0, "Empty dependency inventory.");
-  return {
-    packages: [...all.values()].sort(
-      (a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`, "en")
-    ),
-    documents
-  };
-}
-function report(result, allowedExitCodes) {
-  demand(
-    allowedExitCodes.includes(result.exitCode),
-    `Audit command failed (exit ${result.exitCode}): ${result.stderr ?? ""}`
-  );
-  let parsed;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch {
-    throw new Error("Malformed audit JSON report.");
-  }
-  demand(
-    object(parsed) && !parsed.error && !parsed.errors && !parsed.ignored,
-    "Audit failed or report contains ignored findings."
-  );
-  return parsed;
-}
-function assessAudit(result, inventory) {
-  const data = report(result, [0, 1]);
-  keys(data, ["advisories", "metadata"], "audit report");
-  demand(object(data.advisories) && object(data.metadata), "Invalid advisory report.");
-  demand(
-    inventory.length > 0 && data.metadata.totalDependencies === inventory.length,
-    "Audit coverage differs from complete lock inventory."
-  );
-  keys(data.metadata.vulnerabilities, SEVERITIES, "vulnerability counts");
-  const counts = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
-  const findings = /* @__PURE__ */ new Map();
-  for (const advisory of Object.values(data.advisories)) {
-    demand(
-      object(advisory) && typeof advisory.severity === "string" && SEVERITIES.some((severity2) => severity2 === advisory.severity) && typeof advisory.module_name === "string" && typeof advisory.github_advisory_id === "string" && PACKAGE.test(advisory.module_name) && GHSA.test(advisory.github_advisory_id) && nonempty(advisory.title),
-      "Invalid advisory identity or severity."
-    );
-    demand(Array.isArray(advisory.findings) && advisory.findings.length > 0, "Advisory omits affected versions.");
-    const severity = advisory.severity;
-    counts[severity]++;
-    for (const finding of advisory.findings) {
-      demand(object(finding) && typeof finding.version === "string", "Invalid affected version.");
-      demand(
-        inventory.some((pkg) => pkg.name === advisory.module_name && pkg.version === finding.version),
-        "Advisory version not in inventory."
-      );
-      demand(
-        Array.isArray(finding.paths) && finding.paths.length > 0 && finding.paths.every(nonempty),
-        "Advisory omits dependency paths."
-      );
-      const item = {
-        ghsa: advisory.github_advisory_id,
-        package: advisory.module_name,
-        version: finding.version,
-        severity,
-        title: advisory.title
-      };
-      const key = `${item.ghsa}:${item.package}:${item.version}`;
-      demand(
-        !findings.has(key) || findings.get(key)?.severity === item.severity,
-        "Conflicting advisory severities."
-      );
-      findings.set(key, item);
-    }
-  }
-  for (const severity of SEVERITIES)
-    demand(
-      Number.isInteger(data.metadata.vulnerabilities[severity]) && data.metadata.vulnerabilities[severity] === counts[severity],
-      "Advisory severity counts do not match report."
-    );
-  demand(
-    result.exitCode === (Object.values(counts).some((count) => count > 0) ? 1 : 0),
-    "Audit exit code conflicts with report."
-  );
-  return [...findings.values()];
-}
-function validateSignatures(result, expectedCount) {
-  const data = report(result, [0]);
-  keys(data, ["audited", "verified", "invalid", "missing"], "signature report");
-  demand(
-    Number.isInteger(expectedCount) && expectedCount > 0 && data.audited === expectedCount && data.verified === expectedCount,
-    "Signature coverage differs from lock inventory."
-  );
-  demand(
-    Array.isArray(data.invalid) && data.invalid.length === 0 && Array.isArray(data.missing) && data.missing.length === 0,
-    "Missing or invalid registry signatures."
-  );
-}
-function utc(value) {
-  demand(
-    typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$/.test(value),
-    "Review dates must be UTC ISO timestamps."
-  );
-  const date = new Date(value);
-  demand(Number.isFinite(date.getTime()) && date.toISOString() === value, "Invalid review date.");
-  return date.getTime();
-}
-function validateExceptions(data, now = /* @__PURE__ */ new Date()) {
-  keys(data, ["schemaVersion", "exceptions"], "exception manifest");
-  demand(data.schemaVersion === 1 && Array.isArray(data.exceptions), "Invalid exception schema.");
-  const seen = /* @__PURE__ */ new Set();
-  for (const item of data.exceptions) {
-    keys(
-      item,
-      [
-        "ghsa",
-        "package",
-        "version",
-        "scope",
-        "reason",
-        "triggerConditions",
-        "evidence",
-        "reviewedBy",
-        "reviewedAt",
-        "expiresAt",
-        "fingerprints"
-      ],
-      "exception"
-    );
-    demand(
-      typeof item.ghsa === "string" && typeof item.version === "string" && typeof item.scope === "string" && GHSA.test(item.ghsa) && typeof item.package === "string" && PACKAGE.test(item.package) && isSemVer(item.version) && SCOPES.includes(item.scope),
-      "Exception needs an exact GHSA, package, version and scope."
-    );
-    for (const field of ["reason", "triggerConditions", "reviewedBy"])
-      demand(nonempty(item[field]), `Exception omits ${field}.`);
-    demand(
-      Array.isArray(item.evidence) && item.evidence.length > 0 && item.evidence.every(
-        (file) => nonempty(file) && !file.startsWith("/") && !file.includes("..") && !file.includes("\\") && !file.includes(":")
-      ),
-      "Exception needs repository-relative evidence files."
-    );
-    keys(item.fingerprints, ["code", "configuration", "dependencies"], "fingerprint");
-    demand(
-      Object.values(item.fingerprints).every(
-        (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
-      ),
-      "Invalid SHA-256 fingerprint."
-    );
-    const reviewed = utc(item.reviewedAt);
-    const expires = utc(item.expiresAt);
-    demand(
-      reviewed <= now.getTime() && expires > now.getTime() && expires > reviewed && expires - reviewed <= MAX_REVIEW_MS,
-      "Expired, future or over-30-day exception."
-    );
-    const key = `${item.scope}:${item.ghsa}:${item.package}:${item.version}`;
-    demand(!seen.has(key), "Duplicate exception.");
-    seen.add(key);
-  }
-  return data.exceptions;
-}
-function evaluateFindings(findings, exceptions, contexts) {
-  const scope = Object.keys(contexts)[0];
-  demand(Object.keys(contexts).length === 1 && scope && SCOPES.includes(scope), "Choose exactly one audit scope.");
-  const checkedScope = scope;
-  const context = contexts[checkedScope];
-  demand(context, "Missing audit context.");
-  const result = {
-    blocked: [],
-    waived: [],
-    reported: findings.map((item) => ({ ...item, scope: checkedScope }))
-  };
-  for (const exception of exceptions.filter((item) => item.scope === scope)) {
-    demand(
-      ["code", "configuration", "dependencies"].every(
-        (key) => exception.fingerprints[key] === context[key]
-      ),
-      "Exception evidence fingerprint changed; review required."
-    );
-  }
-  for (const item of result.reported) {
-    const waived = exceptions.some(
-      (exception) => exception.scope === scope && exception.ghsa === item.ghsa && exception.package === item.package && exception.version === item.version
-    );
-    if (waived) result.waived.push(item);
-    else if (["high", "critical"].includes(item.severity)) result.blocked.push(item);
-  }
-  return result;
-}
-
-// tooling/security/official-inputs.ts
-import { readFile as readFile2 } from "node:fs/promises";
-import path2 from "node:path";
+// tooling/security/dependency-scan.ts
+var import_yaml3 = __toESM(require_dist(), 1);
+import { execFile } from "node:child_process";
+import { lstat, mkdtemp, readFile as readFile3, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path3 from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 // src/shared/constants.ts
 var MAX_HTTP_BYTES = 8 * 1024 * 1024;
@@ -8248,42 +7935,42 @@ function isPortablePayloadRelativePath(value) {
 }
 
 // src/gateway/official/release-evidence.ts
-function demand2(condition, message) {
+function demand(condition, message) {
   if (!condition) throw new Error(`Invalid official release: ${message}`);
 }
 function fields(value, names) {
-  demand2(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), "evidence fields.");
+  demand(isRecord(value) && Object.keys(value).sort().join() === [...names].sort().join(), "evidence fields.");
 }
 function parseOfficialReleaseEvidence(input) {
   fields(input, ["schemaVersion", "name", "version", "registry", "tarball", "integrity", "bin", "source", "files"]);
-  demand2(
+  demand(
     input.schemaVersion === 1 && input.name === PACKAGE_NAME && input.version === PACKAGE_VERSION,
     "package identity."
   );
-  demand2(
+  demand(
     input.registry === NPM_REGISTRY && input.tarball === `${NPM_REGISTRY}/${PACKAGE_NAME}/-/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz`,
     "registry source."
   );
-  demand2(
+  demand(
     typeof input.integrity === "string" && /^sha512-[A-Za-z0-9+/]{86}==$/.test(input.integrity),
     "SHA-512 integrity."
   );
-  demand2(input.bin === "build/src/bin/chrome-devtools-mcp.js", "public Server bin.");
+  demand(input.bin === "build/src/bin/chrome-devtools-mcp.js", "public Server bin.");
   fields(input.source, ["repository", "tag", "commit"]);
-  demand2(
+  demand(
     input.source.repository === "https://github.com/ChromeDevTools/chrome-devtools-mcp" && input.source.tag === `chrome-devtools-mcp-v${PACKAGE_VERSION}` && typeof input.source.commit === "string" && /^[a-f0-9]{40}$/.test(input.source.commit),
     "source provenance."
   );
-  demand2(Array.isArray(input.files) && input.files.length > 0, "file inventory.");
+  demand(Array.isArray(input.files) && input.files.length > 0, "file inventory.");
   const files = [];
   const aliases = /* @__PURE__ */ new Set();
   let previous = "";
   for (const file of input.files) {
     fields(file, ["path", "sha256", "bytes"]);
-    demand2(isPortablePayloadRelativePath(file.path), "unsafe relative path.");
-    demand2(file.path > previous && !aliases.has(file.path.toLowerCase()), "duplicate, alias or unsorted path.");
-    demand2(typeof file.sha256 === "string" && /^[a-f0-9]{64}$/.test(file.sha256), "SHA-256 digest.");
-    demand2(typeof file.bytes === "number" && Number.isSafeInteger(file.bytes) && file.bytes >= 0, "byte length.");
+    demand(isPortablePayloadRelativePath(file.path), "unsafe relative path.");
+    demand(file.path > previous && !aliases.has(file.path.toLowerCase()), "duplicate, alias or unsorted path.");
+    demand(typeof file.sha256 === "string" && /^[a-f0-9]{64}$/.test(file.sha256), "SHA-256 digest.");
+    demand(typeof file.bytes === "number" && Number.isSafeInteger(file.bytes) && file.bytes >= 0, "byte length.");
     previous = file.path;
     aliases.add(file.path.toLowerCase());
     files.push({ path: file.path, sha256: file.sha256, bytes: file.bytes });
@@ -8295,11 +7982,11 @@ function parseOfficialReleaseEvidence(input) {
     "build/src/third_party/THIRD_PARTY_NOTICES",
     "build/src/third_party/bundled-packages.json"
   ])
-    demand2(
+    demand(
       files.some((file) => file.path === required),
       `missing required file ${required}.`
     );
-  demand2(
+  demand(
     files.some((file) => file.path.startsWith("skills/") && file.path.endsWith("/SKILL.md")),
     "missing published skills."
   );
@@ -8316,46 +8003,209 @@ function parseOfficialReleaseEvidence(input) {
   };
 }
 
-// tooling/security/security-evidence.ts
+// tooling/security/official-inputs.ts
+import { readFile as readFile2 } from "node:fs/promises";
+import path2 from "node:path";
+
+// tooling/security/installed-tree.ts
 var import_yaml2 = __toESM(require_dist(), 1);
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-// src/adapters/file-evidence.ts
-import { constants } from "node:fs";
-import { lstat, open } from "node:fs/promises";
-function sameFile(expected, actual) {
-  return actual.isFile() && !actual.isSymbolicLink() && expected.dev === actual.dev && expected.ino === actual.ino;
+// tooling/security/lock-inventory.ts
+var import_yaml = __toESM(require_dist(), 1);
+
+// src/domains/software-version.ts
+var import_parse = __toESM(require_parse(), 1);
+function parseStrictVersion(value) {
+  if (typeof value !== "string" || value !== value.trim() || value.startsWith("v") || value.startsWith("V"))
+    return null;
+  return (0, import_parse.default)(value, { loose: false });
 }
-function unchanged(expected, actual) {
-  return sameFile(expected, actual) && expected.size === actual.size && expected.mtimeNs === actual.mtimeNs && expected.ctimeNs === actual.ctimeNs;
-}
-async function readRegularFile(file, io = {}) {
-  const inspect = io.lstat ?? ((name) => lstat(name, { bigint: true }));
-  const acquire = io.open ?? (async (name, flags) => {
-    const handle2 = await open(name, flags);
-    return {
-      stat: () => handle2.stat({ bigint: true }),
-      readFile: () => handle2.readFile(),
-      close: () => handle2.close()
-    };
-  });
-  const handle = await acquire(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
-  try {
-    const before = await handle.stat();
-    if (!before.isFile()) throw new Error("Evidence must be a regular file without links.");
-    if (!unchanged(before, await inspect(file))) throw new Error("Evidence file identity or metadata changed.");
-    const bytes = await handle.readFile();
-    if (!unchanged(before, await handle.stat()) || !unchanged(before, await inspect(file)) || BigInt(bytes.length) !== before.size)
-      throw new Error("Evidence file identity or metadata changed.");
-    return bytes;
-  } finally {
-    await handle.close();
-  }
+function isSemVer(value) {
+  return parseStrictVersion(value) !== null;
 }
 
-// tooling/security/security-evidence.ts
+// tooling/security/lock-inventory.ts
+var PACKAGE = /^(?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+$/;
+function demand2(condition, message) {
+  if (!condition) throw new Error(message);
+}
+function object(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function nonempty(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function identity(key) {
+  const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+)@([^()]+)(?:\(.*\))?$/.exec(key);
+  demand2(
+    match?.[1] && match[2] && PACKAGE.test(match[1]) && isSemVer(match[2]),
+    `Non-registry or unpinned dependency: ${key}`
+  );
+  return { name: match[1], version: match[2] };
+}
+function validateConfigurationDependencies(value) {
+  demand2(
+    value === void 0 || object(value) && Object.keys(value).length === 0,
+    "Unreviewed configuration dependencies are prohibited."
+  );
+}
+function readLockInventory(source) {
+  const parsed = (0, import_yaml.parseAllDocuments)(source);
+  demand2(parsed.length > 0 && parsed.every((doc) => doc.errors.length === 0), "Malformed lockfile YAML.");
+  const values = parsed.map((doc) => doc.toJS());
+  const documents = [];
+  const all = /* @__PURE__ */ new Map();
+  for (const doc of values) {
+    demand2(
+      object(doc) && doc.lockfileVersion === "9.0" && object(doc.importers) && object(doc.importers["."]) && object(doc.packages) && object(doc.snapshots),
+      "Incomplete lockfile inventory."
+    );
+    validateConfigurationDependencies(doc.configDependencies);
+    const packageKeys = /* @__PURE__ */ new Set();
+    for (const [key, value] of Object.entries(doc.packages)) {
+      const { name, version } = identity(key);
+      demand2(object(value) && object(value.resolution), `Invalid resolution: ${key}`);
+      const integrity = value.resolution.integrity;
+      demand2(
+        nonempty(integrity) && /^sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}$/.test(integrity),
+        `Missing registry integrity: ${key}`
+      );
+      demand2(
+        !value.resolution.tarball || typeof value.resolution.tarball === "string" && value.resolution.tarball.startsWith("https://registry.npmjs.org/"),
+        `Non-standard dependency source: ${key}`
+      );
+      const previous = all.get(`${name}@${version}`);
+      demand2(!previous || previous.integrity === integrity, `Conflicting dependency integrity: ${key}`);
+      all.set(`${name}@${version}`, { name, version, integrity });
+      packageKeys.add(`${name}@${version}`);
+    }
+    const snapshotKeys = new Set(
+      Object.keys(doc.snapshots).map((key) => {
+        const item = identity(key);
+        const plain = `${item.name}@${item.version}`;
+        demand2(packageKeys.has(plain), `Snapshot missing from inventory: ${key}`);
+        return plain;
+      })
+    );
+    demand2(snapshotKeys.size === packageKeys.size, "Lockfile graph omits packages.");
+    for (const snapshot of Object.values(doc.snapshots)) {
+      demand2(object(snapshot), "Invalid dependency snapshot.");
+      for (const field of ["dependencies", "optionalDependencies"]) {
+        const dependencies = snapshot[field] ?? {};
+        demand2(object(dependencies), "Invalid snapshot dependencies.");
+        for (const [name, version] of Object.entries(dependencies)) {
+          demand2(typeof version === "string", "Invalid dependency version.");
+          const item = identity(`${name}@${version}`);
+          demand2(
+            packageKeys.has(`${item.name}@${item.version}`),
+            `Graph references missing dependency: ${name}@${version}`
+          );
+        }
+      }
+    }
+    for (const importer of Object.values(doc.importers)) {
+      demand2(object(importer), "Invalid lock importer.");
+      validateConfigurationDependencies(importer.configDependencies);
+      for (const field of [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "packageManagerDependencies"
+      ]) {
+        const dependencies = importer[field] ?? {};
+        demand2(object(dependencies), "Invalid importer dependencies.");
+        for (const [name, value] of Object.entries(dependencies)) {
+          demand2(
+            object(value) && typeof value.version === "string" && (value.specifier === void 0 || typeof value.specifier === "string"),
+            "Invalid importer reference."
+          );
+          const item = identity(`${name}@${value.version}`);
+          demand2(
+            packageKeys.has(`${item.name}@${item.version}`),
+            `Importer references missing dependency: ${name}`
+          );
+        }
+      }
+    }
+    documents.push({
+      ...doc,
+      lockfileVersion: "9.0",
+      importers: doc.importers,
+      packages: doc.packages,
+      snapshots: doc.snapshots
+    });
+  }
+  demand2(all.size > 0, "Empty dependency inventory.");
+  return {
+    packages: [...all.values()].sort(
+      (a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`, "en")
+    ),
+    documents
+  };
+}
+function canonicalLockEvidence(value) {
+  if (Array.isArray(value)) return value.map(canonicalLockEvidence);
+  if (isRecord(value))
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonicalLockEvidence(value[key])])
+    );
+  return value;
+}
+
+// tooling/security/installed-tree.ts
+function graph(doc) {
+  return canonicalLockEvidence({ importers: doc.importers, packages: doc.packages, snapshots: doc.snapshots });
+}
+async function verifyLockManifest(root, inventory) {
+  const runtime = inventory.documents.filter((doc) => !doc.importers["."]?.packageManagerDependencies);
+  const document = runtime[0];
+  if (runtime.length !== 1 || !document) throw new Error("Lockfile must have exactly one runtime dependency graph.");
+  const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  if (!isRecord(manifest)) throw new Error("Invalid dependency manifest.");
+  for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
+    const expected = manifest[group] ?? {};
+    if (!isRecord(expected)) throw new Error("Invalid dependency declarations.");
+    const actual = document.importers["."]?.[group] ?? {};
+    if (Object.keys(expected).length !== Object.keys(actual).length || Object.entries(expected).some(([name, version]) => actual[name]?.specifier !== version))
+      throw new Error(`Lockfile importer differs from manifest ${group}.`);
+  }
+  return document;
+}
+async function verifyInstalledTree(root, inventory) {
+  const runtime = await verifyLockManifest(root, inventory);
+  const modules = (0, import_yaml2.parse)(await readFile(path.join(root, "node_modules/.modules.yaml"), "utf8"));
+  if (!isRecord(modules) || !isRecord(modules.included)) throw new Error("Invalid installation metadata.");
+  for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
+    if (modules.included?.[group] !== true) throw new Error(`Installed tree excluded ${group}.`);
+  }
+  const installed = readLockInventory(await readFile(path.join(root, "node_modules/.pnpm/lock.yaml"), "utf8"));
+  const installedDocument = installed.documents[0];
+  if (installed.documents.length !== 1 || !installedDocument || JSON.stringify(graph(runtime)) !== JSON.stringify(graph(installedDocument)))
+    throw new Error("Installed dependency graph differs from lockfile.");
+}
+
+// tooling/security/official-inputs.ts
+function verifyOfficialLock(inventory, release, group) {
+  const declared = inventory.documents.filter((document) => document.importers["."]?.[group]?.[release.name]);
+  const identities = inventory.packages.filter((item) => item.name === release.name);
+  if (declared.length !== 1 || declared[0]?.importers["."]?.[group]?.[release.name]?.specifier !== release.version || identities.length !== 1 || identities[0]?.version !== release.version || identities[0]?.integrity !== release.integrity)
+    throw new Error("Official release identity or integrity differs from its frozen lock.");
+}
+async function verifyOfficialInputs(root) {
+  const release = parseOfficialReleaseEvidence(
+    JSON.parse(await readFile2(path2.join(root, "tooling/official-server-release.json"), "utf8"))
+  );
+  const repository = readLockInventory(await readFile2(path2.join(root, "pnpm-lock.yaml"), "utf8"));
+  await verifyLockManifest(root, repository);
+  verifyOfficialLock(repository, release, "devDependencies");
+  const snapshot = await readFile2(path2.join(root, "tooling/security/upstream-pnpm-lock.yaml"), "utf8");
+  verifyOfficialLock(readLockInventory(snapshot), release, "dependencies");
+  return { release, snapshot };
+}
+
+// tooling/security/installation-policy.ts
 var INSTALL_POLICY = Object.freeze({
   minimumReleaseAge: 1440,
   minimumReleaseAgeStrict: true,
@@ -8402,90 +8252,112 @@ function validateInstallPolicy(config, isolated = false) {
   if (config.registry && (typeof config.registry !== "string" || config.registry.replace(/\/$/, "") !== NPM_REGISTRY))
     throw new Error("Unexpected audit registry.");
 }
-function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (isRecord(value))
-    return Object.fromEntries(
-      Object.keys(value).sort().map((key) => [key, canonical(value[key])])
-    );
-  return value;
-}
-function graph(doc) {
-  return canonical({ importers: doc.importers, packages: doc.packages, snapshots: doc.snapshots });
-}
-async function verifyLockManifest(root, inventory) {
-  const runtime = inventory.documents.filter((doc) => !doc.importers["."]?.packageManagerDependencies);
-  const document = runtime[0];
-  if (runtime.length !== 1 || !document) throw new Error("Lockfile must have exactly one runtime dependency graph.");
-  const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
-  if (!isRecord(manifest)) throw new Error("Invalid dependency manifest.");
-  for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
-    const expected = manifest[group] ?? {};
-    if (!isRecord(expected)) throw new Error("Invalid dependency declarations.");
-    const actual = document.importers["."]?.[group] ?? {};
-    if (Object.keys(expected).length !== Object.keys(actual).length || Object.entries(expected).some(([name, version]) => actual[name]?.specifier !== version))
-      throw new Error(`Lockfile importer differs from manifest ${group}.`);
-  }
-  return document;
-}
-async function verifyInstalledTree(root, inventory) {
-  const runtime = await verifyLockManifest(root, inventory);
-  const modules = (0, import_yaml2.parse)(await readFile(path.join(root, "node_modules/.modules.yaml"), "utf8"));
-  if (!isRecord(modules) || !isRecord(modules.included)) throw new Error("Invalid installation metadata.");
-  for (const group of ["dependencies", "devDependencies", "optionalDependencies"]) {
-    if (modules.included?.[group] !== true) throw new Error(`Installed tree excluded ${group}.`);
-  }
-  const installed = readLockInventory(await readFile(path.join(root, "node_modules/.pnpm/lock.yaml"), "utf8"));
-  const installedDocument = installed.documents[0];
-  if (installed.documents.length !== 1 || !installedDocument || JSON.stringify(graph(runtime)) !== JSON.stringify(graph(installedDocument)))
-    throw new Error("Installed dependency graph differs from lockfile.");
-}
-async function hashFiles(root, files) {
-  if (!files.length) throw new Error("Empty evidence file set.");
-  const hash = createHash("sha256");
-  for (const file of [...files].sort()) {
-    const absolute = path.resolve(root, file);
-    if (!absolute.startsWith(`${path.resolve(root)}${path.sep}`)) throw new Error(`Unsafe evidence path: ${file}`);
-    const bytes = await readRegularFile(absolute);
-    hash.update(`${file}\0${bytes.length}\0`).update(bytes);
-  }
-  return hash.digest("hex");
-}
-async function fingerprintInputs(root, codeFiles, configurationFiles, inventory) {
-  return {
-    code: await hashFiles(root, codeFiles),
-    configuration: await hashFiles(root, configurationFiles),
-    dependencies: createHash("sha256").update(JSON.stringify(canonical(inventory.documents))).digest("hex")
-  };
-}
 
-// tooling/security/official-inputs.ts
-function verifyOfficialLock(inventory, release, group) {
-  const declared = inventory.documents.filter((document) => document.importers["."]?.[group]?.[release.name]);
-  const identities = inventory.packages.filter((item) => item.name === release.name);
-  if (declared.length !== 1 || declared[0]?.importers["."]?.[group]?.[release.name]?.specifier !== release.version || identities.length !== 1 || identities[0]?.version !== release.version || identities[0]?.integrity !== release.integrity)
-    throw new Error("Official release identity or integrity differs from its frozen lock.");
+// tooling/security/registry-reports.ts
+var SEVERITIES = ["info", "low", "moderate", "high", "critical"];
+var PACKAGE2 = /^(?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+$/;
+var GHSA = /^GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}$/;
+function demand3(condition, message) {
+  if (!condition) throw new Error(message);
 }
-async function verifyOfficialInputs(root) {
-  const release = parseOfficialReleaseEvidence(
-    JSON.parse(await readFile2(path2.join(root, "tooling/official-server-release.json"), "utf8"))
+function object2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function keys(value, expected, context) {
+  demand3(
+    object2(value) && Object.keys(value).sort().join() === [...expected].sort().join(),
+    `Invalid ${context} fields.`
   );
-  const repository = readLockInventory(await readFile2(path2.join(root, "pnpm-lock.yaml"), "utf8"));
-  await verifyLockManifest(root, repository);
-  verifyOfficialLock(repository, release, "devDependencies");
-  const snapshot = await readFile2(path2.join(root, "tooling/security/upstream-pnpm-lock.yaml"), "utf8");
-  verifyOfficialLock(readLockInventory(snapshot), release, "dependencies");
-  return { release, snapshot };
+}
+function nonempty2(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function report(result, allowedExitCodes) {
+  demand3(
+    allowedExitCodes.includes(result.exitCode),
+    `Audit command failed (exit ${result.exitCode}): ${result.stderr ?? ""}`
+  );
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("Malformed audit JSON report.");
+  }
+  demand3(
+    object2(parsed) && !parsed.error && !parsed.errors && !parsed.ignored,
+    "Audit failed or report contains ignored findings."
+  );
+  return parsed;
+}
+function assessAudit(result, inventory) {
+  const data = report(result, [0, 1]);
+  keys(data, ["advisories", "metadata"], "audit report");
+  demand3(object2(data.advisories) && object2(data.metadata), "Invalid advisory report.");
+  demand3(
+    inventory.length > 0 && data.metadata.totalDependencies === inventory.length,
+    "Audit coverage differs from complete lock inventory."
+  );
+  keys(data.metadata.vulnerabilities, SEVERITIES, "vulnerability counts");
+  const counts = { info: 0, low: 0, moderate: 0, high: 0, critical: 0 };
+  const findings = /* @__PURE__ */ new Map();
+  for (const advisory of Object.values(data.advisories)) {
+    demand3(
+      object2(advisory) && typeof advisory.severity === "string" && SEVERITIES.some((severity2) => severity2 === advisory.severity) && typeof advisory.module_name === "string" && typeof advisory.github_advisory_id === "string" && PACKAGE2.test(advisory.module_name) && GHSA.test(advisory.github_advisory_id) && nonempty2(advisory.title),
+      "Invalid advisory identity or severity."
+    );
+    demand3(Array.isArray(advisory.findings) && advisory.findings.length > 0, "Advisory omits affected versions.");
+    const severity = advisory.severity;
+    counts[severity]++;
+    for (const finding of advisory.findings) {
+      demand3(object2(finding) && typeof finding.version === "string", "Invalid affected version.");
+      demand3(
+        inventory.some((pkg) => pkg.name === advisory.module_name && pkg.version === finding.version),
+        "Advisory version not in inventory."
+      );
+      demand3(
+        Array.isArray(finding.paths) && finding.paths.length > 0 && finding.paths.every(nonempty2),
+        "Advisory omits dependency paths."
+      );
+      const item = {
+        ghsa: advisory.github_advisory_id,
+        package: advisory.module_name,
+        version: finding.version,
+        severity,
+        title: advisory.title
+      };
+      const key = `${item.ghsa}:${item.package}:${item.version}`;
+      demand3(
+        !findings.has(key) || findings.get(key)?.severity === item.severity,
+        "Conflicting advisory severities."
+      );
+      findings.set(key, item);
+    }
+  }
+  for (const severity of SEVERITIES)
+    demand3(
+      Number.isInteger(data.metadata.vulnerabilities[severity]) && data.metadata.vulnerabilities[severity] === counts[severity],
+      "Advisory severity counts do not match report."
+    );
+  demand3(
+    result.exitCode === (Object.values(counts).some((count) => count > 0) ? 1 : 0),
+    "Audit exit code conflicts with report."
+  );
+  return [...findings.values()];
+}
+function validateSignatures(result, expectedCount) {
+  const data = report(result, [0]);
+  keys(data, ["audited", "verified", "invalid", "missing"], "signature report");
+  demand3(
+    Number.isInteger(expectedCount) && expectedCount > 0 && data.audited === expectedCount && data.verified === expectedCount,
+    "Signature coverage differs from lock inventory."
+  );
+  demand3(
+    Array.isArray(data.invalid) && data.invalid.length === 0 && Array.isArray(data.missing) && data.missing.length === 0,
+    "Missing or invalid registry signatures."
+  );
 }
 
-// tooling/security/security-runner.ts
-var import_yaml3 = __toESM(require_dist(), 1);
-import { execFile } from "node:child_process";
-import { lstat as lstat2, mkdtemp, readFile as readFile3, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path3 from "node:path";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+// tooling/security/dependency-scan.ts
 var exec = promisify(execFile);
 var AUDIT_OPTIONS = ["--ignore-pnpmfile", "--config.configDependencies={}", `--registry=${NPM_REGISTRY}`];
 var PROCESS_OPTIONS = {
@@ -8534,7 +8406,7 @@ async function auditTree(root, inventory, execute, env) {
 }
 async function hasInstallation(root) {
   try {
-    await lstat2(path3.join(root, "node_modules"));
+    await lstat(path3.join(root, "node_modules"));
     return true;
   } catch (error) {
     if (errorCode(error) !== "ENOENT") throw error;
@@ -8657,7 +8529,175 @@ ignore-scripts=true
   }
 }
 
-// tooling/check-security.ts
+// tooling/security/fingerprints.ts
+import { createHash } from "node:crypto";
+import path4 from "node:path";
+
+// src/adapters/file-evidence.ts
+import { constants } from "node:fs";
+import { lstat as lstat2, open } from "node:fs/promises";
+function sameFile(expected, actual) {
+  return actual.isFile() && !actual.isSymbolicLink() && expected.dev === actual.dev && expected.ino === actual.ino;
+}
+function unchanged(expected, actual) {
+  return sameFile(expected, actual) && expected.size === actual.size && expected.mtimeNs === actual.mtimeNs && expected.ctimeNs === actual.ctimeNs;
+}
+async function readRegularFile(file, io = {}) {
+  const inspect = io.lstat ?? ((name) => lstat2(name, { bigint: true }));
+  const acquire = io.open ?? (async (name, flags) => {
+    const handle2 = await open(name, flags);
+    return {
+      stat: () => handle2.stat({ bigint: true }),
+      readFile: () => handle2.readFile(),
+      close: () => handle2.close()
+    };
+  });
+  const handle = await acquire(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) throw new Error("Evidence must be a regular file without links.");
+    if (!unchanged(before, await inspect(file))) throw new Error("Evidence file identity or metadata changed.");
+    const bytes = await handle.readFile();
+    if (!unchanged(before, await handle.stat()) || !unchanged(before, await inspect(file)) || BigInt(bytes.length) !== before.size)
+      throw new Error("Evidence file identity or metadata changed.");
+    return bytes;
+  } finally {
+    await handle.close();
+  }
+}
+
+// tooling/security/fingerprints.ts
+async function hashFiles(root, files) {
+  if (!files.length) throw new Error("Empty evidence file set.");
+  const hash = createHash("sha256");
+  for (const file of [...files].sort()) {
+    const absolute = path4.resolve(root, file);
+    if (!absolute.startsWith(`${path4.resolve(root)}${path4.sep}`)) throw new Error(`Unsafe evidence path: ${file}`);
+    const bytes = await readRegularFile(absolute);
+    hash.update(`${file}\0${bytes.length}\0`).update(bytes);
+  }
+  return hash.digest("hex");
+}
+async function fingerprintInputs(root, codeFiles, configurationFiles, inventory) {
+  return {
+    code: await hashFiles(root, codeFiles),
+    configuration: await hashFiles(root, configurationFiles),
+    dependencies: createHash("sha256").update(JSON.stringify(canonicalLockEvidence(inventory.documents))).digest("hex")
+  };
+}
+
+// tooling/security/vulnerability-reviews.ts
+var SCOPES = ["repository", "upstream"];
+var PACKAGE3 = /^(?:@[a-z0-9_.-]+\/)?[a-z0-9_.-]+$/;
+var GHSA2 = /^GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}$/;
+var MAX_REVIEW_MS = 30 * 24 * 60 * 60 * 1e3;
+function demand4(condition, message) {
+  if (!condition) throw new Error(message);
+}
+function object3(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function keys2(value, expected, context) {
+  demand4(
+    object3(value) && Object.keys(value).sort().join() === [...expected].sort().join(),
+    `Invalid ${context} fields.`
+  );
+}
+function nonempty3(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function utc(value) {
+  demand4(
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$/.test(value),
+    "Review dates must be UTC ISO timestamps."
+  );
+  const date = new Date(value);
+  demand4(Number.isFinite(date.getTime()) && date.toISOString() === value, "Invalid review date.");
+  return date.getTime();
+}
+function validateExceptions(data, now) {
+  keys2(data, ["schemaVersion", "exceptions"], "exception manifest");
+  demand4(data.schemaVersion === 1 && Array.isArray(data.exceptions), "Invalid exception schema.");
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of data.exceptions) {
+    keys2(
+      item,
+      [
+        "ghsa",
+        "package",
+        "version",
+        "scope",
+        "reason",
+        "triggerConditions",
+        "evidence",
+        "reviewedBy",
+        "reviewedAt",
+        "expiresAt",
+        "fingerprints"
+      ],
+      "exception"
+    );
+    demand4(
+      typeof item.ghsa === "string" && typeof item.version === "string" && typeof item.scope === "string" && GHSA2.test(item.ghsa) && typeof item.package === "string" && PACKAGE3.test(item.package) && isSemVer(item.version) && SCOPES.includes(item.scope),
+      "Exception needs an exact GHSA, package, version and scope."
+    );
+    for (const field of ["reason", "triggerConditions", "reviewedBy"])
+      demand4(nonempty3(item[field]), `Exception omits ${field}.`);
+    demand4(
+      Array.isArray(item.evidence) && item.evidence.length > 0 && item.evidence.every(
+        (file) => nonempty3(file) && !file.startsWith("/") && !file.includes("..") && !file.includes("\\") && !file.includes(":")
+      ),
+      "Exception needs repository-relative evidence files."
+    );
+    keys2(item.fingerprints, ["code", "configuration", "dependencies"], "fingerprint");
+    demand4(
+      Object.values(item.fingerprints).every(
+        (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
+      ),
+      "Invalid SHA-256 fingerprint."
+    );
+    const reviewed = utc(item.reviewedAt);
+    const expires = utc(item.expiresAt);
+    demand4(
+      reviewed <= now.getTime() && expires > now.getTime() && expires > reviewed && expires - reviewed <= MAX_REVIEW_MS,
+      "Expired, future or over-30-day exception."
+    );
+    const key = `${item.scope}:${item.ghsa}:${item.package}:${item.version}`;
+    demand4(!seen.has(key), "Duplicate exception.");
+    seen.add(key);
+  }
+  return data.exceptions;
+}
+function evaluateFindings(findings, exceptions, contexts) {
+  const scope = Object.keys(contexts)[0];
+  demand4(Object.keys(contexts).length === 1 && scope && SCOPES.includes(scope), "Choose exactly one audit scope.");
+  const checkedScope = scope;
+  const context = contexts[checkedScope];
+  demand4(context, "Missing audit context.");
+  const result = {
+    blocked: [],
+    waived: [],
+    reported: findings.map((item) => ({ ...item, scope: checkedScope }))
+  };
+  for (const exception of exceptions.filter((item) => item.scope === scope)) {
+    demand4(
+      ["code", "configuration", "dependencies"].every(
+        (key) => exception.fingerprints[key] === context[key]
+      ),
+      "Exception evidence fingerprint changed; review required."
+    );
+  }
+  for (const item of result.reported) {
+    const waived = exceptions.some(
+      (exception) => exception.scope === scope && exception.ghsa === item.ghsa && exception.package === item.package && exception.version === item.version
+    );
+    if (waived) result.waived.push(item);
+    else if (["high", "critical"].includes(item.severity)) result.blocked.push(item);
+  }
+  return result;
+}
+
+// tooling/security/check-security.ts
 async function checkSecurity(root, options = {}) {
   const phase = options.phase ?? "complete";
   if (phase !== "complete" && phase !== "lockfile") throw new Error(`Unknown security phase: ${phase}`);
@@ -8667,12 +8707,12 @@ async function checkSecurity(root, options = {}) {
         cwd: root,
         encoding: "utf8",
         windowsHide: true
-      }).split("\0").filter((file) => file && existsSync(path4.join(root, file)))
+      }).split("\0").filter((file) => file && existsSync(path5.join(root, file)))
     )
   ];
   const exceptions = validateExceptions(
-    JSON.parse(await readFile4(path4.join(root, "docs/policies/security-exceptions.json"), "utf8")),
-    options.now
+    JSON.parse(await readFile4(path5.join(root, "docs/policies/security-exceptions.json"), "utf8")),
+    options.now ?? /* @__PURE__ */ new Date()
   );
   const code = paths.filter(
     (file) => /^(?:src|tooling)\/.*\.(?:ts|mts|cts|mjs|cjs|ps1|jxa|cs)$/.test(file) || /^plugins\/.*\/dist\/.*\.(?:mjs|cjs|ps1|jxa|cs)$/.test(file) || PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/official-server/`))
@@ -8690,11 +8730,11 @@ async function checkSecurity(root, options = {}) {
   );
   for (const exception of exceptions) {
     for (const file of exception.evidence) {
-      if (!code.includes(file) && !configuration.includes(file) || !(await lstat3(path4.join(root, file))).isFile())
+      if (!code.includes(file) && !configuration.includes(file) || !(await lstat3(path5.join(root, file))).isFile())
         throw new Error(`Unreviewable fingerprinted evidence: ${file}`);
     }
   }
-  const initialInventory = readLockInventory(await readFile4(path4.join(root, "pnpm-lock.yaml"), "utf8"));
+  const initialInventory = readLockInventory(await readFile4(path5.join(root, "pnpm-lock.yaml"), "utf8"));
   const initialEvidence = await fingerprintInputs(root, code, configuration, initialInventory);
   async function review(scope, result) {
     const fingerprints = await fingerprintInputs(root, code, configuration, result.inventory);
@@ -8719,7 +8759,7 @@ async function checkSecurity(root, options = {}) {
     throw new Error("Audit evidence changed during scan; retry with stable inputs.");
   return { ok: Object.values(results).every((result) => result.blocked.length === 0), scopes: results };
 }
-if (process.argv[1] && path4.resolve(process.argv[1]) === fileURLToPath2(import.meta.url)) {
+if (process.argv[1] && path5.resolve(process.argv[1]) === fileURLToPath2(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
     let root;
@@ -8732,7 +8772,7 @@ if (process.argv[1] && path4.resolve(process.argv[1]) === fileURLToPath2(import.
         throw new Error("Usage: check-security.mjs --root <repository> [--phase complete|lockfile]");
       seen.add(flag);
       if (flag === "--phase") phase = value;
-      else root = path4.resolve(value);
+      else root = path5.resolve(value);
     }
     if (!root) throw new Error("Usage: check-security.mjs --root <repository> [--phase complete|lockfile]");
     const result = await checkSecurity(root, { phase });

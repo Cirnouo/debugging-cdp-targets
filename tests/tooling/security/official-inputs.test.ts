@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../../../src/shared/constants.ts';
 import { isRecord } from '../../../src/shared/errors.ts';
-import { readLockInventory } from '../../../tooling/security/audit-policy.ts';
+import { readLockInventory } from '../../../tooling/security/lock-inventory.ts';
 import { verifyOfficialInputs } from '../../../tooling/security/official-inputs.ts';
 
 test('reviewed official release agrees with exact build dependency and isolated lock', async () => {
