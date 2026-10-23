@@ -108,6 +108,15 @@ Refusal does not consume a pending form reply or close a healthy legacy session,
 peer request or owned Core resource. These per-request work limits do not cap
 responses, impose a connection count or establish complete denial-of-service
 protection. Larger requests require less input in one envelope.
+For cooperative uploads and exact-boundary checks, refusal includes the complete
+closed JSON response at the client. A flooding or deliberately incomplete upload
+can instead encounter a transport reset while the server closes its request
+socket. Its contract is bounded real 413 headers and fixed JSON bytes, a returned
+response end, local response finish and actual socket closure, with no dispatch
+or resource acquisition. Local finish does not prove peer receipt. Tests keep
+complete client 413 and a known closed upload as distinct outcomes; a timeout,
+partial response or upload error alone never establishes refusal. The App does
+not drain an unbounded upload or add TCP shutdown state to guarantee delivery.
 After authentication, known busy and originating-client facility failures carry
 a closed code and fixed actionable explanation. Unknown upstream errors remain
 generic; the App never projects arbitrary exception text. A locally known facility

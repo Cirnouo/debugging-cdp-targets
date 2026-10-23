@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
+import { EventEmitter, errorMonitor } from 'node:events';
 import {
     type ClientRequest,
     createServer,
@@ -7,7 +7,7 @@ import {
     type IncomingMessage,
     ServerResponse,
 } from 'node:http';
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client, ProtocolError, ProtocolErrorCode, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { DataDirectoryRegistry } from '../src/adapters/data-directory.ts';
@@ -16,18 +16,21 @@ import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createGatewayCore } from '../src/gateway/core.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
-function httpStatus(
+type HttpOptions = {
+    expectRefusal?: boolean;
+    timeoutMs?: number;
+    observeRequest?: (request: ClientRequest) => void;
+    holdEnd?: boolean;
+};
+type HttpOutcome = { kind: 'response'; status: number } | { kind: 'upload-terminated' };
+
+function httpExchange(
     url: string,
     headers: Record<string, string>,
     chunks: string[],
-    options: {
-        expectRefusal?: boolean;
-        timeoutMs?: number;
-        observeRequest?: (request: ClientRequest) => void;
-        holdEnd?: boolean;
-    } = {},
+    options: HttpOptions & { allowUploadTermination?: boolean } = {},
 ) {
-    return new Promise<number>((resolve, reject) => {
+    return new Promise<HttpOutcome>((resolve, reject) => {
         const started = performance.now();
         const events: { ms: number; event: string; value?: number | string }[] = [];
         const body: Buffer[] = [];
@@ -40,6 +43,7 @@ function httpStatus(
         let responseAborted = false;
         let settled = false;
         let failure: string | undefined;
+        let knownUploadError = false;
         let timer: ReturnType<typeof setTimeout>;
         function record(event: string, value?: number | string) {
             if (events.length < 48)
@@ -51,6 +55,19 @@ function httpStatus(
             else fail('event-limit');
         }
         function settle(force = false) {
+            if (
+                !settled &&
+                !failure &&
+                options.allowUploadTermination &&
+                requestClosed &&
+                !response &&
+                knownUploadError
+            ) {
+                settled = true;
+                clearTimeout(timer);
+                resolve({ kind: 'upload-terminated' });
+                return;
+            }
             if (settled || (!force && (!requestClosed || (!failure && !responseClosed)))) return;
             if (!failure && (!responseEnded || !response?.complete || responseAborted)) failure = 'incomplete-response';
             if (!failure && options.expectRefusal) {
@@ -82,7 +99,7 @@ function httpStatus(
                         `HTTP exchange failed: ${failure}; ${JSON.stringify({ requestClosed, responseEnded, responseClosed, responseAborted, complete: response?.complete ?? false, status: response?.statusCode ?? null, bytes, events })}`,
                     ),
                 );
-            } else resolve(response?.statusCode ?? 0);
+            } else resolve({ kind: 'response', status: response?.statusCode ?? 0 });
         }
         function fail(reason: string) {
             failure ??= reason;
@@ -93,6 +110,7 @@ function httpStatus(
             const code =
                 isRecord(error) && (error.code === 'EPIPE' || error.code === 'ECONNRESET') ? error.code : 'OTHER';
             record('request.error', code);
+            if (code !== 'OTHER') knownUploadError = true;
             if (!options.expectRefusal || code === 'OTHER') fail('request-error');
         }
         request = httpRequest(url, { method: 'POST', headers }, (incoming) => {
@@ -156,6 +174,232 @@ function httpStatus(
     });
 }
 
+async function httpStatus(url: string, headers: Record<string, string>, chunks: string[], options: HttpOptions = {}) {
+    const outcome = await httpExchange(url, headers, chunks, options);
+    assert.equal(outcome.kind, 'response');
+    if (outcome.kind !== 'response') throw new Error('Missing client HTTP response.');
+    return outcome.status;
+}
+
+async function boundedFloodRefusal(
+    t: TestContext,
+    url: string,
+    chunks: string[],
+    options: Pick<HttpOptions, 'holdEnd' | 'timeoutMs' | 'observeRequest'> = {},
+) {
+    const authority = new URL(url).host;
+    const events: string[] = [];
+    const body: Buffer[] = [];
+    let response: ServerResponse | undefined;
+    let socket: IncomingMessage['socket'] | undefined;
+    let client: ClientRequest | undefined;
+    let bytes = 0;
+    let headReturned = false;
+    let endReturned = false;
+    let finished = false;
+    let socketClosed = false;
+    let finishBeforeSocketClose = false;
+    let cleanup = false;
+    let failure: string | undefined;
+    let status: number | undefined;
+    let contentType: unknown;
+    let connection: unknown;
+    let before: { complete: boolean; destroyed: boolean; aborted: boolean } | undefined;
+    let signalClosed: () => void = () => {};
+    const closed = new Promise<void>((resolve) => {
+        signalClosed = resolve;
+    });
+    const record = (event: string) => {
+        if (events.length < 48) events.push(event);
+        else failure ??= 'event-limit';
+    };
+    const finish = () => {
+        finished = true;
+        record('response.finish');
+    };
+    const responseError = () => {
+        failure ??= 'response-error';
+        record('response.error');
+    };
+    const socketError = (error: unknown) => {
+        if (!isRecord(error) || (error.code !== 'EPIPE' && error.code !== 'ECONNRESET')) failure ??= 'socket-error';
+        record('socket.error');
+    };
+    const socketClose = () => {
+        socketClosed = !cleanup;
+        finishBeforeSocketClose = finished;
+        record('socket.close');
+        signalClosed();
+    };
+    function append(chunk: unknown, encoding: unknown) {
+        if (chunk === undefined || chunk === null || typeof chunk === 'function') return;
+        let value: Buffer;
+        if (typeof chunk === 'string')
+            value = Buffer.from(chunk, typeof encoding === 'string' && Buffer.isEncoding(encoding) ? encoding : 'utf8');
+        else if (chunk instanceof Uint8Array) value = Buffer.from(chunk);
+        else {
+            failure ??= 'invalid-server-chunk';
+            return;
+        }
+        bytes += value.length;
+        if (bytes > 16384) failure ??= 'body-limit';
+        else body.push(value);
+    }
+    const originalHead = ServerResponse.prototype.writeHead;
+    const originalWrite = ServerResponse.prototype.write;
+    const originalEnd = ServerResponse.prototype.end;
+    const headSpy = t.mock.method(
+        ServerResponse.prototype,
+        'writeHead',
+        function (this: ServerResponse, ...args: Parameters<ServerResponse['writeHead']>) {
+            const matches =
+                this.req.method === 'POST' &&
+                this.req.url === '/mcp' &&
+                this.req.headers.host === authority &&
+                this.req.headers['transfer-encoding'] === 'chunked';
+            if (matches) {
+                if (response) failure ??= 'duplicate-response';
+                response = this;
+                socket = this.req.socket;
+                before = { complete: this.req.complete, destroyed: this.req.destroyed, aborted: this.req.aborted };
+                this.once('finish', finish);
+                this.once(errorMonitor, responseError);
+                socket.once('close', socketClose);
+                (socket as EventEmitter).once(errorMonitor, socketError);
+                record('response.head-entry');
+            }
+            try {
+                const result = originalHead.apply(this, args);
+                if (this === response) {
+                    headReturned = true;
+                    status = args[0];
+                    const headers: unknown = typeof args[1] === 'string' ? (args as readonly unknown[])[2] : args[1];
+                    if (isRecord(headers)) {
+                        for (const [key, value] of Object.entries(headers)) {
+                            if (key.toLowerCase() === 'content-type') contentType = value;
+                            if (key.toLowerCase() === 'connection') connection = value;
+                        }
+                    }
+                    record('response.head-return');
+                }
+                return result;
+            } catch (error) {
+                if (this === response) failure ??= 'head-threw';
+                throw error;
+            }
+        },
+    );
+    const writeSpy = t.mock.method(
+        ServerResponse.prototype,
+        'write',
+        function (this: ServerResponse, ...args: Parameters<ServerResponse['write']>) {
+            try {
+                const result = originalWrite.apply(this, args);
+                if (this === response) {
+                    append(args[0], args[1]);
+                    record('response.write-return');
+                }
+                return result;
+            } catch (error) {
+                if (this === response) failure ??= 'write-threw';
+                throw error;
+            }
+        },
+    );
+    const endSpy = t.mock.method(
+        ServerResponse.prototype,
+        'end',
+        function (this: ServerResponse, ...args: Parameters<ServerResponse['end']>) {
+            try {
+                const result = originalEnd.apply(this, args);
+                if (this === response) {
+                    append(args[0], args[1]);
+                    endReturned = true;
+                    record('response.end-return');
+                }
+                return result;
+            } catch (error) {
+                if (this === response) failure ??= 'end-threw';
+                throw error;
+            }
+        },
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+            () =>
+                reject(
+                    new Error(
+                        `Bounded flooding refusal failed: timeout; ${JSON.stringify({ headReturned, endReturned, finished, socketClosed, bytes, events })}`,
+                    ),
+                ),
+            options.timeoutMs ?? 2000,
+        );
+    });
+    try {
+        const [outcome] = await Promise.race([
+            Promise.all([
+                httpExchange(
+                    url,
+                    { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+                    chunks,
+                    {
+                        ...options,
+                        expectRefusal: true,
+                        allowUploadTermination: true,
+                        observeRequest(request) {
+                            client = request;
+                            options.observeRequest?.(request);
+                        },
+                    },
+                ),
+                closed,
+            ]),
+            deadline,
+        ]);
+        if (!(headReturned && endReturned && finished && socketClosed && finishBeforeSocketClose))
+            failure ??= 'incomplete-server';
+        if (status !== 413) failure ??= 'wrong-server-status';
+        if (connection !== 'close') failure ??= 'wrong-server-connection';
+        if (!(typeof contentType === 'string' && contentType.split(';')[0] === 'application/json'))
+            failure ??= 'wrong-server-content-type';
+        if (
+            !Buffer.concat(body).equals(
+                Buffer.from(
+                    '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+                ),
+            )
+        )
+            failure ??= 'invalid-server-body';
+        const evidence = JSON.stringify({
+            headReturned,
+            endReturned,
+            finished,
+            socketClosed,
+            finishBeforeSocketClose,
+            status,
+            bytes,
+            before,
+            events,
+        });
+        assert.equal(failure, undefined, `Bounded flooding refusal failed: ${failure}; ${evidence}`);
+        if (options.holdEnd) assert.deepEqual(before, { complete: false, destroyed: false, aborted: false });
+        if (outcome.kind === 'response') assert.equal(outcome.status, 413);
+        return outcome;
+    } finally {
+        cleanup = true;
+        clearTimeout(timer);
+        headSpy.mock.restore();
+        writeSpy.mock.restore();
+        endSpy.mock.restore();
+        response?.off('finish', finish);
+        response?.off(errorMonitor, responseError);
+        socket?.off('close', socketClose);
+        socket?.off(errorMonitor, socketError);
+        client?.destroy();
+    }
+}
+
 async function refusalResponse(
     respond: (request: IncomingMessage, response: ServerResponse) => void,
     options: Parameters<typeof httpStatus>[3] = {},
@@ -173,6 +417,153 @@ async function refusalResponse(
         await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     }
 }
+
+test('HTTP bounded flooding refusal distinguishes a physically closed upload from client JSON', async (t) => {
+    let client: ClientRequest | undefined;
+    const server = createServer((_request, response) => {
+        response.once('finish', () =>
+            client?.destroy(Object.assign(new Error('peer upload failed'), { code: 'EPIPE' })),
+        );
+        response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+        response.end(
+            '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+        );
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+        const address = server.address();
+        assert.ok(address && typeof address !== 'string');
+        const outcome = await boundedFloodRefusal(
+            t,
+            `http://127.0.0.1:${address.port}/mcp`,
+            [' '.repeat(2 * 1024 * 1024)],
+            {
+                holdEnd: true,
+                observeRequest: (request) => {
+                    client = request;
+                },
+            },
+        );
+        assert.deepEqual(outcome, { kind: 'upload-terminated' });
+    } finally {
+        client?.destroy();
+        await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
+});
+
+async function floodFixture(
+    t: TestContext,
+    respond: (request: IncomingMessage, response: ServerResponse) => void,
+    code: 'EPIPE' | 'ECONNRESET' | 'OTHER' | null = 'ECONNRESET',
+) {
+    let client: ClientRequest | undefined;
+    const server = createServer((request, response) => {
+        if (code)
+            response.once('finish', () =>
+                client?.destroy(Object.assign(new Error('controlled peer failure'), { code })),
+            );
+        respond(request, response);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+        const address = server.address();
+        assert.ok(address && typeof address !== 'string');
+        return await boundedFloodRefusal(t, `http://127.0.0.1:${address.port}/mcp`, [' '], {
+            timeoutMs: 50,
+            observeRequest: (request) => {
+                client = request;
+            },
+        });
+    } finally {
+        client?.destroy();
+        await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+    }
+}
+
+test('HTTP bounded flooding refusal retains complete client JSON as a distinct outcome', async (t) => {
+    assert.deepEqual(
+        await floodFixture(
+            t,
+            (_request, response) => {
+                response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+                response.end(
+                    '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+                );
+            },
+            null,
+        ),
+        { kind: 'response', status: 413 },
+    );
+});
+
+for (const [name, status, body, contentType, connection, reason] of [
+    ['wrong status', 400, '{}', 'application/json', 'close', 'wrong-server-status'],
+    ['wrong body', 413, '{"private":"do-not-echo"}', 'application/json', 'close', 'invalid-server-body'],
+    ['invalid JSON', 413, '{', 'application/json', 'close', 'invalid-server-body'],
+    ['body limit', 413, 'x'.repeat(16385), 'application/json', 'close', 'body-limit'],
+    ['content type', 413, '{}', 'text/plain', 'close', 'wrong-server-content-type'],
+    ['connection', 413, '{}', 'application/json', 'keep-alive', 'wrong-server-connection'],
+] as const) {
+    test(`HTTP bounded flooding refusal rejects actual server ${name} despite known upload closure`, async (t) => {
+        await assert.rejects(
+            floodFixture(t, (_request, response) => {
+                response.writeHead(status, { 'Content-Type': contentType, Connection: connection });
+                response.end(body);
+            }),
+            new RegExp(`Bounded flooding refusal failed: ${reason};`),
+        );
+    });
+}
+
+test('HTTP bounded flooding refusal rejects native closure without server end and finish', async (t) => {
+    await assert.rejects(
+        floodFixture(t, (request, response) => {
+            response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+            response.write('{');
+            request.socket.destroy();
+        }),
+        /Bounded flooding refusal failed: incomplete-server;|HTTP exchange failed: (response-aborted|response-error|incomplete-response);/,
+    );
+});
+
+test('HTTP bounded flooding refusal rejects absent headers and cleanup-induced socket closure', async (t) => {
+    await assert.rejects(
+        floodFixture(t, () => {}),
+        /Bounded flooding refusal failed: timeout;/,
+    );
+});
+
+test('HTTP bounded flooding refusal requires native socket close beyond complete response close', async (t) => {
+    await assert.rejects(
+        floodFixture(
+            t,
+            (_request, response) => {
+                response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'keep-alive' });
+                response.end(
+                    '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+                );
+            },
+            null,
+        ),
+        /Bounded flooding refusal failed: timeout;|HTTP exchange failed: missing-connection-close;/,
+    );
+});
+
+test('HTTP bounded flooding refusal rejects unknown client error after actual server finish', async (t) => {
+    await assert.rejects(
+        floodFixture(
+            t,
+            (_request, response) => {
+                response.writeHead(413, { 'Content-Type': 'application/json', Connection: 'close' });
+                response.end(
+                    '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload Too Large: Request body must not exceed 1048576 bytes"},"id":null}',
+                );
+            },
+            'OTHER',
+        ),
+        /HTTP exchange failed: request-error;/,
+    );
+});
 
 test('HTTP refusal observation retains upload error before complete response', async () => {
     const result = await refusalResponse(
@@ -736,48 +1127,27 @@ test('actual SDK HTTP keeps delayed originating roots after an accepted start an
 
 test('HTTP oversized refusal preserves the incomplete request until response handoff', async (t) => {
     const selected = await fixture();
-    const authority = new URL(selected.http.url).host;
-    const observed: { complete: boolean; destroyed: boolean; aborted: boolean }[] = [];
-    const original = ServerResponse.prototype.writeHead;
-    const spy = t.mock.method(
-        ServerResponse.prototype,
-        'writeHead',
-        function (this: ServerResponse, ...args: Parameters<ServerResponse['writeHead']>) {
-            if (
-                args[0] === 413 &&
-                this.req.method === 'POST' &&
-                this.req.url === '/mcp' &&
-                this.req.headers.host === authority &&
-                this.req.headers['transfer-encoding'] === 'chunked'
-            )
-                observed.push({
-                    complete: this.req.complete,
-                    destroyed: this.req.destroyed,
-                    aborted: this.req.aborted,
-                });
-            return original.apply(this, args);
-        },
-    );
     try {
-        const outcome = await httpStatus(
-            selected.http.url,
-            { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
-            [' '.repeat(2 * 1024 * 1024)],
-            { expectRefusal: true, holdEnd: true },
-        ).then(
-            (status) => ({ status }),
-            (error: unknown) => ({ error }),
+        const own = await selected.client();
+        const peer = await selected.client();
+        const sessions = selected.transports.map((transport) => transport.sessionId);
+        const acquired = { ...selected.acquired };
+        await boundedFloodRefusal(t, selected.http.url, [' '.repeat(2 * 1024 * 1024)], { holdEnd: true });
+        assert.deepEqual(selected.acquired, acquired);
+        assert.equal(selected.launched(), 0);
+        assert.equal(selected.officialCalls(), 0);
+        assert.ok((await own.listTools()).tools.length > 0);
+        assert.ok((await peer.listTools()).tools.length > 0);
+        assert.deepEqual(
+            selected.transports.map((transport) => transport.sessionId),
+            sessions,
         );
-        assert.deepEqual(observed, [{ complete: false, destroyed: false, aborted: false }]);
-        if ('error' in outcome) throw outcome.error;
-        assert.equal(outcome.status, 413);
     } finally {
-        spy.mock.restore();
         await selected.close();
     }
 });
 
-test('HTTP socket enforces endpoint headers, bounded streamed bodies and explicit port conflict', async () => {
+test('HTTP socket enforces endpoint headers, bounded streamed bodies and explicit port conflict', async (t) => {
     const selected = await fixture();
     const status = (headers: Record<string, string>, chunks: string[], expectRefusal = false) =>
         httpStatus(selected.http.url, headers, chunks, { expectRefusal });
@@ -796,13 +1166,23 @@ test('HTTP socket enforces endpoint headers, bounded streamed bodies and explici
         });
         assert.equal(tooLarge.status, 413);
         assert.deepEqual(await tooLarge.json(), { error: 'Request body exceeds the limit.' });
-        assert.equal(
-            await status(
-                { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
-                [' '.repeat(2 * 1024 * 1024), ' '.repeat(2 * 1024 * 1024), ' '],
-                true,
-            ),
-            413,
+        const own = await selected.client();
+        const peer = await selected.client();
+        const sessions = selected.transports.map((transport) => transport.sessionId);
+        const acquired = { ...selected.acquired };
+        await boundedFloodRefusal(t, selected.http.url, [
+            ' '.repeat(2 * 1024 * 1024),
+            ' '.repeat(2 * 1024 * 1024),
+            ' ',
+        ]);
+        assert.deepEqual(selected.acquired, acquired);
+        assert.equal(selected.launched(), 0);
+        assert.equal(selected.officialCalls(), 0);
+        assert.ok((await own.listTools()).tools.length > 0);
+        assert.ok((await peer.listTools()).tools.length > 0);
+        assert.deepEqual(
+            selected.transports.map((transport) => transport.sessionId),
+            sessions,
         );
         const port = Number(new URL(selected.http.url).port);
         await assert.rejects(createMcpHttpServer({ port, core: selected.core }), { code: 'EADDRINUSE' });

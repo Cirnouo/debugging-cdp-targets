@@ -133,6 +133,17 @@ Git hook tests remain contributor-tooling regressions.
   elicitation/progress, client cancellation versus owned work, boundary rejection
   and explicit shutdown over the real Core with controlled native/official I/O,
   plus fixed/chunked UTF-8 limits and healthy own/peer sessions after rejection.
+  Its strict refusal observer still requires complete closed client JSON and
+  rejects known upload errors without a response. Separate flooding cases retain
+  the original far-over-limit and held-tail inputs while observing real server
+  413 headers, exact fixed JSON bytes, returned end, local finish and actual
+  native socket close before cleanup and the unchanged deadline. They distinguish
+  complete client 413 from a known physically closed upload; no error alone,
+  partial response, timeout or cleanup-induced close can pass. The deliberately
+  incomplete case also requires the original request to remain incomplete,
+  undestroyed and unaborted at response handoff. Both retain zero owned effects
+  and healthy own/peer sessions. Controlled real HTTP fixtures exercise positive
+  and negative observer/classification outcomes without changing production I/O.
 - `mcp-http-modern.test.ts` covers the actual pinned 2026-07-28 SDK wire,
   strict era routing, the fixed catalog and authenticated roots continuation
   before resource acquisition, while retaining sessionful legacy behavior. It
