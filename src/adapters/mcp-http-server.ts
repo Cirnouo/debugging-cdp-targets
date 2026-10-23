@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
-import { toNodeHandler } from '@modelcontextprotocol/node';
+import { type NodeIncomingMessageLike, toNodeHandler } from '@modelcontextprotocol/node';
 import {
     createMcpHandler,
     isLegacyRequest,
@@ -152,7 +152,18 @@ export async function createMcpHttpServer(options: { port: number; core: McpHttp
             const selected = sessions.get(String(request.headers['mcp-session-id']));
             if (request.method === 'GET') response.once('close', () => selected?.disconnect());
             if (!request.method || !request.url) throw new Error('Invalid HTTP request.');
-            await nodeHandler(Object.assign(request, { method: request.method, url: request.url }), response);
+            const original = request as NodeIncomingMessageLike;
+            await nodeHandler(
+                {
+                    method: request.method,
+                    url: request.url,
+                    headers: request.headers,
+                    ...(original.auth !== undefined && { auth: original.auth }),
+                    // Early iterator return must not destroy the socket before the SDK writes its refusal.
+                    [Symbol.asyncIterator]: () => request.iterator({ destroyOnReturn: false }),
+                },
+                response,
+            );
         })().catch(() => {
             if (!response.headersSent) response.writeHead(500, { 'Content-Type': 'application/json' });
             response.end('{"error":"MCP request failed."}');

@@ -5,7 +5,7 @@ import {
     createServer,
     request as httpRequest,
     type IncomingMessage,
-    type ServerResponse,
+    ServerResponse,
 } from 'node:http';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -20,7 +20,12 @@ function httpStatus(
     url: string,
     headers: Record<string, string>,
     chunks: string[],
-    options: { expectRefusal?: boolean; timeoutMs?: number; observeRequest?: (request: ClientRequest) => void } = {},
+    options: {
+        expectRefusal?: boolean;
+        timeoutMs?: number;
+        observeRequest?: (request: ClientRequest) => void;
+        holdEnd?: boolean;
+    } = {},
 ) {
     return new Promise<number>((resolve, reject) => {
         const started = performance.now();
@@ -141,8 +146,10 @@ function httpStatus(
                     if (error) requestError(error);
                 });
             }
-            record('request.end');
-            request.end();
+            if (!options.holdEnd) {
+                record('request.end');
+                request.end();
+            }
         } catch {
             fail('write-threw');
         }
@@ -723,6 +730,49 @@ test('actual SDK HTTP keeps delayed originating roots after an accepted start an
         );
         await assert.rejects(second.callTool({ name: 'dct_connection_status', arguments: {} }));
     } finally {
+        await selected.close();
+    }
+});
+
+test('HTTP oversized refusal preserves the incomplete request until response handoff', async (t) => {
+    const selected = await fixture();
+    const authority = new URL(selected.http.url).host;
+    const observed: { complete: boolean; destroyed: boolean; aborted: boolean }[] = [];
+    const original = ServerResponse.prototype.writeHead;
+    const spy = t.mock.method(
+        ServerResponse.prototype,
+        'writeHead',
+        function (this: ServerResponse, ...args: Parameters<ServerResponse['writeHead']>) {
+            if (
+                args[0] === 413 &&
+                this.req.method === 'POST' &&
+                this.req.url === '/mcp' &&
+                this.req.headers.host === authority &&
+                this.req.headers['transfer-encoding'] === 'chunked'
+            )
+                observed.push({
+                    complete: this.req.complete,
+                    destroyed: this.req.destroyed,
+                    aborted: this.req.aborted,
+                });
+            return original.apply(this, args);
+        },
+    );
+    try {
+        const outcome = await httpStatus(
+            selected.http.url,
+            { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+            [' '.repeat(2 * 1024 * 1024)],
+            { expectRefusal: true, holdEnd: true },
+        ).then(
+            (status) => ({ status }),
+            (error: unknown) => ({ error }),
+        );
+        assert.deepEqual(observed, [{ complete: false, destroyed: false, aborted: false }]);
+        if ('error' in outcome) throw outcome.error;
+        assert.equal(outcome.status, 413);
+    } finally {
+        spy.mock.restore();
         await selected.close();
     }
 });
