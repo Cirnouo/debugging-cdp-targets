@@ -80,10 +80,14 @@ const gatewayCases = [
     'tests/gateway/targets/chrome-profile-argument.test.ts',
     'tests/gateway/targets/chrome-profile.test.ts',
     'tests/gateway/targets/chromium-features.test.ts',
+    'tests/gateway/targets/close-diagnostics.test.ts',
     'tests/gateway/targets/data-isolation.test.ts',
     'tests/gateway/targets/directory-admission.test.ts',
+    'tests/gateway/targets/lifecycle-rollback.test.ts',
+    'tests/gateway/targets/observer-cleanup.test.ts',
     'tests/gateway/targets/port-and-endpoint-admission.test.ts',
     'tests/gateway/targets/structured-launch.test.ts',
+    'tests/gateway/targets/target-lifecycle.test.ts',
 ];
 const hostCases = ['tests/host-plugins/payload-filesystem.test.ts', 'tests/host-plugins/payload-integrity.test.ts'];
 

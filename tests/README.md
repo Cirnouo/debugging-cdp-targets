@@ -411,8 +411,9 @@ Git hook tests remain contributor-tooling regressions.
 - `control-contract.test.ts` rejects malformed external control envelopes.
 - `typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
-- `entry-lifecycle.test.ts` checks target-controller Keep/Close, confirmed exit retirement,
-  live same-port restart and independent child observation for each launch.
+- `gateway/targets/target-lifecycle.test.ts` keeps nine Keep/Close, confirmed-exit,
+  live same-port restart, health, retry, explicit owner cleanup and route-attachment
+  cases, including busy-router rollback. Every original callback and fixture remains.
 - `entry-runtime.test.ts` keeps ten actual Core ownership, independent connection
   and upstream lifetime cases. `gateway/connections/gateway-cleanup.test.ts` owns
   the seven whole Gateway shutdown, rollback, catalog and retained disposal cases.
@@ -448,7 +449,8 @@ Git hook tests remain contributor-tooling regressions.
   lifetime and five explicit evidence cases; `gateway/targets/directory-admission.test.ts`
   retains two pre-acquisition cases. All share the real Core/DataDirectoryRegistry
   support in `fixtures/connection-directory-runtime.ts`, preserving support/cleanup assertions.
-- `controller-rollback.test.ts` checks failed launch cleanup and retained evidence.
+- `gateway/targets/lifecycle-rollback.test.ts` keeps all three failed attachment,
+  replacement rollback and typed retained-target evidence cases.
 - `target-recovery.test.ts` checks explicit same-port recovery, literal launch
   evidence and rejection of port races after an application is created.
 - `target-ownership.test.ts` checks early application acquisition, shared gateway
@@ -480,7 +482,7 @@ Git hook tests remain contributor-tooling regressions.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous owner/identity/deduplication/cursor/cancel behavior,
   terminal result/error snapshots and actual SDK HTTP lifecycle validation.
-- `close-diagnostics.test.ts`, `platform-close.test.ts` cover absent/foreign listeners,
+- `gateway/targets/close-diagnostics.test.ts`, `platform-close.test.ts` cover absent/foreign listeners,
   native failure causes through operation wrappers, retry identity and actual
   child/handle exit evidence without a target deadline or Unix process polling.
 - `windows-launch.test.ts` checks synchronous actual application acquisition,
@@ -490,7 +492,8 @@ Git hook tests remain contributor-tooling regressions.
   resource receipts cannot release ownership. No-identity termination requires
   explicit acquisition proof plus physical helper close, with late identity taking
   priority and never-spawned OS helper failure as the explicit exception.
-- `observer-cleanup.test.ts` checks retryable observation, disconnect disposal and profile release after confirmed exit.
+- `gateway/targets/observer-cleanup.test.ts` keeps both retryable observation, explicit
+  owner cleanup and profile-release cases through confirmed actual exit.
 - `windows-native.test.ts` runs a disposable ordinary Node process on Windows;
   it checks argv/cwd/env/PID/NUL stdio and limited-query identity without a GUI.
   Hidden descendants outlive the root and spawn later descendants; native job
@@ -521,15 +524,16 @@ Git hook tests remain contributor-tooling regressions.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select forty-six entries: `tests/*.test.ts`, the
+command and `pnpm test:coverage` select fifty entries: `tests/*.test.ts`, the
 twenty-five explicit [tooling suites](tooling/README.md), two explicit
-[Host suites](host-plugins/README.md) and eighteen Gateway suites. Gateway selection
-retains argument parsing, seven [Target suites](gateway/targets/README.md), five
+[Host suites](host-plugins/README.md) and twenty-two Gateway suites. Gateway selection
+retains argument parsing, eleven [Target suites](gateway/targets/README.md), five
 [connection/directory suites](gateway/connections/README.md) and the five explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
 append once in that order, followed by package-files, security/official-inputs and
-quality/temporary-directory-alias. Default commands do not launch
+quality/temporary-directory-alias, then target-lifecycle, lifecycle-rollback,
+observer-cleanup and close-diagnostics. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

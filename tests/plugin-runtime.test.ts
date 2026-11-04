@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 import path from 'node:path';
@@ -8,18 +7,8 @@ import { fileURLToPath } from 'node:url';
 import type { RawData } from 'ws';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
-import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
 
-function targetFixture(port: number, processId = 42): ManagedTarget {
-    return {
-        port,
-        processId,
-        targetKind: 'generic-cdp',
-        executablePath: process.execPath,
-        startedAtUtc: '2026-09-30T00:00:00Z',
-    };
-}
 function listeningPort(server: http.Server) {
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
@@ -27,11 +16,9 @@ function listeningPort(server: http.Server) {
 }
 
 const { createCdpRouter } = await import('../src/adapters/cdp-router.ts');
-const { createTargetController } = await import('../src/application/target-controller.ts');
 const { choosePort } = await import('../src/domains/cdp-target.ts');
 const { createTargetHost } = await import('../src/adapters/target-host.ts');
 const { applyChromePreset } = await import('../src/adapters/target-host.ts');
-const entryId = randomUUID();
 
 test('CDP router rewrites discovery URLs and forwards WebSocket frames', async (context) => {
     const target = http.createServer((request, response) => {
@@ -266,82 +253,4 @@ test('Chrome rejects every duplicate or non-loopback debugging address before la
     ])
         assert.throws(() => applyChromePreset(arguments_), /loopback|Duplicate/);
     assert.ok(applyChromePreset(['--remote-debugging-address', '127.0.0.1']).includes('127.0.0.1'));
-});
-
-test('controller normal Close pauses routing and preserves identity on failure even while CDP is busy', async () => {
-    const events: string[] = [];
-    let busy = false;
-    const controller = createTargetController({
-        entryId,
-        router: {
-            isBusy: () => busy,
-            pause: () => {
-                events.push('pause');
-            },
-            resume: () => {
-                events.push('resume');
-            },
-            setTarget: () => {
-                events.push('route');
-            },
-            clearTarget: () => {
-                events.push('clear');
-            },
-        },
-        host: {
-            launch: async () => targetFixture(9222),
-            close: async () => {
-                events.push('close');
-                return false;
-            },
-        },
-        server: {
-            ensure: async () => {},
-            close: async () => {
-                events.push('official-close');
-            },
-        },
-    });
-    const active = await controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } });
-    assert.ok(active.sessionId);
-    busy = true;
-    await assert.rejects(controller.stop({ sessionId: active.sessionId, disposition: 'Close' }), (error: unknown) => {
-        assert.ok(error instanceof DetailedError && isRecord(error.details));
-        assert.deepEqual(error.details.retainedTargets, [{ processId: 42, port: 9222 }]);
-        return true;
-    });
-    assert.deepEqual(events, ['route', 'pause', 'close', 'resume']);
-    busy = false;
-    assert.equal(controller.status().sessionId, active.sessionId);
-    assert.equal(controller.status().status, 'active');
-});
-
-test('controller route attachment failure normally closes only the newly launched target', async () => {
-    const closed: number[] = [];
-    const child = new EventEmitter();
-    const controller = createTargetController({
-        entryId,
-        router: {
-            isBusy: () => false,
-            setTarget: () => {
-                throw new Error('route failed');
-            },
-            clearTarget: () => {},
-        },
-        host: {
-            launch: async () => ({ ...targetFixture(9222), child }),
-            close: async (target) => {
-                closed.push(target.processId);
-                child.emit('exit');
-                return true;
-            },
-        },
-        server: { ensure: async () => {}, close: async () => {} },
-    });
-    await assert.rejects(
-        controller.start({ isolation: { mode: 'none' }, launch: { executable: 'fixture' } }),
-        /route failed/,
-    );
-    assert.deepEqual(closed, [42]);
-    assert.equal(controller.status().status, 'idle');
 });

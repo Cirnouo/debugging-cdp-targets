@@ -6,8 +6,8 @@ import { type FixtureEvent, subscribeFixtureDiagnostics } from '../src/adapters/
 import type { PlatformAdapter } from '../src/adapters/platform-process.ts';
 import { createPortReservations } from '../src/adapters/port-reservation.ts';
 import { createTargetHost } from '../src/adapters/target-host.ts';
-import { createTargetController, type TargetEvent } from '../src/application/target-controller.ts';
 import type { ManagedTarget } from '../src/gateway/targets/model/target-contract.ts';
+import { createTargetLifecycle, type TargetExitEvent } from '../src/gateway/targets/target-lifecycle.ts';
 import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
 function fixture(
@@ -163,8 +163,8 @@ const sessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const operationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 function controllerFixture(f: ReturnType<typeof fixture>, routeFails = false) {
-    const events: TargetEvent[] = [];
-    const controller = createTargetController({
+    const events: TargetExitEvent[] = [];
+    const controller = createTargetLifecycle({
         entryId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         host: f.host,
         router: {

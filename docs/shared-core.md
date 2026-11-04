@@ -8,6 +8,10 @@ App owns direct SDK HTTP and final cleanup; thin Plugins never launch a core.
 Core owns the complete managed-connection generation/execution object;
 `src/gateway/registry.ts` owns route membership and retained cleanup joins over
 those same objects, with no runtime back edge or duplicated capability shape.
+The complete `src/gateway/targets/target-lifecycle.ts` transaction composes the
+supplied target host/router capabilities, owns actual-exit callbacks and exposes
+explicit owner cleanup. Core and registry retain their generation and cleanup
+joins; Agent/MCP disconnect does not request that cleanup.
 See [App runtime](app-runtime.md) for bootstrap, storage and request lifetime.
 
 ## Client and registration boundary

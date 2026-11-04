@@ -290,8 +290,24 @@ export function validateRuntimeSource(file: string, source: string) {
     const gatewayService = core || registry;
     const officialPackageFiles = file === 'src/gateway/official/package-files.ts';
     const officialLaunch = file === 'src/gateway/official/server-launch.ts';
+    const targetLifecycle = file === 'src/gateway/targets/target-lifecycle.ts';
     const reviewedAmbient = new Set<Node>();
     visit(ast, (node, parent, grandparent) => {
+        if (
+            targetLifecycle &&
+            node.type === 'NewExpression' &&
+            node.callee.type === 'Identifier' &&
+            node.callee.name === 'Date' &&
+            node.arguments.length === 0 &&
+            parent?.type === 'MemberExpression' &&
+            !parent.computed &&
+            parent.object === node &&
+            propertyName(parent.property) === 'toISOString' &&
+            grandparent?.type === 'CallExpression' &&
+            grandparent.callee === parent &&
+            grandparent.arguments.length === 0
+        )
+            reviewedAmbient.add(node.callee);
         if (officialLaunch && node.type === 'FunctionDeclaration') {
             const name = node.id?.name;
             for (const [index, parameter] of node.params.entries()) {
@@ -373,7 +389,7 @@ export function validateRuntimeSource(file: string, source: string) {
     const pure = domain || layer === 'shared' || gateway;
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
-    function dependency(specifier: unknown, typeOnly = false) {
+    function dependency(specifier: unknown, typeOnly = false, declaration?: Node) {
         if (typeof specifier !== 'string') {
             errors.push(`${file}: computed module dependencies are prohibited.`);
             return;
@@ -400,11 +416,61 @@ export function validateRuntimeSource(file: string, source: string) {
             resolved === 'src/gateway/connections/resource-owner.ts' ||
             resolved === 'src/gateway/connections/directory-lease.ts';
         const mutableGateway = resolved === 'src/gateway/core.ts' || resolved === 'src/gateway/registry.ts';
+        const mutableTarget = resolved === 'src/gateway/targets/target-lifecycle.ts';
+        if (mutableTarget && !gatewayService)
+            errors.push(`${file}: only Core and registry may depend on the mutable target lifecycle.`);
+        if (targetLifecycle || (gatewayService && mutableTarget)) {
+            const capabilities: Record<string, { values: readonly string[]; types: readonly string[] }> =
+                targetLifecycle
+                    ? {
+                          'node:crypto': { values: ['randomUUID'], types: [] },
+                          '../../adapters/fixture-diagnostics.ts': { values: ['emitFixtureEvent'], types: [] },
+                          '../../domains/control-contract.ts': {
+                              values: [],
+                              types: [
+                                  'ControlContext',
+                                  'Disposition',
+                                  'LaunchContext',
+                                  'LaunchOptions',
+                                  'TargetStatus',
+                              ],
+                          },
+                          '../connections/resource-owner.ts': {
+                              values: ['createResourceOwner'],
+                              types: ['ResourceOwner'],
+                          },
+                          './model/target-contract.ts': { values: ['RetainedTargetError'], types: ['ManagedTarget'] },
+                          '../../shared/errors.ts': {
+                              values: ['DetailedError', 'errorCode', 'errorDetails', 'errorMessage'],
+                              types: [],
+                          },
+                      }
+                    : {
+                          './targets/target-lifecycle.ts': core
+                              ? {
+                                    values: ['createTargetLifecycle'],
+                                    types: ['TargetLifecycleHost', 'TargetLifecycleRouter'],
+                                }
+                              : { values: [], types: ['TargetExitEvent'] },
+                      };
+            const permitted = Object.hasOwn(capabilities, specifier) ? capabilities[specifier] : undefined;
+            const exactBindings =
+                permitted &&
+                declaration?.type === 'ImportDeclaration' &&
+                declaration.specifiers.length > 0 &&
+                declaration.specifiers.every((binding) => {
+                    if (binding.type !== 'ImportSpecifier' || binding.imported.type !== 'Identifier') return false;
+                    const name = binding.imported.name;
+                    const erased = declaration.importKind === 'type' || binding.importKind === 'type';
+                    return binding.local.name === name && (erased ? permitted.types : permitted.values).includes(name);
+                });
+            if (!exactBindings) errors.push(`${file}: unapproved target lifecycle dependency or binding.`);
+        }
         if (pure && !gatewayService && mutableGateway)
             errors.push(`${file}: pure owners cannot depend on mutable Gateway services.`);
         if (layer === 'adapters' && mutableGateway)
             errors.push(`${file}: adapters cannot depend on mutable Gateway services.`);
-        if (pure && !connectionOwner && !gatewayService && mutableConnection)
+        if (pure && !connectionOwner && !gatewayService && !targetLifecycle && mutableConnection)
             errors.push(`${file}: pure owners cannot depend on mutable connection owners.`);
         if (layer === 'adapters' && mutableConnection)
             errors.push(`${file}: adapters cannot depend on mutable connection owners.`);
@@ -434,7 +500,7 @@ export function validateRuntimeSource(file: string, source: string) {
             errors.push(`${file}: pure owners cannot depend on Official launch inputs.`);
         if (pure && !officialPackageFiles && !officialLaunch && resolved === 'src/gateway/official/package-files.ts')
             errors.push(`${file}: pure owners cannot depend on Official package files.`);
-        if (gatewayService) {
+        if (gatewayService && !mutableTarget) {
             const permittedValue = (
                 core
                     ? [
@@ -461,7 +527,6 @@ export function validateRuntimeSource(file: string, source: string) {
                           '../application/client-context.ts',
                           '../application/mcp-lifecycle.ts',
                           '../application/registrations.ts',
-                          '../application/target-controller.ts',
                           './registry.ts',
                       ]
                     : [
@@ -480,7 +545,6 @@ export function validateRuntimeSource(file: string, source: string) {
                           './connections/directory-lease.ts',
                           '../application/registrations.ts',
                           '../application/mcp-lifecycle.ts',
-                          '../application/target-controller.ts',
                           '../shared/client-context.ts',
                       ]
                 ).includes(specifier);
@@ -503,6 +567,7 @@ export function validateRuntimeSource(file: string, source: string) {
             gateway &&
             !connectionOwner &&
             !gatewayService &&
+            !targetLifecycle &&
             !officialPackageFiles &&
             !officialLaunch &&
             (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
@@ -609,7 +674,7 @@ export function validateRuntimeSource(file: string, source: string) {
                           node.specifiers.every(
                               (specifier) => specifier.type === 'ExportSpecifier' && specifier.exportKind === 'type',
                           ));
-            dependency(node.source.value, typeOnly);
+            dependency(node.source.value, typeOnly, node);
         }
         if (node.type === 'ImportExpression')
             dependency(node.source.type === 'StringLiteral' ? node.source.value : undefined);

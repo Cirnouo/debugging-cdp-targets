@@ -10,7 +10,7 @@ application may use explicit adapters. Adapters may consume the delivered pure g
 rules, target models and pure Official options/execution/release evidence, the
 exact complete Official package-file proof and launch-input owner, or its
 exact diagnostics clock, and never depend on
-application/interface or either mutable Gateway service.
+application/interface, either mutable Gateway service or the mutable target lifecycle.
 The pure Official owners contain no ambient defaults, package reads, live catalog
 or child/context lifetime authority. The exact gateway/official/server-launch.ts owns invocation-time environment/
 platform defaults, child snapshots and verified public-bin resolution; live catalog
@@ -44,7 +44,8 @@ files remain pure. Before changing these lifetime owners, read their cumulative
 [connections instructions](gateway/connections/AGENTS.md).
 Only gateway/core.ts owns the existing managed-connection transaction and actual
 execution/context. Its exact application value providers are client-context.ts,
-mcp-lifecycle.ts, registrations.ts and target-controller.ts. Its reviewed adapters
+mcp-lifecycle.ts and registrations.ts; its target factory and host/router types
+come from gateway/targets/target-lifecycle.ts. Its reviewed adapters
 remain cdp-router, chrome-profile, data-directory, fixture-diagnostics, mcp-bridge,
 port-reservation, target-host and tool-catalog; its node imports
 remain crypto, os and path. Core consumes the exact ./official/server-launch.ts
@@ -56,12 +57,22 @@ Only gateway/registry.ts owns route membership and the retained cleanup ledger:
 its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
 domains/control-contract and shared/errors. TYPE-only dependencies are the original
 Core ManagedConnection, connections/directory-lease, shared/client-context and the
-three exact application registrations/mcp-lifecycle/target-controller ports. Its
+two exact application registrations/mcp-lifecycle ports and the target lifecycle's
+TargetExitEvent TYPE. Its
 sole ambient capability is the existing direct process.stderr.write diagnostic.
 Neither service grants permissions to siblings, pure owners, adapters or unknown
 Gateway files. Type imports, reexports, import() and require obey the same exact
 role boundaries. Before editing Core or registry, read the cumulative
 [Gateway instructions](gateway/AGENTS.md) and their application lifecycle trigger.
+The exact gateway/targets/target-lifecycle.ts owns its complete existing target
+attachment, admission, health, normal-Close reuse, rollback, actual-exit and
+retirement transaction. Its named UUID, diagnostic producer, resource-owner,
+target/error values and control/resource/target TYPES are enumerated in the
+[target instructions](gateway/targets/AGENTS.md). Only its existing direct
+new Date().toISOString() exit timestamp is permitted. Pure owners and adapters
+cannot depend on this mutable lifecycle, including through erased syntax.
+Before editing it, read those target instructions and the canonical
+[application lifecycle obligations](application/AGENTS.md) cumulatively.
 Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.
 The existing semver/functions/parse.js exception remains limited to

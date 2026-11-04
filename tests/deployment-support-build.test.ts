@@ -10,7 +10,7 @@ import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { after, mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
+import { inspect, promisify } from 'node:util';
 import { isRecord } from '../src/shared/errors.ts';
 import {
     ownedDeploymentPe,
@@ -142,7 +142,35 @@ test('compiler input drift during the first controlled compilation rejects befor
         ]);
     });
     syncBuiltinESMExports();
-    await assert.rejects(buildWindowsDeploymentSupport(), /changed|Unsafe deployment build input/);
+    try {
+        await assert.rejects(buildWindowsDeploymentSupport(), /changed|Unsafe deployment build input/);
+    } catch (error) {
+        try {
+            const diagnostic = inspect(
+                { assertion: error, actual: isRecord(error) ? error.actual : undefined },
+                {
+                    showHidden: true,
+                    customInspect: false,
+                    getters: false,
+                    depth: 12,
+                    maxArrayLength: 64,
+                    maxStringLength: 16384,
+                    compact: false,
+                    breakLength: 120,
+                },
+            );
+            const maximum = 16384;
+            const truncated = '\n[diagnostic truncated at 16384 characters]';
+            t.diagnostic(
+                diagnostic.length > maximum
+                    ? `${diagnostic.slice(0, maximum - truncated.length)}${truncated}`
+                    : diagnostic,
+            );
+        } catch {
+            // Diagnostics must never replace the original assertion failure.
+        }
+        throw error;
+    }
     assert.equal(fixture.compiles(), 1);
     assert.deepEqual(await fs.readdir(fixture.outputs), []);
 });

@@ -7,7 +7,7 @@ It executes no native permission helper, target or App.
 `connection-directory-runtime.ts` exports createDirectoryRuntimeFixture, deferred,
 tick and route for the connection lifetime, operation evidence and directory
 admission suites. It composes real Core/DataDirectoryRegistry over controlled
-ControllerHost/router/official boundaries, keeping Application private and all
+TargetLifecycleHost/router/official boundaries, keeping Application private and all
 setup/support/teardown assertions and expectCleanupFailure cleanup branches.
 Regression-case assertion bodies remain in the three suites. This support differs
 from target-host.ts's real createTargetHost fake; neither fixture copies the other.

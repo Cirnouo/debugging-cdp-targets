@@ -1,7 +1,10 @@
 # Desktop App runtime
 
 The App owns the transport-independent core, verified target processes and
-official Server children. Codex and Claude Code Plugins contain host metadata,
+official Server children. Core composes the complete
+[target lifecycle](../src/gateway/targets/target-lifecycle.ts) through supplied
+host/router capabilities; the App's final owner cleanup remains distinct from
+client transport detachment. Codex and Claude Code Plugins contain host metadata,
 direct HTTP configuration, artwork, documentation and the shared Skill. They
 connect to `http://127.0.0.1:27637/mcp`; they never launch another gateway.
 App and Plugin versions are independent strict SemVer strings. Both host payloads
