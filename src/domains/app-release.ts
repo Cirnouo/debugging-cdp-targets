@@ -1,7 +1,7 @@
 import { isRecord } from '../shared/errors.ts';
 import { isPortablePayloadRelativePath } from '../shared/payload-path.ts';
 
-export const APP_ELECTRON_VERSION = '44.8.0';
+export const APP_ELECTRON_VERSION = '44.9.1';
 export const APP_NODE_VERSION = '24.21.0';
 export type AppReleaseFile = Readonly<{ path: string; bytes: number; sha256: string }>;
 export type AppRuntimeFile = AppReleaseFile & Readonly<{ destination: string }>;

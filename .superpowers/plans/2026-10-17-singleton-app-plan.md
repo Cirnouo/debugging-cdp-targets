@@ -13,6 +13,15 @@ contracts; the currently delivered stdio Plugin remains supported until Task 4.
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) owns the forward architecture.
 This tracked plan replaces the ignored planning copy as the durable task owner.
 
+## Security prerequisite — 2026-11-04
+
+Merged PR #80 at `f79d25e7c745af48c9de392d332cb6b30d66567d` failed main CI's
+Supply chain security gate on the blocking Zod and Electron advisories. Preserve
+that failure as historical evidence. A narrowly reviewed fixed descendant must
+pass the trusted supply-chain sequence, local verification and current-head CI
+before further Core work, the primary main fast-forward or O4 worktree archive.
+This prerequisite establishes no additional native or deployment acceptance.
+
 ## Global constraints
 
 - One App singleton per OS user, including portable/installed copies regardless of data directory. First process owns its data; later processes activate it without migration/merging. Installer uses per-user data, portable uses extracted data (macOS next to .app). Default tray/menu bar, management-window fallback where no tray exists. No runtime object restoration or cross-platform parent-death supervisor. Never force-kill target applications.
