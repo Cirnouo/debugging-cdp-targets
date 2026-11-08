@@ -1,17 +1,23 @@
 # Singleton desktop gateway implementation plan
 
-Goal: replace per-chat stdio gateways with one consciously launched desktop App per OS user, shared by Codex and Claude Code through Streamable HTTP on Windows, macOS and Linux.
+Goal: replace per-chat stdio gateways with one consciously launched desktop App per OS user, shared by Codex and Claude Code through Streamable HTTP on Windows 11, x64 and arm64.
 
 Architecture: Electron main process embeds the native erasable TypeScript gateway core; React/TypeScript management UI uses narrow preload IPC. Official chrome-devtools-mcp remains a complete unchanged npm release, launched with separately bundled ordinary Node 24. No TUI, CLI/headless mode, service, autostart, deep links, per-chat proxy, or custom DevTools tools.
 
-Tech: Node >=24.21.0 <25, pnpm 12.4.2, official MCP SDK, Electron, React, esbuild, electron-builder. Pin and audit reviewed dependencies. Windows 11, macOS 15 and Ubuntu 24.04 desktop, x64 and arm64, installer and portable distributions. Keep App and plugin 0.1.0 Unreleased until publication separately authorized.
+Tech: Node >=24.21.0 <25, pnpm 12.4.2, official MCP SDK, Electron, React, esbuild, electron-builder. Pin and audit reviewed dependencies. Windows 11 desktop, x64 and arm64, installer and portable distributions. Keep App and plugin 0.1.0 Unreleased until publication separately authorized.
 
 Spec: the global constraints below record the user's accepted design. They supersede conflicting current stdio/Hook-only architectural rules. Current supported-behavior docs change with actual implementation; accepted forward decisions may be recorded separately.
 
-Status: accepted forward implementation plan, 2026-10-17. Task 2 records the
-contracts; the currently delivered stdio Plugin remains supported until Task 4.
+Status: accepted forward implementation plan, 2026-10-17; current support scope
+amended 2026-11-08. The minimal App/direct HTTP/thin-plugin cutover is implemented
+in source; richer management and native deployment remain acceptance work.
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md) owns the forward architecture.
 This tracked plan replaces the ignored planning copy as the durable task owner.
+Its [Windows-only amendment](../../docs/adr/0017-singleton-desktop-app.md#accepted-windows-only-scope-amendment--2026-11-08)
+supersedes historical six-cell target membership, not historical observations or
+native evidence gaps. Linux and macOS have no current support, distribution or
+native acceptance target, including no Experimental support tier. Earlier task
+descriptions retain their implementation history where not amended below.
 
 ## Security prerequisite — 2026-11-04
 
@@ -22,9 +28,23 @@ pass the trusted supply-chain sequence, local verification and current-head CI
 before further Core work, the primary main fast-forward or O4 worktree archive.
 This prerequisite establishes no additional native or deployment acceptance.
 
+Forward exception — 2026-11-08: trusted local security has passed for the
+Windows-only successor based on `a1768761033f99a72c0048c9c4cd267a977ff110`,
+which inherits the reviewed Zod/Electron dependency repair against the main base
+`f79d25e7c745af48c9de392d332cb6b30d66567d`. Only the Windows-only
+support/security/CI cutover may proceed under this exception. Frozen PR #81's
+failed Ubuntu outcomes remain historical failures; no old-job rerun, head rewrite
+or automatic closure is implied. The bounded Ubuntu kernel diagnostic route is
+cancelled before remote execution, retaining its two signed local commits, five
+uncommitted tests and private evidence/custody outside this successor. Do not
+transplant that diagnostic code. Unrelated Core work, the primary main
+fast-forward and O4 archive remain on HOLD until the successor passes exact-head
+required checks, merges ordinarily and qualifies on main CI. Trusted local
+security alone does not satisfy those gates or establish native acceptance.
+
 ## Global constraints
 
-- One App singleton per OS user, including portable/installed copies regardless of data directory. First process owns its data; later processes activate it without migration/merging. Installer uses per-user data, portable uses extracted data (macOS next to .app). Default tray/menu bar, management-window fallback where no tray exists. No runtime object restoration or cross-platform parent-death supervisor. Never force-kill target applications.
+- One App singleton per OS user, including portable/installed copies regardless of data directory. First process owns its data; later processes activate it without migration/merging. Installer uses per-user data, portable uses extracted-local data. Default tray, management-window fallback where no tray exists. No runtime object restoration or cross-platform parent-death supervisor. Never force-kill target applications.
 - Default loopback endpoint http://127.0.0.1:27637/mcp; port conflict is explicit failure. Enforce Host/Origin boundaries. No long-term HTTP API key. A registration bearer owns connections and jobs independently of chat/socket/MCP session. Prefer verified initialization registration when possible, ordinary register-tool fallback. Empty registrations with no resources/jobs expire after 30 minutes. Reconnect never replays start, revokes ownership or transfers it.
 - Drop public entryId, taskActive, end-task, Hooks/notification injection/Stop continuations. Keep connectionId stable; new sessionId after any side restart. requestId and operationId remain distinct. One SDK request context per client; no global current roots/elicitation/progress. App/connection lifetime never follows a single client's close.
 - Only launch new verified targets, one target and independent official server per connection. Agent owns only bearer resources; GUI administers all. Refuse transfer while busy; future operations change owner, old terminal operation/results retain original owner. No token readback/recovery. New registration and GUI transfer of idle resources provide recovery.
@@ -37,7 +57,8 @@ This prerequisite establishes no additional native or deployment acceptance.
 - Persist configuration only with integer schemaVersion, pure sequential migration and validation, backup and atomic commit of whole chain after singleton acquisition. Corrupt/future schemas refuse writes. Cheap settings hot; expensive settings cold; port cold. Show desired vs effective config.
 - Port workflow saves desired port, normal App restart/cleanup, successfully binds new port, then independently syncs each user-level host plugin. Display success/failure/pending host reload and retry failures; no cross-host all-or-rollback transaction.
 - GUI manages only user-scope plugins using stable native CLI adapters, actual returned installation paths, re-resolution after update, own mcp URL patch and readback. Show project/local/managed copies read-only. Respect disabled and pinned installs. Config roots explicitly selectable when environment differs. App/plugin versions independent; both host plugins same logical version. Stable static latest-plugin record contains minimumAppVersion and immutable verifiable source. Automatically detect/install compatible stable updates independently of App updates; incompatible latest retains installed version and asks for App update. No history solver/backend.
-- Build six OS/architecture installer+portable targets. Packaging owns Node, official release and licenses in App; thin plugins contain host manifests/Skill/assets. GitHub Releases concern App; plugin updates have independent immutable feed. Publication/tagging remains unauthorized.
+- Build Windows 11 x64 and arm64 installer+portable targets only. Neither architecture is newly qualified. Default installation admission stays unwired/disabled; contributor-only x64 fresh staging does not establish protected creation, native permission/ACL, compiler/runtime or installer acceptance, and arm64 source inventory/producer/native proof remains pending. Packaging owns Node, official release and licenses in App; thin plugins contain host manifests/Skill/assets. Preserve complete original official/npm/native package files and evidence, including all six original Node prebuild cells and upstream non-Windows files. GitHub Releases concern App; plugin updates have independent immutable feed. Publication/tagging remains unauthorized.
+- Retire first-party POSIX runtime/deployment/archive/acceptance responsibilities only through complete caller/test/audit/current-map cuts. Preserve shared protocol/security/lifecycle/isolation regressions with actual consumers. CI runner OS does not promise product support; a real Windows Chrome/official-server/recovery path must replace the retired shared E2E responsibility. Preserve coverage floors 52/71/61 and sequential default selection. Test/CI qualification allows no ignored failure, automatic or unapproved qualification retry, timeout inflation, fake E2E, renamed unrelated status impersonation or administrative bypass. Review exact replacement status contexts and new-check evidence before any separately authorized repository settings change.
 - Update current repo rules/docs/tests/Skill/examples/audits/CI/build/generated output with behavior. Preserve genuine historical ADR bodies/evidence and valid application fixtures. Do not globally erase stdio/Git hooks/old version history. Remove obsolete obsidian commit scope without historical special casing (reachable history has no use). Avoid mechanical source relocation or empty packages.
 - Each PR is green independently, reviewed by fresh gpt-6.1-sol Ultra agent, pushed, attached to current chat, squash merged with validated exact message; monitor CI, fast-forward local main, archive only task worktrees preserving PR attachments. User authorizes those operations. No tags/releases/settings changes.
 
@@ -67,7 +88,7 @@ Implement connection/registration/operation dashboard, age and idle timers, expl
 
 ## Task 7: Native distributions, CI and final semantic audit
 
-Complete six native OS/architecture installer and portable builds, bundled supported Node, original official package, licenses/notices/integrities, platform lifecycle/tray fallbacks, release dry-run/CI artifacts. Do not claim emulated/cross-built artifacts are native-tested. No tag/publication/settings changes. Update all stale current repo content including AGENTS/Skill/policies/tooling/CI/build metadata; preserve real history. Reconcile Unreleased cumulative changelog against authoritative release baseline. Independently review whole delivered architecture, final dual-host acceptance and generated output. Each PR follows user-authorized push/attach/green CI/squash merge/main CI/local fast-forward. Archive task worktrees preserving PR associations only after completed work and ignored needed artifacts saved.
+Complete native Windows 11 x64 and arm64 installer and portable builds, bundled supported Node, original official package, licenses/notices/integrities, Windows lifecycle/tray fallback, release dry-run/CI artifacts. Neither target is qualified by the scope amendment. Do not claim emulated/cross-built artifacts are native-tested. No tag/publication/settings changes. Update all stale current repo content including AGENTS/Skill/policies/tooling/CI/build metadata; preserve real history. Reconcile Unreleased cumulative changelog against authoritative release baseline. Independently review whole delivered architecture, final dual-host acceptance and generated output. Each PR follows user-authorized push/attach/green CI/squash merge/main CI/local fast-forward. Archive task worktrees preserving PR associations only after completed work and ignored needed artifacts saved.
 
 ## Accepted implementation rulings
 
@@ -119,6 +140,11 @@ These clarify the global constraints without claiming implementation or publicat
 
 Implement the accepted [ADR 0017 amendment](../../docs/adr/0017-singleton-desktop-app.md#accepted-live-deployment-amendment--2026-10-17)
 as three bounded increments. This is forward work, not current installer support.
+The [2026-11-08 Windows-only amendment](../../docs/adr/0017-singleton-desktop-app.md#accepted-windows-only-scope-amendment--2026-11-08)
+sets the current membership below. Historical six-cell and POSIX-specific
+requirements, including the earlier singleton candidate's six-native load-test
+condition, are superseded only for current targets; both Windows architectures
+still require native Electron load/lock proof and complete native acceptance.
 
 - 7a: strict schema-version-one physical installation metadata, immutable complete
     build selection and active/removing/removed transitions; exactly two existing
@@ -126,21 +152,27 @@ as three bounded increments. This is forward work, not current installer support
     store with explicit pre-commit/indeterminate outcomes and adversarial real
     cross-process tests. Accept only enrolled roots. No payload staging/removal,
     startup integration, identity adoption/repair or generic inventory framework.
-    Formatted hashes are not payload proof. Windows ACLs, macOS permissions/local
-    filesystem evidence and system-DEB roles remain conservatively gated. These
-    are hard prerequisites before 7b enables admission on those platforms; the
-    existing App retains its supported platform behavior meanwhile.
+    Formatted hashes are not payload proof. Actual Windows protected creation,
+    permissions/ACL readback and native store/lease authority remain hard
+    prerequisites before 7b enables admission. Contributor-only x64 fresh staging
+    and source tests establish no native acceptance; arm64 source inventory,
+    producer and native proof remain pending. Default admission stays unwired
+    and disabled.
 - 7b: pinned complete runtime closure and installation-use admission before data
-    or gateway work, preserving synchronous Chromium isolation as step zero;
+    or gateway work, with earliest unsupported-host refusal followed by synchronous
+    supported-Windows Chromium isolation before any asynchronous or other
+    main-process effects;
     installation/account-bound closed normal quit; cleanup and actual-exit gates;
     a short external copied ordinary-Node bridge with detached launches and one
     bounded private atomic receipt ACK for overlapping successor use ownership.
     Unknown live children retain coverage; no kill/replay/timeout success or
     resident cleanup supervisor. Unprovable helper cleanup leaves owned residue.
-- 7c: audited packaging inputs and custom live-safe NSIS, retained-runtime DEB,
-    explicit DMG installer GUI and extracted portable integration; managed removal
+    Integrate complete verified Windows production, protected creation and native
+    authority together before enabling default installation admission.
+- 7c: audited Windows packaging inputs, custom live-safe NSIS and extracted
+    portable integration on Windows 11 x64 and arm64; managed removal
     retains configuration/plugins and lock tombstone, refuses remaining readers,
-    and never deletes a live payload. Complete native six-cell installer/portable
+    and never deletes a live payload. Complete native two-architecture installer/portable
     acceptance and final bilingual docs, CI and cumulative Unreleased audit.
 
 Updates commit only next-launch selection after independently verifying complete
