@@ -565,11 +565,11 @@ export async function readAppOfficialFiles(root: string) {
 }
 export async function generateAppFiles(options: AppBuild) {
     const { root } = options;
-    const version = await readAppVersion(root);
     const distribution = parseAppDistribution(
         { schemaVersion: 1, kind: options.kind, platform: options.platform, architecture: options.architecture },
         { platform: options.platform, architecture: options.architecture },
     );
+    const version = await readAppVersion(root);
     const { release } = await verifyOfficialInputs(root);
     const catalog: unknown = JSON.parse(await readFile(path.join(root, 'tooling/official-tool-catalog.json'), 'utf8'));
     const files = new Map<string, Buffer>();
@@ -649,12 +649,7 @@ export async function generateAppFiles(options: AppBuild) {
     );
     for (const file of ['app-release-inputs.json', 'app-native-release.json', 'official-server-release.json'])
         files.set(`delivery/${file}`, await readRegularFile(path.join(root, 'tooling', file)));
-    for (const file of [
-        'windows-cdp-helper.ps1',
-        'windows-native-helper.ps1',
-        'windows-native-process.cs',
-        'macos-deployment-authority.jxa',
-    ])
+    for (const file of ['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs'])
         files.set(file, await readRegularFile(path.join(root, 'src/adapters', file)));
     const native = parseAppNativeEvidence(
         JSON.parse(files.get('delivery/app-native-release.json')?.toString('utf8') ?? 'null'),
@@ -685,12 +680,9 @@ export async function generateAppFiles(options: AppBuild) {
         'src/interface/app.css',
         'packaging/shared/assets/icon.png',
         'LICENSE',
-        ...[
-            'windows-cdp-helper.ps1',
-            'windows-native-helper.ps1',
-            'windows-native-process.cs',
-            'macos-deployment-authority.jxa',
-        ].map((file) => `src/adapters/${file}`),
+        ...['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs'].map(
+            (file) => `src/adapters/${file}`,
+        ),
     ]);
     return files;
 }
@@ -729,7 +721,7 @@ export async function stageDesktopApp(
         (item) =>
             item.kind === 'node' && item.platform === request.platform && item.architecture === request.architecture,
     );
-    if (!electron || !node?.runtimeFiles) throw new Error('Native extraction evidence is unavailable.');
+    if (!electron?.licenses || !node?.runtimeFiles) throw new Error('Native extraction evidence is unavailable.');
     const output = path.resolve(request.output);
     const scratch = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-app-stage-')));
     try {
@@ -873,17 +865,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         return result;
     };
     const kind = process.argv.includes('--portable') ? 'portable' : 'installed';
-    const platform = process.platform;
-    const architecture = process.arch;
-    const metadata = parseAppDistribution(
-        { schemaVersion: 1, kind, platform, architecture },
-        { platform, architecture },
-    );
     if (process.argv.includes('--check')) {
-        await generateAppFiles({ root, ...metadata });
+        for (const architecture of ['x64', 'arm64'] as const)
+            await generateAppFiles({ root, kind, platform: 'win32', architecture });
         await readAppOfficialFiles(root);
-        console.log('App bundles, original native loading closure and actual graph licenses verified without writing.');
+        console.log(
+            'Static Windows x64 and arm64 App bundles, original native inputs and actual graph licenses verified without writing; native acceptance not performed.',
+        );
     } else {
+        const platform = process.platform;
+        const architecture = process.arch;
+        const metadata = parseAppDistribution(
+            { schemaVersion: 1, kind, platform, architecture },
+            { platform, architecture },
+        );
         const output = await stageDesktopApp({
             root,
             ...metadata,

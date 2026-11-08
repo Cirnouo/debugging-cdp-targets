@@ -1,5 +1,6 @@
 import { isRecord } from '../shared/errors.ts';
 import { isPortablePayloadRelativePath } from '../shared/payload-path.ts';
+import { supportsWindowsApp } from './app-distribution.ts';
 
 export const APP_ELECTRON_VERSION = '44.9.1';
 export const APP_NODE_VERSION = '24.21.0';
@@ -8,7 +9,7 @@ export type AppRuntimeFile = AppReleaseFile & Readonly<{ destination: string }>;
 export type AppArchive = Readonly<{
     kind: 'electron' | 'node';
     version: string;
-    platform: 'win32' | 'darwin' | 'linux';
+    platform: 'win32';
     architecture: 'x64' | 'arm64';
     filename: string;
     url: string;
@@ -89,7 +90,7 @@ export function parseAppReleaseInputs(value: unknown): AppReleaseInputs {
             `https://api.github.com/repos/electron/electron/releases/tags/v${APP_ELECTRON_VERSION}` ||
         value.sources.nodeChecksums !== `https://nodejs.org/dist/v${APP_NODE_VERSION}/SHASUMS256.txt` ||
         !Array.isArray(value.archives) ||
-        value.archives.length !== 12
+        value.archives.length !== 4
     )
         throw new Error('Invalid App release source or archive inventory.');
     const identities = new Set<string>();
@@ -101,16 +102,16 @@ export function parseAppReleaseInputs(value: unknown): AppReleaseInputs {
         );
         if (
             (entry.kind !== 'electron' && entry.kind !== 'node') ||
-            (entry.platform !== 'win32' && entry.platform !== 'darwin' && entry.platform !== 'linux') ||
-            (entry.architecture !== 'x64' && entry.architecture !== 'arm64')
+            (entry.architecture !== 'x64' && entry.architecture !== 'arm64') ||
+            typeof entry.platform !== 'string' ||
+            !supportsWindowsApp(entry.platform, entry.architecture)
         )
             throw new Error('Unsupported App archive platform identity.');
         const version = entry.kind === 'electron' ? APP_ELECTRON_VERSION : APP_NODE_VERSION;
-        const nodePlatform = entry.platform === 'win32' ? 'win' : entry.platform;
         const filename =
             entry.kind === 'electron'
-                ? `electron-v${version}-${entry.platform}-${entry.architecture}.zip`
-                : `node-v${version}-${nodePlatform}-${entry.architecture}.${entry.platform === 'win32' ? 'zip' : 'tar.gz'}`;
+                ? `electron-v${version}-win32-${entry.architecture}.zip`
+                : `node-v${version}-win-${entry.architecture}.zip`;
         const url =
             entry.kind === 'electron'
                 ? `https://github.com/electron/electron/releases/download/v${version}/${filename}`
@@ -125,7 +126,7 @@ export function parseAppReleaseInputs(value: unknown): AppReleaseInputs {
             !digest(entry.sha256)
         )
             throw new Error('Changed App archive immutable source identity.');
-        const identity = `${entry.kind}:${entry.platform}:${entry.architecture}`;
+        const identity = `${entry.kind}:win32:${entry.architecture}`;
         if (identities.has(identity)) throw new Error('Duplicate App archive inventory identity.');
         identities.add(identity);
         let runtimeFiles: AppRuntimeFile[] | undefined;
@@ -141,7 +142,7 @@ export function parseAppReleaseInputs(value: unknown): AppReleaseInputs {
             if (
                 new Set(runtimeFiles.map((file) => file.destination.toLowerCase())).size !== runtimeFiles.length ||
                 !runtimeFiles.some((file) => file.destination === 'LICENSE') ||
-                !runtimeFiles.some((file) => file.destination === (entry.platform === 'win32' ? 'node.exe' : 'node'))
+                !runtimeFiles.some((file) => file.destination === 'node.exe')
             )
                 throw new Error('Incomplete Node runtime and license evidence.');
         }
@@ -158,7 +159,7 @@ export function parseAppReleaseInputs(value: unknown): AppReleaseInputs {
         return Object.freeze({
             kind: entry.kind,
             version,
-            platform: entry.platform,
+            platform: 'win32',
             architecture: entry.architecture,
             filename,
             url,

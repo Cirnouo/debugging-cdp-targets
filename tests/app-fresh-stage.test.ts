@@ -805,6 +805,52 @@ test('unsupported fresh selections fail before filesystem, subprocess or native 
     }
 });
 
+test('fresh arm64 staging retains its x64-only refusal before filesystem, subprocess or native loading', async () => {
+    const effects = { filesystem: 0, subprocess: 0, dlopen: 0 };
+    const spawn = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
+    assert.ok(spawn);
+    const filesystem = () => {
+        effects.filesystem++;
+        throw new Error('Unexpected fresh arm64 filesystem effect.');
+    };
+    const subprocess = () => {
+        effects.subprocess++;
+        throw new Error('Unexpected fresh arm64 subprocess.');
+    };
+    const replacements = [
+        mock.method(fs, 'mkdtemp', filesystem),
+        mock.method(fs, 'realpath', filesystem),
+        mock.method(fs, 'lstat', filesystem),
+        mock.method(fs, 'open', filesystem),
+        mock.method(fs, 'mkdir', filesystem),
+        mock.method(fs, 'writeFile', filesystem),
+        mock.method(childProcess, 'execFile', subprocess),
+        mock.method(process, 'dlopen', () => {
+            effects.dlopen++;
+            throw new Error('Unexpected fresh arm64 native load.');
+        }),
+    ];
+    Object.defineProperty(ChildProcess.prototype, 'spawn', { ...spawn, value: subprocess });
+    syncBuiltinESMExports();
+    try {
+        const options = {
+            root: 'unused',
+            kind: 'portable',
+            platform: 'win32',
+            architecture: 'arm64',
+            electronArchive: 'unused',
+            nodeArchive: 'unused',
+            output: 'unused',
+        } satisfies Parameters<typeof app.stageFreshDesktopInstallation>[0];
+        await assert.rejects(app.stageFreshDesktopInstallation(options), /Windows x64 only/);
+        assert.deepEqual(effects, { filesystem: 0, subprocess: 0, dlopen: 0 });
+    } finally {
+        for (const replacement of replacements.reverse()) replacement.mock.restore();
+        Object.defineProperty(ChildProcess.prototype, 'spawn', spawn);
+        syncBuiltinESMExports();
+    }
+});
+
 test('protected manifest failures never publish state or remove fixed lease inodes', {
     skip: process.platform !== 'win32',
 }, async (context) => {
