@@ -1,48 +1,87 @@
-import { readFile } from 'node:fs/promises';
-import { setImmediate } from 'node:timers/promises';
-import { openDeploymentInstallation } from '../../src/adapters/app-deployment.ts';
-import { loadAppAdvisoryLock } from '../../src/adapters/app-native.ts';
-import { parseAppNativeEvidence } from '../../src/domains/app-release.ts';
+import type { DeploymentLease } from '../../src/adapters/app-deployment.ts';
+import { isRecord } from '../../src/shared/errors.ts';
+import { deploymentAdvisoryLock } from './deployment-advisory-lock.ts';
+import { attachDeploymentStoreFixture } from './deployment-store.ts';
 
-const directory = process.argv[2];
-if (!directory || !process.send) throw new Error('Missing owned deployment reader fixture.');
-const tryLock = await loadAppAdvisoryLock(
-    parseAppNativeEvidence(
-        JSON.parse(await readFile(new URL('../../tooling/app-native-release.json', import.meta.url), 'utf8')),
-    ),
-);
-const store = await openDeploymentInstallation(directory, { tryLock });
-const use = await store.tryAcquire('use');
-if (!use) throw new Error('Fixture installation is busy.');
-const lease = use;
-const samples = new Set<string>();
-let rejected = 0;
+const physical = process.argv[2];
+const directory = process.argv[3];
+if (!physical || !directory || !process.send) throw new Error('Missing owned deployment reader fixture.');
+let command = Promise.withResolvers<number | undefined>();
+let busy = true;
 let stopping = false;
-process.on('message', (message: unknown) => {
-    if (message !== 'stop') throw new Error('Malformed reader fixture command.');
+let nextOrdinal = 1;
+const failures: unknown[] = [];
+function fail(error: unknown) {
+    failures.push(error);
     stopping = true;
-});
-async function sample() {
-    try {
+    command.resolve(undefined);
+}
+function receive(message: unknown) {
+    if (message === 'stop' && !stopping) {
+        stopping = true;
+        command.resolve(undefined);
+    } else if (
+        !stopping &&
+        !busy &&
+        isRecord(message) &&
+        Object.keys(message).length === 2 &&
+        message.type === 'sample' &&
+        typeof message.ordinal === 'number' &&
+        message.ordinal === nextOrdinal &&
+        nextOrdinal <= 11
+    ) {
+        busy = true;
+        nextOrdinal++;
+        command.resolve(message.ordinal);
+    } else fail(new Error('Unexpected reader fixture command or ordinal.'));
+}
+function disconnected() {
+    fail(new Error('Reader fixture parent disconnected.'));
+}
+process.on('message', receive);
+process.on('disconnect', disconnected);
+const tryLock = await deploymentAdvisoryLock();
+const own = await attachDeploymentStoreFixture(physical, directory);
+let use: DeploymentLease | undefined;
+try {
+    const store = await own.deployment.openDeploymentInstallation(directory, { tryLock });
+    use = await store.tryAcquire('use');
+    if (!use) throw new Error('Fixture installation is busy.');
+    const lease = use;
+    let ordinal = 0;
+    while (!stopping) {
         const state = await store.read(lease);
         if (state.phase !== 'active') throw new Error('Reader observed unexpected fence.');
-        samples.add(`${state.selectedBuildId}:${state.selectedManifestSha256}`);
-    } catch (error) {
-        if (!(error instanceof Error) || !/document identity.*changed/.test(error.message)) throw error;
-        // Concurrent replacement may invalidate named/open evidence; no partial state is returned.
-        rejected++;
+        if (stopping) break; // A pending read settles naturally before shutdown.
+        // The complete read closed its documents; the same use lease stays held while idle.
+        command = Promise.withResolvers<number | undefined>();
+        busy = false;
+        await new Promise<void>((resolve, reject) => {
+            if (!process.send) return reject(new Error('Reader fixture IPC is unavailable.'));
+            process.send({ type: 'sample', ordinal, state }, (error: Error | null) => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
+        const requested = await command.promise;
+        if (requested === undefined) break;
+        ordinal = requested;
     }
-}
-try {
-    await sample();
-    process.send('ready');
-    while (!stopping) {
-        await sample();
-        await setImmediate();
-    }
-    await sample();
-    process.send({ samples: [...samples], rejected });
+} catch (error) {
+    failures.push(error);
 } finally {
-    await use.release();
-    process.disconnect();
+    try {
+        await use?.release();
+    } catch (error) {
+        failures.push(error);
+    }
+    try {
+        await own.cleanup();
+    } catch (error) {
+        failures.push(error);
+    }
+    process.off('message', receive);
+    process.off('disconnect', disconnected);
+    if (process.connected) process.disconnect();
 }
+if (failures.length) throw new AggregateError(failures, 'Reader fixture failed.');

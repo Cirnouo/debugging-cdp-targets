@@ -17,9 +17,11 @@
   lifetime and reopens readers with newly sampled facts. Normal Windows admission
   fails closed while delivered query binaries remain pending; no runtime build
   fallback, caller receipt, backend or authority registration exists.
-- `app-deployment-native.ts` produces actual native account/entry evidence and
-  fixed Windows x64 current-account fresh directory/no-replace operations for
-  the explicit contributor builder. Same-boundary Windows path collections use
+- `app-deployment-native.ts` refuses unsupported actual hosts before filesystem
+  or native query acquisition. Windows x64/arm64 normal admission still fails
+  closed without delivered query support. Its fixed Windows x64 current-account
+  fresh directory/no-replace operations belong to the explicit contributor builder.
+  Same-boundary Windows path collections use
   bounded fresh batches; dedup never weakens managed-entry purpose predicates.
   Fresh payload sweeps union all recorded entries and parent chains per boundary,
   with a new complete permission sweep on each side of content verification.
@@ -32,8 +34,10 @@
   directory/file creation, write/flush/checked close/reopen/readback. Each file
   boundary resamples the unchanged native permission predicates while holding
   actual parent handles; Node retains content provenance and publication order. No existing ACL repair or elevation is
-  provided. Common ancestor DACL admission, actual native behavior and other OS
-  creation remain unaccepted; these sources do not enable App admission.
+  provided. Common ancestor DACL admission and actual native behavior remain
+  unaccepted; these sources do not enable default App admission. Dormant POSIX
+  authority helpers and their historical pure policies remain only until the
+  scheduled deployment deletion cut; the public factory cannot select them.
 - `windows-deployment-support.ts` owns the fixed Windows x64 compiler/source/
   reference recipe, inert PE structure checks, actual output receipt, exclusive
   materialization and finite invocation lifetime. It accepts no caller helper
@@ -57,9 +61,12 @@
   synchronously before asynchronous bootstrap work, separate from configuration.
 - `app-configuration.ts` validates the whole migration chain before a backup and
   atomic settings replacement, keeping desired port separate from effective port.
-- `app-native.ts` verifies the complete original native loader closure before
-  loading its original public shared/exclusive advisory-lock API. Callers without
-  an explicit validated shared option retain exclusive behavior.
+- `app-native.ts` refuses unsupported actual hosts before native verification
+  or loading. Its independent input verifier stays host-neutral and checks the
+  complete original six-package source/prebuild/license closure, including all
+  original non-Windows files, without loading an addon. Supported Windows loading
+  retains the original public shared/exclusive advisory-lock API after verification.
+  Callers without an explicit validated shared option retain exclusive behavior.
 - `app-delivery.ts` verifies immutable archive and regular-file evidence without
   executing or repairing delivery inputs. Its separate payload verifier compares
   a complete canonical manifest and observed tree with independently expected

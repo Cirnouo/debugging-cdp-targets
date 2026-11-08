@@ -1,17 +1,11 @@
 import { closeSync, openSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { loadAppAdvisoryLock } from '../../src/adapters/app-native.ts';
-import { parseAppNativeEvidence } from '../../src/domains/app-release.ts';
 import { isRecord } from '../../src/shared/errors.ts';
+import { deploymentAdvisoryLock } from './deployment-advisory-lock.ts';
 
 const directory = process.argv[2];
 if (!directory || !path.isAbsolute(directory) || !process.send) throw new Error('Missing owned lock fixture.');
-const tryLock = await loadAppAdvisoryLock(
-    parseAppNativeEvidence(
-        JSON.parse(await readFile(new URL('../../tooling/app-native-release.json', import.meta.url), 'utf8')),
-    ),
-);
+const tryLock = await deploymentAdvisoryLock();
 const held = new Map<number, number>();
 process.on('message', (message: unknown) => {
     if (!isRecord(message) || !Number.isSafeInteger(message.id) || typeof message.id !== 'number')

@@ -33,8 +33,11 @@ Git hook tests remain contributor-tooling regressions.
   alter the expected source selection. These tests execute no App, target, native
   permission helper or ACL query and establish no real archive/native acceptance.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
-  verified public native addon to test shared read-only use, independent operation
-  writers, exclusive deletion barriers and persistent lock inode identity.
+  completely verified original public vendor addon under each process's actual
+  host identity to test shared read-only use, independent operation writers,
+  exclusive deletion barriers and persistent lock inode identity. Only the
+  separate production-wrapper integration requires actual Windows x64/arm64.
+  Vendor kernel-lock regression evidence does not grant product admission.
 - `app-fresh-stage.test.ts` exercises the actual source builder and fresh
   transaction with controlled native-process/addon I/O, exact file-only owned ZIP
   extraction, protected manifest failures and state publication outcomes. Native
@@ -43,23 +46,38 @@ Git hook tests remain contributor-tooling regressions.
   no-replace/locking acceptance or runnable admitted App claim.
 - `app-deployment-storage.test.ts` tests enrolled-root and lease ownership,
   bounded canonical state, atomic failure/readback outcomes and retained fences
-  through real owned temporary files. Linux private-account/local-filesystem
-  cases skip explicitly elsewhere; unsupported native roles refuse before writes.
-  These GUI-free tests do not establish installer or six-cell native acceptance.
-  Linux-only reader-context resample barriers exercise pre-read/post-read real
-  replacements, mixed unsafe permissions and unknown failures; their R1
-  classification correction and Linux execution remain pending.
+  through real owned files, actual vendor locks and explicit controlled Windows
+  authority. A controlled original EPERM at the replacement port retains the exact
+  indeterminate cause, old bytes, same-lease readback and temporary cleanup without
+  replay; this is controlled outcome evidence, not kernel contention acceptance.
+  Its separate ordinary Node reader retains one real shared use lease while the
+  parent holds its operation lease through eleven successful one-shot default
+  atomic commits. Initial ordinal zero and ordinals one through eleven acknowledge
+  exact complete states after natural read settlement; no background document read
+  occurs while idle. This coordinated process/use-lifetime evidence does not prove
+  overlapping document-read/write availability or observation during replacement.
+  The prior uncoordinated Windows schedule actually failed with EPERM/indeterminate;
+  that availability remains unproved. Store document
+  authority and named/current receipt barriers use actual held-handle and state-path
+  receipts, retaining no-stale-parse, original fatal errors, one actual close and
+  same-lease retry after controlled refusal clears. Only the deliberately paused
+  adversarial cases use non-atomic unlink and prepared-inode publication through
+  the existing test I/O port. They do not prove ordinary atomic replacement over
+  an open destination; normal transaction and real-child replacement cases retain
+  the default writer path. Nonregular evidence is an actual directory at the state name.
+  Linux-specific statfs/native-resample algorithm assertions are retired; no
+  synthetic ACL, Windows enrollment or native deployment acceptance is claimed.
 - `app-deployment-authority.test.ts` covers strict native SID/UID, protected and
   inherited ACL templates, ancestors, unsigned identities, APFS/NTFS evidence
   and Linux private/system mode rules through literal pure inputs.
-- `app-deployment-capabilities.test.ts` exercises the real store with a controlled
-  Linux-private POSIX filesystem/UID profile on every host: reader refusal, writer authority
-  changes, exact descriptor modes, fixed lease identity, partial-envelope refusal
-  and commit/removal outcomes. Process creation/dlopen/chmod are blocked or replaced
-  before native code, including custom-promisify bypasses. Linux role fixtures replace
-  real/effective UID and filesystem evidence. A controlled macOS full ancestor
-  chain separates a sealed read-only System root from writable Data controls.
-  These fixtures supply no native proof.
+- `app-deployment-capabilities.test.ts` exercises the real store with controlled
+  Windows authority over mapped owned files: reader refusal, explicit authority
+  revocation, exact descriptor modes, fixed lease identity, partial-envelope
+  refusal and commit/removal outcomes. A shared test fixture replaces only the
+  native import; its fresh-enrollment stub always throws and is never requested.
+  Direct production factory cases block acquisition and require unsupported-host
+  refusal before filesystem/native work. Custom-promisify process creation remains
+  blocked. These controlled capabilities supply no native permission proof.
 - `deployment-support-build.test.ts` consumes the actual fixed source builder and
   fresh Windows composition through controlled compiler/process I/O and real owned
   files. Receipt/source/output drift, collisions, replacement/close errors,
@@ -113,6 +131,9 @@ Git hook tests remain contributor-tooling regressions.
   check independently recorded native archive identities, complete loader/license
   inputs and verified runtime files before executable use. These input checks
   do not establish six-platform native acceptance.
+  Native-input regressions also require actual production unsupported-host
+  refusal before package verification or addon loading, while complete original
+  input verification remains host-neutral.
 - `app-distribution.test.ts` and `build-app.test.ts` cover immutable delivery
   metadata, sandboxed bundles, license closure and complete official-file copying.
 - `app-archive-extraction.test.ts` checks actual Windows ZIP extraction refusal
