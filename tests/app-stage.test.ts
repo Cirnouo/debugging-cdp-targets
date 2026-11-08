@@ -248,19 +248,20 @@ test('stage keeps its source-derived selection when actual output and its self-c
 test('non-Windows production stages fail closed before any external execution or output creation', async () => {
     const restore = archiveGuard(new Set());
     try {
-        for (const platform of ['darwin', 'linux'] as const)
-            await assert.rejects(
-                app.stageDesktopApp({
-                    root: 'unused',
-                    kind: 'portable',
-                    platform,
-                    architecture: 'x64',
-                    electronArchive: 'unused',
-                    nodeArchive: 'unused',
-                    output: 'unused',
-                }),
-                /other native cells remain pending/,
-            );
+        for (const platform of ['darwin', 'linux'] as const) {
+            const options = {
+                root: 'unused',
+                kind: 'portable',
+                platform: 'win32',
+                architecture: 'x64',
+                electronArchive: 'unused',
+                nodeArchive: 'unused',
+                output: 'unused',
+            } satisfies Parameters<typeof app.stageDesktopApp>[0];
+            assert.equal(Reflect.set(options, 'platform', platform), true);
+            assert.equal(Reflect.get(options, 'platform'), platform);
+            await assert.rejects(app.stageDesktopApp(options), /other native cells remain pending/);
+        }
     } finally {
         restore();
     }

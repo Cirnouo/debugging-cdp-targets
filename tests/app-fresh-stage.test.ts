@@ -782,19 +782,20 @@ test('unsupported fresh selections fail before filesystem, subprocess or native 
     });
     syncBuiltinESMExports();
     try {
-        for (const platform of ['darwin', 'linux'] as const)
-            await assert.rejects(
-                app.stageFreshDesktopInstallation({
-                    root: 'unused',
-                    kind: 'portable',
-                    platform,
-                    architecture: 'x64',
-                    electronArchive: 'unused',
-                    nodeArchive: 'unused',
-                    output: 'unused',
-                }),
-                /other native cells remain pending/,
-            );
+        for (const platform of ['darwin', 'linux'] as const) {
+            const options = {
+                root: 'unused',
+                kind: 'portable',
+                platform: 'win32',
+                architecture: 'x64',
+                electronArchive: 'unused',
+                nodeArchive: 'unused',
+                output: 'unused',
+            } satisfies Parameters<typeof app.stageFreshDesktopInstallation>[0];
+            assert.equal(Reflect.set(options, 'platform', platform), true);
+            assert.equal(Reflect.get(options, 'platform'), platform);
+            await assert.rejects(app.stageFreshDesktopInstallation(options), /other native cells remain pending/);
+        }
         assert.equal(exec.mock.callCount(), 0);
         assert.equal(native.mock.callCount(), 0);
     } finally {

@@ -81,10 +81,14 @@ The delivered `host-plugins/` slice is also pure: it depends only on its own
 domain, existing domains and shared contracts. Application and adapters consume
 its payload proof directly; the remaining technical-layer owners stay in place.
 
-Only interface/app-bootstrap.ts executes directly. It synchronously redirects
-Chromium userData/sessionData to separate per-process temporary directories before
-any await or controlled main import. App main owns the OS-user lease, selected
-configuration and cleanup-gated normal exit. Never call Electron's singleton API.
+Only interface/app-bootstrap.ts executes directly. Startup step zero rejects
+platform/architecture evidence outside Windows x64/arm64 before App paths, scratch
+storage, privileged schemes or controlled main import. Supported startup then
+synchronously redirects Chromium userData/sessionData to separate per-process
+temporary directories before any await or controlled main import. Direct App main
+invocation repeats the pure support decision before native or resource acquisition.
+App main owns the OS-user lease, selected configuration and cleanup-gated normal
+exit. Never call Electron's singleton API.
 
 The official SDK HTTP adapter authenticates explicit registrationBearer on every
 owned tool request. Official _dct contains bearer, connectionId and sessionId;
