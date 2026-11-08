@@ -4,6 +4,9 @@ Version 0.1.0 is under development and has not been released.
 
 ## Requirements
 
+- Windows 11 on x64 or arm64 for the App and its managed targets. Installer and
+    portable distributions remain targets, not qualified native deliveries.
+    Linux and macOS are unsupported; there is no Experimental support tier.
 - Codex with Plugin support or Claude Code with native HTTP MCP support, plus
     the separately running App. The App includes verified ordinary Node and the
     complete original `chrome-devtools-mcp@1.11.0`; thin Plugins need no runtime
@@ -15,12 +18,15 @@ Version 0.1.0 is under development and has not been released.
     port and exposes a **browser-level Chrome DevTools Protocol (CDP) endpoint**.
     Chrome is the known-compatible target. Other CDP-capable applications are
     best effort; Electron, Tauri, or WebView2 alone does not establish compatibility.
-- Linux and macOS require `ps` and `lsof`; Linux additionally requires `getconf`
-    and readable `/proc` process evidence.
-- Windows launch requires Windows 10 / Windows Server 2016 or newer for atomic
-    native job assignment through `PROC_THREAD_ATTRIBUTE_JOB_LIST`. Failure to
-    create or observe the owned job leaves launch/cleanup failed rather than
-    falling back to an unobserved application. See Microsoft's
+- The App refuses non-Windows operating systems and unsupported architectures
+    before reading App data, creating scratch directories, loading native resources,
+    importing its main composition or acquiring a target, then requests normal Quit.
+    It does not fall back to another platform or take over an existing application.
+- Windows native launch uses atomic job assignment through
+    `PROC_THREAD_ATTRIBUTE_JOB_LIST`. Failure to create or observe the owned job
+    leaves launch/cleanup failed rather than falling back to an unobserved
+    application. The API's availability on older Windows releases does not widen
+    this product's Windows 11 scope. See Microsoft's
     [process-creation attribute contract](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 
 The Plugin controls only applications it launches and verifies. It does not
@@ -35,6 +41,30 @@ versions and prereleases are outside the supported range. Contributors use
 exact pnpm 12.4.2; installed Plugin users do not need pnpm. See
 [contributor setup](../../CONTRIBUTING.md#prepare-a-checkout) for optional mise
 selection and [ADR 0016](../adr/0016-toolchain-compatibility.md) for the policy.
+
+## Current App delivery limits
+
+Windows x64 and arm64 installer and portable targets remain unqualified. Default
+installation admission is unwired and disabled. Contributor-only Windows x64
+fresh staging/enrollment is source-only: actual protected creation, permission/ACL
+readback, compiler/runtime, native Electron load/lock and installer/portable
+acceptance remain pending. Windows arm64 still lacks its complete runtime-file
+and license extraction evidence, fresh source producer and native proof. Recorded
+archive identities do not establish those results.
+
+Controlled storage fixtures preserve complete-state, actual-lease and explicit
+failure contracts. They do not qualify ordinary simultaneous state-document
+reading and publication on Windows: an uncoordinated reader can coincide with a
+failed or indeterminate update. Stronger live-update availability remains
+unverified. Neither coordinated fixture success nor this limitation enables
+default native admission. See [App building and evidence](../app-runtime.md#building-and-evidence).
+
+Static App checks target Windows x64 and arm64 independently of the runner's OS.
+Retained Ubuntu common quality, security, tooling and original-vendor tests do not
+establish Linux App support or native Windows acceptance. Explicitly supplied
+Windows test capabilities do not authorize default native acquisition on another
+OS. Original upstream package contents and evidence remain complete, including
+non-Windows files.
 
 ## MCP protocol compatibility
 
@@ -97,8 +127,8 @@ acceptance. See the [current thin HTTP contract](../reference/host-metadata.md#d
 The dated 2026-10-04 [desktop Chrome matrix](../mcp-native-validation.md#desktop-chrome-acceptance--2026-10-04)
 covers Windows x64, Ubuntu/Xvfb x64 and macOS arm64 at its recorded versions.
 It precedes the actual-exit revision in ADR 0013 and explicit isolation/connection
-leases in ADR 0015, and establishes neither later change. Other combinations
-remain best effort.
+leases in ADR 0015, and establishes neither later change. Its non-Windows results
+are historical evidence, not current App support or acceptance targets.
 
 ## Windows normal Close acceptance
 
@@ -115,8 +145,9 @@ remain in that dated record.
 Windows `targetKind: "chrome"` uses the fixed
 [screenshot feature rule](configuration.md#windows-chrome-screenshot-feature).
 The setting is a Chromium application feature; the fixed policy is scoped to
-Windows Chrome. Generic applications and other platforms retain their launch
-semantics and need independent verification. Normal window switching and
+Windows Chrome. Windows generic applications retain their independently researched
+launch semantics and require separate compatibility verification. Linux and macOS
+requests are refused under the current App scope. Normal window switching and
 minimizing remain supported usage, without a foreground/minimize checklist.
 
 The [2026-10-07 controlled comparison](../mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)

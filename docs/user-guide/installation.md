@@ -1,11 +1,15 @@
 # Installation
 
-Use a host with Plugin support and launch the separate desktop App first. Each
-host receives a thin payload with direct HTTP configuration, artwork and shared
-Skill. It does not install Node, run scripts or launch a gateway. The App supplies
-verified ordinary Node and the unchanged official Server. Version 0.1.0 remains
-unreleased; native installers are pending. Contributors can build a verified local
-Windows stage using the [App build instructions](../app-runtime.md#building-and-evidence).
+Use a host with Plugin support and launch the separate Windows desktop App first.
+Current App targets are Windows 11 x64 and arm64, installer and portable; Linux
+and macOS are unsupported. Each host receives a thin payload with direct HTTP
+configuration, artwork and the shared Skill. It does not install Node, run scripts
+or launch a gateway. The App supplies verified ordinary Node and the unchanged
+official Server. Version 0.1.0 remains unreleased. Native installers and default
+installation admission are not available yet; contributor-only x64 staging does
+not establish native acceptance or arm64 readiness. Read the
+[current App delivery limits](compatibility.md#current-app-delivery-limits) before
+using the [App build instructions](../app-runtime.md#building-and-evidence).
 The default App HTTP address is `http://127.0.0.1:27637/mcp`; host configuration
 must match the effective App port. Host disconnect does not close managed targets.
 See [compatibility](compatibility.md) for prerequisites and tested host versions.

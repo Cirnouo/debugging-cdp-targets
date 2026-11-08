@@ -4,8 +4,15 @@ This thin Plugin connects Codex directly to the separately launched Debugging
 CDP Targets desktop App at `http://127.0.0.1:27637/mcp`. The App launches verified
 new local CDP targets and relays the unchanged official Chrome DevTools MCP
 Server. Version 0.1.0 is unreleased. Native installers remain under development;
-contributors can build a verified local Windows stage using the repository's
+contributors can prepare a local Windows stage subject to the delivery limits
+below. See the
 [App build instructions](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/app-runtime.md).
+
+The App and its managed targets require Windows 11 x64 or arm64. Linux and macOS
+are unsupported. Installer and portable targets remain unqualified; native
+installers and default installation admission are not available yet. Read the
+[current applicability and delivery limits](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/user-guide/compatibility.md#current-app-delivery-limits)
+before using a contributor stage. A source/static check is not native acceptance.
 
 Launch the App first, then install the Plugin:
 

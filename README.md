@@ -34,6 +34,7 @@
 
 ## Requirements
 
+- **Windows 11, x64 or arm64.** Linux and macOS are unsupported.
 - **The separate desktop App**, running before connecting the Plugin. It includes
     verified ordinary Node and the original official Server.
 - **Codex with Plugin support**, or **Claude Code 2.1.283+**.
@@ -43,9 +44,10 @@ See [full requirements and tested platforms](docs/user-guide/compatibility.md).
 
 ## Quick start
 
-Start the App, then install either thin host Plugin below. Native installers are
-still in development; unreleased contributor builds use the
-[verified local App stage](docs/app-runtime.md#building-and-evidence).
+Start the App, then install either thin host Plugin below. Native installers and
+default installation admission are not available yet. Contributor stages remain
+subject to the [current delivery limits](docs/user-guide/compatibility.md#current-app-delivery-limits)
+and [App build instructions](docs/app-runtime.md#building-and-evidence).
 
 ### Codex
 

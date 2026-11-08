@@ -1,5 +1,12 @@
 # CDP and lifecycle security
 
+Current App/gateway and native target scope is Windows 11 x64 and arm64. Reject
+non-Windows operating systems and unsupported architectures before native resource
+acquisition; bootstrap refuses before App data, owned scratch, native loading or
+main import, then requests normal Quit. Default installation admission stays
+unwired/disabled; support eligibility and controlled test capabilities do not
+establish native authority or qualification. See [App evidence](../app-runtime.md#building-and-evidence).
+
 One singleton App per OS user manages independent connections without a fixed count limit. One
 newly launched target belongs to each connection. Public registration, connection and session identities identify ownership and
 target runs; internal diagnostic correlation never grants authority. Each connection's target,
@@ -9,14 +16,7 @@ package cache cannot authorize attaching to a process.
 
 Validate executable path, launch creation time, user/session, process tree,
 loopback listener ownership, and browser-level WebSocket endpoint.
-On Linux, derive root creation time from `/proc` boot time and process start
-ticks with the system `CLK_TCK`, preserving fractional precision instead of
-the rounded `ps lstart` display. Missing or malformed evidence fails closed.
-On macOS, an absolute installed executable can also be verified through a unique
-mapped hard-link alias: its regular-file device/inode must match the kernel's
-`lsof` text mapping for the target PID. This covers Chrome's asynchronous
-[code-sign clone](https://chromium.googlesource.com/chromium/src.git/+/2d20934f814ddd688b6dd4bd0052019391114f8d/chrome/browser/mac/code_sign_clone_manager.mm)
-without accepting same-name copies, missing identity or ambiguous aliases.
+Missing, malformed or ambiguous identity evidence fails closed.
 Reserve each candidate port synchronously for its session owner before probing;
 skip occupied, privileged, and OS-excluded ports on new launches. Gateway-local
 reservations prevent peer launches from selecting the same port and remain held

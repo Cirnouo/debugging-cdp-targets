@@ -34,6 +34,7 @@
 
 ## 使用要求
 
+- **Windows 11，x64 或 arm64。** 不支持 Linux 和 macOS。
 - 先运行独立的**桌面 App**；App 自带已验证的普通 Node 和原始官方 Server。
 - **支持 Plugin 的 Codex**，或 **Claude Code 2.1.283+**。
 - **Chrome**，或其他提供**浏览器级 CDP 端点**的应用。
@@ -42,8 +43,9 @@
 
 ## 快速开始
 
-先启动 App，再安装下面任一宿主薄插件。原生安装器仍在开发；尚未发布的贡献者构建
-使用[已验证的本地 App 目录](docs/app-runtime.md#building-and-evidence)。
+先启动 App，再安装下面任一宿主薄插件。原生安装器和默认安装准入尚不可用。
+贡献者构建目录仍受[当前交付限制](docs/user-guide/compatibility.md#current-app-delivery-limits)
+和 [App 构建说明](docs/app-runtime.md#building-and-evidence)约束。
 
 ### Codex
 

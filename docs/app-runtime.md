@@ -10,16 +10,28 @@ connect to `http://127.0.0.1:27637/mcp`; they never launch another gateway.
 App and Plugin versions are independent strict SemVer strings. Both host payloads
 and the shared Skill still have exactly one matching Plugin version.
 
+## Windows applicability
+
+Current App/gateway scope is Windows 11 x64 and arm64, with installer and portable
+targets. Linux and macOS are unsupported, including no Experimental tier. Neither
+Windows architecture is newly qualified. Default installation admission remains
+unwired and disabled; [building and evidence](#building-and-evidence) distinguishes
+source/static checks, contributor staging and pending native acceptance.
+
 ## Startup, storage and exit
 
-The small Electron bootstrap synchronously captures the native App data base and
-redirects Chromium userData/sessionData into separate children of one private
-per-process OS temporary directory. Only then does it import asynchronous main
-composition without awaiting its ready-dependent startup from the entry module.
-Electron releases ready only after entry import completes; main retains its startup
-promise and early normal-Quit handlers, while bootstrap observes rejected startup
-without exposing raw errors. Configuration never uses this cache. Normal exit tries to remove
-its own cache; Chromium-held files may remain in OS temporary storage.
+The small Electron bootstrap first refuses non-Windows operating systems and
+unsupported architectures and requests normal Quit, before reading App data,
+creating owned scratch, loading native resources or importing asynchronous main
+composition. On a supported Windows platform/architecture, it synchronously
+captures the native App data base and redirects Chromium userData/sessionData
+into separate children of one private per-process OS temporary directory. Only
+then does it import main without awaiting its ready-dependent startup from the
+entry module. Electron releases ready only after entry import completes; main
+retains its startup promise and early normal-Quit handlers, while bootstrap
+observes rejected startup without exposing raw errors. Configuration never uses
+this cache. Normal exit tries to remove its own cache; Chromium-held files may
+remain in OS temporary storage.
 
 The App verifies its native loading closure before holding a kernel advisory
 lock for the actual process lifetime. The lock namespace derives from the native
@@ -31,7 +43,7 @@ creates or migrates selected data. No Electron singleton lock, heartbeat, PID
 takeover or force kill participates.
 
 Only the winner creates App data. Installed builds use native App data; portable
-builds use `data` next to the executable (next to the `.app` bundle on macOS).
+builds use `data` next to the executable.
 Neither mode searches for or merges another root. Registrations, targets, jobs
 and launch snapshots remain memory-only. Configuration schema 2 stores desired
 port, appearance and optional explicit host configuration-root/executable/cache
@@ -90,8 +102,8 @@ independent host outcomes and waits for actual native completion before Quit.
 
 Current source tests cover these contracts with real Core/Task5 services and
 controlled I/O. React server rendering is component-only evidence. Native
-management interaction/visual acceptance and all six delivery cells remain
-separate explicit acceptance gates.
+management interaction/visual acceptance and both Windows architectures' installer
+and portable delivery remain separate explicit acceptance gates.
 
 ## HTTP and authentication
 
@@ -209,30 +221,35 @@ release emits live changes for its fixed startup configuration.
 ## Building and evidence
 
 The deployment store remains a source-only prerequisite, outside App bootstrap,
-main, activation and restart-worker composition. Its normal open returns only
-read/shared-use capabilities. The separate trusted worker open validates actual
-native authority before exposing operation, commit or deletion. Per-user roles
-trust code running as the same account; OS permissions do not distinguish that
-account's ordinary App from arbitrary code run by that account. Linux system-DEB
-readers use the fixed root-owned `/opt/debugging-cdp-targets` envelope, while
-mutation requires the worker's actual matching real/effective UID 0. Metadata
-kind and environment values confer no writer authority.
+main, activation and restart-worker composition. Current native authority is
+Windows-only. Normal Windows authority remains unavailable pending delivered
+deployment support; current build-only support does not enable it. The normal-open
+contract exposes only read/shared-use capabilities; the
+separate trusted worker open requires actual validated native authority before
+exposing operation, commit or deletion. Per-user roles trust code running as the
+same account; OS permissions do not distinguish that account's ordinary App from
+arbitrary code run by that account. Metadata kind and environment values confer
+no writer authority. Unsupported default native entry points refuse before
+resource acquisition. Explicit supplied Windows capabilities in controlled tests
+do not authorize default native I/O on another OS.
 
-The source has bounded Windows handle/SID/protected-DACL/local-NTFS evidence and
-a macOS JXA descriptor/UID/ACL/local-APFS candidate, alongside Linux private and
-system permission checks. Unknown results, unsafe ancestors, links, cross-volume
-control entries, changed identities and missing fixed leases refuse admission.
-Windows inherited control-file ACEs require the checked protected parent
-template; macOS managed entries require absent/empty ACLs and private modes.
-Trusted macOS ancestors can reside on the sealed read-only System volume while
-the managed root and controls require writable local APFS on their own device.
-Ancestor ownership, non-granting ACLs, safe modes, local APFS and ownership-enabled
-mount checks remain required. The fixed JXA query distinguishes request-only
-`ATTR_VOL_INFO` from the exact result-bearing volume mask.
-Controlled transcripts, Node VM buffers and C# compilation establish source
-contracts only. Actual Windows permission/ACL readback, macOS 15 JXA/Ref/errno
-behavior and Linux multi-account/root execution remain native gates. No native
-installer/portable acceptance is implied by these branches or shipped helpers.
+Bounded Windows handle/SID/protected-DACL/local-NTFS source evidence and controlled
+fixtures do not establish actual protected creation, permission/ACL readback,
+native loading or installer/portable acceptance. Unknown results, unsafe ancestors,
+links, cross-volume control entries, changed identities and missing fixed leases
+refuse admission. Windows inherited control-file ACEs require the checked protected
+parent template. Retained POSIX implementation branches and dated evidence are
+historical or pending later source removal, not current support, distribution or
+native acceptance targets. Complete original upstream files remain unchanged.
+
+Coordinated storage fixtures cover complete state, actual leases and explicit
+failure outcomes. Ordinary uncoordinated reading of the Windows state document
+can coincide with failed or indeterminate publication; simultaneous reader/update
+availability remains unqualified. Controlled reader handshakes are test evidence,
+not a product coordination algorithm or a guarantee that publication always
+succeeds while the document is open. Stronger availability needs later native
+production/admission qualification. This gap does not change the existing
+complete-state, lease, explicit-failure or no-replay contracts.
 
 The explicit contributor-only `stageFreshDesktopInstallation` source composition
 supports Windows x64 fresh enrollment and state-last initial publication. It
@@ -251,13 +268,14 @@ the independently source-derived selection before returning.
 `stageDesktopApp` returns the flat stage's `root`, canonical manifest, selection
 and descriptive original-source/build-input provenance. This result grants no
 runtime authority or protected publication capability. The tree verifier alone
-still establishes observed content agreement. macOS signed bundle/framework links
-and Unix executable bits need their actual source producers; the Windows producer
-fails closed for other platforms. The explicit fresh source consumer joins this
+still establishes observed content agreement. The Windows producer refuses
+unsupported targets. Recorded archives do not replace missing source extraction
+and license evidence. The explicit fresh source consumer joins this
 production with native protected creation before publishing an initial build;
 actual platform permission, compiler/runtime and installer acceptance remain pending.
-The maintained Node runtime-file inventory currently enables Windows x64 only;
-other cells refuse staging until their actual source evidence is supplied.
+The maintained Node runtime-file inventory currently enables Windows x64 only.
+Windows arm64 refuses staging until its complete runtime-file and license evidence
+is supplied; its fresh source producer and native proof also remain pending.
 Ordinary startup neither creates nor repairs a missing or partial envelope.
 The installation schema, canonical identity formula and two persistent lease
 inodes are unchanged. App admission stays disabled until the complete producer,
@@ -270,9 +288,11 @@ and reviewed SDK vendor maps. Catalog and every connection receive the same
 verified ordinary Node executable and original public bin. Electron never acts
 as their Node runtime. None of those files is installed through the Plugins.
 
-`pnpm check:app` checks bundles, license evidence, original native closure and
-official bytes without writing a stage. For a local Windows stage, provide
-archives matching `tooling/app-release-inputs.json`:
+`pnpm check:app` statically verifies Windows x64 and arm64 bundles, complete
+original native inputs, actual graph licenses and official bytes,
+independently of its runner's OS, without staging or native execution. It does
+not establish native acceptance. For a local Windows stage, provide archives
+matching `tooling/app-release-inputs.json`:
 
 ```powershell
 pnpm build:app --portable --electron-archive <electron-zip> --node-archive <node-zip> --output <new-absolute-stage-directory>
