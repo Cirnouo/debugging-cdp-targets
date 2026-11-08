@@ -10,6 +10,7 @@ import { createPlatformAdapter } from '../../src/adapters/platform-process.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createToolCatalog } from '../../src/adapters/tool-catalog.ts';
 import { createWindowsLauncher } from '../../src/adapters/windows-launch.ts';
+import { supportsWindowsApp } from '../../src/domains/app-distribution.ts';
 import type { ConnectionStatus, ControlRequest } from '../../src/domains/control-contract.ts';
 import { parseControlRequest } from '../../src/domains/control-contract.ts';
 import type { DataIsolationEvidence } from '../../src/gateway/targets/model/isolation.ts';
@@ -30,7 +31,17 @@ export const nativeIdentity = {
 };
 
 /** Real ownership stack; only native/process/network and MCP transport I/O are replaced. */
-export async function nativeCloseRuntime(t: TestContext) {
+export async function nativeCloseRuntime(
+    t: TestContext,
+    native: Readonly<{ platform: string; architecture: string }> = {
+        platform: process.platform,
+        architecture: process.arch,
+    },
+) {
+    if (!supportsWindowsApp(native.platform, native.architecture))
+        throw new Error(
+            `Unsupported Windows native fixture platform or architecture: ${native.platform}/${native.architecture}.`,
+        );
     const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-native-close-runtime-')));
     const profile = path.join(parent, 'profile');
     const accepted = deferred();
@@ -102,6 +113,8 @@ export async function nativeCloseRuntime(t: TestContext) {
     let application: Awaited<ReturnType<typeof launcher.launch>> | undefined;
     const platform = createPlatformAdapter({
         platform: 'win32',
+        architecture: native.architecture,
+        reservedRanges: async () => [],
         requestWindowsClose: launcher.requestNormalClose,
         waitWindowsExit: launcher.waitForExit,
         snapshot: async (pid, port) => {
@@ -121,7 +134,10 @@ export async function nativeCloseRuntime(t: TestContext) {
         },
     });
     const host = createTargetHost({
-        platformAdapter: { ...platform, reservedRanges: async () => [] },
+        platform: 'win32',
+        architecture: native.architecture,
+        platformAdapter: platform,
+        profileAvailable: async () => true,
         probe: async () => true,
         now: () => Date.parse('2026-10-12T00:59:59.000Z'),
         spawn: async (executablePath, arguments_, _port, cwd, env, context) => {

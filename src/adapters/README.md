@@ -111,7 +111,10 @@
   dispatch using the pure `gateway/owned-tool-arguments.ts` parsers, modern roots
   preflight before lifecycle acceptance, bounded form continuation around one
   Core execution and active-request progress routing.
-- `target-host.ts` launches and verifies a newly created target. Its Chrome preset
+- `target-host.ts` admits Windows x64/arm64 before native defaults, port/profile
+  work or target acquisition, then launches and verifies a newly created target.
+  Fully supplied test ports avoid native launcher construction; supplied identity
+  cannot authorize ambient native launch or profile checks. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
   the debugging process and fixes Windows screenshots with one bare
   `CDPScreenshotNewSurface` feature before profile acquisition or spawn.
@@ -122,14 +125,19 @@
   rejects overlapping claims and retries authorized cleanup with identity checks.
 - `port-reservation.ts` reserves CDP ports synchronously for one gateway and
   checks owner identity before releasing a live-run claim.
-- `platform-process.ts` obtains OS identity/reservations and normal shutdown;
-  Linux root creation evidence preserves kernel start tick precision.
-  Darwin verifies mapped hard-link aliases against the installed executable's
-  device/inode, and failures retain bounded executable identity metadata.
-  Unix normal close validates the owned application identity and requests
-  shutdown; actual Node child exit completes the separate unbounded wait.
+- `platform-process.ts` admits Windows x64/arm64, obtains Windows identity and
+  excluded-port evidence, and requests normal shutdown with actual-exit receipts.
+  Supplied snapshot/Close/wait/range ports keep pure tests useful on other hosts;
+  default native queries independently require a supported actual Windows host.
+  Windows identity validation applies Windows path/case and Chrome vendor rules
+  to supplied evidence throughout launch, Close, verification and health.
+  Exported Unix inspection/probe models and the portable spawn helper remain
+  for direct-model regressions until their scheduled deletion; production
+  constructors no longer select them.
 - `windows-cdp-helper.ps1` supplies Windows process/listener evidence.
-- `windows-launch.ts` validates the native helper protocol and actual app events.
+- `windows-launch.ts` requires a supported actual Windows host before constructing
+  or using its default helper spawn, and validates the native helper protocol and
+  actual app events. An explicitly supplied spawn is a concrete test capability.
 - `windows-native-helper.ps1` orchestrates native launch/close, permission waiting
   and authenticated one-shot elevation with private structured data transfer.
 - `windows-native-process.cs` owns Win32 handles, permission/manifest evidence,

@@ -5,6 +5,12 @@ import { createPlatformAdapter } from '../src/adapters/platform-process.ts';
 import type { ManagedTarget, ProcessEvidence, ProcessTarget } from '../src/gateway/targets/model/target-contract.ts';
 import { DetailedError, errorDetails } from '../src/shared/errors.ts';
 
+const windowsIdentity: { platform: NodeJS.Platform; architecture: string } = {
+    platform: 'win32',
+    architecture: 'x64',
+};
+const windowsEvidence = { ...windowsIdentity, reservedRanges: async () => [] };
+
 const identity: ProcessTarget = {
     processId: 601,
     port: 9222,
@@ -45,7 +51,7 @@ test('absent and foreign listeners permit closing only the verified application'
     for (const listeners of [[], [{ localAddress: '127.0.0.1', owningProcess: 900 }]]) {
         const requested: number[] = [];
         const platform = createPlatformAdapter({
-            platform: 'win32',
+            ...windowsEvidence,
             snapshot: async () => evidence(listeners),
             closeWindows: async (target) => {
                 requested.push(target.processId);
@@ -57,13 +63,14 @@ test('absent and foreign listeners permit closing only the verified application'
     }
 });
 
-test('PID snapshot absence cannot prove application exit or authorize a signal', async () => {
+test('PID snapshot absence cannot prove application exit or authorize native Close', async () => {
     let requested = false;
     const platform = createPlatformAdapter({
-        platform: 'darwin',
+        ...windowsEvidence,
         snapshot: async () => ({ root: { exists: false }, currentSessionId: 1, processIds: [], listeners: [] }),
-        requestUnixClose: () => {
+        closeWindows: async () => {
             requested = true;
+            return receipt();
         },
     });
     await assert.rejects(platform.close({ ...identity }), (error: unknown) => {
@@ -84,7 +91,7 @@ test('Windows waits require a matching native handle receipt rather than boolean
     ]) {
         let snapshots = 0;
         const platform = createPlatformAdapter({
-            platform: 'win32',
+            ...windowsEvidence,
             snapshot: async () => {
                 snapshots += 1;
                 return snapshots === 1
@@ -104,7 +111,7 @@ test('Windows waits require a matching native handle receipt rather than boolean
 test('native-close cancellation retains listener diagnostics and permits explicit retry', async () => {
     let requests = 0;
     const platform = createPlatformAdapter({
-        platform: 'win32',
+        ...windowsEvidence,
         snapshot: async () => evidence(),
         closeWindows: async () => {
             requests += 1;
@@ -123,44 +130,50 @@ test('native-close cancellation retains listener diagnostics and permits explici
     assert.equal(requests, 2);
 });
 
-test('Unix close awaits the direct child exit without process or listener polling', async () => {
+test('Windows Close awaits actual exit without process or listener polling', async () => {
     const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null });
     const target: ManagedTarget = { ...identity, child };
     let snapshots = 0;
-    const signals: number[] = [];
+    const requests: number[] = [];
+    const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
     const platform = createPlatformAdapter({
-        platform: 'darwin',
+        ...windowsEvidence,
         snapshot: async () => {
             snapshots += 1;
             if (snapshots > 1) throw new Error('No process polling is permitted.');
             return evidence([{ localAddress: '127.0.0.1', owningProcess: 900 }]);
         },
-        requestUnixClose: (pid) => {
-            signals.push(pid);
+        requestWindowsClose: async (selected) => {
+            requests.push(selected.processId);
             queueMicrotask(() => child.emit('exit', 0));
+            return { closeRequested: true, processExited: false };
+        },
+        waitWindowsExit: async () => {
+            await exited;
+            return receipt();
         },
     });
     assert.equal(await platform.close(target), true);
-    assert.deepEqual(signals, [601]);
+    assert.deepEqual(requests, [601]);
     assert.equal(snapshots, 1);
 });
 
 test('an already observed direct-child exit latches success without snapshotting a reused PID', async () => {
     const child = Object.assign(new EventEmitter(), { exitCode: 0, signalCode: null });
     const platform = createPlatformAdapter({
-        platform: 'darwin',
+        ...windowsEvidence,
         snapshot: async () => {
             throw new Error('The PID has been reused.');
         },
-        requestUnixClose: () => {
-            throw new Error('A reused PID must never receive a signal.');
+        closeWindows: async () => {
+            throw new Error('A reused PID must never receive native Close.');
         },
     });
     assert.equal(await platform.close({ ...identity, child }), true);
 });
 
 for (const change of ['actual-exit', 'cancelled-live'] as const) {
-    test(`a pending Unix close snapshot cannot authorize a later signal after ${change}`, async () => {
+    test(`a pending Windows Close snapshot cannot authorize a later native request after ${change}`, async () => {
         const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null });
         const target: ManagedTarget = { ...identity, child };
         const abort = new AbortController();
@@ -173,15 +186,19 @@ for (const change of ['actual-exit', 'cancelled-live'] as const) {
         const entered = new Promise<void>((resolve) => {
             enterSnapshot = resolve;
         });
-        const signals: number[] = [];
+        const requests: number[] = [];
         const platform = createPlatformAdapter({
-            platform: 'darwin',
+            ...windowsEvidence,
             snapshot: async () => {
                 enterSnapshot();
                 await snapshotGate;
                 return evidence();
             },
-            requestUnixClose: (pid) => signals.push(pid),
+            requestWindowsClose: async (selected) => {
+                requests.push(selected.processId);
+                return { closeRequested: true, processExited: false };
+            },
+            waitWindowsExit: async () => receipt(),
         });
         assert.ok(platform.requestNormalClose);
         const outcome = platform.requestNormalClose(target, { signal: abort.signal }).then(
@@ -193,7 +210,7 @@ for (const change of ['actual-exit', 'cancelled-live'] as const) {
         abort.abort(cancellation);
         releaseSnapshot();
         const result = await outcome;
-        assert.deepEqual(signals, [], 'A late snapshot must never cause a signal to an exited or cancelled PID.');
+        assert.deepEqual(requests, [], 'A late snapshot must never request Close for an exited or cancelled PID.');
         if (change === 'actual-exit') assert.deepEqual(result, { closeRequested: false, processExited: true });
         else assert.equal(result, cancellation);
     });
