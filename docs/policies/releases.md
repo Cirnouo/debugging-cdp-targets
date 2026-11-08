@@ -87,7 +87,9 @@ The tagged commit must already be merged into main. Enabling the workflow
 does not itself authorize the first 0.1.0 publication, which remains unreleased.
 
 The Release workflow calls the full CI at the tagged commit and publishes only
-after all security, governance, quality, Windows and portable checks succeed.
+after all retained common security, governance, quality and Node compatibility
+checks, Windows regressions and genuine Windows official/recovery Chrome checks
+succeed.
 It additionally verifies annotated-tag, checkout, event and remote tag identity,
 including the original pushed tag object, main ancestry and version/Changelog
 agreement. The workflow admits stable three-component tags and prerelease

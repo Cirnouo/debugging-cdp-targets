@@ -7,6 +7,11 @@ owns a disposable native process. The retired per-chat stdio entry, automatic
 host Tool Hooks and task-activity model are not current runtime interfaces.
 Git hook tests remain contributor-tooling regressions.
 
+Current App/native support is Windows 11 x64 and arm64, without new native
+qualification. Retained POSIX source/model regressions below preserve shared
+contracts pending their complete deletion cuts; they do not provide a current
+Linux/macOS product execution or acceptance route.
+
 - `app-restart.test.ts` uses deterministic deferred producers for bounded private
   context/ACK parsing, read-only exact-parent evidence and restart lease overlap,
   uncertain child retention and cleanup retry. It supplies no native execution
@@ -366,8 +371,11 @@ Git hook tests remain contributor-tooling regressions.
   adversarial structure/answer cases and local-I/O isolation remain distinct.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, exact lane commands and syntax plans. Parsed
-  CI checks retain canonical versions and names, and require the latest-24
-  Ubuntu lane's setup inputs, quality dependency and unconditional command order.
+  CI checks retain canonical versions and six actual job names, genuine Windows
+  official/recovery commands, immediate PowerShell failure propagation and the
+  failure-only five-file envelope. They reject retired portable/study execution
+  routes and retain the latest-24 Ubuntu lane's setup inputs, quality dependency
+  and unconditional command order without implying Linux App support.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
   cleanup failures, prerequisite/not-run indexing and the real Core/SDK HTTP
@@ -395,7 +403,9 @@ Git hook tests remain contributor-tooling regressions.
   configuration and complete official-byte verification before filename exemptions.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
-- `chrome-smoke-config.test.ts` checks explicit portable executable selection,
+- `chrome-smoke-config.test.ts` checks the configured Windows Chrome path through
+  controlled access/stat I/O, missing/nonregular prerequisite refusal before
+  profile or target acquisition, retained explicit-platform resolver fixtures,
   literal isolated launch arguments, actual Chrome version requirements and
   bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser. External Close stimuli only request normal closure;
@@ -538,10 +548,12 @@ Git hook tests remain contributor-tooling regressions.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `interactive/` owns eighteen explicit Windows GUI cases across four
   native/window/anchor test files; see its [inventory and prerequisites](interactive/README.md).
-- `smoke/` owns explicit host HTTP/metadata, cross-platform Chrome, official
+- `smoke/` owns explicit host HTTP/metadata, Windows Chrome, official
   Server, local Marketplace, screenshot and Windows native acceptance tools.
   Its inventory distinguishes current entrypoints from historical stdio/Hook
-  evidence; these tools do not run in the ordinary suite.
+  evidence; these tools do not run in the ordinary suite. Retired POSIX sampler,
+  study and direct-model source/tests remain pending their later complete
+  target-native deletion cut, with no current product CI execution route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
@@ -574,13 +586,23 @@ existing thin-payload selector in place; the four Official suites remain appende
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen
-installation precedes its source/type/build regressions. The separate original
-official catalog smoke now requires an explicitly supplied verified App stage:
-`pnpm smoke:official --stage <verified-App-stage>`. It normally closes the SDK
-stdio child and launches no browser. Source/build checks or a historical job
-pass do not establish current App delivery, latest-24 Windows/macOS or GUI
+installation precedes its source/type/build regressions and
+`pnpm smoke:official --installed`. That explicit mode verifies the installed
+original official package, uses the current supported ordinary Node, lists its
+actual catalog and normally closes the SDK stdio child without launching a
+browser. The separate `--stage <verified-App-stage>` mode verifies App-delivered
+ordinary Node and original Server. Source/build checks or a historical job
+pass do not establish current App delivery, latest-24 Windows or GUI
 acceptance; record those executed scopes separately. See the
 [toolchain policy](../docs/policies/quality.md#toolchain-compatibility).
+
+The separate `Real Chrome (windows-latest)` job requires both actual official
+tools and connection recovery smokes after typecheck and configured-path
+preflight. It explicitly passes `--allow-gui` to both unchanged scripts, with
+new synthetic pages/profiles, normal Close and actual exit/deletion checks.
+Actual runner Chrome availability and Windows E2E remain unknown until a
+successful run on the tested commit. This fixture evidence does not establish
+App GUI, installer, default admission or Windows arm64 native acceptance.
 
 For the historical bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).
