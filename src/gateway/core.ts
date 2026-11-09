@@ -3,7 +3,6 @@ import type { Tool } from '@modelcontextprotocol/client';
 import { createCdpRouter } from '../adapters/cdp-router.ts';
 import { profileAvailable as nativeProfileAvailable } from '../adapters/chrome-profile.ts';
 import { DataDirectoryRegistry } from '../adapters/data-directory.ts';
-import { createOfficialConnection } from '../adapters/mcp-bridge.ts';
 import { loadOfficialToolCatalog } from '../adapters/tool-catalog.ts';
 import { createClientContext } from '../application/client-context.ts';
 import { createRegistrationRegistry } from '../application/registrations.ts';
@@ -11,6 +10,7 @@ import type { CoreControlHandler, CoreControlRequest, Diagnose } from '../domain
 import type { ClientRequestContext } from '../shared/client-context.ts';
 import { DetailedError, errorMessage } from '../shared/errors.ts';
 import { createManagedConnections, type RuntimeRouter } from './connections/managed-connection.ts';
+import { openOfficialUpstream } from './official/upstream.ts';
 import { createGatewayRegistry } from './registry.ts';
 import type { TargetLifecycleHost } from './targets/target-lifecycle.ts';
 
@@ -21,7 +21,7 @@ export type GatewayDependencies = {
     profileAvailable?: typeof nativeProfileAvailable;
     createRouter?: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
     createHost?: () => TargetLifecycleHost;
-    createConnection?: typeof createOfficialConnection;
+    createConnection?: typeof openOfficialUpstream;
     loadCatalog?: typeof loadOfficialToolCatalog;
     now?: () => number;
 };
@@ -34,7 +34,7 @@ export async function createGatewayCore({
     profileAvailable = nativeProfileAvailable,
     createRouter = createCdpRouter,
     createHost,
-    createConnection = createOfficialConnection,
+    createConnection = openOfficialUpstream,
     loadCatalog = loadOfficialToolCatalog,
     now,
     officialRuntime,

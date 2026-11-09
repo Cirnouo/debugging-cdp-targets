@@ -29,11 +29,12 @@
     wire identity/terminal tracking and strict release evidence, alongside the complete
     filesystem package-file proof and invocation-time defaults, child environment
     capture and verified public-bin resolution under exact five-dependency roles.
-    Live catalog, child/wire/disposal and upstream remain with existing adapters;
-    see its [current inventory](official/README.md).
+    Its upstream owns actual catalog, SDK wire and child/disposal together under its
+    own exact role. See its [current inventory](official/README.md).
 - `AGENTS.md` keeps argument and target rules pure and limits the exact diagnostics owner
     to its clock read and pure contract dependency, with exact Core, registry and
-    connection, target-lifecycle, package-file and launch-input roles and the mandatory application lifecycle instruction trigger.
+    connection, target-lifecycle, package-file, launch-input and upstream roles and
+    the mandatory application lifecycle instruction trigger.
 
 The HTTP server still consumes admission from `domains/mcp-http.ts`; the
 request handler consumes these parsers before real Core authentication. This

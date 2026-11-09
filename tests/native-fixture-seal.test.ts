@@ -203,8 +203,10 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('src/gateway/official/release-evidence.ts'));
     assert.ok(built.inputs.includes('src/gateway/official/package-files.ts'));
     assert.ok(built.inputs.includes('src/gateway/official/server-launch.ts'));
+    assert.ok(built.inputs.includes('src/gateway/official/upstream.ts'));
     assert.equal(built.inputs.includes('src/adapters/official-package.ts'), false);
     assert.equal(built.inputs.includes('src/adapters/official-server.ts'), false);
+    assert.equal(built.inputs.includes('src/adapters/mcp-bridge.ts'), false);
     assert.ok(built.inputs.includes('src/shared/payload-path.ts'));
     assert.equal(built.inputs.includes('src/domains/chrome-profile.ts'), false);
     assert.equal(built.inputs.includes('src/domains/chromium-features.ts'), false);

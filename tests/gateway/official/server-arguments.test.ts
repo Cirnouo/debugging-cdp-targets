@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createOfficialConnection } from '../../../src/adapters/mcp-bridge.ts';
 import { buildOfficialServerArguments } from '../../../src/gateway/official/options.ts';
 import { buildOfficialLaunchArguments } from '../../../src/gateway/official/server-launch.ts';
+import { openOfficialUpstream } from '../../../src/gateway/official/upstream.ts';
 
 const builders = [buildOfficialLaunchArguments, buildOfficialServerArguments];
 
@@ -149,13 +149,13 @@ test('official argument composition refuses a non-loopback URL before reading en
     }
 });
 
-test('official bridge composes omitted arguments before runtime resolution and explicit arguments bypass ambient validation', async () => {
+test('official upstream composes omitted arguments before runtime resolution and explicit arguments bypass ambient validation', async () => {
     const previous = process.env.DCT_EXTENSIONS;
     process.env.DCT_EXTENSIONS = 'yes';
     try {
-        await assert.rejects(createOfficialConnection('http://127.0.0.1:30000'), /DCT_EXTENSIONS must be a boolean/);
+        await assert.rejects(openOfficialUpstream('http://127.0.0.1:30000'), /DCT_EXTENSIONS must be a boolean/);
         await assert.rejects(
-            createOfficialConnection('http://127.0.0.1:30000', { args: [] }),
+            openOfficialUpstream('http://127.0.0.1:30000', { args: [] }),
             /Explicit verified runtime location/,
         );
     } finally {

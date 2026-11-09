@@ -4,7 +4,6 @@ import path from 'node:path';
 import type { profileAvailable as nativeProfileAvailable } from '../../adapters/chrome-profile.ts';
 import type { DataDirectoryRegistry } from '../../adapters/data-directory.ts';
 import { emitFixtureEvent } from '../../adapters/fixture-diagnostics.ts';
-import { createOfficialConnection } from '../../adapters/mcp-bridge.ts';
 import { waitForClient } from '../../application/client-context.ts';
 import type { createLifecycleService } from '../../application/mcp-lifecycle.ts';
 import type { createRegistrationRegistry } from '../../application/registrations.ts';
@@ -23,6 +22,7 @@ import {
     captureOfficialServerEnvironment,
     resolveVerifiedOfficialServerBin,
 } from '../official/server-launch.ts';
+import { openOfficialUpstream } from '../official/upstream.ts';
 import type { createGatewayRegistry } from '../registry.ts';
 import { parseDataIsolation } from '../targets/model/isolation.ts';
 import {
@@ -61,7 +61,7 @@ export function createStartAdmission({
     dataDirectories: DataDirectoryRegistry;
     profileAvailable: typeof nativeProfileAvailable;
     createRouter: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
-    createConnection: typeof createOfficialConnection;
+    createConnection: typeof openOfficialUpstream;
     makeHost: () => TargetLifecycleHost;
     registrations: Pick<ReturnType<typeof createRegistrationRegistry>, 'check'>;
     registry: Pick<
@@ -150,8 +150,7 @@ export function createStartAdmission({
         try {
             context.onIdentity?.({ connectionId, sessionId });
             context.onPhase?.('validating-official-server');
-            if (createConnection === createOfficialConnection && !runtimeLocation)
-                await resolveVerifiedOfficialServerBin();
+            if (createConnection === openOfficialUpstream && !runtimeLocation) await resolveVerifiedOfficialServerBin();
             context.signal?.throwIfAborted();
             if (registry.closing) throw new Error('The gateway is closing.');
             context.onPhase?.('acquiring-data-directory');

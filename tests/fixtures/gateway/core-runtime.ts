@@ -3,7 +3,6 @@ import { EventEmitter } from 'node:events';
 import type { Progress } from '@modelcontextprotocol/client';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { DataDirectoryRegistry } from '../../../src/adapters/data-directory.ts';
-import type { OfficialConnection } from '../../../src/adapters/mcp-bridge.ts';
 import { createToolCatalog } from '../../../src/adapters/tool-catalog.ts';
 import type {
     ConnectionStatus,
@@ -14,6 +13,7 @@ import type {
     LaunchOptions,
 } from '../../../src/domains/control-contract.ts';
 import { createGatewayCore, type GatewayDependencies } from '../../../src/gateway/core.ts';
+import type { OfficialUpstream } from '../../../src/gateway/official/upstream.ts';
 import { RetainedTargetError } from '../../../src/gateway/targets/model/target-contract.ts';
 import type { ClientRequestContext, ClientRequestFacilities } from '../../../src/shared/client-context.ts';
 
@@ -158,7 +158,7 @@ export async function createConnectionRuntimeFixture({
                 return true;
             },
         }),
-        createConnection: async (url): Promise<OfficialConnection> => {
+        createConnection: async (url): Promise<OfficialUpstream> => {
             connections += 1;
             return {
                 tools: [

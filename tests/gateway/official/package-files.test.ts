@@ -203,7 +203,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
         await build({
             stdin: {
                 contents:
-                    "export { resolveVerifiedOfficialServerBin } from './src/gateway/official/server-launch.ts'; export { createOfficialConnection } from './src/adapters/mcp-bridge.ts';",
+                    "export { resolveVerifiedOfficialServerBin } from './src/gateway/official/server-launch.ts'; export { openOfficialUpstream } from './src/gateway/official/upstream.ts';",
                 resolveDir: fileURLToPath(new URL('../../..', import.meta.url)),
             },
             outfile: output,
@@ -249,7 +249,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
+                    `${prelude} await m.openOfficialUpstream('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
                 ],
                 options,
             ),
@@ -263,7 +263,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
+                    `${prelude} await m.openOfficialUpstream('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
                 ],
                 options,
             ),

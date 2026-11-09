@@ -15,21 +15,24 @@ pure Diagnostic/Diagnose contract from domains/control-contract.ts. No other
 clock, environment, filesystem, process, network, native or external-package
 access is permitted to pure owners. Core, registry, the reviewed connection
 roles, target lifecycle and the exact Official package-file and launch-input
-roles have only the bounded capabilities below. These dependency restrictions
+roles and the exact Official upstream have only the bounded capabilities below. These dependency restrictions
 also apply to erased syntax.
 
-Before editing official/ values, filesystem proof or launch inputs, read its
+Before editing official/ values, filesystem proof, launch inputs or upstream lifetime, read its
 [cumulative Official instructions](official/AGENTS.md). Only official/package-files.ts
 may import node:crypto, node:fs/promises, node:path, ./release-evidence.ts and
 ../../adapters/file-evidence.ts. Pure owners cannot depend on this effectful proof,
 even through erased syntax; only the exact official/server-launch.ts adds a proof
 consumer. That launch owner retains invocation-time defaults, child environment
 capture and verified bin resolution under its closed dependency/default role.
-The exact managed connection, start admission and connection view consumers
-use server-launch.ts through their reviewed relative edges.
+The exact upstream, managed connection, start admission and connection view
+consumers use server-launch.ts through their reviewed relative edges.
 Core, registry, pure or unknown owners, package-files and other connection roles
-cannot depend on launch. Actual catalog publication and child disposal remain
-with their existing adapters. Package-file proof gains no ambient state authority.
+cannot depend on launch. Package-file proof gains no ambient state authority.
+Only official/upstream.ts owns actual catalog publication, SDK wire execution and
+the owned Server child's lifetime. Core and start admission import openOfficialUpstream
+as a value. Managed connection imports openOfficialUpstream and OfficialUpstream
+as types. See the Official instructions for exact outgoing and ambient capabilities.
 
 BEFORE editing core.ts, registry.ts, targets/target-lifecycle.ts, connections/managed-connection.ts,
 connections/start-admission.ts or connections/connection-view.ts, read all of the canonical
@@ -110,5 +113,5 @@ Before adding a mutable Gateway responsibility or changing this boundary, read
 [repository organization](../../docs/policies/repository-organization.md) and
 [instruction progressive disclosure](../../docs/policies/documentation.md#instruction-progressive-disclosure),
 then review these rules and the runtime-source auditor together. This slice
-provides no authority beyond the exact Core, registry, connection, package-file and launch-input
-roles described.
+provides no authority beyond the exact Core, registry, connection, package-file, launch-input
+and upstream roles described.
