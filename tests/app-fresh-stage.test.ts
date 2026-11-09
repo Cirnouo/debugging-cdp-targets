@@ -10,6 +10,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { mock, type TestContext, test } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { verifyDeploymentPayload } from '../src/adapters/app-delivery.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import * as app from '../tooling/build-app.ts';
 import { stageFixture } from './fixtures/app-stage.ts';
@@ -757,6 +758,175 @@ test('fresh transaction uses actual source producer, protected manifest and stat
             manifest.toString(),
         );
     } finally {
+        await fixture.cleanup();
+    }
+});
+
+test('fresh enrollment refuses a byte-identical replacement of the verified source stage before acquisition', {
+    skip: !fixedWindows,
+}, async (context) => {
+    const fixture = await controlled(context);
+    // Bound the old path at its first controlled permission probe if it reaches that far.
+    fixture.fault('unsafe-parent');
+    const owned = path.dirname(fixture.own.options.output);
+    const producerScratch = path.join(owned, 'dct-app-stage-controlled');
+    const remove = fs.rm;
+    const loadNative = process.dlopen;
+    let substitutions = 0;
+    let nativeLoads = 0;
+    process.dlopen = (...args) => {
+        nativeLoads++;
+        loadNative.apply(process, args);
+    };
+    fs.rm = async (name, options) => {
+        if (name === producerScratch) {
+            assert.deepEqual(options, { recursive: true, force: true });
+            assert.equal(substitutions, 0);
+            assert.equal(await fs.realpath(producerScratch), producerScratch);
+            const enrollment = (await fs.readdir(owned)).filter((entry) => entry.startsWith('dct-app-enrollment-'));
+            assert.equal(enrollment.length, 1);
+            const [enrollmentName] = enrollment;
+            assert.ok(enrollmentName);
+            const source = path.join(owned, enrollmentName, 'source');
+            const retained = path.join(path.dirname(source), 'source-retained');
+            assert.equal(await fs.realpath(source), source);
+            const original = await fs.lstat(source, { bigint: true });
+            assert.ok(original.isDirectory() && !original.isSymbolicLink());
+            const manifest = await fs.readFile(path.join(source, 'payload-manifest.json'));
+            const digest = createHash('sha256').update(manifest).digest('hex');
+            await assert.rejects(fs.lstat(retained), { code: 'ENOENT' });
+            await fs.rename(source, retained);
+            await fs.cp(retained, source, { recursive: true, errorOnExist: true, force: false });
+            const replacement = await fs.lstat(source, { bigint: true });
+            const originalRetained = await fs.lstat(retained, { bigint: true });
+            assert.ok(replacement.isDirectory() && !replacement.isSymbolicLink());
+            assert.equal(originalRetained.dev, original.dev);
+            assert.equal(originalRetained.ino, original.ino);
+            assert.equal(replacement.dev, original.dev);
+            assert.notEqual(replacement.ino, original.ino);
+            assert.deepEqual(await fs.readFile(path.join(source, 'payload-manifest.json')), manifest);
+            await verifyDeploymentPayload(source, {
+                selectedBuildId: digest,
+                selectedManifestSha256: digest,
+                platform: fixture.own.options.platform,
+                architecture: fixture.own.options.architecture,
+            });
+            substitutions++;
+        }
+        return remove(name, options);
+    };
+    syncBuiltinESMExports();
+    try {
+        await assert.rejects(
+            app.stageFreshDesktopInstallation(fixture.own.options),
+            (error: unknown) => error instanceof app.FreshDeploymentError && error.outcome === 'not-published',
+        );
+        assert.equal(substitutions, 1);
+        const effects = fixture.executionCounts();
+        context.diagnostic(JSON.stringify({ substitutions, effects, nativeLoads }));
+        assert.deepEqual(
+            effects,
+            {
+                archive: 2,
+                inspect: 0,
+                createRoot: 0,
+                createDirectory: 0,
+                publish: 0,
+                copy: 0,
+                worker: 0,
+                workerInspect: 0,
+                compiles: 2,
+            },
+            'verified source replacement must be refused before destination or native authority acquisition',
+        );
+        assert.equal(nativeLoads, 0);
+        assert.deepEqual(fixture.events, []);
+        await assert.rejects(fs.lstat(fixture.own.options.output), { code: 'ENOENT' });
+    } finally {
+        fs.rm = remove;
+        process.dlopen = loadNative;
+        syncBuiltinESMExports();
+        await fixture.cleanup();
+    }
+});
+
+test('fresh enrollment refuses changed mode on the verified source stage before acquisition', {
+    skip: !fixedWindows,
+}, async (context) => {
+    const fixture = await controlled(context);
+    fixture.fault('unsafe-parent');
+    const owned = path.dirname(fixture.own.options.output);
+    const producerScratch = path.join(owned, 'dct-app-stage-controlled');
+    const remove = fs.rm;
+    const stat = fs.lstat;
+    let changedSource: string | undefined;
+    let modeReads = 0;
+    fs.rm = async (name, options) => {
+        if (name !== producerScratch) return remove(name, options);
+        assert.deepEqual(options, { recursive: true, force: true });
+        assert.equal(changedSource, undefined);
+        assert.equal(await fs.realpath(producerScratch), producerScratch);
+        const enrollment = (await fs.readdir(owned)).filter((entry) => entry.startsWith('dct-app-enrollment-'));
+        assert.equal(enrollment.length, 1);
+        const [enrollmentName] = enrollment;
+        assert.ok(enrollmentName);
+        const source = path.join(owned, enrollmentName, 'source');
+        assert.equal(await fs.realpath(source), source);
+        const original = await stat(source, { bigint: true });
+        const manifestPath = path.join(source, 'payload-manifest.json');
+        const manifest = await fs.readFile(manifestPath);
+        await remove(name, options);
+        const settled = await stat(source, { bigint: true });
+        assert.ok(settled.isDirectory() && !settled.isSymbolicLink());
+        assert.equal(settled.dev, original.dev);
+        assert.equal(settled.ino, original.ino);
+        assert.equal(settled.mode, original.mode);
+        assert.deepEqual(await fs.readFile(manifestPath), manifest);
+        changedSource = source;
+    };
+    Object.defineProperty(fs, 'lstat', {
+        value: async (...args: Parameters<typeof fs.lstat>) => {
+            if (!changedSource || args[0] !== changedSource || !args[1]?.bigint) return Reflect.apply(stat, fs, args);
+            const actual = await stat(changedSource, { bigint: true });
+            const reported: typeof actual = Object.create(
+                Object.getPrototypeOf(actual),
+                Object.getOwnPropertyDescriptors(actual),
+            );
+            reported.mode ^= 0o200n;
+            modeReads++;
+            return reported;
+        },
+    });
+    syncBuiltinESMExports();
+    try {
+        await assert.rejects(
+            app.stageFreshDesktopInstallation(fixture.own.options),
+            (error: unknown) => error instanceof app.FreshDeploymentError && error.outcome === 'not-published',
+        );
+        assert.equal(modeReads, 1);
+        const effects = fixture.executionCounts();
+        context.diagnostic(JSON.stringify({ modeReads, effects }));
+        assert.deepEqual(
+            effects,
+            {
+                archive: 2,
+                inspect: 0,
+                createRoot: 0,
+                createDirectory: 0,
+                publish: 0,
+                copy: 0,
+                worker: 0,
+                workerInspect: 0,
+                compiles: 2,
+            },
+            'verified source mode drift must be refused before destination or native authority acquisition',
+        );
+        assert.deepEqual(fixture.events, []);
+        await assert.rejects(fs.lstat(fixture.own.options.output), { code: 'ENOENT' });
+    } finally {
+        fs.rm = remove;
+        fs.lstat = stat;
+        syncBuiltinESMExports();
         await fixture.cleanup();
     }
 });
