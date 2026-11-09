@@ -13,7 +13,7 @@ import type { HostInventory } from '../src/adapters/native-host-plugins.ts';
 import { patchPluginEndpoint, readPluginTree } from '../src/adapters/verified-plugin-files.ts';
 import { createAppHostManagement } from '../src/application/app-host-management.ts';
 import { HostPluginManager } from '../src/application/host-plugin-manager.ts';
-import { defaultAppConfiguration } from '../src/domains/app-configuration.ts';
+import { defaultAppConfiguration } from '../src/desktop/configuration/model.ts';
 import type { PluginHost } from '../src/domains/host-management.ts';
 import { overlayPluginEndpoint, pluginMcpEndpointEvidence } from '../src/host-plugins/payload-integrity.ts';
 

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { BrowserWindow, ipcMain } from 'electron';
 import { readRegularFile } from '../adapters/file-evidence.ts';
-import type { AppConfiguration } from '../domains/app-configuration.ts';
+import type { AppConfiguration } from '../desktop/configuration/model.ts';
 import {
     APP_MANAGEMENT_CHANNEL,
     APP_UI_URL,

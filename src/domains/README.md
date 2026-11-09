@@ -9,9 +9,6 @@
   Deterministic native identity/permission predicates validate supplied facts
   without issuing native authority.
   It grants no payload-verification, permission, enrollment or deletion authority.
-- `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
-  explicit host selections and desired/effective hot/cold settings. Unpublished
-  pre-schema-1 formats have no production migration promise.
 - `app-release.ts` validates independently maintained Electron, ordinary Node
   and complete native loader release evidence.
 - `app-ui.ts` validates the fixed local asset routes and narrow management
@@ -44,5 +41,8 @@ adds pure required start intent, existing/new selection and cleanup validation,
 plus opaque {dataDir} binding in structured args/env, now owned by
 [gateway/targets/model/](../gateway/targets/model/README.md). control-contract.ts
 consumes its parsers and value types; app-ui.ts consumes isolation evidence types.
-Only the exact isolation.ts and launch-command.ts model dependencies are permitted
-from this layer. Filesystem and application support evidence comes from callers/adapters.
+Only the exact isolation.ts and launch-command.ts target dependencies are permitted
+from this layer. The exact app-ui.ts additionally consumes the pure configuration
+parser and types from [desktop/configuration/model.ts](../desktop/configuration/model.ts).
+No domain consumes the configuration store. Filesystem and application support
+evidence comes from callers/adapters.

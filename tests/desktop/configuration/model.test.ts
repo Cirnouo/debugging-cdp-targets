@@ -6,7 +6,7 @@ import {
     migrateAppConfiguration,
     parseAppConfiguration,
     runConfigurationMigrations,
-} from '../src/domains/app-configuration.ts';
+} from '../../../src/desktop/configuration/model.ts';
 
 test('real schema 1 migrates purely to host selections without changing the saved port or appearance', () => {
     const original = Object.freeze({ schemaVersion: 1, port: 28761, appearance: 'dark' });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { defaultAppConfiguration } from '../src/domains/app-configuration.ts';
+import { defaultAppConfiguration } from '../src/desktop/configuration/model.ts';
 import type { AppUiBridge, AppUiSnapshot } from '../src/domains/app-ui.ts';
 import { AppManager, SelectedOperationDetails } from '../src/interface/app-manager.ts';
 

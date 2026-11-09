@@ -13,6 +13,29 @@ const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/interface/app-manager.ts', ['react']],
 ]);
 
+const CONFIGURATION_DEPENDENCIES = new Map<string, readonly string[]>([
+    ['src/desktop/configuration/model.ts', ['src/shared/errors.ts']],
+    [
+        'src/desktop/configuration/store.ts',
+        [
+            'node:crypto',
+            'node:fs/promises',
+            'node:path',
+            'src/desktop/configuration/model.ts',
+            'src/shared/errors.ts',
+            'src/adapters/file-evidence.ts',
+        ],
+    ],
+]);
+const CONFIGURATION_MODEL_CONSUMERS = new Map<string, 'value' | 'type'>([
+    ['src/desktop/configuration/store.ts', 'value'],
+    ['src/interface/app-main.ts', 'type'],
+    ['src/interface/app-manager.ts', 'value'],
+    ['src/interface/app-window.ts', 'type'],
+    ['src/application/app-host-management.ts', 'type'],
+    ['src/domains/app-ui.ts', 'value'],
+]);
+
 const HOST_INTENT_DEPENDENCIES = new Map<string, { value: readonly string[]; type: readonly string[] }>([
     [
         'src/host-plugins/user-intent.ts',
@@ -589,6 +612,7 @@ export function validateRuntimeSource(file: string, source: string) {
         return [`${file}: invalid source: ${error instanceof Error ? error.message : String(error)}`];
     }
     const layer = file.split('/')[1];
+    const desktop = layer === 'desktop';
     const hostIntentRole = HOST_INTENT_DEPENDENCIES.get(path.posix.normalize(file));
     const hostPayload = layer === 'host-plugins';
     const domain = layer === 'domains' || hostPayload;
@@ -709,7 +733,7 @@ export function validateRuntimeSource(file: string, source: string) {
         )
             reviewedAmbient.add(node.callee.object.object);
     });
-    const pure = domain || layer === 'shared' || gateway;
+    const pure = domain || layer === 'shared' || gateway || desktop;
     const entry = file === 'src/interface/app-bootstrap.ts';
     const reviewedReferences = new Set<Node>();
     const ownedTerminations = officialUpstream
@@ -753,6 +777,23 @@ export function validateRuntimeSource(file: string, source: string) {
         if (hostIntentConsumers && !hostIntentConsumers.includes(path.posix.normalize(file)))
             errors.push(`${file}: unapproved Host intent consumer.`);
         const payloadComparison = file === 'src/host-plugins/payload-integrity.ts' && specifier === 'node:util';
+        const modelConsumer = CONFIGURATION_MODEL_CONSUMERS.get(file);
+        const configurationModel =
+            specifier.startsWith('.') &&
+            resolved === 'src/desktop/configuration/model.ts' &&
+            (modelConsumer === 'value' || (modelConsumer === 'type' && typeOnly));
+        if (resolved === 'src/desktop/configuration/model.ts' && !configurationModel)
+            errors.push(`${file}: unapproved configuration model consumer or VALUE dependency.`);
+        if (
+            resolved === 'src/desktop/configuration/store.ts' &&
+            (!specifier.startsWith('.') || file !== 'src/interface/app-main.ts')
+        )
+            errors.push(`${file}: only App Main may depend on the configuration store.`);
+        if (
+            desktop &&
+            !CONFIGURATION_DEPENDENCIES.get(file)?.includes(specifier.startsWith('.') ? resolved : specifier)
+        )
+            errors.push(`${file}: unapproved configuration dependency.`);
         const pureRelative =
             /^src\/(?:domains|shared)\//.test(resolved) || (hostPayload && resolved.startsWith('src/host-plugins/'));
         const targetValue =
@@ -764,6 +805,7 @@ export function validateRuntimeSource(file: string, source: string) {
             !versionParser &&
             !permittedHostIntent &&
             !payloadComparison &&
+            !configurationModel &&
             (!specifier.startsWith('.') || (!pureRelative && !targetValue))
         ) {
             errors.push(`${file}: domains may depend only on domains and shared.`);

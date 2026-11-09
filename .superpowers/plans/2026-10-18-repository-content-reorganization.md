@@ -643,8 +643,8 @@ tests/deployment/restart/parent-exit.test.ts
 tests/deployment/restart/parent-watch.test.ts
 tests/desktop/README.md
 tests/desktop/configuration/README.md
-tests/desktop/configuration/app-configuration-storage.test.ts
-tests/desktop/configuration/app-configuration.test.ts
+tests/desktop/configuration/store.test.ts
+tests/desktop/configuration/model.test.ts
 tests/desktop/configuration/app-storage.test.ts
 tests/desktop/contracts/README.md
 tests/desktop/contracts/commands.test.ts

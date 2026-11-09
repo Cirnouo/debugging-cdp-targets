@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:f
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { loadAppConfigurationDocument, openAppConfiguration } from '../src/adapters/app-configuration.ts';
-import { defaultAppConfiguration, runConfigurationMigrations } from '../src/domains/app-configuration.ts';
+import { defaultAppConfiguration, runConfigurationMigrations } from '../../../src/desktop/configuration/model.ts';
+import { loadAppConfigurationDocument, openAppConfiguration } from '../../../src/desktop/configuration/store.ts';
 
 async function fixture(run: (directory: string) => Promise<void>) {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-app-settings-'));

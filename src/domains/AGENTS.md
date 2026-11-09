@@ -7,6 +7,12 @@ all resources; thin host plugins contain metadata, artwork and the shared Skill.
 Do not import Node I/O, adapters, application, or environment globals. Inputs
 carry evidence and environment mappings; output rules are deterministic.
 Identity must fail closed, not guess a different framework contract.
+The exact app-ui.ts additionally consumes parseAppConfiguration as a VALUE and
+AppConfiguration/AppConfigurationState as TYPEs from desktop/configuration/model.ts.
+Before changing that schema consumer, read the cumulative
+[configuration instructions](../desktop/configuration/AGENTS.md), ADR 0017 and the
+[accepted singleton plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md).
+No domain gains a store dependency or other desktop I/O authority.
 
 Before editing a consumer of target launch or isolation values, read the
 [pure target model instructions](../gateway/targets/model/AGENTS.md). This layer

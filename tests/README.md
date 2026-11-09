@@ -118,7 +118,8 @@ Linux/macOS product execution or acceptance route.
   roots for independent App processes.
 - `app-bootstrap.test.ts` exercises entry import completion before ready-dependent
   startup, synchronous path redirection and observed asynchronous startup failure.
-- `app-configuration.test.ts` and `app-configuration-storage.test.ts` cover
+- [desktop/configuration/](desktop/configuration/README.md) preserves the complete
+  six model and nine serialized-store cases covering
   validated migration chains, backup/atomic commit, invalid/future settings,
   singleton admission before I/O and desired versus effective cold settings.
 - `app-main-lifecycle.test.ts` exercises startup/Quit races and refusal to admit
@@ -409,7 +410,7 @@ Linux/macOS product execution or acceptance route.
   flag forwarding. Entrypoint regression subprocesses block external
   child acquisition so a broken guard cannot open a real fixture during the test.
 - `tooling/quality/test-lanes.test.ts` recursively classifies every maintained test file into a
-  runnable root, explicit tooling/Gateway/Host or interactive lane and retains the
+  runnable root, explicit tooling/Gateway/Host/desktop or interactive lane and retains the
   four-file, eighteen-case interactive inventory without launching fixtures.
 - `tooling/quality/hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
@@ -573,9 +574,10 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select seventy-seven entries: `tests/*.test.ts`, the
+command and `pnpm test:coverage` select seventy-nine entries: `tests/*.test.ts`, the
 forty-two explicit [tooling suites](tooling/README.md), three explicit
-[Host suites](host-plugins/README.md) and thirty-one Gateway suites. Gateway selection
+[Host suites](host-plugins/README.md), thirty-one Gateway suites and two explicit
+[Desktop configuration suites](desktop/configuration/README.md). Gateway selection
 retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
 [connection suites](gateway/connections/README.md) and the eight explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
@@ -587,7 +589,7 @@ observer-cleanup and close-diagnostics. The six connection suites then append
 once as cleanup, connection-options, execution-detachment,
 registration-administration, roots-admission and scoped-restart. Upstream,
 catalog-refresh and upstream-lifetime follow in that order, followed once by Host
-user-intent. Default commands do not launch
+user-intent, then Desktop model.test.ts and store.test.ts. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { open, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { readRegularFile } from '../../adapters/file-evidence.ts';
+import { errorCode } from '../../shared/errors.ts';
 import {
     type AppConfigurationState,
     applyAppConfiguration,
@@ -8,9 +10,7 @@ import {
     defaultAppConfiguration,
     migrateAppConfiguration,
     parseAppConfiguration,
-} from '../domains/app-configuration.ts';
-import { errorCode } from '../shared/errors.ts';
-import { readRegularFile } from './file-evidence.ts';
+} from './model.ts';
 
 async function commitConfiguration(file: string, value: unknown) {
     const temporary = `${file}.${randomUUID()}.tmp`;

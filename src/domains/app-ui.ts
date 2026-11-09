@@ -1,6 +1,10 @@
+import {
+    type AppConfiguration,
+    type AppConfigurationState,
+    parseAppConfiguration,
+} from '../desktop/configuration/model.ts';
 import type { DataIsolationEvidence } from '../gateway/targets/model/isolation.ts';
 import { isRecord } from '../shared/errors.ts';
-import { type AppConfiguration, type AppConfigurationState, parseAppConfiguration } from './app-configuration.ts';
 import { type ConnectionRoute, parseConnectionRoute, type RestartScope, validateIdentity } from './control-contract.ts';
 import type { PluginHost } from './host-management.ts';
 

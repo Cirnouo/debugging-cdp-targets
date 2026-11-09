@@ -32,7 +32,7 @@ test('elapsed clocks retain hours above 24, clamp future timestamps and show una
     for (const timestamp of [undefined, null, NaN, Infinity, -1]) assert.equal(format(timestamp, 1000), 'Unavailable');
 });
 
-import { defaultAppConfiguration } from '../src/domains/app-configuration.ts';
+import { defaultAppConfiguration } from '../src/desktop/configuration/model.ts';
 import { appAssetPath, parseAppUiRequest, parseAppUiSnapshot } from '../src/domains/app-ui.ts';
 
 test('the secure App scheme serves only fixed manager assets with exact authority and method', () => {

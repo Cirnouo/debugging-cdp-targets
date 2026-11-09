@@ -13,7 +13,7 @@ import {
     type AppConfiguration,
     type AppHostSelection,
     parseAppConfiguration,
-} from '../domains/app-configuration.ts';
+} from '../desktop/configuration/model.ts';
 import {
     type AppConnectionSummary,
     type AppHostSummary,
