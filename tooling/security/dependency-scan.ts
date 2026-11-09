@@ -8,8 +8,9 @@ import { parse, stringify } from 'yaml';
 import { parseOfficialReleaseEvidence } from '../../src/gateway/official/release-evidence.ts';
 import { NPM_REGISTRY, PACKAGE_NAME, PACKAGE_VERSION } from '../../src/shared/constants.ts';
 import { errorCode, errorMessage, isRecord } from '../../src/shared/errors.ts';
-import type { AuditCommandResult, Finding, LockInventory } from './audit-policy.ts';
+import type { LockInventory } from './lock-inventory.ts';
 import { type OfficialInputs, verifyOfficialInputs, verifyOfficialLock } from './official-inputs.ts';
+import type { AuditCommandResult, Finding } from './registry-reports.ts';
 
 export type SecurityPhase = 'complete' | 'lockfile';
 export type PnpmExecutor = (
@@ -30,13 +31,10 @@ export type UpstreamOptions = {
     review?: (result: ScanResult) => Promise<{ blocked: readonly Finding[] }>;
 };
 
-import {
-    assessAudit,
-    readLockInventory,
-    validateConfigurationDependencies,
-    validateSignatures,
-} from './audit-policy.ts';
-import { INSTALL_POLICY, validateInstallPolicy, verifyInstalledTree, verifyLockManifest } from './security-evidence.ts';
+import { INSTALL_POLICY, validateInstallPolicy } from './installation-policy.ts';
+import { verifyInstalledTree, verifyLockManifest } from './installed-tree.ts';
+import { readLockInventory, validateConfigurationDependencies } from './lock-inventory.ts';
+import { assessAudit, validateSignatures } from './registry-reports.ts';
 
 const exec = promisify(execFile);
 const AUDIT_OPTIONS = ['--ignore-pnpmfile', '--config.configDependencies={}', `--registry=${NPM_REGISTRY}`];

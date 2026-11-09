@@ -74,8 +74,6 @@
   by App and research fixtures, pure canonical identities and fixed reviewed SDK
   source-map/vendor license evidence. Standalone security reuses canonical data
   while preserving its distinct original-byte notice format.
-- `build-security.ts` builds and read-only verifies the dependency-free CI
-  audit entry and its original YAML and semver licenses.
 - [quality/](quality/README.md) owns the complete supplied-source AST validator,
   actual repository walker, syntax operation, staged text checker and shared pure
   text/YAML rules.
@@ -113,14 +111,15 @@
   `--allow-gui` it returns a successful explicit skip before selecting files. With
   authorization it runs all four interactive files through native `node:test.run`,
   concurrency 1 and forwarded argv, preserving failed-test exit status.
-- `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
 - `smoke-official-catalog.ts` requires explicit `--stage <verified-App-stage>` or
   `--installed`. Stage mode uses verified delivered ordinary Node/public bin;
   installed mode verifies the repository's original release and supported ordinary
   Node for release/catalog evidence only. Both isolate home/cwd, empty PATH, read
   catalog and normally dispose the child. Neither proves host or target operation.
-- `security/` owns complete lock inventories, audit/exception policy,
-  fingerprints, and disposable official Server dependency scans.
+- [security/](security/README.md) separates pure lock/report/review/install policy
+  from installed graph reads and descriptor fingerprints; it retains the complete
+  disposable scan and initial/review/final gate transactions, official build inputs
+  and standalone generation/nonwriting comparison with original parser notices.
 - `AGENTS.md` specifies validator safety and independent evidence.
 
 Before changing host metadata validation, follow the

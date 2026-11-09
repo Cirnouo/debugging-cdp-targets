@@ -1,5 +1,11 @@
 # Test fixtures
 
+`security-audit.ts` shares original controlled audit reports, exact lock/review
+values and owned setup/executor support across seven security suites. Its finite
+exports retain required-value and blocked-install assertions; AuditFixture stays
+private. Regression callbacks, matrices and the gate-local tree helper remain in
+`tests/tooling/security/`; this fixture copies no production policy.
+
 `app-archive.ts` supplies small stored ZIPs of inert owned bytes and the exact
 file-only extractor pre-spawn guard shared by archive and stage regressions.
 It executes no native permission helper, target or App.

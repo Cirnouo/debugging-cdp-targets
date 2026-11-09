@@ -4,8 +4,8 @@ import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
 } from '../../src/gateway/official/release-evidence.ts';
-import { type LockInventory, readLockInventory } from './audit-policy.ts';
-import { verifyLockManifest } from './security-evidence.ts';
+import { verifyLockManifest } from './installed-tree.ts';
+import { type LockInventory, readLockInventory } from './lock-inventory.ts';
 
 export interface OfficialInputs {
     release: OfficialReleaseEvidence;

@@ -129,7 +129,15 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/server-arguments.test.ts` and
 `tests/gateway/official/server-arguments-environment.test.ts`, followed by exactly
 `tests/gateway/official/package-files.test.ts`,
-`tests/tooling/security/official-inputs.test.ts` and
+`tests/tooling/security/official-inputs.test.ts`,
+`tests/tooling/security/lock-inventory.test.ts`,
+`tests/tooling/security/registry-reports.test.ts`,
+`tests/tooling/security/vulnerability-reviews.test.ts`,
+`tests/tooling/security/installation-policy.test.ts`,
+`tests/tooling/security/installed-tree.test.ts`,
+`tests/tooling/security/fingerprints.test.ts`,
+`tests/tooling/security/dependency-scan.test.ts`,
+`tests/tooling/security/standalone-build.test.ts` and
 `tests/tooling/quality/temporary-directory-alias.test.ts`, plus exactly
 `tests/gateway/targets/target-lifecycle.test.ts`,
 `tests/gateway/targets/lifecycle-rollback.test.ts`,
@@ -144,7 +152,7 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/upstream.test.ts`,
 `tests/gateway/official/catalog-refresh.test.ts` and
 `tests/gateway/official/upstream-lifetime.test.ts`, then
-`tests/host-plugins/user-intent.test.ts`. These sixty-nine selectors
+`tests/host-plugins/user-intent.test.ts`. These seventy-seven selectors
 include thirty-one Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions

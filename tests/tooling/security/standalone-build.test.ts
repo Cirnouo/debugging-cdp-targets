@@ -6,10 +6,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { isRecord } from '../src/shared/errors.ts';
-import { readSecurityNotices } from '../tooling/build-security.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
+import { readSecurityNotices } from '../../../tooling/security/build-standalone.ts';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
+const root = fileURLToPath(new URL('../../../', import.meta.url));
 const bundle = path.join(root, 'tooling/security/dist/check-security.mjs');
 
 test('committed security checker includes its parser and fails closed without node_modules', async () => {
@@ -75,7 +75,9 @@ test('committed security checker includes its parser and fails closed without no
 });
 
 test('security build comparison rejects drift without repairing it', async () => {
-    const { generateSecurityFiles, verifySecurityFiles } = await import('../tooling/build-security.ts');
+    const { generateSecurityFiles, verifySecurityFiles } = await import(
+        '../../../tooling/security/build-standalone.ts'
+    );
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-security-build-'));
     try {
         const files = await generateSecurityFiles();

@@ -5,7 +5,8 @@
 - [quality/](quality/README.md) owns complete AST role and traversal regressions,
   syntax/hooks/CI/toolchain/lane contracts, pure text policy and the real aliased
   temporary-directory child/cleanup contract.
-- [security/](security/README.md) owns frozen official build-input agreement and drift.
+- [security/](security/README.md) owns pure policy boundaries, installed/fingerprint evidence,
+  whole disposable scan/gate transactions and standalone/official build inputs.
 - [licenses/](licenses/README.md) checks bundled notices and reviewed input boundaries.
 - [distribution/](distribution/README.md) checks complete thin delivery, supplied metadata, independent audits and output effects.
 - [releases/](releases/README.md) separates pure release-note behavior and import
@@ -21,7 +22,7 @@ all eleven explicit `quality/` suites listed in its map, `releases/release-notes
 `releases/publication.test.ts`, `submissions/markdown.test.ts`,
 `submissions/pull-requests.test.ts`, `submissions/issue-forms.test.ts`,
 `submissions/issue-feedback.test.ts`, `submissions/issue-workflow.test.ts`,
-`licenses/bundled-notices.test.ts` and the ten explicit `distribution/` suites listed in its map,
-`security/official-inputs.test.ts` once each.
+`licenses/bundled-notices.test.ts`, the ten explicit `distribution/` suites listed in its map,
+and the nine explicit `security/` suites listed in its map once each.
 They retain root regressions and exclude interactive/smoke entrypoints.
 Ancestor [test rules](../AGENTS.md) apply.
