@@ -532,6 +532,57 @@ test('readiness attempt budget remains tied to the original predicate and rollba
     assert.ok(records.some((record) => record.phase === 'rollback-exit' && record.event === 'begin'));
 });
 
+test('injected readiness budget permits a second attempt after 20 seconds', async (t) => {
+    const records = observations(t);
+    let clock = 0;
+    const attemptedAt: number[] = [];
+    const sleeps: number[] = [];
+    const dependencies = {
+        startupTimeoutMs: 40_000,
+        now: () => clock,
+        sleep: async (milliseconds: number) => {
+            sleeps.push(milliseconds);
+            clock += 21_000;
+        },
+    };
+    const host = endpointHost(
+        9222,
+        async () => {},
+        async () => {
+            attemptedAt.push(clock);
+            throw ioError('ECONNREFUSED', 'connect');
+        },
+        dependencies,
+    );
+    await assert.rejects(
+        runFixtureObservation(first, () =>
+            host.launch({ isolation: { mode: 'none' }, launch: { executable: process.execPath }, basePort: 9222 }),
+        ),
+        /verified CDP endpoint/,
+    );
+    assert.deepEqual(attemptedAt, [0, 21_000]);
+    assert.deepEqual(sleeps, [200, 200]);
+    const waiting = records.filter((record) => record.stage === 'readiness' && record.phase === 'waiting-cdp');
+    assert.deepEqual(
+        waiting.map((record) => [record.event, record.budgetMs]),
+        [
+            ['begin', 40_000],
+            ['end', 40_000],
+        ],
+    );
+    const attempts = records.filter(
+        (record) => record.stage === 'readiness' && record.phase === 'attempt' && record.event === 'begin',
+    );
+    assert.deepEqual(
+        attempts.map((record) => record.attempt),
+        [1, 2],
+    );
+    for (const attempt of attempts) {
+        assert.ok(typeof attempt.elapsedMs === 'number');
+        assert.equal(attempt.remainingMs, Math.max(0, 40_000 - attempt.elapsedMs));
+    }
+});
+
 test('successful endpoint records body completion and only one discovery request', async (t) => {
     const records = observations(t);
     let requests = 0;

@@ -556,6 +556,34 @@ test('source HTTP core fixture remains the child entry with explicit subscriber 
     }
 });
 
+test('fixture gateway argv marks only explicitly selected Windows Chrome acceptance', async () => {
+    const { fixtureGatewayArguments } = await import('./smoke/fixture-artifacts.ts');
+    const acceptanceArguments: (
+        entry: string,
+        directory: string | undefined,
+        fixture: 'official-server' | 'entry-recovery',
+        collectionId: string | undefined,
+        windowsAcceptance: boolean,
+    ) => string[] = fixtureGatewayArguments;
+    const entry = 'gateway.mjs';
+    const directory = path.join(os.tmpdir(), 'dct-chrome-acceptance');
+    const collectionId = '11111111-1111-4111-8111-111111111111';
+    const marker = '--chrome-acceptance-readiness';
+    for (const fixture of ['official-server', 'entry-recovery'] as const) {
+        const diagnosticArgs = fixtureGatewayArguments(entry, directory, fixture, collectionId);
+        assert.equal(diagnosticArgs.length, 3);
+        assert.equal(diagnosticArgs[0], '--import');
+        assert.equal(diagnosticArgs[2], entry);
+        assert.deepEqual(acceptanceArguments(entry, undefined, fixture, undefined, false), [entry]);
+        assert.deepEqual(acceptanceArguments(entry, directory, fixture, collectionId, false), diagnosticArgs);
+        assert.deepEqual(acceptanceArguments(entry, undefined, fixture, undefined, true), [entry, marker]);
+        assert.deepEqual(acceptanceArguments(entry, directory, fixture, collectionId, true), [
+            ...diagnosticArgs,
+            marker,
+        ]);
+    }
+});
+
 test('normal and truncated earlier collections are preserved and rejected without changing the new smoke failure', async () => {
     const { createFixtureArtifacts, createSmokeFailures } = await import('./smoke/fixture-artifacts.ts');
     const { fixtureJobIndex } = await import('./smoke/fixture-ci.ts');

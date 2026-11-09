@@ -233,6 +233,7 @@ export interface HostDependencies {
         context?: ProcessLaunchContext,
     ) => Promise<LaunchProcess>;
     getVersion?: (port: number) => Promise<unknown>;
+    startupTimeoutMs?: number;
     now?: () => number;
     sleep?: (ms: number) => Promise<void>;
     profileAvailable?: (directory: string) => Promise<boolean>;
@@ -261,6 +262,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
         });
     const origins = new WeakMap<ManagedTarget, FixtureOrigin | undefined>();
     const reservations = dependencies.portReservations ?? createPortReservations();
+    const startupTimeoutMs = dependencies.startupTimeoutMs ?? STARTUP_TIMEOUT_MS;
     const io = {
         probe: probePort,
         spawn: (
@@ -676,13 +678,13 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                     phase: 'waiting-cdp',
                     pid: processId,
                     port,
-                    budgetMs: STARTUP_TIMEOUT_MS,
+                    budgetMs: startupTimeoutMs,
                 });
                 const observedAt = fixtureHasSubscribers() ? performance.now() : undefined;
                 let attempt = 0;
                 for (
                     let readinessElapsed = io.now() - launchedAt;
-                    readinessElapsed < STARTUP_TIMEOUT_MS;
+                    readinessElapsed < startupTimeoutMs;
                     readinessElapsed = io.now() - launchedAt
                 ) {
                     attempt += 1;
@@ -697,7 +699,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         attempt,
                         ...(elapsedMs === undefined
                             ? {}
-                            : { elapsedMs, remainingMs: Math.max(0, STARTUP_TIMEOUT_MS - elapsedMs) }),
+                            : { elapsedMs, remainingMs: Math.max(0, startupTimeoutMs - elapsedMs) }),
                     };
                     const finishAttempt = beginFixtureStage('readiness', attemptFields);
                     try {

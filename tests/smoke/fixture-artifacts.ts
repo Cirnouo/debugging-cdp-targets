@@ -6,6 +6,7 @@ import {
     serializeFixtureError,
     validateFixtureEvent,
 } from '../../src/adapters/fixture-diagnostics.ts';
+import { guiAuthorization } from '../gui-authorization.ts';
 import { type BrowserStartupRecord, validateBrowserStartupRecord } from './chrome-startup.ts';
 import { newFixtureEnvelope, readFixtureIndex } from './fixture-ci.ts';
 import { type LinuxStartupWaitRecord, validateLinuxStartupWaitRecord } from './linux-startup-wait.ts';
@@ -696,13 +697,15 @@ export function fixtureGatewayArguments(
     directory?: string,
     fixture: FixtureLabel = 'official-server',
     collectionId?: string | null,
+    windowsChromeAcceptance = false,
 ): string[] {
-    if (!directory || !collectionId || !uuid.test(collectionId)) return [entry];
+    const args = windowsChromeAcceptance ? [entry, '--chrome-acceptance-readiness'] : [entry];
+    if (!directory || !collectionId || !uuid.test(collectionId)) return args;
     const preload = new URL('./fixture-preload.ts', import.meta.url);
     preload.searchParams.set('directory', directory);
     preload.searchParams.set('fixture', fixture);
     preload.searchParams.set('collectionId', collectionId);
-    return ['--import', preload.href, entry];
+    return ['--import', preload.href, ...args];
 }
 export function fixtureGatewayEnvironment(inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
     return Object.fromEntries(Object.entries(inherited).filter(([name]) => name.toUpperCase() !== 'NODE_OPTIONS'));
@@ -714,7 +717,13 @@ export function createFixtureGatewayClient(
     artifacts: FixtureArtifacts,
 ) {
     return createHttpFixtureClient(
-        fixtureGatewayArguments(entry, directory, fixture, artifacts.snapshot().collectionId),
+        fixtureGatewayArguments(
+            entry,
+            directory,
+            fixture,
+            artifacts.snapshot().collectionId,
+            process.platform === 'win32' && guiAuthorization().allowed,
+        ),
         { env: fixtureGatewayEnvironment() },
     );
 }

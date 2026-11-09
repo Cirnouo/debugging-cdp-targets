@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAppOfficialRuntime } from '../../src/adapters/app-official-runtime.ts';
 import { createMcpHttpServer } from '../../src/adapters/mcp-http-server.ts';
+import { createPortReservations } from '../../src/adapters/port-reservation.ts';
+import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createGatewayCore } from '../../src/gateway/core.ts';
 import { verifyOfficialPackageFiles } from '../../src/gateway/official/package-files.ts';
 import { parseOfficialReleaseEvidence } from '../../src/gateway/official/release-evidence.ts';
@@ -10,9 +12,11 @@ import { guiAuthorization } from '../gui-authorization.ts';
 
 declare const __DCT_FIXTURE_STAGE__: boolean;
 
+const sealedStage = typeof __DCT_FIXTURE_STAGE__ !== 'undefined' && __DCT_FIXTURE_STAGE__;
+
 // Explicit test composition for native regressions. This is never a Plugin/App entry or distribution file.
 async function runtime() {
-    if (typeof __DCT_FIXTURE_STAGE__ !== 'undefined' && __DCT_FIXTURE_STAGE__) {
+    if (sealedStage) {
         const stage = path.dirname(fileURLToPath(import.meta.url));
         const verified = await verifyAppOfficialRuntime({
             directory: path.join(stage, 'resources/app'),
@@ -32,7 +36,17 @@ async function runtime() {
     await verifyOfficialPackageFiles(official, release, { pnpmInstalled: true });
     return { nodeExecutable: process.execPath, bin: path.join(official, release.bin) };
 }
-const core = await createGatewayCore({ officialRuntime: await runtime() });
+const authorization = guiAuthorization();
+const windowsChromeAcceptance =
+    !sealedStage &&
+    process.platform === 'win32' &&
+    authorization.allowed &&
+    authorization.args.includes('--chrome-acceptance-readiness');
+const portReservations = windowsChromeAcceptance ? createPortReservations() : undefined;
+const core = await createGatewayCore({
+    officialRuntime: await runtime(),
+    ...(portReservations ? { createHost: () => createTargetHost({ portReservations, startupTimeoutMs: 40_000 }) } : {}),
+});
 const http = await createMcpHttpServer({
     port: 0,
     core: {
