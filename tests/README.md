@@ -354,9 +354,10 @@ Linux/macOS product execution or acceptance route.
   bounded existing-buffer listener-owner classification without extra native I/O,
   precise Linux kernel creation ticks, malformed evidence rejection,
   and PID/path/session mismatch checks with injected I/O.
-- `repository-audit.test.ts` tests AST boundaries, repository traversal, YAML
-  filenames including generated output and exact exceptions, and directory
-  documentation that preserves the root README on GitHub.
+- `tooling/quality/runtime-boundaries.test.ts` retains complete AST role and
+  owned-child proofs plus import isolation. `tooling/quality/repository-audit.test.ts`
+  tests repository traversal, YAML filenames including generated output and exact
+  exceptions, and directory documentation that preserves the root README on GitHub.
 - `tooling/licenses/` checks the actual bundled-notices collector, canonical
   package boundaries, reviewed SDK/vendor evidence, default roots and import isolation.
 - `tooling/distribution/` checks complete thin-payload bytes, competing/missing/linked
@@ -375,8 +376,8 @@ Linux/macOS product execution or acceptance route.
   supplied PR-template/Issue-form regressions and recoverable Issue feedback,
   REST/publisher effects and actual workflow trust. Literal evidence provenance,
   adversarial structure/answer cases and local-I/O isolation remain distinct.
-- `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
-  check automation, package gates, exact lane commands and syntax plans. Parsed
+- `tooling/quality/ci-config.test.ts`, `tooling/quality/toolchain-config.test.ts` and
+  `tooling/quality/script-syntax.test.ts` check automation, package gates, exact lane commands and syntax plans. Parsed
   CI checks retain canonical versions and six actual job names, genuine Windows
   official/recovery commands, immediate PowerShell failure propagation and the
   failure-only five-file envelope. They reject retired portable/study execution
@@ -400,14 +401,14 @@ Linux/macOS product execution or acceptance route.
   Sampler subprocess and application adapter boundary tests retain mutation-only
   flag forwarding. Entrypoint regression subprocesses block external
   child acquisition so a broken guard cannot open a real fixture during the test.
-- `test-lanes.test.ts` recursively classifies every maintained test file into a
+- `tooling/quality/test-lanes.test.ts` recursively classifies every maintained test file into a
   runnable root, explicit tooling/Gateway/Host or interactive lane and retains the
   four-file, eighteen-case interactive inventory without launching fixtures.
-- `hook-isolation.test.ts` executes the pre-push entry point with foreign Git
+- `tooling/quality/hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
   It also verifies staged YAML case-variant routing through the actual lint-staged
   configuration and complete official-byte verification before filename exemptions.
-- `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
+- `tooling/quality/codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
 - `chrome-smoke-config.test.ts` checks the configured Windows Chrome path through
   controlled access/stat I/O, missing/nonregular prerequisite refusal before
@@ -446,7 +447,7 @@ Linux/macOS product execution or acceptance route.
   valid-YAML version rejection, original bundled licenses and metadata contracts,
   CLI rejection and read-only generated-artifact comparison.
 - `control-contract.test.ts` rejects malformed external control envelopes.
-- `typescript-gates.test.ts` exercises native execution from another cwd,
+- `tooling/quality/typescript-gates.test.ts` exercises native execution from another cwd,
   strict type-error rejection, and non-erasable syntax rejection.
 - `gateway/targets/target-lifecycle.test.ts` keeps nine Keep/Close, confirmed-exit,
   live same-port restart, health, retry, explicit owner cleanup and route-attachment
@@ -565,8 +566,8 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select sixty entries: `tests/*.test.ts`, the
-twenty-five explicit [tooling suites](tooling/README.md), three explicit
+command and `pnpm test:coverage` select sixty-nine entries: `tests/*.test.ts`, the
+thirty-four explicit [tooling suites](tooling/README.md), three explicit
 [Host suites](host-plugins/README.md) and thirty-one Gateway suites. Gateway selection
 retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
 [connection suites](gateway/connections/README.md) and the eight explicit
@@ -590,8 +591,8 @@ remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
 integration requires the same flag and must not touch existing user targets.
 
 Default and coverage selection have two independent contract owners:
-[tests/toolchain-config.test.ts](toolchain-config.test.ts) keeps both literal
-command expectations; [tests/test-lanes.test.ts](test-lanes.test.ts) keeps the
+[tests/tooling/quality/toolchain-config.test.ts](tooling/quality/toolchain-config.test.ts) keeps both literal
+command expectations; [tests/tooling/quality/test-lanes.test.ts](tooling/quality/test-lanes.test.ts) keeps the
 safe inventory, GUI and coverage contracts. Update both with package scripts
 and this map when selectors change. The ten distribution suites expand the
 existing thin-payload selector in place; the four Official suites remain appended.

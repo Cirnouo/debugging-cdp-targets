@@ -27,7 +27,7 @@ test('package, output and repository fixtures work with an aliased system tempor
                     'gateway/official/package-files',
                     'tooling/distribution/thin-plugin-payloads',
                     'tooling/distribution/icon-packaging',
-                    'repository-audit',
+                    'tooling/quality/repository-audit',
                 ].map((name) => fileURLToPath(new URL(`../../${name}.test.ts`, import.meta.url))),
             ],
             {

@@ -100,6 +100,11 @@ the complete builder and independent audit transactions. Its ten central suites
 preserve exact inventories, source equality and separate version predicates.
 Standalone security notices keep their own original-byte formatter.
 
+The delivered quality cut gives `tooling/quality/` one complete supplied-source
+AST validator, actual repository walker, syntax operation, staged text checker
+and pure text policy. Its eleven central suites live in `tests/tooling/quality/`;
+public commands and independent safe lane contracts select those actual owners.
+
 The selected direction is source roots named for cohesive domain responsibilities,
 with subdomains or technical boundaries inside them when needed; central root
 `tests/` corresponding to those responsibilities; and tooling organized by its

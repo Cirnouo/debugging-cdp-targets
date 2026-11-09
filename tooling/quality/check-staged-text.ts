@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyOfficialPackageFiles } from '../src/gateway/official/package-files.ts';
-import { parseOfficialReleaseEvidence } from '../src/gateway/official/release-evidence.ts';
-import { errorMessage } from '../src/shared/errors.ts';
-import { PLUGIN_HOSTS } from './distribution/host-descriptors.ts';
-import { validateTextStyle, validateYamlFilename } from './quality/text-policy.ts';
+import { verifyOfficialPackageFiles } from '../../src/gateway/official/package-files.ts';
+import { parseOfficialReleaseEvidence } from '../../src/gateway/official/release-evidence.ts';
+import { errorMessage } from '../../src/shared/errors.ts';
+import { PLUGIN_HOSTS } from '../distribution/host-descriptors.ts';
+import { validateTextStyle, validateYamlFilename } from './text-policy.ts';
 
 export async function checkTextStyle(root: string, arguments_: readonly string[]) {
     const paths = arguments_.map((argument) => {

@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 test('pre-push verification clears repository routing before creating independent Git fixtures', async () => {
     const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-hook-isolation-'));
@@ -41,7 +41,7 @@ test('pre-push verification clears repository routing before creating independen
         );
         const execPath = git(['--exec-path']);
         const shell = process.platform === 'win32' ? path.resolve(execPath, '../../..', 'usr/bin/sh.exe') : 'sh';
-        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../.husky/pre-push', import.meta.url))], {
+        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../../../.husky/pre-push', import.meta.url))], {
             cwd: folder,
             encoding: 'utf8',
             windowsHide: true,
@@ -95,7 +95,7 @@ test('pre-commit batches every staged file below the launcher capacity while pre
         ]);
         const bin = path.join(folder, 'bin');
         await mkdir(bin);
-        const cli = fileURLToPath(new URL('../node_modules/lint-staged/bin/lint-staged.js', import.meta.url));
+        const cli = fileURLToPath(new URL('../../../node_modules/lint-staged/bin/lint-staged.js', import.meta.url));
         const pnpm = path.join(bin, 'pnpm');
         await writeFile(pnpm, '#!/bin/sh\nshift\nshift\nnode "$DCT_TEST_LINT_STAGED" "$@"\n');
         await chmod(pnpm, 0o755);
@@ -133,7 +133,7 @@ test('pre-commit batches every staged file below the launcher capacity while pre
                 ? path.resolve(git(['--exec-path']).trim(), '../../..', 'usr/bin/sh.exe')
                 : 'sh';
         const log = path.join(folder, 'batches.jsonl');
-        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../.husky/pre-commit', import.meta.url))], {
+        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../../../.husky/pre-commit', import.meta.url))], {
             cwd: folder,
             encoding: 'utf8',
             windowsHide: true,
@@ -186,16 +186,18 @@ test('lint-staged routes YAML filename variants through the actual text checker'
             '-m',
             'fixture',
         ]);
-        const packageData: unknown = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+        const packageData: unknown = JSON.parse(
+            await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
+        );
         assert.ok(isRecord(packageData) && isRecord(packageData['lint-staged']));
         await writeFile(
             path.join(root, 'package.json'),
             JSON.stringify({ type: 'module', 'lint-staged': packageData['lint-staged'] }),
         );
-        await mkdir(path.join(root, 'tooling'));
-        const checker = new URL('../tooling/check-text-style.ts', import.meta.url).href;
+        await mkdir(path.join(root, 'tooling/quality'), { recursive: true });
+        const checker = new URL('../../../tooling/quality/check-staged-text.ts', import.meta.url).href;
         await writeFile(
-            path.join(root, 'tooling/check-text-style.ts'),
+            path.join(root, 'tooling/quality/check-staged-text.ts'),
             `import { checkTextStyle } from ${JSON.stringify(checker)};\nconst errors = await checkTextStyle(process.cwd(), process.argv.slice(2));\nif (errors.length) { console.error(errors.join('\\n')); process.exitCode = 1; }\n`,
         );
         const files = ['valid.yaml', 'legacy.yml', 'upper.YAML', 'mixed.YaMl', 'short.YML'];
@@ -203,7 +205,7 @@ test('lint-staged routes YAML filename variants through the actual text checker'
         git(['add', '--', ...files]);
         const result = spawnSync(
             process.execPath,
-            [fileURLToPath(new URL('../node_modules/lint-staged/bin/lint-staged.js', import.meta.url))],
+            [fileURLToPath(new URL('../../../node_modules/lint-staged/bin/lint-staged.js', import.meta.url))],
             { cwd: root, env: cleanEnvironment, encoding: 'utf8', windowsHide: true, timeout: 60_000 },
         );
         const output = result.stdout + result.stderr;
@@ -220,7 +222,7 @@ test('lint-staged routes YAML filename variants through the actual text checker'
 async function textHookFixture(host = 'codex') {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-')));
     const release: unknown = JSON.parse(
-        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(release));
     const prefix = `plugins/${host}/debugging-cdp-targets/dist/official-server`;
@@ -262,7 +264,7 @@ async function textHookFixture(host = 'codex') {
     const run = (files: string[]) =>
         spawnSync(
             process.execPath,
-            [fileURLToPath(new URL('../tooling/check-text-style.ts', import.meta.url)), ...files],
+            [fileURLToPath(new URL('../../../tooling/quality/check-staged-text.ts', import.meta.url)), ...files],
             { cwd: root, encoding: 'utf8', windowsHide: true },
         );
     return { root, prefix, run };

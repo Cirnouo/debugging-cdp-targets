@@ -77,6 +77,15 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/governance/commit-history.test.ts`,
 `tests/tooling/governance/commit-validation.test.ts`,
 `tests/tooling/quality/text-policy.test.ts`,
+`tests/tooling/quality/runtime-boundaries.test.ts`,
+`tests/tooling/quality/repository-audit.test.ts`,
+`tests/tooling/quality/script-syntax.test.ts`,
+`tests/tooling/quality/hook-isolation.test.ts`,
+`tests/tooling/quality/ci-config.test.ts`,
+`tests/tooling/quality/codeql-config.test.ts`,
+`tests/tooling/quality/test-lanes.test.ts`,
+`tests/tooling/quality/toolchain-config.test.ts`,
+`tests/tooling/quality/typescript-gates.test.ts`,
 `tests/tooling/releases/release-notes.test.ts`,
 `tests/tooling/releases/publication.test.ts`,
 `tests/tooling/submissions/markdown.test.ts`,
@@ -130,15 +139,15 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/upstream.test.ts`,
 `tests/gateway/official/catalog-refresh.test.ts` and
 `tests/gateway/official/upstream-lifetime.test.ts`, then
-`tests/host-plugins/user-intent.test.ts`. These sixty selectors
+`tests/host-plugins/user-intent.test.ts`. These sixty-nine selectors
 include thirty-one Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.
 
 Changes to default or coverage selection must update both independent contracts:
-[tests/toolchain-config.test.ts](../../tests/toolchain-config.test.ts) keeps the two
-literal command expectations; [tests/test-lanes.test.ts](../../tests/test-lanes.test.ts)
+[tests/tooling/quality/toolchain-config.test.ts](../../tests/tooling/quality/toolchain-config.test.ts) keeps the two
+literal command expectations; [tests/tooling/quality/test-lanes.test.ts](../../tests/tooling/quality/test-lanes.test.ts)
 keeps the safe inventory, GUI and coverage contracts. Update both with package
 scripts and the current test map, preserving sequential files and coverage floors.
 
