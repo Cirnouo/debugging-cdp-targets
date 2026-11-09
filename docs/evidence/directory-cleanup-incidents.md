@@ -102,3 +102,55 @@ checks directory identity, and removal is a separate filesystem operation.
 Qualify any additional caller at its own removal boundary. The deployed
 support adapter's scratch root and managed Chrome profiles keep their existing
 cleanup owners.
+
+## Recursive removal proof
+
+A separate Windows run on 2026-11-09 used Node 24.21.0 and the fixture helper
+at commit `3bcaf0c`. A controlled writer created one file in a fresh owned
+directory after the real directory enumeration. The original recursive
+`rm` removed the listed file, then returned `ENOTEMPTY` from `rmdir` at the
+exact canonical root. The directory kept its original device and inode.
+The next recursive removal of that same root succeeded, and the path was
+absent. The writer and ordering were controlled for this experiment. The
+original deployment failure's writer and timing remain unknown.
+
+In the tested Node version, a descendant failure can reject a recursive
+removal while sibling removals are still pending. A returned `ENOTEMPTY`
+from the root's `rmdir` follows an empty enumeration or successful removal
+of every listed child. The exact root error is therefore a narrower basis
+for adapter recovery. A delay and identity check alone do not prove that a failed
+descendant operation has drained.
+[Node 24.21.0 recursive removal](https://github.com/nodejs/node/blob/v24.21.0/lib/internal/fs/rimraf.js)
+
+## Deployment adapter release proof
+
+A Windows x64 Node 24.21.0 experiment on 2026-11-09 compared the unchanged
+adapter from `3bcaf0c` with a disposable retry candidate. All eight
+scenarios passed. The baseline fixed-copy assertions and release were
+recorded separately. The controlled `ENOTEMPTY` failures came from real
+nonrecursive `rmdir` at the removal boundary. Ordinary release and the
+successful retry used real recursive `rm`. The fake compiler and copy child exercised the
+existing completion barriers without running native executables.
+
+The candidate recovered on the same scratch root after the compiler write
+and copy terminal close settled. It retained the original and replacement
+when the root changed during backoff, preserved every removal error on
+exhaustion, and refused to retry errors from a descendant or an unrelated
+cause. Failed-build rollback made one attempt and preserved both the build
+and cleanup failures. The fake helper outputs and reservation were absent
+before fixture teardown.
+
+Explicit release follows a completed build and refuses while a support
+operation is active. A failed build can reach rollback after an unconfirmed
+file-handle close. The proof qualifies the bounded retry for explicit
+release on an exact root `ENOTEMPTY` from `rmdir`. Failed-build rollback
+and other cleanup owners require their own settlement and recovery
+evidence. The historical fixed-copy failure's original assertion outcome
+and the cause of its nonempty directory remain unknown.
+
+The adapter and fixture owners share the
+[bounded removal sequence](../../src/adapters/owned-directory-removal.ts).
+Each supplies its own identity check and retry predicate. The adapter
+uses the exact root predicate only for explicit release. The maintained
+[release regressions](../../tests/deployment-support-build.test.ts) exercise
+same-root recovery and descendant-error propagation at the adapter boundary.
