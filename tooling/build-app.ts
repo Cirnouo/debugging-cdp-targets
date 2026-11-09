@@ -51,6 +51,8 @@ type AppBuild = Omit<AppDistribution, 'schemaVersion'> & {
     root: string;
     onInputs?: (inputs: readonly string[]) => Promise<void>;
 };
+type StageOptions = AppBuild & { electronArchive: string; nodeArchive: string; output: string };
+
 export type StagedDesktopApp = Readonly<
     DeploymentSelection & {
         root: string;
@@ -92,7 +94,7 @@ export class FreshDeploymentError extends Error {
 
 /** Explicit contributor build only. The source producer is internal and cannot be replaced by caller evidence. */
 export async function stageFreshDesktopInstallation(
-    options: AppBuild & { electronArchive: string; nodeArchive: string; output: string },
+    options: StageOptions,
 ): Promise<Readonly<DeploymentSelection & { installationRoot: string; buildRoot: string; executablePath: string }>> {
     const request = Object.freeze({
         root: options.root,
@@ -133,10 +135,12 @@ export async function stageFreshDesktopInstallation(
         failed = true;
     };
     try {
-        const source = await stageDesktopApp({ ...request, output: path.join(scratch, 'source') });
+        const { stage: source, rootIdentity: sourceIdentity } = await produceDesktopStage({
+            ...request,
+            output: path.join(scratch, 'source'),
+        });
         const canonicalManifest = Buffer.from(source.canonicalManifest, 'utf8');
-        // First consumer baseline only: no claim of a retained producer-original inode.
-        const sourceIdentity = await lstat(source.root, { bigint: true });
+        await verifyStageRootIdentity(source.root, sourceIdentity);
         const selection = Object.freeze({
             selectedBuildId: source.selectedBuildId,
             selectedManifestSha256: source.selectedManifestSha256,
@@ -819,9 +823,28 @@ async function composeAppFiles(
     return files;
 }
 
-export async function stageDesktopApp(
-    options: AppBuild & { electronArchive: string; nodeArchive: string; output: string },
-): Promise<StagedDesktopApp> {
+async function verifyStageRootIdentity(root: string, expected: BigIntStats) {
+    const current = await lstat(root, { bigint: true });
+    if (
+        !current.isDirectory() ||
+        current.isSymbolicLink() ||
+        current.dev !== expected.dev ||
+        current.ino !== expected.ino ||
+        current.mode !== expected.mode ||
+        current.uid !== expected.uid ||
+        current.gid !== expected.gid ||
+        (await realpath(root)) !== root
+    )
+        throw new Error('App stage root identity changed.');
+}
+
+export async function stageDesktopApp(options: StageOptions): Promise<StagedDesktopApp> {
+    return (await produceDesktopStage(options)).stage;
+}
+
+async function produceDesktopStage(
+    options: StageOptions,
+): Promise<{ stage: StagedDesktopApp; rootIdentity: BigIntStats }> {
     const request = Object.freeze({
         root: options.root,
         kind: options.kind,
@@ -976,7 +999,11 @@ export async function stageDesktopApp(
         await mkdir(path.dirname(output), { recursive: true });
         // A failure leaves an unusable stage; existing trees are never overwritten or repaired.
         await mkdir(output);
+        const rootIdentity = await lstat(output, { bigint: true });
+        if (!rootIdentity.isDirectory() || rootIdentity.isSymbolicLink())
+            throw new Error('App stage root must be a regular directory.');
         const root = await realpath(output);
+        await verifyStageRootIdentity(root, rootIdentity);
         for (const entry of electronEntries) {
             const destination = path.join(root, entry.path);
             if (entry.type === 'directory') await mkdir(destination, { recursive: true });
@@ -997,12 +1024,14 @@ export async function stageDesktopApp(
                 await writeFile(destination, bytes, { flag: 'wx' });
             }
         await writeFile(path.join(root, 'payload-manifest.json'), identity.canonicalManifest, { flag: 'wx' });
+        await verifyStageRootIdentity(root, rootIdentity);
         await verifyDeploymentPayload(root, {
             ...identity,
             platform: distribution.platform,
             architecture: distribution.architecture,
         });
-        return Object.freeze({
+        await verifyStageRootIdentity(root, rootIdentity);
+        const stage = Object.freeze({
             root,
             ...identity,
             provenance: Object.freeze({
@@ -1024,6 +1053,7 @@ export async function stageDesktopApp(
                 }),
             }),
         });
+        return { stage, rootIdentity };
     } finally {
         await rm(scratch, { recursive: true, force: true });
     }
