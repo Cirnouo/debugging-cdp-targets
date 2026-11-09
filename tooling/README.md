@@ -76,10 +76,9 @@
   while preserving its distinct original-byte notice format.
 - `build-security.ts` builds and read-only verifies the dependency-free CI
   audit entry and its original YAML and semver licenses.
-- `repository-audit.ts` checks AST layer boundaries, versions, docs, symlink and
-  production safety, consuming shared text rules from `quality/`.
-- `quality/` owns pure text style and YAML filename rules reused by the repository
-  walker and staged text checker.
+- [quality/](quality/README.md) owns the complete supplied-source AST validator,
+  actual repository walker, syntax operation, staged text checker and shared pure
+  text/YAML rules.
 - [distribution/](distribution/README.md) owns supplied host metadata, import-free
   descriptors, closed inventories, approved PNG policy and version agreement,
   separate strict tree operations and complete thin builder/independent auditor.
@@ -114,10 +113,6 @@
   `--allow-gui` it returns a successful explicit skip before selecting files. With
   authorization it runs all four interactive files through native `node:test.run`,
   concurrency 1 and forwarded argv, preserving failed-test exit status.
-- `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
-  with Node, and parses the Windows helper with PowerShell 5.1 and 7.
-- `check-text-style.ts` audits staged non-Biome text and YAML filenames; original official release
-  files are exempt only after complete independent byte verification.
 - `check-security.ts` runs the opt-in, network-dependent supply-chain gate.
 - `smoke-official-catalog.ts` requires explicit `--stage <verified-App-stage>` or
   `--installed`. Stage mode uses verified delivered ordinary Node/public bin;

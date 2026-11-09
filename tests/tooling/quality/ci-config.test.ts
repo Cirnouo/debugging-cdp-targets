@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { parse } from 'yaml';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 interface WorkflowStep {
     name?: string;
@@ -77,7 +77,7 @@ function readWorkflow(source: string): Workflow {
     };
 }
 
-const workflowUrl = new URL('../.github/workflows/ci.yaml', import.meta.url);
+const workflowUrl = new URL('../../../.github/workflows/ci.yaml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
 
@@ -316,7 +316,7 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
 });
 
 test('release workflow publishes new stable and prerelease candidate tags after the same-commit reusable CI', async () => {
-    const releaseSource = await readFile(new URL('../.github/workflows/release.yaml', import.meta.url), 'utf8');
+    const releaseSource = await readFile(new URL('../../../.github/workflows/release.yaml', import.meta.url), 'utf8');
     const release: unknown = parse(releaseSource);
     assert.ok(isRecord(release) && isRecord(release.on) && isRecord(release.jobs));
     assert.deepEqual(release.on, { push: { tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*'] } });
