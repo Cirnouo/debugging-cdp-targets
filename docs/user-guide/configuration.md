@@ -5,6 +5,11 @@ Plugin launches a target and configures its official Server connection. Use
 [workflow](workflow.md) for the task sequence and the
 [lifecycle protocol](../lifecycle-protocol.md) for exact selectors and delivery rules.
 
+These settings apply to the Windows App and Windows targets only. Non-Windows
+operating systems and unsupported architectures are refused before native
+acquisition. Both Windows architectures remain subject to the
+[current delivery limits](compatibility.md#current-app-delivery-limits).
+
 ## Lifecycle tools
 
 The App manages targets through direct SDK HTTP. Thin Plugins declare the default
@@ -146,9 +151,8 @@ choose another verified free port before the replacement is created.
 Chrome receives no implicit profile directory. Directory choices are presented
 as Agent chooses a suitable location, Chrome preset (Chrome only), user existing,
 then user new parent plus optional name. The explicit preset is
-`%USERPROFILE%/.cache/chrome-devtools-mcp/chrome-profile` on Windows and
-`~/.cache/chrome-devtools-mcp/chrome-profile` on Linux/macOS, resolved to the actual
-absolute home location. None never selects or prepares it.
+`%USERPROFILE%/.cache/chrome-devtools-mcp/chrome-profile`, resolved to the actual
+absolute Windows home location. None never selects or prepares it.
 
 A present preset leaf maps to existing/path; an absent leaf maps to new with
 its absolute `chrome-devtools-mcp` parent and name `chrome-profile`.
@@ -223,8 +227,8 @@ Composition copies caller arguments and is idempotent. Explicit live restart
 retains composed launch bytes and profile; only recorded automatic port tokens may change. To change application args,
 complete normal Close and issue a new start with a fresh requestId and the new
 application args. Then use the returned connection/session identities and obtain
-fresh page IDs with `list_pages`. `generic-cdp` and Chrome on other platforms keep
-their existing launch semantics; this feature is not an MCP/CDP request option.
+fresh page IDs with `list_pages`. Windows `generic-cdp` applications retain their
+independently verified launch semantics; this feature is not an MCP/CDP request option.
 
 Normal user window switching and minimizing require no screenshot foreground
 checklist or implicit window manipulation. The

@@ -3,6 +3,7 @@ import { realpath } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import type { LaunchContext, LaunchOptions } from '../domains/control-contract.ts';
 import { validateCdpIdentity } from '../gateway/targets/model/cdp-identity.ts';
 import { withChromeScreenshotFeature } from '../gateway/targets/model/chromium-features.ts';
@@ -219,6 +220,8 @@ export interface TargetLaunchContext extends LaunchContext {
     onRollback?: (target: ManagedTarget) => void;
 }
 export interface HostDependencies {
+    platform?: NodeJS.Platform;
+    architecture?: string;
     platformAdapter?: PlatformAdapter;
     probe?: (port: number) => Promise<boolean>;
     spawn?: (
@@ -236,45 +239,59 @@ export interface HostDependencies {
     portReservations?: PortReservations;
 }
 export function createTargetHost(dependencies: HostDependencies = {}) {
-    const launchWindows = createWindowsLauncher();
+    const nativePlatform = dependencies.platform ?? process.platform;
+    const architecture = dependencies.architecture ?? process.arch;
+    if (!supportsWindowsApp(nativePlatform, architecture))
+        throw new Error(`Unsupported target platform or architecture: ${nativePlatform}/${architecture}.`);
+    const needsWindowsLauncher = !dependencies.spawn || !dependencies.platformAdapter;
+    if (needsWindowsLauncher && !supportsWindowsApp(process.platform, process.arch))
+        throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+    const launchWindows = needsWindowsLauncher ? createWindowsLauncher() : undefined;
     const platform =
         dependencies.platformAdapter ??
         createPlatformAdapter({
-            requestWindowsClose: launchWindows.requestNormalClose,
-            waitWindowsExit: launchWindows.waitForExit,
+            platform: nativePlatform,
+            architecture,
+            ...(launchWindows
+                ? {
+                      requestWindowsClose: launchWindows.requestNormalClose,
+                      waitWindowsExit: launchWindows.waitForExit,
+                  }
+                : {}),
         });
     const origins = new WeakMap<ManagedTarget, FixtureOrigin | undefined>();
     const reservations = dependencies.portReservations ?? createPortReservations();
     const io = {
         probe: probePort,
-        spawn:
-            process.platform === 'win32'
-                ? (
-                      executablePath: string,
-                      arguments_: string[],
-                      _port: number,
-                      cwd: string,
-                      env: NodeJS.ProcessEnv,
-                      context: ProcessLaunchContext,
-                  ) =>
-                      launchWindows.launch(
-                          {
-                              executablePath,
-                              arguments: arguments_,
-                              cwd,
-                              env: Object.fromEntries(
-                                  Object.entries(env).filter(
-                                      (entry): entry is [string, string] => entry[1] !== undefined,
-                                  ),
-                              ),
-                          },
-                          context,
-                      )
-                : spawnPortableApplication,
+        spawn: (
+            executablePath: string,
+            arguments_: string[],
+            _port: number,
+            cwd: string,
+            env: NodeJS.ProcessEnv,
+            context: ProcessLaunchContext,
+        ) => {
+            if (!launchWindows) throw new Error('Windows native launch capability is unavailable.');
+            return launchWindows.launch(
+                {
+                    executablePath,
+                    arguments: arguments_,
+                    cwd,
+                    env: Object.fromEntries(
+                        Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+                    ),
+                },
+                context,
+            );
+        },
         getVersion,
         now: Date.now,
         sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-        profileAvailable,
+        profileAvailable: (directory: string) => {
+            if (!supportsWindowsApp(process.platform, process.arch))
+                throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+            return profileAvailable(directory);
+        },
         ...dependencies,
     };
     async function observeSnapshot(pid: number, port: number, signal?: AbortSignal) {
@@ -763,7 +780,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                         target.verify = () =>
                             runFixtureResource(origins.get(target), async () => {
                                 const current = await observeSnapshot(processId, port, readinessSignal);
-                                validateProcessIdentity(current, target);
+                                validateProcessIdentity(current, target, { platform: nativePlatform });
                                 const endpointNow = await waitForWork(() => io.getVersion(port), readinessSignal);
                                 const checked = validateCdpIdentity({
                                     endpoint: endpointNow,
@@ -880,7 +897,7 @@ export function createTargetHost(dependencies: HostDependencies = {}) {
                 const evidence = await observeSnapshot(target.processId, target.port);
                 if (!evidence.root.exists) return targetExitObserved(target) ? 'gone' : 'unavailable';
                 try {
-                    validateProcessIdentity(evidence, target);
+                    validateProcessIdentity(evidence, target, { platform: nativePlatform });
                 } catch {
                     return 'identity-changed';
                 }

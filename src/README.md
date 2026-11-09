@@ -6,7 +6,8 @@ Before implementing the singleton desktop App migration, read
 The singleton App owns direct HTTP, management and native resources. The
 [runtime contract](../docs/app-runtime.md) describes its startup and cleanup.
 
-- `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
+- `interface/`: Windows platform guard and synchronous Chromium isolation,
+    App composition and sandboxed UI.
 - `application/`: lifecycle/registration and App orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
 - `gateway/`: complete Core transaction and retained registry/cleanup ownership,
@@ -21,6 +22,17 @@ The singleton App owns direct HTTP, management and native resources. The
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
+
+`domains/app-distribution.ts` owns the pure Windows x64/arm64 support decision and
+strict distribution metadata matched to native identity. `interface/app-bootstrap.ts` refuses
+unsupported hosts before App paths, scratch, privileged schemes or controlled main
+import; supported Chromium isolation remains synchronous before asynchronous
+startup. `interface/app-main.ts` repeats the support guard before acquiring native
+or App resources. Its dormant Darwin tray-template and Linux visible-manager
+selectors are scheduled for complete Windows-platform selector retirement,
+together with `tests/app-main-lifecycle.test.ts`, interface instructions and this
+map, under the [Windows-only amendment](../docs/adr/0017-singleton-desktop-app.md#accepted-windows-only-scope-amendment--2026-11-08).
+Windows no-tray/requested-activation fallback and normal cleanup barriers remain.
 
 [ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the
 isolation boundary: gateway/targets/model/ validates directory intent and opaque binding;
@@ -47,3 +59,8 @@ complete verified source producer, protected creation and state-last publication
 These source-only operations remain outside App entry composition; default
 admission, installers and native acceptance are separate pending gates. There is
 no runtime compiler fallback.
+
+The removal loop uses the caller's identity check and error classifier for
+each bounded attempt. Windows build support uses it during explicit release
+of a completed build to remove its scratch root.
+[Owned directory removal](adapters/owned-directory-removal.ts)

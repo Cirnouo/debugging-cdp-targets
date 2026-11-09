@@ -188,6 +188,8 @@ function hostFixture({ endpointFailure = false, closeSucceeds = true, race = fal
         },
     };
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         platformAdapter: platform,
         probe: async () => true,
         spawn: async (_executable, _args, port) => {

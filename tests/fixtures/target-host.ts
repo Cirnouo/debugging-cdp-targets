@@ -6,6 +6,8 @@ export function createTargetHostFixture(available: boolean | (() => Promise<bool
     const inspected: string[] = [];
     const launchedArguments: string[][] = [];
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         profileAvailable:
             typeof available === 'function'
                 ? available
@@ -26,6 +28,8 @@ export function createTargetHostFixture(available: boolean | (() => Promise<bool
                     executablePath: process.execPath,
                     startedAtUtc: '2026-10-02T00:00:00Z',
                     sessionId: 1,
+                    productName: 'Google Chrome',
+                    companyName: 'Google LLC',
                 },
                 currentSessionId: 1,
                 processIds: [pid],

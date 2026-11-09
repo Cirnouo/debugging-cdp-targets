@@ -38,6 +38,8 @@ function fixture(
     const probes: number[] = [];
     const closed: number[] = [];
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         ...(options.reservations ? { portReservations: options.reservations } : {}),
         probe: async (port) => {
             probes.push(port);
@@ -599,6 +601,8 @@ test('a successful legacy close request preserves ownership until actual exit is
     const reservations = createPortReservations();
     const child = Object.assign(new EventEmitter(), { pid: 601, exitCode: null, signalCode: null });
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         portReservations: reservations,
         probe: async () => true,
         spawn: async () => child,

@@ -159,6 +159,8 @@ test('unverified startup with failed normal cleanup retains typed identity witho
     let closeSucceeds = false;
     const child = Object.assign(new EventEmitter(), { pid: 90, exitCode: null as number | null });
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         platformAdapter: {
             reservedRanges: async () => [],
             snapshot: async (pid) => ({

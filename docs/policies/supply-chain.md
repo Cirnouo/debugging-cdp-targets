@@ -31,9 +31,11 @@ validates and audits the repository lockfile using the committed standalone Node
 checker without project dependencies. It then installs with `--ignore-scripts`,
 verifies the installed graph and full audits, and checks the standalone build
 against its maintained source. Commit messages and Quality depend on its
-success. Windows and Portable tests remain downstream of Quality. No
-continue-on-error, always-run build, registry-error suppression, or audit repair
-is permitted. All third-party Actions must use reviewed full commit SHAs.
+success. Windows tests, Real Chrome (windows-latest) and Node compatibility
+remain downstream of Quality. Ubuntu-hosted common checks do not establish
+Linux App support or native acceptance. No continue-on-error, always-run build,
+registry-error suppression, or audit repair is permitted. All third-party Actions
+must use reviewed full commit SHAs.
 
 Explicit installation policy is a 1,440-minute release cooldown, strict
 enforcement, no missing-publish-date bypass, `trustLockfile: false`,

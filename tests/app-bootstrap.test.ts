@@ -11,7 +11,7 @@ import { isRecord } from '../src/shared/errors.ts';
 
 // Model Electron's public entry-loader boundary: ready is released only after entry import settles.
 // Electron and storage are I/O replacements; the entry under test is the maintained bootstrap.
-async function loadBootstrap(failStartup = false) {
+async function loadBootstrap(failStartup = false, native?: { platform: string; architecture: string }) {
     const root = fileURLToPath(new URL('..', import.meta.url));
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-bootstrap-loader-'));
     const stateUrl = pathToFileURL(path.join(directory, 'state.mjs')).href;
@@ -21,9 +21,9 @@ async function loadBootstrap(failStartup = false) {
             `let release;export const state={events:[],ready:new Promise(resolve=>{release=resolve}),release:()=>release()};`,
         );
         const modules: Record<string, string> = {
-            electron: `import{state}from${JSON.stringify(stateUrl)};export const app={getPath:()=>{state.events.push('appData');return'fixture'},setPath:name=>state.events.push(name)};export const protocol={registerSchemesAsPrivileged:()=>state.events.push('protocol')};`,
+            electron: `import{state}from${JSON.stringify(stateUrl)};export const app={getPath:()=>{state.events.push('appData');return'fixture'},setPath:name=>state.events.push(name),quit:()=>state.events.push('quit')};export const protocol={registerSchemesAsPrivileged:()=>state.events.push('protocol')};`,
             '../adapters/app-chromium-storage.ts': `import{state}from${JSON.stringify(stateUrl)};export function createAppChromiumStorage(){state.events.push('storage');return{userData:'fixture-user',sessionData:'fixture-session'}}`,
-            './app-main.ts': `import{state}from${JSON.stringify(stateUrl)};export async function startDesktopApp(){state.events.push('startup');await state.ready;${failStartup ? "throw Error('private-startup-detail')" : "state.events.push('startup-ready')"}}`,
+            './app-main.ts': `import{state}from${JSON.stringify(stateUrl)};state.events.push('main-evaluation');export async function startDesktopApp(){state.events.push('startup');await state.ready;${failStartup ? "throw Error('private-startup-detail')" : "state.events.push('startup-ready')"}}`,
         };
         const bundle = await build({
             entryPoints: [path.join(root, 'src/interface/app-bootstrap.ts')],
@@ -54,7 +54,7 @@ async function loadBootstrap(failStartup = false) {
         await writeFile(path.join(directory, 'entry.mjs'), output.contents);
         await writeFile(
             path.join(directory, 'loader.mjs'),
-            `import{state}from'./state.mjs';import{setTimeout as delay}from'node:timers/promises';let settled=false;const unhandled=[];process.on('unhandledRejection',()=>unhandled.push(true));const entry=import('./entry.mjs').then(()=>{settled=true});await delay(100);const entrySettledBeforeReady=settled;state.release();await entry;await delay(10);console.log(JSON.stringify({entrySettledBeforeReady,events:state.events,unhandled}));`,
+            `import{state}from'./state.mjs';import{setTimeout as delay}from'node:timers/promises';${native ? `Object.defineProperty(process,'platform',{value:${JSON.stringify(native.platform)}});Object.defineProperty(process,'arch',{value:${JSON.stringify(native.architecture)}});` : ''}let settled=false;const unhandled=[];process.on('unhandledRejection',()=>unhandled.push(true));const entry=import('./entry.mjs').then(()=>{settled=true});await delay(100);const entrySettledBeforeReady=settled;state.release();await entry;await delay(10);console.log(JSON.stringify({entrySettledBeforeReady,events:state.events,unhandled}));`,
         );
         const result = await promisify(execFile)(process.execPath, [path.join(directory, 'loader.mjs')], {
             windowsHide: true,
@@ -70,7 +70,7 @@ async function loadBootstrap(failStartup = false) {
 }
 
 test('bootstrap import completes before ready-dependent startup and keeps synchronous Chromium isolation first', async () => {
-    const result = await loadBootstrap();
+    const result = await loadBootstrap(false, { platform: 'win32', architecture: 'x64' });
     assert.equal(result.state.entrySettledBeforeReady, true);
     assert.deepEqual(result.state.events, [
         'appData',
@@ -78,6 +78,7 @@ test('bootstrap import completes before ready-dependent startup and keeps synchr
         'userData',
         'sessionData',
         'protocol',
+        'main-evaluation',
         'startup',
         'startup-ready',
     ]);
@@ -86,9 +87,27 @@ test('bootstrap import completes before ready-dependent startup and keeps synchr
 });
 
 test('bootstrap observes asynchronous startup rejection without exposing private error details', async () => {
-    const result = await loadBootstrap(true);
+    const result = await loadBootstrap(true, { platform: 'win32', architecture: 'arm64' });
     assert.equal(result.state.entrySettledBeforeReady, true);
     assert.deepEqual(result.state.unhandled, []);
     assert.match(result.stderr, /App startup could not complete/);
     assert.doesNotMatch(result.stderr, /private-startup-detail/);
+});
+
+test('unsupported bootstrap quits before App paths, scratch, native or main acquisition', async () => {
+    for (const native of [
+        { platform: 'linux', architecture: 'x64' },
+        { platform: 'darwin', architecture: 'arm64' },
+        { platform: 'win32', architecture: 'ia32' },
+    ]) {
+        const result = await loadBootstrap(false, native);
+        assert.equal(result.state.entrySettledBeforeReady, true);
+        assert.deepEqual(result.state.events, ['quit'], `${native.platform}/${native.architecture}`);
+        assert.deepEqual(result.state.unhandled, []);
+        assert.match(result.stderr, /Windows/);
+        assert.match(result.stderr, /x64/);
+        assert.match(result.stderr, /arm64/);
+        assert.ok(result.stderr.length > 0 && result.stderr.length <= 256);
+        assert.doesNotMatch(result.stderr, /private-startup-detail|fixture|dct-bootstrap-loader|file:\/\//);
+    }
 });

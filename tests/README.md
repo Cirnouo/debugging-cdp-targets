@@ -7,6 +7,11 @@ owns a disposable native process. The retired per-chat stdio entry, automatic
 host Tool Hooks and task-activity model are not current runtime interfaces.
 Git hook tests remain contributor-tooling regressions.
 
+Current App/native support is Windows 11 x64 and arm64, without new native
+qualification. Retained POSIX source/model regressions below preserve shared
+contracts pending their complete deletion cuts; they do not provide a current
+Linux/macOS product execution or acceptance route.
+
 - `app-restart.test.ts` uses deterministic deferred producers for bounded private
   context/ACK parsing, read-only exact-parent evidence and restart lease overlap,
   uncertain child retention and cleanup retry. It supplies no native execution
@@ -33,8 +38,11 @@ Git hook tests remain contributor-tooling regressions.
   alter the expected source selection. These tests execute no App, target, native
   permission helper or ACL query and establish no real archive/native acceptance.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
-  verified public native addon to test shared read-only use, independent operation
-  writers, exclusive deletion barriers and persistent lock inode identity.
+  completely verified original public vendor addon under each process's actual
+  host identity to test shared read-only use, independent operation writers,
+  exclusive deletion barriers and persistent lock inode identity. Only the
+  separate production-wrapper integration requires actual Windows x64/arm64.
+  Vendor kernel-lock regression evidence does not grant product admission.
 - `app-fresh-stage.test.ts` exercises the actual source builder and fresh
   transaction with controlled native-process/addon I/O, exact file-only owned ZIP
   extraction, protected manifest failures and state publication outcomes. Native
@@ -43,23 +51,38 @@ Git hook tests remain contributor-tooling regressions.
   no-replace/locking acceptance or runnable admitted App claim.
 - `app-deployment-storage.test.ts` tests enrolled-root and lease ownership,
   bounded canonical state, atomic failure/readback outcomes and retained fences
-  through real owned temporary files. Linux private-account/local-filesystem
-  cases skip explicitly elsewhere; unsupported native roles refuse before writes.
-  These GUI-free tests do not establish installer or six-cell native acceptance.
-  Linux-only reader-context resample barriers exercise pre-read/post-read real
-  replacements, mixed unsafe permissions and unknown failures; their R1
-  classification correction and Linux execution remain pending.
+  through real owned files, actual vendor locks and explicit controlled Windows
+  authority. A controlled original EPERM at the replacement port retains the exact
+  indeterminate cause, old bytes, same-lease readback and temporary cleanup without
+  replay; this is controlled outcome evidence, not kernel contention acceptance.
+  Its separate ordinary Node reader retains one real shared use lease while the
+  parent holds its operation lease through eleven successful one-shot default
+  atomic commits. Initial ordinal zero and ordinals one through eleven acknowledge
+  exact complete states after natural read settlement; no background document read
+  occurs while idle. This coordinated process/use-lifetime evidence does not prove
+  overlapping document-read/write availability or observation during replacement.
+  The prior uncoordinated Windows schedule actually failed with EPERM/indeterminate;
+  that availability remains unproved. Store document
+  authority and named/current receipt barriers use actual held-handle and state-path
+  receipts, retaining no-stale-parse, original fatal errors, one actual close and
+  same-lease retry after controlled refusal clears. Only the deliberately paused
+  adversarial cases use non-atomic unlink and prepared-inode publication through
+  the existing test I/O port. They do not prove ordinary atomic replacement over
+  an open destination; normal transaction and real-child replacement cases retain
+  the default writer path. Nonregular evidence is an actual directory at the state name.
+  Linux-specific statfs/native-resample algorithm assertions are retired; no
+  synthetic ACL, Windows enrollment or native deployment acceptance is claimed.
 - `app-deployment-authority.test.ts` covers strict native SID/UID, protected and
   inherited ACL templates, ancestors, unsigned identities, APFS/NTFS evidence
   and Linux private/system mode rules through literal pure inputs.
-- `app-deployment-capabilities.test.ts` exercises the real store with a controlled
-  Linux-private POSIX filesystem/UID profile on every host: reader refusal, writer authority
-  changes, exact descriptor modes, fixed lease identity, partial-envelope refusal
-  and commit/removal outcomes. Process creation/dlopen/chmod are blocked or replaced
-  before native code, including custom-promisify bypasses. Linux role fixtures replace
-  real/effective UID and filesystem evidence. A controlled macOS full ancestor
-  chain separates a sealed read-only System root from writable Data controls.
-  These fixtures supply no native proof.
+- `app-deployment-capabilities.test.ts` exercises the real store with controlled
+  Windows authority over mapped owned files: reader refusal, explicit authority
+  revocation, exact descriptor modes, fixed lease identity, partial-envelope
+  refusal and commit/removal outcomes. A shared test fixture replaces only the
+  native import; its fresh-enrollment stub always throws and is never requested.
+  Direct production factory cases block acquisition and require unsupported-host
+  refusal before filesystem/native work. Custom-promisify process creation remains
+  blocked. These controlled capabilities supply no native permission proof.
 - `deployment-support-build.test.ts` consumes the actual fixed source builder and
   fresh Windows composition through controlled compiler/process I/O and real owned
   files. Receipt/source/output drift, collisions, replacement/close errors,
@@ -113,6 +136,9 @@ Git hook tests remain contributor-tooling regressions.
   check independently recorded native archive identities, complete loader/license
   inputs and verified runtime files before executable use. These input checks
   do not establish six-platform native acceptance.
+  Native-input regressions also require actual production unsupported-host
+  refusal before package verification or addon loading, while complete original
+  input verification remains host-neutral.
 - `app-distribution.test.ts` and `build-app.test.ts` cover immutable delivery
   metadata, sandboxed bundles, license closure and complete official-file copying.
 - `app-archive-extraction.test.ts` checks actual Windows ZIP extraction refusal
@@ -273,6 +299,10 @@ Git hook tests remain contributor-tooling regressions.
   rejection/timeout/exit, intentional sampling/tab cancellation and preservation
   of capture results when native sampling or evidence writes fail.
 
+- `owned-directory-cleanup.test.ts` uses real temporary directories and `rmdir`
+  failures to check recovery from transient `ENOTEMPTY`, refusal to remove a
+  replacement directory and preservation of errors when retries fail.
+
 - `owned-native-fixtures.test.ts` injects readiness failures after each retained
   target/anchor launch, requires normal Close with actual exit, avoids duplicate
   successful controller cleanup and retains ownership for uncertain Close retry.
@@ -345,8 +375,11 @@ Git hook tests remain contributor-tooling regressions.
   adversarial structure/answer cases and local-I/O isolation remain distinct.
 - `ci-config.test.ts`, `toolchain-config.test.ts`, `script-checks.test.ts`
   check automation, package gates, exact lane commands and syntax plans. Parsed
-  CI checks retain canonical versions and names, and require the latest-24
-  Ubuntu lane's setup inputs, quality dependency and unconditional command order.
+  CI checks retain canonical versions and six actual job names, genuine Windows
+  official/recovery commands, immediate PowerShell failure propagation and the
+  failure-only five-file envelope. They reject retired portable/study execution
+  routes and retain the latest-24 Ubuntu lane's setup inputs, quality dependency
+  and unconditional command order without implying Linux App support.
 - `fixture-artifacts.test.ts` exercises controlled smoke streaming, closed event
   validation, bounded/truncated evidence, safe writer failures, primary versus
   cleanup failures, prerequisite/not-run indexing and the real Core/SDK HTTP
@@ -374,7 +407,9 @@ Git hook tests remain contributor-tooling regressions.
   configuration and complete official-byte verification before filename exemptions.
 - `codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
-- `chrome-smoke-config.test.ts` checks explicit portable executable selection,
+- `chrome-smoke-config.test.ts` checks the configured Windows Chrome path through
+  controlled access/stat I/O, missing/nonregular prerequisite refusal before
+  profile or target acquisition, retained explicit-platform resolver fixtures,
   literal isolated launch arguments, actual Chrome version requirements and
   bounded explicit Close handling when pending CDP traffic is busy
   without starting a browser. External Close stimuli only request normal closure;
@@ -517,10 +552,12 @@ Git hook tests remain contributor-tooling regressions.
 - `fixtures/` owns isolated CDP, native process and visible window test inputs.
 - `interactive/` owns eighteen explicit Windows GUI cases across four
   native/window/anchor test files; see its [inventory and prerequisites](interactive/README.md).
-- `smoke/` owns explicit host HTTP/metadata, cross-platform Chrome, official
+- `smoke/` owns explicit host HTTP/metadata, Windows Chrome, official
   Server, local Marketplace, screenshot and Windows native acceptance tools.
   Its inventory distinguishes current entrypoints from historical stdio/Hook
-  evidence; these tools do not run in the ordinary suite.
+  evidence; these tools do not run in the ordinary suite. Retired POSIX sampler,
+  study and direct-model source/tests remain pending their later complete
+  target-native deletion cut, with no current product CI execution route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
@@ -553,13 +590,23 @@ existing thin-payload selector in place; the four Official suites remain appende
 
 The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
 on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen
-installation precedes its source/type/build regressions. The separate original
-official catalog smoke now requires an explicitly supplied verified App stage:
-`pnpm smoke:official --stage <verified-App-stage>`. It normally closes the SDK
-stdio child and launches no browser. Source/build checks or a historical job
-pass do not establish current App delivery, latest-24 Windows/macOS or GUI
+installation precedes its source/type/build regressions and
+`pnpm smoke:official --installed`. That explicit mode verifies the installed
+original official package, uses the current supported ordinary Node, lists its
+actual catalog and normally closes the SDK stdio child without launching a
+browser. The separate `--stage <verified-App-stage>` mode verifies App-delivered
+ordinary Node and original Server. Source/build checks or a historical job
+pass do not establish current App delivery, latest-24 Windows or GUI
 acceptance; record those executed scopes separately. See the
 [toolchain policy](../docs/policies/quality.md#toolchain-compatibility).
+
+The separate `Real Chrome (windows-latest)` job requires both actual official
+tools and connection recovery smokes after typecheck and configured-path
+preflight. It explicitly passes `--allow-gui` to both unchanged scripts, with
+new synthetic pages/profiles, normal Close and actual exit/deletion checks.
+Actual runner Chrome availability and Windows E2E remain unknown until a
+successful run on the tested commit. This fixture evidence does not establish
+App GUI, installer, default admission or Windows arm64 native acceptance.
 
 For the historical bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).

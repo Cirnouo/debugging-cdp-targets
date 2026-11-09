@@ -13,7 +13,7 @@ import { createMcpHttpServer } from '../adapters/mcp-http-server.ts';
 import { createAppHostManagement } from '../application/app-host-management.ts';
 import { createAppManagement } from '../application/app-management.ts';
 import type { AppConfiguration } from '../domains/app-configuration.ts';
-import { parseAppDistribution } from '../domains/app-distribution.ts';
+import { parseAppDistribution, supportsWindowsApp } from '../domains/app-distribution.ts';
 import { parseAppNativeEvidence } from '../domains/app-release.ts';
 import type { AppUiSnapshot } from '../domains/app-ui.ts';
 import { createGatewayCore, type GatewayConstructionCleanup, type GatewayCore } from '../gateway/core.ts';
@@ -25,6 +25,11 @@ export async function startDesktopApp(options: {
     appData: string;
     chromium: ReturnType<typeof createAppChromiumStorage>;
 }) {
+    if (!supportsWindowsApp(process.platform, process.arch)) {
+        process.stderr.write('The App supports Windows x64 and arm64 only.\n');
+        app.quit();
+        return;
+    }
     // Module-relative paths stay pinned to this complete build throughout its process lifetime.
     const directory = path.dirname(fileURLToPath(import.meta.url));
     let configuration: Awaited<ReturnType<typeof openAppConfiguration>> | undefined;
