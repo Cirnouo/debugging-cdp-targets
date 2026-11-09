@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { decodeWindowsDeploymentFacts } from '../src/adapters/windows-deployment-protocol.ts';
 import * as deployment from '../src/domains/app-deployment.ts';
+import { ownedDeploymentFacts } from './fixtures/deployment-support.ts';
 
 const sid = 'S-1-5-21-1-2-3-1001';
 const file = { device: '4294967295', inode: '18446744073709551615', links: '1', size: '0', directory: false };
@@ -366,4 +368,34 @@ test('Linux receipt permissions expose a pure predicate without granting native 
             ),
         { message: 'Deployment entry lacks native account permissions.' },
     );
+});
+
+test('decoded read-only query facts retain full identity and native permission validation without granting writes', () => {
+    const fact = {
+        account: sid,
+        owner: sid,
+        path: expected.path,
+        ...file,
+        protected: true,
+        reparse: false,
+        filesystem: 'NTFS',
+        volumeFlags: 8,
+        driveType: 3,
+        sid,
+        mask: 2032127,
+        flags: 0,
+    };
+    const decode = (value: Record<string, unknown>) =>
+        decodeWindowsDeploymentFacts(ownedDeploymentFacts([value]), [expected.path])[0];
+    assert.doesNotThrow(() => validate(decode(fact), expected));
+    for (const patch of [
+        { account: 'S-1-5-21-999' },
+        { owner: 'S-1-5-21-999' },
+        { reparse: true },
+        { filesystem: 'ReFS' },
+        { mask: 2147483648 },
+        { flags: 32 },
+        { inode: '18446744073709551614' },
+    ])
+        assert.throws(() => validate(decode({ ...fact, ...patch }), expected));
 });

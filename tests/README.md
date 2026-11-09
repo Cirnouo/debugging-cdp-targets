@@ -37,12 +37,19 @@ Linux/macOS product execution or acceptance route.
   missing/extra/drift/selection cases and a self-consistent replaced output cannot
   alter the expected source selection. These tests execute no App, target, native
   permission helper or ACL query and establish no real archive/native acceptance.
+  Supported stage controls reuse the whole owned compiler fixture for Q binding;
+  fresh controls execute the actual emitted worker action through file-only child
+  I/O, preserving real reader/store/use/full-payload checks, output/exit/stdio
+  failures and overlapping parent ownership.
 - `app-deployment-locks.test.ts` uses two owned ordinary Node processes and the
   completely verified original public vendor addon under each process's actual
   host identity to test shared read-only use, independent operation writers,
   exclusive deletion barriers and persistent lock inode identity. Only the
   separate production-wrapper integration requires actual Windows x64/arm64.
   Vendor kernel-lock regression evidence does not grant product admission.
+- `deployment-worker.test.ts` exercises intrinsic unbound/closed-shape refusals
+  before I/O, exact worker/Node placement, wrong PE, same-byte query replacement
+  and bound ordinary writer refusal under pre-import native-process fences.
 - `app-fresh-stage.test.ts` exercises the actual source builder and fresh
   transaction with controlled native-process/addon I/O, exact file-only owned ZIP
   extraction, protected manifest failures and state publication outcomes. Native
@@ -591,6 +598,8 @@ execution with individual authorization skips. GUI authorization comes only from
 verification of changed GUI tests may opt in explicitly; default hooks and scripts
 remain GUI-free. Windows CI explicitly opts in after typecheck. Real-browser
 integration requires the same flag and must not touch existing user targets.
+
+The root test glob includes the deployment worker regression.
 
 Default and coverage selection have two independent contract owners:
 [tests/tooling/quality/toolchain-config.test.ts](tooling/quality/toolchain-config.test.ts) keeps both literal

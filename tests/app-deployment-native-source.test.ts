@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { inspectWindowsDeploymentExecutable } from '../src/adapters/windows-deployment-query.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { ownedDeploymentPe } from './fixtures/deployment-support.ts';
 
 async function candidate(
     patch: {
@@ -209,4 +211,17 @@ test('finite Windows copy source preserves pinned change-time ABI, closed file-o
         source,
         /Json|installation\.json|state\.json|selectedBuildId|Process\.Start|SetNamedSecurityInfo/,
     );
+});
+
+test('query PE owner rejects overlapping section resolution truncated CLR headers and escaping metadata', () => {
+    const overlap = ownedDeploymentPe();
+    overlap.writeUInt16LE(2, 0x86);
+    overlap.copy(overlap, 0x188 + 40, 0x188, 0x188 + 40);
+    const short = ownedDeploymentPe().subarray(0, 511);
+    const emptyMetadata = ownedDeploymentPe();
+    emptyMetadata.writeUInt32LE(0, 0x20c);
+    const escapingVersion = ownedDeploymentPe();
+    escapingVersion.writeUInt32LE(64, 0x28c);
+    for (const bytes of [overlap, short, emptyMetadata, escapingVersion])
+        assert.throws(() => inspectWindowsDeploymentExecutable(bytes), /Invalid Windows/);
 });

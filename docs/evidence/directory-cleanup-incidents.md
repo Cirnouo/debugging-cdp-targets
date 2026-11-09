@@ -15,6 +15,7 @@ caused the removal operations to report `ENOTEMPTY` remains unknown.
 | 2026-10-19 and 2026-10-20 | [`deployment-support-build.test.ts`](../../tests/deployment-support-build.test.ts) | The compiler fixture's teardown reported `ENOTEMPTY` under its owned `managed/.deployment` and `outputs` subdirectories in separate runs. The two cases exercised a deployment reader lease and a replacement reservation, respectively. [Compiler fixture](../../tests/fixtures/deployment-support.ts) |
 | 2026-10-23 | [`app-fresh-stage.test.ts`](../../tests/app-fresh-stage.test.ts) | The state-publication response-loss case reported `ENOTEMPTY` under `stage/.deployment`. The path and source are consistent with final fixture teardown. The original body outcome remains unknown. [Stage fixture](../../tests/fixtures/app-stage.ts) |
 | 2026-11-08 | [`deployment-support-build.test.ts`](../../tests/deployment-support-build.test.ts) | The fixed-copy stream case reported `ENOTEMPTY` during the support adapter's explicit `release()`, which removed its separately owned build scratch root. The pre-push hook stopped at coverage with 2,007 passed, 1 failed and 1 skipped. The original copy and assertion outcome is unknown because release ran in `finally`. [Support adapter](../../src/adapters/windows-deployment-support.ts) |
+| 2026-11-09 | [`deployment-worker.test.ts`](../../tests/deployment-worker.test.ts) | The ordinary Query case for wrong PE and same-byte inode replacement reported `ENOTEMPTY` from `rmdir` at the owned `builds/<build-id>/resources/app` descendant during fixture teardown. The focused run ended with 126 passed and 1 failed. Which operation left the directory nonempty and the original assertion outcome remain unknown. |
 
 The configuration, Host manager and payload fixture teardowns adopted bounded
 recursive removal with `maxRetries: 5` and `retryDelay: 100`. Those options
@@ -86,11 +87,11 @@ recreated earlier Chrome profile paths remains unknown.
 ## Shared fixture cleanup
 
 The [test fixture helper](../../tests/fixtures/owned-directory-cleanup.ts)
-binds the compiler and stage fixture roots at creation. Each fixture restores
-its mocks and checks the root's parent and prefix before cleanup. The helper
-checks the original identity before each attempt and keeps the removal
-options supplied by the fixture. If recovery ends in failure, it reports
-earlier removal errors together with the terminal reason.
+binds the compiler, stage and deployment worker fixture roots at creation.
+Each caller checks the root's parent and prefix. The compiler and stage
+fixtures restore their mocks before cleanup. The helper checks the original
+identity before each attempt and keeps the supplied removal options. If recovery
+ends in failure, it reports earlier removal errors with the terminal reason.
 
 The maintained tests exercise transient recovery, replacement during backoff
 and exhaustion using real `rmdir` errors. Targeted integration covers ordinary
@@ -121,6 +122,25 @@ of every listed child. The exact root error is therefore a narrower basis
 for adapter recovery. A delay and identity check alone do not prove that a failed
 descendant operation has drained.
 [Node 24.21.0 recursive removal](https://github.com/nodejs/node/blob/v24.21.0/lib/internal/fs/rimraf.js)
+
+## Deployment worker fixture descendant proof
+
+A separate Windows x64 Node 24.21.0 run on 2026-11-09 exercised the unchanged
+fixture helper from staged tree `fd85cb79`. It used one directory at each
+level from the owned root through `builds/<build-id>/resources/app`. At that
+leaf, a controlled writer added one marker after the actual enumeration.
+The first recursive removal cleared every listed leaf file, then returned
+`ENOTEMPTY` from `rmdir` at the exact `app` descendant. The marker remained and
+the original root's device and inode still matched. Each ancestor had one
+child, and the listed leaf files had settled before the failure reached
+the fixture helper. The next attempt verified the original root and
+reused the same recursive removal options. The root was absent afterward.
+
+This controlled result qualifies recovery at the deployment worker fixture's
+teardown boundary with that directory shape and the existing test ordering.
+The original failure's writer, timing and assertion outcome remain unknown.
+The deployed adapter's release and failed-build rollback policies and managed
+Chrome profile cleanup retain their separate evidence requirements.
 
 ## Deployment adapter release proof
 

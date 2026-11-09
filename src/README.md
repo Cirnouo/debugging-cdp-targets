@@ -58,9 +58,12 @@ lease inodes, exposing separate reader and trusted writer opens.
 `adapters/app-deployment-native.ts` supplies concrete native account, ancestor,
 volume and object evidence. The read-only macOS JXA remains a source candidate.
 Windows contributor builds use fixed query/create C# sources through the private
-build-only support lifetime; generated App delivery contains neither deployment
-C# sources nor support EXEs. The explicit Windows x64 fresh stage composes the
-complete verified source producer, protected creation and state-last publication.
+build-only support lifetime. The query adapter owns the single PE inspector and
+intrinsic sibling-query binding. Supported stages deliver the fixed query and
+ordinary deployment worker, while creator/compiler/C# inputs remain build-only. The explicit Windows x64 fresh stage composes the
+complete verified source producer, protected creation and state-last publication,
+then closes temporary support before an independent ordinary-reader worker verifies
+the published build while parent operation/shared-use descriptors remain held.
 These source-only operations remain outside App entry composition; default
 admission, installers and native acceptance are separate pending gates. There is
 no runtime compiler fallback.
