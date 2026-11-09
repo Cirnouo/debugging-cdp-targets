@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { mock, type TestContext, test } from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { isRecord } from '../src/shared/errors.ts';
 import * as app from '../tooling/build-app.ts';
@@ -17,6 +18,8 @@ import {
     ownedDeploymentFacts,
     ownedWindowsDeploymentCompiler,
 } from './fixtures/deployment-support.ts';
+
+const fixedWindows = process.platform === 'win32' && process.arch === 'x64';
 
 let lockEffect: (exclusive: boolean) => void = () => {
     throw new Error('No controlled native lock owner.');
@@ -56,7 +59,7 @@ async function controlled(context: TestContext) {
         execFile: childProcess.execFile,
         dlopen: process.dlopen,
     };
-    const own = await stageFixture();
+    const own = await stageFixture({ compiler: false });
     const originalExec = childProcess.execFile;
     let compiler: Awaited<ReturnType<typeof ownedWindowsDeploymentCompiler>>;
     try {
@@ -73,10 +76,28 @@ async function controlled(context: TestContext) {
     const originalSpawn = childProcess.spawn;
     const originalOpen = fs.open;
     const originalStat = fs.lstat;
+    const originalUnlink = fs.unlink;
     const originalDlopen = process.dlopen;
     const events: string[] = [];
-    const executionCounts = { archive: 0, inspect: 0, createRoot: 0, createDirectory: 0, publish: 0, copy: 0 };
+    const executionCounts = {
+        archive: 0,
+        inspect: 0,
+        createRoot: 0,
+        createDirectory: 0,
+        publish: 0,
+        copy: 0,
+        worker: 0,
+        workerInspect: 0,
+    };
     let fault = '';
+    let completeWorker: (() => void) | undefined;
+    let workerReady: () => void = () => {};
+    let workerFailed: (error: unknown) => void = () => {};
+    const workerResponse = new Promise<void>((resolve, reject) => {
+        workerReady = resolve;
+        workerFailed = reject;
+    });
+    void workerResponse.catch(() => {});
     let sourceManifest: Buffer | undefined;
     let published = false,
         contentSeen = false,
@@ -100,7 +121,95 @@ async function controlled(context: TestContext) {
         throw new Error('External executor forbidden before native spawn.');
     };
     Object.defineProperty(childProcess, 'spawn', {
-        value: (executable: string, argv: readonly string[]) => {
+        value: (executable: string, argv: readonly string[], options: unknown) => {
+            if (executable.endsWith('node.exe')) {
+                assert.equal(argv.length, 1);
+                const workerFile = argv[0];
+                assert.ok(
+                    workerFile &&
+                        workerFile.startsWith(own.options.output + path.sep) &&
+                        workerFile.endsWith(path.join('resources', 'app', 'deployment-worker.mjs')),
+                );
+                assert.ok(isRecord(options) && options.shell === false && options.windowsHide === true);
+                assert.deepEqual(options.env, { SystemRoot: 'C:\\Windows', WINDIR: 'C:\\Windows' });
+                assert.equal(executable, path.join(path.dirname(path.dirname(workerFile)), 'node/node.exe'));
+                executionCounts.worker++;
+                events.push('worker:spawn');
+                const child = Object.assign(new EventEmitter(), {
+                    pid: 43,
+                    stdin: new PassThrough(),
+                    stdout: new PassThrough(),
+                    stderr: new PassThrough(),
+                });
+                child.stdin.resume();
+                void (async () => {
+                    await assert.rejects(fs.lstat(path.join(compiler.outputs, 'windows-deployment-query.exe')), {
+                        code: 'ENOENT',
+                    });
+                    events.push('support:closed-files');
+                    if (fault === 'worker-node') await fs.appendFile(executable, 'changed');
+                    if (fault === 'worker-code')
+                        await fs.appendFile(workerFile, '\n// changed after retained producer capture\n');
+                    const queryFile = path.join(path.dirname(workerFile), 'windows-deployment-query.exe');
+                    if (fault === 'worker-query-bytes')
+                        await fs.writeFile(queryFile, Buffer.from('not the produced query'));
+                    if (fault === 'worker-query-identity') {
+                        const bytes = await fs.readFile(queryFile);
+                        await fs.rename(queryFile, path.join(path.dirname(own.options.output), 'retained-query'));
+                        await fs.writeFile(queryFile, bytes);
+                    }
+                    if (fault === 'worker-manifest')
+                        await fs.appendFile(
+                            path.join(path.dirname(path.dirname(path.dirname(workerFile))), 'payload-manifest.json'),
+                            ' ',
+                        );
+                    const descriptor = Object.getOwnPropertyDescriptor(process, 'execPath');
+                    assert.ok(descriptor);
+                    let worker: unknown;
+                    try {
+                        Object.defineProperty(process, 'execPath', { ...descriptor, value: executable });
+                        worker = await import(pathToFileURL(workerFile).href);
+                    } finally {
+                        Object.defineProperty(process, 'execPath', descriptor);
+                    }
+                    assert.ok(isRecord(worker) && typeof worker.verifyFreshDeployment === 'function');
+                    const state: unknown = await worker.verifyFreshDeployment();
+                    events.push('worker:verified-released');
+                    const bytes = Buffer.from(JSON.stringify(state) + '\n');
+                    child.stdout.write(
+                        fault === 'worker-malformed'
+                            ? Buffer.from('{}\n')
+                            : fault === 'worker-oversized'
+                              ? Buffer.alloc(1025, 32)
+                              : bytes,
+                    );
+                    workerReady();
+                    if (fault === 'worker-late-exit' || fault === 'worker-late-stdio') {
+                        if (fault === 'worker-late-stdio') {
+                            child.emit('exit', 0, null);
+                            events.push('worker:exit');
+                        }
+                        await new Promise<void>((resolve) => {
+                            completeWorker = resolve;
+                        });
+                    }
+                    child.stdout.end();
+                    child.stderr.end(fault === 'worker-stderr' ? 'controlled worker stderr' : undefined);
+                    if (fault !== 'worker-late-stdio') {
+                        child.emit('exit', fault === 'worker-nonzero' ? 2 : 0, null);
+                        events.push('worker:exit');
+                    }
+                    child.emit('close', fault === 'worker-nonzero' ? 2 : 0, null);
+                    events.push('worker:close');
+                })().catch((error: unknown) => {
+                    workerFailed(error);
+                    child.stdout.end();
+                    child.stderr.end(String(error));
+                    child.emit('exit', 1, null);
+                    child.emit('close', 1, null);
+                });
+                return child;
+            }
             assert.ok(
                 executable.endsWith('windows-deployment-query.exe') ||
                     executable.endsWith('windows-deployment-create.exe'),
@@ -159,7 +268,8 @@ async function controlled(context: TestContext) {
                 const destination = mutating ? fields[3] : '';
                 assert.ok(root !== undefined && relative !== undefined && destination !== undefined);
                 if (!mutating) {
-                    executionCounts.inspect++;
+                    if (executable.startsWith(own.options.output + path.sep)) executionCounts.workerInspect++;
+                    else executionCounts.inspect++;
                 } else if (operation === 'create-root') executionCounts.createRoot++;
                 else if (operation === 'create-directory') executionCounts.createDirectory++;
                 else if (operation === 'publish') executionCounts.publish++;
@@ -228,6 +338,8 @@ async function controlled(context: TestContext) {
                             volumeFlags: 8,
                             sid:
                                 fault === 'unsafe-parent' ||
+                                (fault === 'worker-native-facts' &&
+                                    executable.startsWith(own.options.output + path.sep)) ||
                                 (fault === 'unsafe-second-chunk' &&
                                     payloadChunks === 2 &&
                                     entryName === fields.at(-1)) ||
@@ -268,6 +380,11 @@ async function controlled(context: TestContext) {
             return Reflect.apply(originalStat, fs, args);
         },
     });
+    fs.unlink = async (file) => {
+        if (fault === 'support-close' && published && path.basename(String(file)) === 'windows-deployment-query.exe')
+            throw new Error('controlled temporary support close failed');
+        return originalUnlink(file);
+    };
     fs.open = async (...args: Parameters<typeof fs.open>) => {
         if (
             fault === 'require-copy' &&
@@ -285,6 +402,15 @@ async function controlled(context: TestContext) {
         const handle = await originalOpen(...args);
         handles.push(handle);
         const name = String(args[0]);
+        if (name.endsWith('use.lock') && typeof args[1] === 'number') {
+            const workerLease = executionCounts.worker > 0;
+            const close = handle.close.bind(handle);
+            handle.close = async () => {
+                await close();
+                events.push(workerLease ? 'lease:worker-close' : 'lease:parent-close');
+                if (workerLease && fault === 'worker-release') throw new Error('controlled worker use release failed');
+            };
+        }
         if (name.startsWith(own.options.output) && String(args[1]).includes('x')) {
             events.push(`write:${path.relative(own.options.output, name)}`);
             const sync = handle.sync.bind(handle);
@@ -323,6 +449,7 @@ async function controlled(context: TestContext) {
             const close = handle.close.bind(handle);
             handle.close = async () => {
                 await close();
+                events.push('lease:operation-close');
                 if (published && fault === 'operation-close') throw new Error('controlled operation release failure');
             };
         }
@@ -343,7 +470,19 @@ async function controlled(context: TestContext) {
     return {
         own,
         events,
-        executionCounts: () => ({ ...executionCounts }),
+        executionCounts: () => ({ ...executionCounts, compiles: compiler.compiles() }),
+        waitForWorkerResponse: () => workerResponse,
+        completeWorker: () => {
+            assert.ok(completeWorker);
+            const release = completeWorker;
+            completeWorker = undefined;
+            release();
+        },
+        releaseHeldWorker: () => {
+            const release = completeWorker;
+            completeWorker = undefined;
+            release?.();
+        },
         sourceManifest: () => {
             assert.ok(sourceManifest);
             return sourceManifest;
@@ -375,6 +514,7 @@ async function controlled(context: TestContext) {
             for (const handle of handles) await handle.close().catch(() => {});
             fs.open = originalOpen;
             fs.lstat = originalStat;
+            fs.unlink = originalUnlink;
             childProcess.execFile = originalExec;
             childProcess.spawn = originalSpawn;
             process.dlopen = originalDlopen;
@@ -424,7 +564,7 @@ test('stage fixture admits exact captured temporary owners across controlled raw
     });
     syncBuiltinESMExports();
     try {
-        own = await stageFixture();
+        own = await stageFixture({ compiler: false });
         compiler = await ownedWindowsDeploymentCompiler(context);
         assert.deepEqual(
             allocations.map((value) => value.prefix),
@@ -525,7 +665,7 @@ test('fresh fixture construction restores guards and owned stage after compiler 
         assert.equal(fault.compilerRequests(), 1);
         fault.assertRestored();
         await fault.assertRemoved();
-        const subsequent = await stageFixture();
+        const subsequent = await stageFixture({ compiler: false });
         try {
             assert.ok((await fs.lstat(subsequent.options.electronArchive)).isFile());
         } finally {
@@ -558,7 +698,7 @@ test('fresh fixture construction preserves original setup and cleanup errors in 
 });
 
 test('fresh transaction uses actual source producer, protected manifest and state-last publication then read admission', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('source-manifest-replaced');
@@ -622,7 +762,7 @@ test('fresh transaction uses actual source producer, protected manifest and stat
 });
 
 test('controlled fresh I/O does not retain raw payload bytes or executor callback histories', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('manifest-write');
@@ -637,7 +777,7 @@ test('controlled fresh I/O does not retain raw payload bytes or executor callbac
 });
 
 test('post-publication source cleanup failure remains an indeterminate transaction result', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('cleanup');
@@ -653,7 +793,7 @@ test('post-publication source cleanup failure remains an indeterminate transacti
 });
 
 test('fresh write and close failures preserve both original errors and publish no state', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('lease-write-and-close');
@@ -676,7 +816,7 @@ test('fresh write and close failures preserve both original errors and publish n
 });
 
 test('existing roots and fixed-file collisions are refused without adoption or repair', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const scenario of [
         'empty',
@@ -742,7 +882,7 @@ test('existing roots and fixed-file collisions are refused without adoption or r
 });
 
 test('no-replace collision and final tree drift cannot publish a state', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['build-collision', 'final-drift'])
         await context.test(fault, async () => {
@@ -852,7 +992,7 @@ test('fresh arm64 staging retains its x64-only refusal before filesystem, subpro
 });
 
 test('protected manifest failures never publish state or remove fixed lease inodes', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of [
         'manifest-write',
@@ -887,7 +1027,7 @@ test('protected manifest failures never publish state or remove fixed lease inod
 });
 
 test('unsafe native parents and false successful creation replies refuse admission before payload or state publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['unsafe-parent', 'unprotected', 'create-directory']) {
         const fixture = await controlled(context);
@@ -908,7 +1048,7 @@ test('unsafe native parents and false successful creation replies refuse admissi
 });
 
 test('state publication response loss is indeterminate and preserves the committed closure without replay', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('publish-after-state');
@@ -934,7 +1074,7 @@ test('state publication response loss is indeterminate and preserves the committ
 });
 
 test('post-publication read admission and operation release failures remain indeterminate', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['reopen', 'use-lock', 'operation-close'])
         await context.test(fault, async () => {
@@ -955,7 +1095,7 @@ test('post-publication read admission and operation release failures remain inde
 });
 
 test('fresh payload consumer issues exactly one fixed copy command before any payload publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('require-copy');
@@ -972,7 +1112,7 @@ test('fresh payload consumer issues exactly one fixed copy command before any pa
 });
 
 test('complete permission sweeps reject unsafe non-target second chunks and changes after content reads before publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['unsafe-second-chunk', 'post-content-unsafe'])
         await context.test(fault, async () => {
@@ -994,4 +1134,156 @@ test('complete permission sweeps reject unsafe non-target second chunks and chan
                 await fixture.cleanup();
             }
         });
+});
+
+test('fresh published payload contains the fixed query and ordinary deployment worker before readback succeeds', {
+    skip: !fixedWindows,
+}, async (context) => {
+    const fixture = await controlled(context);
+    try {
+        const result = await app.stageFreshDesktopInstallation(fixture.own.options);
+        const manifest: unknown = JSON.parse(
+            await fs.readFile(path.join(result.buildRoot, 'payload-manifest.json'), 'utf8'),
+        );
+        assert.ok(isRecord(manifest) && Array.isArray(manifest.entries));
+        const names = manifest.entries.map((entry: unknown) => {
+            assert.ok(isRecord(entry) && typeof entry.path === 'string');
+            return entry.path;
+        });
+        assert.ok(names.includes('resources/app/windows-deployment-query.exe'), 'fresh reader query must be delivered');
+        assert.ok(names.includes('resources/app/deployment-worker.mjs'), 'ordinary readback worker must be delivered');
+    } finally {
+        await fixture.cleanup();
+    }
+});
+
+test('fresh worker retains parent use through early response actual exit and late stdio settlement', {
+    skip: !fixedWindows,
+}, async (context) => {
+    for (const fault of ['worker-late-exit', 'worker-late-stdio']) {
+        const fixture = await controlled(context);
+        fixture.fault(fault);
+        let settled = false;
+        const outcome = app.stageFreshDesktopInstallation(fixture.own.options).then(
+            (value) => {
+                settled = true;
+                return { ok: true as const, value };
+            },
+            (error: unknown) => {
+                settled = true;
+                return { ok: false as const, error };
+            },
+        );
+        const failures: unknown[] = [];
+        try {
+            await Promise.race([
+                fixture.waitForWorkerResponse(),
+                outcome.then((terminal) => {
+                    if (!terminal.ok) throw terminal.error;
+                    throw new Error('Fresh transaction settled before the intentionally held worker response.');
+                }),
+            ]);
+            assert.equal(settled, false);
+            assert.ok(fixture.events.includes('lease:worker-close'));
+            assert.equal(fixture.events.includes('lease:parent-close'), false);
+            assert.equal(fixture.events.includes('lease:operation-close'), false);
+            fixture.completeWorker();
+            const terminal = await outcome;
+            if (!terminal.ok) throw terminal.error;
+            assert.ok(fixture.events.indexOf('lease:worker-close') < fixture.events.indexOf('worker:exit'));
+            assert.ok(fixture.events.indexOf('worker:close') < fixture.events.indexOf('lease:parent-close'));
+            assert.ok(fixture.events.indexOf('lease:parent-close') < fixture.events.indexOf('lease:operation-close'));
+        } catch (error) {
+            failures.push(error);
+        } finally {
+            fixture.releaseHeldWorker();
+            const terminal = await outcome;
+            if (!terminal.ok && !failures.includes(terminal.error)) failures.push(terminal.error);
+            try {
+                await fixture.cleanup();
+            } catch (error) {
+                failures.push(error);
+            }
+        }
+        if (failures.length === 1) throw failures[0];
+        if (failures.length > 1)
+            throw new AggregateError(failures, 'Late-worker assertion, transaction, or fixture cleanup failures.');
+    }
+});
+
+test('fresh worker malformed oversized stderr nonzero and release failures remain indeterminate after actual settlement', {
+    skip: !fixedWindows,
+}, async (context) => {
+    for (const fault of ['worker-malformed', 'worker-oversized', 'worker-stderr', 'worker-nonzero', 'worker-release']) {
+        const fixture = await controlled(context);
+        fixture.fault(fault);
+        try {
+            await assert.rejects(
+                app.stageFreshDesktopInstallation(fixture.own.options),
+                (error) => error instanceof app.FreshDeploymentError && error.outcome === 'indeterminate',
+            );
+            assert.equal(fixture.executionCounts().worker, 1);
+            assert.ok(fixture.events.includes('lease:parent-close'));
+            const state: unknown = JSON.parse(
+                await fs.readFile(path.join(fixture.own.options.output, '.deployment/state.json'), 'utf8'),
+            );
+            assert.ok(isRecord(state) && state.phase === 'active');
+        } finally {
+            await fixture.cleanup();
+        }
+    }
+});
+
+test('fresh worker rejects changed retained code Node query manifest and native facts without rollback or replay', {
+    skip: !fixedWindows,
+}, async (context) => {
+    for (const fault of [
+        'worker-code',
+        'worker-node',
+        'worker-query-bytes',
+        'worker-query-identity',
+        'worker-manifest',
+        'worker-native-facts',
+    ]) {
+        const fixture = await controlled(context);
+        fixture.fault(fault);
+        try {
+            await assert.rejects(
+                app.stageFreshDesktopInstallation(fixture.own.options),
+                (error) => error instanceof app.FreshDeploymentError && error.outcome === 'indeterminate',
+            );
+            assert.equal(fixture.executionCounts().worker, 1);
+            const state: unknown = JSON.parse(
+                await fs.readFile(path.join(fixture.own.options.output, '.deployment/state.json'), 'utf8'),
+            );
+            assert.ok(isRecord(state) && state.phase === 'active');
+            assert.equal(
+                fixture.events.filter((value) => value.startsWith('publish:') && value.includes('state')).length,
+                1,
+            );
+        } finally {
+            await fixture.cleanup();
+        }
+    }
+});
+
+test('fresh temporary support close failure stops before ordinary worker spawn and retains indeterminate publication', {
+    skip: !fixedWindows,
+}, async (context) => {
+    const fixture = await controlled(context);
+    fixture.fault('support-close');
+    try {
+        await assert.rejects(
+            app.stageFreshDesktopInstallation(fixture.own.options),
+            (error) => error instanceof app.FreshDeploymentError && error.outcome === 'indeterminate',
+        );
+        assert.equal(fixture.executionCounts().worker, 0);
+        const state: unknown = JSON.parse(
+            await fs.readFile(path.join(fixture.own.options.output, '.deployment/state.json'), 'utf8'),
+        );
+        assert.ok(isRecord(state) && state.phase === 'active');
+        assert.ok(fixture.events.includes('lease:parent-close'));
+    } finally {
+        await fixture.cleanup();
+    }
 });

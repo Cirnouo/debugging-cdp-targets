@@ -17,6 +17,7 @@ import {
     ownedWindowsDeploymentCompiler,
     ownedWindowsDeploymentNative,
 } from './fixtures/deployment-support.ts';
+import { captureOwnedDirectoryCleanup } from './fixtures/owned-directory-cleanup.ts';
 
 const fixedWindows = process.platform === 'win32' && process.arch === 'x64';
 
@@ -35,9 +36,8 @@ after(() => {
     mock.restoreAll();
     syncBuiltinESMExports();
 });
-const { inspectWindowsDeploymentExecutable, buildWindowsDeploymentSupport } = await import(
-    '../src/adapters/windows-deployment-support.ts'
-);
+const { inspectWindowsDeploymentExecutable } = await import('../src/adapters/windows-deployment-query.ts');
+const { buildWindowsDeploymentSupport } = await import('../src/adapters/windows-deployment-support.ts');
 const { openDeploymentNativeAuthority, createFreshDeploymentRoot } = await import(
     '../src/adapters/app-deployment-native.ts'
 );
@@ -68,6 +68,51 @@ test('support build refuses non-PE, wrong architecture, native entry, library an
 
 test('pre-native guard also rejects execFile custom-promisify retained executors', async () => {
     await assert.rejects(async () => promisify(childProcess.execFile)(process.execPath, ['--version']), /forbidden/);
+});
+
+test('compiler fixture removes its owned scratch directory after an initial reference write fails', async (t) => {
+    const parent = await fs.realpath(os.tmpdir());
+    const prefix = path.join(parent, 'dct-owned-compiler-');
+    const mkdtemp = fs.mkdtemp;
+    const writeFile = fs.writeFile;
+    const failure = new Error('Injected compiler fixture reference write failure.');
+    let owned: { root: string; remove: Awaited<ReturnType<typeof captureOwnedDirectoryCleanup>> } | undefined;
+    const create = t.mock.method(fs, 'mkdtemp', async (requestedPrefix: string) => {
+        assert.equal(requestedPrefix, prefix);
+        const root = await fs.realpath(await mkdtemp(prefix));
+        assert.equal(path.dirname(root), parent);
+        assert.match(path.basename(root), /^dct-owned-compiler-[A-Za-z0-9_-]{6}$/);
+        owned = { root, remove: await captureOwnedDirectoryCleanup(root) };
+        return root;
+    });
+    const write = t.mock.method(fs, 'writeFile', async (...args: Parameters<typeof fs.writeFile>) => {
+        if (owned && args[0] === path.join(owned.root, 'mscorlib.dll')) throw failure;
+        return writeFile(...args);
+    });
+    syncBuiltinESMExports();
+
+    try {
+        await assert.rejects(
+            async () => {
+                const fixture = await ownedWindowsDeploymentCompiler();
+                await fixture.cleanup();
+            },
+            (error: unknown) => error === failure,
+        );
+        assert.ok(owned);
+        await assert.rejects(fs.lstat(owned.root), { code: 'ENOENT' });
+    } finally {
+        write.mock.restore();
+        create.mock.restore();
+        syncBuiltinESMExports();
+        if (owned) {
+            const remaining = await fs.lstat(owned.root).catch((error: unknown) => {
+                if (isRecord(error) && error.code === 'ENOENT') return undefined;
+                throw error;
+            });
+            if (remaining) await owned.remove((directory) => fs.rm(directory, { recursive: true }));
+        }
+    }
 });
 
 test('fixed builder owns both real source sets, refuses concurrent build and releases only owned artifacts', {
@@ -640,7 +685,7 @@ test('normal Windows admission refuses missing delivered support before any help
 }, async () => {
     const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'dct-source-admission-')));
     try {
-        await assert.rejects(openDeploymentNativeAuthority(root, false), /build-only|delivered/i);
+        await assert.rejects(openDeploymentNativeAuthority(root, false), /unbound/i);
         assert.deepEqual(await fs.readdir(root), []);
     } finally {
         await fs.rm(root, { recursive: true });
@@ -1206,4 +1251,22 @@ test('copy body count failure preserves the underlying source finally close fail
     } finally {
         await support.release();
     }
+});
+
+test('query capture retains real producer bytes and rejects same-byte replacement and closed support', {
+    skip: !fixedWindows,
+}, async (t) => {
+    const fixture = await ownedWindowsDeploymentCompiler(t);
+    const support = await buildWindowsDeploymentSupport();
+    const first = await support.captureQuery();
+    first.bytes.fill(0);
+    const captured = await support.captureQuery();
+    assert.deepEqual(captured.bytes, ownedDeploymentPe());
+    assert.equal(captured.sha256, createHash('sha256').update(ownedDeploymentPe()).digest('hex'));
+    const output = path.join(fixture.outputs, 'windows-deployment-query.exe');
+    await fs.rename(output, output + '.retained');
+    await fs.writeFile(output, captured.bytes);
+    await assert.rejects(support.captureQuery(), /identity\/bytes changed/);
+    await assert.rejects(support.release(), /identity\/cleanup failures/);
+    await assert.rejects(support.query([fixture.root]), /closed or busy/);
 });

@@ -222,16 +222,18 @@ release emits live changes for its fixed startup configuration.
 
 The deployment store remains a source-only prerequisite, outside App bootstrap,
 main, activation and restart-worker composition. Current native authority is
-Windows-only. Normal Windows authority remains unavailable pending delivered
-deployment support; current build-only support does not enable it. The normal-open
-contract exposes only read/shared-use capabilities; the
-separate trusted worker open requires actual validated native authority before
-exposing operation, commit or deletion. Per-user roles trust code running as the
-same account; OS permissions do not distinguish that account's ordinary App from
-arbitrary code run by that account. Metadata kind and environment values confer
-no writer authority. Unsupported default native entry points refuse before
-resource acquisition. Explicit supplied Windows capabilities in controlled tests
-do not authorize default native I/O on another OS.
+Windows-only. Ordinary native authority exposes read/shared-use through the
+verified, intrinsically bound sibling query. The direct native factory rejects
+unsupported hosts and ordinary writer requests before filesystem or native
+acquisition. The unbound query and worker also refuse before I/O. The public store
+entry points resolve the canonical installation path before requesting native
+authority. The separate trusted worker open requires actual validated native
+authority before exposing operation, commit or deletion. Per-user roles trust
+code running as the same account. OS permissions cannot distinguish that
+account's ordinary App from other code run by that account. Metadata kind and
+environment values confer no writer authority. Unsupported default native entry
+points refuse before resource acquisition. Explicit supplied Windows capabilities
+in controlled tests do not authorize default native I/O on another OS.
 
 Bounded Windows handle/SID/protected-DACL/local-NTFS source evidence and controlled
 fixtures do not establish actual protected creation, permission/ACL readback,
@@ -255,7 +257,17 @@ The explicit contributor-only `stageFreshDesktopInstallation` source composition
 supports Windows x64 fresh enrollment and state-last initial publication. It
 consumes the actual verified stage producer and owns a finite private build-only
 query/create support lifetime. This does not enable default App admission,
-restart-worker or installer integration, and establishes no native acceptance.
+restart/update/installer integration, and establishes no native acceptance.
+The supported Windows stage produces and privately captures its actual query Q
+before App/worker buffers and observer callbacks. Its intrinsic
+`__DCT_DEPLOYMENT_QUERY__` expectation fixes platform/architecture, sibling name,
+complete bytes/digest and PE/CLR structure. Q precedes buffers, manifest and build
+identity; no state, caller digest/backend, old executable or runtime compiler
+supplies trust. Creator/compiler/reference provenance remains separate from
+runtime files. `generateAppFiles` and `check:app` are compile-free and explicitly
+unbound; that worker refuses before file/native/process I/O. Unsupported native
+cells refuse without architecture substitution.
+
 The Windows stage producer composes its complete expected payload
 from authenticated original ZIP entries, the selected original Node runtime,
 actual generated App buffers/licenses/native packages and the complete unchanged
@@ -274,8 +286,26 @@ and license evidence. The explicit fresh source consumer joins this
 production with native protected creation before publishing an initial build;
 actual platform permission, compiler/runtime and installer acceptance remain pending.
 The maintained Node runtime-file inventory currently enables Windows x64 only.
-Windows arm64 refuses staging until its complete runtime-file and license evidence
-is supplied; its fresh source producer and native proof also remain pending.
+Windows arm64 staging still requires complete runtime-file and license evidence,
+an architecture-specific source producer and native proof.
+
+After protected state-last publication and temporary reader/fixed/payload checks,
+the fresh transaction retains operation/shared-use descriptors and successfully
+closes temporary support once. It never calls that old reader/query again. The
+parent verifies retained producer bytes/identities for fixed Node, query and
+worker, then owns one hidden shell-free ordinary Node child and all stdio before
+awaiting. The worker captures its own module/Node paths before awaits, requires
+canonical installationRoot/builds/<64-hex>/resources/app placement, verifies the
+original Node/native loader, ordinary read/shared-use, own-build selection, whole
+payload and repeated native/state/identity checks, and releases its own use before
+canonical output. Parent success requires the exact retained state and actual
+successful child/all-stdio settlement; response, EOF and deadlines are not exit.
+No early lease release, kill, replay, rollback or new global ledger is added.
+Close/spawn/read/output/release failures after publication remain indeterminate.
+Normal Windows writers remain unavailable even in bound builds. Executing code
+and original native loading remain trust boundaries; hashes do not establish OS
+image-selection atomicity, permissions or native execution acceptance.
+
 Ordinary startup neither creates nor repairs a missing or partial envelope.
 The installation schema, canonical identity formula and two persistent lease
 inodes are unchanged. App admission stays disabled until the complete producer,

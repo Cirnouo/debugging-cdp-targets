@@ -6,6 +6,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { mock, test } from 'node:test';
 import { promisify } from 'node:util';
+import { openDeploymentNativeAuthority } from '../src/adapters/app-deployment-native.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { createDeploymentStoreFixture } from './fixtures/deployment-store.ts';
 
@@ -255,5 +256,33 @@ test('controlled Windows reader refuses replacement of its held fixed inode', as
         await lease.release();
     } finally {
         await own.cleanup();
+    }
+});
+
+test('ordinary Windows writer refusal precedes filesystem and native I/O without borrowing fresh authority', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const architecture = Object.getOwnPropertyDescriptor(process, 'arch');
+    assert.ok(platform && architecture);
+    const guards = [
+        mock.method(fs, 'lstat', () => {
+            throw new Error('Writer performed filesystem I/O.');
+        }),
+        mock.method(childProcess, 'spawn', () => {
+            throw new Error('Writer performed native I/O.');
+        }),
+    ];
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
+    Object.defineProperty(process, 'arch', { ...architecture, value: 'x64' });
+    syncBuiltinESMExports();
+    try {
+        await assert.rejects(
+            openDeploymentNativeAuthority('C:\\unselected', true),
+            /Ordinary Windows deployment writing remains unavailable/,
+        );
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+        Object.defineProperty(process, 'arch', architecture);
+        for (const guard of guards) guard.mock.restore();
+        syncBuiltinESMExports();
     }
 });

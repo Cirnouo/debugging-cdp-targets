@@ -14,15 +14,16 @@
   Its bounded canonical state store preserves removal fences, changed-document
   refusal and pre-commit versus indeterminate outcomes. It remains outside App startup.
 - Its explicit fresh contributor composition owns the concrete native build
-  lifetime and reopens readers with newly sampled facts. Normal Windows admission
-  fails closed while delivered query binaries remain pending; no runtime build
-  fallback, caller receipt, backend or authority registration exists.
-- `app-deployment-native.ts` refuses unsupported actual hosts before filesystem
-  or native query acquisition. Windows x64/arm64 normal admission still fails
-  closed without delivered query support. Its fixed Windows x64 current-account
-  fresh directory/no-replace operations belong to the explicit contributor builder.
-  Same-boundary Windows path collections use
-  bounded fresh batches; dedup never weakens managed-entry purpose predicates.
+  lifetime and reopens readers with newly sampled facts. Ordinary Windows readers
+  use only the intrinsically bound sibling query; unbound source refuses before
+  I/O and normal writing remains unavailable. No runtime build fallback, caller
+  receipt, backend or authority registration exists.
+- The ordinary factory in `app-deployment-native.ts` refuses unsupported actual
+  hosts before filesystem or native query acquisition. This adapter supplies
+  native account and entry evidence and owns fixed Windows x64 current-account
+  fresh directory/no-replace operations for the explicit contributor builder.
+  Same-boundary Windows path collections use bounded fresh batches. Deduplication
+  preserves managed-entry purpose predicates.
   Fresh payload sweeps union all recorded entries and parent chains per boundary,
   with a new complete permission sweep on each side of content verification.
   Windows reader root/envelope and fixed-inode collections coalesce only within
@@ -39,14 +40,19 @@
   authority helpers and their historical pure policies remain only until the
   scheduled deployment deletion cut; the public factory cannot select them.
 - `windows-deployment-support.ts` owns the fixed Windows x64 compiler/source/
-  reference recipe, inert PE structure checks, actual output receipt, exclusive
+  reference recipe, actual output receipt, exclusive
   materialization and finite invocation lifetime. It accepts no caller helper
   path or receipt. `windows-deployment-protocol.ts` owns strict finite UTF-8 wire
   framing and actual byte/count query packing; `windows-deployment-stream.ts`
   drains both pipes during backpressured input and retains child/stdio terminal
-  ownership after failures. These build-only EXEs and C# inputs are excluded
-  from generated App delivery. Compilation, runtime/signing and native admission
-  remain separate gates.
+  ownership after failures. Creator EXEs and C# inputs remain build-only; supported
+  stages separately capture and deliver only the actual produced query bytes.
+  Compilation, runtime/signing and native admission remain separate gates.
+- `windows-deployment-query.ts` owns the complete PE/CLR inspector and strict
+  internal bound/unbound expectation. It resolves one exact canonical sibling,
+  checks full bytes and retained named/descriptor identity around read-only
+  execution, and shares the existing binary codec and terminal stream owner.
+  It imports no compiler/creator/copy implementation.
 - `macos-deployment-authority.jxa` provides read-only descriptor/UID/ACL/local-APFS
   source evidence with exact returned masks. Controlled source checks do not
   establish native acceptance on either architecture. Filesystem IDs bound the

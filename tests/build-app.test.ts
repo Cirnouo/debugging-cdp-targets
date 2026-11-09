@@ -251,10 +251,10 @@ async function staticCheck(native: { platform: string; architecture: string }, p
     const stateUrl = pathToFileURL(path.join(directory, 'state.mjs')).href;
     const stateImport = `import{state,blocked}from${JSON.stringify(stateUrl)};`;
     const modules: Record<string, string> = {
-        'node:child_process': `${stateImport}export const execFile=()=>blocked('extraction');`,
+        'node:child_process': `${stateImport}export const execFile=()=>blocked('extraction'),spawn=()=>blocked('spawn');`,
         'node:fs/promises': `${stateImport}
 export const mkdir=()=>blocked('mkdir'),mkdtemp=()=>blocked('mkdtemp'),writeFile=()=>blocked('write'),
-open=()=>blocked('stage'),lstat=()=>blocked('stage'),rm=()=>blocked('write');
+open=()=>blocked('stage'),lstat=()=>blocked('stage'),rm=()=>blocked('write'),unlink=()=>blocked('write');
 export const realpath=async value=>value;
 export async function readFile(file){state.reads.push(String(file));return '{"tools":[]}'};`,
         esbuild: `${stateImport}import path from'node:path';export async function build(options){
@@ -389,7 +389,13 @@ test('static App check verifies Windows x64 and arm64 without native staging on 
                     assert.deepEqual(
                         result.state.bundles,
                         targets.flatMap((target) =>
-                            ['app-bootstrap.ts', 'app-main.ts', 'app-preload.ts', 'app-renderer.ts'].map((entry) => ({
+                            [
+                                'app-bootstrap.ts',
+                                'app-main.ts',
+                                'app-preload.ts',
+                                'app-renderer.ts',
+                                'deployment-worker.ts',
+                            ].map((entry) => ({
                                 target,
                                 entry,
                             })),
@@ -511,4 +517,17 @@ test('App delivery copies every official published file at its complete relative
         assert.ok(files.get(record.path)?.equals(bytes), record.path);
     }
     assert.equal(files.size, release.files.length);
+});
+
+test('compile-free App composition includes an unbound ordinary worker with no delivered query or compiler runtime', async () => {
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const files = await generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
+    const worker = files.get('deployment-worker.mjs');
+    assert.ok(worker && worker.length > 0);
+    assert.match(worker.toString('utf8'), /unbound/);
+    assert.equal(files.has('windows-deployment-query.exe'), false);
+    assert.doesNotMatch(
+        worker.toString('utf8'),
+        /DctDeploymentCreateProgram|Framework64|dct-deployment-support-|createFreshDeploymentRoot|copyPayload|createGatewayCore/,
+    );
 });
