@@ -1,4 +1,4 @@
-# Official supplied rules, package-file proof and launch inputs
+# Official supplied rules, package-file proof, launch inputs and upstream lifetime
 
 Apply root, [source](../../AGENTS.md) and [Gateway](../AGENTS.md) instructions
 cumulatively. The options, execution and release-evidence owners operate only on
@@ -18,7 +18,7 @@ its child environment snapshot remains a separate later boundary.
 execution.ts owns only one supplied wire id and once-only terminal latch. Preserve
 exact id type, single assignment, response/result-error XOR, close idempotence and
 no result archive. Actual slot accounting, originating facilities, wire transport,
-child exit and disposal stay with their current Core/bridge transaction owners.
+child exit and disposal stay with the managed connection and upstream transaction owners.
 Client cancellation detaches a response, never proves execution/child completion.
 
 release-evidence.ts validates unknown original-release and manifest evidence through
@@ -48,10 +48,48 @@ buildOfficialLaunchArguments, and windowsEnvironment=process.platform==='win32'
 at parameter3 of the latter, may read ambient state. Preserve invocation timing,
 original supplied-object getter/spread semantics and separate later child capture.
 No top-level/body/alias/computed reads, clock, network, SDK, native or child-process
-authority is granted. Pure/unknown owners, registry, connections and package-files
-cannot acquire this owner through any value or erased dependency form. Core's
-closed role and actual adapters consume it; complete child/catalog/wire/disposal
-transactions remain in their existing adapters.
+authority is granted. Managed connection, start admission and connection view
+consume it through their exact ../official/server-launch.ts edges. Upstream uses
+./server-launch.ts, and actual adapters also consume it. Core, registry, pure or
+unknown owners, package-files and other connection roles cannot acquire it through
+any value or erased dependency form.
+
+upstream.ts owns the complete openOfficialUpstream transaction. Keep the private
+catalog publisher, admitted Tool, SDK transport and wire latch, original roots
+and form callbacks, synchronous child enrollment, actual exit and bounded reaping
+together. The fixed outward catalog, managed connection's execution slot and
+original client facilities, and HTTP continuation stay with their existing owners.
+Preserve serialized uncapped refresh, atomic live-owner publication and unavailable
+recovery. Closing the upstream fences publication and closes the logical transport
+before confirming actual child exit.
+
+The upstream uses only these exact named dependency bindings:
+
+- node:child_process supplies spawn.
+- @modelcontextprotocol/client supplies Client, ProtocolError, ProtocolErrorCode,
+    ReadBuffer, SdkError, SdkErrorCode and serializeMessage. CallToolResult,
+    ElicitRequestFormParams, ElicitResult, JSONRPCMessage, ListRootsResult,
+    Progress, Tool and Transport are TYPE-only.
+- @modelcontextprotocol/core supplies CallToolResultSchema and ListToolsResultSchema.
+- ../../domains/control-contract.ts supplies only Diagnose TYPE.
+- ../../domains/request-failure.ts supplies RequestFailure.
+- ../diagnostics.ts supplies measured.
+- ./execution.ts supplies createOfficialExecution.
+- ./server-launch.ts supplies buildOfficialLaunchArguments,
+    captureOfficialServerEnvironment and resolveVerifiedOfficialServerBin.
+- ../../shared/constants.ts supplies CLOSE_TIMEOUT_SECONDS.
+
+Only the verified spawn executable fallback reads process.execPath. Only the
+original five direct zero-argument performance.now() calls in reapOwnedChild's
+deadline and remaining-time expressions read the clock. Preserve the direct
+public-bin fallback, unaliased owned child, shell:false and the literal TERM/KILL
+controls for that child. No other ambient process/clock, direct filesystem or
+network I/O, type-kind escape, alias, reexport or dynamic dependency is granted.
+Core and start admission import openOfficialUpstream as a value through their
+exact relative paths. Managed connection imports openOfficialUpstream and
+OfficialUpstream as types through its exact path. All other source owners,
+including adapters and unknown Official siblings, cannot depend on this lifetime,
+even through erased syntax.
 
 Before changing a consumer of target launch/isolation contracts, read the
 [target model instructions](../targets/model/AGENTS.md) and
@@ -66,5 +104,5 @@ live child/catalog or MCP continuation responsibility here, read the canonical
 [instruction disclosure policy](../../../docs/policies/documentation.md#instruction-progressive-disclosure),
 and review cumulative roles with the runtime-source auditor. Pure ownership grants
 none of those additional capabilities; the exact package-file role grants no
-permission to split a transaction or widen its five dependencies. The exact launch
-role likewise grants only its named defaults and five dependencies.
+permission to split a transaction or widen its five dependencies. The launch and
+upstream roles likewise grant only their named capabilities.

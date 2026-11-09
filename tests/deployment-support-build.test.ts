@@ -10,13 +10,14 @@ import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { after, mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
+import { inspect, promisify } from 'node:util';
 import { isRecord } from '../src/shared/errors.ts';
 import {
     ownedDeploymentPe,
     ownedWindowsDeploymentCompiler,
     ownedWindowsDeploymentNative,
 } from './fixtures/deployment-support.ts';
+import { captureOwnedDirectoryCleanup } from './fixtures/owned-directory-cleanup.ts';
 
 const fixedWindows = process.platform === 'win32' && process.arch === 'x64';
 
@@ -35,9 +36,8 @@ after(() => {
     mock.restoreAll();
     syncBuiltinESMExports();
 });
-const { inspectWindowsDeploymentExecutable, buildWindowsDeploymentSupport } = await import(
-    '../src/adapters/windows-deployment-support.ts'
-);
+const { inspectWindowsDeploymentExecutable } = await import('../src/adapters/windows-deployment-query.ts');
+const { buildWindowsDeploymentSupport } = await import('../src/adapters/windows-deployment-support.ts');
 const { openDeploymentNativeAuthority, createFreshDeploymentRoot } = await import(
     '../src/adapters/app-deployment-native.ts'
 );
@@ -70,6 +70,51 @@ test('pre-native guard also rejects execFile custom-promisify retained executors
     await assert.rejects(async () => promisify(childProcess.execFile)(process.execPath, ['--version']), /forbidden/);
 });
 
+test('compiler fixture removes its owned scratch directory after an initial reference write fails', async (t) => {
+    const parent = await fs.realpath(os.tmpdir());
+    const prefix = path.join(parent, 'dct-owned-compiler-');
+    const mkdtemp = fs.mkdtemp;
+    const writeFile = fs.writeFile;
+    const failure = new Error('Injected compiler fixture reference write failure.');
+    let owned: { root: string; remove: Awaited<ReturnType<typeof captureOwnedDirectoryCleanup>> } | undefined;
+    const create = t.mock.method(fs, 'mkdtemp', async (requestedPrefix: string) => {
+        assert.equal(requestedPrefix, prefix);
+        const root = await fs.realpath(await mkdtemp(prefix));
+        assert.equal(path.dirname(root), parent);
+        assert.match(path.basename(root), /^dct-owned-compiler-[A-Za-z0-9_-]{6}$/);
+        owned = { root, remove: await captureOwnedDirectoryCleanup(root) };
+        return root;
+    });
+    const write = t.mock.method(fs, 'writeFile', async (...args: Parameters<typeof fs.writeFile>) => {
+        if (owned && args[0] === path.join(owned.root, 'mscorlib.dll')) throw failure;
+        return writeFile(...args);
+    });
+    syncBuiltinESMExports();
+
+    try {
+        await assert.rejects(
+            async () => {
+                const fixture = await ownedWindowsDeploymentCompiler();
+                await fixture.cleanup();
+            },
+            (error: unknown) => error === failure,
+        );
+        assert.ok(owned);
+        await assert.rejects(fs.lstat(owned.root), { code: 'ENOENT' });
+    } finally {
+        write.mock.restore();
+        create.mock.restore();
+        syncBuiltinESMExports();
+        if (owned) {
+            const remaining = await fs.lstat(owned.root).catch((error: unknown) => {
+                if (isRecord(error) && error.code === 'ENOENT') return undefined;
+                throw error;
+            });
+            if (remaining) await owned.remove((directory) => fs.rm(directory, { recursive: true }));
+        }
+    }
+});
+
 test('fixed builder owns both real source sets, refuses concurrent build and releases only owned artifacts', {
     skip: !fixedWindows,
 }, async (t) => {
@@ -99,6 +144,130 @@ test('fixed builder owns both real source sets, refuses concurrent build and rel
     await support.release();
     assert.deepEqual(await fs.readdir(fixture.outputs), []);
 });
+
+for (const { childFailure, title } of [
+    { childFailure: false, title: 'fixed builder release retries a root ENOTEMPTY on the same scratch directory' },
+    { childFailure: true, title: 'fixed builder release preserves a child ENOTEMPTY without retrying scratch removal' },
+]) {
+    test(title, { skip: !fixedWindows }, async (t) => {
+        const fixture = await ownedWindowsDeploymentCompiler(t);
+        const support = await buildWindowsDeploymentSupport();
+        const remove = fs.rm;
+        let fault: unknown;
+        let attempts = 0;
+        let injectFault = false;
+        const setupRemoval = async () => {
+            const output = support.receipt.recipes[0]?.find((argument) => argument.startsWith('/out:'));
+            assert.ok(output);
+            const scratch = path.dirname(output.slice(5));
+            assert.equal(path.dirname(scratch), await fs.realpath(os.tmpdir()));
+            assert.match(path.basename(scratch), /^dct-deployment-support-[A-Za-z0-9_-]{6}$/);
+            assert.equal(await fs.realpath(scratch), scratch);
+            const identity = await fs.lstat(scratch, { bigint: true });
+            assert.ok(identity.isDirectory() && !identity.isSymbolicLink());
+            const verifyScratch = async (current: BigIntStats) => {
+                assert.ok(current.isDirectory() && !current.isSymbolicLink());
+                assert.equal(current.dev, identity.dev);
+                assert.equal(current.ino, identity.ino);
+                assert.equal(await fs.realpath(scratch), scratch);
+            };
+            const faultPath = childFailure ? path.join(scratch, 'retained-child') : scratch;
+            const removal = t.mock.method(fs, 'rm', async (...args: Parameters<typeof fs.rm>) => {
+                const [directory, options] = args;
+                assert.equal(directory, scratch);
+                assert.deepEqual(options, { recursive: true });
+                if (!injectFault) return remove(...args);
+                await verifyScratch(await fs.lstat(directory, { bigint: true }));
+                attempts++;
+                if (attempts === 2 && !childFailure) {
+                    await remove(directory, { recursive: true });
+                    return;
+                }
+                assert.equal(attempts, 1);
+                if (childFailure) {
+                    await fs.mkdir(faultPath);
+                    await fs.writeFile(path.join(faultPath, 'marker'), 'owned fixture data', { flag: 'wx' });
+                }
+                try {
+                    await fs.rmdir(faultPath);
+                } catch (error) {
+                    assert.ok(isRecord(error));
+                    assert.deepEqual([error.code, error.syscall, error.path], ['ENOTEMPTY', 'rmdir', faultPath]);
+                    fault = error;
+                    throw error;
+                }
+                assert.fail('Expected a real ENOTEMPTY from the owned directory.');
+            });
+            syncBuiltinESMExports();
+            return { scratch, verifyScratch, removal };
+        };
+        const { scratch, verifyScratch, removal } = await setupRemoval().catch(async (setupError: unknown) => {
+            try {
+                await support.release();
+            } catch (releaseError) {
+                throw new AggregateError(
+                    [setupError, releaseError],
+                    'Deployment release test setup and release failures.',
+                    {
+                        cause: setupError,
+                    },
+                );
+            }
+            throw setupError;
+        });
+        injectFault = true;
+
+        const failures: unknown[] = [];
+        try {
+            if (childFailure) {
+                await assert.rejects(
+                    () => support.release(),
+                    (error: unknown) => {
+                        assert.ok(error instanceof AggregateError);
+                        assert.equal(error.errors.length, 1);
+                        assert.equal(error.errors[0], fault);
+                        return true;
+                    },
+                );
+            } else {
+                await support.release();
+                await assert.rejects(fs.lstat(scratch), { code: 'ENOENT' });
+            }
+            assert.ok(fault);
+            assert.equal(attempts, childFailure ? 1 : 2);
+        } catch (error) {
+            failures.push(error);
+        }
+        removal.mock.restore();
+        syncBuiltinESMExports();
+
+        try {
+            assert.deepEqual(await fs.readdir(fixture.outputs), []);
+        } catch (error) {
+            failures.push(error);
+        }
+        if (childFailure || failures.length) {
+            try {
+                const remaining = await fs.lstat(scratch, { bigint: true }).catch((error: unknown) => {
+                    if (isRecord(error) && error.code === 'ENOENT') return undefined;
+                    throw error;
+                });
+                if (remaining) {
+                    await verifyScratch(remaining);
+                    await remove(scratch, { recursive: true });
+                }
+            } catch (error) {
+                failures.push(error);
+            }
+        }
+        if (failures.length > 1) {
+            throw new AggregateError(failures, 'Deployment release test and fixture cleanup failures.', {
+                cause: failures[0],
+            });
+        }
+        if (failures.length) throw failures[0];
+    });
+}
 
 test('unsupported build architecture rejects before compiler or source filesystem selection', {
     skip: !fixedWindows,
@@ -142,7 +311,35 @@ test('compiler input drift during the first controlled compilation rejects befor
         ]);
     });
     syncBuiltinESMExports();
-    await assert.rejects(buildWindowsDeploymentSupport(), /changed|Unsafe deployment build input/);
+    try {
+        await assert.rejects(buildWindowsDeploymentSupport(), /changed|Unsafe deployment build input/);
+    } catch (error) {
+        try {
+            const diagnostic = inspect(
+                { assertion: error, actual: isRecord(error) ? error.actual : undefined },
+                {
+                    showHidden: true,
+                    customInspect: false,
+                    getters: false,
+                    depth: 12,
+                    maxArrayLength: 64,
+                    maxStringLength: 16384,
+                    compact: false,
+                    breakLength: 120,
+                },
+            );
+            const maximum = 16384;
+            const truncated = '\n[diagnostic truncated at 16384 characters]';
+            t.diagnostic(
+                diagnostic.length > maximum
+                    ? `${diagnostic.slice(0, maximum - truncated.length)}${truncated}`
+                    : diagnostic,
+            );
+        } catch {
+            // Diagnostics must never replace the original assertion failure.
+        }
+        throw error;
+    }
     assert.equal(fixture.compiles(), 1);
     assert.deepEqual(await fs.readdir(fixture.outputs), []);
 });
@@ -488,7 +685,7 @@ test('normal Windows admission refuses missing delivered support before any help
 }, async () => {
     const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'dct-source-admission-')));
     try {
-        await assert.rejects(openDeploymentNativeAuthority(root, false), /build-only|delivered/i);
+        await assert.rejects(openDeploymentNativeAuthority(root, false), /unbound/i);
         assert.deepEqual(await fs.readdir(root), []);
     } finally {
         await fs.rm(root, { recursive: true });
@@ -1054,4 +1251,22 @@ test('copy body count failure preserves the underlying source finally close fail
     } finally {
         await support.release();
     }
+});
+
+test('query capture retains real producer bytes and rejects same-byte replacement and closed support', {
+    skip: !fixedWindows,
+}, async (t) => {
+    const fixture = await ownedWindowsDeploymentCompiler(t);
+    const support = await buildWindowsDeploymentSupport();
+    const first = await support.captureQuery();
+    first.bytes.fill(0);
+    const captured = await support.captureQuery();
+    assert.deepEqual(captured.bytes, ownedDeploymentPe());
+    assert.equal(captured.sha256, createHash('sha256').update(ownedDeploymentPe()).digest('hex'));
+    const output = path.join(fixture.outputs, 'windows-deployment-query.exe');
+    await fs.rename(output, output + '.retained');
+    await fs.writeFile(output, captured.bytes);
+    await assert.rejects(support.captureQuery(), /identity\/bytes changed/);
+    await assert.rejects(support.release(), /identity\/cleanup failures/);
+    await assert.rejects(support.query([fixture.root]), /closed or busy/);
 });

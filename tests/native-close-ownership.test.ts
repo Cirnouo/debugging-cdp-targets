@@ -1,9 +1,44 @@
 import assert from 'node:assert/strict';
-import { lstat, readFile } from 'node:fs/promises';
+import { ChildProcess } from 'node:child_process';
+import fs, { lstat, readFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
 import { type NativeCloseRuntime, nativeCloseRuntime } from './fixtures/native-close-runtime.ts';
+
+test('omitted unsupported native fixture identity rejects before scratch creation or spawn', async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const architecture = Object.getOwnPropertyDescriptor(process, 'arch');
+    assert.ok(platform && architecture);
+    const effects = { scratch: 0, spawn: 0 };
+    const scratch = t.mock.method(fs, 'mkdtemp', async () => {
+        effects.scratch++;
+        throw new Error('Blocked native fixture scratch creation.');
+    });
+    const spawn = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
+    assert.ok(spawn);
+    Object.defineProperty(ChildProcess.prototype, 'spawn', {
+        ...spawn,
+        value: () => {
+            effects.spawn++;
+            throw new Error('Blocked native fixture process spawn.');
+        },
+    });
+    Object.defineProperty(process, 'platform', { ...platform, value: 'linux' });
+    Object.defineProperty(process, 'arch', { ...architecture, value: 'x64' });
+    syncBuiltinESMExports();
+    try {
+        await assert.rejects(nativeCloseRuntime(t), /unsupported.*(?:Windows|platform|operating|architecture)/i);
+        assert.deepEqual(effects, { scratch: 0, spawn: 0 });
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+        Object.defineProperty(process, 'arch', architecture);
+        scratch.mock.restore();
+        Object.defineProperty(ChildProcess.prototype, 'spawn', spawn);
+        syncBuiltinESMExports();
+    }
+});
 
 async function awaitingExit(f: NativeCloseRuntime, operationId: string) {
     await f.accepted;
@@ -97,7 +132,7 @@ async function completeClose(f: NativeCloseRuntime, operationId: string) {
 test('accepted native Close retains live root ownership after its listener disappears until actual exit and disposal', {
     timeout: 10_000,
 }, async (t) => {
-    const f = await nativeCloseRuntime(t);
+    const f = await nativeCloseRuntime(t, { platform: 'win32', architecture: 'x64' });
     const id = operationId(await f.close('close-root-alive'));
     await awaitingExit(f, id);
     await retainedLiveRoot(f);
@@ -109,7 +144,7 @@ test('accepted native Close retains live root ownership after its listener disap
 test('native root Close receipt cannot finish its operation before independent descendant resources close', {
     timeout: 10_000,
 }, async (t) => {
-    const f = await nativeCloseRuntime(t);
+    const f = await nativeCloseRuntime(t, { platform: 'win32', architecture: 'x64' });
     const id = operationId(await f.close('close-resource-users'));
     await awaitingExit(f, id);
     f.emitClose();
@@ -131,7 +166,7 @@ test('native root Close receipt cannot finish its operation before independent d
 test('aborting operation_wait leaves the accepted native Close job and observer running without repost or cancellation', {
     timeout: 10_000,
 }, async (t) => {
-    const f = await nativeCloseRuntime(t);
+    const f = await nativeCloseRuntime(t, { platform: 'win32', architecture: 'x64' });
     const id = operationId(await f.close('wait-abort-root-alive'));
     const snapshot = await awaitingExit(f, id);
     const abort = new AbortController();
@@ -152,7 +187,7 @@ test('aborting operation_wait leaves the accepted native Close job and observer 
 test('a new Close after operation cancellation reuses the accepted native request while owning a new operation', {
     timeout: 10_000,
 }, async (t) => {
-    const f = await nativeCloseRuntime(t);
+    const f = await nativeCloseRuntime(t, { platform: 'win32', architecture: 'x64' });
     const cancelledId = operationId(await f.close('cancel-root-alive'));
     await awaitingExit(f, cancelledId);
     await f.readControl({ action: 'cancel', operationId: cancelledId });
@@ -177,7 +212,7 @@ for (const failure of ['helper-eof', 'wrong-pid', 'wrong-started-at'] as const) 
     test(`native Close ${failure} cannot prove root exit or release the retained observer and directory`, {
         timeout: 10_000,
     }, async (t) => {
-        const f = await nativeCloseRuntime(t);
+        const f = await nativeCloseRuntime(t, { platform: 'win32', architecture: 'x64' });
         const id = operationId(await f.close(`invalid-close-${failure}`));
         await awaitingExit(f, id);
         if (failure === 'helper-eof') f.helpers[1]?.child.stdout.emit('end');

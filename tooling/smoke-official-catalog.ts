@@ -4,9 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyAppOfficialRuntime } from '../src/adapters/app-official-runtime.ts';
-import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
 import { isStableVersion } from '../src/domains/software-version.ts';
 import { resolveVerifiedOfficialServerBin } from '../src/gateway/official/server-launch.ts';
+import { openOfficialUpstream } from '../src/gateway/official/upstream.ts';
 import { OFFICIAL_RELEASE } from './official-release.ts';
 
 type Source = { kind: 'installed' } | { kind: 'stage'; directory: string };
@@ -56,7 +56,7 @@ export async function smokeOfficialCatalog(source: Source) {
     const temporaryBase = await realpath(os.tmpdir());
     const home = await realpath(await mkdtemp(path.join(temporaryBase, 'dct-official-catalog-')));
     try {
-        const connection = await createOfficialConnection('http://127.0.0.1:1', {
+        const connection = await openOfficialUpstream('http://127.0.0.1:1', {
             ...runtime,
             cwd: home,
             environment: {

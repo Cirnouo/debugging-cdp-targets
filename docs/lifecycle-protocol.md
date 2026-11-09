@@ -32,6 +32,11 @@ prove client delivery, and an error alone, partial response or timeout is not
 refusal evidence. No unbounded drain or additional TCP shutdown protocol is
 part of this contract.
 
+The complete [target lifecycle](../src/gateway/targets/target-lifecycle.ts)
+implements supplied launch, rollback, normal Close and actual-exit handling.
+Its cleanup method is an explicit Core/registry owner operation; transport or
+Agent disconnect does not request resource cleanup.
+
 ## Requests and status selectors
 
 The gateway exposes seven lifecycle/operation tools alongside the fixed reviewed

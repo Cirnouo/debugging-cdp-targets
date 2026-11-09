@@ -203,7 +203,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
         await build({
             stdin: {
                 contents:
-                    "export { resolveVerifiedOfficialServerBin } from './src/gateway/official/server-launch.ts'; export { createOfficialConnection } from './src/adapters/mcp-bridge.ts';",
+                    "export { resolveVerifiedOfficialServerBin } from './src/gateway/official/server-launch.ts'; export { openOfficialUpstream } from './src/gateway/official/upstream.ts';",
                 resolveDir: fileURLToPath(new URL('../../..', import.meta.url)),
             },
             outfile: output,
@@ -249,7 +249,7 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
+                    `${prelude} await m.openOfficialUpstream('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
                 ],
                 options,
             ),
@@ -263,13 +263,51 @@ test('packaged resolver verifies every call and rejects missing or changed conte
                 [
                     '--input-type=module',
                     '--eval',
-                    `${prelude} await m.createOfficialConnection('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
+                    `${prelude} await m.openOfficialUpstream('http://127.0.0.1:9222', {bin: await m.resolveVerifiedOfficialServerBin(explicit)});`,
                 ],
                 options,
             ),
             /Missing official package file/,
         );
         await assert.rejects(readFile(path.join(fixture.root, 'spawn-marker')), /ENOENT/);
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true });
+    }
+});
+
+test('original release verification preserves upstream formatting and refuses incomplete content', async () => {
+    const fixture = await packageFixture();
+    try {
+        const original = new Map([
+            ['skills/devtools/SKILL.md', '# Upstream skill\r\n\tOriginal upstream format\r\n'],
+            ['skills/devtools/upstream.yml', '# Original upstream\r\n\tUnchanged upstream bytes\r\n'],
+        ]);
+        for (const [name, bytes] of original) {
+            fixture.contents.set(name, bytes);
+            await writeFile(path.join(fixture.root, name), bytes);
+        }
+        const evidence = parseOfficialReleaseEvidence({
+            ...fixture.input,
+            files: [...fixture.contents]
+                .map(([name, bytes]) => ({
+                    path: name,
+                    bytes: Buffer.byteLength(bytes),
+                    sha256: createHash('sha256').update(bytes).digest('hex'),
+                }))
+                .sort((left, right) => (left.path < right.path ? -1 : 1)),
+        });
+        const files = await verifyOfficialPackageFiles(fixture.root, evidence);
+        for (const [name, bytes] of original) assert.deepEqual(files.get(name), Buffer.from(bytes));
+        const license = path.join(fixture.root, 'LICENSE');
+        await writeFile(license, 'Changed upstream license\n');
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /digest|length|changed/i);
+        await writeFile(license, fixture.contents.get('LICENSE') ?? '');
+        const bin = path.join(fixture.root, 'build/src/bin/chrome-devtools-mcp.js');
+        await rm(bin);
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /missing/i);
+        await writeFile(bin, fixture.contents.get('build/src/bin/chrome-devtools-mcp.js') ?? '');
+        await writeFile(path.join(fixture.root, 'extra.yml'), 'extra: true\n');
+        await assert.rejects(verifyOfficialPackageFiles(fixture.root, evidence), /extra|unexpected/i);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }

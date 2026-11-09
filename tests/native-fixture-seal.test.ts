@@ -180,9 +180,15 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('tests/smoke/screenshot-timeout-study.ts'));
     assert.ok(built.inputs.includes('src/gateway/core.ts'));
     assert.ok(built.inputs.includes('src/gateway/registry.ts'));
+    assert.ok(built.inputs.includes('src/gateway/targets/target-lifecycle.ts'));
+    assert.equal(built.inputs.includes('src/application/target-controller.ts'), false);
     assert.equal(built.inputs.includes('src/application/plugin-runtime.ts'), false);
     assert.ok(built.inputs.includes('src/gateway/connections/resource-owner.ts'));
     assert.ok(built.inputs.includes('src/gateway/connections/directory-lease.ts'));
+    assert.ok(built.inputs.includes('src/gateway/connections/workspace-policy.ts'));
+    assert.ok(built.inputs.includes('src/gateway/connections/managed-connection.ts'));
+    assert.ok(built.inputs.includes('src/gateway/connections/start-admission.ts'));
+    assert.ok(built.inputs.includes('src/gateway/connections/connection-view.ts'));
     assert.equal(built.inputs.includes('src/application/connection-owner.ts'), false);
     assert.equal(built.inputs.includes('src/application/connection-directory.ts'), false);
     assert.ok(built.inputs.includes('src/gateway/owned-tool-arguments.ts'));
@@ -197,8 +203,10 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('src/gateway/official/release-evidence.ts'));
     assert.ok(built.inputs.includes('src/gateway/official/package-files.ts'));
     assert.ok(built.inputs.includes('src/gateway/official/server-launch.ts'));
+    assert.ok(built.inputs.includes('src/gateway/official/upstream.ts'));
     assert.equal(built.inputs.includes('src/adapters/official-package.ts'), false);
     assert.equal(built.inputs.includes('src/adapters/official-server.ts'), false);
+    assert.equal(built.inputs.includes('src/adapters/mcp-bridge.ts'), false);
     assert.ok(built.inputs.includes('src/shared/payload-path.ts'));
     assert.equal(built.inputs.includes('src/domains/chrome-profile.ts'), false);
     assert.equal(built.inputs.includes('src/domains/chromium-features.ts'), false);
@@ -218,7 +226,12 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
         false,
     );
     for (const input of [
+        'tooling/deployment-worker.ts',
+        'src/adapters/windows-deployment-query.ts',
         'tooling/licenses/bundled-notices.ts',
+        'src/host-plugins/user-intent.ts',
+        'src/host-plugins/native/user-intent-file.ts',
+        'src/adapters/host-user-intent.ts',
         'tooling/licenses/canonical-inputs.ts',
         'tooling/licenses/reviewed-vendors.json',
         'tooling/distribution/build-plugin.ts',
@@ -231,6 +244,8 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
         'tooling/distribution/version-agreement.ts',
     ])
         assert.equal(built.inputs.includes(input), false, input);
+    assert.equal(built.files.has('resources/app/windows-deployment-query.exe'), false);
+    assert.equal(built.files.has('resources/app/deployment-worker.mjs'), false);
     assert.ok(built.externalImports.every(isBuiltin), JSON.stringify(built.externalImports));
     for (const [file, bytes] of built.files) {
         if (/\.(?:ps1|cs)$/.test(file)) {

@@ -35,6 +35,7 @@ The four pure policy owners use only their exact supplied-value dependencies;
 none imports installed evidence, hashing or scans, including erased TYPE edges.
 The gate and scan keep their independent complete transaction lifetimes.
 Run `pnpm check:security` for the explicit network gate; the standalone entry's
-`--phase lockfile --root .` supports pre-install checks without upstream reads.
+`--phase lockfile --root .` runs repository-only pre-install checks and skips the
+upstream scan and install.
 `pnpm build:security` generates and `pnpm check:security:build` compares offline.
 These modules are tooling, never installable Plugin runtime content.

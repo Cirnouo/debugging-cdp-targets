@@ -9,11 +9,10 @@ This directory owns GitHub Actions workflows.
   archive contains the owned native helper before the job can succeed.
 
 - `ci.yaml` validates commit governance and current PR template submissions,
-  repository quality, Windows behavior, portable simulated CDP, real Chrome and
+  repository quality, Windows behavior, real Windows Chrome and
   the Plugin distribution on branch pushes, manual runs, weekly runs, and pull
-  request open/reopen/synchronize/title-or-body-edit events. Ordinary controlled
-  real Chrome jobs upload the fixed safe fixture diagnostic files only on failure.
-  The default-off manual Ubuntu startup study is the narrow exception below.
+  request open/reopen/synchronize/title-or-body-edit events. The controlled
+  real Chrome job uploads the fixed safe fixture diagnostic files only on failure.
   Quality also verifies App bundle/native-input/license composition. Latest-24
   Ubuntu catalog smoke explicitly uses the independently verified installed
   original release; this does not establish App/native delivery acceptance.
@@ -42,16 +41,20 @@ It disables lifecycle scripts, pnpmfile hooks and configuration-dependency
 loading, then installs, checks the installed graph,
 repeats the audits, and verifies the standalone build against its source. The
 isolated official Server tree is also reviewed before its actual installation. Commit
-messages and Quality wait for it; Windows/Portable/Real Chrome tests wait for Quality. A
-failed security check prevents downstream builds. Registry failures also block.
+messages and Quality wait for it; Windows tests, Real Chrome and Node compatibility
+wait for Quality. A failed security check prevents downstream builds. Registry
+failures also block. The six CI display names are Supply chain security, Commit
+messages, Quality, Node compatibility (24.x), Windows tests and
+Real Chrome (windows-latest). CodeQL remains in its separate workflow.
 
-Quality, Windows tests and both Portable tests execute strict TypeScript
+Quality, Windows tests, Real Chrome and Node compatibility execute strict TypeScript
 typechecking before their regression tests. The required Windows tests job keeps
 `needs: quality` and runs `pnpm test` followed by `pnpm test:windows:interactive --allow-gui`
 as separate mandatory steps after `pnpm typecheck`, without job/step conditions
 or `continue-on-error`. Windows additionally parses the PowerShell helper with
-both 5.1 and 7; portable tests remain simulated CDP, not claims of real
-Linux/macOS application acceptance. The first security entry is generated
+both 5.1 and 7. Ubuntu-hosted security, governance, Quality, Node compatibility
+and CodeQL checks retain shared regression value without Linux App support.
+The first security entry is generated
 JavaScript so lockfile preflight needs no installed dependencies.
 
 Contributor `pnpm test`, `pnpm test:coverage`, `pnpm verify:push` and pre-push
@@ -77,84 +80,63 @@ Weekly CI runs on Mondays at 01:17 UTC (09:17 Asia/Shanghai); CodeQL runs at
 01:47 UTC (09:47 Asia/Shanghai). Scheduled commit checks use GitHub's explicit
 branch ref and audit its full ancestry, rejecting missing identity or tag refs.
 
-Real Chrome jobs run the official tools and three-connection recovery smokes on
-`ubuntu-24.04` and `macos-15`, after their own strict typecheck. Linux requires
-Xvfb; macOS starts desktop Chrome directly. Both real smoke commands explicitly
-pass `--allow-gui`. Existing Windows CI proves owned native regression behavior;
-Tauri/Electron probes remain opt-in local development evidence without new CI
-application acquisition or toolchains. The executable path is explicit and
-must be an existing actual Chrome binary. Each launch uses an independent
-temporary profile and synthetic local page, validates process/listener/endpoint
-identity and logs the actual OS and Chrome versions. Missing prerequisites fail;
-no browser/profile/content artifacts are uploaded and cleanup uses normal Close.
+`Real Chrome (windows-latest)` runs the unchanged official tools and
+three-connection recovery smokes after its own strict typecheck, within the
+existing 20-minute job budget. Both commands explicitly pass `--allow-gui`.
+The job configures `C:/Program Files/Google/Chrome/Application/chrome.exe` and
+calls `requireChromeSmokeExecutable()` to check that exact path before profile
+or target acquisition. Actual runner availability is unknown until the job
+runs. Missing Chrome is a prerequisite failure; no installer, alternate
+installation, headless substitute, retry or timeout increase is provided.
+Each launch uses an independent temporary profile and synthetic local page,
+validates process/listener/endpoint identity and logs actual OS/Chrome versions.
+Normal Close, real exit and managed-root deletion assertions remain mandatory.
+This source-fixture result does not qualify the GUI App, installer, default
+admission or Windows arm64 native delivery. Tauri/Electron application probes
+remain separate opt-in development evidence.
+
+After trusted frozen installation and typecheck, PowerShell initializes the
+current collection before the blocking Chrome preflight. Initialization captures
+its native status immediately and reports `initialized=true` only after success
+with a valid fresh UUID; otherwise it reports false and an empty collection ID.
+Only that diagnostic step explicitly succeeds after handling its status. Failed
+init or stage metadata cannot skip either mandatory smoke. Both smoke commands
+carry the captured ID and joined `RUNNER_TEMP/dct-fixture-diagnostics` path.
+Preflight and each smoke immediately capture and check their own native exit
+status. A failed official smoke skips recovery, whose envelope remains not-run;
+later metadata or summary commands cannot replace the failure.
+
 Failure diagnostics use the reviewed
 [official upload-artifact v7.0.2 commit](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9).
-The failure-only upload names each artifact by OS, run ID and attempt and
-requires successful current initialization before upload.
-Initialization returns the existing collection UUID, which later stage, smoke
-and summary commands must carry. Refusal cannot mutate or present earlier
-collector files as current evidence, and those files are not eligible for upload.
-It retains artifacts for seven days, disables hidden files and overwrite, and selects exactly
-`job-index.json`, `official-server.events.ndjson`, `official-server.summary.json`,
-`entry-recovery.events.ndjson` and `entry-recovery.summary.json` from the separate
-`RUNNER_TEMP/dct-fixture-diagnostics` directory. There are no profile, workspace
-or temporary-directory wildcards. Jobs other than ordinary real Chrome and the
-manual study below remain artifact-free, and the release publisher uploads no
-custom assets. The failure job summary indexes
-relative filenames, safe primary stage/operation identity and the artifact link
-when upload succeeds. The index, both independent not-run summaries and empty
-streams start before prerequisites; collection ownership refuses prior evidence.
-Interrupted summary presentation derives the last safe runtime boundary/operation
-and count from the stream without requiring successful cleanup. If the first smoke
-fails, the second remains not-run under the existing fail-fast shell behavior.
-Evidence covers recorded direct checks; historical failure causes remain unknown,
-and synchronous instrumentation overhead on real Linux/macOS Chrome is unmeasured.
-See [smoke diagnostics and reproduction](../../tests/smoke/README.md#controlled-failure-diagnostics).
-New scan and browser checks become required only after their first successful
-GitHub runs and review of the CodeQL findings.
+Upload requires failure and successful current initialization, with a Windows,
+run-ID and attempt artifact name. It retains artifacts for seven days, disables
+hidden files and overwrite, and selects exactly `job-index.json`,
+`official-server.events.ndjson`, `official-server.summary.json`,
+`entry-recovery.events.ndjson` and `entry-recovery.summary.json` from that separate
+runner-temp directory. There are no profile, workspace or temporary-directory
+wildcards. All other jobs remain artifact-free, and the release publisher
+uploads no custom assets. No browser content or raw logs are uploaded.
 
-The `ubuntu-startup-study` workflow-dispatch input is boolean and defaults to
-false. Select the reviewed branch in Actions, choose **Run workflow**, and set
-that input to true, or run this single explicitly authorized batch:
+The index, both independent not-run envelopes and empty streams precede browser
+prerequisites. Stage, smoke and summary carry the fresh initialization UUID.
+Refusal preserves earlier collector files and excludes them from current evidence
+and upload. The failure summary runs even when initialization failed, presenting
+only a current-collection limitation in that case. Otherwise it indexes relative
+filenames, safe primary stage/operation identity, bounded stream progress and the
+artifact link when upload succeeds, without requiring successful cleanup.
+Recorded checks do not establish complete lifecycle attribution or explain
+historical failures. See
+[smoke diagnostics and reproduction](../../tests/smoke/README.md#controlled-failure-diagnostics).
 
-```sh
-gh workflow run ci.yaml --ref <reviewed-branch> -f ubuntu-startup-study=true
-```
+The portable product matrix, POSIX real-Chrome matrix and baseline Ubuntu
+startup-study job/input are retired. Ordinary CI retains cancellable
+`ci-{workflow}-{ref}` concurrency. The baseline sampler, study mode and controlled
+tests remain pending their later complete target-native deletion cut; they have
+no current CI execution or success-upload exception. Historical failed runs and
+dated observations remain historical evidence.
 
-Its run-ID-specific concurrency group cannot cancel ordinary CI's workflow/ref
-group. All ordinary jobs still execute their full checks, with the same display
-names and gates. The additional Ubuntu startup study waits for Quality and
-uses exactly three blocks crossed with file logging `on`/`off`, six fresh
-`ubuntu-24.04` runner jobs. It uses Node 24.21.0, pnpm 12.4.2 and the fixed actual
-Chrome path `/opt/google/chrome/chrome`. Each slot performs the existing frozen
-install, typecheck, current collection initialization and prerequisites, then
-one `official-server.ts --allow-gui --startup-study --chrome-file-logging on|off`
-invocation under `xvfb-run -a`, with its diagnostics directory and collection UUID.
-No pre-start Chrome version query, binary hashing, warmup, browser download or
-OS package installation is added. There are no retries, replacement slots or
-ignored failures; fail-fast is false so one sample's failure does not cancel peers.
-
-Only this study job uploads and indexes diagnostics after success as well as
-failure, guarded by `always()` and successful current initialization. It retains
-the exact same five safe filenames for seven days, with hidden files and overwrite
-disabled, warning on missing files. Artifact names are
-`ubuntu-startup-study-block-<block>-logging-<on|off>-<run-id>-<attempt>`.
-`entry-recovery` remains not-run with its empty stream. Normal real Chrome
-artifacts keep their original failure-only guard; release publication gains no
-assets. Raw Chrome logs, profiles and private scratch remain excluded.
-
-The primary measure is the first readiness outcome and monotonic duration.
-Secondary evidence includes owned-listener time, endpoint outcomes, safe process
-counters, closed wait kinds, system PSI, native/collector costs and cleanup.
-Both arms retain collectors, capture, display preflight and sampler; the off arm's
-absent Chrome log is expected. This is one batch of six pilot samples, with
-cancelled or incomplete slots recorded without replacement. Fresh runners do not
-establish cold caches, and blocks are not matched machines. Arm differences are
-association only; six successes mean not reproduced and root cause unknown.
-Missing terminal/cleanup records or capped/truncated evidence limits conclusions.
-The study is diagnostic evidence, not full acceptance. See the
-[bounded study procedure](../../tests/smoke/README.md#bounded-ubuntu-startup-study)
-for exact local arguments and the unchanged collection budgets.
+The [remote enforcement policy](../../docs/policies/quality.md#remote-enforcement)
+lists the active main ruleset's required checks and governs changes to them.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

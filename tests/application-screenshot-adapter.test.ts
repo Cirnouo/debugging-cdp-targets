@@ -411,6 +411,21 @@ function boundary(
     return { adapter, calls, sequence, records, nativeCalls, closed: () => fixtureClosed };
 }
 
+test('application adapter accepts a supplied anchor on a non-Windows host', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    assert.ok(platform);
+    let io: ReturnType<typeof boundary>;
+    try {
+        Object.defineProperty(process, 'platform', { ...platform, value: 'linux' });
+        io = boundary();
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+    }
+    assert.deepEqual(await io.adapter.cleanup(), { ok: true, gatewayNotAcquired: true });
+    assert.deepEqual(io.sequence, ['anchor-close']);
+    assert.deepEqual(io.nativeCalls, []);
+});
+
 test('application adapter forwards CLI GUI authorization only for native window mutations', async () => {
     const original = process.argv;
     try {

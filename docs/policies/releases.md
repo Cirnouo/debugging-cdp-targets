@@ -87,7 +87,9 @@ The tagged commit must already be merged into main. Enabling the workflow
 does not itself authorize the first 0.1.0 publication, which remains unreleased.
 
 The Release workflow calls the full CI at the tagged commit and publishes only
-after all security, governance, quality, Windows and portable checks succeed.
+after all retained common security, governance, quality and Node compatibility
+checks, Windows regressions and genuine Windows official/recovery Chrome checks
+succeed.
 It additionally verifies annotated-tag, checkout, event and remote tag identity,
 including the original pushed tag object, main ancestry and version/Changelog
 agreement. The workflow admits stable three-component tags and prerelease
@@ -150,8 +152,18 @@ own the accepted forward delivery design. Native App artifacts, updater and thin
 HTTP plugins are not delivered by this policy change. The current source-only
 publisher above is not evidence of native App delivery. Task 7 must replace its
 source-only final contract with independently inventoried native installer/portable
-artifacts for Windows 11, macOS 15 and Ubuntu 24.04, x64/arm64, including ordinary
-Node, unchanged official Server, licenses/notices and verifiable integrity.
+artifacts for Windows 11 x64 and arm64, including ordinary Node, unchanged official
+Server, licenses/notices and verifiable integrity. The
+[2026-11-08 Windows-only amendment](../adr/0017-singleton-desktop-app.md#accepted-windows-only-scope-amendment--2026-11-08)
+supersedes historical six-cell target membership; Linux and macOS have no current
+support, distribution or native acceptance target, including no Experimental
+support tier. Neither Windows architecture is newly qualified. Default admission
+remains unwired/disabled; contributor-only x64 fresh staging establishes no native
+or default-admission acceptance, and arm64 source/native proof gaps remain explicit
+in [App evidence](../app-runtime.md#building-and-evidence).
+Keep complete unchanged original official/npm/native package files and evidence,
+including all six original Node prebuild cells and upstream non-Windows files.
+CI runner host OS and cross-builds do not establish native product acceptance.
 
 Root package.json.version owns App Releases independently of the one plugin version
 owned by shared Skill metadata and validated against both maintained/generated

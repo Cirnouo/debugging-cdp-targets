@@ -2,8 +2,10 @@
 
 Status: accepted, 2026-10-17. Both App and plugins remain 0.1.0 Unreleased.
 The shared core and minimal App/direct HTTP/thin-plugin cutover are implemented
-in source; richer management, native deployment and all six distribution cells
-remain separate acceptance work. [App runtime](../app-runtime.md) documents the
+in source; richer management and native deployment remain separate acceptance
+work. The [Windows-only amendment](#accepted-windows-only-scope-amendment--2026-11-08)
+sets the current Windows 11 x64/arm64 installer and portable targets without
+qualifying either architecture. [App runtime](../app-runtime.md) documents the
 current boundary and evidence limits. This decision and the
 [implementation plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md)
 govern the remaining work; historical decisions below retain their design context.
@@ -291,3 +293,52 @@ Default regressions acquire no user targets/downloads or implicit GUI permission
 Task 7 separately verifies every native architecture, UI claim and actual host call,
 and semantically reconciles current bilingual docs while preserving dated history.
 No tags, publication, user/global configuration or repository settings are authorized.
+
+## Accepted Windows-only scope amendment — 2026-11-08
+
+The accepted current App/gateway support and delivery scope is Windows 11 only,
+with x64 and arm64 installer and portable targets. Linux and macOS have no current
+support, distribution or native acceptance target, including no Experimental
+support tier. This forward decision supersedes only the target membership of
+the earlier six-cell requirements, POSIX deployment roles and DEB/DMG delivery
+requirements above. Their historical bodies, observations and failed evidence
+remain intact. The [maintained App plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md)
+and [release policy](../policies/releases.md#accepted-forward-app-and-plugin-delivery)
+carry this current scope as maintained authorities.
+
+This scope change grants no native qualification. Default installation admission
+remains unwired and disabled. The explicit contributor-only Windows x64 fresh
+stage/enrollment composition is source-only, with actual protected creation,
+permission/ACL readback, compiler/runtime, installer and portable acceptance still
+pending. The maintained Node runtime-file inventory enables only Windows x64;
+Windows arm64 still needs its actual source inventory, producer and native proof.
+Both architectures retain their applicable native Electron load/lock and complete
+installer/portable acceptance gates. Cross-builds, unit tests and CI runner host
+OS do not establish native product support or acceptance. See the current
+[building and evidence limits](../app-runtime.md#building-and-evidence).
+
+Task 7a keeps strict enrolled-root metadata, immutable complete selection, two
+persistent installation lock inodes and pre-commit/indeterminate state outcomes;
+it does not enable default admission or stage/remove payloads. Task 7b must still
+join complete verified production, protected Windows creation and native authority
+before admission, and preserve pinned lifetime, cleanup/actual exit and overlapping
+restart leases. Task 7c now owns live-safe NSIS and extracted portable integration
+and native acceptance on both Windows architectures. Later implementation cuts
+remove retired first-party POSIX runtime, deployment, archive and acceptance
+responsibilities together with their callers, tests, audits and current maps;
+shared protocol, security, lifecycle and isolation regressions retain their actual
+consumers. A real Windows Chrome/official-server/recovery path must replace the
+retired shared E2E responsibility without ignoring or deleting failures to pass.
+
+Original official/npm/native releases and their authenticated evidence remain
+complete and unchanged, including all six original Node prebuild cells and
+non-Windows files inside upstream packages. Narrowing first-party App targets
+does not authorize pruning vendor bytes, refreshing hashes or upgrading inputs.
+
+All singleton, direct SDK Streamable HTTP, thin Codex/Claude host, bearer/_dct
+routing, official forwarding and resource lifetime boundaries remain in force.
+Preserve explicit Close/Keep, no takeover, no force-kill or automatic replay,
+connection-level directory leases and definitive cleanup barriers. This decision
+does not specify a replacement gateway architecture, CLI/service/deep link or
+remote-network model. App and plugins remain 0.1.0 Unreleased, with no release,
+tag, publication, repository settings or user/global configuration authorization.

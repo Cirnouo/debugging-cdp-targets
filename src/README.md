@@ -6,20 +6,38 @@ Before implementing the singleton desktop App migration, read
 The singleton App owns direct HTTP, management and native resources. The
 [runtime contract](../docs/app-runtime.md) describes its startup and cleanup.
 
-- `interface/`: synchronous Electron bootstrap, App composition and sandboxed UI.
-- `application/`: existing target controller, lifecycle/registration and App orchestration.
+- `interface/`: Windows platform guard and synchronous Chromium isolation,
+    App composition and sandboxed UI.
+- `application/`: lifecycle/registration and App orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
-- `gateway/`: complete Core transaction and retained registry/cleanup ownership,
+- `gateway/`: Core registration/catalog composition and retained registry/cleanup ownership,
+    managed state/execution, whole start admission and live view services in connections/,
     pure explicit bearer/tool-argument extraction, target evidence/identity
-    models, structured launch/isolation rules, bounded clock-backed diagnostics
-    and complete resource-generation/directory-lease lifetime in `connections/`,
+    models, structured launch/isolation rules, complete supplied-capability target
+    lifecycle in `targets/`, bounded clock-backed diagnostics
+    and complete resource-generation/directory-lease lifetime, managed connection,
+    start admission, live projection and supplied workspace policy in `connections/`,
     plus supplied Official options, wire-terminal values, release evidence and the
-    complete filesystem package-file proof and bounded launch-input authority in `official/`.
-- `host-plugins/`: pure payload byte proof and own-endpoint overlays.
-- `adapters/`: CDP transport, complete official child/catalog transactions and native process/OS I/O.
+    complete filesystem package-file proof, bounded launch-input authority and the
+    complete actual upstream lifetime in `official/`.
+- `host-plugins/`: pure payload byte proof, own-endpoint overlays and supplied
+    user-intent parsing/transition validation, plus selected-file evidence in `native/`.
+- `adapters/`: CDP transport, MCP HTTP composition and continuation, fixed reviewed
+    tool declarations and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
+
+`domains/app-distribution.ts` owns the pure Windows x64/arm64 support decision and
+strict distribution metadata matched to native identity. `interface/app-bootstrap.ts` refuses
+unsupported hosts before App paths, scratch, privileged schemes or controlled main
+import; supported Chromium isolation remains synchronous before asynchronous
+startup. `interface/app-main.ts` repeats the support guard before acquiring native
+or App resources. Its dormant Darwin tray-template and Linux visible-manager
+selectors are scheduled for complete Windows-platform selector retirement,
+together with `tests/app-main-lifecycle.test.ts`, interface instructions and this
+map, under the [Windows-only amendment](../docs/adr/0017-singleton-desktop-app.md#accepted-windows-only-scope-amendment--2026-11-08).
+Windows no-tray/requested-activation fallback and normal cleanup barriers remain.
 
 [ADR 0015](../docs/adr/0015-explicit-data-directory-isolation.md) assigns the
 isolation boundary: gateway/targets/model/ validates directory intent and opaque binding;
@@ -40,9 +58,17 @@ lease inodes, exposing separate reader and trusted writer opens.
 `adapters/app-deployment-native.ts` supplies concrete native account, ancestor,
 volume and object evidence. The read-only macOS JXA remains a source candidate.
 Windows contributor builds use fixed query/create C# sources through the private
-build-only support lifetime; generated App delivery contains neither deployment
-C# sources nor support EXEs. The explicit Windows x64 fresh stage composes the
-complete verified source producer, protected creation and state-last publication.
+build-only support lifetime. The query adapter owns the single PE inspector and
+intrinsic sibling-query binding. Supported stages deliver the fixed query and
+ordinary deployment worker, while creator/compiler/C# inputs remain build-only. The explicit Windows x64 fresh stage composes the
+complete verified source producer, protected creation and state-last publication,
+then closes temporary support before an independent ordinary-reader worker verifies
+the published build while parent operation/shared-use descriptors remain held.
 These source-only operations remain outside App entry composition; default
 admission, installers and native acceptance are separate pending gates. There is
 no runtime compiler fallback.
+
+The removal loop uses the caller's identity check and error classifier for
+each bounded attempt. Windows build support uses it during explicit release
+of a completed build to remove its scratch root.
+[Owned directory removal](adapters/owned-directory-removal.ts)

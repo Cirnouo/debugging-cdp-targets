@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import { connectionStatus, createConnectionRuntimeFixture, createCoreFixture } from '../../fixtures/core-runtime.ts';
+import {
+    connectionStatus,
+    createConnectionRuntimeFixture,
+    createCoreFixture,
+} from '../../fixtures/gateway/core-runtime.ts';
 
 test('gateway cleanup begins closing other connections while one permission operation still waits', async () => {
     const f = await createConnectionRuntimeFixture();

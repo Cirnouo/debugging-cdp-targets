@@ -12,177 +12,118 @@ Version 0.1.0 remains under development; no release has been published.
 
 ### Added
 
-- MCP initialization instructions expose registration, launch isolation,
-    explicit bearer/connection/session routing and Close/Keep to compatible hosts.
-- A consciously launched singleton Electron desktop App with a sandboxed React
-    manager, tray/fallback window, separate installed/portable data, validated
-    atomic settings, hot appearance, cold HTTP port and cleanup-gated normal exit.
-    The dashboard manages registration/connection ownership, unbounded age/idle
-    clocks, explicit scoped restart, per-row/batch Close and idle transfer, empty
-    registration cleanup and existing lifecycle operations. Validated schema-1
-    migration adds explicit host selections. After a successful cold-port bind,
-    independent native host synchronization preserves restrictions and reports
-    failure/retry or disk success with host reload pending. Pending configuration
-    writes and native host work settle before normal App exit.
-    Verified local Windows staging precedes native installer delivery.
-
-- Stable Node >=24.21.0 <25 support, with Node 24.21.0 as the exact CI and
-    problem-reproduction baseline, optional mise selection of everyday Node 24,
-    and exact pnpm 12.4.2 under the frozen-lockfile and supply-chain controls.
-- Explicit project homepages in both manifests, a consumed Codex website field
-    and Claude display title for GitHub self-installation.
-- Explicit Codex Skill discovery and host-only title, description and shared
-    Plugin icon metadata, with exact shared instruction and overlay inventories.
-- A dated independent host metadata record and contributor research requirement
-    before implementing new hosts or changing their metadata contracts.
-- Installed metadata and complete explicit Skill context acceptance on Windows
-    with Codex CLI 0.161.0 and Claude Code 2.1.294. Manual Codex Desktop
-    26.1002.52244 acceptance confirms the project website, Skill title/description/
-    icons and full long description. Automatic starter prompt injection remains
-    unverified.
-- Complete Codex same-version refresh instructions: upgrade the Marketplace,
-    then reinstall the current Plugin payload to refresh its installed cache.
-
-- English and Simplified Chinese project READMEs with language navigation, a
-    themed icon, a short host-specific quick start and a topic-based user guide
-    for installation, operation, compatibility and privacy.
-- Three Codex starter prompts for screenshot capture, console/network diagnosis
-    and page-load performance profiling.
-- A generated geometric project icon with theme-aware README artwork, universal
-  Codex base icons, a Codex dark variant and a universal Claude directory icon.
-- Independent thin Codex and Claude Code Plugins and Marketplace catalogs, with
-  direct App HTTP configuration and shared application-agnostic debugging instructions,
-  including fixed Chinese/English isolation, directory, cleanup, recovery,
-  configuration, input and Close/Keep questions with explicit Agent/User/Plugin
-  roles, declared factual variables and event-to-template mapping.
-  Claude Code 2.1.283 is the first supported and accepted baseline.
-- Explicitly authorized tag-triggered stable and prerelease GitHub source releases
-  with cumulative Changelog-based notes, new contributor attribution, and required
-  security and cross-platform CI gates. Arbitrary legal SemVer prerelease labels
-  preserve the latest stable release as the comparison baseline and GitHub latest.
-- One App-owned SDK HTTP gateway that creates independent official chrome-devtools-mcp
-  1.11.0 connections for new targets, without a fixed connection limit.
-- Direct host HTTP with strict MCP 2026-07-28 and sessionful legacy compatibility,
-  original official-child stdio, immutable initiating roots, validated form
-  continuation around one execution, active-response progress and cancellation.
-  The existing operation wait/status/result path remains available under host defaults.
-- Complete unchanged official chrome-devtools-mcp 1.11.0 bundled with the App,
-  with integrity-verified startup and no runtime package downloads.
-  Automatic update checks are disabled only for the official Server child.
-- Parallel independent-connection official calls with explicit connection/session routing and
-  independent progress, cancellation, actual-exit observation and lifecycle events.
-- Seven registration/lifecycle/operation tools with explicit per-call bearer,
-  idempotent asynchronous requests, bounded waits, explicit cancellation and Close/Keep.
-- A transport-independent shared core with bearer-scoped resource/operation ownership,
-    immutable roots and launch snapshots, explicit target/official/both restart,
-    per-connection execution admission and retryable final cleanup that retains failures.
-- Fixed complete official tool catalog with per-connection mcpArgs, explicit
-  disabled-tool replacement recipes, actual enabled schemas and workspace sources.
-  Capability-gated private upstream catalog refresh publishes complete reviewed
-  snapshots and freshness, retaining healthy resources while unavailable schemas
-  block new forwarding until validated recovery.
-- Summary discovery/lifecycle results and selected status with opt-in configuration,
-  diagnostics and tool details. Unavailable upstreams expose requirements only;
-  enabled tools have no activation recipe and unsupported tools give their reason.
-- Logical connection ownership with independent target/official generations,
-  scoped cancellation and complete
-  exit cleanup. Actual exit removes active and inactive sessions; failed resource
-  disposal remains in an internal in-memory cleanup ledger.
-- Reuse of kept live targets and resources with continued actual-exit observation.
-  Ordinary exit retries use a new start; explicit live restart retains the connection
-  and router while replacing the selected target, official Server, or both, and
-  refreshing the public session. Target-only restart retains the official Server;
-  fixed target ports remain fixed, while automatic ports may change before launch.
-  Directory ownership remains stable across every scope.
-- Explicit owned lifecycle/operation status and native actual-exit observation.
-  Failed startup retains primary phase/error and owned identity for recovery;
-  resource disposal failures retain ownership for retry without restoring dead routes.
-- Structured executable/args/cwd/env launches with native Windows privilege
-  detection, private one-shot elevation, actual app handles and separate
-  authorization and CDP readiness waits. Independently verified generic
-  application recipes can select a Chromium screenshot surface through existing
-  launch arguments; changed arguments use normal Close followed by a fresh start.
-- Windows normal Close selects the first verified visible, enabled, unowned
-    application window, excluding child/tool windows while supporting minimized
-    windows. Dated Tauri, Chrome, Electron and same-gateway Chrome-reuse controls
-    verify normal lifecycle, native exit and whole-directory cleanup.
-- Independent client response waits and owned official execution, phase-only diagnostics;
-  normal close without a listener and explicit retries after native failures.
-- Required explicit no-isolation or data-directory start intent, with researched
-    application bindings and Agent guidance for full/partial/unsupported/unknown
-    isolation support. Every launch in both modes uses a conservative read-only
-    occupancy gate, without singleton-capability exemptions or guessed generic roots.
-- Ordered directory choices: Agent selection, explicit Chrome-only preset at the
-    former home-relative location, existing directory, or new parent/optional name.
-    Program-owned exclusive named/random allocation, existing-nonempty retention,
-    explicit cleanup for other cases and reuse of prior whole-directory choices.
-    Only selected-preset container ancestors may be prepared; none uses no preset.
-- Connection-level data-directory leases across session restart and Keep,
-    with preauthorized retain or whole-directory delete-on-release after all
-    actual-app/native-acquisition/successor/resource users settle. Explicit original
-    start metadata retains actual real path/policy/state after failed/cancelled
-    startup and later cleanup; default summaries omit directory evidence.
-- Chrome native occupancy checks and launch reservations, with no implicit profile
-    fallback. Gateway-local port ownership is reserved before probing and retained
-    until actual exit or evidence that no app was created. Automatic updater
-    scheduling is disabled only in the new process. Windows Chrome automatically
-    receives one bare CDPScreenshotNewSurface feature, preserving valid unrelated
-    parameters and exact restart arguments. Conflicting or ineffective input fails
-    before directory acquisition/spawn and releases its transient port claim.
-- Chrome extension debugging, with usage statistics and CrUX disabled by default
-  and explicit overrides.
-- Chrome support on Windows, Ubuntu 24.04 and macOS 15, with normal shutdown
-  and hidden Windows auxiliary consoles.
+- A consciously launched singleton Electron desktop App with sandboxed React
+    management, tray/fallback window, separate installed/portable configuration,
+    validated atomic settings, schema migration, hot appearance, cold HTTP port
+    and cleanup-gated normal exit. Current targets are Windows 11 x64 and arm64,
+    installer and portable; neither architecture is qualified. Default installation
+    admission remains unwired/disabled. Contributor-only Windows x64 fresh staging
+    is source-only, while arm64 source/native proof remains pending.
+- Independent thin Codex and Claude Code Plugins and Marketplace catalogs with
+    direct App HTTP configuration, complete shared debugging Skill, approved artwork
+    and MIT license. Fixed English/Chinese question contracts retain explicit actor
+    roles, factual variables and operation triggers. Explicit Skill invocation
+    preserves complete instructions; automatic starter-prompt injection remains
+    unverified. Claude Code 2.1.283 is
+    the first supported and accepted baseline.
+- English and Simplified Chinese entry guides, host install/update/uninstall and
+    connection instructions, themed artwork, three Codex starter prompts and
+    detailed workflow, compatibility, configuration and privacy guidance. Explicit
+    manifests/Skill discovery/presentation have dated evidence and limits; historical
+    presentation checks do not qualify current HTTP, GUI or native delivery.
+- Stable Node >=24.21.0 <25 contributor support, Node 24.21.0 CI/reproduction
+    baseline, optional mise and exact pnpm 12.4.2 under frozen-lockfile/supply-chain
+    controls. Thin host payloads require no runtime installation.
+- One App-owned public SDK Streamable HTTP gateway with strict MCP 2026-07-28 and
+    sessionful legacy compatibility. Standard roots/form continuation preserves one
+    execution and originating context; active-response progress coexists with
+    lifecycle operation wait/status/results.
+- Independent official chrome-devtools-mcp 1.11.0 connections for new verified
+    targets, without a fixed connection limit. Complete unchanged official release
+    delivery uses verified ordinary Node and the original public bin, with no
+    runtime downloads. Only the official child's automatic update checks and
+    configuration discovery are disabled.
+- MCP initialization instructions and seven registration/lifecycle/operation tools
+    expose per-call bearer/current connection/session identity, idempotent
+    asynchronous requests, cursor waits, explicit cancellation,
+    summary/selected discovery and Close/Keep. Official tool names, arguments and
+    results remain unchanged after complete _dct removal.
+- Fixed complete official catalog, actual per-connection mcpArgs/enablement and
+    schemas, complete disabled-tool replacement recipes, workspace sources and
+    capability-gated private catalog refresh. Failed refresh blocks new forwarding
+    while retaining healthy resources and running work.
+- Bearer-scoped ownership, immutable initiating roots/launch snapshots, explicit
+    target/official/both restart, independent generations and per-connection execution
+    admission. Independent connections proceed in parallel; detached waits preserve
+    actual execution/original context without replay.
+- Kept target/upstream/observation reuse until actual exit. Scoped restart retains
+    connection/router/directory ownership and refreshes session/page identities;
+    changed configuration requires completed Close/new start. Failed startup/disposal
+    retains owned recovery evidence and retryable cleanup without reviving routes.
+- Structured executable/args/cwd/env launches with Windows privilege detection,
+    private one-shot elevation, actual application handles and separate permission
+    and CDP readiness waits. Normal Close selects verified eligible application
+    windows, including minimized windows, and waits for actual exit/resource release.
+- Explicit none/data-dir intent, researched binding and full/partial/unsupported/
+    unknown evidence. Every launch uses conservative read-only occupancy without
+    singleton exemptions, takeover or guessed roots. Chrome has native known-root
+    occupancy and port reservations, no implicit profile fallback or silent isolation.
+- Ordered directory selection, exclusive program-owned leaf allocation, explicit
+    Windows Chrome preset, existing-nonempty retention and preauthorized
+    whole-directory cleanup. Connection leases span restart/Keep through all live/pending
+    app/resource users. Explicit original-start/selected evidence retains actual
+    path/policy/state after failed/cancelled startup and cleanup; summaries omit paths.
+- Windows Chrome screenshot composition preserves valid unrelated arguments and
+    rejects conflicts before directory/spawn. Independently verified Windows generic
+    carriers use explicit replacement launches; ordinary window switching/minimizing
+    needs no foreground checklist. Compatible Chrome extension tools are available;
+    usage statistics and CrUX default to disabled.
+- Registration/connection/operation management, unbounded age/idle clocks, selected
+    configuration, scoped restart, per-row/batch Close, idle transfer and empty-owner
+    cleanup. Native user-level host synchronization follows successful cold-port
+    binding, preserves scope/pin/disabled restrictions and reports independent
+    failure/retry/reload-pending outcomes. Pending writes and actual native host work
+    settle before exit. Missing stable update records remain ordinary while Unreleased.
+- Separately authorized tag-triggered stable/prerelease source publication with
+    cumulative Changelog categories, contributor attribution, strict tag identity and
+    required security/quality/acceptance gates. No 0.1.0 publication, native installer
+    delivery or stable App/plugin feed is implied.
 
 ### Security
 
-- Explicit bearer ownership on every owned HTTP request, exact loopback Host,
-    Origin, path and method boundaries, and no implicit MCP-session owner.
-    Whole-envelope admission bounds actual UTF-8 requests to 1 MiB, cumulative
-    object members/array elements to 10,000 and container depth to 64 before
-    SDK dispatch, without consuming refused continuations or closing healthy
-    sessions and owned work.
-- Verified ordinary Node and complete original native loading closure in the App,
-    with original licenses, archive provenance and no runtime package fallback.
-- A sandboxed local management renderer with fixed assets, restrictive CSP and
-    sender/main-frame validation before narrow management actions.
-
-- Dependency and vulnerability-exception identities use shared strict SemVer
-  parsing, rejecting malformed prerelease/build identifiers and unsafe core numbers.
-- Integrity verification rejects observed file replacement or mutation in
-  bundled release files and review evidence.
-- Target process, listener, and endpoint identity verification, loopback-only
-  CDP connections, and fail-closed handling of identity mismatches.
-- Normal target shutdown only, without force-killing or taking over existing
-  applications; failed shutdown reports support manual recovery.
-- Event-driven normal target Close without a target deadline. A 25-second
-  operation wait bounds one response and never expires its underlying cleanup.
-  Cancelled Close retains live application ownership and observation.
-- Independent official Server disposal closes the public SDK transport immediately,
-  rejects pending calls and proves actual child exit. Its owned child receives
-  two seconds for EOF, two seconds after TERM, then KILL within a ten-second budget;
-  applications remain subject only to normal Close. Normal App Quit attempts
-  every resource cleanup in parallel with target shutdown despite peer failures.
-- Script-disabled Supply chain security CI gate for complete repository
-  and isolated official Server vulnerability/signature audits.
-- Strict release cooldown and no-downgrade dependency trust, with only the
-  reviewed esbuild installation script allowed after the audit gate.
-- Exact, fingerprint-bound review exceptions with a maximum 30-day lifetime;
-  signature, registry and scan failures cannot be waived.
-- Private vulnerability reporting, dependency alerts and weekly supply-chain audits.
-- Protected source changes require pull requests, CodeQL analysis and security checks.
-- Actual application exit revokes routes and cancels pending work before cleanup.
-- Real-directory identity and overlap protection, opaque application binding and
-    whole-directory cleanup scoped to the selected actual object. External Chrome
-    occupancy prevents deletion after failed launch or before cleanup; failed
-    disposal retains in-memory claim/evidence without route revival or replay.
-    Hard crash or unverified exit cannot promise eventual deletion.
-- Native application handle waits/events on Windows provide actual-exit evidence
-  without process polling; helper exit and observer faults cannot establish app exit.
-- Independent Windows resource completion holds the directory lease and Close
-    completion until the new application's inherited native job is verified empty,
-    while actual root exit immediately revokes routes. Atomic job assignment,
-    separate root/resource receipts and fail-closed acquisition evidence preserve
-    ownership without process limits, kill-on-close, forced shutdown or deletion retries.
-- Normal application Close is independent of unrelated CDP listeners and official
-  MCP lifetime, with process identity checks and no application force kill.
+- Bearer authentication before owned reads/effects; exact loopback Host/Origin/
+    port/path/method boundaries and no implicit session owner. Whole-envelope
+    admission bounds actual UTF-8 requests to 1 MiB, cumulative members/elements
+    to 10,000 and depth to 64 without consuming refused continuations or closing
+    healthy sessions/work.
+- Verified target process/listener/endpoint identities, loopback-only CDP, stale
+    route/generation rejection and unsupported-platform refusal before native
+    acquisition. Applications receive normal Close only, without force-kill,
+    takeover or automatic replay; failures retain identity/ownership.
+- Windows actual-app handle observation and independent inherited-job resource
+    completion retain leases until real release. Cancelled Close/detached waits
+    retain live ownership; helper exit/fault does not establish app exit. Independent
+    official-child disposal closes SDK transport and proves child exit within its
+    bounded EOF/TERM/KILL policy; targets have no artificial close deadline.
+- Real-directory identity/overlap protection, opaque binding and authorized
+    whole-directory cleanup. Root replacement, external Chrome occupancy, unverifiable
+    use and failed disposal retain claims/evidence without route revival. Hard crash
+    or unverified exit cannot promise eventual deletion.
+- Complete verified ordinary Node, original official/native loading closure,
+    licenses/notices and archive provenance without fallback or pruning upstream
+    non-Windows files. Original-input mutation/replacement fails integrity checks.
+    Archive identity, static checks, extraction and native acceptance are distinct.
+- Sandboxed local renderer with fixed assets, restrictive CSP, sender/main-frame
+    validation and narrow management actions, plus private one-shot native helpers.
+    Tokens, private page data and real paths are excluded from default summaries
+    and public diagnostics.
+- Reviewed dependency versions, including Zod and Electron, with blocking
+    advisories addressed; script-disabled repository/isolated-official vulnerability
+    and signature gates;
+    strict cooldown/no-downgrade trust; exact fingerprint-bound exceptions of at
+    most 30 days; and only reviewed esbuild installation after audit. Signature,
+    registry and scan failures cannot be waived. Strict SemVer parsing rejects
+    malformed dependency/exception identities.
+- Private vulnerability reporting, dependency alerts, weekly supply-chain audits
+    and protected source changes requiring review/security analysis. Graph audits
+    do not establish coverage of embedded upstream vendor libraries.

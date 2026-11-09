@@ -38,8 +38,8 @@ compile-only PowerShell helpers and passive observers launch no GUI and remain
 ungated. Direct `windows-window-evidence.ps1` mutation modes require `-AllowGui`;
 its default None observation remains passive and ungated.
 
-Windows CI explicitly opts in to real owned native fixture regressions, and
-Linux/macOS CI explicitly opts in to real Chrome acceptance. Tauri/Electron
+Windows CI explicitly opts in to real owned native fixture regressions and
+genuine official/recovery Chrome acceptance. Tauri/Electron
 application probes remain development verification with separately selected
 fixtures; this change adds no application acquisition or toolchain to CI. These
 forms of evidence remain distinct.
@@ -607,24 +607,28 @@ paths. Loopback protocol fixtures do not identify a particular host.
 opt-in real-Chrome smoke; adapting its protocol assertions does not establish a
 new real-browser acceptance result.
 
-`official-server.ts` and `entry-recovery.ts` support Windows, Linux and macOS.
-Set `DCT_SMOKE_CHROME_EXECUTABLE` to the absolute path of the actual Chrome
-binary on Linux/macOS; launcher scripts and PATH fallback are not used. Windows
-keeps `C:/Program Files/Google/Chrome/Application/chrome.exe` as its default and
-accepts an explicit absolute override. Chrome 149 or newer is required. Missing
-executables, process inspection prerequisites or required browser tools fail.
-The scripts print OS, architecture, Chrome version and verified target evidence.
-The official tools smoke retains its visible-console monitor on Windows.
+`official-server.ts` and `entry-recovery.ts` provide the current Windows
+real-Chrome acceptance route. CI explicitly configures
+`C:/Program Files/Google/Chrome/Application/chrome.exe` through
+`DCT_SMOKE_CHROME_EXECUTABLE` and checks that exact regular file with
+`requireChromeSmokeExecutable()` before profile or target acquisition. Chrome 149
+or newer is required. Missing executables, inspection prerequisites or browser
+tools fail. No PATH fallback, alternative installation or browser acquisition is
+provided. The scripts print OS, architecture, Chrome version and verified target
+evidence; the official smoke retains its Windows visible-console monitor.
 
-CI runs both smokes on `ubuntu-24.04` with Xvfb and on `macos-15` with ordinary
-Chrome. It uses the runner's existing Chrome, `ps` and `lsof`; Linux additionally
-requires Xvfb, xvfb-run, xauth and getconf. It downloads no browser, starts no headless
-substitute and uploads no profiles or browser content. These jobs are also part
-of the reusable release CI. Both platform checks passed on GitHub before becoming
-required main checks on the earlier stdio implementation; that history does not
-establish current HTTP acceptance. Record new executed scope separately; see the
-[compatibility guide](../../docs/user-guide/compatibility.md)
-for tested systems and actual Chrome versions.
+`Real Chrome (windows-latest)` runs both unchanged smokes after its own strict
+typecheck and current-collection initialization, with explicit `--allow-gui`,
+within the existing 20-minute job budget. It uses the runner's configured Chrome,
+with no headless substitute, retry or added toolchain. This mandatory job also
+runs in same-commit reusable release CI. Actual runner Chrome availability and
+Windows E2E are unknown until genuine execution succeeds on the tested commit.
+Static contract tests or historical POSIX successes do not establish that result.
+The Windows x64/arm64 product targets retain their separate native, installer,
+GUI App and default-admission evidence gaps; this fixture does not qualify them.
+See the [compatibility guide](../../docs/user-guide/compatibility.md) for current
+scope and dated observations. Retained POSIX fixture/model source awaits its
+later complete caller/test/audit deletion cut and has no current product CI route.
 
 Each target explicitly requests a new managed profile with delete-on-release
 and a synthetic local page. The official Server rejects and filters
@@ -658,47 +662,57 @@ marks each smoke as running immediately before execution, so an earlier failure
 leaves the later smoke not-run. The existing acceptance scripts run once, with
 their original prerequisites, assertions and deadlines.
 
-After trusted setup, original official verification and actual Chrome prerequisites,
-reproduce on Linux from the repository root with the explicit installed browser:
+After trusted setup and typecheck, use the following PowerShell script sequence
+from the repository root with the explicit installed Windows browser. It creates
+a fresh diagnostics invocation, then checks the browser prerequisite before
+running each real smoke once:
 
-```sh
-export DCT_SMOKE_CHROME_EXECUTABLE=/opt/google/chrome/chrome
-set -euo pipefail
-fixtureDiagnosticsDirectory="$(mktemp -d "${TMPDIR:-/tmp}/dct-fixture-diagnostics.XXXXXX")"
-collectionId=""
-if collectionId="$(node tests/smoke/fixture-ci.ts init "$fixtureDiagnosticsDirectory")"; then :; fi
-test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
-command -v lsof
-command -v getconf
-command -v Xvfb
-command -v xvfb-run
-command -v xauth
-if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
-xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
-if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" entry-recovery "$collectionId"; then :; fi
-xvfb-run -a node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+```powershell
+$PSNativeCommandUseErrorActionPreference = $false
+$env:DCT_SMOKE_CHROME_EXECUTABLE = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
+$fixtureDiagnosticsDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('dct-fixture-diagnostics-' + [guid]::NewGuid().ToString('N'))
+$initializationOutput = node tests/smoke/fixture-ci.ts init "$fixtureDiagnosticsDirectory"
+$initializationExitCode = $LASTEXITCODE
+$collectionId = ($initializationOutput -join "`n").Trim()
+$initialized = $initializationExitCode -eq 0 -and $collectionId -match '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+if (-not $initialized) { $collectionId = '' }
+node --input-type=module -e "import { requireChromeSmokeExecutable } from './tests/smoke/chrome-host.ts'; await requireChromeSmokeExecutable();"
+$preflightExitCode = $LASTEXITCODE
+if ($preflightExitCode -ne 0) { exit $preflightExitCode }
+node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"
+node tests/smoke/official-server.ts --allow-gui --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+$smokeExitCode = $LASTEXITCODE
+if ($smokeExitCode -ne 0) { exit $smokeExitCode }
+node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" entry-recovery "$collectionId"
+node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
+$smokeExitCode = $LASTEXITCODE
+if ($smokeExitCode -ne 0) { exit $smokeExitCode }
 ```
 
-The command creates a fresh invocation directory and preserves earlier runs.
-If set, `TMPDIR` must name an existing absolute temporary parent; otherwise it
-uses `/tmp`. Initialization refuses existing fixed collector files.
-The successful initializer prints its collection UUID; refusal exits 1 and
-prints no UUID. Stage, smoke and summary commands carry that successful
-initialization identity. Invalid or absent identity leaves earlier files intact;
-summary prints only an explicit current-collection limitation. The shell guards
-only diagnostic setup/stage commands so the actual prerequisite and smoke exits
-retain their existing behavior. A collector
-adopts only its current initialized not-run envelope with an empty stream; the
-preload must present the parent's current collection UUID. Reused or unowned
-collections are disabled with a safe diagnostic limitation, preserving previous
-evidence and the actual smoke outcome. Do not interpret previous files as a new
-run. On macOS use
-`DCT_SMOKE_CHROME_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'`,
-retain `test -x` and `command -v lsof`, and run the two `node` smoke commands
-without `xvfb-run`; Linux-only prerequisites do not apply. CI uses the identical
-sequence with each job's fresh `RUNNER_TEMP/dct-fixture-diagnostics` directory.
-To index a failed run afterward, run
-`node tests/smoke/fixture-ci.ts summary "<absolute-artifact-directory>" "$collectionId"`.
+Initialization refuses existing fixed collector files and preserves earlier
+runs. Successful init prints the fresh collection UUID; refusal exits 1 without
+one. Its status and UUID validity determine the truthful initialized flag and
+current ID. Init/stage are non-authoritative metadata: their failure cannot skip
+actual acceptance. An invalid/absent ID disables collection and preserves earlier
+files. Required preflight and both smokes immediately capture and check their own
+native exit, so later metadata cannot mask a failure. Official failure leaves
+recovery not-run. A collector adopts only the current initialized not-run envelope
+with an empty stream, and the preload must carry the parent's UUID.
+
+CI uses the same ordering with a joined, dedicated
+`RUNNER_TEMP/dct-fixture-diagnostics` path. Its init step reports true only for
+successful valid initialization and otherwise false plus an empty ID, then ends
+that metadata step successfully. On failure it uploads only the five fixed safe
+files when initialization succeeded, for seven days with no hidden files or
+overwrite. No prior/refused collection becomes upload evidence. The failure
+summary runs even without valid initialization and then reports only the safe
+current-collection limitation. To index a failed invocation afterward, carry its
+captured ID to:
+
+```powershell
+node tests/smoke/fixture-ci.ts summary "$fixtureDiagnosticsDirectory" "$collectionId"
+```
+
 Without `--diagnostics`, the original child runs without a subscriber or files.
 Both smoke launch sites use a copied child environment that omits inherited
 `NODE_OPTIONS`; the generic test client's environment contract is unchanged.
@@ -771,20 +785,23 @@ child or capped stream can lack the terminal record; absence means unknown cost.
 Invalid clock evidence is marked unavailable. Asynchronous Linux sample elapsed
 time is recorded separately. Neither metric measures all Chrome logging costs,
 kernel I/O disturbance, event-loop scheduling delay or instrumentation causation.
-No real Linux/macOS collector-cost acceptance is established by synthetic tests.
+Synthetic tests establish no real collector-cost acceptance.
 
 An accepted current diagnostics collection also enables `chrome-startup.ts`.
-On Linux, `xdpyinfo` queries the inherited `DISPLAY` inside the smoke's
-`xvfb-run` session with ignored output and a separate five-second bound.
+The POSIX display/sampler descriptions below record retained baseline source
+pending its complete deletion cut, with no current support or execution route.
+In the retained Linux code, `xdpyinfo` queries the inherited `DISPLAY` inside the
+smoke's `xvfb-run` session with ignored output and a separate five-second bound.
 The utility is optional: missing query support records `available=false` and
-`responsive=false`, leaving display responsiveness unknown. The original Xvfb,
-Chrome and actual CDP acceptance checks remain mandatory. An available utility's
-failed or timed-out query fails the prerequisite check before Chrome starts.
+`responsive=false`, leaving display responsiveness unknown. That retained code's
+original Xvfb, Chrome and actual CDP checks precede target acceptance. An available
+utility's failed or timed-out query fails the prerequisite check before Chrome starts.
 Refused or unconfigured collections add no browser logging flags or files.
 Controlled launches add plain `--enable-logging` and an absolute `--log-file`
 in a canonical private scratch sibling outside profiles and the upload directory.
-The opt-in startup study's `off` arm omits only those two flags; its missing
-Chrome log projection is expected, while capture and display preflight remain enabled.
+The retired baseline startup study's `off` arm omits only those two flags; its
+missing Chrome log projection is expected, while capture and display preflight
+remain enabled.
 Chrome stdio stays ignored; current controlled runs use the Core/SDK HTTP source
 fixture. Original delivered stdio gateway records remain historical evidence.
 Each startup settlement reads its own log; restart samples before reuse and
@@ -1045,93 +1062,17 @@ and unresolved; synthetic interleavings verify diagnostic behavior only.
 
 ## Bounded Ubuntu startup study
 
-The diagnostic-only `official-server.ts --startup-study --chrome-file-logging on|off`
-mode is Linux-only and requires both explicit `--allow-gui` authorization and a
-valid, freshly initialized diagnostics collection. The two study arguments must
-appear together exactly once, with the literal arm `on` or `off`; malformed,
-unknown or duplicate arguments fail before resource acquisition after the GUI
-authorization check. A refused or missing current collection cannot run a study.
-This mode is outside the default test lane.
+The baseline Ubuntu startup study and its manual CI input, special concurrency
+and success-upload exception are retired under the Windows-only support decision.
+There is no current dispatch or local product-acceptance recipe. Historical
+POSIX CI outcomes remain historical and cannot establish Windows acceptance or
+explain earlier failures.
 
-Both arms preserve the normal smoke's initialization, official catalog, initial
-status and first-start prefix. They launch exactly one new owned Chrome, verify
-process/listener/endpoint identity, actual browser version and managed Profile
-Path, then run the existing finally cleanup. They skip later CSS, extension,
-multiple-target and recovery acceptance. A successful sample establishes only
-those first-start checks; ordinary CI continues to run the complete official
-tools and entry-recovery smokes on both existing platforms. The production
-readiness predicate, polling strategy and 20-second deadline stay unchanged.
-
-The `on` arm retains the existing `--enable-logging` and absolute `--log-file`
-switches. The `off` arm omits only these two switches. Both retain the same
-parent behavior, accepted collector/preload, private capture, display preflight,
-Linux sampler and cleanup. The closed study result in stdout identifies
-`chromeFileLogging` and `expectedLogAbsence`; `off` expects the absent-log
-projection. Absence in that arm is not evidence of a Chrome logging failure.
-Raw Chrome logs remain excluded from uploads even when private scratch is retained.
-
-After trusted setup and original official verification, run one explicitly authorized local
-Linux sample with a fresh collection, choosing exactly one arm:
-
-```sh
-export DCT_SMOKE_CHROME_EXECUTABLE=/opt/google/chrome/chrome
-set -euo pipefail
-fixtureDiagnosticsDirectory="$(mktemp -d "${TMPDIR:-/tmp}/dct-startup-study.XXXXXX")"
-collectionId="$(node tests/smoke/fixture-ci.ts init "$fixtureDiagnosticsDirectory")"
-test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
-command -v lsof
-command -v getconf
-command -v Xvfb
-command -v xvfb-run
-command -v xauth
-if node tests/smoke/fixture-ci.ts stage "$fixtureDiagnosticsDirectory" official-server "$collectionId"; then :; fi
-xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging off --diagnostics "$fixtureDiagnosticsDirectory" --collection-id "$collectionId"
-```
-
-After either outcome, index only that current collection with
-`node tests/smoke/fixture-ci.ts summary "<absolute-artifact-directory>" "$collectionId"`.
-Do not run a Chrome version/hash command or warmup before its first start.
-The example does not retry a failed sample. `TMPDIR`, when provided, must be an
-existing absolute temporary parent. Every invocation uses a fresh directory;
-earlier evidence is preserved and never presented as current.
-
-The CI input `ubuntu-startup-study` defaults to false. Dispatch `ci.yaml` once
-against the reviewed branch with it set to true, using Actions or
-`gh workflow run ci.yaml --ref <reviewed-branch> -f ubuntu-startup-study=true`.
-Quality and its supply-chain prerequisite must pass before the study starts.
-The matrix is fixed: blocks 1, 2 and 3 crossed with file logging `on` and `off`,
-six independent fresh `ubuntu-24.04` runner slots, Node 24.21.0, pnpm 12.4.2
-and `/opt/google/chrome/chrome`. Fail-fast is false, with no ignored failures,
-retries, extra batches or replacement slots. A cancelled or incomplete slot is
-recorded as such. The study dispatch has its own run-ID concurrency group and
-cannot cancel ordinary CI's workflow/ref group.
-
-Only this manual study uploads on both success and failure, using `always()`
-and the successful current-initialization guard. Each artifact is named
-`ubuntu-startup-study-block-<block>-logging-<on|off>-<run-id>-<attempt>` and retains
-exactly `job-index.json`, `official-server.events.ndjson`,
-`official-server.summary.json`, `entry-recovery.events.ndjson` and
-`entry-recovery.summary.json` for seven days. The entry-recovery envelope stays
-not-run and its stream stays empty. Hidden files and overwrite remain disabled;
-missing files warn. The neutral job summary indexes the same safe evidence and
-artifact link after either outcome. Ordinary real Chrome jobs retain failure-only
-uploads, and other jobs remain artifact-free.
-
-Compare the first readiness outcome and its monotonic duration as the primary
-measure. Secondary evidence is time to first owned listener, endpoint outcomes,
-safe process counters, `wchan`/optional closed `ioWaitKind`, system PSI,
-native-command and collector costs, and actual exit/profile/scratch cleanup.
-Preserve the tested commit and tree, Actions runner image/toolchain identities,
-actual endpoint browser version, arm and slot alongside the five-file artifacts
-and safe job logs. The sampler still has four one-shot triggers, seven fixed
-file reads, a 4,096-byte per-read bound and a 250 ms total budget. Streams still
-allow 4,096 bytes per record, 2,000 records plus one truncation marker and 1 MiB
-total. Missing terminal cost records, absent cleanup, omitted samples or truncated
-evidence must remain explicit limits.
-
-Fresh runners do not establish known cold caches. Blocks do not place the two
-arms on the same machine, and host load, storage, image and scheduling can differ.
-These six pilot samples cannot prove a causal logging effect or rare-failure
-reliability; an arm difference is association only. If all samples pass, the
-historical failure was not reproduced and the root cause remains unknown.
-The study does not change or replace full real Chrome acceptance.
+The existing `official-server.ts` study mode, `linux-startup-wait.ts` sampler,
+fixture preload/projections/presentation and controlled study/wait regression
+tests remain in source until the later complete target-native deletion cut.
+Their current presence is an explicit pending maintenance closure, not Linux
+support or authorization to execute a new diagnostic. That source removal must
+close its actual imports, default/coverage inventory consequences, audit and
+security-evidence consumers together while preserving shared safe diagnostics,
+Windows scenarios and all original vendor bytes.

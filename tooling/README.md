@@ -1,7 +1,8 @@
 # Tooling
 
 - `app-release-inputs.json` records canonical Electron and ordinary Node archive
-  identities separately from npm signature evidence. File extraction and native
+  identities for exactly four Windows x64/arm64 archives, separately from npm
+  signature evidence. Original runtime-file/license extraction and native
   acceptance must be established for each distribution before delivery.
 - `app-native-release.json` records canonical registry tarball integrity and
   every original regular file in the native advisory-lock loading closure,
@@ -9,18 +10,31 @@
 - `distribution/build-plugin.ts` assembles thin Codex and Claude Code payloads from
   `packaging/` and root `LICENSE`, retaining complete assembly and read-only checks.
 - `build-app.ts` builds the synchronous bootstrap, main, sandboxed preload and
-  renderer, collects actual graph licenses and stages verified original native
+  renderer and collects actual graph licenses. Its read-only `--check` verifies
+  Windows x64 then arm64 bundle/input/license composition independently of the
+  runner OS, retaining installed/portable kind selection without archive extraction
+  or native staging. Static verification establishes no native acceptance.
+  Writing mode validates the actual host and stages verified original native
   archives without overwriting an existing stage. It composes the complete expected
   Windows payload from actual verified source producers, emits its canonical
   manifest, verifies the actual complete tree and returns root/selection with
   descriptive source provenance. `extract-app-zip.ps1` authenticates and inventories
   the same opened read-locked ZIP stream; unsafe paths, aliases and non-regular
-  entries refuse before extraction. Other platform source producers remain pending.
-  The generated App helper inventory includes macOS deployment JXA source.
-  Windows deployment query/create C# and their fixed compiler-produced EXEs
-  belong to the contributor build lifetime in the native adapter, and are
-  excluded from generated App delivery. All remain repository-owned MIT inputs,
-  with no new third-party runtime or notice. App admission remains unconnected.
+  entries refuse before extraction. Missing Node runtime or Electron license
+  evidence refuses before scratch or output creation; arm64 records still lack
+  that source proof. The generated App helper inventory retains the Windows
+  CDP/native helpers. macOS deployment JXA remains source-only pending its later
+  retirement and is excluded from both App delivery and generated provenance.
+  The contributor build lifetime compiles the fixed Windows deployment query and
+  creator. A supported x64 stage captures the actual query before buffers or
+  observers, binds its digest into the worker/App composition and inventories the
+  query and worker bytes in the manifest. The creator EXE, compiler references
+  and C# sources remain build-only. These are repository-owned MIT inputs with
+  no new third-party runtime or notice. Complete original native packages,
+  including non-Windows prebuilds and all licenses, remain unchanged in delivery.
+  Windows 11 x64 and arm64 installer/portable acceptance remains pending;
+  default App admission remains unwired and disabled. App and plugins remain
+  0.1.0 Unreleased.
   Its separate `stageFreshDesktopInstallation` explicit contributor entry owns
   the Windows x64 current-account source-to-protected-root transaction, two fixed
   lease inodes, exact canonical manifest, no-replace build and state-last initial
@@ -34,11 +48,19 @@
   Each of five payload checkpoints performs fresh permission sweeps before and
   after the complete tree verifier. Child count follows the real count-and-byte
   query packer at every boundary, plus ten fixed mutating/copy children; no
-  payload file or ancestor starts its own child. The fixed
-  mutation/query C# helpers are build-only MIT repository inputs, excluded
-  from generated App delivery and its runtime notices. Default CLI/research flat
-  staging remains the unpublished intermediate path. App/worker integration,
-  nested portable data, real native acceptance and installers remain pending.
+  payload file or ancestor starts its own child. Default CLI/research flat
+  staging remains an intermediate development path. The fresh transaction closes
+  temporary support once before its fixed ordinary-Node worker, waits for exact
+  state plus actual child/all-stdio settlement, then releases parent descriptors.
+  Default App admission, nested portable data, native acceptance and installers
+  remain pending.
+- `deployment-worker.ts` owns only fresh post-publication ordinary-reader/shared-use
+  verification, complete own-build payload/native checks, repeated state/identity
+  and successful release before canonical output. Its fixed module/Node placement
+  comes from executing code, never caller/state/env selectors. No Electron,
+  Gateway, MCP, target, compiler, creator or copy behavior enters its emitted graph.
+  `generateAppFiles`/`check:app` stay compilation-free and emit an explicitly
+  unbound worker that refuses before I/O; real staging supplies only actual Q.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed
@@ -52,10 +74,9 @@
   by App and research fixtures, pure canonical identities and fixed reviewed SDK
   source-map/vendor license evidence. Standalone security reuses canonical data
   while preserving its distinct original-byte notice format.
-- `repository-audit.ts` checks AST layer boundaries, versions, docs, symlink and
-  production safety, consuming shared text rules from `quality/`.
-- `quality/` owns pure text style and YAML filename rules reused by the repository
-  walker and staged text checker.
+- [quality/](quality/README.md) owns the complete supplied-source AST validator,
+  actual repository walker, syntax operation, staged text checker and shared pure
+  text/YAML rules.
 - [distribution/](distribution/README.md) owns supplied host metadata, import-free
   descriptors, closed inventories, approved PNG policy and version agreement,
   separate strict tree operations and complete thin builder/independent auditor.
@@ -90,10 +111,6 @@
   `--allow-gui` it returns a successful explicit skip before selecting files. With
   authorization it runs all four interactive files through native `node:test.run`,
   concurrency 1 and forwarded argv, preserving failed-test exit status.
-- `check-scripts.ts` parses TypeScript with Babel, checks generated JavaScript
-  with Node, and parses the Windows helper with PowerShell 5.1 and 7.
-- `check-text-style.ts` audits staged non-Biome text and YAML filenames; original official release
-  files are exempt only after complete independent byte verification.
 - `smoke-official-catalog.ts` requires explicit `--stage <verified-App-stage>` or
   `--installed`. Stage mode uses verified delivered ordinary Node/public bin;
   installed mode verifies the repository's original release and supported ordinary

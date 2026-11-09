@@ -294,6 +294,8 @@ function readinessFixture({
     let snapshotCalls = 0;
     let closeCalls = 0;
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         probe: async () => true,
         spawn: async () => child,
         getVersion: async () => {

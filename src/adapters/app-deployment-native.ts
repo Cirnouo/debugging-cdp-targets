@@ -12,12 +12,14 @@ import {
     validateDeploymentNativeEntry,
     validateDeploymentUnixEntry,
 } from '../domains/app-deployment.ts';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import { errorCode, isRecord } from '../shared/errors.ts';
 import {
     encodeWindowsDeploymentCopyHeader,
     packWindowsDeploymentQueries,
     preflightWindowsDeploymentCopy,
 } from './windows-deployment-protocol.ts';
+import { openWindowsDeploymentQuery } from './windows-deployment-query.ts';
 import { buildWindowsDeploymentSupport } from './windows-deployment-support.ts';
 
 type WindowsSupport = Awaited<ReturnType<typeof buildWindowsDeploymentSupport>>;
@@ -33,7 +35,7 @@ function account(): string {
     return String(real);
 }
 
-async function snapshot(file: string, support?: WindowsSupport): Promise<unknown> {
+async function snapshot(file: string, support?: Pick<WindowsSupport, 'query'>): Promise<unknown> {
     let executable: string;
     let args: string[];
     let env: NodeJS.ProcessEnv;
@@ -70,7 +72,7 @@ async function snapshot(file: string, support?: WindowsSupport): Promise<unknown
 }
 
 /** Concrete OS evidence for this enrolled root only. No JSON, role flag or environment grants writes. */
-async function openAuthority(directory: string, writing: boolean, support?: WindowsSupport) {
+async function openAuthority(directory: string, writing: boolean, support?: Pick<WindowsSupport, 'query'>) {
     if (!['linux', 'win32', 'darwin'].includes(process.platform))
         throw new Error('Deployment native role is unsupported.');
     if (process.platform === 'win32' && !support)
@@ -289,7 +291,10 @@ async function openAuthority(directory: string, writing: boolean, support?: Wind
 
 /** Concrete enrolled-root admission. No caller source, helper, receipt or evidence input exists. */
 export async function openDeploymentNativeAuthority(directory: string, writing: boolean) {
-    return openAuthority(directory, writing);
+    if (!supportsWindowsApp(process.platform, process.arch))
+        throw new Error('Unsupported deployment native authority; Windows x64 or arm64 is required.');
+    if (writing) throw new Error('Ordinary Windows deployment writing remains unavailable.');
+    return openAuthority(directory, false, await openWindowsDeploymentQuery());
 }
 
 /** Fixed source-build creation I/O. This returns object checks, never payload/enrollment authority. */

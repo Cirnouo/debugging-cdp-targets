@@ -2,7 +2,8 @@
 
 - `governance/` separates supplied commit events and pure grammar from actual
   Git/history audits, real commitlint execution and controlled process boundaries.
-- `quality/` owns pure text/YAML policy, import isolation and the real aliased
+- [quality/](quality/README.md) owns complete AST role and traversal regressions,
+  syntax/hooks/CI/toolchain/lane contracts, pure text policy and the real aliased
   temporary-directory child/cleanup contract.
 - [security/](security/README.md) owns pure policy boundaries, installed/fingerprint evidence,
   whole disposable scan/gate transactions and standalone/official build inputs.
@@ -17,12 +18,11 @@
 The safe default and coverage commands explicitly select
 `governance/commit-events.test.ts`, `governance/commit-grammar.test.ts`,
 `governance/commit-history.test.ts`, `governance/commit-validation.test.ts`,
-`quality/text-policy.test.ts`, `releases/release-notes.test.ts` and
+all eleven explicit `quality/` suites listed in its map, `releases/release-notes.test.ts` and
 `releases/publication.test.ts`, `submissions/markdown.test.ts`,
 `submissions/pull-requests.test.ts`, `submissions/issue-forms.test.ts`,
 `submissions/issue-feedback.test.ts`, `submissions/issue-workflow.test.ts`,
-`licenses/bundled-notices.test.ts` and the ten explicit `distribution/` suites listed in its map,
-the nine explicit `security/` suites listed in its map and
-`quality/temporary-directory-alias.test.ts` once each.
+`licenses/bundled-notices.test.ts`, the ten explicit `distribution/` suites listed in its map,
+and the nine explicit `security/` suites listed in its map once each.
 They retain root regressions and exclude interactive/smoke entrypoints.
 Ancestor [test rules](../AGENTS.md) apply.
