@@ -118,10 +118,12 @@ initializes the current collection. The blocking prerequisite then calls
 `requireChromeSmokeExecutable()` for the configured regular executable
 `C:/Program Files/Google/Chrome/Application/chrome.exe`, before acquiring
 a profile or target. Runner availability is established at execution. Missing
-or nonregular Chrome fails the prerequisite. Keep the configured browser,
-original deadlines and one attempt per smoke. Preserve genuine acceptance
-without alternate installations, browser downloads, headless substitution,
-ignored failures or timeout expansion.
+or nonregular Chrome fails the prerequisite. Keep the configured browser and
+one attempt per smoke. Each Windows Chrome acceptance source fixture uses a
+40-second CDP readiness budget. The App and other fixtures use the 20-second
+default. Keep the existing job and other deadlines. Preserve genuine acceptance
+without alternate installations, browser downloads, headless substitution or
+ignored failures.
 
 Both smokes use the test-only real-Core/SDK HTTP fixture with verified ordinary
 Node and original official Server bytes. The first checks official tools on
