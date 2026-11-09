@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 test('pre-push verification clears repository routing before creating independent Git fixtures', async () => {
     const folder = await mkdtemp(path.join(os.tmpdir(), 'dct-hook-isolation-'));
@@ -41,7 +41,7 @@ test('pre-push verification clears repository routing before creating independen
         );
         const execPath = git(['--exec-path']);
         const shell = process.platform === 'win32' ? path.resolve(execPath, '../../..', 'usr/bin/sh.exe') : 'sh';
-        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../.husky/pre-push', import.meta.url))], {
+        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../../../.husky/pre-push', import.meta.url))], {
             cwd: folder,
             encoding: 'utf8',
             windowsHide: true,
@@ -95,7 +95,7 @@ test('pre-commit batches every staged file below the launcher capacity while pre
         ]);
         const bin = path.join(folder, 'bin');
         await mkdir(bin);
-        const cli = fileURLToPath(new URL('../node_modules/lint-staged/bin/lint-staged.js', import.meta.url));
+        const cli = fileURLToPath(new URL('../../../node_modules/lint-staged/bin/lint-staged.js', import.meta.url));
         const pnpm = path.join(bin, 'pnpm');
         await writeFile(pnpm, '#!/bin/sh\nshift\nshift\nnode "$DCT_TEST_LINT_STAGED" "$@"\n');
         await chmod(pnpm, 0o755);
@@ -133,7 +133,7 @@ test('pre-commit batches every staged file below the launcher capacity while pre
                 ? path.resolve(git(['--exec-path']).trim(), '../../..', 'usr/bin/sh.exe')
                 : 'sh';
         const log = path.join(folder, 'batches.jsonl');
-        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../.husky/pre-commit', import.meta.url))], {
+        const result = spawnSync(shell, ['-e', fileURLToPath(new URL('../../../.husky/pre-commit', import.meta.url))], {
             cwd: folder,
             encoding: 'utf8',
             windowsHide: true,
@@ -186,16 +186,18 @@ test('lint-staged routes YAML filename variants through the actual text checker'
             '-m',
             'fixture',
         ]);
-        const packageData: unknown = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+        const packageData: unknown = JSON.parse(
+            await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
+        );
         assert.ok(isRecord(packageData) && isRecord(packageData['lint-staged']));
         await writeFile(
             path.join(root, 'package.json'),
             JSON.stringify({ type: 'module', 'lint-staged': packageData['lint-staged'] }),
         );
-        await mkdir(path.join(root, 'tooling'));
-        const checker = new URL('../tooling/check-text-style.ts', import.meta.url).href;
+        await mkdir(path.join(root, 'tooling/quality'), { recursive: true });
+        const checker = new URL('../../../tooling/quality/check-staged-text.ts', import.meta.url).href;
         await writeFile(
-            path.join(root, 'tooling/check-text-style.ts'),
+            path.join(root, 'tooling/quality/check-staged-text.ts'),
             `import { checkTextStyle } from ${JSON.stringify(checker)};\nconst errors = await checkTextStyle(process.cwd(), process.argv.slice(2));\nif (errors.length) { console.error(errors.join('\\n')); process.exitCode = 1; }\n`,
         );
         const files = ['valid.yaml', 'legacy.yml', 'upper.YAML', 'mixed.YaMl', 'short.YML'];
@@ -203,7 +205,7 @@ test('lint-staged routes YAML filename variants through the actual text checker'
         git(['add', '--', ...files]);
         const result = spawnSync(
             process.execPath,
-            [fileURLToPath(new URL('../node_modules/lint-staged/bin/lint-staged.js', import.meta.url))],
+            [fileURLToPath(new URL('../../../node_modules/lint-staged/bin/lint-staged.js', import.meta.url))],
             { cwd: root, env: cleanEnvironment, encoding: 'utf8', windowsHide: true, timeout: 60_000 },
         );
         const output = result.stdout + result.stderr;
@@ -217,10 +219,10 @@ test('lint-staged routes YAML filename variants through the actual text checker'
     }
 });
 
-async function textHookFixture(host = 'codex') {
+async function retiredThinRuntimeFixture(host = 'codex') {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-')));
     const release: unknown = JSON.parse(
-        await readFile(new URL('../tooling/official-server-release.json', import.meta.url), 'utf8'),
+        await readFile(new URL('../../../tooling/official-server-release.json', import.meta.url), 'utf8'),
     );
     assert.ok(isRecord(release));
     const prefix = `plugins/${host}/debugging-cdp-targets/dist/official-server`;
@@ -262,35 +264,36 @@ async function textHookFixture(host = 'codex') {
     const run = (files: string[]) =>
         spawnSync(
             process.execPath,
-            [fileURLToPath(new URL('../tooling/check-text-style.ts', import.meta.url)), ...files],
+            [fileURLToPath(new URL('../../../tooling/quality/check-staged-text.ts', import.meta.url)), ...files],
             { cwd: root, encoding: 'utf8', windowsHide: true },
         );
     return { root, prefix, run };
 }
 
-test('upstream YAML filename exemption requires complete verified bytes for both hosts', async () => {
+test('retired thin runtime paths reject even matching upstream YAML bytes for both hosts', async () => {
     for (const host of ['codex', 'claude-code']) {
-        const fixture = await textHookFixture(host);
+        const fixture = await retiredThinRuntimeFixture(host);
         try {
             const selected = `${fixture.prefix}/skills/example/upstream.yml`;
             const original = fixture.run([selected]);
-            assert.equal(original.status, 0, original.stdout + original.stderr);
+            assert.equal(original.status, 1, original.stdout + original.stderr);
+            assert.ok(original.stderr.includes(`${selected}: retired thin runtime path`), original.stderr);
             const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
             await writeFile(license, 'Changed upstream license\n');
             const changed = fixture.run([selected]);
             assert.equal(changed.status, 1, changed.stdout + changed.stderr);
-            assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+            assert.ok(changed.stderr.includes(`${selected}: retired thin runtime path`), changed.stderr);
             await writeFile(license, 'Original upstream license\n');
             const bin = path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js');
             await rm(bin);
             const missing = fixture.run([selected]);
             assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-            assert.match(missing.stderr, /official|missing|inventory/i);
+            assert.ok(missing.stderr.includes(`${selected}: retired thin runtime path`), missing.stderr);
             await writeFile(bin, 'export {};\n');
             await writeFile(path.join(fixture.root, fixture.prefix, 'extra.yml'), 'enabled: true\n');
             const extra = fixture.run([selected]);
             assert.equal(extra.status, 1, extra.stdout + extra.stderr);
-            assert.match(extra.stderr, /official|unexpected|inventory/i);
+            assert.ok(extra.stderr.includes(`${selected}: retired thin runtime path`), extra.stderr);
         } finally {
             assert.equal(path.dirname(fixture.root), await realpath(os.tmpdir()));
             assert.ok(path.basename(fixture.root).startsWith('dct-hook-text-'));
@@ -299,11 +302,15 @@ test('upstream YAML filename exemption requires complete verified bytes for both
     }
 });
 
-test('text hook preserves formatting only after verifying the complete original official release', async () => {
-    const fixture = await textHookFixture();
+test('text hook refuses retired upstream Skill formatting and still checks maintained text', async () => {
+    const fixture = await retiredThinRuntimeFixture();
     try {
         const result = fixture.run([`${fixture.prefix}/skills/example/SKILL.md`]);
-        assert.equal(result.status, 0, result.stdout + result.stderr);
+        assert.equal(result.status, 1, result.stdout + result.stderr);
+        assert.ok(
+            result.stderr.includes(`${fixture.prefix}/skills/example/SKILL.md: retired thin runtime path`),
+            result.stderr,
+        );
         const own = 'plugins/codex/debugging-cdp-targets/README.md';
         await writeFile(path.join(fixture.root, own), '# Maintained\n\tInvalid indentation\n');
         const rejected = fixture.run([own]);
@@ -314,39 +321,61 @@ test('text hook preserves formatting only after verifying the complete original 
     }
 });
 
-test('text hook rejects altered or incomplete official releases even when the selected file follows repository style', async () => {
-    const fixture = await textHookFixture();
+test('Codex retired runtime refusal precedes changed missing or absent release evidence', async () => {
+    const fixture = await retiredThinRuntimeFixture();
     try {
         const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
         await writeFile(license, 'Changed upstream license\n');
         const changed = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(changed.status, 1, changed.stdout + changed.stderr);
-        assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+        assert.ok(changed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), changed.stderr);
         await writeFile(license, 'Original upstream license\n');
         await rm(path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js'));
         const missing = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-        assert.match(missing.stderr, /official|missing|inventory/i);
+        assert.ok(missing.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), missing.stderr);
+        const evidence = path.join(fixture.root, 'tooling/official-server-release.json');
+        await rm(evidence);
+        const absent = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(absent.status, 1, absent.stdout + absent.stderr);
+        assert.ok(absent.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), absent.stderr);
+        await writeFile(evidence, '{malformed');
+        const malformed = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(malformed.status, 1, malformed.stdout + malformed.stderr);
+        assert.ok(malformed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), malformed.stderr);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }
 });
 
-test('Claude official text exemption verifies complete independent bytes and rejects altered or missing content', async () => {
-    const fixture = await textHookFixture('claude-code');
+test('Claude retired runtime refusal precedes changed missing or malformed release evidence', async () => {
+    const fixture = await retiredThinRuntimeFixture('claude-code');
     try {
         const original = fixture.run([`${fixture.prefix}/skills/example/SKILL.md`]);
-        assert.equal(original.status, 0, original.stdout + original.stderr);
+        assert.equal(original.status, 1, original.stdout + original.stderr);
+        assert.ok(
+            original.stderr.includes(`${fixture.prefix}/skills/example/SKILL.md: retired thin runtime path`),
+            original.stderr,
+        );
         const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
         await writeFile(license, 'Changed upstream license\n');
         const changed = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(changed.status, 1, changed.stdout + changed.stderr);
-        assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+        assert.ok(changed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), changed.stderr);
         await writeFile(license, 'Original upstream license\n');
         await rm(path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js'));
         const missing = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-        assert.match(missing.stderr, /official|missing|inventory/i);
+        assert.ok(missing.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), missing.stderr);
+        const evidence = path.join(fixture.root, 'tooling/official-server-release.json');
+        await rm(evidence);
+        const absent = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(absent.status, 1, absent.stdout + absent.stderr);
+        assert.ok(absent.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), absent.stderr);
+        await writeFile(evidence, '{malformed');
+        const malformed = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(malformed.status, 1, malformed.stdout + malformed.stderr);
+        assert.ok(malformed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), malformed.stderr);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }

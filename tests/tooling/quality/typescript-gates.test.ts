@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 test('native TypeScript executes from any cwd while the independent compiler rejects type errors', async () => {
-    const root = fileURLToPath(new URL('../', import.meta.url));
+    const root = fileURLToPath(new URL('../../../', import.meta.url));
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'dct-typescript-'));
     try {
         const fixture = path.join(temporary, 'fixture.ts');

@@ -4,9 +4,13 @@ Use four spaces, UTF-8, LF, a final newline, and no tabs. Biome formats/lints
 TypeScript, generated-compatible JavaScript and JSON; repository text checks cover YAML, Markdown, PowerShell,
 TOML, and shell. Generated lockfile indentation is exempt.
 
-Only each official release subtree verified against maintained release evidence
-keeps upstream formatting and directory documentation. All delivered JavaScript
-still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
+Original upstream bytes are verified against maintained release evidence by the
+actual App/Official package consumers. Retired thin-host `dist/` paths receive no
+repository formatting or directory-map exemption: staged checks refuse them
+before release-evidence reads, and the walker also applies ordinary filename,
+text and directory checks. Only `tooling/security/dist/check-security.mjs` keeps
+its existing generated-text exemption. All delivered JavaScript still receives
+Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
 
 ## YAML filenames
 
@@ -21,8 +25,9 @@ does not apply to another directory, basename match or case variant.
 Complete official release content retains upstream filenames only after full
 independent package verification under the
 [original release delivery contract](supply-chain.md#official-release-delivery-and-upgrades).
-An official-directory prefix alone grants no exemption. Repository-generated
-files still follow the naming rule even when their formatting is exempt.
+This original-package contract grants no thin-host placement or repository
+walker exemption. Repository-generated files still follow the naming rule even
+when their formatting is exempt.
 
 Repository auditing and staged text checks share the filename validator. Keep
 `.yml` and case-variant matching in staged checks so incorrect names are rejected,
@@ -77,6 +82,15 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/tooling/governance/commit-history.test.ts`,
 `tests/tooling/governance/commit-validation.test.ts`,
 `tests/tooling/quality/text-policy.test.ts`,
+`tests/tooling/quality/runtime-boundaries.test.ts`,
+`tests/tooling/quality/repository-audit.test.ts`,
+`tests/tooling/quality/script-syntax.test.ts`,
+`tests/tooling/quality/hook-isolation.test.ts`,
+`tests/tooling/quality/ci-config.test.ts`,
+`tests/tooling/quality/codeql-config.test.ts`,
+`tests/tooling/quality/test-lanes.test.ts`,
+`tests/tooling/quality/toolchain-config.test.ts`,
+`tests/tooling/quality/typescript-gates.test.ts`,
 `tests/tooling/releases/release-notes.test.ts`,
 `tests/tooling/releases/publication.test.ts`,
 `tests/tooling/submissions/markdown.test.ts`,
@@ -130,15 +144,15 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/upstream.test.ts`,
 `tests/gateway/official/catalog-refresh.test.ts` and
 `tests/gateway/official/upstream-lifetime.test.ts`, then
-`tests/host-plugins/user-intent.test.ts`. These sixty selectors
+`tests/host-plugins/user-intent.test.ts`. These sixty-nine selectors
 include thirty-one Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.
 
 Changes to default or coverage selection must update both independent contracts:
-[tests/toolchain-config.test.ts](../../tests/toolchain-config.test.ts) keeps the two
-literal command expectations; [tests/test-lanes.test.ts](../../tests/test-lanes.test.ts)
+[tests/tooling/quality/toolchain-config.test.ts](../../tests/tooling/quality/toolchain-config.test.ts) keeps the two
+literal command expectations; [tests/tooling/quality/test-lanes.test.ts](../../tests/tooling/quality/test-lanes.test.ts)
 keeps the safe inventory, GUI and coverage contracts. Update both with package
 scripts and the current test map, preserving sequential files and coverage floors.
 
@@ -222,8 +236,9 @@ Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection and
 4096-character command batches to accommodate Windows launcher expansion; safe
 Biome writes are limited to staged TS/JS/JSON, other text is audited read-only.
-The text hook exempts original upstream files only after verifying their complete
-official release; altered or incomplete releases fail closed.
+The text hook refuses selected retired thin-host runtime paths before any
+release-evidence read. Original-byte proof remains with the actual App/Official
+verifiers; there is no inferred App-stage text exemption.
 pre-push clears Git's repository routing variables before running verify:push,
 so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.

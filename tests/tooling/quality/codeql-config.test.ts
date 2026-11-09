@@ -6,9 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { parse } from 'yaml';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
-const workflowUrl = new URL('../.github/workflows/codeql.yaml', import.meta.url);
+const workflowUrl = new URL('../../../.github/workflows/codeql.yaml', import.meta.url);
 async function workflow() {
     assert.ok(existsSync(workflowUrl), 'A maintained CodeQL workflow is required.');
     const parsed: unknown = parse(await readFile(workflowUrl, 'utf8'));
@@ -56,7 +56,9 @@ test('CodeQL covers owned languages without executing a C# build', async () => {
     const init = steps.find((step) => String(step.uses).includes('/init@'));
     assert.ok(isRecord(init?.with));
     assert.equal(init.with['build-mode'], `\${{ matrix.build-mode }}`);
-    const config: unknown = parse(await readFile(new URL('../.github/codeql-config.yaml', import.meta.url), 'utf8'));
+    const config: unknown = parse(
+        await readFile(new URL('../../../.github/codeql-config.yaml', import.meta.url), 'utf8'),
+    );
     assert.ok(isRecord(config));
     assert.deepEqual(config.paths, ['src', 'tooling', '.github']);
     assert.deepEqual(config.queries, [{ uses: 'security-extended' }]);
@@ -74,8 +76,14 @@ test('CodeQL extracts the exact fixed query/create source sets while query has n
         /@\('src\/adapters\/windows-native-process\.cs', 'src\/adapters\/windows-deployment-authority\.cs', 'src\/adapters\/windows-deployment-create\.cs'\)/,
     );
     assert.match(evidence.run, /\$nativeSource\.Count -ne 1/);
-    const query = await readFile(new URL('../src/adapters/windows-deployment-authority.cs', import.meta.url), 'utf8');
-    const create = await readFile(new URL('../src/adapters/windows-deployment-create.cs', import.meta.url), 'utf8');
+    const query = await readFile(
+        new URL('../../../src/adapters/windows-deployment-authority.cs', import.meta.url),
+        'utf8',
+    );
+    const create = await readFile(
+        new URL('../../../src/adapters/windows-deployment-create.cs', import.meta.url),
+        'utf8',
+    );
     assert.match(query, /class DctDeploymentQueryProgram/);
     assert.match(query, /arguments\.Length != 0/);
     assert.match(query, /DctDeploymentAuthority\.Inspect\(name\)/);

@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { parse } from '@babel/parser';
 import * as t from '@babel/types';
 
-const testsUrl = new URL('./', import.meta.url);
+const testsUrl = new URL('../../', import.meta.url);
 const interactiveCases = {
     'interactive/screenshot-background-anchor.test.ts': [
         'actual owned opaque anchor covers native target bounds and hands off foreground with normal exit cleanup',
@@ -53,8 +53,17 @@ const toolingCases = [
     'tests/tooling/governance/commit-history.test.ts',
     'tests/tooling/governance/commit-validation.test.ts',
     'tests/tooling/licenses/bundled-notices.test.ts',
+    'tests/tooling/quality/ci-config.test.ts',
+    'tests/tooling/quality/codeql-config.test.ts',
+    'tests/tooling/quality/hook-isolation.test.ts',
+    'tests/tooling/quality/repository-audit.test.ts',
+    'tests/tooling/quality/runtime-boundaries.test.ts',
+    'tests/tooling/quality/script-syntax.test.ts',
     'tests/tooling/quality/temporary-directory-alias.test.ts',
+    'tests/tooling/quality/test-lanes.test.ts',
     'tests/tooling/quality/text-policy.test.ts',
+    'tests/tooling/quality/toolchain-config.test.ts',
+    'tests/tooling/quality/typescript-gates.test.ts',
     'tests/tooling/releases/publication.test.ts',
     'tests/tooling/releases/release-notes.test.ts',
     'tests/tooling/security/official-inputs.test.ts',

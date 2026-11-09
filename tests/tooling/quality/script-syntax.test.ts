@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildScriptCheckPlan } from '../tooling/check-scripts.ts';
+import { buildScriptCheckPlan } from '../../../tooling/quality/check-script-syntax.ts';
 
 const files = [
-    'tooling/check-scripts.ts',
+    'tooling/quality/check-script-syntax.ts',
     'src/interface/mcp-bootstrap.ts',
     'src/adapters/windows-launch.ts',
     'src/adapters/windows-cdp-helper.ps1',
@@ -15,7 +15,7 @@ test('checks every maintained TypeScript file and parses PowerShell with pwsh', 
     const plan = buildScriptCheckPlan({ files, platform: 'linux' });
     assert.deepEqual(
         plan.filter((step) => step.kind === 'typescript').map((step) => step.file),
-        ['src/adapters/windows-launch.ts', 'src/interface/mcp-bootstrap.ts', 'tooling/check-scripts.ts'],
+        ['src/adapters/windows-launch.ts', 'src/interface/mcp-bootstrap.ts', 'tooling/quality/check-script-syntax.ts'],
     );
     assert.deepEqual(
         plan.filter((step) => step.kind === 'powershell').map((step) => step.executable),
