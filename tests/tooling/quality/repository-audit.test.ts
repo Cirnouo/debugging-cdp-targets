@@ -169,40 +169,49 @@ test('GitHub directory documentation uses INDEX.md without overriding the root R
     );
 });
 
-test('repository audit enforces YAML filenames before generated formatting exemptions', async () => {
+test('repository audit independently enforces YAML filenames and retired thin runtime paths', async () => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-yaml-names-')));
-    const cases: [string, boolean][] = [
-        ['example.yaml', true],
-        ['nested/example.yaml', true],
-        ['example.yml.md', true],
-        ['.github/ISSUE_TEMPLATE/config.yml', true],
-        ['example.yml', false],
-        ['example.YML', false],
-        ['example.YAML', false],
-        ['example.YaMl', false],
-        ['nested/config.yml', false],
-        ['.hidden/legacy.yml', false],
-        ['.github/ISSUE_TEMPLATE/nested/config.yml', false],
-        ['.github/ISSUE_TEMPLATE/config.YML', false],
+    const cases: [string, boolean, boolean][] = [
+        ['example.yaml', true, false],
+        ['nested/example.yaml', true, false],
+        ['example.yml.md', true, false],
+        ['.github/ISSUE_TEMPLATE/config.yml', true, false],
+        ['example.yml', false, false],
+        ['example.YML', false, false],
+        ['example.YAML', false, false],
+        ['example.YaMl', false, false],
+        ['nested/config.yml', false, false],
+        ['.hidden/legacy.yml', false, false],
+        ['.github/ISSUE_TEMPLATE/nested/config.yml', false, false],
+        ['.github/ISSUE_TEMPLATE/config.YML', false, false],
     ];
     for (const host of PLUGIN_HOSTS) {
         cases.push(
-            [`${host.payloadRoot}/dist/valid.yaml`, true],
-            [`${host.payloadRoot}/dist/legacy.yml`, false],
-            [`${host.payloadRoot}/dist/upper.YAML`, false],
+            [`${host.payloadRoot}/dist/valid.yaml`, true, true],
+            [`${host.payloadRoot}/dist/legacy.yml`, false, true],
+            [`${host.payloadRoot}/dist/upper.YAML`, false, true],
         );
     }
     try {
         execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
         // Test one path at a time: case variants alias on Windows filesystems.
-        for (const [file, accepted] of cases) {
+        for (const [file, yamlAccepted, retired] of cases) {
             const target = path.join(root, file);
             await mkdir(path.dirname(target), { recursive: true });
             await writeFile(target, 'enabled: true\n');
             const errors = await auditRepository(root);
             const diagnostics = errors.filter((error) => error.startsWith(`${file}:`));
-            assert.equal(diagnostics.length > 0, !accepted, `${file}: ${diagnostics.join('\n')}`);
-            if (!accepted) assert.match(diagnostics.join('\n'), /\.yaml/);
+            assert.equal(
+                diagnostics.some((error) => error.includes('maintained YAML filenames')),
+                !yamlAccepted,
+                file,
+            );
+            assert.equal(
+                diagnostics.some((error) => error.includes('retired thin runtime path')),
+                retired,
+                file,
+            );
+            assert.equal(diagnostics.length > 0, !yamlAccepted || retired, `${file}: ${diagnostics.join('\n')}`);
             await rm(target);
         }
     } finally {
@@ -216,12 +225,27 @@ test('thin plugin runtime leftovers receive ordinary repository checks and no up
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-retired-repo-')));
     try {
         execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
-        const file = `${PLUGIN_ROOT}/dist/official-server/unexpected.yml`;
-        await mkdir(path.dirname(path.join(root, file)), { recursive: true });
-        await writeFile(path.join(root, file), 'enabled: true\n');
-        const errors = await auditRepository(root);
-        assert.ok(errors.some((error) => error.startsWith(`${file}:`) && error.includes('.yaml')));
-        assert.ok(errors.some((error) => error.includes('/dist/official-server: add README.md')));
+        for (const host of PLUGIN_HOSTS) {
+            const file = `${host.payloadRoot}/dist/official-server/unexpected.yml`;
+            await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+            await writeFile(path.join(root, file), 'enabled:\r\n  value:\ttrue\r\n');
+            const errors = await auditRepository(root);
+            const diagnostics = errors.filter((error) => error.startsWith(`${file}:`));
+            for (const rule of [
+                'maintained YAML filenames',
+                'retired thin runtime path',
+                'use LF',
+                'tabs are prohibited',
+                'indentation must be a multiple of four',
+            ])
+                assert.ok(
+                    diagnostics.some((error) => error.includes(rule)),
+                    `${file}: ${rule}`,
+                );
+            assert.ok(
+                errors.some((error) => error.includes(`${host.payloadRoot}/dist/official-server: add README.md`)),
+            );
+        }
     } finally {
         await rm(root, { recursive: true, force: true });
     }

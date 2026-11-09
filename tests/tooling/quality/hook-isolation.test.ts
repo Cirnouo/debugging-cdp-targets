@@ -219,7 +219,7 @@ test('lint-staged routes YAML filename variants through the actual text checker'
     }
 });
 
-async function textHookFixture(host = 'codex') {
+async function retiredThinRuntimeFixture(host = 'codex') {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-hook-text-')));
     const release: unknown = JSON.parse(
         await readFile(new URL('../../../tooling/official-server-release.json', import.meta.url), 'utf8'),
@@ -270,29 +270,30 @@ async function textHookFixture(host = 'codex') {
     return { root, prefix, run };
 }
 
-test('upstream YAML filename exemption requires complete verified bytes for both hosts', async () => {
+test('retired thin runtime paths reject even matching upstream YAML bytes for both hosts', async () => {
     for (const host of ['codex', 'claude-code']) {
-        const fixture = await textHookFixture(host);
+        const fixture = await retiredThinRuntimeFixture(host);
         try {
             const selected = `${fixture.prefix}/skills/example/upstream.yml`;
             const original = fixture.run([selected]);
-            assert.equal(original.status, 0, original.stdout + original.stderr);
+            assert.equal(original.status, 1, original.stdout + original.stderr);
+            assert.ok(original.stderr.includes(`${selected}: retired thin runtime path`), original.stderr);
             const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
             await writeFile(license, 'Changed upstream license\n');
             const changed = fixture.run([selected]);
             assert.equal(changed.status, 1, changed.stdout + changed.stderr);
-            assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+            assert.ok(changed.stderr.includes(`${selected}: retired thin runtime path`), changed.stderr);
             await writeFile(license, 'Original upstream license\n');
             const bin = path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js');
             await rm(bin);
             const missing = fixture.run([selected]);
             assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-            assert.match(missing.stderr, /official|missing|inventory/i);
+            assert.ok(missing.stderr.includes(`${selected}: retired thin runtime path`), missing.stderr);
             await writeFile(bin, 'export {};\n');
             await writeFile(path.join(fixture.root, fixture.prefix, 'extra.yml'), 'enabled: true\n');
             const extra = fixture.run([selected]);
             assert.equal(extra.status, 1, extra.stdout + extra.stderr);
-            assert.match(extra.stderr, /official|unexpected|inventory/i);
+            assert.ok(extra.stderr.includes(`${selected}: retired thin runtime path`), extra.stderr);
         } finally {
             assert.equal(path.dirname(fixture.root), await realpath(os.tmpdir()));
             assert.ok(path.basename(fixture.root).startsWith('dct-hook-text-'));
@@ -301,11 +302,15 @@ test('upstream YAML filename exemption requires complete verified bytes for both
     }
 });
 
-test('text hook preserves formatting only after verifying the complete original official release', async () => {
-    const fixture = await textHookFixture();
+test('text hook refuses retired upstream Skill formatting and still checks maintained text', async () => {
+    const fixture = await retiredThinRuntimeFixture();
     try {
         const result = fixture.run([`${fixture.prefix}/skills/example/SKILL.md`]);
-        assert.equal(result.status, 0, result.stdout + result.stderr);
+        assert.equal(result.status, 1, result.stdout + result.stderr);
+        assert.ok(
+            result.stderr.includes(`${fixture.prefix}/skills/example/SKILL.md: retired thin runtime path`),
+            result.stderr,
+        );
         const own = 'plugins/codex/debugging-cdp-targets/README.md';
         await writeFile(path.join(fixture.root, own), '# Maintained\n\tInvalid indentation\n');
         const rejected = fixture.run([own]);
@@ -316,39 +321,61 @@ test('text hook preserves formatting only after verifying the complete original 
     }
 });
 
-test('text hook rejects altered or incomplete official releases even when the selected file follows repository style', async () => {
-    const fixture = await textHookFixture();
+test('Codex retired runtime refusal precedes changed missing or absent release evidence', async () => {
+    const fixture = await retiredThinRuntimeFixture();
     try {
         const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
         await writeFile(license, 'Changed upstream license\n');
         const changed = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(changed.status, 1, changed.stdout + changed.stderr);
-        assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+        assert.ok(changed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), changed.stderr);
         await writeFile(license, 'Original upstream license\n');
         await rm(path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js'));
         const missing = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-        assert.match(missing.stderr, /official|missing|inventory/i);
+        assert.ok(missing.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), missing.stderr);
+        const evidence = path.join(fixture.root, 'tooling/official-server-release.json');
+        await rm(evidence);
+        const absent = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(absent.status, 1, absent.stdout + absent.stderr);
+        assert.ok(absent.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), absent.stderr);
+        await writeFile(evidence, '{malformed');
+        const malformed = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(malformed.status, 1, malformed.stdout + malformed.stderr);
+        assert.ok(malformed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), malformed.stderr);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }
 });
 
-test('Claude official text exemption verifies complete independent bytes and rejects altered or missing content', async () => {
-    const fixture = await textHookFixture('claude-code');
+test('Claude retired runtime refusal precedes changed missing or malformed release evidence', async () => {
+    const fixture = await retiredThinRuntimeFixture('claude-code');
     try {
         const original = fixture.run([`${fixture.prefix}/skills/example/SKILL.md`]);
-        assert.equal(original.status, 0, original.stdout + original.stderr);
+        assert.equal(original.status, 1, original.stdout + original.stderr);
+        assert.ok(
+            original.stderr.includes(`${fixture.prefix}/skills/example/SKILL.md: retired thin runtime path`),
+            original.stderr,
+        );
         const license = path.join(fixture.root, fixture.prefix, 'LICENSE');
         await writeFile(license, 'Changed upstream license\n');
         const changed = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(changed.status, 1, changed.stdout + changed.stderr);
-        assert.match(changed.stderr, /official|digest|fingerprint|integrity/i);
+        assert.ok(changed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), changed.stderr);
         await writeFile(license, 'Original upstream license\n');
         await rm(path.join(fixture.root, fixture.prefix, 'build/src/bin/chrome-devtools-mcp.js'));
         const missing = fixture.run([`${fixture.prefix}/LICENSE`]);
         assert.equal(missing.status, 1, missing.stdout + missing.stderr);
-        assert.match(missing.stderr, /official|missing|inventory/i);
+        assert.ok(missing.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), missing.stderr);
+        const evidence = path.join(fixture.root, 'tooling/official-server-release.json');
+        await rm(evidence);
+        const absent = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(absent.status, 1, absent.stdout + absent.stderr);
+        assert.ok(absent.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), absent.stderr);
+        await writeFile(evidence, '{malformed');
+        const malformed = fixture.run([`${fixture.prefix}/LICENSE`]);
+        assert.equal(malformed.status, 1, malformed.stdout + malformed.stderr);
+        assert.ok(malformed.stderr.includes(`${fixture.prefix}/LICENSE: retired thin runtime path`), malformed.stderr);
     } finally {
         await rm(fixture.root, { recursive: true, force: true });
     }

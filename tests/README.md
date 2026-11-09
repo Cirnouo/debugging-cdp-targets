@@ -407,7 +407,9 @@ Linux/macOS product execution or acceptance route.
 - `tooling/quality/hook-isolation.test.ts` executes the pre-push entry point with foreign Git
   routing variables and verifies disposable fixtures leave that repository intact.
   It also verifies staged YAML case-variant routing through the actual lint-staged
-  configuration and complete official-byte verification before filename exemptions.
+  configuration and both-host retired-runtime refusal before release-evidence
+  reads. Ordinary filename/style checks still run in the repository walker;
+  original formatting proof remains with the actual Official package verifier.
 - `tooling/quality/codeql-config.test.ts` checks scan triggers, permissions, owned-source scope,
   action pins and rejection of C# source archives missing the native helper.
 - `chrome-smoke-config.test.ts` checks the configured Windows Chrome path through

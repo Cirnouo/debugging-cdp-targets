@@ -4,11 +4,13 @@
   ambient-state and owned-child matrices, including original TypeScript evidence,
   and checks import isolation from repository I/O dependencies.
 - `repository-audit.test.ts` retains actual temporary-Git traversal, metadata,
-  directory-map, PNG/link and YAML checks, with all nested state restoration.
+  directory-map, PNG/link and independent YAML/style/retired-path checks, with all
+  nested state restoration.
 - `script-syntax.test.ts` checks the complete sorted syntax plan and both
   PowerShell parsers without classifying process.execPath as pure supplied data.
 - `hook-isolation.test.ts` exercises real Git routing, batching, partial staging,
-  YAML variants and the existing independently verified release exemption.
+  YAML variants and both-host retired-runtime refusal regardless of release
+  evidence. Ordinary maintained text checks remain.
 - `ci-config.test.ts` and `codeql-config.test.ts` retain workflow, trust, safe
   lanes, extraction and permission contracts.
 - `test-lanes.test.ts` and `toolchain-config.test.ts` independently constrain
@@ -21,6 +23,10 @@
   NODE_TEST_CONTEXT removal, timeout/hidden shell-free invocation, canonical-base
   and owned-prefix cleanup. Four selected files retain seven independent current
   pass-title assertions; it never selects itself or security inputs.
+
+Original upstream CRLF/tab Skill and YAML bytes, changed LICENSE, missing public
+bin and extra YAML refusal belong to the real Official package-file suite under
+`tests/gateway/official/`, alongside its six existing cases.
 
 All eleven suites are explicit safe default and coverage inputs, with sequential
 files and unchanged coverage floors. Ancestor [test rules](../../AGENTS.md) apply.

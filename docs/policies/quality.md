@@ -4,9 +4,13 @@ Use four spaces, UTF-8, LF, a final newline, and no tabs. Biome formats/lints
 TypeScript, generated-compatible JavaScript and JSON; repository text checks cover YAML, Markdown, PowerShell,
 TOML, and shell. Generated lockfile indentation is exempt.
 
-Only each official release subtree verified against maintained release evidence
-keeps upstream formatting and directory documentation. All delivered JavaScript
-still receives Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
+Original upstream bytes are verified against maintained release evidence by the
+actual App/Official package consumers. Retired thin-host `dist/` paths receive no
+repository formatting or directory-map exemption: staged checks refuse them
+before release-evidence reads, and the walker also applies ordinary filename,
+text and directory checks. Only `tooling/security/dist/check-security.mjs` keeps
+its existing generated-text exemption. All delivered JavaScript still receives
+Node syntax checks. Root and isolated pnpm locks retain pnpm's format.
 
 ## YAML filenames
 
@@ -21,8 +25,9 @@ does not apply to another directory, basename match or case variant.
 Complete official release content retains upstream filenames only after full
 independent package verification under the
 [original release delivery contract](supply-chain.md#official-release-delivery-and-upgrades).
-An official-directory prefix alone grants no exemption. Repository-generated
-files still follow the naming rule even when their formatting is exempt.
+This original-package contract grants no thin-host placement or repository
+walker exemption. Repository-generated files still follow the naming rule even
+when their formatting is exempt.
 
 Repository auditing and staged text checks share the filename validator. Keep
 `.yml` and case-variant matching in staged checks so incorrect names are rejected,
@@ -231,8 +236,9 @@ Husky commit-msg checks commitlint, skipping merges only with real MERGE_HEAD.
 pre-commit uses lint-staged's default stash/partial-staging protection and
 4096-character command batches to accommodate Windows launcher expansion; safe
 Biome writes are limited to staged TS/JS/JSON, other text is audited read-only.
-The text hook exempts original upstream files only after verifying their complete
-official release; altered or incomplete releases fail closed.
+The text hook refuses selected retired thin-host runtime paths before any
+release-evidence read. Original-byte proof remains with the actual App/Official
+verifiers; there is no inferred App-stage text exemption.
 pre-push clears Git's repository routing variables before running verify:push,
 so disposable Git fixtures cannot modify the repository that invoked the hook.
 --no-verify and HUSKY=0 can bypass local hooks.

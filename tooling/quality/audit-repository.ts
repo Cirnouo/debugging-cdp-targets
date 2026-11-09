@@ -50,11 +50,9 @@ export async function auditRepository(root: string) {
         errors.push(...validateYamlFilename(file));
         if (/^\.github\/readme(?:\.[^/]+)?$/i.test(file))
             errors.push(`${file}: GitHub displays this instead of the root README; use .github/INDEX.md.`);
-        if (
-            !PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/`)) &&
-            file !== 'tooling/security/dist/check-security.mjs'
-        )
-            errors.push(...validateTextStyle(file, source));
+        if (PLUGIN_HOSTS.some((host) => file.startsWith(`${host.payloadRoot}/dist/`)))
+            errors.push(`${file}: retired thin runtime path must not ship.`);
+        if (file !== 'tooling/security/dist/check-security.mjs') errors.push(...validateTextStyle(file, source));
         if (/^src\/.+\.(?:ts|mts|cts|mjs|cjs)$/.test(file)) errors.push(...validateRuntimeSource(file, source));
         if (/\.(?:mjs|cjs|js)$/.test(file) && !file.includes('/dist/'))
             errors.push(`${file}: maintained Node code must be TypeScript.`);
