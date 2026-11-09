@@ -43,6 +43,11 @@ Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend
 only on the exact relative isolation.ts and launch-command.ts model owners in
 addition to domains/shared; Host payload/shared gain no Gateway permission.
+Host user-intent.ts owns supplied own-intent parsing and transition comparison;
+host-plugins/native/user-intent-file.ts retains the complete selected-file evidence
+read with its exact dependencies. The native adapter retains command/receipt
+publication order; synchronization and the GUI pending-job barrier stay separate.
+Unknown Host/native siblings remain pure and gain no filesystem or command authority.
 Shared environment-key.ts serves actual target and Official consumers. PortRange
 and the standalone chooser remain an explicitly unfinished
 `domains/cdp-target.ts` residue; actual claim-before-await/lifetime stays in its

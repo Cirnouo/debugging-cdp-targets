@@ -80,6 +80,8 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/adapters/mcp-request-handler.ts',
         'src/application/host-plugin-manager.ts',
         'src/host-plugins/payload-integrity.ts',
+        'src/host-plugins/user-intent.ts',
+        'src/host-plugins/native/user-intent-file.ts',
         'src/adapters/verified-plugin-files.ts',
         'src/adapters/native-host-plugins.ts',
         'src/adapters/managed-plugin-receipts.ts',
@@ -97,6 +99,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         false,
     );
     for (const oldInput of [
+        'src/adapters/host-user-intent.ts',
         'src/application/plugin-runtime.ts',
         'src/application/target-controller.ts',
         'src/adapters/official-package.ts',

@@ -76,9 +76,6 @@
 - `native-host-plugins.ts` manages only the own user plugin through separate
     Codex and Claude native CLI contracts, preserves user intent and consumes
     actual install receipts instead of constructing cache paths.
-- `host-user-intent.ts` reads only the explicitly selected user configuration
-    with standard TOML/JSON parsers and extracts the own source/ref/enablement.
-    Unrelated settings never enter the normalized management receipt.
 - `git-plugin-source.ts` verifies both latest catalogs and the immutable Git
     payload blobs without executing or checking out plugin code.
 - `verified-plugin-files.ts` owns filesystem evidence, paths, sharing and leases,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseHostUserIntent } from '../src/adapters/host-user-intent.ts';
+import { parseHostUserIntent } from '../../src/host-plugins/user-intent.ts';
 
 test('Codex standard TOML forms expose only own intent and ignore unrelated edits', () => {
     const a = parseHostUserIntent(

@@ -227,6 +227,9 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     );
     for (const input of [
         'tooling/licenses/bundled-notices.ts',
+        'src/host-plugins/user-intent.ts',
+        'src/host-plugins/native/user-intent-file.ts',
+        'src/adapters/host-user-intent.ts',
         'tooling/licenses/canonical-inputs.ts',
         'tooling/licenses/reviewed-vendors.json',
         'tooling/distribution/build-plugin.ts',

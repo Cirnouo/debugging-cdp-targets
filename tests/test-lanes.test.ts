@@ -98,7 +98,11 @@ const gatewayCases = [
     'tests/gateway/targets/structured-launch.test.ts',
     'tests/gateway/targets/target-lifecycle.test.ts',
 ];
-const hostCases = ['tests/host-plugins/payload-filesystem.test.ts', 'tests/host-plugins/payload-integrity.test.ts'];
+const hostCases = [
+    'tests/host-plugins/payload-filesystem.test.ts',
+    'tests/host-plugins/payload-integrity.test.ts',
+    'tests/host-plugins/user-intent.test.ts',
+];
 
 async function testFiles(): Promise<string[]> {
     const { stdout } = await promisify(execFile)(
