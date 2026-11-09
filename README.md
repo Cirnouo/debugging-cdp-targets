@@ -47,7 +47,7 @@ See [full requirements and tested platforms](docs/user-guide/compatibility.md).
 Start the App, then install either thin host Plugin below. Native installers and
 default installation admission are not available yet. Contributor stages remain
 subject to the [current delivery limits](docs/user-guide/compatibility.md#current-app-delivery-limits)
-and [App build instructions](docs/app-runtime.md#building-and-evidence).
+and [App build instructions](docs/architecture/deployment.md#building-and-evidence).
 
 ### Codex
 

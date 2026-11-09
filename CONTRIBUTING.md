@@ -8,7 +8,7 @@ Before implementing the singleton desktop App migration, read
 [ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
 [accepted implementation plan](.superpowers/plans/2026-10-17-singleton-app-plan.md).
 The singleton App owns direct HTTP and native resources; thin host Plugins load
-metadata, artwork and the shared Skill. [App runtime](docs/app-runtime.md) records
+metadata, artwork and the shared Skill. [App runtime](docs/architecture/desktop-runtime.md) records
 current composition and separates local staging from installer acceptance.
 
 Before adding, splitting, merging, renaming or moving maintained files, or changing
@@ -142,7 +142,7 @@ changes also require `pnpm check:security`. When runtime source changes,
 verify App bundles with `pnpm check:app`. For packaging/Skill changes regenerate
 thin distributions with `pnpm build:plugin`, then compare with `pnpm check:build`.
 Native App stages require independently verified original archives; see the
-[App build contract](docs/app-runtime.md#building-and-evidence).
+[App build contract](docs/architecture/deployment.md#building-and-evidence).
 
 Real browser integration is separate from ordinary tests. Follow
 [the smoke instructions](tests/smoke/README.md); use only newly launched isolated

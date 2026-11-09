@@ -169,7 +169,7 @@ support, distribution or native acceptance target, including no Experimental
 support tier. Neither Windows architecture is newly qualified. Default admission
 remains unwired/disabled; contributor-only x64 fresh staging establishes no native
 or default-admission acceptance, and arm64 source/native proof gaps remain explicit
-in [App evidence](../app-runtime.md#building-and-evidence).
+in [App evidence](../architecture/deployment.md#building-and-evidence).
 Keep complete unchanged original official/npm/native package files and evidence,
 including all six original Node prebuild cells and upstream non-Windows files.
 CI runner host OS and cross-builds do not establish native product acceptance.

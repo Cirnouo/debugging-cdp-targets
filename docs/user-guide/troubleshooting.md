@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Use the reported target identity when investigating a failure. Explicit recovery
-affects the selected connection; other connections remain usable. The Plugin
+affects the selected connection; other connections remain usable. The App
 never automatically restarts an application or replays a tool call.
 
 ## Common failures
@@ -55,8 +55,8 @@ never automatically restarts an application or replays a tool call.
 - **Isolation support is partial, unsupported or unknown**: partial explains remaining
     production effects and asks accepted partial scope or none; unsupported only
     informs and stays unlaunched; unknown continues applicable research and stays
-    unlaunched. App support through cwd alone is a separate Plugin expression
-    limitation because `{dataDir}` binds only through args/env.
+    unlaunched. The App binds `{dataDir}` only through args/env, so cwd-only isolation
+    cannot be expressed.
 - **Regular Chrome 136+ cannot debug its default production directory**: report the
     documented CDP limitation and leave unlaunched even when the profile is free.
     A none choice never silently selects the preset or another isolation directory.
@@ -116,7 +116,7 @@ for the distinction between normal shutdown and resource-user cleanup.
 
 If the reported application remains alive, inspect its PID and port, confirm
 its identity, and close it manually. Replace `<reported-pid>` and
-`<reported-port>` with the values from the Plugin's diagnostic. On Windows:
+`<reported-port>` with the values from the App's diagnostic. On Windows:
 
 ```powershell
 Get-Process -Id <reported-pid>
@@ -124,14 +124,14 @@ Get-NetTCPConnection -State Listen -LocalPort <reported-port>
 ```
 
 Closing a window does not release the port if the owning process remains alive.
-Use normal application shutdown; the Plugin does not force-kill applications.
+Use normal application shutdown; the App does not force-kill applications.
 
 ## Minimized screenshots
 
 Windows `targetKind: "chrome"` automatically receives the bare
 `CDPScreenshotNewSurface` application feature. Use the ordinary Chrome launch;
 users can switch windows or minimize Chrome without a screenshot foreground
-checklist. The Plugin does not focus or restore a window for capture. See
+checklist. The App does not focus or restore a window for capture. See
 [configuration](configuration.md#windows-chrome-screenshot-feature) for the fixed
 rule and [the dated controlled comparison](../mcp-native-validation.md#controlled-chrome-window-state-follow-up-2026-10-07)
 for the measured static states and limits.
@@ -141,7 +141,7 @@ explicitly correct the reported input. An effective target disable, decorated
 or repeated target, ambiguous switch, non-ASCII feature value or malformed
 enable entry is rejected before data directory acquisition/spawn. A repeated colon in
 `Other:one/two:three/four` invalidates the entire enable list; appending the target
-cannot repair it. The Plugin releases any transient port claim and supplies an
+cannot repair it. The App releases any transient port claim and supplies an
 actionable error instead of silently changing the conflicting choice.
 
 For a Windows `generic-cdp` application, feature support and its launch-argument

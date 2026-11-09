@@ -2,7 +2,7 @@
 
 Invoke the [Skill entry for your host](installation.md) and describe the
 application and debugging task. The connection starts with no target. The
-Plugin only controls an application it launches and verifies; it does not attach
+App only controls an application it launches and verifies. It does not attach
 to an already running browser. Data directory isolation is an explicit choice;
 Chrome receives no automatic debugging-profile directory.
 
@@ -29,7 +29,7 @@ template's declared facts. Titles, questions, option labels, explanations and
 order remain fixed. Agent, User and Plugin name the responsible roles explicitly.
 For another application, only the Chrome preset directory option is omitted.
 Full Agent delegation requires no User-supplied path: the Agent chooses an
-existing parent and the Plugin creates a random child.
+existing parent and the App creates a random child.
 
 Existing applicable choices are reused; fixed wording does not transfer another
 independent task's paths or authorization. Host preselection is not consent.
@@ -89,8 +89,8 @@ launch alone does not prove which state is isolated.
 - Unknown support prompts further applicable research and a report of the gaps;
     the application remains unlaunched and unknown is not reported as unsupported.
 
-Application support and Plugin expression support are separate. An application
-may isolate through cwd alone, while this Plugin binds the acquired data directory
+Application support and the App's binding support are separate. An application
+may isolate through cwd alone, while the App binds the acquired data directory
 only through args/env. Such a verified contract cannot be launched as isolated
 here without an expressible binding; the Agent reports that limitation.
 
@@ -101,7 +101,7 @@ When a directory choice is needed, the Agent presents these options in order:
 1. Agent freely chooses a suitable location.
 2. Chrome preset isolation directory, for Chrome only.
 3. User selects an existing empty or nonempty directory directly as the isolation directory.
-4. User selects an existing parent; the Plugin creates an isolation child with a
+4. User selects an existing parent. The App creates an isolation child with a
     random name that does not conflict with existing child directories.
 
 Other applications omit the Chrome-only option and keep the remaining order.
@@ -210,7 +210,7 @@ alive. Failed directory
 cleanup remains in the in-memory retry ledger without restoring a dead route.
 External Chrome use detected before deletion retains the directory. A hard crash
 or disconnect without verified app exit cannot promise future deletion. See the
-[lifecycle protocol](../lifecycle-protocol.md#target-and-resource-lifetime) for
+[lifecycle protocol](../reference/mcp-lifecycle.md#target-and-resource-lifetime) for
 exact lifetime rules.
 
 ## Operations and waiting
@@ -227,7 +227,7 @@ Mutations use a requestId. Identical retries return the original operation;
 different input cannot reuse that identifier. Cancel is idempotent for its
 operation and cannot affect a newer session. Terminal results are read explicitly;
 there is no automatic notification queue or acknowledgment. The
-[lifecycle protocol](../lifecycle-protocol.md#operations-and-delivery) defines
+[lifecycle protocol](../reference/mcp-lifecycle.md#operations-and-delivery) defines
 the complete replay and delivery rules.
 
 ## Directory evidence
@@ -260,7 +260,7 @@ host Hooks, task-active flags or end-task tool. Legacy accepted start responses
 can precede roots admission; original facilities remain until admission settles
 or the originating client/session disconnects. Modern starts retain the captured
 roots snapshot after their accepted response. See
-[HTTP request lifetime](../app-runtime.md#request-lifetime), including best-effort
+[HTTP request lifetime](../reference/mcp-http.md#request-lifetime), including best-effort
 remote roots cancellation after an SSE response has ended.
 
 For failures, read [troubleshooting](troubleshooting.md), or return to the

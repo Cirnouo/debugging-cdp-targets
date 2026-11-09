@@ -1,9 +1,9 @@
 # Launch and MCP configuration
 
 The Agent normally follows the shared Skill. These settings explain how the
-Plugin launches a target and configures its official Server connection. Use
+App launches a target and configures its official Server connection. Use
 [workflow](workflow.md) for the task sequence and the
-[lifecycle protocol](../lifecycle-protocol.md) for exact selectors and delivery rules.
+[lifecycle protocol](../reference/mcp-lifecycle.md) for exact selectors and delivery rules.
 
 These settings apply to the Windows App and Windows targets only. Non-Windows
 operating systems and unsupported architectures are refused before native
@@ -39,7 +39,7 @@ to finish before replacing its selection. Missing stable updates are ordinary
 while 0.1.0 is Unreleased; known verified App-owned copies can still synchronize.
 See [Host Plugin management](../architecture/host-plugin-management.md) for
 ownership, synchronization/retry and acceptance boundaries; the
-[App dashboard](../app-runtime.md#management-and-host-synchronization) owns the
+[App dashboard](../architecture/desktop-runtime.md#management-and-host-synchronization) owns the
 management view.
 
 The seven tools are:
@@ -59,7 +59,7 @@ public registrationId and private registrationBearer once; never put the bearer
 in a user question or log. Restart and stop also require connectionId/sessionId;
 restart requires scope target, official or both. Start accepts neither connection
 nor session identity. Status/start forbid sessionId; only stop takes disposition.
-The [protocol](../lifecycle-protocol.md#requests-and-status-selectors)
+The [protocol](../reference/mcp-lifecycle.md#requests-and-status-selectors)
 defines the allowed status combinations and exact identity requirements.
 
 ## Structured application launch
@@ -123,11 +123,11 @@ is accepted; duplicate, separate-value and native alias forms fail.
 
 `{port}` works in application args/env. `%NAME%` and `${NAME}` expand within
 structured fields. No shell parsing or command-string interface is involved.
-Without a placeholder or explicit debugging port, the Plugin appends the
+Without a placeholder or explicit debugging port, the App appends the
 Chromium debugging-port argument. Other CDP runtimes use their documented
 args/env; a framework name alone does not prove compatibility.
 
-Windows launch is a Plugin capability: maintained native helpers inspect
+The App's Windows native helpers inspect
 manifests and compatibility settings, preserve argv/cwd/environment across
 ordinary or elevated creation, and observe the actual app PID, creation time
 and process handle. Windows policy determines whether authorization appears.
@@ -201,7 +201,7 @@ switches. It does not modify updater services.
 
 On Windows, `targetKind: "chrome"` also requires the bare Chromium application
 feature `CDPScreenshotNewSurface`. Supply the ordinary structured Chrome launch;
-the Plugin adds the feature automatically. It inserts one canonical
+the App adds the feature automatically. It inserts one canonical
 `--enable-features=CDPScreenshotNewSurface` before the first exact `--`, appends
 the bare name to one existing canonical enable list, or keeps one existing bare
 occurrence. It preserves other valid ASCII list entries and parameter bytes,
@@ -218,7 +218,7 @@ for exact parsing boundaries and the deliberately strict conflict policy.
 
 A conflict fails before data directory acquisition or application spawn and
 releases the transient port claim. Port selection/probing may already have occurred.
-Repair the reported list or conflicting choice explicitly; the Plugin does not
+Repair the reported list or conflicting choice explicitly. The App does not
 delete a disable or rewrite ambiguous arguments. Only valid ASCII feature names
 and parameter values are accepted. Other launch-field environment expansion
 continues to apply as described above.
@@ -320,7 +320,7 @@ and raw filesystem errors; read it explicitly before claiming cleanup.
 Request `include: ["diagnostics"]` only when bounded phase/outcome evidence is
 needed. Includes require connectionId and can combine with toolNames;
 operationId excludes those selectors. See the
-[lifecycle protocol](../lifecycle-protocol.md#requests-and-status-selectors)
+[lifecycle protocol](../reference/mcp-lifecycle.md#requests-and-status-selectors)
 for complete selector rules.
 
 For recovery, read [troubleshooting](troubleshooting.md), or return to the
