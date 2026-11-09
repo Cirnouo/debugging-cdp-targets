@@ -1,15 +1,15 @@
 import { createHash } from 'node:crypto';
 import { lstat, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { readRegularFile } from '../../adapters/file-evidence.ts';
 import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
     validateOfficialManifest,
-} from '../gateway/official/release-evidence.ts';
-import { readRegularFile } from './file-evidence.ts';
+} from './release-evidence.ts';
 
 /** Return only the independently verified release bytes; never follow package links. */
-export async function verifyOfficialPackage(
+export async function verifyOfficialPackageFiles(
     directory: string,
     input: OfficialReleaseEvidence,
     options: { pnpmInstalled?: boolean } = {},

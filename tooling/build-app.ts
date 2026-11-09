@@ -15,7 +15,6 @@ import {
 } from '../src/adapters/app-deployment.ts';
 import { loadAppAdvisoryLock, verifyAppNativeInputs } from '../src/adapters/app-native.ts';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
-import { verifyOfficialPackage } from '../src/adapters/official-package.ts';
 import {
     packWindowsDeploymentQueries,
     preflightWindowsDeploymentCopy,
@@ -38,6 +37,7 @@ import {
     parseAppReleaseInputs,
 } from '../src/domains/app-release.ts';
 import { isSemVer } from '../src/domains/software-version.ts';
+import { verifyOfficialPackageFiles } from '../src/gateway/official/package-files.ts';
 import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
@@ -640,7 +640,7 @@ export async function readAppVersion(root: string) {
 }
 export async function readAppOfficialFiles(root: string) {
     const { release } = await verifyOfficialInputs(root);
-    return verifyOfficialPackage(await realpath(path.join(root, 'node_modules', release.name)), release, {
+    return verifyOfficialPackageFiles(await realpath(path.join(root, 'node_modules', release.name)), release, {
         pnpmInstalled: true,
     });
 }
@@ -666,11 +666,11 @@ async function composeAppFiles(
           }
         : { kind: 'unbound' };
     const { root } = options;
-    const version = await readAppVersion(root);
     const distribution = parseAppDistribution(
         { schemaVersion: 1, kind: options.kind, platform: options.platform, architecture: options.architecture },
         { platform: options.platform, architecture: options.architecture },
     );
+    const version = await readAppVersion(root);
     const { release } = await verifyOfficialInputs(root);
     const catalog: unknown = JSON.parse(await readFile(path.join(root, 'tooling/official-tool-catalog.json'), 'utf8'));
     const files = new Map<string, Buffer>();
@@ -774,12 +774,7 @@ async function composeAppFiles(
     );
     for (const file of ['app-release-inputs.json', 'app-native-release.json', 'official-server-release.json'])
         files.set(`delivery/${file}`, await readRegularFile(path.join(root, 'tooling', file)));
-    for (const file of [
-        'windows-cdp-helper.ps1',
-        'windows-native-helper.ps1',
-        'windows-native-process.cs',
-        'macos-deployment-authority.jxa',
-    ])
+    for (const file of ['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs'])
         files.set(file, await readRegularFile(path.join(root, 'src/adapters', file)));
     const native = parseAppNativeEvidence(
         JSON.parse(files.get('delivery/app-native-release.json')?.toString('utf8') ?? 'null'),
@@ -817,12 +812,9 @@ async function composeAppFiles(
         'src/interface/app.css',
         'packaging/shared/assets/icon.png',
         'LICENSE',
-        ...[
-            'windows-cdp-helper.ps1',
-            'windows-native-helper.ps1',
-            'windows-native-process.cs',
-            'macos-deployment-authority.jxa',
-        ].map((file) => `src/adapters/${file}`),
+        ...['windows-cdp-helper.ps1', 'windows-native-helper.ps1', 'windows-native-process.cs'].map(
+            (file) => `src/adapters/${file}`,
+        ),
     ]);
     return files;
 }
@@ -840,12 +832,7 @@ export async function stageDesktopApp(
         output: options.output,
         onInputs: options.onInputs,
     });
-    if (
-        process.platform !== 'win32' ||
-        process.arch !== 'x64' ||
-        request.platform !== 'win32' ||
-        request.architecture !== 'x64'
-    )
+    if (process.platform !== 'win32' || process.arch !== 'x64' || request.platform !== 'win32')
         throw new Error('This native stage extractor currently supports Windows; other native cells remain pending.');
     const distribution = parseAppDistribution(
         { schemaVersion: 1, kind: request.kind, platform: request.platform, architecture: request.architecture },
@@ -866,7 +853,8 @@ export async function stageDesktopApp(
         (item) =>
             item.kind === 'node' && item.platform === request.platform && item.architecture === request.architecture,
     );
-    if (!electron || !node?.runtimeFiles) throw new Error('Native extraction evidence is unavailable.');
+    if (!electron?.licenses || !node?.runtimeFiles) throw new Error('Native extraction evidence is unavailable.');
+    if (request.architecture !== 'x64') throw new Error('Native stage production supports Windows x64 only.');
     const output = path.resolve(request.output);
     const scratch = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-app-stage-')));
     try {
@@ -1050,17 +1038,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         return result;
     };
     const kind = process.argv.includes('--portable') ? 'portable' : 'installed';
-    const platform = process.platform;
-    const architecture = process.arch;
-    const metadata = parseAppDistribution(
-        { schemaVersion: 1, kind, platform, architecture },
-        { platform, architecture },
-    );
     if (process.argv.includes('--check')) {
-        await generateAppFiles({ root, ...metadata });
+        for (const architecture of ['x64', 'arm64'] as const)
+            await generateAppFiles({ root, kind, platform: 'win32', architecture });
         await readAppOfficialFiles(root);
-        console.log('App bundles, original native loading closure and actual graph licenses verified without writing.');
+        console.log(
+            'Static Windows x64 and arm64 App bundles, original native inputs and actual graph licenses verified without writing; native acceptance not performed.',
+        );
     } else {
+        const platform = process.platform;
+        const architecture = process.arch;
+        const metadata = parseAppDistribution(
+            { schemaVersion: 1, kind, platform, architecture },
+            { platform, architecture },
+        );
         const output = await stageDesktopApp({
             root,
             ...metadata,

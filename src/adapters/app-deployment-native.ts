@@ -12,6 +12,7 @@ import {
     validateDeploymentNativeEntry,
     validateDeploymentUnixEntry,
 } from '../domains/app-deployment.ts';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import { errorCode, isRecord } from '../shared/errors.ts';
 import {
     encodeWindowsDeploymentCopyHeader,
@@ -290,11 +291,10 @@ async function openAuthority(directory: string, writing: boolean, support?: Pick
 
 /** Concrete enrolled-root admission. No caller source, helper, receipt or evidence input exists. */
 export async function openDeploymentNativeAuthority(directory: string, writing: boolean) {
-    if (process.platform === 'win32') {
-        if (writing) throw new Error('Ordinary Windows deployment writing remains unavailable.');
-        return openAuthority(directory, false, await openWindowsDeploymentQuery());
-    }
-    return openAuthority(directory, writing);
+    if (!supportsWindowsApp(process.platform, process.arch))
+        throw new Error('Unsupported deployment native authority; Windows x64 or arm64 is required.');
+    if (writing) throw new Error('Ordinary Windows deployment writing remains unavailable.');
+    return openAuthority(directory, false, await openWindowsDeploymentQuery());
 }
 
 /** Fixed source-build creation I/O. This returns object checks, never payload/enrollment authority. */

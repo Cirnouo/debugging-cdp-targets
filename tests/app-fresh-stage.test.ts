@@ -19,6 +19,8 @@ import {
     ownedWindowsDeploymentCompiler,
 } from './fixtures/deployment-support.ts';
 
+const fixedWindows = process.platform === 'win32' && process.arch === 'x64';
+
 let lockEffect: (exclusive: boolean) => void = () => {
     throw new Error('No controlled native lock owner.');
 };
@@ -696,7 +698,7 @@ test('fresh fixture construction preserves original setup and cleanup errors in 
 });
 
 test('fresh transaction uses actual source producer, protected manifest and state-last publication then read admission', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('source-manifest-replaced');
@@ -760,7 +762,7 @@ test('fresh transaction uses actual source producer, protected manifest and stat
 });
 
 test('controlled fresh I/O does not retain raw payload bytes or executor callback histories', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('manifest-write');
@@ -775,7 +777,7 @@ test('controlled fresh I/O does not retain raw payload bytes or executor callbac
 });
 
 test('post-publication source cleanup failure remains an indeterminate transaction result', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('cleanup');
@@ -791,7 +793,7 @@ test('post-publication source cleanup failure remains an indeterminate transacti
 });
 
 test('fresh write and close failures preserve both original errors and publish no state', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('lease-write-and-close');
@@ -814,7 +816,7 @@ test('fresh write and close failures preserve both original errors and publish n
 });
 
 test('existing roots and fixed-file collisions are refused without adoption or repair', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const scenario of [
         'empty',
@@ -880,7 +882,7 @@ test('existing roots and fixed-file collisions are refused without adoption or r
 });
 
 test('no-replace collision and final tree drift cannot publish a state', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['build-collision', 'final-drift'])
         await context.test(fault, async () => {
@@ -920,19 +922,20 @@ test('unsupported fresh selections fail before filesystem, subprocess or native 
     });
     syncBuiltinESMExports();
     try {
-        for (const platform of ['darwin', 'linux'] as const)
-            await assert.rejects(
-                app.stageFreshDesktopInstallation({
-                    root: 'unused',
-                    kind: 'portable',
-                    platform,
-                    architecture: 'x64',
-                    electronArchive: 'unused',
-                    nodeArchive: 'unused',
-                    output: 'unused',
-                }),
-                /other native cells remain pending/,
-            );
+        for (const platform of ['darwin', 'linux'] as const) {
+            const options = {
+                root: 'unused',
+                kind: 'portable',
+                platform: 'win32',
+                architecture: 'x64',
+                electronArchive: 'unused',
+                nodeArchive: 'unused',
+                output: 'unused',
+            } satisfies Parameters<typeof app.stageFreshDesktopInstallation>[0];
+            assert.equal(Reflect.set(options, 'platform', platform), true);
+            assert.equal(Reflect.get(options, 'platform'), platform);
+            await assert.rejects(app.stageFreshDesktopInstallation(options), /other native cells remain pending/);
+        }
         assert.equal(exec.mock.callCount(), 0);
         assert.equal(native.mock.callCount(), 0);
     } finally {
@@ -942,8 +945,54 @@ test('unsupported fresh selections fail before filesystem, subprocess or native 
     }
 });
 
+test('fresh arm64 staging retains its x64-only refusal before filesystem, subprocess or native loading', async () => {
+    const effects = { filesystem: 0, subprocess: 0, dlopen: 0 };
+    const spawn = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
+    assert.ok(spawn);
+    const filesystem = () => {
+        effects.filesystem++;
+        throw new Error('Unexpected fresh arm64 filesystem effect.');
+    };
+    const subprocess = () => {
+        effects.subprocess++;
+        throw new Error('Unexpected fresh arm64 subprocess.');
+    };
+    const replacements = [
+        mock.method(fs, 'mkdtemp', filesystem),
+        mock.method(fs, 'realpath', filesystem),
+        mock.method(fs, 'lstat', filesystem),
+        mock.method(fs, 'open', filesystem),
+        mock.method(fs, 'mkdir', filesystem),
+        mock.method(fs, 'writeFile', filesystem),
+        mock.method(childProcess, 'execFile', subprocess),
+        mock.method(process, 'dlopen', () => {
+            effects.dlopen++;
+            throw new Error('Unexpected fresh arm64 native load.');
+        }),
+    ];
+    Object.defineProperty(ChildProcess.prototype, 'spawn', { ...spawn, value: subprocess });
+    syncBuiltinESMExports();
+    try {
+        const options = {
+            root: 'unused',
+            kind: 'portable',
+            platform: 'win32',
+            architecture: 'arm64',
+            electronArchive: 'unused',
+            nodeArchive: 'unused',
+            output: 'unused',
+        } satisfies Parameters<typeof app.stageFreshDesktopInstallation>[0];
+        await assert.rejects(app.stageFreshDesktopInstallation(options), /Windows x64 only/);
+        assert.deepEqual(effects, { filesystem: 0, subprocess: 0, dlopen: 0 });
+    } finally {
+        for (const replacement of replacements.reverse()) replacement.mock.restore();
+        Object.defineProperty(ChildProcess.prototype, 'spawn', spawn);
+        syncBuiltinESMExports();
+    }
+});
+
 test('protected manifest failures never publish state or remove fixed lease inodes', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of [
         'manifest-write',
@@ -978,7 +1027,7 @@ test('protected manifest failures never publish state or remove fixed lease inod
 });
 
 test('unsafe native parents and false successful creation replies refuse admission before payload or state publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['unsafe-parent', 'unprotected', 'create-directory']) {
         const fixture = await controlled(context);
@@ -999,7 +1048,7 @@ test('unsafe native parents and false successful creation replies refuse admissi
 });
 
 test('state publication response loss is indeterminate and preserves the committed closure without replay', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('publish-after-state');
@@ -1025,7 +1074,7 @@ test('state publication response loss is indeterminate and preserves the committ
 });
 
 test('post-publication read admission and operation release failures remain indeterminate', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['reopen', 'use-lock', 'operation-close'])
         await context.test(fault, async () => {
@@ -1046,7 +1095,7 @@ test('post-publication read admission and operation release failures remain inde
 });
 
 test('fresh payload consumer issues exactly one fixed copy command before any payload publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('require-copy');
@@ -1063,7 +1112,7 @@ test('fresh payload consumer issues exactly one fixed copy command before any pa
 });
 
 test('complete permission sweeps reject unsafe non-target second chunks and changes after content reads before publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['unsafe-second-chunk', 'post-content-unsafe'])
         await context.test(fault, async () => {
@@ -1088,7 +1137,7 @@ test('complete permission sweeps reject unsafe non-target second chunks and chan
 });
 
 test('fresh published payload contains the fixed query and ordinary deployment worker before readback succeeds', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     try {
@@ -1109,7 +1158,7 @@ test('fresh published payload contains the fixed query and ordinary deployment w
 });
 
 test('fresh worker retains parent use through early response actual exit and late stdio settlement', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['worker-late-exit', 'worker-late-stdio']) {
         const fixture = await controlled(context);
@@ -1163,7 +1212,7 @@ test('fresh worker retains parent use through early response actual exit and lat
 });
 
 test('fresh worker malformed oversized stderr nonzero and release failures remain indeterminate after actual settlement', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of ['worker-malformed', 'worker-oversized', 'worker-stderr', 'worker-nonzero', 'worker-release']) {
         const fixture = await controlled(context);
@@ -1186,7 +1235,7 @@ test('fresh worker malformed oversized stderr nonzero and release failures remai
 });
 
 test('fresh worker rejects changed retained code Node query manifest and native facts without rollback or replay', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     for (const fault of [
         'worker-code',
@@ -1219,7 +1268,7 @@ test('fresh worker rejects changed retained code Node query manifest and native 
 });
 
 test('fresh temporary support close failure stops before ordinary worker spawn and retains indeterminate publication', {
-    skip: process.platform !== 'win32',
+    skip: !fixedWindows,
 }, async (context) => {
     const fixture = await controlled(context);
     fixture.fault('support-close');

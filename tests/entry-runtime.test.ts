@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isRecord } from '../src/shared/errors.ts';
-import { connectionStatus, createConnectionRuntimeFixture, createCoreFixture } from './fixtures/core-runtime.ts';
+import {
+    connectionStatus,
+    createConnectionRuntimeFixture,
+    createCoreFixture,
+} from './fixtures/gateway/core-runtime.ts';
 
 test('Close ends upstream and later start reuses the entry without host reconnection', async () => {
     const f = await createConnectionRuntimeFixture();

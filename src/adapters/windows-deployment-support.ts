@@ -5,6 +5,8 @@ import { lstat, mkdtemp, open, realpath, rm, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isRecord } from '../shared/errors.ts';
+import { retryOwnedDirectoryRemoval } from './owned-directory-removal.ts';
 import {
     decodeWindowsDeploymentCopyHeader,
     decodeWindowsDeploymentCopyReply,
@@ -145,7 +147,7 @@ export async function buildWindowsDeploymentSupport() {
     let sourceInputs: Record[] = [];
     let closed = false;
     let active = false;
-    async function clean() {
+    async function clean(phase: 'release' | 'rollback') {
         const errors: unknown[] = [];
         for (const artifact of [...artifacts].reverse()) {
             try {
@@ -182,11 +184,30 @@ export async function buildWindowsDeploymentSupport() {
             }
         }
         if (scratch && scratchIdentity) {
-            try {
-                const actual = await lstat(scratch, { bigint: true });
-                if (!same(actual, scratchIdentity) || (await realpath(scratch)) !== scratch)
+            const directory = scratch;
+            const identity = scratchIdentity;
+            const verifyScratch = async () => {
+                const actual = await lstat(directory, { bigint: true });
+                if (!same(actual, identity) || (await realpath(directory)) !== directory)
                     throw new Error('Deployment compiler scratch identity changed; retained.');
-                await rm(scratch, { recursive: true });
+            };
+            const removeScratch = () => rm(directory, { recursive: true });
+            try {
+                if (phase === 'release') {
+                    // A descendant failure can leave sibling removals pending.
+                    await retryOwnedDirectoryRemoval(
+                        verifyScratch,
+                        removeScratch,
+                        (error) =>
+                            isRecord(error) &&
+                            error.code === 'ENOTEMPTY' &&
+                            error.syscall === 'rmdir' &&
+                            error.path === directory,
+                    );
+                } else {
+                    await verifyScratch();
+                    await removeScratch();
+                }
             } catch (error) {
                 errors.push(error);
             }
@@ -495,12 +516,12 @@ export async function buildWindowsDeploymentSupport() {
             async release() {
                 if (closed || active) throw new Error('Deployment build lifetime is closed or busy.');
                 closed = true;
-                await clean();
+                await clean('release');
             },
         });
     } catch (error) {
         try {
-            await clean();
+            await clean('rollback');
         } catch (cleanup) {
             throw new AggregateError([error, cleanup], 'Deployment build and cleanup failures.');
         }

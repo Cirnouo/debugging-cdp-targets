@@ -1,75 +1,35 @@
 import assert from 'node:assert/strict';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { once } from 'node:events';
-import type { BigIntStats } from 'node:fs';
-import filesystem, {
-    chmod,
-    lstat,
-    mkdir,
-    mkdtemp,
-    readdir,
-    readFile,
-    rename,
-    rm,
-    symlink,
-    unlink,
-    writeFile,
-} from 'node:fs/promises';
+import filesystem, { lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mock, type TestContext, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
-    DeploymentCommitError,
     type DeploymentLease,
-    openDeploymentWriterInstallation,
+    openDeploymentWriterInstallation as productionOpenWriter,
 } from '../src/adapters/app-deployment.ts';
-import { loadAppAdvisoryLock } from '../src/adapters/app-native.ts';
-import { parseAppNativeEvidence } from '../src/domains/app-release.ts';
 import { isRecord } from '../src/shared/errors.ts';
+import { deploymentAdvisoryLock } from './fixtures/deployment-advisory-lock.ts';
+import { createDeploymentStoreFixture } from './fixtures/deployment-store.ts';
 
-const native = () =>
-    readFile(new URL('../tooling/app-native-release.json', import.meta.url), 'utf8').then((text) =>
-        loadAppAdvisoryLock(parseAppNativeEvidence(JSON.parse(text))),
-    );
 const selection = { selectedBuildId: 'a'.repeat(64), selectedManifestSha256: 'b'.repeat(64) };
 const next = { type: 'select', selectedBuildId: 'c'.repeat(64), selectedManifestSha256: 'd'.repeat(64) };
-const supported = process.platform === 'linux';
-
-function rejectionReason(error: unknown, expression: RegExp) {
-    const reason = error instanceof DeploymentCommitError ? error.cause : error;
+function rejectionReason(
+    error: unknown,
+    expression: RegExp,
+    ErrorType: typeof import('../src/adapters/app-deployment.ts').DeploymentCommitError,
+) {
+    const reason = error instanceof ErrorType ? error.cause : error;
     return reason instanceof Error && expression.test(reason.message);
 }
-
 async function fixture() {
-    const directory = await mkdtemp(path.join(process.cwd(), '.deployment-test-'));
-    await chmod(directory, 0o700);
-    const envelope = path.join(directory, '.deployment');
-    await mkdir(envelope, { mode: 0o700 });
-    const root = await lstat(directory, { bigint: true });
-    const installation = {
-        schemaVersion: 1,
-        installationId: '0dd7224c-51a2-41b3-914d-01171c139ac2',
-        kind: 'portable',
-        platform: process.platform,
-        architecture: process.arch,
-        root: { realPath: directory, device: String(root.dev), inode: String(root.ino) },
-    };
-    const identity = createHash('sha256').update(JSON.stringify(installation)).digest('hex');
-    const state = { schemaVersion: 1, installationIdentity: identity, phase: 'active', ...selection };
-    await writeFile(path.join(envelope, 'installation.json'), `${JSON.stringify(installation)}\n`, {
-        flag: 'wx',
-        mode: 0o600,
-    });
-    await writeFile(path.join(envelope, 'state.json'), `${JSON.stringify(state)}\n`, { flag: 'wx', mode: 0o600 });
-    for (const file of ['operation.lock', 'use.lock'])
-        await writeFile(path.join(envelope, file), '', { flag: 'wx', mode: 0o600 });
-    return { directory, envelope, installation, state, identity, cleanup: () => rm(directory, { recursive: true }) };
+    // Verify/load the actual-host vendor before installing any controlled Windows mapping.
+    const tryLock = await deploymentAdvisoryLock();
+    return { ...(await createDeploymentStoreFixture()), tryLock };
 }
-
 test('unsupported native permission/filesystem roles refuse before creating or adopting deployment metadata', async () => {
     const rawDirectory = await mkdtemp(path.join(tmpdir(), 'dct-deployment-unsupported-'));
     const platform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -79,7 +39,7 @@ test('unsupported native permission/filesystem roles refuse before creating or a
         assert.equal(path.resolve(directory), directory);
         assert.equal(await filesystem.realpath(directory), directory);
         Object.defineProperty(process, 'platform', { value: 'aix', configurable: true });
-        await assert.rejects(openDeploymentWriterInstallation(directory, { tryLock: () => true }), /unsupported/i);
+        await assert.rejects(productionOpenWriter(directory, { tryLock: () => true }), /unsupported/i);
         assert.deepEqual(await readdir(directory), []);
     } finally {
         if (platform) Object.defineProperty(process, 'platform', platform);
@@ -87,12 +47,10 @@ test('unsupported native permission/filesystem roles refuse before creating or a
     }
 });
 
-test('enrolled store binds physical root, exact metadata and independently owned leases', {
-    skip: !supported,
-}, async () => {
+test('enrolled store binds physical root, exact metadata and independently owned leases', async () => {
     const own = await fixture();
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock });
         assert.equal(store.identity, own.identity);
         const operation = await store.tryAcquire('operation');
         assert.ok(operation);
@@ -101,15 +59,15 @@ test('enrolled store binds physical root, exact metadata and independently owned
         assert.deepEqual(await store.read(reader), own.state);
         assert.equal(await store.tryAcquire('operation'), undefined);
         await assert.rejects(store.commit(reader, own.state, next), (error: unknown) =>
-            rejectionReason(error, /operation/i),
+            rejectionReason(error, /operation/i, own.deployment.DeploymentCommitError),
         );
         await assert.rejects(store.tryAcquire('deletion'), /operation/i);
-        const foreign = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
+        const foreign = await own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock });
         await assert.rejects(foreign.read(operation), /lease/i);
         const committed = await store.commit(operation, own.state, next);
         assert.equal(committed.selectedBuildId, next.selectedBuildId);
         await assert.rejects(store.commit(operation, own.state, next), (error: unknown) =>
-            rejectionReason(error, /stale/i),
+            rejectionReason(error, /stale/i, own.deployment.DeploymentCommitError),
         );
         await reader.release();
         await assert.rejects(store.read(reader), /lease/i);
@@ -125,12 +83,10 @@ test('enrolled store binds physical root, exact metadata and independently owned
     }
 });
 
-test('removing fences new readers and deletion waits for every actual open shared descriptor', {
-    skip: !supported,
-}, async () => {
+test('removing fences new readers and deletion waits for every actual open shared descriptor', async () => {
     const own = await fixture();
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock });
         const operation = await store.tryAcquire('operation');
         const reader = await store.tryAcquire('use');
         assert.ok(operation);
@@ -139,13 +95,13 @@ test('removing fences new readers and deletion waits for every actual open share
         await assert.rejects(store.tryAcquire('use'), /fenced/i);
         assert.equal(await store.tryAcquire('deletion', operation), undefined);
         await assert.rejects(store.commit(operation, removing, { type: 'finish-removal' }), (error: unknown) =>
-            rejectionReason(error, /deletion/i),
+            rejectionReason(error, /deletion/i, own.deployment.DeploymentCommitError),
         );
         await reader.release();
         const deletion = await store.tryAcquire('deletion', operation);
         assert.ok(deletion);
         await assert.rejects(store.commit(operation, removing, { type: 'cancel-removal' }), (error: unknown) =>
-            rejectionReason(error, /deletion/i),
+            rejectionReason(error, /deletion/i, own.deployment.DeploymentCommitError),
         );
         await assert.rejects(operation.release(), /deletion/i);
         assert.equal(await store.tryAcquire('use'), undefined);
@@ -160,7 +116,6 @@ test('removing fences new readers and deletion waits for every actual open share
 });
 
 test('cancellation excludes deletion acquisition throughout its asynchronous flush', {
-    skip: !supported,
     timeout: 20000,
 }, async () => {
     const own = await fixture();
@@ -171,8 +126,8 @@ test('cancellation excludes deletion acquisition throughout its asynchronous flu
     let deletion: DeploymentLease | undefined;
     let cancellation: Promise<void> | undefined;
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, {
-            tryLock: await native(),
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
             stateIO: {
                 flush: async (handle) => {
                     await handle.sync();
@@ -223,7 +178,6 @@ test('cancellation excludes deletion acquisition throughout its asynchronous flu
 });
 
 test('pending deletion acquisition excludes cancellation before it owns an open descriptor', {
-    skip: !supported,
     timeout: 20000,
 }, async () => {
     const own = await fixture();
@@ -248,8 +202,8 @@ test('pending deletion acquisition excludes cancellation before it owns an open 
     });
     syncBuiltinESMExports();
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, {
-            tryLock: await native(),
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
             stateIO: {
                 flush: async (handle) => {
                     await handle.sync();
@@ -304,13 +258,11 @@ test('pending deletion acquisition excludes cancellation before it owns an open 
     }
 });
 
-test('pre-replacement flush failure retains old state while uncertain replacement never claims rollback', {
-    skip: !supported,
-}, async () => {
+test('pre-replacement flush failure retains old state while uncertain replacement never claims rollback', async () => {
     const own = await fixture();
     try {
-        const before = await openDeploymentWriterInstallation(own.directory, {
-            tryLock: await native(),
+        const before = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
             stateIO: {
                 flush: async () => {
                     throw new Error('controlled disk-full');
@@ -321,12 +273,48 @@ test('pre-replacement flush failure retains old state while uncertain replacemen
         assert.ok(lease);
         await assert.rejects(
             before.commit(lease, own.state, next),
-            (error: unknown) => error instanceof DeploymentCommitError && error.outcome === 'not-committed',
+            (error: unknown) =>
+                error instanceof own.deployment.DeploymentCommitError && error.outcome === 'not-committed',
         );
         assert.deepEqual(await before.read(lease), own.state);
         await lease.release();
-        const after = await openDeploymentWriterInstallation(own.directory, {
-            tryLock: await native(),
+        const oldBytes = await readFile(path.join(own.envelope, 'state.json'));
+        const controlledRefusal = Object.assign(new Error('controlled replacement refusal'), { code: 'EPERM' });
+        let replacementCalls = 0;
+        const refused = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
+            stateIO: {
+                replace: async () => {
+                    replacementCalls++;
+                    throw controlledRefusal;
+                },
+            },
+        });
+        const refusedLease = await refused.tryAcquire('operation');
+        assert.ok(refusedLease);
+        try {
+            await assert.rejects(
+                refused.commit(refusedLease, own.state, next),
+                (error: unknown) =>
+                    error instanceof own.deployment.DeploymentCommitError &&
+                    error.outcome === 'indeterminate' &&
+                    error.cause === controlledRefusal,
+            );
+            assert.equal(replacementCalls, 1);
+            assert.deepEqual(await readFile(path.join(own.envelope, 'state.json')), oldBytes);
+            assert.deepEqual(await refused.read(refusedLease), own.state);
+            assert.equal(replacementCalls, 1);
+            assert.deepEqual((await readdir(own.envelope)).sort(), [
+                'installation.json',
+                'operation.lock',
+                'state.json',
+                'use.lock',
+            ]);
+        } finally {
+            await refusedLease.release();
+        }
+        const after = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
             stateIO: {
                 replace: async (from, to) => {
                     await rename(from, to);
@@ -338,7 +326,8 @@ test('pre-replacement flush failure retains old state while uncertain replacemen
         assert.ok(writer);
         await assert.rejects(
             after.commit(writer, own.state, next),
-            (error: unknown) => error instanceof DeploymentCommitError && error.outcome === 'indeterminate',
+            (error: unknown) =>
+                error instanceof own.deployment.DeploymentCommitError && error.outcome === 'indeterminate',
         );
         assert.equal((await after.read(writer)).selectedBuildId, next.selectedBuildId);
         await writer.release();
@@ -353,14 +342,12 @@ test('pre-replacement flush failure retains old state while uncertain replacemen
     }
 });
 
-test('a replaced temporary inode cannot become selection or authorize deletion of a foreign name', {
-    skip: !supported,
-}, async () => {
+test('a replaced temporary inode cannot become selection or authorize deletion of a foreign name', async () => {
     const own = await fixture();
     let replacement: string | undefined;
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, {
-            tryLock: await native(),
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
             stateIO: {
                 flush: async (handle) => {
                     await handle.sync();
@@ -368,7 +355,7 @@ test('a replaced temporary inode cannot become selection or authorize deletion o
                     assert.ok(name);
                     replacement = path.join(own.envelope, name);
                     await rename(replacement, `${replacement}.original`);
-                    await symlink(path.join(own.envelope, 'installation.json'), replacement);
+                    await writeFile(replacement, 'foreign temporary inode', { flag: 'wx' });
                 },
             },
         });
@@ -376,28 +363,28 @@ test('a replaced temporary inode cannot become selection or authorize deletion o
         assert.ok(operation);
         await assert.rejects(
             store.commit(operation, own.state, next),
-            (error: unknown) => error instanceof DeploymentCommitError && error.outcome === 'not-committed',
+            (error: unknown) =>
+                error instanceof own.deployment.DeploymentCommitError && error.outcome === 'not-committed',
         );
         assert.deepEqual(await store.read(operation), own.state);
         assert.ok(replacement);
-        assert.equal((await lstat(replacement)).isSymbolicLink(), true);
+        assert.equal((await lstat(replacement)).isFile(), true);
+        assert.equal(await readFile(replacement, 'utf8'), 'foreign temporary inode');
         await operation.release();
     } finally {
         await own.cleanup();
     }
 });
 
-test('readback failure retains the committed removal fence and reports indeterminate outcome', {
-    skip: !supported,
-}, async () => {
+test('readback failure retains the committed removal fence and reports indeterminate outcome', async () => {
     const own = await fixture();
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, {
-            tryLock: await native(),
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
             stateIO: {
                 replace: async (from, to) => {
                     await rename(from, to);
-                    await chmod(to, 0o620);
+                    own.fail(to, new Error('Controlled readback authority refusal.'));
                 },
             },
         });
@@ -405,11 +392,12 @@ test('readback failure retains the committed removal fence and reports indetermi
         assert.ok(operation);
         await assert.rejects(
             store.commit(operation, own.state, { type: 'begin-removal' }),
-            (error: unknown) => error instanceof DeploymentCommitError && error.outcome === 'indeterminate',
+            (error: unknown) =>
+                error instanceof own.deployment.DeploymentCommitError && error.outcome === 'indeterminate',
         );
         const bytes = await readFile(path.join(own.envelope, 'state.json'), 'utf8');
         assert.equal(JSON.parse(bytes).phase, 'removing');
-        await chmod(path.join(own.envelope, 'state.json'), 0o600);
+        own.fail(path.join(own.envelope, 'state.json'));
         assert.equal((await store.read(operation)).phase, 'removing');
         await operation.release();
     } finally {
@@ -417,548 +405,177 @@ test('readback failure retains the committed removal fence and reports indetermi
     }
 });
 
-// R1 keeps real filesystem identity and commit/replacement; only the reader's
-// native resample is paused. No classification correction is present yet.
-for (const phase of ['pre-read', 'post-read'] as const) {
-    for (const condition of ['replacement', 'unsafe-replacement', 'unknown-replacement'] as const) {
-        test(`native ${phase} document resample preserves ${condition} classification`, {
-            skip: !supported,
-            timeout: 20000,
-        }, async (context) => {
-            const own = await fixture();
-            const readerContext = new AsyncLocalStorage<boolean>();
-            const captured = Promise.withResolvers<void>();
-            const resume = Promise.withResolvers<void>();
-            const originalOpen = filesystem.open;
-            const originalLstat = filesystem.lstat;
-            const originalStatfs = filesystem.statfs;
-            const originalParse = JSON.parse;
-            const stateFile = path.join(own.envelope, 'state.json');
-            const oldText = `${JSON.stringify(own.state)}\n`;
-            const unknownFailure = Object.assign(new Error('Controlled unknown native resample failure.'), {
-                code: 'EIO',
-            });
-            let pendingNativeResample = false;
-            let paused = false;
-            let countParse = false;
-            let readCalls = 0;
-            let parseCalls = 0;
-            let closeCalls = 0;
-            let observedPhase: typeof phase | undefined;
-            let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
-            let openedBefore: BigIntStats | undefined;
-            let heldAfterReplacement: BigIntStats | undefined;
-            let namedAfterReplacement: BigIntStats | undefined;
-            let operation: DeploymentLease | undefined;
-            let use: DeploymentLease | undefined;
-            let settleRead: Promise<unknown> | undefined;
-            const openBoundary = mock.method(
-                filesystem,
-                'open',
-                async (...args: Parameters<typeof filesystem.open>) => {
-                    const handle = await originalOpen(...args);
-                    if (!readerContext.getStore() || args[0] !== stateFile || opened) return handle;
-                    opened = handle;
-                    return new Proxy(handle, {
-                        get(target, key) {
-                            if (key === 'stat')
-                                return async () => {
-                                    const entry = await target.stat({ bigint: true });
-                                    openedBefore ??= entry;
-                                    return entry;
-                                };
-                            if (key === 'read')
-                                return (...values: unknown[]) => {
-                                    readCalls++;
-                                    return Reflect.apply(target.read, target, values);
-                                };
-                            if (key === 'close')
-                                return async () => {
-                                    closeCalls++;
-                                    await target.close();
-                                };
-                            const value: unknown = Reflect.get(target, key, target);
-                            return typeof value === 'function' ? value.bind(target) : value;
-                        },
-                    });
-                },
-            );
-            const volumeBoundary = mock.method(
-                filesystem,
-                'statfs',
-                async (...args: Parameters<typeof filesystem.statfs>) => {
-                    const volume = await originalStatfs(...args);
-                    if (readerContext.getStore() && args[0] === stateFile) pendingNativeResample = true;
-                    return volume;
-                },
-            );
-            const namedBoundary = mock.method(
-                filesystem,
-                'lstat',
-                async (...args: Parameters<typeof filesystem.lstat>) => {
-                    if (!readerContext.getStore() || args[0] !== stateFile || !pendingNativeResample)
-                        return originalLstat(...args);
-                    pendingNativeResample = false;
-                    const currentPhase = readCalls === 0 ? 'pre-read' : 'post-read';
-                    if (paused || currentPhase !== phase) return originalLstat(...args);
-                    paused = true;
-                    observedPhase = currentPhase;
-                    captured.resolve();
-                    await resume.promise;
-                    const entry = await originalLstat(stateFile, { bigint: true });
-                    namedAfterReplacement = entry;
-                    if (condition === 'unknown-replacement') throw unknownFailure;
-                    return entry;
-                },
-            );
-            const parseBoundary = mock.method(JSON, 'parse', (...args: Parameters<typeof JSON.parse>) => {
-                if (countParse && args[0] === oldText) parseCalls++;
-                return originalParse(...args);
-            });
-            syncBuiltinESMExports();
-            try {
-                const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
-                operation = await store.tryAcquire('operation');
-                use = await store.tryAcquire('use');
-                assert.ok(operation);
-                assert.ok(use);
-                const readerLease = use;
-                countParse = true;
-                const reading = readerContext
-                    .run(true, () => store.read(readerLease))
-                    .then(
-                        (value) => ({ value }),
-                        (error: unknown) => ({ error }),
-                    );
-                settleRead = reading;
-                await Promise.race([
-                    captured.promise,
-                    reading.then(() => {
-                        throw new Error('Reader bypassed the controlled native resample.');
-                    }),
-                ]);
-                assert.equal(observedPhase, phase);
-                assert.ok(opened);
-                assert.ok(openedBefore);
-                assert.equal(openedBefore.nlink, 1n);
-                // The writer is outside readerContext and cannot enter the barrier.
-                countParse = false;
-                const selected = await store.commit(operation, own.state, next);
-                if (condition === 'unsafe-replacement') await chmod(stateFile, 0o644);
-                heldAfterReplacement = await opened.stat({ bigint: true });
-                const replacement = await originalLstat(stateFile, { bigint: true });
-                assert.equal(heldAfterReplacement.isFile(), true);
-                assert.equal(heldAfterReplacement.nlink, 0n);
-                assert.equal(heldAfterReplacement.ino, openedBefore.ino);
-                assert.equal(replacement.nlink, 1n);
-                assert.notEqual(replacement.ino, heldAfterReplacement.ino);
-                if (condition === 'unsafe-replacement') assert.notEqual(replacement.mode & 0o077n, 0n);
-                else assert.equal(replacement.mode & 0o077n, 0n);
-                countParse = true;
-                resume.resolve();
-                const result = await reading;
-                countParse = false;
-                assert.equal(parseCalls, 0);
-                assert.equal(closeCalls, 1);
-                await assert.rejects(opened.stat(), { code: 'EBADF' });
-                assert.ok(namedAfterReplacement);
-                assert.equal(namedAfterReplacement.ino, replacement.ino);
-                if (phase === 'pre-read') assert.equal(readCalls, 0);
-                else assert.ok(readCalls > 0);
-                context.diagnostic(
-                    JSON.stringify({
-                        phase,
-                        condition,
-                        nativeResampleReached: paused,
-                        actualHeldLinks: String(heldAfterReplacement.nlink),
-                        actualHeldInode: String(heldAfterReplacement.ino),
-                        actualNamedInode: String(namedAfterReplacement.ino),
-                        actualNamedMode: String(namedAfterReplacement.mode & 0o777n),
-                        readCalls,
-                        parseCalls,
-                        closeCalls,
-                    }),
-                );
-                if (condition !== 'unsafe-replacement') assert.deepEqual(await store.read(use), selected);
-                assert.ok('error' in result);
-                assert.ok(result.error instanceof Error);
-                if (condition === 'replacement')
-                    assert.equal(result.error.message, 'Deployment document identity changed.');
-                else {
-                    assert.doesNotMatch(result.error.message, /document identity.*changed/);
-                    if (condition === 'unsafe-replacement')
-                        assert.equal(result.error.message, 'Deployment native authority is unavailable or unsafe.');
-                    else assert.equal(result.error, unknownFailure);
-                }
-            } finally {
-                countParse = false;
-                resume.resolve();
-                await settleRead?.catch(() => {});
-                parseBoundary.mock.restore();
-                namedBoundary.mock.restore();
-                volumeBoundary.mock.restore();
-                openBoundary.mock.restore();
-                syncBuiltinESMExports();
-                readerContext.disable();
-                await use?.release();
-                await operation?.release();
-                await own.cleanup();
-            }
-        });
-    }
-}
-
-test('an opened state document unlinked before its first stat rejects as changed identity', {
-    skip: !supported,
-    timeout: 20000,
-}, async () => {
-    const own = await fixture();
-    const captured = Promise.withResolvers<void>();
-    const resume = Promise.withResolvers<void>();
-    const originalOpen = filesystem.open;
-    const stateFile = path.join(own.envelope, 'state.json');
-    let armed = false;
-    let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
-    let operation: DeploymentLease | undefined;
-    let use: DeploymentLease | undefined;
-    let settleRead: Promise<unknown> | undefined;
-    const boundary = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
-        const handle = await originalOpen(...args);
-        if (armed && args[0] === stateFile) {
-            armed = false;
-            opened = handle;
-            captured.resolve();
-            await resume.promise;
-        }
-        return handle;
-    });
-    syncBuiltinESMExports();
-    try {
-        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
-        operation = await store.tryAcquire('operation');
-        use = await store.tryAcquire('use');
-        assert.ok(operation);
-        assert.ok(use);
-        armed = true;
-        const reading = store.read(use).then(
-            (value) => ({ value }),
-            (error: unknown) => ({ error }),
-        );
-        settleRead = reading;
-        await Promise.race([
-            captured.promise,
-            reading.then(() => {
-                throw new Error('Reader bypassed its controlled open return.');
-            }),
-        ]);
-        const selected = await store.commit(operation, own.state, next);
-        assert.ok(opened);
-        const oldInode = await opened.stat({ bigint: true });
-        assert.equal(oldInode.isFile(), true);
-        assert.equal(oldInode.nlink, 0n);
-        resume.resolve();
-        const result = await reading;
-        assert.ok('error' in result);
-        assert.ok(result.error instanceof Error);
-        assert.match(result.error.message, /document identity.*changed/);
-        await assert.rejects(opened.stat(), { code: 'EBADF' });
-        assert.deepEqual(await store.read(use), selected);
-
-        const secondName = path.join(own.envelope, 'state-second-link.json');
-        await filesystem.link(stateFile, secondName);
-        try {
-            await assert.rejects(
-                store.read(use),
-                (error: unknown) => error instanceof Error && /regular file with one link/.test(error.message),
-            );
-        } finally {
-            await filesystem.unlink(secondName);
-        }
-    } finally {
-        resume.resolve();
-        await settleRead?.catch(() => {});
-        boundary.mock.restore();
-        syncBuiltinESMExports();
-        await use?.release();
-        await operation?.release();
-        await own.cleanup();
-    }
-});
-
-for (const receipt of ['named', 'current'] as const) {
-    test(`an invalidated ${receipt} document receipt rejects without returning or parsing its bytes`, {
-        skip: !supported,
-        timeout: 20000,
-    }, async (context) => {
-        const own = await fixture();
-        const captured = Promise.withResolvers<void>();
-        const resume = Promise.withResolvers<void>();
-        const originalOpen = filesystem.open;
-        const originalLstat = filesystem.lstat;
-        const originalParse = JSON.parse;
-        const stateFile = path.join(own.envelope, 'state.json');
-        const originalStateText = `${JSON.stringify(own.state)}\n`;
-        let armed = false;
-        let observing = false;
-        let countParse = false;
-        let namedCalls = 0;
-        let readCalls = 0;
-        let parseCalls = 0;
-        let closeCalls = 0;
-        let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
-        let before: BigIntStats | undefined;
-        let operation: DeploymentLease | undefined;
-        let use: DeploymentLease | undefined;
-        let settleRead: Promise<unknown> | undefined;
-        const openBoundary = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
-            const handle = await originalOpen(...args);
-            if (!armed || args[0] !== stateFile) return handle;
-            armed = false;
-            observing = true;
-            opened = handle;
-            return new Proxy(handle, {
-                get(target, key) {
-                    if (key === 'stat')
-                        return async () => {
-                            const entry = await target.stat({ bigint: true });
-                            before ??= entry;
-                            return entry;
-                        };
-                    if (key === 'read')
-                        return (...values: unknown[]) => {
-                            readCalls++;
-                            return Reflect.apply(target.read, target, values);
-                        };
-                    if (key === 'close')
-                        return async () => {
-                            closeCalls++;
-                            await target.close();
-                        };
-                    const value: unknown = Reflect.get(target, key, target);
-                    return typeof value === 'function' ? value.bind(target) : value;
-                },
-            });
-        });
-        const lstatBoundary = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
-            const entry = await originalLstat(...args);
-            if (!observing || args[0] !== stateFile) return entry;
-            if (receipt === 'named' ? ++namedCalls !== 1 : readCalls === 0) return entry;
-            observing = false;
-            captured.resolve();
-            await resume.promise;
-            assert.ok(opened);
-            assert.ok(before);
-            const invalidated = await opened.stat({ bigint: true });
-            const replacement = await originalLstat(stateFile, { bigint: true });
-            assert.equal(invalidated.isFile(), true);
-            assert.equal(invalidated.isSymbolicLink(), false);
-            assert.equal(invalidated.nlink, 0n);
-            assert.equal(invalidated.ino, before.ino);
-            assert.equal(replacement.nlink, 1n);
-            assert.notEqual(replacement.ino, invalidated.ino);
-            if (receipt === 'named') return invalidated;
-            const expected = before;
-            context.diagnostic(
-                JSON.stringify({
-                    receipt,
-                    modeledFields: ['mtimeNs', 'ctimeNs'],
-                    actual: { mtimeNs: String(invalidated.mtimeNs), ctimeNs: String(invalidated.ctimeNs) },
-                    modeled: { mtimeNs: String(expected.mtimeNs), ctimeNs: String(expected.ctimeNs) },
-                    actualNlink: String(invalidated.nlink),
-                }),
-            );
-            // Model only timestamp equality to reach the current-receipt classifier.
-            // Inode, link count, type and private-role metadata remain actual.
-            return new Proxy(invalidated, {
-                get(target, key) {
-                    if (key === 'mtimeNs') return expected.mtimeNs;
-                    if (key === 'ctimeNs') return expected.ctimeNs;
-                    const value: unknown = Reflect.get(target, key, target);
-                    return typeof value === 'function' ? value.bind(target) : value;
-                },
-            });
-        });
-        const parseBoundary = mock.method(JSON, 'parse', (...args: Parameters<typeof JSON.parse>) => {
-            if (countParse && args[0] === originalStateText) parseCalls++;
-            return originalParse(...args);
-        });
-        syncBuiltinESMExports();
-        try {
-            const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
-            operation = await store.tryAcquire('operation');
-            use = await store.tryAcquire('use');
-            assert.ok(operation);
-            assert.ok(use);
-            armed = true;
-            countParse = true;
-            const reading = store.read(use).then(
-                (value) => ({ value }),
-                (error: unknown) => ({ error }),
-            );
-            settleRead = reading;
-            await Promise.race([
-                captured.promise,
-                reading.then(() => {
-                    throw new Error('Reader bypassed its controlled receipt return.');
-                }),
-            ]);
-            countParse = false;
-            const selected = await store.commit(operation, own.state, next);
-            countParse = true;
-            resume.resolve();
-            const result = await reading;
-            countParse = false;
-            assert.ok('error' in result);
-            assert.ok(result.error instanceof Error);
-            assert.match(result.error.message, /document identity.*changed/);
-            assert.equal(parseCalls, 0);
-            if (receipt === 'named') assert.equal(readCalls, 0);
-            else assert.ok(readCalls > 0, 'current receipt follows bounded reads');
-            assert.equal(closeCalls, 1);
-            assert.ok(opened);
-            await assert.rejects(opened.stat(), { code: 'EBADF' });
-            assert.deepEqual(await store.read(use), selected);
-        } finally {
-            countParse = false;
-            resume.resolve();
-            await settleRead?.catch(() => {});
-            parseBoundary.mock.restore();
-            lstatBoundary.mock.restore();
-            openBoundary.mock.restore();
-            syncBuiltinESMExports();
-            await use?.release();
-            await operation?.release();
-            await own.cleanup();
-        }
-    });
-}
-
-test('named document hardlinks, nonregular entries, private-mode failures and absence remain fatal', {
-    skip: !supported,
-}, async (context) => {
-    for (const kind of ['hardlink', 'nonregular', 'permissions', 'absent'] as const) {
-        const own = await fixture();
-        const originalLstat = filesystem.lstat;
-        const stateFile = path.join(own.envelope, 'state.json');
-        const secondName = path.join(own.envelope, 'state-second-link.json');
-        let armed = false;
-        let operation: DeploymentLease | undefined;
-        let use: DeploymentLease | undefined;
-        const boundary = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
-            if (!armed || args[0] !== stateFile) return originalLstat(...args);
-            armed = false;
-            if (kind === 'hardlink') await filesystem.link(stateFile, secondName);
-            if (kind === 'permissions') await chmod(stateFile, 0o644);
-            if (kind === 'absent') await unlink(stateFile);
-            // The nonregular control supplies actual owned-directory metadata only here.
-            const entry = await originalLstat(kind === 'nonregular' ? own.envelope : stateFile, { bigint: true });
-            if (kind === 'hardlink') assert.equal(entry.nlink, 2n);
-            if (kind === 'nonregular') assert.equal(entry.isDirectory(), true);
-            if (kind === 'permissions') assert.notEqual(entry.mode & 0o077n, 0n);
-            return entry;
-        });
-        syncBuiltinESMExports();
-        try {
-            const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
-            operation = await store.tryAcquire('operation');
-            use = await store.tryAcquire('use');
-            assert.ok(operation);
-            assert.ok(use);
-            armed = true;
-            await assert.rejects(store.read(use), (error: unknown) => {
-                assert.ok(error instanceof Error);
-                assert.doesNotMatch(error.message, /document identity.*changed/);
-                if (kind === 'absent') return isRecord(error) && error.code === 'ENOENT';
-                return kind === 'permissions'
-                    ? error.message === 'Deployment native authority is unavailable or unsafe.'
-                    : /regular file with one link/.test(error.message);
-            });
-            context.diagnostic(JSON.stringify({ fatalControl: kind, result: 'passed' }));
-        } finally {
-            boundary.mock.restore();
-            syncBuiltinESMExports();
-            if (kind === 'hardlink') await unlink(secondName).catch(() => {});
-            if (kind === 'permissions') await chmod(stateFile, 0o600);
-            await use?.release();
-            await operation?.release();
-            await own.cleanup();
-        }
-    }
-});
-
-test('a separate leased reader returns complete selections during atomic writer replacements', {
-    skip: !supported,
+test('a separate leased reader acknowledges complete selections between default atomic commits', {
     timeout: 20000,
 }, async () => {
     const own = await fixture();
     const child = spawn(
         process.execPath,
-        [fileURLToPath(new URL('./fixtures/deployment-state-reader.ts', import.meta.url)), own.directory],
+        [fileURLToPath(new URL('./fixtures/deployment-state-reader.ts', import.meta.url)), own.physical, own.directory],
         { stdio: ['ignore', 'ignore', 'pipe', 'ipc'], windowsHide: true },
     );
     let stderr = '';
     child.stderr?.on('data', (data: Buffer) => {
         stderr += data.toString();
     });
-    const exited = once(child, 'exit');
-    const earlyExit = exited.then(() => {
-        throw new Error(`Reader fixture exited: ${stderr}`);
+    const closed = Promise.withResolvers<void>();
+    const failed = Promise.withResolvers<Error>();
+    let protocolFailure: Error | undefined;
+    let exit: readonly [number | null, NodeJS.Signals | null] | undefined;
+    let stopping = false;
+    let expected = { ordinal: 0, result: Promise.withResolvers<unknown>() };
+    let awaiting = true;
+    const observations: unknown[] = [];
+    function fail(error: Error) {
+        protocolFailure ??= error;
+        failed.resolve(protocolFailure);
+    }
+    child.on('message', (message: unknown) => {
+        if (
+            stopping ||
+            !awaiting ||
+            !isRecord(message) ||
+            Object.keys(message).length !== 3 ||
+            message.type !== 'sample' ||
+            message.ordinal !== expected.ordinal ||
+            !isRecord(message.state)
+        ) {
+            fail(new Error('Unexpected reader acknowledgement or ordinal.'));
+            return;
+        }
+        awaiting = false;
+        expected.result.resolve(message.state);
     });
+    child.on('error', fail);
+    child.on('disconnect', () => {
+        if (!stopping) fail(new Error('Reader fixture disconnected before stop.'));
+    });
+    child.on('exit', (code, signal) => {
+        exit = [code, signal];
+        if (!stopping) fail(new Error(`Reader fixture exited before stop: ${code}/${signal}: ${stderr}`));
+    });
+    child.on('close', () => closed.resolve());
+    async function observe(state: unknown) {
+        const actual = await Promise.race([
+            expected.result.promise,
+            failed.promise.then((error) => {
+                throw error;
+            }),
+        ]);
+        if (protocolFailure) throw protocolFailure;
+        assert.deepEqual(actual, state);
+        observations.push(actual);
+    }
+    async function send(message: string | { type: 'sample'; ordinal: number }) {
+        await new Promise<void>((resolve, reject) => {
+            child.send(message, (error: Error | null) => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
+    }
+    const failures: unknown[] = [];
     let operation: DeploymentLease | undefined;
     try {
-        const ready = await Promise.race([once(child, 'message'), earlyExit]);
-        assert.equal(ready[0], 'ready');
-        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
+        await observe(own.state);
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock });
         operation = await store.tryAcquire('operation');
         assert.ok(operation);
         let current = await store.read(operation);
-        for (let index = 0; index < 11; index++)
+        let commits = 0;
+        for (let index = 0; index < 11; index++) {
+            if (protocolFailure) throw protocolFailure;
             current = await store.commit(operation, current, index % 2 === 0 ? next : { type: 'select', ...selection });
-        const result = once(child, 'message');
-        child.send('stop');
-        const [message] = await Promise.race([result, earlyExit]);
-        assert.ok(isRecord(message));
-        assert.ok(Array.isArray(message.samples));
+            commits++;
+            const selected = index % 2 === 0 ? next : selection;
+            assert.deepEqual(current, {
+                ...own.state,
+                selectedBuildId: selected.selectedBuildId,
+                selectedManifestSha256: selected.selectedManifestSha256,
+            });
+            if (protocolFailure) throw protocolFailure;
+            expected = { ordinal: index + 1, result: Promise.withResolvers<unknown>() };
+            awaiting = true;
+            await send({ type: 'sample', ordinal: expected.ordinal });
+            await observe(current);
+        }
+        assert.equal(commits, 11);
+        assert.equal(observations.length, 12);
         assert.deepEqual(
-            new Set(message.samples),
+            new Set(
+                observations.map((value) => {
+                    assert.ok(isRecord(value));
+                    return `${value.selectedBuildId}:${value.selectedManifestSha256}`;
+                }),
+            ),
             new Set([
                 `${selection.selectedBuildId}:${selection.selectedManifestSha256}`,
                 `${next.selectedBuildId}:${next.selectedManifestSha256}`,
             ]),
         );
-        const [code, signal] = await exited;
-        assert.equal(code, 0, stderr);
-        assert.equal(signal, null);
+    } catch (error) {
+        failures.push(error);
     } finally {
-        if (child.connected) {
-            child.send('stop');
-            await exited;
+        try {
+            if (child.connected) {
+                stopping = true;
+                await send('stop');
+            }
+        } catch (error) {
+            failures.push(error);
+            try {
+                if (child.connected) child.disconnect();
+            } catch (disconnectError) {
+                failures.push(disconnectError);
+            }
         }
-        await operation?.release();
-        await own.cleanup();
+        await closed.promise;
+        try {
+            assert.ok(exit, stderr);
+            assert.equal(exit[0], 0, stderr);
+            assert.equal(exit[1], null, stderr);
+        } catch (error) {
+            failures.push(error);
+        }
+        if (protocolFailure && !failures.includes(protocolFailure)) failures.push(protocolFailure);
+        try {
+            await operation?.release();
+        } catch (error) {
+            failures.push(error);
+        }
+        try {
+            await own.cleanup();
+        } catch (error) {
+            failures.push(error);
+        }
     }
+    if (failures.length) throw new AggregateError(failures, 'Coordinated reader regression failed.');
 });
 
-test('stale root or lock identity and malformed bounded metadata fail without replacing state', {
-    skip: !supported,
-}, async () => {
+test('stale root or lock identity and malformed bounded metadata fail without replacing state', async () => {
     const own = await fixture();
     const moved = `${own.directory}-moved`;
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
-        const operation = await store.tryAcquire('operation');
-        assert.ok(operation);
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock });
+        const stateFile = path.join(own.envelope, 'state.json');
+        const originalState = await readFile(stateFile);
+        const descriptors = own.descriptors.length;
+        // Cache identity before mutation, without demanding a directory move over an open lease.
         await rename(own.directory, moved);
         await mkdir(own.directory, { mode: 0o700 });
-        await assert.rejects(store.commit(operation, own.state, next), (error: unknown) =>
-            rejectionReason(error, /identity/i),
-        );
+        await assert.rejects(store.tryAcquire('operation'), /identity/i);
+        assert.equal(own.descriptors.length, descriptors);
+        assert.deepEqual(await readdir(own.directory), []);
+        assert.deepEqual(await readFile(path.join(moved, '.deployment', 'state.json')), originalState);
         await rm(own.directory, { recursive: true });
         await rename(moved, own.directory);
+        assert.deepEqual(await readFile(stateFile), originalState);
+        const operation = await store.tryAcquire('operation');
+        assert.ok(operation);
         await rename(path.join(own.envelope, 'operation.lock'), path.join(own.envelope, 'held.lock'));
         await writeFile(path.join(own.envelope, 'operation.lock'), '', { flag: 'wx', mode: 0o600 });
         await assert.rejects(store.commit(operation, own.state, next), (error: unknown) =>
-            rejectionReason(error, /identity/i),
+            rejectionReason(error, /identity/i, own.deployment.DeploymentCommitError),
         );
         await operation.release();
         assert.equal(
@@ -966,44 +583,44 @@ test('stale root or lock identity and malformed bounded metadata fail without re
             selection.selectedBuildId,
         );
         await writeFile(path.join(own.envelope, 'state.json'), ' '.repeat(65536));
-        await assert.rejects(openDeploymentWriterInstallation(own.directory, { tryLock: await native() }), /bound/i);
+        await assert.rejects(
+            own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock }),
+            /bound/i,
+        );
         await writeFile(
             path.join(own.envelope, 'state.json'),
             `${JSON.stringify(own.state).slice(0, -1)},"phase":"active"}\n`,
         );
         await assert.rejects(
-            openDeploymentWriterInstallation(own.directory, { tryLock: await native() }),
+            own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock }),
             /canonical/i,
         );
         await unlink(path.join(own.envelope, 'state.json'));
-        await symlink(path.join(own.envelope, 'installation.json'), path.join(own.envelope, 'state.json'));
-        await assert.rejects(openDeploymentWriterInstallation(own.directory, { tryLock: await native() }));
+        await writeFile(path.join(own.envelope, 'state.json'), `${JSON.stringify(own.state)}\n`);
+        own.fail(path.join(own.envelope, 'state.json'), new Error('Controlled reparse refusal.'));
+        await assert.rejects(own.deployment.openDeploymentWriterInstallation(own.directory, { tryLock: own.tryLock }));
     } finally {
         await own.cleanup();
-        await rm(moved, { recursive: true, force: true });
     }
 });
 
-type DocumentReadPhase = 'pre-read' | 'post-read';
-type DocumentReadInterval = 'canonical' | 'final' | 'named' | 'current';
-type DocumentReadCondition =
+type ReadBoundary = 'authority-pre-read' | 'authority-post-read' | 'opened' | 'named' | 'current';
+type ReadCondition =
     | 'replacement'
-    | 'unsafe-replacement'
-    | 'unknown-replacement'
-    | 'enoent-replacement'
-    | 'permissions'
+    | 'refusal'
+    | 'EIO'
+    | 'ENOENT'
+    | 'invalidated'
     | 'hardlink'
     | 'nonregular'
-    | 'foreign-device';
+    | 'absent'
+    | 'foreign-device'
+    | 'controlled-link';
 
+// Observe the real store's document capability/receipt boundaries, never a POSIX native algorithm.
 async function controlledDocumentRead(
     context: TestContext,
-    control: Readonly<{
-        phase: DocumentReadPhase;
-        interval: DocumentReadInterval;
-        condition: DocumentReadCondition;
-        closeFailure?: boolean;
-    }>,
+    control: Readonly<{ boundary: ReadBoundary; condition: ReadCondition; closeFailure?: boolean }>,
 ) {
     const own = await fixture();
     const readerContext = new AsyncLocalStorage<boolean>();
@@ -1011,79 +628,53 @@ async function controlledDocumentRead(
     const resume = Promise.withResolvers<void>();
     const originalOpen = filesystem.open;
     const originalLstat = filesystem.lstat;
-    const originalStatfs = filesystem.statfs;
-    const originalRealpath = filesystem.realpath;
     const originalParse = JSON.parse;
-    const stateFile = path.join(own.envelope, 'state.json');
-    const secondName = path.join(own.envelope, 'state-control-link.json');
+    const file = path.join(own.envelope, 'state.json');
+    const alias = path.join(own.envelope, 'state-control-link.json');
     const oldText = `${JSON.stringify(own.state)}\n`;
-    const root = await originalLstat(own.directory, { bigint: true });
-    const unknownFailure = Object.assign(new Error('Controlled document interval failure.'), {
-        code: control.condition === 'enoent-replacement' ? 'ENOENT' : 'EIO',
+    const injected = Object.assign(new Error(`Controlled document ${control.condition} failure.`), {
+        code: control.condition,
     });
     const closeFailure = new Error('Controlled document close failure.');
-    const events: string[] = [];
-    const nativeSequence: { stage: 'idle' | 'volume' | 'sampled' | 'canonical'; phase: DocumentReadPhase | undefined } =
-        {
-            stage: 'idle',
-            phase: undefined,
-        };
     let paused = false;
-    let observing = true;
-    let pendingCurrent = false;
+    let observing = false;
     let readCalls = 0;
     let parseCalls = 0;
     let closeCalls = 0;
-    let failureInjected = false;
+    let invalidations = 0;
+    let pendingCurrent = false;
+    let heldReceiptLinks: bigint | undefined;
+    const namedSamples: { inode: string; links: string; directory: boolean }[] = [];
     let opened: Awaited<ReturnType<typeof filesystem.open>> | undefined;
-    let before: BigIntStats | undefined;
-    let held: BigIntStats | undefined;
-    let suppliedCurrent: BigIntStats | undefined;
     let operation: DeploymentLease | undefined;
     let use: DeploymentLease | undefined;
     let settleRead: Promise<unknown> | undefined;
-    const phase = (): DocumentReadPhase => (readCalls === 0 ? 'pre-read' : 'post-read');
-    function invalidateNativeSequence(event: string) {
-        events.push(`${phase()}:${event}:${nativeSequence.stage}`);
-        nativeSequence.stage = 'idle';
-        nativeSequence.phase = undefined;
-    }
-    async function pauseAt(interval: DocumentReadInterval) {
-        if (paused || control.interval !== interval || control.phase !== phase()) return false;
+    async function barrier() {
         paused = true;
-        events.push(`${phase()}:barrier:${interval}`);
         captured.resolve();
         await resume.promise;
-        return true;
+        if (control.condition === 'EIO' || control.condition === 'ENOENT') throw injected;
     }
-    function failUnknown() {
-        if (control.condition === 'unknown-replacement' || control.condition === 'enoent-replacement') {
-            failureInjected = true;
-            throw unknownFailure;
-        }
-    }
-    const openBoundary = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
+    const opening = mock.method(filesystem, 'open', async (...args: Parameters<typeof filesystem.open>) => {
         const handle = await originalOpen(...args);
-        if (!observing || !readerContext.getStore() || args[0] !== stateFile || opened) return handle;
+        if (!observing || !readerContext.getStore() || args[0] !== file || opened) return handle;
         opened = handle;
+        if (control.boundary === 'opened') await barrier();
         return new Proxy(handle, {
             get(target, key) {
                 if (key === 'stat')
                     return async () => {
-                        // A handle receipt ends the native sequence. In particular, the old
-                        // reader's current lstat cannot be mistaken for a native final lstat.
-                        invalidateNativeSequence('handle-stat');
-                        if (readCalls > 0 && control.interval === 'current' && (await pauseAt('current')))
+                        if (control.boundary === 'current' && readCalls > 0 && !paused) {
+                            await barrier();
                             pendingCurrent = true;
-                        const entry = await target.stat({ bigint: true });
-                        before ??= entry;
-                        if (readCalls > 0) held = entry;
-                        return entry;
+                        }
+                        const stats = await target.stat({ bigint: true });
+                        if (control.boundary === 'current' && readCalls > 0) heldReceiptLinks = stats.nlink;
+                        return stats;
                     };
                 if (key === 'read')
                     return (...values: unknown[]) => {
                         readCalls++;
-                        invalidateNativeSequence('handle-read');
                         return Reflect.apply(target.read, target, values);
                     };
                 if (key === 'close')
@@ -1097,136 +688,104 @@ async function controlledDocumentRead(
             },
         });
     });
-    const volumeBoundary = mock.method(filesystem, 'statfs', async (...args: Parameters<typeof filesystem.statfs>) => {
-        const volume = await originalStatfs(...args);
-        if (observing && readerContext.getStore() && opened && args[0] === stateFile) {
-            nativeSequence.stage = 'volume';
-            nativeSequence.phase = phase();
-            events.push(`${phase()}:native-volume`);
-        }
-        return volume;
-    });
-    const namedBoundary = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
-        if (!observing || !readerContext.getStore() || !opened || args[0] !== stateFile) return originalLstat(...args);
-        assert.ok(isRecord(args[1]) && args[1].bigint === true, 'Document metadata must use bigint receipts.');
-        if (nativeSequence.stage === 'volume') {
-            const entry = await originalLstat(stateFile, { bigint: true });
-            nativeSequence.stage = 'sampled';
-            events.push(`${phase()}:native-first-sample`);
-            return entry;
-        }
-        if (nativeSequence.stage === 'canonical' && nativeSequence.phase === phase()) {
-            events.push(`${phase()}:native-final-sample`);
-            const reached = await pauseAt('final');
-            const entry = await originalLstat(stateFile, { bigint: true });
-            nativeSequence.stage = 'idle';
-            if (reached) failUnknown();
-            return entry;
-        }
-        if (control.interval === 'named' && readCalls === 0) await pauseAt('named');
-        const entry = await originalLstat(stateFile, { bigint: true });
-        if (!pendingCurrent) return entry;
-        pendingCurrent = false;
-        if (control.condition === 'nonregular') {
-            // Actual owned-directory metadata is controlled type evidence, not
-            // a claim of an atomic file-to-directory replacement.
-            suppliedCurrent = await originalLstat(own.envelope, { bigint: true });
-            return suppliedCurrent;
-        }
-        if (control.condition === 'foreign-device') {
-            // Only this adversarial negative field is modeled. This is not
-            // evidence of a cross-filesystem rename or a mount experiment.
-            suppliedCurrent = new Proxy(entry, {
+    const named = mock.method(filesystem, 'lstat', async (...args: Parameters<typeof filesystem.lstat>) => {
+        if (!observing || !readerContext.getStore() || !opened || args[0] !== file) return originalLstat(...args);
+        const current = control.boundary === 'current' && pendingCurrent;
+        if (paused && !current) return originalLstat(...args);
+        const matching = current || (control.boundary === 'named' && readCalls === 0);
+        if (!matching) return originalLstat(...args);
+        if (current) pendingCurrent = false;
+        else await barrier();
+        // Every named/current receipt samples this actual pathname after the barrier.
+        const entry = await originalLstat(file, { bigint: true });
+        namedSamples.push({ inode: String(entry.ino), links: String(entry.nlink), directory: entry.isDirectory() });
+        if (control.condition === 'foreign-device' || control.condition === 'controlled-link')
+            return new Proxy(entry, {
                 get(target, key) {
-                    if (key === 'dev') return root.dev + 1n;
+                    if (key === 'dev' && control.condition === 'foreign-device') return entry.dev + 1n;
+                    if (key === 'isSymbolicLink' && control.condition === 'controlled-link') return () => true;
                     const value: unknown = Reflect.get(target, key, target);
                     return typeof value === 'function' ? value.bind(target) : value;
                 },
             });
-            return suppliedCurrent;
-        }
-        suppliedCurrent = entry;
         return entry;
     });
-    const canonicalBoundary = mock.method(
-        filesystem,
-        'realpath',
-        async (...args: Parameters<typeof filesystem.realpath>) => {
-            const nativeCanonical =
-                observing &&
-                readerContext.getStore() &&
-                opened &&
-                args[0] === stateFile &&
-                nativeSequence.stage === 'sampled' &&
-                nativeSequence.phase === phase();
-            const reached = nativeCanonical && (await pauseAt('canonical'));
-            const resolved = await originalRealpath(...args);
-            if (nativeCanonical) {
-                nativeSequence.stage = 'canonical';
-                events.push(`${phase()}:native-canonical`);
-            }
-            if (reached) failUnknown();
-            return resolved;
-        },
-    );
-    const parseBoundary = mock.method(JSON, 'parse', (...args: Parameters<typeof JSON.parse>) => {
+    const parsing = mock.method(JSON, 'parse', (...args: Parameters<typeof JSON.parse>) => {
         if (observing && readerContext.getStore() && args[0] === oldText) parseCalls++;
         return originalParse(...args);
     });
+    own.onDocument(async (name) => {
+        if (!observing || !readerContext.getStore() || name !== file || paused) return;
+        if (
+            (control.boundary === 'authority-pre-read' && readCalls === 0) ||
+            (control.boundary === 'authority-post-read' && readCalls > 0)
+        )
+            await barrier();
+    });
     syncBuiltinESMExports();
     try {
-        const store = await openDeploymentWriterInstallation(own.directory, { tryLock: await native() });
+        const store = await own.deployment.openDeploymentWriterInstallation(own.directory, {
+            tryLock: own.tryLock,
+            stateIO: {
+                // Non-atomic adversarial name invalidation, never the default atomic writer path.
+                replace: async (from, to) => {
+                    assert.equal(to, file);
+                    assert.equal(path.dirname(from), own.envelope);
+                    assert.ok(path.basename(from).startsWith('.state-') && from.endsWith('.tmp'));
+                    assert.equal(closeCalls, 0, 'The paused reader must retain its actual handle.');
+                    const prepared = await originalLstat(from, { bigint: true });
+                    assert.ok(prepared.isFile() && !prepared.isSymbolicLink() && prepared.nlink === 1n);
+                    await unlink(to);
+                    await assert.rejects(originalLstat(to, { bigint: true }), { code: 'ENOENT' });
+                    // The isolated test schedule establishes absence; ordinary rename is not no-clobber.
+                    await rename(from, to);
+                    const published = await originalLstat(to, { bigint: true });
+                    assert.equal(published.dev, prepared.dev);
+                    assert.equal(published.ino, prepared.ino);
+                    assert.equal(closeCalls, 0);
+                    invalidations++;
+                },
+            },
+        });
         operation = await store.tryAcquire('operation');
         use = await store.tryAcquire('use');
         assert.ok(operation);
         assert.ok(use);
-        const readerLease = use;
+        const lease = use;
+        observing = true;
         const reading = readerContext
-            .run(true, () => store.read(readerLease))
+            .run(true, () => store.read(lease))
             .then(
                 (value) => ({ value }),
                 (error: unknown) => ({ error }),
             );
         settleRead = reading;
-        const arrival = await Promise.race([
-            captured.promise.then(() => 'reached' as const),
-            reading.then(() => 'settled' as const),
-        ]);
-        context.diagnostic(
-            JSON.stringify({ ...control, arrival, events: [...events], readCalls, parseCalls, closeCalls }),
-        );
-        // Old code has no native final lstat. Intervening handle I/O resets the
-        // provenance above; a later reader receipt cannot satisfy this assertion.
-        assert.equal(
-            arrival,
-            'reached',
-            `Missing controlled native/receipt interval: ${control.phase}/${control.interval}; reader settled first.`,
-        );
-        assert.equal(phase(), control.phase);
+        const arrival = await Promise.race([captured.promise.then(() => 'reached'), reading.then(() => 'settled')]);
+        assert.equal(arrival, 'reached', `Missing controlled store boundary: ${control.boundary}`);
         assert.ok(opened);
-        assert.ok(before);
-        assert.equal(before.nlink, 1n);
-        let selected = own.state;
-        if (control.condition === 'permissions') {
-            await chmod(stateFile, 0o644);
-            const changed = await originalLstat(stateFile, { bigint: true });
-            assert.equal(changed.ino, before.ino);
-            assert.equal(changed.mode & 0o777n, 0o644n);
-            assert.notEqual(changed.ctimeNs, before.ctimeNs);
-        } else {
-            // Writer execution is outside readerContext and cannot enter the barrier.
-            selected = await store.commit(operation, own.state, next);
-            if (control.condition === 'unsafe-replacement') await chmod(stateFile, 0o644);
-            if (control.condition === 'hardlink') await filesystem.link(stateFile, secondName);
-            held = await opened.stat({ bigint: true });
-            const named = await originalLstat(stateFile, { bigint: true });
-            assert.equal(held.isFile(), true);
-            assert.equal(held.ino, before.ino);
-            assert.equal(held.nlink, 0n);
-            assert.notEqual(named.ino, held.ino);
-            assert.equal(named.dev, root.dev);
-            assert.equal(named.nlink, control.condition === 'hardlink' ? 2n : 1n);
-            assert.equal(named.mode & 0o777n, control.condition === 'unsafe-replacement' ? 0o644n : 0o600n);
+        const heldBefore = await opened.stat({ bigint: true });
+        assert.equal(heldBefore.nlink, 1n);
+        const selected = await store.commit(operation, own.state, next);
+        assert.equal(invalidations, 1);
+        const heldAfter = await opened.stat({ bigint: true });
+        const current = await originalLstat(file, { bigint: true });
+        assert.equal(heldAfter.ino, heldBefore.ino);
+        assert.equal(heldAfter.nlink, 0n);
+        assert.notEqual(current.ino, heldBefore.ino);
+        assert.equal(current.nlink, 1n);
+        if (control.condition === 'hardlink') await filesystem.link(file, alias);
+        if (control.condition === 'absent') await unlink(file);
+        if (control.condition === 'nonregular') {
+            await unlink(file);
+            await mkdir(file);
+            assert.equal((await originalLstat(file, { bigint: true })).isDirectory(), true);
+        }
+        if (control.condition === 'refusal') {
+            if (control.boundary === 'current' || control.boundary === 'named')
+                own.onReceipt((stats) => {
+                    if (stats.ino !== heldBefore.ino) throw injected;
+                });
+            else own.fail(file, injected);
         }
         resume.resolve();
         const result = await reading;
@@ -1234,134 +793,97 @@ async function controlledDocumentRead(
         context.diagnostic(
             JSON.stringify({
                 ...control,
-                events,
                 readCalls,
                 parseCalls,
                 closeCalls,
-                heldLinks: held && String(held.nlink),
-                suppliedCurrentDevice: suppliedCurrent && String(suppliedCurrent.dev),
-                rootDevice: String(root.dev),
-                rejected: 'error' in result,
-                failureInjected,
-                message: 'error' in result && result.error instanceof Error ? result.error.message : undefined,
+                invalidations,
+                heldBefore: { inode: String(heldBefore.ino), links: String(heldBefore.nlink) },
+                heldAfter: { inode: String(heldAfter.ino), links: String(heldAfter.nlink) },
+                published: { inode: String(current.ino), links: String(current.nlink) },
+                namedSamples,
             }),
         );
-        assert.equal(closeCalls, 1);
-        await assert.rejects(opened.stat(), { code: 'EBADF' });
-        assert.ok('error' in result, 'Concurrent document change must refuse before returning the old selection.');
+        assert.ok('error' in result, 'A replaced document must never return the old selection.');
         assert.ok(result.error instanceof Error);
         if (control.closeFailure) assert.equal(result.error, closeFailure);
-        else if (control.condition === 'replacement')
-            assert.equal(result.error.message, 'Deployment document identity changed.');
-        else if (control.condition === 'unknown-replacement' || control.condition === 'enoent-replacement')
-            assert.equal(result.error, unknownFailure);
-        else if (control.condition === 'hardlink' || control.condition === 'nonregular')
-            assert.equal(result.error.message, 'Deployment metadata/lease must be a regular file with one link.');
-        else assert.equal(result.error.message, 'Deployment native authority is unavailable or unsafe.');
-        if (control.condition !== 'replacement')
-            assert.doesNotMatch(result.error.message, /document identity.*changed/);
-        assert.equal(parseCalls, 0);
-        if (control.condition === 'unknown-replacement' || control.condition === 'enoent-replacement')
-            assert.equal(failureInjected, true);
-        if (control.condition === 'foreign-device') {
-            assert.ok(held);
-            assert.equal(held.nlink, 0n);
-            assert.ok(suppliedCurrent);
-            assert.equal(suppliedCurrent.dev, root.dev + 1n);
-            assert.equal(suppliedCurrent.nlink, 1n);
-            assert.equal(suppliedCurrent.mode & 0o777n, 0o600n);
-        }
-        if (
-            !control.closeFailure &&
-            ['replacement', 'unknown-replacement', 'enoent-replacement'].includes(control.condition)
+        else if (control.condition === 'refusal' || control.condition === 'EIO' || control.condition === 'ENOENT')
+            assert.equal(result.error, injected);
+        else if (
+            control.condition === 'hardlink' ||
+            control.condition === 'nonregular' ||
+            control.condition === 'controlled-link'
         )
-            assert.deepEqual(await store.read(use), selected);
+            assert.match(result.error.message, /regular file with one link/);
+        else if (control.condition === 'foreign-device') assert.match(result.error.message, /owned device/);
+        else if (control.condition === 'absent') assert.ok(isRecord(result.error) && result.error.code === 'ENOENT');
+        else assert.equal(result.error.message, 'Deployment document identity changed.');
+        assert.equal(parseCalls, 0);
+        assert.equal(closeCalls, 1);
+        if (control.boundary === 'current') assert.equal(heldReceiptLinks, 0n);
+        if (control.boundary === 'opened' || control.boundary === 'named' || control.boundary === 'authority-pre-read')
+            assert.equal(readCalls, 0);
+        else assert.ok(readCalls > 0);
+        await assert.rejects(opened.stat(), { code: 'EBADF' });
+        own.onDocument();
+        own.onReceipt();
+        own.fail(file);
+        if (control.condition === 'hardlink') await unlink(alias);
+        if (control.condition === 'nonregular')
+            await filesystem.rmdir(path.join(own.physical, '.deployment', 'state.json'));
+        if (control.condition === 'absent' || control.condition === 'nonregular')
+            await writeFile(file, `${JSON.stringify(selected)}\n`, { flag: 'wx' });
+        assert.deepEqual(await store.read(use), selected);
     } finally {
         observing = false;
         resume.resolve();
         await settleRead?.catch(() => {});
-        parseBoundary.mock.restore();
-        canonicalBoundary.mock.restore();
-        namedBoundary.mock.restore();
-        volumeBoundary.mock.restore();
-        openBoundary.mock.restore();
+        parsing.mock.restore();
+        named.mock.restore();
+        opening.mock.restore();
         syncBuiltinESMExports();
         readerContext.disable();
-        if (control.condition === 'permissions' || control.condition === 'unsafe-replacement')
-            await chmod(stateFile, 0o600);
-        if (control.condition === 'hardlink')
-            await unlink(secondName).catch((error: unknown) => {
-                if (!isRecord(error) || error.code !== 'ENOENT') throw error;
-            });
+        own.onDocument();
+        own.onReceipt();
+        own.fail(file);
         await use?.release();
         await operation?.release();
         await own.cleanup();
     }
 }
 
-for (const phase of ['pre-read', 'post-read'] as const) {
-    for (const interval of ['canonical', 'final'] as const) {
-        for (const condition of ['replacement', 'unsafe-replacement', 'unknown-replacement'] as const) {
-            test(
-                `${phase} ${interval} native interval refuses ${condition} before old document parsing`,
-                {
-                    skip: !supported,
-                    timeout: 20000,
-                },
-                (context) => controlledDocumentRead(context, { phase, interval, condition }),
-            );
-        }
-    }
+for (const boundary of ['authority-pre-read', 'authority-post-read'] as const) {
+    for (const condition of ['replacement', 'refusal', 'EIO', 'ENOENT'] as const)
+        test(
+            `${boundary} preserves ${condition} refusal without stale bytes and retains retry`,
+            { timeout: 20000 },
+            (context) => controlledDocumentRead(context, { boundary, condition }),
+        );
 }
-
-for (const [phase, interval] of [
-    ['pre-read', 'named'],
-    ['post-read', 'current'],
-] as const) {
+for (const boundary of ['opened', 'named', 'current'] as const)
     test(
-        `${phase} observed private permissions take precedence over chmod ctime drift`,
-        {
-            skip: !supported,
-            timeout: 20000,
-        },
-        (context) => controlledDocumentRead(context, { phase, interval, condition: 'permissions' }),
+        `${boundary} invalidated document receipt closes once before returning or parsing bytes`,
+        { timeout: 20000 },
+        (context) => controlledDocumentRead(context, { boundary, condition: 'invalidated' }),
     );
+for (const boundary of ['named', 'current'] as const) {
+    for (const condition of [
+        'refusal',
+        'hardlink',
+        'nonregular',
+        'absent',
+        'foreign-device',
+        'controlled-link',
+    ] as const)
+        test(
+            `${boundary} receipt preserves fatal ${condition} evidence during real replacement`,
+            { timeout: 20000 },
+            (context) => controlledDocumentRead(context, { boundary, condition }),
+        );
 }
-
-for (const condition of ['unsafe-replacement', 'hardlink', 'nonregular', 'foreign-device'] as const) {
+for (const condition of ['replacement', 'EIO'] as const)
     test(
-        `post-read held zero-link receipt cannot hide observed current ${condition}`,
-        {
-            skip: !supported,
-            timeout: 20000,
-        },
-        (context) => controlledDocumentRead(context, { phase: 'post-read', interval: 'current', condition }),
-    );
-}
-
-test(
-    'final native lstat preserves the original ENOENT Error after an actual replacement',
-    {
-        skip: !supported,
-        timeout: 20000,
-    },
-    (context) =>
-        controlledDocumentRead(context, { phase: 'post-read', interval: 'final', condition: 'enoent-replacement' }),
-);
-
-for (const condition of ['replacement', 'unknown-replacement'] as const) {
-    test(
-        `a real single close preserves its own fatal Error after final-native ${condition}`,
-        {
-            skip: !supported,
-            timeout: 20000,
-        },
+        `one actual close preserves its original fatal Error after document ${condition}`,
+        { timeout: 20000 },
         (context) =>
-            controlledDocumentRead(context, {
-                phase: 'post-read',
-                interval: 'final',
-                condition,
-                closeFailure: true,
-            }),
+            controlledDocumentRead(context, { boundary: 'authority-post-read', condition, closeFailure: true }),
     );
-}

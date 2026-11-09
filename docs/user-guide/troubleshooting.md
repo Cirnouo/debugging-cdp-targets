@@ -6,6 +6,12 @@ never automatically restarts an application or replays a tool call.
 
 ## Common failures
 
+- **Unsupported operating system or architecture**: current App targets are
+    Windows 11 x64 and arm64. Non-Windows operating systems and other architectures
+    are refused before App data, scratch or native resources are acquired, followed
+    by normal Quit. Do not use another platform, launch wrapper or existing
+    application as a fallback. Both Windows architectures remain subject to
+    [current delivery limits](compatibility.md#current-app-delivery-limits).
 - **Bundled official package verification failed**: replace the affected App
     stage from independently verified inputs. Reinstalling a thin Plugin cannot
     repair App runtime files. Runtime does not fetch
@@ -117,10 +123,8 @@ Get-Process -Id <reported-pid>
 Get-NetTCPConnection -State Listen -LocalPort <reported-port>
 ```
 
-On Linux/macOS, use `ps -p <reported-pid>` and
-`lsof -nP -iTCP:<reported-port> -sTCP:LISTEN`. Closing a window does not release
-the port if the owning process remains alive. Use normal application shutdown;
-the Plugin does not force-kill applications.
+Closing a window does not release the port if the owning process remains alive.
+Use normal application shutdown; the Plugin does not force-kill applications.
 
 ## Minimized screenshots
 
@@ -140,8 +144,8 @@ enable entry is rejected before data directory acquisition/spawn. A repeated col
 cannot repair it. The Plugin releases any transient port claim and supplies an
 actionable error instead of silently changing the conflicting choice.
 
-For `generic-cdp` or another platform, feature support and its launch-argument
-carrier must be independently verified for the application. A new isolated
+For a Windows `generic-cdp` application, feature support and its launch-argument
+carrier must be independently verified for that application. A new isolated
 launch can then explicitly use `--enable-features=CDPScreenshotNewSurface` in
 `launch.args`, preserving valid unrelated entries and reporting conflicts. The
 [shared Skill](../../packaging/shared/skills/debugging-cdp-targets/SKILL.md#conditional-minimized-screenshot-compatibility)

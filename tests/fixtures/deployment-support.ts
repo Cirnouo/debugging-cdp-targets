@@ -11,6 +11,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { mock, type TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { decodeWindowsDeploymentCopyHeader } from '../../src/adapters/windows-deployment-protocol.ts';
+import { captureOwnedDirectoryCleanup } from './owned-directory-cleanup.ts';
 
 // Inert owned PE-shaped bytes, never a compiler/runtime or executable acceptance fixture.
 export function ownedDeploymentPe() {
@@ -45,12 +46,22 @@ export function ownedDeploymentPe() {
 export async function ownedWindowsDeploymentCompiler(t?: TestContext) {
     const temporaryRoot = await fs.realpath(os.tmpdir());
     const root = await fs.realpath(await fs.mkdtemp(path.join(temporaryRoot, 'dct-owned-compiler-')));
+    const removeRoot = await captureOwnedDirectoryCleanup(root);
     const helper = fileURLToPath(new URL('../../src/adapters/', import.meta.url));
     const compilerRoot = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319';
     const outputs = path.join(root, 'outputs');
-    await fs.mkdir(outputs);
-    for (const name of ['csc.exe', 'mscorlib.dll', 'System.dll', 'System.Core.dll'])
-        await fs.writeFile(path.join(root, name), `inert owned ${name}`);
+    try {
+        await fs.mkdir(outputs);
+        for (const name of ['csc.exe', 'mscorlib.dll', 'System.dll', 'System.Core.dll'])
+            await fs.writeFile(path.join(root, name), `inert owned ${name}`);
+    } catch (setupError) {
+        try {
+            await removeRoot((owned) => fs.rm(owned, { recursive: true }));
+        } catch (cleanupError) {
+            throw new AggregateError([setupError, cleanupError], 'Compiler fixture setup and cleanup failed.');
+        }
+        throw setupError;
+    }
     const original = { open: fs.open, lstat: fs.lstat, realpath: fs.realpath, unlink: fs.unlink };
     const map = (file: PathLike) => {
         const name = String(file);
@@ -119,7 +130,7 @@ export async function ownedWindowsDeploymentCompiler(t?: TestContext) {
         syncBuiltinESMExports();
         assert.equal(path.dirname(root), temporaryRoot);
         assert.ok(path.basename(root).startsWith('dct-owned-compiler-'));
-        await fs.rm(root, { recursive: true });
+        await removeRoot((owned) => fs.rm(owned, { recursive: true }));
     }
     t?.after(cleanup);
     return { root, outputs, compiles: () => compiles, cleanup };

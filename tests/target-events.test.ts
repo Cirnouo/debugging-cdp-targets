@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import test from 'node:test';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import type { ControlHandler } from '../src/domains/control-contract.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
+import { createCoreFixture } from './fixtures/gateway/core-runtime.ts';
 
 async function fixture(
     options: {

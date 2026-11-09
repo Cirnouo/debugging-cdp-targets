@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { readFile, readlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import type { PortRange } from '../domains/cdp-target.ts';
 import type { LaunchContext } from '../domains/control-contract.ts';
 import type {
@@ -272,19 +273,24 @@ function parseSnapshot(value: Record<string, unknown>): ProcessEvidence {
     return { root: verifiedRoot, currentSessionId: value.currentSessionId, processIds: value.processIds, listeners };
 }
 
-function normalizePath(value: string) {
-    const normalized = path.resolve(value);
-    return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+function normalizePath(value: string, platform: NodeJS.Platform) {
+    return platform === 'win32' ? path.win32.resolve(value).toLowerCase() : path.resolve(value);
 }
 
 export function validateProcessIdentity(
     evidence: Pick<ProcessEvidence, 'root' | 'currentSessionId'>,
     target: Pick<ProcessTarget, 'executablePath' | 'startedAtUtc' | 'targetKind'>,
-    { newlyLaunched = false } = {},
+    {
+        newlyLaunched = false,
+        platform = process.platform,
+    }: {
+        newlyLaunched?: boolean;
+        platform?: NodeJS.Platform;
+    } = {},
 ) {
     const root = evidence.root;
     if (!root?.exists) throw new Error('The target root process is absent.');
-    if (normalizePath(root.executablePath) !== normalizePath(target.executablePath))
+    if (normalizePath(root.executablePath, platform) !== normalizePath(target.executablePath, platform))
         throw new Error('The process executable identity changed.');
     if (root.sessionId !== evidence.currentSessionId) throw new Error('The process user/session identity changed.');
     const actual = Date.parse(root.startedAtUtc);
@@ -298,7 +304,7 @@ export function validateProcessIdentity(
     }
     if (
         target.targetKind === 'chrome' &&
-        process.platform === 'win32' &&
+        platform === 'win32' &&
         (root.productName !== 'Google Chrome' || root.companyName !== 'Google LLC')
     ) {
         throw new Error('The target executable is not identified as Google Chrome.');
@@ -677,7 +683,9 @@ export async function unixSnapshot(
 export function createPlatformAdapter(
     dependencies: {
         platform?: NodeJS.Platform;
+        architecture?: string;
         snapshot?: PlatformAdapter['snapshot'];
+        reservedRanges?: PlatformAdapter['reservedRanges'];
         closeWindows?: (target: ProcessTarget) => Promise<Record<string, unknown>>;
         requestWindowsClose?: (target: ProcessTarget, context?: LaunchContext) => Promise<Record<string, unknown>>;
         waitWindowsExit?: (target: ProcessTarget, signal?: AbortSignal) => Promise<Record<string, unknown>>;
@@ -686,15 +694,22 @@ export function createPlatformAdapter(
     } = {},
 ): PlatformAdapter {
     const platform = dependencies.platform ?? process.platform;
-    const windows = createWindowsLauncher();
+    const architecture = dependencies.architecture ?? process.arch;
+    if (!supportsWindowsApp(platform, architecture))
+        throw new Error(`Unsupported target platform or architecture: ${platform}/${architecture}.`);
+    const needsWindowsLauncher =
+        !dependencies.closeWindows && (!dependencies.requestWindowsClose || !dependencies.waitWindowsExit);
+    if (needsWindowsLauncher && !supportsWindowsApp(process.platform, process.arch))
+        throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+    const windows = needsWindowsLauncher ? createWindowsLauncher() : undefined;
     const closeWindows = dependencies.closeWindows;
-    const requestUnixClose = dependencies.requestUnixClose ?? ((pid) => process.kill(pid, 'SIGTERM'));
-    if (!['win32', 'linux', 'darwin'].includes(platform)) throw new Error('Unsupported operating system.');
     const snapshot: PlatformAdapter['snapshot'] =
         dependencies.snapshot ??
-        (platform === 'win32'
-            ? async (pid, port) => parseSnapshot(await windowsHelper('Snapshot', { RootProcessId: pid, Port: port }))
-            : unixSnapshot);
+        (async (pid, port) => {
+            if (!supportsWindowsApp(process.platform, process.arch))
+                throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+            return parseSnapshot(await windowsHelper('Snapshot', { RootProcessId: pid, Port: port }));
+        });
     const nativeExit = new WeakMap<ManagedTarget, Promise<Record<string, unknown>>>();
     async function requestNormalClose(
         target: ManagedTarget,
@@ -716,11 +731,7 @@ export function createPlatformAdapter(
             error.details = { phase: 'process-identity', listenerState, closeRequested: false, processExited: false };
             throw error;
         }
-        validateProcessIdentity(evidence, target);
-        if (platform !== 'win32') {
-            requestUnixClose(target.processId);
-            return { closeRequested: true, processExited: targetExitObserved(target), listenerState };
-        }
+        validateProcessIdentity(evidence, target, { platform });
         try {
             if (closeWindows) {
                 const result = await closeWindows(target);
@@ -730,8 +741,12 @@ export function createPlatformAdapter(
                 recordTargetExit(target);
                 return { ...result, listenerState };
             }
-            const result = await (dependencies.requestWindowsClose ?? windows.requestNormalClose)(target, context);
-            const completion = (dependencies.waitWindowsExit ?? windows.waitForExit)(target);
+            const requestWindowsClose = dependencies.requestWindowsClose ?? windows?.requestNormalClose;
+            const waitWindowsExit = dependencies.waitWindowsExit ?? windows?.waitForExit;
+            if (!requestWindowsClose || !waitWindowsExit)
+                throw new Error('Windows native Close capabilities are unavailable.');
+            const result = await requestWindowsClose(target, context);
+            const completion = waitWindowsExit(target);
             void completion.catch(() => {});
             nativeExit.set(target, completion);
             if (result.closeRequested !== true && result.processExited !== true) {
@@ -766,36 +781,28 @@ export function createPlatformAdapter(
     }
     return {
         snapshot,
-        validateNewRoot: (evidence, target) => validateProcessIdentity(evidence, target, { newlyLaunched: true }),
-        async reservedRanges() {
-            if (process.platform === 'linux') {
-                const value = await readFile('/proc/sys/net/ipv4/ip_local_reserved_ports', 'utf8');
-                return value
-                    .trim()
-                    .split(',')
-                    .filter(Boolean)
-                    .map((part) => {
-                        const start = Number(part.split('-')[0]);
-                        const end = Number(part.split('-')[1] ?? start);
-                        return [start, end];
-                    });
-            }
-            if (process.platform === 'darwin') return [];
-            const ranges: PortRange[] = [];
-            for (const family of ['ipv4', 'ipv6']) {
-                const result = await observeNativeCommand('netsh', run, 'netsh.exe', [
-                    'int',
-                    family,
-                    'show',
-                    'excludedportrange',
-                    'protocol=tcp',
-                ]);
-                if (result.code !== 0) throw new Error('Windows excluded ports could not be read.');
-                for (const match of result.stdout.matchAll(/^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$/gm))
-                    ranges.push([Number(match[1]), Number(match[2])]);
-            }
-            return ranges;
-        },
+        validateNewRoot: (evidence, target) =>
+            validateProcessIdentity(evidence, target, { newlyLaunched: true, platform }),
+        reservedRanges:
+            dependencies.reservedRanges ??
+            (async () => {
+                if (!supportsWindowsApp(process.platform, process.arch))
+                    throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+                const ranges: PortRange[] = [];
+                for (const family of ['ipv4', 'ipv6']) {
+                    const result = await observeNativeCommand('netsh', run, 'netsh.exe', [
+                        'int',
+                        family,
+                        'show',
+                        'excludedportrange',
+                        'protocol=tcp',
+                    ]);
+                    if (result.code !== 0) throw new Error('Windows excluded ports could not be read.');
+                    for (const match of result.stdout.matchAll(/^\s*(\d+)\s+(\d+)(?:\s+\*)?\s*$/gm))
+                        ranges.push([Number(match[1]), Number(match[2])]);
+                }
+                return ranges;
+            }),
         requestNormalClose,
         waitForExit,
         async close(target) {

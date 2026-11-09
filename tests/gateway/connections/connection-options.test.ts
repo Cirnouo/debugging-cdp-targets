@@ -3,10 +3,11 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import type { Tool } from '@modelcontextprotocol/client';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
+import { createMcpHttpServer } from '../../../src/adapters/mcp-http-server.ts';
+import { createToolCatalog } from '../../../src/adapters/tool-catalog.ts';
+import { describeWorkspacePolicy } from '../../../src/gateway/connections/workspace-policy.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
+import { createCoreFixture } from '../../fixtures/gateway/core-runtime.ts';
 
 test('connections keep independent actual catalogs and explicit restart invalidates only its old session', async () => {
     const routed: Tool = {
@@ -182,4 +183,59 @@ test('connections keep independent actual catalogs and explicit restart invalida
     } finally {
         await runtime.cleanup();
     }
+});
+
+test('workspace policy describes only supplied temporary directories and negotiated roots', () => {
+    assert.deepEqual(describeWorkspacePolicy([], false, '/policy-temp-A'), {
+        officialDirectories: ['/policy-temp-A'],
+        officialSource: 'system-temporary-directory',
+        clientRoots: 'not-negotiated',
+        unrestrictedPaths: false,
+        cwdGrantsAccess: false,
+    });
+    assert.deepEqual(describeWorkspacePolicy([], true, '/policy-temp-B'), {
+        officialDirectories: ['/policy-temp-B'],
+        officialSource: 'system-temporary-directory',
+        clientRoots: 'immutable-start-snapshot',
+        unrestrictedPaths: false,
+        cwdGrantsAccess: false,
+    });
+});
+
+test('workspace policy preserves explicit alias order and does not mutate the supplied arguments', () => {
+    const args = ['--filesystemRoot=/first', '--workspace', '/second', '--filesystem-root=/third'];
+    const before = [...args];
+    const expected = {
+        officialDirectories: ['/first', '/second', '/third'],
+        officialSource: 'explicit-workspace',
+        clientRoots: 'immutable-start-snapshot',
+        unrestrictedPaths: false,
+        cwdGrantsAccess: false,
+    };
+    assert.deepEqual(describeWorkspacePolicy(args, true, '/ignored-temp-A'), expected);
+    assert.deepEqual(describeWorkspacePolicy(args, true, '/ignored-temp-B'), expected);
+    assert.deepEqual(args, before);
+});
+
+test('workspace policy unrestricted settings preserve explicit directories and roots facts', () => {
+    for (const [args, unrestrictedPaths] of [
+        [[], false],
+        [['--allowUnrestrictedPaths'], true],
+        [['--allowUnrestrictedPaths=true'], true],
+        [['--allowUnrestrictedPaths', 'true'], true],
+        [['--allowUnrestrictedPaths=false'], false],
+        [['--no-allowUnrestrictedPaths'], false],
+    ] as const)
+        assert.deepEqual(describeWorkspacePolicy(['--workspace=/explicit', ...args], true, '/ignored-temp'), {
+            officialDirectories: ['/explicit'],
+            officialSource: 'explicit-workspace',
+            clientRoots: 'immutable-start-snapshot',
+            unrestrictedPaths,
+            cwdGrantsAccess: false,
+        });
+});
+
+test('workspace policy propagates closed official option rejection', () => {
+    for (const args of [['--workspace'], ['--allowUnrestrictedPaths=maybe'], ['--unknown-policy=true']])
+        assert.throws(() => describeWorkspacePolicy(args, false, '/policy-temp'), /literal value|boolean|Unsupported/);
 });

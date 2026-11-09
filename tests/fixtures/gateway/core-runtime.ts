@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import type { Progress } from '@modelcontextprotocol/client';
 import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
-import type { OfficialConnection } from '../../src/adapters/mcp-bridge.ts';
-import { createToolCatalog } from '../../src/adapters/tool-catalog.ts';
+import { DataDirectoryRegistry } from '../../../src/adapters/data-directory.ts';
+import { createToolCatalog } from '../../../src/adapters/tool-catalog.ts';
 import type {
     ConnectionStatus,
     ControlContext,
@@ -11,10 +11,11 @@ import type {
     CoreControlHandler,
     CoreControlRequest,
     LaunchOptions,
-} from '../../src/domains/control-contract.ts';
-import { createGatewayCore, type GatewayDependencies } from '../../src/gateway/core.ts';
-import { RetainedTargetError } from '../../src/gateway/targets/model/target-contract.ts';
-import type { ClientRequestFacilities } from '../../src/shared/client-context.ts';
+} from '../../../src/domains/control-contract.ts';
+import { createGatewayCore, type GatewayDependencies } from '../../../src/gateway/core.ts';
+import type { OfficialUpstream } from '../../../src/gateway/official/upstream.ts';
+import { RetainedTargetError } from '../../../src/gateway/targets/model/target-contract.ts';
+import type { ClientRequestContext, ClientRequestFacilities } from '../../../src/shared/client-context.ts';
 
 /** Test composition over the real core, with one explicit authenticated client. */
 export async function createCoreFixture(
@@ -157,7 +158,7 @@ export async function createConnectionRuntimeFixture({
                 return true;
             },
         }),
-        createConnection: async (url): Promise<OfficialConnection> => {
+        createConnection: async (url): Promise<OfficialUpstream> => {
             connections += 1;
             return {
                 tools: [
@@ -203,4 +204,160 @@ export async function createConnectionRuntimeFixture({
             targetCloseFails = false;
         },
     };
+}
+
+export async function createManagedConnectionFixture(now?: () => number) {
+    const tool = { name: 'echo', inputSchema: { type: 'object' as const, properties: {} } };
+    const catalog = createToolCatalog({ version: '1.11.0', tools: [{ name: 'echo', requires: {}, variants: [tool] }] });
+    const children = new Map<number, EventEmitter>();
+    let launched = 0;
+    let closed = 0;
+    let rejectClose = false;
+    let rejectOfficial = false;
+    let closeWait: Promise<void> | undefined;
+    let officialCreated = 0;
+    let officialClosed = 0;
+    let routersCreated = 0;
+    let directoryAcquisitions = 0;
+    const dataDirectories = new DataDirectoryRegistry();
+    dataDirectories.acquire = async () => {
+        directoryAcquisitions += 1;
+        throw new Error('This no-I/O fixture must not acquire a data directory.');
+    };
+    const officialExits: (() => void)[] = [];
+    const launchInputs: LaunchOptions[] = [];
+    const officialInputs: { args: string[]; environment: NodeJS.ProcessEnv }[] = [];
+    let settle: () => void = () => {};
+    let entered: () => void = () => {};
+    const executing = new Promise<void>((resolve) => {
+        entered = resolve;
+    });
+    const core = await createGatewayCore({
+        dataDirectories,
+        ...(now ? { now } : {}),
+        loadCatalog: async () => catalog,
+        createRouter: async () => {
+            routersCreated += 1;
+            return {
+                url: 'http://127.0.0.1:30000',
+                isBusy: () => false,
+                setTarget() {},
+                clearTarget() {},
+                close: async () => {},
+            };
+        },
+        createHost: () => ({
+            launch: async (options) => {
+                launchInputs.push(structuredClone(options));
+                const processId = ++launched;
+                const child = new EventEmitter();
+                children.set(processId, child);
+                return {
+                    processId,
+                    port: 9222 + processId,
+                    executablePath: process.execPath,
+                    startedAtUtc: '2026-10-17T00:00:00Z',
+                    targetKind: 'generic-cdp' as const,
+                    child,
+                    launchDefinition: { executablePath: process.execPath, arguments: [] },
+                };
+            },
+            close: async (target) => {
+                closed += 1;
+                if (closeWait) await closeWait;
+                if (rejectClose && target.processId === 1) throw new Error('Normal close refused.');
+                children.get(target.processId)?.emit('exit');
+                return true;
+            },
+        }),
+        createConnection: async (_url, options) => {
+            officialCreated += 1;
+            officialInputs.push({ args: [...(options?.args ?? [])], environment: { ...options?.environment } });
+            if (rejectOfficial) throw new Error('Official acquisition failed.');
+            return {
+                tools: [tool],
+                call: async (_name, args, _signal, progress) => {
+                    progress?.({ progress: 1 });
+                    if (args.hold) {
+                        entered();
+                        await new Promise<void>((resolve) => {
+                            settle = resolve;
+                        });
+                        progress?.({ progress: 2 });
+                    }
+                    if (args.fail) throw new Error('Late original execution failed.');
+                    if (args.elicit)
+                        await options?.elicitation?.request(
+                            { mode: 'form', message: 'origin', requestedSchema: { type: 'object', properties: {} } },
+                            new AbortController().signal,
+                        );
+                    return { content: [], structuredContent: { roots: await options?.roots?.() } };
+                },
+                close: async () => {
+                    officialClosed += 1;
+                },
+                onExit(listener) {
+                    officialExits.push(listener);
+                },
+                rootsChanged: async () => {},
+            };
+        },
+    });
+    function client(name: string) {
+        const registration = core.register();
+        const handle = core.attachClient(registration.bearer);
+        const events: string[] = [];
+        const context = (): ClientRequestContext =>
+            handle.request({
+                requestId: 0,
+                capabilities: { roots: true, formElicitation: true },
+                readRoots: async () => ({ roots: [{ uri: `file:///${name}` }] }),
+                onProgress: () => events.push('progress'),
+                elicit: async () => {
+                    events.push('form');
+                    return { action: 'cancel' };
+                },
+            });
+        return { handle, events, context, registration };
+    }
+    return {
+        core,
+        client,
+        counts: () => ({ launched, closed }),
+        generations: () => ({ officialCreated, officialClosed, routersCreated }),
+        directoryAcquisitions: () => directoryAcquisitions,
+        officialExits,
+        executing,
+        settle: () => settle(),
+        exit: (pid: number) => children.get(pid)?.emit('exit'),
+        blockClose() {
+            let release = () => {};
+            closeWait = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            return release;
+        },
+        failClose: (value: boolean) => {
+            rejectClose = value;
+        },
+        failOfficial: () => {
+            rejectOfficial = true;
+        },
+        launchInputs,
+        officialInputs,
+    };
+}
+
+export async function boundedManagedResult<T>(pending: Promise<T>, label: string) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        return await Promise.race([
+            pending,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error(label)), 1000);
+            }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
 }

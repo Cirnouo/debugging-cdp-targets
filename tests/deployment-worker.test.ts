@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import { build } from 'esbuild';
 import { isRecord } from '../src/shared/errors.ts';
 import { ownedDeploymentPe } from './fixtures/deployment-support.ts';
+import { captureOwnedDirectoryCleanup } from './fixtures/owned-directory-cleanup.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 // Start only the reviewed bundler before native process fences; never a deployment executable.
@@ -48,6 +49,7 @@ const bound = (bytes: Buffer) => ({
 
 async function compiled(binding: unknown, worker = false, enrolled = true, authority = false) {
     const directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'dct-query-worker-controlled-')));
+    const removeDirectory = await captureOwnedDirectoryCleanup(directory);
     const app = enrolled ? path.join(directory, 'builds', 'a'.repeat(64), 'resources/app') : directory;
     await fs.mkdir(app, { recursive: true });
     const module = path.join(app, worker ? 'deployment-worker.mjs' : 'app-main.mjs');
@@ -81,7 +83,7 @@ async function compiled(binding: unknown, worker = false, enrolled = true, autho
         async cleanup() {
             assert.equal(path.dirname(directory), await fs.realpath(os.tmpdir()));
             assert.ok(path.basename(directory).startsWith('dct-query-worker-controlled-'));
-            await fs.rm(directory, { recursive: true });
+            await removeDirectory((owned) => fs.rm(owned, { recursive: true }));
         },
     };
 }

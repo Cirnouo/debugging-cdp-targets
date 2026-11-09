@@ -1,22 +1,37 @@
 # Desktop App runtime
 
 The App owns the transport-independent core, verified target processes and
-official Server children. Codex and Claude Code Plugins contain host metadata,
+official Server children. Core composes the complete
+[target lifecycle](../src/gateway/targets/target-lifecycle.ts) through supplied
+host/router capabilities; the App's final owner cleanup remains distinct from
+client transport detachment. Codex and Claude Code Plugins contain host metadata,
 direct HTTP configuration, artwork, documentation and the shared Skill. They
 connect to `http://127.0.0.1:27637/mcp`; they never launch another gateway.
 App and Plugin versions are independent strict SemVer strings. Both host payloads
 and the shared Skill still have exactly one matching Plugin version.
 
+## Windows applicability
+
+Current App/gateway scope is Windows 11 x64 and arm64, with installer and portable
+targets. Linux and macOS are unsupported, including no Experimental tier. Neither
+Windows architecture is newly qualified. Default installation admission remains
+unwired and disabled; [building and evidence](#building-and-evidence) distinguishes
+source/static checks, contributor staging and pending native acceptance.
+
 ## Startup, storage and exit
 
-The small Electron bootstrap synchronously captures the native App data base and
-redirects Chromium userData/sessionData into separate children of one private
-per-process OS temporary directory. Only then does it import asynchronous main
-composition without awaiting its ready-dependent startup from the entry module.
-Electron releases ready only after entry import completes; main retains its startup
-promise and early normal-Quit handlers, while bootstrap observes rejected startup
-without exposing raw errors. Configuration never uses this cache. Normal exit tries to remove
-its own cache; Chromium-held files may remain in OS temporary storage.
+The small Electron bootstrap first refuses non-Windows operating systems and
+unsupported architectures and requests normal Quit, before reading App data,
+creating owned scratch, loading native resources or importing asynchronous main
+composition. On a supported Windows platform/architecture, it synchronously
+captures the native App data base and redirects Chromium userData/sessionData
+into separate children of one private per-process OS temporary directory. Only
+then does it import main without awaiting its ready-dependent startup from the
+entry module. Electron releases ready only after entry import completes; main
+retains its startup promise and early normal-Quit handlers, while bootstrap
+observes rejected startup without exposing raw errors. Configuration never uses
+this cache. Normal exit tries to remove its own cache; Chromium-held files may
+remain in OS temporary storage.
 
 The App verifies its native loading closure before holding a kernel advisory
 lock for the actual process lifetime. The lock namespace derives from the native
@@ -28,7 +43,7 @@ creates or migrates selected data. No Electron singleton lock, heartbeat, PID
 takeover or force kill participates.
 
 Only the winner creates App data. Installed builds use native App data; portable
-builds use `data` next to the executable (next to the `.app` bundle on macOS).
+builds use `data` next to the executable.
 Neither mode searches for or merges another root. Registrations, targets, jobs
 and launch snapshots remain memory-only. Configuration schema 2 stores desired
 port, appearance and optional explicit host configuration-root/executable/cache
@@ -87,8 +102,8 @@ independent host outcomes and waits for actual native completion before Quit.
 
 Current source tests cover these contracts with real Core/Task5 services and
 controlled I/O. React server rendering is component-only evidence. Native
-management interaction/visual acceptance and all six delivery cells remain
-separate explicit acceptance gates.
+management interaction/visual acceptance and both Windows architectures' installer
+and portable delivery remain separate explicit acceptance gates.
 
 ## HTTP and authentication
 
@@ -96,6 +111,27 @@ Public SDK Node Streamable HTTP binds only `127.0.0.1`, checks exact effective-p
 Host, fixed `/mcp`, bounded JSON body, methods, content type and Origin. Forwarded
 headers confer no authority. Missing, expired or unknown bearers fail before
 owned reads or effects. Rejections never include raw requests, tokens or paths.
+Each POST is limited to 1 MiB of actual UTF-8 bytes, including chunked bodies,
+10,000 cumulative object members plus array elements, and 64 nested containers
+including the root. The Node adapter bounds bytes before one JSON parse; an
+iterative whole-envelope check runs before SDK era classification, schema checks
+or App dispatch. Metadata, capabilities and continuation replies share these
+limits. Malformed JSON returns a closed 400 response and budget excess a closed
+413 response. Strings consume bytes, not one structural member per character.
+An admitted body is passed unchanged through the public parsedBody option.
+Refusal does not consume a pending form reply or close a healthy legacy session,
+peer request or owned Core resource. These per-request work limits do not cap
+responses, impose a connection count or establish complete denial-of-service
+protection. Larger requests require less input in one envelope.
+For cooperative uploads and exact-boundary checks, refusal includes the complete
+closed JSON response at the client. A flooding or deliberately incomplete upload
+can instead encounter a transport reset while the server closes its request
+socket. Its contract is bounded real 413 headers and fixed JSON bytes, a returned
+response end, local response finish and actual socket closure, with no dispatch
+or resource acquisition. Local finish does not prove peer receipt. Tests keep
+complete client 413 and a known closed upload as distinct outcomes; a timeout,
+partial response or upload error alone never establishes refusal. The App does
+not drain an unbounded upload or add TCP shutdown state to guarantee delivery.
 After authentication, known busy and originating-client facility failures carry
 a closed code and fixed actionable explanation. Unknown upstream errors remain
 generic; the App never projects arbitrary exception text. A locally known facility
@@ -153,7 +189,7 @@ acquisitions. A detached official response wait retains its execution slot until
 the actual response or definitive upstream close. It does not replay, restart or
 quarantine a healthy upstream.
 
-Public SDK 2.2.0 has a wire limit: cancellation notifications retain the original
+Public SDK 2.3.1 has a wire limit: cancellation notifications retain the original
 relatedRequestId, while Node HTTP removes that response's stream mapping after
 the accepted response ends. Cancellation over that ended SSE is best-effort and
 cannot promise abortion of the remote roots handler. Local termination and zero
@@ -185,30 +221,37 @@ release emits live changes for its fixed startup configuration.
 ## Building and evidence
 
 The deployment store remains a source-only prerequisite, outside App bootstrap,
-main, activation and restart-worker composition. Its normal open returns only
-read/shared-use capabilities. The separate trusted worker open validates actual
-native authority before exposing operation, commit or deletion. Per-user roles
-trust code running as the same account; OS permissions do not distinguish that
-account's ordinary App from arbitrary code run by that account. Linux system-DEB
-readers use the fixed root-owned `/opt/debugging-cdp-targets` envelope, while
-mutation requires the worker's actual matching real/effective UID 0. Metadata
-kind and environment values confer no writer authority.
+main, activation and restart-worker composition. Current native authority is
+Windows-only. Ordinary native authority exposes read/shared-use through the
+verified, intrinsically bound sibling query. The direct native factory rejects
+unsupported hosts and ordinary writer requests before filesystem or native
+acquisition. The unbound query and worker also refuse before I/O. The public store
+entry points resolve the canonical installation path before requesting native
+authority. The separate trusted worker open requires actual validated native
+authority before exposing operation, commit or deletion. Per-user roles trust
+code running as the same account. OS permissions cannot distinguish that
+account's ordinary App from other code run by that account. Metadata kind and
+environment values confer no writer authority. Unsupported default native entry
+points refuse before resource acquisition. Explicit supplied Windows capabilities
+in controlled tests do not authorize default native I/O on another OS.
 
-The source has bounded Windows handle/SID/protected-DACL/local-NTFS evidence and
-a macOS JXA descriptor/UID/ACL/local-APFS candidate, alongside Linux private and
-system permission checks. Unknown results, unsafe ancestors, links, cross-volume
-control entries, changed identities and missing fixed leases refuse admission.
-Windows inherited control-file ACEs require the checked protected parent
-template; macOS managed entries require absent/empty ACLs and private modes.
-Trusted macOS ancestors can reside on the sealed read-only System volume while
-the managed root and controls require writable local APFS on their own device.
-Ancestor ownership, non-granting ACLs, safe modes, local APFS and ownership-enabled
-mount checks remain required. The fixed JXA query distinguishes request-only
-`ATTR_VOL_INFO` from the exact result-bearing volume mask.
-Controlled transcripts, Node VM buffers and C# compilation establish source
-contracts only. Actual Windows permission/ACL readback, macOS 15 JXA/Ref/errno
-behavior and Linux multi-account/root execution remain native gates. No native
-installer/portable acceptance is implied by these branches or shipped helpers.
+Bounded Windows handle/SID/protected-DACL/local-NTFS source evidence and controlled
+fixtures do not establish actual protected creation, permission/ACL readback,
+native loading or installer/portable acceptance. Unknown results, unsafe ancestors,
+links, cross-volume control entries, changed identities and missing fixed leases
+refuse admission. Windows inherited control-file ACEs require the checked protected
+parent template. Retained POSIX implementation branches and dated evidence are
+historical or pending later source removal, not current support, distribution or
+native acceptance targets. Complete original upstream files remain unchanged.
+
+Coordinated storage fixtures cover complete state, actual leases and explicit
+failure outcomes. Ordinary uncoordinated reading of the Windows state document
+can coincide with failed or indeterminate publication; simultaneous reader/update
+availability remains unqualified. Controlled reader handshakes are test evidence,
+not a product coordination algorithm or a guarantee that publication always
+succeeds while the document is open. Stronger availability needs later native
+production/admission qualification. This gap does not change the existing
+complete-state, lease, explicit-failure or no-replay contracts.
 
 The explicit contributor-only `stageFreshDesktopInstallation` source composition
 supports Windows x64 fresh enrollment and state-last initial publication. It
@@ -237,13 +280,15 @@ the independently source-derived selection before returning.
 `stageDesktopApp` returns the flat stage's `root`, canonical manifest, selection
 and descriptive original-source/build-input provenance. This result grants no
 runtime authority or protected publication capability. The tree verifier alone
-still establishes observed content agreement. macOS signed bundle/framework links
-and Unix executable bits need their actual source producers; the Windows producer
-fails closed for other platforms. The explicit fresh source consumer joins this
+still establishes observed content agreement. The Windows producer refuses
+unsupported targets. Recorded archives do not replace missing source extraction
+and license evidence. The explicit fresh source consumer joins this
 production with native protected creation before publishing an initial build;
 actual platform permission, compiler/runtime and installer acceptance remain pending.
-The maintained Node runtime-file inventory currently enables Windows x64 only;
-other cells refuse staging until their actual source evidence is supplied.
+The maintained Node runtime-file inventory currently enables Windows x64 only.
+Windows arm64 staging still requires complete runtime-file and license evidence,
+an architecture-specific source producer and native proof.
+
 After protected state-last publication and temporary reader/fixed/payload checks,
 the fresh transaction retains operation/shared-use descriptors and successfully
 closes temporary support once. It never calls that old reader/query again. The
@@ -273,9 +318,11 @@ and reviewed SDK vendor maps. Catalog and every connection receive the same
 verified ordinary Node executable and original public bin. Electron never acts
 as their Node runtime. None of those files is installed through the Plugins.
 
-`pnpm check:app` checks bundles, license evidence, original native closure and
-official bytes without writing a stage. For a local Windows stage, provide
-archives matching `tooling/app-release-inputs.json`:
+`pnpm check:app` statically verifies Windows x64 and arm64 bundles, complete
+original native inputs, actual graph licenses and official bytes,
+independently of its runner's OS, without staging or native execution. It does
+not establish native acceptance. For a local Windows stage, provide archives
+matching `tooling/app-release-inputs.json`:
 
 ```powershell
 pnpm build:app --portable --electron-archive <electron-zip> --node-archive <node-zip> --output <new-absolute-stage-directory>

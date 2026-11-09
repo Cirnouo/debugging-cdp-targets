@@ -9,6 +9,7 @@ import { isRecord } from '../../src/shared/errors.ts';
 import * as app from '../../tooling/build-app.ts';
 import { guardAppArchiveExtraction as archiveGuard, storedAppZip as zip } from './app-archive.ts';
 import { ownedWindowsDeploymentCompiler } from './deployment-support.ts';
+import { captureOwnedDirectoryCleanup } from './owned-directory-cleanup.ts';
 
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
@@ -19,6 +20,7 @@ export async function stageFixture(options: { compiler?: false } = {}) {
     // Start only the existing trusted build compiler before the strict process guard.
     await app.generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
     const directory = await realpath(await mkdtemp(path.join(temporaryRoot, 'dct-payload-stage-')));
+    const removeDirectory = await captureOwnedDirectoryCleanup(directory);
     const metadataName = path.join(root, 'tooling/app-release-inputs.json');
     const fixtureMetadata = path.join(directory, 'release.json');
     const electronArchive = path.join(directory, 'electron-owned.zip');
@@ -148,10 +150,10 @@ export async function stageFixture(options: { compiler?: false } = {}) {
         fs.readFile = originalRead;
         fs.mkdtemp = originalTemporary;
         syncBuiltinESMExports();
-        assert.equal(path.dirname(directory), await realpath(os.tmpdir()));
-        assert.ok(path.basename(directory).startsWith('dct-payload-stage-'));
         try {
-            await rm(directory, { recursive: true });
+            assert.equal(path.dirname(directory), await realpath(os.tmpdir()));
+            assert.ok(path.basename(directory).startsWith('dct-payload-stage-'));
+            await removeDirectory((owned) => rm(owned, { recursive: true }));
         } catch (error) {
             throw compilerError
                 ? new AggregateError([compilerError, error], 'Stage compiler and owned cleanup failed.')

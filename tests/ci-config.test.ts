@@ -23,10 +23,8 @@ interface WorkflowJob {
     if?: string;
     needs?: string;
     env?: Record<string, string>;
-    strategy?: {
-        'fail-fast'?: boolean;
-        matrix: { include?: { os: string; chrome: string }[]; block?: number[]; fileLogging?: string[] };
-    };
+    strategy?: unknown;
+    'timeout-minutes'?: number;
     'continue-on-error'?: boolean;
 }
 interface Workflow {
@@ -44,9 +42,7 @@ interface Workflow {
         | 'quality'
         | 'node-compatibility'
         | 'windows-tests'
-        | 'portable-tests'
-        | 'real-chrome-tests'
-        | 'ubuntu-startup-study',
+        | 'real-chrome-tests',
         WorkflowJob
     >;
 }
@@ -85,99 +81,137 @@ const workflowUrl = new URL('../.github/workflows/ci.yaml', import.meta.url);
 const source = await readFile(workflowUrl, 'utf8');
 const workflow = readWorkflow(source);
 
-test('Ubuntu startup study requires explicit manual opt-in and cannot cancel ordinary CI', () => {
-    assert.deepEqual(workflow.on.workflow_dispatch, {
-        inputs: {
-            'ubuntu-startup-study': {
-                description: 'Run the bounded Ubuntu first-start file-logging study (six fresh runners)',
-                type: 'boolean',
-                required: false,
-                default: false,
-            },
-        },
-    });
-    assert.equal(
-        workflow.jobs['ubuntu-startup-study']?.if,
-        "github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true",
-    );
+test('retired platform checks and cancelled Ubuntu study have no execution route', () => {
+    assert.equal(workflow.on.workflow_dispatch, null);
+    assert.equal(Object.hasOwn(workflow.jobs, 'portable-tests'), false);
+    assert.equal(Object.hasOwn(workflow.jobs, 'ubuntu-startup-study'), false);
     assert.deepEqual(workflow.concurrency, {
-        group: `\${{ github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}`,
+        group: `\${{ format('ci-{0}-{1}', github.workflow, github.ref) }}`,
         'cancel-in-progress': true,
     });
+    assert.deepEqual(
+        Object.values(workflow.jobs).map((job) => job.name),
+        [
+            'Supply chain security',
+            'Commit messages',
+            'Quality',
+            'Node compatibility (24.x)',
+            'Windows tests',
+            'Real Chrome (windows-latest)',
+        ],
+    );
     for (const [name, job] of Object.entries(workflow.jobs)) {
-        if (name === 'ubuntu-startup-study') continue;
         assert.equal(job.if, undefined, name);
+        assert.equal(job['continue-on-error'], undefined, name);
+        assert.equal(job.strategy, undefined, name);
+        for (const step of job.steps) assert.equal(step['continue-on-error'], undefined, name);
     }
+    assert.doesNotMatch(
+        source,
+        /portable-tests|Portable tests|ubuntu-startup-study|Ubuntu startup study|ci-startup-study|--startup-study|matrix\./,
+    );
+    assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
+    assert.equal(workflow.jobs.quality.needs, 'supply-chain-security');
+    for (const name of ['node-compatibility', 'windows-tests', 'real-chrome-tests'] as const)
+        assert.equal(workflow.jobs[name].needs, 'quality', name);
 });
 
-test('Ubuntu startup study has exactly six quality-gated fresh runner slots without ignored failures', () => {
-    const job = workflow.jobs['ubuntu-startup-study'];
-    assert.ok(job, 'The manually authorized study must be present.');
+test('Windows real Chrome covers official and recovery through the existing owned fixture envelope', () => {
+    const job = workflow.jobs['real-chrome-tests'];
+    assert.ok(job, 'Real Windows Chrome acceptance must be part of reusable CI.');
+    assert.equal(job.name, 'Real Chrome (windows-latest)');
+    assert.equal(job['runs-on'], 'windows-latest');
     assert.equal(job.needs, 'quality');
-    assert.equal(job['runs-on'], 'ubuntu-24.04');
-    assert.deepEqual(job.strategy, {
-        'fail-fast': false,
-        matrix: { block: [1, 2, 3], fileLogging: ['on', 'off'] },
+    assert.equal(job['timeout-minutes'], 20);
+    for (const key of ['if', 'continue-on-error', 'permissions', 'strategy'])
+        assert.equal(Object.hasOwn(job, key), false, key);
+    assert.deepEqual(job.env, {
+        DCT_SMOKE_CHROME_EXECUTABLE: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
     });
-    assert.deepEqual(job.env, { DCT_SMOKE_CHROME_EXECUTABLE: '/opt/google/chrome/chrome' });
-    assert.equal(Object.hasOwn(job, 'permissions'), false);
-    assert.equal(job['continue-on-error'], undefined);
-    for (const step of job.steps) assert.equal(step['continue-on-error'], undefined);
-    const setup = job.steps.filter((step) => step.uses !== undefined);
     assert.deepEqual(
-        setup.map((step) => step.uses),
+        job.steps.slice(0, 3).map((step) => step.uses),
         [
             'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
             'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
             'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
-            'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
         ],
     );
-    assert.deepEqual(job.steps.slice(0, 3), setup.slice(0, 3));
     assert.deepEqual(
         job.steps.slice(3, 5).map((step) => step.run),
         ['pnpm install --frozen-lockfile', 'pnpm typecheck'],
     );
-});
-
-test('Ubuntu startup study initializes current evidence and runs only one first-start smoke', () => {
-    const job = workflow.jobs['ubuntu-startup-study'];
-    assert.ok(job);
-    const init = job.steps.find((step) => step.id === 'fixture-initialization');
-    const normalInit = workflow.jobs['real-chrome-tests'].steps.find((step) => step.id === 'fixture-initialization');
-    assert.deepEqual(init, normalInit, 'Study must retain current collection initialization and refusal semantics.');
-    const smoke = job.steps.find((step) => step.name === 'Run one Ubuntu Chrome startup study sample');
-    assert.equal(smoke?.if, undefined);
-    assert.equal(smoke?.shell, 'bash');
-    assert.deepEqual(smoke?.run?.trim().split('\n'), [
-        'set -euo pipefail',
-        `collectionId="\${{ steps.fixture-initialization.outputs.collection-id }}"`,
-        'test -x "$DCT_SMOKE_CHROME_EXECUTABLE"',
-        'command -v lsof',
-        'command -v getconf',
-        'command -v Xvfb',
-        'command -v xvfb-run',
-        'command -v xauth',
-        'if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi',
-        `xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging "\${{ matrix.fileLogging }}" --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"`,
+    const initialization = job.steps[5];
+    assert.equal(initialization?.id, 'fixture-initialization');
+    assert.equal(initialization?.if, undefined);
+    assert.equal(initialization?.shell, 'pwsh');
+    assert.deepEqual(initialization?.run?.trim().split('\n'), [
+        '$PSNativeCommandUseErrorActionPreference = $false',
+        "$diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'",
+        '$initializationOutput = node tests/smoke/fixture-ci.ts init "$diagnosticsDirectory"',
+        '$initializationExitCode = $LASTEXITCODE',
+        '$collectionId = ($initializationOutput -join "`n").Trim()',
+        "$initialized = $initializationExitCode -eq 0 -and $collectionId -match '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'",
+        "if (-not $initialized) { $collectionId = '' }",
+        '"initialized=$($initialized.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT',
+        '"collection-id=$collectionId" >> $env:GITHUB_OUTPUT',
+        'exit 0',
     ]);
-    assert.ok(init && smoke && job.steps.indexOf(init) < job.steps.indexOf(smoke));
+    const preflight = job.steps[6];
+    assert.equal(preflight?.if, undefined);
+    assert.equal(preflight?.shell, 'pwsh');
+    assert.deepEqual(preflight?.run?.trim().split('\n'), [
+        '$PSNativeCommandUseErrorActionPreference = $false',
+        'node --input-type=module -e "import { requireChromeSmokeExecutable } from \'./tests/smoke/chrome-host.ts\'; await requireChromeSmokeExecutable();"',
+        '$preflightExitCode = $LASTEXITCODE',
+        'if ($preflightExitCode -ne 0) { exit $preflightExitCode }',
+    ]);
+    for (const [index, fixture] of [
+        [7, 'official-server'],
+        [8, 'entry-recovery'],
+    ] as const) {
+        const smoke = job.steps[index];
+        assert.equal(smoke?.if, undefined, fixture);
+        assert.equal(smoke?.shell, 'pwsh', fixture);
+        assert.deepEqual(smoke?.env, {
+            DCT_FIXTURE_COLLECTION_ID: `\${{ steps.fixture-initialization.outputs.collection-id }}`,
+        });
+        assert.deepEqual(smoke?.run?.trim().split('\n'), [
+            '$PSNativeCommandUseErrorActionPreference = $false',
+            "$diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'",
+            '$collectionId = $env:DCT_FIXTURE_COLLECTION_ID',
+            `node tests/smoke/fixture-ci.ts stage "$diagnosticsDirectory" ${fixture} "$collectionId"`,
+            `node tests/smoke/${fixture}.ts --allow-gui --diagnostics "$diagnosticsDirectory" --collection-id "$collectionId"`,
+            '$smokeExitCode = $LASTEXITCODE',
+            'if ($smokeExitCode -ne 0) { exit $smokeExitCode }',
+        ]);
+        assert.equal(smoke?.run?.match(/--allow-gui/g)?.length, 1, fixture);
+    }
+    const upload = job.steps[9];
+    assert.equal(upload?.id, 'fixture-artifact');
+    assert.equal(upload?.uses, 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9');
+    assert.equal(upload?.if, "failure() && steps.fixture-initialization.outputs.initialized == 'true'");
+    const summary = job.steps[10];
+    assert.equal(summary?.if, 'failure()');
+    assert.equal(summary?.shell, 'pwsh');
+    assert.deepEqual(summary?.env, {
+        DCT_FIXTURE_COLLECTION_ID: `\${{ steps.fixture-initialization.outputs.collection-id }}`,
+        DCT_FIXTURE_ARTIFACT_URL: `\${{ steps.fixture-artifact.outputs.artifact-url }}`,
+    });
+    assert.deepEqual(summary?.run?.trim().split('\n'), [
+        "$diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'",
+        'node tests/smoke/fixture-ci.ts summary "$diagnosticsDirectory" "$env:DCT_FIXTURE_COLLECTION_ID"',
+    ]);
+    assert.equal(job.steps.length, 11);
     const commands = job.steps.map((step) => step.run ?? '').join('\n');
     assert.equal(commands.match(/node tests\/smoke\/official-server\.ts/g)?.length, 1);
+    assert.equal(commands.match(/node tests\/smoke\/entry-recovery\.ts/g)?.length, 1);
+    assert.equal(commands.match(/--allow-gui/g)?.length, 2);
+    assert.equal(commands.match(/^exit 0$/gm)?.length, 1, 'Only metadata init has an explicitly successful exit.');
     assert.doesNotMatch(
         commands,
-        /entry-recovery\.ts|--version|sha256|shasum|warmup|retry|--no-sandbox|--headless|kill -9|pkill|download|apt-get|brew install/,
+        /xvfb|--startup-study|--headless|--no-sandbox|kill -9|pkill|download|apt-get|brew install|winget|choco|retry|timeout|catch\s*\{|\|\|/i,
     );
-    const summary = job.steps.find((step) => step.name === 'Index Ubuntu startup study diagnostics');
-    assert.equal(summary?.if, "always() && steps.fixture-initialization.outputs.initialized == 'true'");
-    assert.deepEqual(summary?.env, { DCT_FIXTURE_ARTIFACT_URL: `\${{ steps.fixture-artifact.outputs.artifact-url }}` });
-    assert.equal(
-        summary?.run,
-        `node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "\${{ steps.fixture-initialization.outputs.collection-id }}"`,
-    );
-    const upload = job.steps.find((step) => step.id === 'fixture-artifact');
-    assert.ok(upload && summary && job.steps.indexOf(upload) < job.steps.indexOf(summary));
-    assert.equal(job.steps.length, 9);
+    for (const step of job.steps) assert.equal(step['continue-on-error'], undefined);
 });
 
 test('latest Node 24 compatibility runs mandatory Ubuntu checks after the canonical quality gate', () => {
@@ -273,9 +307,7 @@ test('CI workflow has read-only triggers, concurrency, and exact job display nam
             'Quality',
             'Node compatibility (24.x)',
             'Windows tests',
-            `Portable tests (\${{ matrix.os }})`,
-            `Real Chrome (\${{ matrix.os }})`,
-            `Ubuntu startup study (block \${{ matrix.block }}, file logging \${{ matrix.fileLogging }})`,
+            'Real Chrome (windows-latest)',
         ],
     );
     assert.equal(workflow.jobs['commit-messages'].needs, 'supply-chain-security');
@@ -341,28 +373,22 @@ test('CI workflow uses reviewed pins and limits artifacts to controlled Chrome f
         'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9',
     ]);
     const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.uses).filter(Boolean));
-    assert.equal(uses.length, 26);
+    assert.equal(uses.length, 19);
     assert.deepEqual(new Set(uses), approved);
     assert.match(source, /# v7\.0\.1/);
     assert.match(source, /# v7\.0\.0/);
     assert.match(source, /# v6\.0\.10/);
     for (const [name, job] of Object.entries(workflow.jobs)) {
         const uploads = job.steps.filter((step) => step.uses?.startsWith('actions/upload-artifact@'));
-        if (name !== 'real-chrome-tests' && name !== 'ubuntu-startup-study') {
-            assert.deepEqual(uploads, []);
+        if (name !== 'real-chrome-tests') {
+            assert.deepEqual(uploads, [], name);
             continue;
         }
         assert.equal(uploads.length, 1);
         const upload = uploads[0];
-        assert.equal(
-            upload?.if,
-            `${name === 'ubuntu-startup-study' ? 'always()' : 'failure()'} && steps.fixture-initialization.outputs.initialized == 'true'`,
-        );
+        assert.equal(upload?.if, "failure() && steps.fixture-initialization.outputs.initialized == 'true'");
         assert.deepEqual(upload?.with, {
-            name:
-                name === 'ubuntu-startup-study'
-                    ? `ubuntu-startup-study-block-\${{ matrix.block }}-logging-\${{ matrix.fileLogging }}-\${{ github.run_id }}-\${{ github.run_attempt }}`
-                    : `controlled-chrome-\${{ matrix.os }}-\${{ github.run_id }}-\${{ github.run_attempt }}`,
+            name: `controlled-chrome-windows-latest-\${{ github.run_id }}-\${{ github.run_attempt }}`,
             path: `${[
                 `\${{ runner.temp }}/dct-fixture-diagnostics/job-index.json`,
                 `\${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson`,
@@ -428,7 +454,7 @@ test('CI jobs run their required frozen-install and verification commands', () =
 });
 
 test('every execution platform performs independent type checking before tests', () => {
-    for (const name of ['quality', 'node-compatibility', 'windows-tests', 'portable-tests'] as const) {
+    for (const name of ['quality', 'node-compatibility', 'windows-tests'] as const) {
         const job = workflow.jobs[name];
         assert.ok(job);
         const commands = job.steps
@@ -438,58 +464,4 @@ test('every execution platform performs independent type checking before tests',
         assert.match(commands, /pnpm typecheck/);
         assert.ok(commands.indexOf('pnpm typecheck') < commands.indexOf('pnpm test'));
     }
-});
-
-test('real Chrome CI requires both actual desktop browsers and preserves the audit-first boundary', () => {
-    const job = workflow.jobs['real-chrome-tests'];
-    assert.ok(job, 'Real Chrome acceptance must be part of reusable CI.');
-    assert.equal(job.needs, 'quality');
-    assert.equal(job['continue-on-error'], undefined);
-    assert.equal(job.strategy?.['fail-fast'], false);
-    assert.deepEqual(job.strategy?.matrix.include, [
-        { os: 'ubuntu-24.04', chrome: '/opt/google/chrome/chrome' },
-        { os: 'macos-15', chrome: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
-    ]);
-    assert.equal(job.env?.DCT_SMOKE_CHROME_EXECUTABLE, `\${{ matrix.chrome }}`);
-    const commands = job.steps.map((step) => step.run ?? '').join('\n');
-    assert.match(commands, /pnpm install --frozen-lockfile/);
-    assert.match(commands, /pnpm typecheck/);
-    assert.ok(commands.indexOf('pnpm typecheck') < commands.indexOf('node tests/smoke/official-server.ts'));
-    const linux = job.steps.find((step) => step.if === "runner.os == 'Linux'");
-    const mac = job.steps.find((step) => step.if === "runner.os == 'macOS'");
-    assert.ok(linux?.run && mac?.run);
-    assert.doesNotMatch(linux.run, /command -v xdpyinfo/);
-    for (const script of ['official-server', 'entry-recovery']) {
-        assert.match(linux.run, new RegExp(`xvfb-run -a node tests/smoke/${script}\\.ts --allow-gui`));
-        assert.match(mac.run, new RegExp(`node tests/smoke/${script}\\.ts --allow-gui`));
-    }
-    assert.doesNotMatch(mac.run, /xvfb/);
-    for (const step of [linux, mac]) {
-        assert.ok(step?.run);
-        assert.ok(step.run.includes('fixture-ci.ts stage'));
-        assert.ok(step.run.indexOf('fixture-ci.ts stage') < step.run.indexOf('node tests/smoke/official-server.ts'));
-        assert.match(
-            step.run,
-            /official-server\.ts --allow-gui --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/,
-        );
-        assert.match(step.run, /entry-recovery\.ts --allow-gui --diagnostics "\$RUNNER_TEMP\/dct-fixture-diagnostics"/);
-        assert.match(step.run, /--collection-id "\$collectionId"/);
-        assert.match(step.run, /fixture-ci\.ts stage[^\n]+"\$collectionId"; then :; fi/);
-    }
-    const init = job.steps.find((step) => step.id === 'fixture-initialization');
-    assert.ok(init);
-    assert.ok(init.run);
-    assert.ok(init.run.includes('fixture-ci.ts init'));
-    assert.match(init.run, /if collectionId=/);
-    assert.match(init.run, /initialized=true/);
-    assert.match(init.run, /initialized=false/);
-    assert.ok(job.steps.indexOf(init) < job.steps.indexOf(linux));
-    assert.ok(job.steps.indexOf(init) < job.steps.indexOf(mac));
-    const summary = job.steps.find((step) => step.name === 'Index controlled Chrome failure diagnostics');
-    assert.equal(summary?.if, 'failure()');
-    assert.equal(summary?.env?.DCT_FIXTURE_ARTIFACT_URL, `\${{ steps.fixture-artifact.outputs.artifact-url }}`);
-    assert.match(summary?.run ?? '', /fixture-ci\.ts summary/);
-    assert.match(summary?.run ?? '', /steps\.fixture-initialization\.outputs\.collection-id/);
-    assert.ok(job.steps.every((step) => step['continue-on-error'] !== true));
-    assert.doesNotMatch(commands, /--no-sandbox|--headless|kill -9|pkill|download|apt-get|brew install/);
 });

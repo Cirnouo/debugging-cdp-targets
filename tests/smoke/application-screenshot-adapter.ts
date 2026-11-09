@@ -302,11 +302,10 @@ export function createApplicationScreenshotAdapter(
             return { ...item, title: titleMap.get(Number(item.handle)) };
         });
     };
-    const markers = new Map<number, string>();
-    const launcher = createWindowsLauncher();
-    const anchor =
-        io.anchor ??
-        createScreenshotBackgroundAnchor({
+    const nativeAnchor = () => {
+        const markers = new Map<number, string>();
+        const launcher = createWindowsLauncher();
+        return createScreenshotBackgroundAnchor({
             async launch(bounds) {
                 const executable = path.join(folder, 'background-anchor.exe');
                 await record(
@@ -353,6 +352,8 @@ export function createApplicationScreenshotAdapter(
             close: (selected) => launcher.close({ ...selected, targetKind: 'generic-cdp', port: 0 }),
             record,
         });
+    };
+    const anchor = io.anchor ?? nativeAnchor();
     const nativeSample = async (handle?: number, signal?: AbortSignal) => {
         assert.ok(identity);
         return backgroundPrepared && handle !== undefined
