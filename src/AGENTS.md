@@ -32,8 +32,8 @@ Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact
 relative target value owners gateway/targets/model/isolation.ts and
-gateway/targets/model/launch-command.ts; this grants no Host payload or shared
-permission to depend on Gateway. Only gateway/diagnostics.ts may read its existing
+gateway/targets/model/launch-command.ts. Host payload and shared owners gain
+no Gateway or configuration permission. Only gateway/diagnostics.ts may read its existing
 performance.now() clock and depend on the pure domains/control-contract.ts.
 Domains and pure Gateway owners contain no environment, file, process, network or
 PowerShell I/O. The exact gateway/connections/resource-owner.ts owns resource
@@ -121,6 +121,36 @@ Before editing Host intent, its selected-file acquisition or their actual
 [accepted singleton plan](../.superpowers/plans/2026-10-17-singleton-app-plan.md).
 Application and adapters consume payload proof directly; other technical-layer
 owners stay in place.
+
+The delivered desktop slice includes configuration. Exact desktop/configuration/model.ts
+owns supplied schema/migration/desired-effective rules and imports only shared/errors.
+Exact desktop/configuration/store.ts owns singleton-admitted load, backup and the
+serialized atomic save transaction through model, shared/errors, adapters/file-evidence
+and node:crypto, node:fs/promises and node:path. No unknown desktop sibling inherits
+I/O or ambient process/clock/network authority. Main alone imports openAppConfiguration
+from the store. Main, app-window and app-host-management consume model types;
+app-manager consumes parseAppConfiguration VALUE and AppAppearance/AppConfiguration/
+AppHostSelection TYPEs. Desktop contracts/commands.ts consumes that parser VALUE
+and AppConfiguration TYPE. The snapshots.ts contract consumes the parser VALUE and
+AppConfigurationState TYPE.
+Before editing these schema/store owners or their consumers, read the cumulative
+[configuration instructions](desktop/configuration/AGENTS.md), ADR 0017 and the
+[accepted singleton plan](../.superpowers/plans/2026-10-17-singleton-app-plan.md).
+Other desktop trust boundaries remain at their current technical-layer owners.
+
+Before editing Desktop management messages/snapshots, fixed asset admission,
+supplied elapsed formatting or their consumers, read [ADR 0017](../docs/adr/0017-singleton-desktop-app.md),
+the accepted singleton plan above and the cumulative [Desktop instructions](desktop/AGENTS.md),
+then the corresponding [contracts](desktop/contracts/AGENTS.md),
+[asset](desktop/main/AGENTS.md) or [elapsed](desktop/renderer/AGENTS.md) instructions.
+Only exact contracts/commands.ts and snapshots.ts have their reviewed model,
+shared/errors and current control-contract edges; host and snapshot isolation
+evidence remain TYPE-only. Their single field assertion belongs to snapshots.
+Only current window imports main/asset-policy.ts, and only current manager imports
+renderer/elapsed.ts; both pure leaves have no imports or acquisition/clock power.
+Exact caller VALUE/TYPE roles follow those local owners and the auditor. Unknown
+Desktop siblings remain pure and dependencyless; no store, Node, Electron/React,
+SDK, native or ambient I/O permission follows from their directory names.
 
 Only interface/app-bootstrap.ts executes directly. Startup step zero rejects
 platform/architecture evidence outside Windows x64/arm64 before App paths, scratch

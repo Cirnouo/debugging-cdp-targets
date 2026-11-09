@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { APP_MANAGEMENT_CHANNEL, type AppUiBridge, parseAppUiRequest, parseAppUiSnapshot } from '../domains/app-ui.ts';
+import { APP_MANAGEMENT_CHANNEL, type AppUiBridge, parseAppUiRequest } from '../desktop/contracts/commands.ts';
+import { parseAppUiSnapshot } from '../desktop/contracts/snapshots.ts';
 
 async function inspectRequest(request: unknown) {
     const value: unknown = await ipcRenderer.invoke(APP_MANAGEMENT_CHANNEL, parseAppUiRequest(request));

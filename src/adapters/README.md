@@ -65,8 +65,6 @@
   their creation only after singleton ownership.
 - `app-chromium-storage.ts` creates per-process temporary Chromium roots
   synchronously before asynchronous bootstrap work, separate from configuration.
-- `app-configuration.ts` validates the whole migration chain before a backup and
-  atomic settings replacement, keeping desired port separate from effective port.
 - `app-native.ts` refuses unsupported actual hosts before native verification
   or loading. Its independent input verifier stays host-neutral and checks the
   complete original six-package source/prebuild/license closure, including all

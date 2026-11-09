@@ -4,6 +4,10 @@ Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
 
+The complete App configuration load/backup/serialized save owner is now
+[desktop/configuration/store.ts](../desktop/configuration/store.ts). Adapters retain
+regular-file evidence and other actual I/O; they gain no configuration-store edge.
+
 Before editing `native-host-plugins.ts` intent observations or native transitions,
 read cumulative [Host instructions](../host-plugins/AGENTS.md),
 [selected-file instructions](../host-plugins/native/AGENTS.md) and the

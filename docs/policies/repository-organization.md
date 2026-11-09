@@ -41,8 +41,9 @@ workspace calculation; start admission retains its actual pre-roots temporary-di
 capture and invokes it with three explicit inputs at the original construction point.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend
-only on the exact relative isolation.ts and launch-command.ts model owners in
-addition to domains/shared; Host payload/shared gain no Gateway permission.
+only on the exact relative isolation.ts and launch-command.ts target model owners
+in addition to domains/shared. Host payload and shared owners gain no Gateway or
+configuration permission. Desktop management contracts retain the separate roles below.
 Host user-intent.ts owns supplied own-intent parsing and transition comparison;
 host-plugins/native/user-intent-file.ts retains the complete selected-file evidence
 read with its exact dependencies. The native adapter retains command/receipt
@@ -75,6 +76,29 @@ separate owners. The package/input/TEMP tests have separate runtime, security an
 quality owners with an explicit seven-title alias-child oracle. Three central
 Official suites retain all original upstream, catalog refresh and lifetime cases
 in both safe lanes. Existing layer, pure-model and I/O rules govern these roles.
+
+The delivered [desktop configuration](../../src/desktop/configuration/README.md)
+contains the whole pure model and whole singleton-admitted serialized atomic store.
+The model owns schema 2, real schema 1 migration, the general chain and desired/
+effective rules; the exact store alone gets its reviewed filesystem dependencies.
+Main alone consumes the store. Current manager/contracts VALUE and Main/window/Host
+TYPE model edges are explicit. Unknown desktop siblings gain no I/O. Main startup/
+save/Quit and Host jobs remain separate current owners, as do selected data roots,
+singleton/activation and sandboxed GUI. This bounded cut creates no future GUI tree.
+
+The complete former domain App UI family now belongs to four delivered Desktop
+owners: contracts/commands.ts owns closed channel/requests/commands/bridge and
+both parsers; contracts/snapshots.ts owns summaries, selected evidence, failure
+values, both snapshot validators and one shared field assertion. Commands consumes
+that assertion without a reverse dependency. Both consume the pure configuration
+model; Host and snapshot isolation edges remain TYPE-only. main/asset-policy.ts
+owns only fixed supplied URL/method/origin admission, and renderer/elapsed.ts owns
+only supplied-value formatting. Exact current caller VALUE/TYPE permissions remain
+closed in the auditor; unknown siblings stay pure and dependencyless. Window
+acquisition/Buffer/sender checks, Main startup/save/Quit, Host job/selection barriers
+and renderer session/settings state remain whole at their current owners. Four
+central Desktop suites retain all nine original cases. Other accepted Desktop
+configuration-data, instance, preload, Main lifecycle and renderer cuts remain pending.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.

@@ -7,6 +7,10 @@ all resources; thin host plugins contain metadata, artwork and the shared Skill.
 Do not import Node I/O, adapters, application, or environment globals. Inputs
 carry evidence and environment mappings; output rules are deterministic.
 Identity must fail closed, not guess a different framework contract.
+Desktop management/schema consumers now belong to the exact
+[Desktop contracts](../desktop/contracts/README.md), whose cumulative instructions
+must be read before changing those consumers. No domain gains a Desktop model,
+contract, store dependency or other desktop I/O authority.
 
 Before editing a consumer of target launch or isolation values, read the
 [pure target model instructions](../gateway/targets/model/AGENTS.md). This layer

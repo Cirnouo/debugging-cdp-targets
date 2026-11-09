@@ -3,6 +3,20 @@
 Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
+
+The exact app-host-management.ts consumes only AppConfiguration and AppHostSelection
+TYPEs from desktop/configuration/model.ts. Before changing that configuration
+consumer, read the cumulative [configuration instructions](../desktop/configuration/AGENTS.md)
+and [accepted singleton plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md).
+Its Host selection/cache/pending-job barrier stays separate from the serialized
+configuration store and Main startup/save/Quit joins; this layer gains no store edge.
+
+Before changing app-management.ts or app-host-management.ts management contract
+consumers, read the cumulative [contract instructions](../desktop/contracts/AGENTS.md).
+Trusted management consumes command/snapshot VALUEs; Host management consumes
+only their TYPEs. Their existing dispatch and Host selection/job barriers remain
+whole here; contract relocation grants no new resource or ambient capability.
+
 These complete lifecycle obligations also govern gateway/core.ts and
 gateway/registry.ts, gateway/targets/target-lifecycle.ts,
 gateway/connections/managed-connection.ts,

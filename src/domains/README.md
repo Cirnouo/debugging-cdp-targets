@@ -9,14 +9,8 @@
   Deterministic native identity/permission predicates validate supplied facts
   without issuing native authority.
   It grants no payload-verification, permission, enrollment or deletion authority.
-- `app-configuration.ts` owns schema 2, the real schema 1 migration, validated
-  explicit host selections and desired/effective hot/cold settings. Unpublished
-  pre-schema-1 formats have no production migration promise.
 - `app-release.ts` validates independently maintained Electron, ordinary Node
   and complete native loader release evidence.
-- `app-ui.ts` validates the fixed local asset routes and narrow management
-  requests/snapshots, selected explicit configuration, unbounded elapsed clocks
-  and startup failure without invented settings.
 - `mcp-http.ts` validates exact loopback HTTP endpoint/body headers and the
   iterative whole-JSON member/depth budgets without reflecting secret inputs.
   Explicit bearer/tool-argument extraction belongs to
@@ -43,6 +37,10 @@ The accepted [isolation design](../../docs/adr/0015-explicit-data-directory-isol
 adds pure required start intent, existing/new selection and cleanup validation,
 plus opaque {dataDir} binding in structured args/env, now owned by
 [gateway/targets/model/](../gateway/targets/model/README.md). control-contract.ts
-consumes its parsers and value types; app-ui.ts consumes isolation evidence types.
-Only the exact isolation.ts and launch-command.ts model dependencies are permitted
-from this layer. Filesystem and application support evidence comes from callers/adapters.
+consumes its parsers and value types. Desktop snapshot isolation evidence TYPEs
+belong to [desktop/contracts/snapshots.ts](../desktop/contracts/snapshots.ts).
+Only the exact isolation.ts and launch-command.ts target dependencies are permitted
+from this layer. Closed management contracts, fixed asset admission and supplied
+elapsed formatting belong to [desktop/](../desktop/README.md). No domain consumes
+Desktop configuration or its store. Filesystem and application support
+evidence comes from callers/adapters.

@@ -1,4 +1,4 @@
-import { isRecord } from '../shared/errors.ts';
+import { isRecord } from '../../shared/errors.ts';
 
 export type AppAppearance = 'system' | 'light' | 'dark';
 export type AppHostSelection = Readonly<{

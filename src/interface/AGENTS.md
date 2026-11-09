@@ -15,8 +15,24 @@ Normal Quit/Restart denies new requests, awaits actual startup settlement and
 retained construction cleanup, then closes transports/windows and exits. Cleanup
 failure preserves management UI and the OS lease for retry; never force exit.
 
+Before changing App configuration consumers, read the cumulative
+[configuration instructions](../desktop/configuration/AGENTS.md) and the
+[accepted singleton plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md).
+Only app-main.ts imports the store's openAppConfiguration VALUE; its AppConfiguration
+and app-window.ts's AppConfiguration remain TYPE-only. app-manager.ts consumes the
+model's parseAppConfiguration VALUE and AppAppearance, AppConfiguration and
+AppHostSelection TYPEs. Preserve Main's pre-await save/closing flags, admitted
+write/startup joins and cleanup retry responsibility; window and
+renderer obtain no configuration filesystem or store authority.
+
 Expose only inspect/configure/manage/quit/restart through the sandboxed preload.
-Manage accepts only the closed domain-validated lifecycle/registration/host commands;
+Before editing management message/snapshot consumers, read the cumulative
+[contract instructions](../desktop/contracts/AGENTS.md). Before editing fixed
+resource admission or supplied elapsed consumers, read the corresponding
+[asset](../desktop/main/AGENTS.md) or [elapsed](../desktop/renderer/AGENTS.md)
+instructions. These owners preserve exact module VALUE/TYPE roles; they grant no
+new store, clock or renderer capability. Manage accepts only the closed
+contract-validated lifecycle/registration/host commands;
 never expose bearer readback, target creation or arbitrary channels. Validate
 unknown payloads and exact main-window/main-frame/fixed-URL sender identity before
 dispatch. No general filesystem, shell, process, URL navigation or unrestricted IPC.

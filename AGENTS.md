@@ -29,7 +29,15 @@ separately authorized annotated stable or prerelease tags.
 Before implementing the singleton desktop App migration, read
 [ADR 0017](docs/adr/0017-singleton-desktop-app.md) and the
 [accepted implementation plan](.superpowers/plans/2026-10-17-singleton-app-plan.md).
-They govern implementation. The singleton App owns direct HTTP and native resources;
+They govern implementation. Before editing configuration schemas, migrations or the
+serialized store in `src/desktop/configuration/{model,store}.ts`, read those same
+authorities and the cumulative [configuration instructions](src/desktop/configuration/AGENTS.md).
+Before changing Desktop management messages/snapshots, fixed asset admission or
+supplied elapsed formatting, read those same authorities and the cumulative
+[Desktop instructions](src/desktop/AGENTS.md), then the corresponding
+[contracts](src/desktop/contracts/AGENTS.md), [asset](src/desktop/main/AGENTS.md)
+or [elapsed](src/desktop/renderer/AGENTS.md) owner before editing.
+The singleton App owns direct HTTP and native resources;
 host plugins contain only metadata, artwork, documentation and the shared Skill.
 
 - The singleton App relays official MCP tools and results through direct SDK

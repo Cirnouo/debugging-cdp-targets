@@ -57,7 +57,7 @@ export async function auditRepository(root: string) {
         if (/\.(?:mjs|cjs|js)$/.test(file) && !file.includes('/dist/'))
             errors.push(`${file}: maintained Node code must be TypeScript.`);
         if (
-            /^src\/(?:interface|application|domains|adapters|shared|gateway|host-plugins)\//.test(file) &&
+            /^src\/(?:interface|application|domains|adapters|shared|gateway|host-plugins|desktop)\//.test(file) &&
             !files.has(`${path.posix.dirname(file)}/AGENTS.md`)
         )
             errors.push(`${file}: source directory requires local AGENTS.md.`);

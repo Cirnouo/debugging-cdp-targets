@@ -1,16 +1,10 @@
 import path from 'node:path';
 import { BrowserWindow, ipcMain } from 'electron';
 import { readRegularFile } from '../adapters/file-evidence.ts';
-import type { AppConfiguration } from '../domains/app-configuration.ts';
-import {
-    APP_MANAGEMENT_CHANNEL,
-    APP_UI_URL,
-    type AppManagementCommand,
-    type AppUiSnapshot,
-    appAssetPath,
-    parseAppUiRequest,
-    parseAppUiSnapshot,
-} from '../domains/app-ui.ts';
+import type { AppConfiguration } from '../desktop/configuration/model.ts';
+import { APP_MANAGEMENT_CHANNEL, type AppManagementCommand, parseAppUiRequest } from '../desktop/contracts/commands.ts';
+import { type AppUiSnapshot, parseAppUiSnapshot } from '../desktop/contracts/snapshots.ts';
+import { APP_UI_URL, appAssetPath } from '../desktop/main/asset-policy.ts';
 
 const CONTENT_SECURITY_POLICY =
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; frame-ancestors 'none'";

@@ -115,6 +115,14 @@ const gatewayCases = [
     'tests/gateway/targets/structured-launch.test.ts',
     'tests/gateway/targets/target-lifecycle.test.ts',
 ];
+const desktopCases = [
+    'tests/desktop/configuration/model.test.ts',
+    'tests/desktop/configuration/store.test.ts',
+    'tests/desktop/contracts/commands.test.ts',
+    'tests/desktop/contracts/snapshots.test.ts',
+    'tests/desktop/main/asset-policy.test.ts',
+    'tests/desktop/renderer/elapsed.test.ts',
+];
 const hostCases = [
     'tests/host-plugins/payload-filesystem.test.ts',
     'tests/host-plugins/payload-integrity.test.ts',
@@ -184,7 +192,8 @@ test('every maintained test file belongs to an explicit safe default or interact
                 !/^tests\/(?:[^/]+|interactive\/[^/]+)\.test\.ts$/.test(file) &&
                 !toolingCases.includes(file) &&
                 !gatewayCases.includes(file) &&
-                !hostCases.includes(file),
+                !hostCases.includes(file) &&
+                !desktopCases.includes(file),
         ),
         [],
         'Nested or misplaced test files must be selected by a maintained test command.',
@@ -200,6 +209,10 @@ test('every maintained test file belongs to an explicit safe default or interact
     assert.deepEqual(
         files.filter((file) => file.startsWith('tests/host-plugins/')),
         hostCases,
+    );
+    assert.deepEqual(
+        files.filter((file) => file.startsWith('tests/desktop/')),
+        desktopCases,
     );
     assert.deepEqual(
         files.filter((file) => file.startsWith('tests/interactive/')),

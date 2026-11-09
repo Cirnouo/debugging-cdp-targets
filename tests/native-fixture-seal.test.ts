@@ -178,6 +178,17 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     );
     assert.ok(built.inputs.includes('tests/smoke/screenshot-layers-study.ts'));
     assert.ok(built.inputs.includes('tests/smoke/screenshot-timeout-study.ts'));
+    for (const input of [
+        'src/desktop/configuration/model.ts',
+        'src/desktop/configuration/store.ts',
+        'src/desktop/contracts/commands.ts',
+        'src/desktop/contracts/snapshots.ts',
+        'src/desktop/main/asset-policy.ts',
+        'src/desktop/renderer/elapsed.ts',
+        'src/domains/app-configuration.ts',
+        'src/adapters/app-configuration.ts',
+    ])
+        assert.equal(built.inputs.includes(input), false, input);
     assert.ok(built.inputs.includes('src/gateway/core.ts'));
     assert.ok(built.inputs.includes('src/gateway/registry.ts'));
     assert.ok(built.inputs.includes('src/gateway/targets/target-lifecycle.ts'));

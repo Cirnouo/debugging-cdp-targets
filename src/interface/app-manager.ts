@@ -13,17 +13,16 @@ import {
     type AppConfiguration,
     type AppHostSelection,
     parseAppConfiguration,
-} from '../domains/app-configuration.ts';
+} from '../desktop/configuration/model.ts';
+import type { AppManagementCommand, AppUiBridge } from '../desktop/contracts/commands.ts';
 import {
     type AppConnectionSummary,
     type AppHostSummary,
-    type AppManagementCommand,
     type AppSelectedOperation,
-    type AppUiBridge,
     type AppUiSnapshot,
-    formatAppElapsed,
     parseAppUiSnapshot,
-} from '../domains/app-ui.ts';
+} from '../desktop/contracts/snapshots.ts';
+import { formatAppElapsed } from '../desktop/renderer/elapsed.ts';
 import type { RestartScope } from '../domains/control-contract.ts';
 import type { PluginHost } from '../domains/host-management.ts';
 

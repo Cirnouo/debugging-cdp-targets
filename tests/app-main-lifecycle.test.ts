@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import type { AppUiSnapshot } from '../src/domains/app-ui.ts';
+import type { AppUiSnapshot } from '../src/desktop/contracts/snapshots.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 type State = {
@@ -91,7 +91,7 @@ loadCatalog:async()=>{if(state.catalogFails)throw Error('Catalog failed');return
         '../adapters/app-singleton.ts': `import{state}from'app-test-state';export function acquireAppSingleton(){state.counts.locks++;return{ownsSingleton:state.mode!=='unavailable-owner',paths:{activation:'fixture-only'}}}`,
         '../adapters/app-activation.ts': `import{state}from'app-test-state';export async function activateExistingApp(){return false}export async function listenForAppActivation(){return{close:async()=>{state.counts.activationClosed++}}}`,
         '../adapters/app-storage.ts': `import{state}from'app-test-state';export function selectAppDataDirectory(){return'fixture-only'}export async function prepareAppDataDirectory(){state.counts.data++;return'fixture-only'}`,
-        '../adapters/app-configuration.ts': `import{state}from'app-test-state';export async function openAppConfiguration(){const config={schemaVersion:2,port:27637,appearance:'system',hosts:{codex:{configRoot:null,executable:null,pluginRoot:null},claude:{configRoot:null,executable:null,pluginRoot:null}}};return{state:()=>({desired:config,effective:config,restartRequired:false}),save:async()=>{state.counts.settingsWrites++;if(state.mode==='settings-pending')await state.settings.promise}}}`,
+        '../desktop/configuration/store.ts': `import{state}from'app-test-state';export async function openAppConfiguration(){const config={schemaVersion:2,port:27637,appearance:'system',hosts:{codex:{configRoot:null,executable:null,pluginRoot:null},claude:{configRoot:null,executable:null,pluginRoot:null}}};return{state:()=>({desired:config,effective:config,restartRequired:false}),save:async()=>{state.counts.settingsWrites++;if(state.mode==='settings-pending')await state.settings.promise}}}`,
         '../adapters/app-official-runtime.ts': `export async function verifyAppOfficialRuntime(){return{nodeExecutable:'fixture-only-node',bin:'fixture-only-public-bin'}}`,
         '../adapters/file-evidence.ts': `import{state}from'app-test-state';export async function readRegularFile(file){state.counts.reads++;return Buffer.from(file.endsWith('distribution.json')?JSON.stringify({schemaVersion:1,kind:'portable',platform:process.platform,architecture:process.arch}):${JSON.stringify(evidence)})}`,
         '../adapters/mcp-http-server.ts': `import{state}from'app-test-state';export async function createMcpHttpServer(options){state.counts.http++;if(state.mode==='bind-failure')throw Error('Bind refused');state.accepting=options.accepting;return{close:async()=>{}}}`,

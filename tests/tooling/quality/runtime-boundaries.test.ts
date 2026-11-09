@@ -607,7 +607,8 @@ test('Electron and React imports stay restricted to their explicit App interface
         if (!file || !dependency) throw new Error('Invalid literal interface fixture.');
         assert.deepEqual(validateRuntimeSource(file, `import x from '${dependency}';`), []);
         for (const outside of [
-            'src/domains/app-ui.ts',
+            'src/desktop/contracts/commands.ts',
+            'src/desktop/contracts/snapshots.ts',
             'src/adapters/app-native.ts',
             'src/application/plugin-runtime.ts',
         ])
@@ -2308,4 +2309,472 @@ test('runtime boundary validation loads and checks supplied source without repos
     });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('desktop configuration literal roles admit only exact supplied model and complete store dependencies', () => {
+    for (const [file, dependencies] of [
+        ['src/desktop/configuration/model.ts', ['../../shared/errors.ts']],
+        [
+            'src/desktop/configuration/store.ts',
+            [
+                'node:crypto',
+                'node:fs/promises',
+                'node:path',
+                './model.ts',
+                '../../shared/errors.ts',
+                '../../adapters/file-evidence.ts',
+            ],
+        ],
+    ] as const) {
+        for (const dependency of dependencies)
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+        for (const dependency of [
+            'node:fs',
+            'node:child_process',
+            'node:net',
+            '@modelcontextprotocol/core',
+            'ws',
+            '../../application/app-host-management.ts',
+            '../../interface/app-main.ts',
+            '../../adapters/target-host.ts',
+            '../../shared/unknown.ts',
+            './unknown.ts',
+            './store.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                assert.ok(
+                    errors.some((error) => error.includes('configuration dependency')),
+                    `${file}: ${source}`,
+                );
+            }
+    }
+    for (const dependency of ['node:crypto', 'node:fs/promises', 'node:path', '../../adapters/file-evidence.ts'])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/desktop/configuration/model.ts', source).length, source);
+});
+
+test('desktop configuration literal consumers preserve model VALUE and TYPE edges without upper-layer privilege', () => {
+    for (const [file, onlyType] of [
+        ['src/interface/app-main.ts', true],
+        ['src/interface/app-manager.ts', false],
+        ['src/interface/app-window.ts', true],
+        ['src/application/app-host-management.ts', true],
+        ['src/desktop/contracts/commands.ts', false],
+        ['src/desktop/contracts/snapshots.ts', false],
+    ] as const)
+        for (const dependency of [
+            path.posix.relative(path.posix.dirname(file), 'src/desktop/configuration/model.ts'),
+            path.posix
+                .relative(path.posix.dirname(file), 'src/desktop/configuration/model.ts')
+                .replace('model.ts', 'nested/../model.ts'),
+        ])
+            for (const { source, erased } of connectionDependencyForms(dependency)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                if (!onlyType || erased) assert.deepEqual(errors, [], `${file}: ${source}`);
+                else
+                    assert.ok(
+                        errors.some((error) => error.includes('configuration model')),
+                        `${file}: ${source}`,
+                    );
+            }
+    for (const { source } of connectionDependencyForms('../desktop/configuration/store.ts'))
+        assert.deepEqual(validateRuntimeSource('src/interface/app-main.ts', source), [], source);
+});
+
+test('desktop configuration inverse edges reject store authority across all sixteen dependency forms', () => {
+    for (const file of [
+        'src/desktop/contracts/commands.ts',
+        'src/desktop/contracts/snapshots.ts',
+        'src/desktop/main/asset-policy.ts',
+        'src/desktop/renderer/elapsed.ts',
+        'src/shared/unknown.ts',
+        'src/gateway/unreviewed.ts',
+        'src/host-plugins/unreviewed.ts',
+        'src/adapters/unreviewed.ts',
+        'src/application/app-host-management.ts',
+        'src/interface/app-manager.ts',
+        'src/interface/app-window.ts',
+        'src/interface/app-renderer.ts',
+        'src/interface/app-preload.ts',
+        'src/desktop/configuration/model.ts',
+        'src/desktop/configuration/unknown.ts',
+        'src/desktop/configuration/toString.ts',
+        'src/desktop/configuration/constructor.ts',
+        'src/desktop/configuration/__proto__.ts',
+        'src/desktop/unknown.ts',
+    ]) {
+        const relative = path.posix.relative(path.posix.dirname(file), 'src/desktop/configuration/store.ts');
+        const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+        for (const specifier of [dependency, dependency.replace('store.ts', 'nested/../store.ts')])
+            for (const { source } of connectionDependencyForms(specifier)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                assert.ok(
+                    errors.some((error) => error.includes('configuration store')),
+                    `${file}: ${source}`,
+                );
+            }
+    }
+    for (const file of ['src/interface/unknown.ts', 'src/application/unknown.ts', 'src/domains/unknown.ts'])
+        for (const { source } of connectionDependencyForms('../desktop/configuration/model.ts'))
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('configuration model')),
+                source,
+            );
+});
+
+test('desktop configuration prototype names and unknown siblings never inherit role policies', () => {
+    for (const key of ['toString', 'constructor', '__proto__']) {
+        for (const file of [key, `src/desktop/configuration/${key}.ts`, `src/desktop/${key}.ts`])
+            for (const { source } of connectionDependencyForms('electron')) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                assert.ok(errors.length, `${file}: ${source}`);
+            }
+        for (const dependency of [`./${key}.ts`, `./nested/../${key}.ts`, `../../shared/${key}.ts`])
+            for (const file of ['src/desktop/configuration/model.ts', 'src/desktop/configuration/store.ts'])
+                for (const { source } of connectionDependencyForms(dependency)) {
+                    const errors = validateRuntimeSource(file, source);
+                    assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                    assert.ok(
+                        errors.some((error) => error.includes('configuration dependency')),
+                        `${file}: ${source}`,
+                    );
+                }
+    }
+    for (const owner of ['unknown', 'toString', 'constructor', '__proto__'])
+        for (const dependency of ['node:fs/promises', 'node:crypto', '../../adapters/file-evidence.ts'])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(`src/desktop/configuration/${owner}.ts`, source).length, source);
+});
+
+test('desktop configuration ambient and computed forms retain pure guards for every exact and unknown role', () => {
+    for (const file of [
+        'src/desktop/configuration/model.ts',
+        'src/desktop/configuration/store.ts',
+        'src/desktop/configuration/unknown.ts',
+        'src/desktop/configuration/toString.ts',
+        'src/desktop/configuration/constructor.ts',
+        'src/desktop/configuration/__proto__.ts',
+        'src/desktop/unknown.ts',
+    ]) {
+        for (const source of [
+            'const value = import(moduleName);',
+            'const value = require?.(moduleName);',
+            'const value = (require as (name: string) => unknown)?.(moduleName);',
+        ]) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+            assert.ok(
+                errors.some((error) => error.includes('computed module dependencies')),
+                `${file}: ${source}`,
+            );
+        }
+        for (const source of [
+            'const value = process.env;',
+            'const value = process?.env;',
+            'const value = (process as {env: unknown})["env"];',
+            'const {env} = process;',
+            'const value = Date.now();',
+            'const value = new Date();',
+            'const value = performance.now();',
+            'const clock = performance;',
+            'const {now} = performance;',
+            'const value = globalThis.global.process.env;',
+            'const value = global?.globalThis?.Date.now();',
+            'const value = globalThis?.["globalThis"]?.["performance"]?.now();',
+            'const ambient = globalThis.global; const value = ambient.process.env;',
+            'const {performance: clock} = globalThis.globalThis;',
+            'const value = globalThis[key];',
+            'const value = fetch(url);',
+            'const value = new WebSocket(url);',
+            'const value = new XMLHttpRequest();',
+            'const value = globalThis.global["fetch"](url);',
+            'interface RecordValue { [performance](): number; }',
+            'const record = { performance() { return process.env; } };',
+        ]) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+            assert.ok(
+                errors.some((error) => /ambient clock|process state|network I\/O/.test(error)),
+                `${file}: ${source}`,
+            );
+        }
+        for (const source of [
+            'interface RecordValue { performance(): number; Date(): number; process(): string; }',
+            'type RecordValue = { globalThis(): string; global(): string; };',
+            'const value = { performance: 1, Date: 2, process: 3 };',
+            'const value = record.performance;',
+        ])
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    }
+});
+
+test('desktop configuration complete actual model and store sources satisfy their exact roles', async () => {
+    for (const file of ['src/desktop/configuration/model.ts', 'src/desktop/configuration/store.ts']) {
+        const source = await readFile(new URL(`../../../${file}`, import.meta.url), 'utf8');
+        assert.deepEqual(validateRuntimeSource(file, source), [], file);
+    }
+});
+
+test('desktop contracts admit their exact literal snapshot and configuration capabilities', () => {
+    for (const [file, dependencies] of [
+        [
+            'src/desktop/contracts/commands.ts',
+            [
+                './snapshots.ts',
+                '../configuration/model.ts',
+                '../../shared/errors.ts',
+                '../../domains/control-contract.ts',
+            ],
+        ],
+        [
+            'src/desktop/contracts/snapshots.ts',
+            ['../configuration/model.ts', '../../shared/errors.ts', '../../domains/control-contract.ts'],
+        ],
+    ] as const)
+        for (const dependency of dependencies)
+            for (const { source } of connectionDependencyForms(dependency)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                assert.deepEqual(errors, [], `${file}: ${source}`);
+            }
+});
+
+test('desktop contract TYPE capabilities reject every VALUE dependency form', () => {
+    for (const [file, dependencies] of [
+        ['src/desktop/contracts/commands.ts', ['../../domains/host-management.ts']],
+        [
+            'src/desktop/contracts/snapshots.ts',
+            ['../../domains/host-management.ts', '../../gateway/targets/model/isolation.ts'],
+        ],
+    ] as const)
+        for (const dependency of dependencies)
+            for (const specifier of [dependency, dependency.replace('../../', '../../desktop/../')])
+                for (const { source, erased } of connectionDependencyForms(specifier)) {
+                    const errors = validateRuntimeSource(file, source);
+                    assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                    if (erased) assert.deepEqual(errors, [], `${file}: ${source}`);
+                    else
+                        assert.ok(
+                            errors.some((error) => error.includes('desktop content dependency')),
+                            source,
+                        );
+                }
+    assert.ok(
+        validateRuntimeSource(
+            'src/desktop/contracts/snapshots.ts',
+            "import { type Value, value } from '../../domains/host-management.ts';",
+        ).some((error) => error.includes('desktop content dependency')),
+    );
+});
+
+test('desktop content consumers and owners reject undeclared inverse and upper-layer capabilities', () => {
+    for (const file of [
+        'src/domains/unknown.ts',
+        'src/shared/unknown.ts',
+        'src/gateway/unknown.ts',
+        'src/host-plugins/unknown.ts',
+        'src/adapters/unknown.ts',
+        'src/application/unknown.ts',
+        'src/interface/unknown.ts',
+        'src/desktop/unknown.ts',
+        'src/desktop/contracts/unknown.ts',
+        'src/desktop/main/unknown.ts',
+        'src/desktop/renderer/unknown.ts',
+    ])
+        for (const owner of ['contracts/commands', 'contracts/snapshots', 'main/asset-policy', 'renderer/elapsed']) {
+            const relative = path.posix.relative(path.posix.dirname(file), `src/desktop/${owner}.ts`);
+            const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+            for (const { source } of connectionDependencyForms(dependency)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                assert.ok(
+                    errors.some((error) => error.includes('desktop content consumer')),
+                    `${file}: ${source}`,
+                );
+            }
+        }
+    for (const owner of ['contracts/commands', 'contracts/snapshots', 'main/asset-policy', 'renderer/elapsed'])
+        for (const dependency of [
+            'node:fs/promises',
+            'node:crypto',
+            'node:net',
+            'electron',
+            'react',
+            '@modelcontextprotocol/core',
+            '../../interface/app-main.ts',
+            '../../adapters/file-evidence.ts',
+            '../../gateway/core.ts',
+            '../../gateway/registry.ts',
+            '../../gateway/diagnostics.ts',
+            '../configuration/store.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency)) {
+                const errors = validateRuntimeSource(`src/desktop/${owner}.ts`, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${owner}: ${source}`);
+                assert.ok(
+                    errors.some((error) => error.includes('desktop content dependency')),
+                    `${owner}: ${source}`,
+                );
+            }
+    for (const owner of ['main/asset-policy', 'renderer/elapsed'])
+        for (const dependency of [
+            '../../shared/errors.ts',
+            '../../domains/control-contract.ts',
+            '../contracts/snapshots.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(`src/desktop/${owner}.ts`, source).length, `${owner}: ${source}`);
+    for (const [file, dependency] of [
+        ['src/interface/app-main.ts', '../desktop/contracts/commands.ts'],
+        ['src/interface/app-preload.ts', '../desktop/main/asset-policy.ts'],
+        ['src/interface/app-renderer.ts', '../desktop/renderer/elapsed.ts'],
+        ['src/interface/app-window.ts', '../desktop/renderer/elapsed.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('desktop content consumer')),
+                source,
+            );
+});
+
+test('desktop content literal consumers retain exact VALUE and TYPE roles across sixteen forms', () => {
+    for (const [file, owner, onlyType] of [
+        ['src/interface/app-main.ts', 'contracts/snapshots', true],
+        ['src/interface/app-window.ts', 'contracts/commands', false],
+        ['src/interface/app-window.ts', 'contracts/snapshots', false],
+        ['src/interface/app-window.ts', 'main/asset-policy', false],
+        ['src/interface/app-preload.ts', 'contracts/commands', false],
+        ['src/interface/app-preload.ts', 'contracts/snapshots', false],
+        ['src/interface/app-manager.ts', 'contracts/commands', true],
+        ['src/interface/app-manager.ts', 'contracts/snapshots', false],
+        ['src/interface/app-manager.ts', 'renderer/elapsed', false],
+        ['src/interface/app-renderer.ts', 'contracts/commands', true],
+        ['src/application/app-management.ts', 'contracts/commands', false],
+        ['src/application/app-management.ts', 'contracts/snapshots', false],
+        ['src/application/app-host-management.ts', 'contracts/commands', true],
+        ['src/application/app-host-management.ts', 'contracts/snapshots', true],
+        ['src/desktop/contracts/commands.ts', 'contracts/snapshots', false],
+    ] as const) {
+        const relative = path.posix.relative(path.posix.dirname(file), `src/desktop/${owner}.ts`);
+        const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+        for (const specifier of [dependency, dependency.replace(/([^/]+)\.ts$/, 'nested/../$1.ts')])
+            for (const { source, erased } of connectionDependencyForms(specifier)) {
+                const errors = validateRuntimeSource(file, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+                if (!onlyType || erased) assert.deepEqual(errors, [], `${file}: ${source}`);
+                else
+                    assert.ok(
+                        errors.some((error) => error.includes('desktop content consumer')),
+                        source,
+                    );
+            }
+    }
+});
+
+test('desktop content normalized aliases do not grant near-name prototype or bare-key roles', () => {
+    for (const name of [
+        'unknown',
+        'commands-extra',
+        'snapshots-extra',
+        'asset-policy-extra',
+        'elapsed-extra',
+        'toString',
+        'constructor',
+        '__proto__',
+    ]) {
+        for (const directory of ['contracts', 'main', 'renderer'])
+            for (const { source } of connectionDependencyForms('../../shared/errors.ts')) {
+                const errors = validateRuntimeSource(`src/desktop/${directory}/${name}.ts`, source);
+                assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+                assert.ok(errors.length, `${directory}/${name}: ${source}`);
+            }
+        for (const { source } of connectionDependencyForms('electron')) {
+            const errors = validateRuntimeSource(name, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, `${name}: ${source}`);
+        }
+    }
+    for (const owner of ['commands', 'snapshots'])
+        for (const dependency of [
+            './unknown.ts',
+            './toString.ts',
+            './nested/../constructor.ts',
+            './__proto__.ts',
+            'snapshots.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(`src/desktop/contracts/${owner}.ts`, source).length, source);
+    for (const dependency of [
+        './nested/../snapshots.ts',
+        '../contracts/snapshots.ts',
+        '../configuration/../contracts/snapshots.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource('src/desktop/contracts/commands.ts', source), [], source);
+});
+
+test('desktop content pure owners reject ambient and computed authority while allowing harmless keys', () => {
+    for (const owner of [
+        'contracts/commands',
+        'contracts/snapshots',
+        'main/asset-policy',
+        'renderer/elapsed',
+        'contracts/unknown',
+        'main/unknown',
+        'renderer/unknown',
+    ]) {
+        const file = `src/desktop/${owner}.ts`;
+        for (const source of [
+            'const value = import(moduleName);',
+            'const value = require?.(moduleName);',
+            'const value = (require as (name: string) => unknown)?.(moduleName);',
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) => error.includes('computed module dependencies')),
+                source,
+            );
+        for (const source of [
+            'const value = process.env;',
+            'const value = process?.env;',
+            'const value = (process as {env: unknown})["env"];',
+            'const {env} = process;',
+            'const value = Date.now();',
+            'const value = new Date();',
+            'const value = performance.now();',
+            'const clock = performance;',
+            'const {now} = performance;',
+            'const value = globalThis.global.process.env;',
+            'const value = global?.globalThis?.Date.now();',
+            'const value = globalThis?.["globalThis"]?.["performance"]?.now();',
+            'const ambient = globalThis.global; const value = ambient.process.env;',
+            'const {performance: clock} = globalThis.globalThis;',
+            'const value = globalThis[key];',
+            'const value = fetch(url);',
+            'const value = new WebSocket(url);',
+            'const value = new XMLHttpRequest();',
+            'const value = globalThis.global["fetch"](url);',
+            'interface RecordValue { [performance](): number; }',
+            'const record = { performance() { return process.env; } };',
+        ]) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+            assert.ok(
+                errors.some((error) => /ambient clock|process state|network I\/O/.test(error)),
+                `${file}: ${source}`,
+            );
+        }
+        for (const source of [
+            'interface RecordValue { performance(): number; Date(): number; process(): string; }',
+            'type RecordValue = { globalThis(): string; global(): string; };',
+            'const value = { performance: 1, Date: 2, process: 3 };',
+            'const value = record.performance;',
+        ])
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    }
 });

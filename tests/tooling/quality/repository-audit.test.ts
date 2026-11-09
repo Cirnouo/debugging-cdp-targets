@@ -6,6 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { PLUGIN_HOSTS, PLUGIN_ROOT } from '../../../tooling/distribution/host-descriptors.ts';
 import { auditRepository } from '../../../tooling/quality/audit-repository.ts';
+import { validateRuntimeSource } from '../../../tooling/quality/runtime-boundaries.ts';
 
 test('repository audit accepts the supported Node range and contributor entry point', async (context) => {
     const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-agents-')));
@@ -287,5 +288,41 @@ test('Host payload source requires its local instructions and immediate director
         assert.ok(!after.some((error) => error.startsWith('src/host-plugins:')));
     } finally {
         await rm(root, { recursive: true });
+    }
+});
+
+test('desktop complete moved source satisfies exact roles without granting siblings local instruction exemptions', async () => {
+    for (const file of [
+        'src/desktop/contracts/commands.ts',
+        'src/desktop/contracts/snapshots.ts',
+        'src/desktop/main/asset-policy.ts',
+        'src/desktop/renderer/elapsed.ts',
+    ])
+        assert.deepEqual(
+            validateRuntimeSource(file, await readFile(new URL(`../../../${file}`, import.meta.url), 'utf8')),
+            [],
+            file,
+        );
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-desktop-instructions-')));
+    try {
+        execFileSync('git', ['init', '--quiet', root], { windowsHide: true });
+        const directory = path.join(root, 'src/desktop/contracts');
+        await mkdir(directory, { recursive: true });
+        await writeFile(path.join(directory, 'commands.ts'), 'export const channel = "closed";\n');
+        await writeFile(path.join(directory, 'README.md'), '# Contracts\n');
+        assert.ok(
+            (await auditRepository(root)).some(
+                (error) => error === 'src/desktop/contracts/commands.ts: source directory requires local AGENTS.md.',
+            ),
+        );
+        await writeFile(path.join(directory, 'AGENTS.md'), '# Pure contracts\n');
+        assert.equal(
+            (await auditRepository(root)).some(
+                (error) => error === 'src/desktop/contracts/commands.ts: source directory requires local AGENTS.md.',
+            ),
+            false,
+        );
+    } finally {
+        await rm(root, { recursive: true, force: true });
     }
 });
