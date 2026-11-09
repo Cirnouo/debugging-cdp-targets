@@ -71,8 +71,78 @@ function bindingNames(node: Node | null | undefined): string[] {
     return [];
 }
 
-/** The fixed bridge may reap only the child obtained from its own native spawn. */
-function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
+type DependencyBindings = Record<string, { values: readonly string[]; types: readonly string[] }>;
+
+function permitsExactImport(capabilities: DependencyBindings, specifier: string, declaration: Node | undefined) {
+    const permitted = Object.hasOwn(capabilities, specifier) ? capabilities[specifier] : undefined;
+    return (
+        permitted &&
+        declaration?.type === 'ImportDeclaration' &&
+        declaration.specifiers.length > 0 &&
+        declaration.specifiers.every((binding) => {
+            if (binding.type !== 'ImportSpecifier' || binding.imported.type !== 'Identifier') return false;
+            const name = binding.imported.name;
+            const erased = declaration.importKind === 'type' || binding.importKind === 'type';
+            return binding.local.name === name && (erased ? permitted.types : permitted.values).includes(name);
+        })
+    );
+}
+
+const OFFICIAL_UPSTREAM_BINDINGS: DependencyBindings = {
+    'node:child_process': { values: ['spawn'], types: [] },
+    '@modelcontextprotocol/client': {
+        values: [
+            'Client',
+            'ProtocolError',
+            'ProtocolErrorCode',
+            'ReadBuffer',
+            'SdkError',
+            'SdkErrorCode',
+            'serializeMessage',
+        ],
+        types: [
+            'CallToolResult',
+            'ElicitRequestFormParams',
+            'ElicitResult',
+            'JSONRPCMessage',
+            'ListRootsResult',
+            'Progress',
+            'Tool',
+            'Transport',
+        ],
+    },
+    '@modelcontextprotocol/core': { values: ['CallToolResultSchema', 'ListToolsResultSchema'], types: [] },
+    '../../domains/control-contract.ts': { values: [], types: ['Diagnose'] },
+    '../../domains/request-failure.ts': { values: ['RequestFailure'], types: [] },
+    '../diagnostics.ts': { values: ['measured'], types: [] },
+    './execution.ts': { values: ['createOfficialExecution'], types: [] },
+    './server-launch.ts': {
+        values: [
+            'buildOfficialLaunchArguments',
+            'captureOfficialServerEnvironment',
+            'resolveVerifiedOfficialServerBin',
+        ],
+        types: [],
+    },
+    '../../shared/constants.ts': { values: ['CLOSE_TIMEOUT_SECONDS'], types: [] },
+};
+
+function assignedValue(statement: Node | undefined, name: string) {
+    const assignment = statement?.type === 'ExpressionStatement' ? statement.expression : undefined;
+    return assignment?.type === 'AssignmentExpression' &&
+        assignment.operator === '=' &&
+        assignment.left.type === 'Identifier' &&
+        assignment.left.name === name
+        ? assignment.right
+        : undefined;
+}
+
+/** The upstream may reap only the child obtained from its own native spawn. */
+function ownedOfficialTermination(
+    ast: ReturnType<typeof parse>,
+    reviewedAmbient: Set<Node>,
+    reviewedReferences: Set<Node>,
+): Set<Node> {
     const allowed = new Set<Node>();
     const imports = (name: string, source: string) =>
         ast.program.body.some(
@@ -88,16 +158,13 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
                         specifier.local.name === name,
                 ),
         );
-    if (
-        !imports('spawn', 'node:child_process') ||
-        !imports('resolveVerifiedOfficialServerBin', '../gateway/official/server-launch.ts')
-    )
+    if (!imports('spawn', 'node:child_process') || !imports('resolveVerifiedOfficialServerBin', './server-launch.ts'))
         return allowed;
     const declaration = ast.program.body.find(
         (node) =>
             node.type === 'ExportNamedDeclaration' &&
             node.declaration?.type === 'FunctionDeclaration' &&
-            node.declaration.id?.name === 'createOfficialConnection',
+            node.declaration.id?.name === 'openOfficialUpstream',
     );
     if (declaration?.type !== 'ExportNamedDeclaration' || declaration.declaration?.type !== 'FunctionDeclaration')
         return allowed;
@@ -111,7 +178,14 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
     const bin = constant('bin');
     if (!constant('arguments_') || !child?.init || !bin?.init) return allowed;
     const binValue = expression(bin.init);
-    if (binValue.type !== 'LogicalExpression' || binValue.operator !== '??') return allowed;
+    const optionsProperty = (value: Node, property: string) =>
+        value.type === 'MemberExpression' &&
+        !value.computed &&
+        value.object.type === 'Identifier' &&
+        value.object.name === 'options' &&
+        propertyName(value.property) === property;
+    if (binValue.type !== 'LogicalExpression' || binValue.operator !== '??' || !optionsProperty(binValue.left, 'bin'))
+        return allowed;
     const fallback = expression(binValue.right);
     if (
         fallback.type !== 'AwaitExpression' ||
@@ -125,22 +199,18 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
     if (creation.type !== 'CallExpression' || creation.callee.type !== 'Identifier' || creation.callee.name !== 'spawn')
         return allowed;
     const [executable, arguments_, options] = creation.arguments;
-    const processNode = (value: Node | undefined) =>
-        value?.type === 'MemberExpression' &&
-        !value.computed &&
-        value.object.type === 'Identifier' &&
-        value.object.name === 'process' &&
-        propertyName(value.property) === 'execPath';
+    const execPath =
+        executable?.type === 'LogicalExpression' &&
+        executable.operator === '??' &&
+        optionsProperty(executable.left, 'nodeExecutable')
+            ? executable.right
+            : undefined;
     const ordinaryNode =
-        processNode(executable) ||
-        (executable?.type === 'LogicalExpression' &&
-            executable.operator === '??' &&
-            executable.left.type === 'MemberExpression' &&
-            !executable.left.computed &&
-            executable.left.object.type === 'Identifier' &&
-            executable.left.object.name === 'options' &&
-            propertyName(executable.left.property) === 'nodeExecutable' &&
-            processNode(executable.right));
+        execPath?.type === 'MemberExpression' &&
+        !execPath.computed &&
+        execPath.object.type === 'Identifier' &&
+        execPath.object.name === 'process' &&
+        propertyName(execPath.property) === 'execPath';
     if (
         creation.arguments.length !== 3 ||
         !ordinaryNode ||
@@ -173,6 +243,7 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
         ['bin', 1],
         ['process', 0],
         ['options', 1],
+        ['reapOwnedChild', 1],
     ]);
     const mutators = new Map([
         ['Object', new Set(['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'])],
@@ -248,7 +319,195 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
     if (reassigned || [...expected].some(([name, count]) => (bindings.get(name) ?? 0) !== count)) return allowed;
     const reaper = body.find((node) => node.type === 'FunctionDeclaration' && node.id?.name === 'reapOwnedChild');
     if (reaper?.type !== 'FunctionDeclaration' || !reaper.async || reaper.params.length !== 0) return allowed;
-    visit(reaper, (node) => {
+    reviewedAmbient.add(execPath.object);
+    reviewedReferences.add(creation.callee);
+    const resource = constant('resource')?.init;
+    const close =
+        resource?.type === 'ObjectExpression'
+            ? resource.properties.find(
+                  (property) =>
+                      property.type === 'ObjectMethod' && !property.computed && propertyName(property.key) === 'close',
+              )
+            : undefined;
+    const closeIfPending =
+        close?.type === 'ObjectMethod'
+            ? close.body.body.find(
+                  (statement) =>
+                      statement.type === 'IfStatement' &&
+                      statement.test.type === 'UnaryExpression' &&
+                      statement.test.operator === '!' &&
+                      statement.test.argument.type === 'Identifier' &&
+                      statement.test.argument.name === 'closing',
+              )
+            : undefined;
+    if (closeIfPending?.type === 'IfStatement' && closeIfPending.consequent.type === 'BlockStatement') {
+        const closeValue = assignedValue(closeIfPending.consequent.body[0], 'closing');
+        if (
+            closeValue?.type === 'CallExpression' &&
+            closeValue.callee.type === 'MemberExpression' &&
+            !closeValue.callee.computed &&
+            propertyName(closeValue.callee.property) === 'finally'
+        ) {
+            const reap = closeValue.callee.object;
+            if (
+                reap.type === 'CallExpression' &&
+                reap.arguments.length === 0 &&
+                reap.callee.type === 'Identifier' &&
+                reap.callee.name === 'reapOwnedChild'
+            )
+                reviewedReferences.add(reap.callee);
+        }
+    }
+    const reaperBody = reaper.body;
+    // The sole nested clock belongs to the timer racing the owned child's spawn event.
+    const spawnTry = reaperBody.body.find((statement) => statement.type === 'TryStatement');
+    const spawnWait = assignedValue(
+        spawnTry?.type === 'TryStatement' ? spawnTry.block.body[0] : undefined,
+        'spawnError',
+    );
+    const race = spawnWait?.type === 'AwaitExpression' ? spawnWait.argument : undefined;
+    const racers =
+        race?.type === 'CallExpression' &&
+        race.callee.type === 'MemberExpression' &&
+        !race.callee.computed &&
+        race.callee.object.type === 'Identifier' &&
+        race.callee.object.name === 'Promise' &&
+        propertyName(race.callee.property) === 'race' &&
+        race.arguments.length === 1
+            ? race.arguments[0]
+            : undefined;
+    const timeout =
+        racers?.type === 'ArrayExpression' &&
+        racers.elements.length === 2 &&
+        racers.elements[0]?.type === 'Identifier' &&
+        racers.elements[0].name === 'spawned'
+            ? racers.elements[1]
+            : undefined;
+    const timerCallback =
+        timeout?.type === 'NewExpression' &&
+        timeout.callee.type === 'Identifier' &&
+        timeout.callee.name === 'Promise' &&
+        timeout.arguments.length === 1
+            ? timeout.arguments[0]
+            : undefined;
+    const timerStatement =
+        timerCallback?.type === 'ArrowFunctionExpression' && timerCallback.body.type === 'BlockStatement'
+            ? timerCallback.body.body[0]
+            : undefined;
+    const spawnTimer = timerStatement?.type === 'ExpressionStatement' ? timerStatement.expression : undefined;
+    const deadline = reaperBody.body
+        .flatMap((node) => (node.type === 'VariableDeclaration' && node.kind === 'const' ? node.declarations : []))
+        .find((node) => node.id.type === 'Identifier' && node.id.name === 'deadline')?.init;
+    const clocks = new Map<string, Node[]>();
+    const signals = new Map<string, Node[]>();
+    const parents = new Map<Node, Node>();
+    const clockIsUnshadowed = !bindings.has('performance') && bindings.get('deadline') === 1;
+    function waitsInReaper(call: Node, negated: boolean) {
+        const awaited = parents.get(call);
+        if (awaited?.type !== 'AwaitExpression') return false;
+        const condition = negated ? parents.get(awaited) : awaited;
+        if (
+            !condition ||
+            (negated &&
+                (condition.type !== 'UnaryExpression' || condition.operator !== '!' || condition.argument !== awaited))
+        )
+            return false;
+        const statement = parents.get(condition);
+        return (
+            statement?.type === 'IfStatement' && statement.test === condition && parents.get(statement) === reaperBody
+        );
+    }
+    visit(reaper, (node, parent, grandparent) => {
+        if (parent) parents.set(node, parent);
+        if (
+            clockIsUnshadowed &&
+            node.type === 'CallExpression' &&
+            node.arguments.length === 0 &&
+            node.callee.type === 'MemberExpression' &&
+            !node.callee.computed &&
+            node.callee.object.type === 'Identifier' &&
+            node.callee.object.name === 'performance' &&
+            propertyName(node.callee.property) === 'now' &&
+            parent?.type === 'BinaryExpression'
+        ) {
+            let site: string | undefined;
+            if (
+                parent === deadline &&
+                parent.operator === '+' &&
+                parent.left === node &&
+                parent.right.type === 'BinaryExpression' &&
+                parent.right.operator === '*' &&
+                parent.right.left.type === 'Identifier' &&
+                parent.right.left.name === 'CLOSE_TIMEOUT_SECONDS' &&
+                parent.right.right.type === 'NumericLiteral' &&
+                parent.right.right.value === 1000 &&
+                imports('CLOSE_TIMEOUT_SECONDS', '../../shared/constants.ts')
+            )
+                site = 'deadline';
+            if (
+                parent.operator === '-' &&
+                parent.right === node &&
+                parent.left.type === 'Identifier' &&
+                parent.left.name === 'deadline' &&
+                grandparent?.type === 'CallExpression'
+            ) {
+                const [first, second] = grandparent.arguments;
+                const callee = grandparent.callee;
+                if (
+                    callee.type === 'Identifier' &&
+                    callee.name === 'waitForExit' &&
+                    first === parent &&
+                    !second &&
+                    waitsInReaper(grandparent, true)
+                )
+                    site = 'kill';
+                if (
+                    callee.type === 'MemberExpression' &&
+                    !callee.computed &&
+                    callee.object.type === 'Identifier' &&
+                    callee.object.name === 'Math' &&
+                    second === parent &&
+                    grandparent.arguments.length === 2
+                ) {
+                    const method = propertyName(callee.property);
+                    const budgetCall = parents.get(grandparent);
+                    if (budgetCall?.type === 'CallExpression' && budgetCall.callee.type === 'Identifier') {
+                        if (
+                            method === 'max' &&
+                            first?.type === 'NumericLiteral' &&
+                            first.value === 0 &&
+                            budgetCall.callee.name === 'setTimeout' &&
+                            budgetCall.arguments.length === 2 &&
+                            budgetCall.arguments[1] === grandparent
+                        ) {
+                            const timer = parents.get(budgetCall);
+                            if (
+                                timer === spawnTimer &&
+                                timer?.type === 'AssignmentExpression' &&
+                                timer.operator === '=' &&
+                                timer.left.type === 'Identifier' &&
+                                timer.left.name === 'timer'
+                            )
+                                site = 'spawn';
+                        }
+                        if (
+                            method === 'min' &&
+                            first?.type === 'Identifier' &&
+                            ['STDIN_GRACE_MS', 'TERM_GRACE_MS'].includes(first.name) &&
+                            budgetCall.callee.name === 'waitForExit' &&
+                            budgetCall.arguments.length === 1 &&
+                            waitsInReaper(budgetCall, false)
+                        )
+                            site = first.name;
+                    }
+                }
+            }
+            if (site) {
+                const candidates = clocks.get(site) ?? [];
+                candidates.push(node.callee.object);
+                clocks.set(site, candidates);
+            }
+        }
         if (
             node.type === 'CallExpression' &&
             node.callee.type === 'MemberExpression' &&
@@ -259,9 +518,39 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
             node.arguments.length === 1 &&
             node.arguments[0]?.type === 'StringLiteral' &&
             ['SIGTERM', 'SIGKILL'].includes(node.arguments[0].value)
-        )
-            allowed.add(node);
+        ) {
+            const guarded =
+                parent?.type === 'UnaryExpression' &&
+                parent.operator === '!' &&
+                parent.argument === node &&
+                grandparent?.type === 'LogicalExpression' &&
+                grandparent.operator === '&&' &&
+                grandparent.left === parent
+                    ? parents.get(grandparent)
+                    : undefined;
+            const statement =
+                parent?.type === 'ExpressionStatement'
+                    ? parent
+                    : guarded?.type === 'IfStatement' && guarded.test === grandparent
+                      ? guarded
+                      : undefined;
+            if (statement && parents.get(statement) === reaperBody) {
+                const signal = node.arguments[0].value;
+                const candidates = signals.get(signal) ?? [];
+                candidates.push(node);
+                signals.set(signal, candidates);
+            }
+        }
     });
+    for (const candidates of signals.values()) {
+        const [call] = candidates;
+        if (call && candidates.length === 1) allowed.add(call);
+    }
+    if (clocks.get('deadline')?.length === 1)
+        for (const candidates of clocks.values()) {
+            const [clock] = candidates;
+            if (clock && candidates.length === 1) reviewedAmbient.add(clock);
+        }
     return allowed;
 }
 
@@ -293,6 +582,7 @@ export function validateRuntimeSource(file: string, source: string) {
     const gatewayService = core || registry || managed || admission || connectionView;
     const officialPackageFiles = file === 'src/gateway/official/package-files.ts';
     const officialLaunch = file === 'src/gateway/official/server-launch.ts';
+    const officialUpstream = file === 'src/gateway/official/upstream.ts';
     const targetLifecycle = file === 'src/gateway/targets/target-lifecycle.ts';
     const reviewedAmbient = new Set<Node>();
     visit(ast, (node, parent, grandparent) => {
@@ -398,10 +688,29 @@ export function validateRuntimeSource(file: string, source: string) {
     });
     const pure = domain || layer === 'shared' || gateway;
     const entry = file === 'src/interface/app-bootstrap.ts';
-    const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
+    const reviewedReferences = new Set<Node>();
+    const ownedTerminations = officialUpstream
+        ? ownedOfficialTermination(ast, reviewedAmbient, reviewedReferences)
+        : new Set<Node>();
+    const upstreamConsumerPath = core
+        ? './official/upstream.ts'
+        : managed || admission
+          ? '../official/upstream.ts'
+          : undefined;
+    const upstreamImportNames = new Set(
+        ast.program.body.flatMap((node) =>
+            node.type === 'ImportDeclaration' && node.source.value === upstreamConsumerPath
+                ? node.specifiers.map((specifier) => specifier.local.name)
+                : [],
+        ),
+    );
     function dependency(specifier: unknown, typeOnly = false, declaration?: Node) {
         if (typeof specifier !== 'string') {
             errors.push(`${file}: computed module dependencies are prohibited.`);
+            return;
+        }
+        if (specifier.startsWith('.') && /[\\%?#]/.test(specifier)) {
+            errors.push(`${file}: relative source dependencies must use plain file paths.`);
             return;
         }
         if (specifier.startsWith('.') && !specifier.endsWith('.ts')) {
@@ -437,62 +746,63 @@ export function validateRuntimeSource(file: string, source: string) {
             resolved === 'src/gateway/connections/connection-view.ts';
         const mutableTarget = resolved === 'src/gateway/targets/target-lifecycle.ts';
         if (targetLifecycle || mutableTarget) {
-            const capabilities: Record<string, { values: readonly string[]; types: readonly string[] }> =
-                targetLifecycle
-                    ? {
-                          'node:crypto': { values: ['randomUUID'], types: [] },
-                          '../../adapters/fixture-diagnostics.ts': { values: ['emitFixtureEvent'], types: [] },
-                          '../../domains/control-contract.ts': {
-                              values: [],
-                              types: [
-                                  'ControlContext',
-                                  'Disposition',
-                                  'LaunchContext',
-                                  'LaunchOptions',
-                                  'TargetStatus',
-                              ],
-                          },
-                          '../connections/resource-owner.ts': {
-                              values: ['createResourceOwner'],
-                              types: ['ResourceOwner'],
-                          },
-                          './model/target-contract.ts': { values: ['RetainedTargetError'], types: ['ManagedTarget'] },
-                          '../../shared/errors.ts': {
-                              values: ['DetailedError', 'errorCode', 'errorDetails', 'errorMessage'],
-                              types: [],
-                          },
-                      }
-                    : core
-                      ? { './targets/target-lifecycle.ts': { values: [], types: ['TargetLifecycleHost'] } }
-                      : registry
-                        ? { './targets/target-lifecycle.ts': { values: [], types: ['TargetExitEvent'] } }
-                        : managed
-                          ? {
-                                '../targets/target-lifecycle.ts': {
-                                    values: [],
-                                    types: ['createTargetLifecycle', 'TargetLifecycleHost', 'TargetLifecycleRouter'],
-                                },
-                            }
-                          : admission
-                            ? {
-                                  '../targets/target-lifecycle.ts': {
-                                      values: ['createTargetLifecycle'],
-                                      types: ['TargetLifecycleHost'],
-                                  },
-                              }
-                            : {};
-            const permitted = Object.hasOwn(capabilities, specifier) ? capabilities[specifier] : undefined;
-            const exactBindings =
-                permitted &&
-                declaration?.type === 'ImportDeclaration' &&
-                declaration.specifiers.length > 0 &&
-                declaration.specifiers.every((binding) => {
-                    if (binding.type !== 'ImportSpecifier' || binding.imported.type !== 'Identifier') return false;
-                    const name = binding.imported.name;
-                    const erased = declaration.importKind === 'type' || binding.importKind === 'type';
-                    return binding.local.name === name && (erased ? permitted.types : permitted.values).includes(name);
-                });
-            if (!exactBindings) errors.push(`${file}: unapproved target lifecycle dependency or binding.`);
+            const capabilities: DependencyBindings = targetLifecycle
+                ? {
+                      'node:crypto': { values: ['randomUUID'], types: [] },
+                      '../../adapters/fixture-diagnostics.ts': { values: ['emitFixtureEvent'], types: [] },
+                      '../../domains/control-contract.ts': {
+                          values: [],
+                          types: ['ControlContext', 'Disposition', 'LaunchContext', 'LaunchOptions', 'TargetStatus'],
+                      },
+                      '../connections/resource-owner.ts': {
+                          values: ['createResourceOwner'],
+                          types: ['ResourceOwner'],
+                      },
+                      './model/target-contract.ts': { values: ['RetainedTargetError'], types: ['ManagedTarget'] },
+                      '../../shared/errors.ts': {
+                          values: ['DetailedError', 'errorCode', 'errorDetails', 'errorMessage'],
+                          types: [],
+                      },
+                  }
+                : core
+                  ? { './targets/target-lifecycle.ts': { values: [], types: ['TargetLifecycleHost'] } }
+                  : registry
+                    ? { './targets/target-lifecycle.ts': { values: [], types: ['TargetExitEvent'] } }
+                    : managed
+                      ? {
+                            '../targets/target-lifecycle.ts': {
+                                values: [],
+                                types: ['createTargetLifecycle', 'TargetLifecycleHost', 'TargetLifecycleRouter'],
+                            },
+                        }
+                      : admission
+                        ? {
+                              '../targets/target-lifecycle.ts': {
+                                  values: ['createTargetLifecycle'],
+                                  types: ['TargetLifecycleHost'],
+                              },
+                          }
+                        : {};
+            if (!permitsExactImport(capabilities, specifier, declaration))
+                errors.push(`${file}: unapproved target lifecycle dependency or binding.`);
+        }
+        const mutableOfficialUpstream = resolved === 'src/gateway/official/upstream.ts';
+        if (officialUpstream && !permitsExactImport(OFFICIAL_UPSTREAM_BINDINGS, specifier, declaration))
+            errors.push(`${file}: unapproved Official upstream dependency or binding.`);
+        if (mutableOfficialUpstream) {
+            const capabilities: DependencyBindings = core
+                ? { './official/upstream.ts': { values: ['openOfficialUpstream'], types: [] } }
+                : admission
+                  ? { '../official/upstream.ts': { values: ['openOfficialUpstream'], types: [] } }
+                  : managed
+                    ? { '../official/upstream.ts': { values: [], types: ['openOfficialUpstream', 'OfficialUpstream'] } }
+                    : {};
+            if (!permitsExactImport(capabilities, specifier, declaration))
+                errors.push(
+                    pure && !core && !admission && !managed
+                        ? `${file}: pure owners cannot depend on Official upstream lifetime.`
+                        : `${file}: unapproved Official upstream dependency or binding.`,
+                );
         }
         if (pure && !gatewayService && mutableGateway)
             errors.push(`${file}: pure owners cannot depend on mutable Gateway services.`);
@@ -530,12 +840,13 @@ export function validateRuntimeSource(file: string, source: string) {
             !admission &&
             !connectionView &&
             !officialLaunch &&
+            !officialUpstream &&
             resolved === 'src/gateway/official/server-launch.ts'
         )
             errors.push(`${file}: pure owners cannot depend on Official launch inputs.`);
         if (pure && !officialPackageFiles && !officialLaunch && resolved === 'src/gateway/official/package-files.ts')
             errors.push(`${file}: pure owners cannot depend on Official package files.`);
-        if (gatewayService && !mutableTarget) {
+        if (gatewayService && !mutableTarget && !mutableOfficialUpstream) {
             const permittedValue = (
                 core
                     ? [
@@ -543,7 +854,6 @@ export function validateRuntimeSource(file: string, source: string) {
                           '../adapters/cdp-router.ts',
                           '../adapters/chrome-profile.ts',
                           '../adapters/data-directory.ts',
-                          '../adapters/mcp-bridge.ts',
                           '../adapters/tool-catalog.ts',
                           '../shared/errors.ts',
                           '../application/client-context.ts',
@@ -572,7 +882,6 @@ export function validateRuntimeSource(file: string, source: string) {
                               'node:os',
                               'node:path',
                               '../../adapters/fixture-diagnostics.ts',
-                              '../../adapters/mcp-bridge.ts',
                               '../../application/client-context.ts',
                               '../../domains/control-contract.ts',
                               '../../shared/constants.ts',
@@ -603,7 +912,6 @@ export function validateRuntimeSource(file: string, source: string) {
                             '@modelcontextprotocol/client',
                             '../../adapters/chrome-profile.ts',
                             '../../adapters/data-directory.ts',
-                            '../../adapters/mcp-bridge.ts',
                             '../../adapters/tool-catalog.ts',
                             '../../application/registrations.ts',
                             '../registry.ts',
@@ -657,6 +965,7 @@ export function validateRuntimeSource(file: string, source: string) {
             !targetLifecycle &&
             !officialPackageFiles &&
             !officialLaunch &&
+            !officialUpstream &&
             (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
         )
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);
@@ -666,6 +975,7 @@ export function validateRuntimeSource(file: string, source: string) {
             pure &&
             !diagnosticClock &&
             !managed &&
+            !officialUpstream &&
             (resolved === 'src/gateway/diagnostics.ts' || specifier === 'node:perf_hooks')
         )
             errors.push(`${file}: pure owners cannot depend on the diagnostic clock.`);
@@ -700,6 +1010,16 @@ export function validateRuntimeSource(file: string, source: string) {
             !(parent.type === 'TSMethodSignature' && !parent.computed && parent.key === node) &&
             isReferenced(node, parent, grandparent)
         ) {
+            if (officialUpstream && !reviewedReferences.has(node)) {
+                if (node.name === 'spawn') errors.push(`${file}: unapproved Official upstream spawn reference.`);
+                if (node.name === 'reapOwnedChild')
+                    errors.push(`${file}: unapproved Official upstream reaper reference.`);
+                if (
+                    node.name === 'child' &&
+                    !(parent.type === 'MemberExpression' && !parent.computed && parent.object === node)
+                )
+                    errors.push(`${file}: unapproved owned child termination API alias.`);
+            }
             let ambient = node.name;
             if (ambient === 'globalThis' || ambient === 'global') {
                 const member = parent.type === 'MemberExpression' || parent.type === 'OptionalMemberExpression';
@@ -763,6 +1083,17 @@ export function validateRuntimeSource(file: string, source: string) {
                           ));
             dependency(node.source.value, typeOnly, node);
         }
+        const defaultExport = node.type === 'ExportDefaultDeclaration' ? expression(node.declaration) : undefined;
+        if (
+            (node.type === 'ExportNamedDeclaration' &&
+                !node.source &&
+                node.specifiers.some(
+                    (specifier) =>
+                        specifier.type === 'ExportSpecifier' && upstreamImportNames.has(specifier.local.name),
+                )) ||
+            (defaultExport?.type === 'Identifier' && upstreamImportNames.has(defaultExport.name))
+        )
+            errors.push(`${file}: unapproved Official upstream reexport.`);
         if (node.type === 'ImportExpression')
             dependency(node.source.type === 'StringLiteral' ? node.source.value : undefined);
         if (node.type === 'TSImportType') dependency(node.argument.value, true);
@@ -794,6 +1125,15 @@ export function validateRuntimeSource(file: string, source: string) {
             propertyName(node.property) === 'argv'
         )
             errors.push(`${file}: CLI parsing belongs only in composition roots.`);
+        if (
+            officialUpstream &&
+            (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
+            object?.type === 'Identifier' &&
+            object.name === 'child' &&
+            propertyName(node.property) === 'kill' &&
+            !(parent?.type === 'CallExpression' && parent.callee === node && ownedTerminations.has(parent))
+        )
+            errors.push(`${file}: unapproved owned child termination API access.`);
         if (
             (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') &&
             (callee?.type === 'MemberExpression' || callee?.type === 'OptionalMemberExpression') &&

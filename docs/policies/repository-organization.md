@@ -61,11 +61,15 @@ environment default RHS expressions and the argument builder's Windows platform
 default. Pure or unknown owners, Core, registry and package-file proof cannot acquire
 launch authority. Managed connection, start admission, connection view and the
 actual adapters use their exact launch edges, preserving the original
-default/capture/await ordering. Existing adapters retain actual catalog
-publication, child/wire and upstream disposal. The package/input/TEMP tests now have separate runtime, security and quality
-owners with an explicit seven-title alias-child oracle. Remaining Official/MCP
-transactions await their complete content cuts. Existing layer,
-pure-model and I/O rules remain in force for all current owners.
+default/capture/await ordering. The exact `gateway/official/upstream.ts` consumes
+launch inputs and owns complete actual catalog publication, SDK wire and Server
+child disposal for one generation. Its nine named dependencies and three exact
+Gateway consumers follow the Official instructions. Fixed reviewed definitions,
+managed execution accounting/original facilities and HTTP continuation retain
+separate owners. The package/input/TEMP tests have separate runtime, security and
+quality owners with an explicit seven-title alias-child oracle. Three central
+Official suites retain all original upstream, catalog refresh and lifetime cases
+in both safe lanes. Existing layer, pure-model and I/O rules govern these roles.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.

@@ -125,7 +125,7 @@ Both catalog discovery and per-connection children use that same location throug
 first verify its ordinary Node and complete unchanged official package/evidence.
 The App always injects verified bundled ordinary Node and the original public
 bin. Test composition supplies its verified development or sealed input explicitly.
-`OfficialConnection.processId` identifies the actual owned child.
+`OfficialUpstream.processId` identifies the actual owned child.
 
 Trusted `onCleanupReady` receives a readonly cleanup/state capability synchronously
 before first catalog acquisition. Callback failure acquires nothing. The App

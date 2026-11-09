@@ -6,12 +6,12 @@ import path from 'node:path';
 import test from 'node:test';
 import type { ClientCapabilities } from '@modelcontextprotocol/client';
 import { Client, ProtocolError, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { createOfficialConnection, interruptedOfficialCall } from '../src/adapters/mcp-bridge.ts';
-import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import { createGatewayCore } from '../src/gateway/core.ts';
-import type { ClientRequestContext } from '../src/shared/client-context.ts';
-import { isRecord } from '../src/shared/errors.ts';
+import { createMcpHttpServer } from '../../../src/adapters/mcp-http-server.ts';
+import { createToolCatalog } from '../../../src/adapters/tool-catalog.ts';
+import { createGatewayCore } from '../../../src/gateway/core.ts';
+import { classifyOfficialCallInterruption, openOfficialUpstream } from '../../../src/gateway/official/upstream.ts';
+import type { ClientRequestContext } from '../../../src/shared/client-context.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 const route = {
     connectionId: '11111111-1111-4111-8111-111111111111',
@@ -94,7 +94,7 @@ test('update checks and config discovery are suppressed only in the independent 
     const previousDiscovery = process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY;
     process.env.CHROME_DEVTOOLS_MCP_NO_CONFIG_DISCOVERY = 'parent-setting';
     process.env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS = 'parent-setting';
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         const content = (await connection.call('echo', { environment: true })).structuredContent;
         assert.ok(isRecord(content));
@@ -114,7 +114,7 @@ test('update checks and config discovery are suppressed only in the independent 
 
 test('SDK execution timeout retains accounting until a cancellation-ignoring upstream definitively closes', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', {
         bin: fixture.bin,
         args: [],
         requestTimeoutMs: 40,
@@ -130,10 +130,10 @@ test('SDK execution timeout retains accounting until a cancellation-ignoring ups
         await assert.rejects(connection.call('echo', {}), /busy/);
         await connection.close();
         await assert.rejects(actual, (error) => {
-            assert.equal(interruptedOfficialCall(error), 'upstream-timeout');
+            assert.equal(classifyOfficialCallInterruption(error), 'upstream-timeout');
             return true;
         });
-        assert.equal(interruptedOfficialCall(new Error('Request timed out')), undefined);
+        assert.equal(classifyOfficialCallInterruption(new Error('Request timed out')), undefined);
     } finally {
         await connection.close();
         await fixture.cleanup();
@@ -143,7 +143,7 @@ test('SDK execution timeout retains accounting until a cancellation-ignoring ups
 test('completed official acquisition is independent of the old target acquisition signal', async () => {
     const fixture = await fakeOfficial();
     const acquisition = new AbortController();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', {
         bin: fixture.bin,
         args: [],
         signal: acquisition.signal,
@@ -161,7 +161,7 @@ test('completed official acquisition is independent of the old target acquisitio
 for (const protocolError of [false, true]) {
     test(`late ${protocolError ? 'protocol error' : 'result'} after SDK timeout releases only its matching wire execution`, async () => {
         const fixture = await fakeOfficial();
-        const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+        const connection = await openOfficialUpstream('http://127.0.0.1:9222', {
             bin: fixture.bin,
             args: [],
             requestTimeoutMs: 20,
@@ -169,12 +169,12 @@ for (const protocolError of [false, true]) {
         try {
             await assert.rejects(
                 connection.call('echo', { lateWire: 60, protocolError }),
-                (error) => interruptedOfficialCall(error) === 'upstream-timeout',
+                (error) => classifyOfficialCallInterruption(error) === 'upstream-timeout',
             );
             await boundedSignal(
                 connection.call('echo', { capabilities: true }).then(
                     (result) => assert.ok(isRecord(capabilitiesOf(result))),
-                    (error: unknown) => assert.equal(interruptedOfficialCall(error), 'upstream-timeout'),
+                    (error: unknown) => assert.equal(classifyOfficialCallInterruption(error), 'upstream-timeout'),
                 ),
                 'Follow-up capability call did not reach its actual terminal.',
             );
@@ -187,19 +187,19 @@ for (const protocolError of [false, true]) {
 
 test('response racing its SDK deadline and explicit close never leaves a permanent execution slot', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', {
         bin: fixture.bin,
         args: [],
         requestTimeoutMs: 25,
     });
     try {
         await connection.call('echo', { lateWire: 25 }).catch((error: unknown) => {
-            assert.equal(interruptedOfficialCall(error), 'upstream-timeout');
+            assert.equal(classifyOfficialCallInterruption(error), 'upstream-timeout');
         });
         await boundedSignal(
             connection.call('echo', { capabilities: true }).then(
                 (result) => assert.ok(isRecord(capabilitiesOf(result))),
-                (error: unknown) => assert.equal(interruptedOfficialCall(error), 'upstream-timeout'),
+                (error: unknown) => assert.equal(classifyOfficialCallInterruption(error), 'upstream-timeout'),
             ),
             'Follow-up capability call did not reach its actual terminal.',
         );
@@ -214,7 +214,7 @@ test('response racing its SDK deadline and explicit close never leaves a permane
 
 test('public transport serialization failure closes pending SDK state and cannot leave a false busy slot', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         const arguments_: Record<string, unknown> = {};
         arguments_.cycle = arguments_;
@@ -230,11 +230,11 @@ test('public transport serialization failure closes pending SDK state and cannot
 async function httpBridge(fixture: Awaited<ReturnType<typeof fakeOfficial>>, capabilities: ClientCapabilities = {}) {
     const children = new Map<number, EventEmitter>();
     const calls: { args: Record<string, unknown>; signal?: AbortSignal; finished: Promise<void> }[] = [];
-    const upstreams: Awaited<ReturnType<typeof createOfficialConnection>>[] = [];
+    const upstreams: Awaited<ReturnType<typeof openOfficialUpstream>>[] = [];
     const contexts: ClientRequestContext[] = [];
     const core = await createGatewayCore({
         createConnection: async (url, options) => {
-            const connection = await createOfficialConnection(url, { ...options, bin: fixture.bin, args: [] });
+            const connection = await openOfficialUpstream(url, { ...options, bin: fixture.bin, args: [] });
             upstreams.push(connection);
             return {
                 ...connection,
@@ -463,9 +463,9 @@ test('HTTP explains original form facility refusal after the real official SDK r
     }
 });
 
-test('official bridge initializes, relays results/roots/progress/cancellation and exits by EOF', async () => {
+test('official upstream initializes, relays results/roots/progress/cancellation and exits by EOF', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', {
         bin: fixture.bin,
         args: [],
         roots: async () => ({ roots: [{ uri: 'file:///fixture' }] }),
@@ -512,9 +512,9 @@ test('official bridge initializes, relays results/roots/progress/cancellation an
     }
 });
 
-test('official bridge rejects pending calls on unexpected subprocess exit once', async () => {
+test('official upstream rejects pending calls on unexpected subprocess exit once', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         let exits = 0;
         let markExit: () => void = () => {};
@@ -534,7 +534,7 @@ test('official bridge rejects pending calls on unexpected subprocess exit once',
     }
 });
 
-test('official bridge forwards form elicitation transparently only for supported hosts', async () => {
+test('official upstream forwards form elicitation transparently only for supported hosts', async () => {
     const fixture = await fakeOfficial();
     let calls = 0;
     let begin: () => void = () => {};
@@ -545,7 +545,7 @@ test('official bridge forwards form elicitation transparently only for supported
     const ended = new Promise<void>((resolve) => {
         end = resolve;
     });
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', {
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', {
         bin: fixture.bin,
         args: [],
         elicitation: {
@@ -597,7 +597,7 @@ test('official bridge forwards form elicitation transparently only for supported
     } finally {
         await connection.close();
     }
-    const unsupported = await createOfficialConnection('http://127.0.0.1:9222', {
+    const unsupported = await openOfficialUpstream('http://127.0.0.1:9222', {
         bin: fixture.bin,
         args: [],
         elicitation: {
@@ -619,7 +619,7 @@ test('official bridge forwards form elicitation transparently only for supported
 
 test('catalog-only upstream has no fabricated roots capability', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         assert.equal(connection.tools[0]?.name, 'echo');
         assert.deepEqual(capabilitiesOf(await connection.call('echo', { capabilities: true })), {});
@@ -733,7 +733,7 @@ function capabilitiesOf(result: { structuredContent?: unknown }) {
 test('official catalog walks more than the SDK aggregate page cap without changing names', async () => {
     const fixture = await fakeOfficial({ pages: 65 });
     try {
-        const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+        const connection = await openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
         try {
             assert.deepEqual(
                 connection.tools.map((tool) => tool.name),
@@ -751,7 +751,7 @@ test('official catalog rejects repeated pagination cursors', async () => {
     const fixture = await fakeOfficial({ pages: 65, repeatedCursor: true });
     try {
         await assert.rejects(
-            createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] }),
+            openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] }),
             /repeated tool catalog cursor/,
         );
     } finally {
@@ -879,7 +879,7 @@ test('raw HTTP preserves request and progress ID zero while cancellation detache
 
 test('official call enforces the catalog output schema while preserving valid result metadata', async () => {
     const fixture = await fakeOfficial();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', { bin: fixture.bin, args: [] });
     try {
         await assert.rejects(connection.call('echo', { invalidOutput: true }), /output schema/);
     } finally {

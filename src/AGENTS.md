@@ -9,12 +9,13 @@ Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
 rules, target models and pure Official options/execution/release evidence, the
 exact complete Official package-file proof and launch-input owner, or its
-exact diagnostics clock, and never depend on
-application/interface, any mutable Gateway service or the mutable target lifecycle.
+exact diagnostics clock. Adapters cannot depend on application/interface or
+mutable Gateway owners, including the Official upstream and target lifecycle.
 The pure Official owners contain no ambient defaults, package reads, live catalog
-or child/context lifetime authority. The exact gateway/official/server-launch.ts owns invocation-time environment/
-platform defaults, child snapshots and verified public-bin resolution; live catalog
-and child/context lifetime remain in adapters.
+or child/context lifetime authority. The exact gateway/official/server-launch.ts
+owns invocation-time environment/platform defaults, child snapshots and verified
+public-bin resolution. The exact gateway/official/upstream.ts keeps one generation's
+actual catalog, SDK wire and owned Server child lifetime under its closed role.
 Before editing these Official owners, read their cumulative
 [Official instructions](gateway/official/AGENTS.md).
 Only gateway/official/package-files.ts owns complete filesystem package verification;
@@ -25,7 +26,7 @@ cannot depend on that effectful owner except the exact server-launch.ts consumer
 unknown Official siblings remain pure. Launch capabilities are limited by the
 cumulative Official instructions, including erased syntax. Core, registry,
 pure owners, package-files and other connection roles cannot acquire launch authority.
-The exact managed connection, start admission and connection view consumers
+The upstream, managed connection, start admission and connection view consumers
 use server-launch.ts through their reviewed relative edges.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
@@ -46,7 +47,7 @@ files remain pure. Before changing these lifetime owners, read their cumulative
 [connections instructions](gateway/connections/AGENTS.md).
 Only gateway/core.ts owns registration/registry/catalog composition and trusted
 construction cleanup. Its value capabilities are crypto, the existing cdp-router,
-chrome-profile, data-directory, mcp-bridge and tool-catalog adapters, application
+chrome-profile, data-directory and tool-catalog adapters, official/upstream, application
 client-context/registrations, shared errors and the registry/managed factory.
 SDK Tool, TargetLifecycleHost, request/diagnostic/client-context and the original moved
 RuntimeRouter are TYPE-only. Its sole ambient capability is the supplied-now
@@ -56,13 +57,13 @@ pointers, handler/lifecycle, actual execution/context, authorization and transfe
 Its exact value providers are crypto, official/server-launch, port-reservation, target-host,
 application client-context/mcp-lifecycle, domain control-contract/request-failure,
 shared/errors, diagnostics and the start-admission/connection-view factories.
-SDK client, chrome-profile/data-directory/mcp-bridge/tool-catalog, the target lifecycle
+SDK client, chrome-profile/data-directory/tool-catalog, official/upstream, the target lifecycle
 factory/host/router, registrations, registry, resource-owner, directory-lease, workspace-policy and shared
 client-context are TYPE-only. Its synchronous factory creates one original
 lifecycle/port/host composition, without acquisition or catalog reads.
 Only gateway/connections/start-admission.ts owns the whole start transaction,
 persistent callbacks, rollback and final directory retry. Its value providers are
-crypto/os/path, fixture-diagnostics, mcp-bridge, official/server-launch, application
+crypto/os/path, fixture-diagnostics, official/upstream, official/server-launch, application
 client-context, domain control-contract, shared constants/errors, target isolation/launch,
 createTargetLifecycle, directory-lease and workspace-policy. TargetLifecycleHost, chrome-profile,
 data-directory, lifecycle/registrations, registry, original managed types,

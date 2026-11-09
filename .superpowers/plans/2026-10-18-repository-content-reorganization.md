@@ -268,8 +268,13 @@ launch-input cut transfers the whole three-function owner to
 `gateway/official/server-launch.ts`: captureOfficialServerEnvironment,
 buildOfficialLaunchArguments and resolveVerifiedOfficialServerBin. Preserve actual
 default/capture/await order, exact five dependencies and original caller context.
-Live catalog/upstream, complete child/wire/disposal and MCP continuation remain
-unfinished with their current transaction owners.
+The actual-upstream cut keeps the full private catalog publisher, SDK wire and
+owned Server child/disposal transaction together in `gateway/official/upstream.ts`.
+It preserves the original four exported contracts at their actual callers with
+exact capability and owned-child audit coverage. Three complete suites retain the
+nineteen upstream, twenty-two refresh and nine lifetime registrations. Both safe
+lanes append those suites once. Reviewed catalog and MCP continuation retain their
+current owners and await separate cuts.
 
 ## Per-batch workflow and complete-task gates
 
@@ -441,7 +446,6 @@ src/gateway/mcp/lifecycle-tools.ts
 src/gateway/mcp/request-dispatch.ts
 src/gateway/official/AGENTS.md
 src/gateway/official/README.md
-src/gateway/official/actual-catalog.ts
 src/gateway/official/catalog-input.ts
 src/gateway/official/execution.ts
 src/gateway/official/options.ts
@@ -449,7 +453,7 @@ src/gateway/official/package-files.ts
 src/gateway/official/release-evidence.ts
 src/gateway/official/reviewed-catalog.ts
 src/gateway/official/server-launch.ts
-src/gateway/official/upstream-connection.ts
+src/gateway/official/upstream.ts
 src/gateway/operations.ts
 src/gateway/owned-tool-arguments.ts
 src/gateway/registrations.ts
@@ -723,18 +727,16 @@ tests/gateway/mcp/originating-facilities.test.ts
 tests/gateway/mcp/registration-lifecycle-schemas.test.ts
 tests/gateway/official/README.md
 tests/gateway/official/catalog-construction-cleanup.test.ts
-tests/gateway/official/catalog-pagination-output.test.ts
-tests/gateway/official/execution-accounting.test.ts
+tests/gateway/official/catalog-refresh.test.ts
 tests/gateway/official/execution.test.ts
-tests/gateway/official/official-catalog-refresh.test.ts
-tests/gateway/official/official-child-lifecycle.test.ts
 tests/gateway/official/options.test.ts
 tests/gateway/official/package-files.test.ts
 tests/gateway/official/reviewed-catalog.test.ts
 tests/gateway/official/server-arguments-environment.test.ts
 tests/gateway/official/server-arguments.test.ts
 tests/gateway/official/upstream-health.test.ts
-tests/gateway/official/upstream-protocol.test.ts
+tests/gateway/official/upstream-lifetime.test.ts
+tests/gateway/official/upstream.test.ts
 tests/gateway/operations.test.ts
 tests/gateway/owned-tool-arguments.test.ts
 tests/gateway/registrations.test.ts

@@ -7,16 +7,16 @@ import path from 'node:path';
 import test from 'node:test';
 import type { Tool } from '@modelcontextprotocol/client';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { createMcpHttpServer } from '../../../src/adapters/mcp-http-server.ts';
+import { createToolCatalog } from '../../../src/adapters/tool-catalog.ts';
+import type { Diagnostic } from '../../../src/domains/control-contract.ts';
+import { createGatewayCore } from '../../../src/gateway/core.ts';
 import {
-    createOfficialConnection,
-    type OfficialConnection,
-    type OfficialConnectionResource,
-} from '../src/adapters/mcp-bridge.ts';
-import { createMcpHttpServer } from '../src/adapters/mcp-http-server.ts';
-import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
-import type { Diagnostic } from '../src/domains/control-contract.ts';
-import { createGatewayCore } from '../src/gateway/core.ts';
-import { isRecord } from '../src/shared/errors.ts';
+    type OfficialUpstream,
+    type OfficialUpstreamResource,
+    openOfficialUpstream,
+} from '../../../src/gateway/official/upstream.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 const first: Tool = {
     name: 'echo',
@@ -143,7 +143,7 @@ await server.connect(new StdioServerTransport());
 
 test('real SDK notifications atomically refresh complete reviewed snapshots and defensive views', async () => {
     const f = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     try {
         assert.deepEqual(connection.toolCatalog, { revision: 1, state: 'current' });
         const saved = connection.tools;
@@ -166,7 +166,7 @@ test('real SDK notifications atomically refresh complete reviewed snapshots and 
 test('notification during initial enumeration drains a coalesced follow-up before readiness', async () => {
     const f = await fixture();
     f.list(async (_cursor, index) => (index === 1 ? { tools: [first], notifications: 8 } : { tools: [second] }));
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     try {
         assert.deepEqual(connection.tools, [second]);
         assert.equal(f.counts().lists, 2);
@@ -179,13 +179,13 @@ test('notification during initial enumeration drains a coalesced follow-up befor
 
 test('a failed dirty initial follow-up rejects acquisition without an unhandled background refresh', async () => {
     const f = await fixture();
-    let acquired: OfficialConnectionResource | undefined;
+    let acquired: OfficialUpstreamResource | undefined;
     f.list(async (_cursor, index) =>
         index === 1 ? { tools: [first], notifications: 3 } : { tools: [{ ...first, name: 'unreviewed' }] },
     );
     try {
         await assert.rejects(
-            createOfficialConnection('http://127.0.0.1:9222', {
+            openOfficialUpstream('http://127.0.0.1:9222', {
                 ...f.options,
                 onAcquired: (resource) => {
                     acquired = resource;
@@ -203,7 +203,7 @@ test('a failed dirty initial follow-up rejects acquisition without an unhandled 
 
 test('refresh bursts serialize one dirty follow-up while readers retain a whole snapshot', async () => {
     const f = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     const held = deferred<Page>();
     try {
         f.list(async (_cursor, index) => (index === 2 ? held.promise : { tools: [second, other] }));
@@ -227,7 +227,7 @@ test('refresh bursts serialize one dirty follow-up while readers retain a whole 
 
 test('refresh walks beyond 64 pages and rejects an invalid later page without partial publication', async () => {
     const f = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     try {
         f.list(async (cursor) => {
             const page = Number(cursor ?? 0);
@@ -258,7 +258,7 @@ const invalidCatalogs: [string, Tool[]][] = [
 for (const [label, tools] of invalidCatalogs) {
     test(`failed ${label} refresh retains healthy resources and blocks admission until metadata recovery`, async () => {
         const f = await fixture();
-        const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+        const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
         let exits = 0;
         connection.onExit(() => {
             exits += 1;
@@ -308,7 +308,7 @@ for (const [label, tools] of invalidCatalogs) {
 
 test('an in-flight SDK call retains its admitted output definition through successful and failed refreshes', async () => {
     const f = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     const result = deferred<unknown>();
     try {
         f.call(() => result.promise);
@@ -336,7 +336,7 @@ test('an in-flight SDK call retains its admitted output definition through succe
 
 test('tool removal during admission never forwards through the earlier snapshot', async () => {
     const f = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     const held = deferred<Page>();
     try {
         f.list(() => held.promise);
@@ -356,9 +356,9 @@ test('tool removal during admission never forwards through the earlier snapshot'
 
 test('Close fences late refresh publication and diagnostics without affecting an independent successor', async () => {
     const f = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     const held = deferred<Page>();
-    let successor: Awaited<ReturnType<typeof createOfficialConnection>> | undefined;
+    let successor: Awaited<ReturnType<typeof openOfficialUpstream>> | undefined;
     try {
         f.list(async (_cursor, index) => (index === 2 ? held.promise : { tools: [second] }));
         await connection.rootsChanged();
@@ -366,7 +366,7 @@ test('Close fences late refresh publication and diagnostics without affecting an
         const previous = connection.toolCatalog;
         await connection.close();
         const diagnosticCount = f.diagnostics.length;
-        successor = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+        successor = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
         held.resolve({ tools: [other], notifications: 4 });
         await new Promise<void>((resolve) => setTimeout(resolve, 30));
         assert.deepEqual(connection.toolCatalog, previous);
@@ -385,7 +385,7 @@ test('Close fences late refresh publication and diagnostics without affecting an
 
 test('a server without listChanged support keeps startup-only knowledge', async () => {
     const f = await fixture(false);
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', f.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', f.options);
     try {
         f.list(async () => ({ tools: [second] }));
         await connection.rootsChanged();
@@ -402,8 +402,8 @@ test('a server without listChanged support keeps startup-only knowledge', async 
 async function coreFixture(initialTools?: Tool[]) {
     const f = await fixture();
     if (initialTools) f.list(async () => ({ tools: initialTools }));
-    const upstreams: OfficialConnection[] = [];
-    const diagnosticSinks: NonNullable<Parameters<typeof createOfficialConnection>[1]>['diagnose'][] = [];
+    const upstreams: OfficialUpstream[] = [];
+    const diagnosticSinks: NonNullable<Parameters<typeof openOfficialUpstream>[1]>['diagnose'][] = [];
     let health: () => Promise<void> = async () => {};
     const children = new Map<number, EventEmitter>();
     let launched = 0;
@@ -441,7 +441,7 @@ async function coreFixture(initialTools?: Tool[]) {
         }),
         createConnection: async (url, options) => {
             diagnosticSinks.push(options?.diagnose);
-            const connection = await createOfficialConnection(url, {
+            const connection = await openOfficialUpstream(url, {
                 ...f.options,
                 ...options,
                 bin: f.options.bin,

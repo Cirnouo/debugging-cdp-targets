@@ -105,11 +105,8 @@
   `gateway/official/package-files.ts`; runtime and launch adapters consume that proof.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
   path/metadata changes and closes the descriptor on success or failure.
-- `mcp-bridge.ts` connects the official Server through the public SDK Client,
-  closes its public transport independently of actual child exit, and owns
-  bounded stdin/TERM/KILL disposal for that Server child. Capability-gated native
-  SDK listChanged drives uncapped serialized private reviewed snapshots, freshness,
-  fail-closed admission and captured Tool output validation.
+- The actual Official SDK client, private catalog and owned Server child now
+  share one [Gateway upstream owner](../gateway/official/upstream.ts).
 - `mcp-http-server.ts` composes the public SDK Node Streamable HTTP transport,
   validates loopback HTTP/raw-body boundaries, parses once and applies the whole
   JSON envelope budget before routing strict modern requests beside

@@ -178,7 +178,7 @@ Linux/macOS product execution or acceptance route.
   and raw SSE socket disconnection without resource cleanup. Whole-envelope
   budget cases include metadata/capabilities/replies/batches, resumable original
   form flows after refusal and overlapping clients with colliding request IDs.
-- `official-catalog-refresh.test.ts` covers public SDK stdio catalog notification,
+- `gateway/official/catalog-refresh.test.ts` covers public SDK stdio catalog notification,
   uncapped pagination, complete schema validation, atomic snapshot/admission and
   Close/scoped-restart races with controlled target/native I/O, preserving fixed
   outward HTTP declarations. `tool-catalog.test.ts` also covers canonical complete
@@ -457,12 +457,12 @@ Linux/macOS product execution or acceptance route.
   the seven whole Gateway shutdown, rollback, catalog and retained disposal cases.
   Both share controlled I/O and status support in `fixtures/gateway/core-runtime.ts`,
   retaining every setup/status assertion and cleanup branch.
-- `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
+- `gateway/official/upstream.test.ts` checks official catalog/result metadata, uncapped pagination,
   output validation and independent subprocess disposal. Actual Core/SDK HTTP
   tests preserve roots/form/progress, raw request/progress ID zero and unchanged
   results. Cancelling a client wait retains the original busy execution and
   healthy upstream until its real late response, without replacement or replay.
-- `official-child-lifecycle.test.ts` checks immediate logical transport close,
+- `gateway/official/upstream-lifetime.test.ts` checks immediate logical transport close,
   actual child exit, EOF-resistant Server disposal, abort during initialization
   and tools/list, retained observation and retry after cleanup failure.
 - `native-close-ownership.test.ts` composes the actual Windows native launcher,
@@ -566,18 +566,19 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select fifty-six entries: `tests/*.test.ts`, the
+command and `pnpm test:coverage` select fifty-nine entries: `tests/*.test.ts`, the
 twenty-five explicit [tooling suites](tooling/README.md), two explicit
-[Host suites](host-plugins/README.md) and twenty-eight Gateway suites. Gateway selection
+[Host suites](host-plugins/README.md) and thirty-one Gateway suites. Gateway selection
 retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
-[connection suites](gateway/connections/README.md) and the five explicit
+[connection suites](gateway/connections/README.md) and the eight explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
 append once in that order, followed by package-files, security/official-inputs and
 quality/temporary-directory-alias, then target-lifecycle, lifecycle-rollback,
 observer-cleanup and close-diagnostics. The six connection suites then append
 once as cleanup, connection-options, execution-detachment,
-registration-administration, roots-admission and scoped-restart. Default commands do not launch
+registration-administration, roots-admission and scoped-restart. Upstream,
+catalog-refresh and upstream-lifetime follow in that order. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

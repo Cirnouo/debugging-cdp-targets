@@ -18,9 +18,11 @@ The singleton App owns direct HTTP, management and native resources. The
     and complete resource-generation/directory-lease lifetime, managed connection,
     start admission, live projection and supplied workspace policy in `connections/`,
     plus supplied Official options, wire-terminal values, release evidence and the
-    complete filesystem package-file proof and bounded launch-input authority in `official/`.
+    complete filesystem package-file proof, bounded launch-input authority and the
+    complete actual upstream lifetime in `official/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
-- `adapters/`: CDP transport, complete official child/catalog transactions and native process/OS I/O.
+- `adapters/`: CDP transport, MCP HTTP composition and continuation, fixed reviewed
+    tool declarations and native process/OS I/O.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.

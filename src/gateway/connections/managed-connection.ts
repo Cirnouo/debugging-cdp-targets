@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { CallToolResult, ListRootsResult } from '@modelcontextprotocol/client';
 import type { profileAvailable as nativeProfileAvailable } from '../../adapters/chrome-profile.ts';
 import type { DataDirectoryRegistry } from '../../adapters/data-directory.ts';
-import type { createOfficialConnection, OfficialConnection } from '../../adapters/mcp-bridge.ts';
 import { createPortReservations } from '../../adapters/port-reservation.ts';
 import { createTargetHost } from '../../adapters/target-host.ts';
 import type { loadOfficialToolCatalog } from '../../adapters/tool-catalog.ts';
@@ -21,6 +20,7 @@ import type { ClientRequestContext } from '../../shared/client-context.ts';
 import { isRecord } from '../../shared/errors.ts';
 import { measured } from '../diagnostics.ts';
 import { buildOfficialLaunchArguments } from '../official/server-launch.ts';
+import type { OfficialUpstream, openOfficialUpstream } from '../official/upstream.ts';
 import type { createGatewayRegistry } from '../registry.ts';
 import type { createTargetLifecycle, TargetLifecycleHost, TargetLifecycleRouter } from '../targets/target-lifecycle.ts';
 import { createConnectionView } from './connection-view.ts';
@@ -41,7 +41,7 @@ export type ManagedConnection = {
     directory: ConnectionDirectoryLease;
     controller: Controller;
     router: RuntimeRouter;
-    upstream?: OfficialConnection;
+    upstream?: OfficialUpstream;
     mcpArgs: string[];
     roots: ListRootsResult;
     rootsNegotiated: boolean;
@@ -77,7 +77,7 @@ export function createManagedConnections({
     profileAvailable: typeof nativeProfileAvailable;
     createRouter: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
     createHost: (() => TargetLifecycleHost) | undefined;
-    createConnection: typeof createOfficialConnection;
+    createConnection: typeof openOfficialUpstream;
     registrations: Pick<
         ReturnType<typeof createRegistrationRegistry>,
         'check' | 'touch' | 'authorize' | 'beginJob' | 'resolve' | 'transfer'
