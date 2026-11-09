@@ -7,7 +7,8 @@ import {
 } from '../adapters/managed-plugin-receipts.ts';
 import { NativeHostPluginAdapter } from '../adapters/native-host-plugins.ts';
 import type { AppConfiguration, AppHostSelection } from '../desktop/configuration/model.ts';
-import type { AppHostSummary, AppManagementCommand } from '../domains/app-ui.ts';
+import type { AppManagementCommand } from '../desktop/contracts/commands.ts';
+import type { AppHostSummary } from '../desktop/contracts/snapshots.ts';
 import type { PluginHost } from '../domains/host-management.ts';
 import { HostPluginManager } from './host-plugin-manager.ts';
 

@@ -9,8 +9,9 @@ The singleton App owns direct HTTP, management and native resources. The
 - `interface/`: Windows platform guard and synchronous Chromium isolation,
     App composition and sandboxed UI.
 - `application/`: lifecycle/registration and App orchestration.
-- `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
-- [desktop/](desktop/README.md): complete configuration model and serialized atomic store;
+- `domains/`: pure release/deployment/HTTP/lifecycle contracts and remaining port rules.
+- [desktop/](desktop/README.md): complete configuration model and serialized atomic store,
+    closed management contracts, fixed asset admission and supplied elapsed formatting;
     Main, UI, singleton and selected data-root owners retain their current placement.
 - `gateway/`: Core registration/catalog composition and retained registry/cleanup ownership,
     managed state/execution, whole start admission and live view services in connections/,

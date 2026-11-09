@@ -26,7 +26,13 @@ write/startup joins and cleanup retry responsibility; window and
 renderer obtain no configuration filesystem or store authority.
 
 Expose only inspect/configure/manage/quit/restart through the sandboxed preload.
-Manage accepts only the closed domain-validated lifecycle/registration/host commands;
+Before editing management message/snapshot consumers, read the cumulative
+[contract instructions](../desktop/contracts/AGENTS.md). Before editing fixed
+resource admission or supplied elapsed consumers, read the corresponding
+[asset](../desktop/main/AGENTS.md) or [elapsed](../desktop/renderer/AGENTS.md)
+instructions. These owners preserve exact module VALUE/TYPE roles; they grant no
+new store, clock or renderer capability. Manage accepts only the closed
+contract-validated lifecycle/registration/host commands;
 never expose bearer readback, target creation or arbitrary channels. Validate
 unknown payloads and exact main-window/main-frame/fixed-URL sender identity before
 dispatch. No general filesystem, shell, process, URL navigation or unrestricted IPC.

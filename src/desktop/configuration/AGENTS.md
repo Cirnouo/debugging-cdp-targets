@@ -28,8 +28,9 @@ admitted pending callback and retain its rejection recovery; add no retry/rollba
 Only current interface/app-main.ts imports the store VALUE. It consumes model TYPEs,
 as do interface/app-window.ts and application/app-host-management.ts. Exact
 interface/app-manager.ts consumes parseAppConfiguration VALUE and AppAppearance,
-AppConfiguration and AppHostSelection TYPEs; domains/app-ui.ts consumes that parser
-VALUE and AppConfiguration/AppConfigurationState TYPEs. These are exact module VALUE/TYPE
+AppConfiguration and AppHostSelection TYPEs; desktop/contracts/commands.ts consumes
+that parser VALUE and AppConfiguration TYPE, and desktop/contracts/snapshots.ts
+consumes the parser VALUE and AppConfigurationState TYPE. These are exact module VALUE/TYPE
 roles, not a general symbol-level capability checker. Unknown siblings inherit no
 store or I/O permission. Never add wrappers, barrels, duplicate state or queues.
 

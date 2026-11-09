@@ -1,6 +1,6 @@
 import { createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppUiBridge } from '../domains/app-ui.ts';
+import type { AppUiBridge } from '../desktop/contracts/commands.ts';
 import { AppManager } from './app-manager.ts';
 
 declare global {

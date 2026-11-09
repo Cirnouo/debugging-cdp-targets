@@ -51,6 +51,10 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
     for (const input of [
         'src/desktop/configuration/model.ts',
         'src/desktop/configuration/store.ts',
+        'src/desktop/contracts/commands.ts',
+        'src/desktop/contracts/snapshots.ts',
+        'src/desktop/main/asset-policy.ts',
+        'src/desktop/renderer/elapsed.ts',
         'src/gateway/core.ts',
         'src/gateway/registry.ts',
         'src/gateway/targets/target-lifecycle.ts',
@@ -101,6 +105,7 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         false,
     );
     for (const oldInput of [
+        'src/domains/app-ui.ts',
         'src/domains/app-configuration.ts',
         'src/adapters/app-configuration.ts',
         'src/adapters/host-user-intent.ts',

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import type { AppUiSnapshot } from '../src/domains/app-ui.ts';
+import type { AppUiSnapshot } from '../src/desktop/contracts/snapshots.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 type State = {

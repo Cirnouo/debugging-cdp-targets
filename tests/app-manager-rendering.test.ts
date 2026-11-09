@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { defaultAppConfiguration } from '../src/desktop/configuration/model.ts';
-import type { AppUiBridge, AppUiSnapshot } from '../src/domains/app-ui.ts';
+import type { AppUiBridge } from '../src/desktop/contracts/commands.ts';
+import type { AppUiSnapshot } from '../src/desktop/contracts/snapshots.ts';
 import { AppManager, SelectedOperationDetails } from '../src/interface/app-manager.ts';
 
 function render(snapshot: AppUiSnapshot) {

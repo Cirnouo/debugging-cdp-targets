@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { type AppManagementCommand, parseAppManagementCommand } from '../desktop/contracts/commands.ts';
 import {
     APP_OPERATION_FAILURE_VALUES,
     type AppHostSummary,
-    type AppManagementCommand,
     type AppManagementSnapshot,
-    parseAppManagementCommand,
     parseAppManagementSnapshot,
-} from '../domains/app-ui.ts';
+} from '../desktop/contracts/snapshots.ts';
 import type { ConnectionRoute } from '../domains/control-contract.ts';
 import type { GatewayCore } from '../gateway/core.ts';
 import { isRecord } from '../shared/errors.ts';

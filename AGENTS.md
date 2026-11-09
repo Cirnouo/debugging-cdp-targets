@@ -32,6 +32,11 @@ Before implementing the singleton desktop App migration, read
 They govern implementation. Before editing configuration schemas, migrations or the
 serialized store in `src/desktop/configuration/{model,store}.ts`, read those same
 authorities and the cumulative [configuration instructions](src/desktop/configuration/AGENTS.md).
+Before changing Desktop management messages/snapshots, fixed asset admission or
+supplied elapsed formatting, read those same authorities and the cumulative
+[Desktop instructions](src/desktop/AGENTS.md), then the corresponding
+[contracts](src/desktop/contracts/AGENTS.md), [asset](src/desktop/main/AGENTS.md)
+or [elapsed](src/desktop/renderer/AGENTS.md) owner before editing.
 The singleton App owns direct HTTP and native resources;
 host plugins contain only metadata, artwork, documentation and the shared Skill.
 

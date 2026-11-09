@@ -18,3 +18,9 @@
   startup settlement, admitted configuration writes, native host-management work
   and real Core cleanup success before releasing the process.
 - `AGENTS.md` defines public entry and output contracts.
+
+Closed request/snapshot validation now belongs to [desktop/contracts/](../desktop/contracts/README.md),
+fixed resource admission to [desktop/main/asset-policy.ts](../desktop/main/asset-policy.ts)
+and supplied elapsed formatting to [desktop/renderer/elapsed.ts](../desktop/renderer/elapsed.ts).
+Window acquisition/Buffer responses/sender authorization, Main startup/save/Quit
+and the manager's coherent polling/pending/settings session remain here.

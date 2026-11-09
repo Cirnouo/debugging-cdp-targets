@@ -1,52 +1,11 @@
-import {
-    type AppConfiguration,
-    type AppConfigurationState,
-    parseAppConfiguration,
-} from '../desktop/configuration/model.ts';
-import type { DataIsolationEvidence } from '../gateway/targets/model/isolation.ts';
-import { isRecord } from '../shared/errors.ts';
-import { type ConnectionRoute, parseConnectionRoute, type RestartScope, validateIdentity } from './control-contract.ts';
-import type { PluginHost } from './host-management.ts';
+import { validateIdentity } from '../../domains/control-contract.ts';
+import type { PluginHost } from '../../domains/host-management.ts';
+import type { DataIsolationEvidence } from '../../gateway/targets/model/isolation.ts';
+import { isRecord } from '../../shared/errors.ts';
+import { type AppConfigurationState, parseAppConfiguration } from '../configuration/model.ts';
 
-export const APP_UI_URL = 'dct-app://manager/';
-export const APP_MANAGEMENT_CHANNEL = 'dct-app:manage';
-const APP_ASSET_PATHS = ['/', '/app-renderer.js', '/app.css', '/icon.png'] as const;
-
-export function appAssetPath(input: string, method: string, initiatorOrigin: unknown) {
-    try {
-        const url = new URL(input);
-        if (
-            method !== 'GET' ||
-            url.protocol !== 'dct-app:' ||
-            url.host !== 'manager' ||
-            url.username ||
-            url.password ||
-            url.search ||
-            url.hash ||
-            (initiatorOrigin !== undefined && initiatorOrigin !== 'dct-app://manager')
-        )
-            return undefined;
-        return APP_ASSET_PATHS.find((candidate) => candidate === url.pathname);
-    } catch {
-        return undefined;
-    }
-}
-export type AppUiRequest =
-    | Readonly<{ action: 'inspect' | 'quit' | 'restart' }>
-    | Readonly<{ action: 'configure'; configuration: AppConfiguration }>
-    | Readonly<{ action: 'manage'; command: AppManagementCommand }>;
-export type AppManagementCommand =
-    | { kind: 'restart'; route: ConnectionRoute; scope: RestartScope }
-    | { kind: 'close'; routes: ConnectionRoute[] }
-    | { kind: 'transfer'; routes: ConnectionRoute[]; registrationId: string }
-    | { kind: 'unregister'; registrationId: string }
-    | { kind: 'connection'; route: ConnectionRoute }
-    | { kind: 'operation-status'; operationId: string }
-    | { kind: 'operation-cancel'; operationId: string }
-    | { kind: 'operation-wait'; operationId: string; cursor: number }
-    | { kind: 'host-inspect'; host: PluginHost }
-    | { kind: 'host-sync'; host: PluginHost };
 export type AppRegistrationSummary = { registrationId: string; resources: number; jobs: number };
+
 export type AppConnectionSummary = {
     connectionId: string;
     sessionId?: string;
@@ -60,6 +19,7 @@ export type AppConnectionSummary = {
     processId?: number;
     port?: number;
 };
+
 export type AppOperationSummary = {
     operationId: string;
     requestId: string;
@@ -72,6 +32,7 @@ export type AppOperationSummary = {
     elapsedMs: number;
     cursor: number;
 };
+
 export const APP_OPERATION_FAILURE_VALUES = {
     kind: ['start-failed', 'restart-failed', 'close-failed', 'operation-failed'],
     phase: [
@@ -138,6 +99,7 @@ export const APP_OPERATION_FAILURE_VALUES = {
         'directory-cleanup-failed',
     ],
 } as const;
+
 export type AppSelectedOperation = AppOperationSummary & {
     result?: {
         connectionId?: string;
@@ -165,6 +127,7 @@ export type AppSelectedOperation = AppOperationSummary & {
     isolation?: DataIsolationEvidence;
     wait?: { cursor: number; complete: boolean; replayTruncated: boolean };
 };
+
 export type AppHostSummary = {
     host: PluginHost;
     state:
@@ -191,6 +154,7 @@ export type AppHostSummary = {
         readOnlyReason?: string;
     }[];
 };
+
 export type AppManagementSnapshot = {
     registrations: AppRegistrationSummary[];
     connections: AppConnectionSummary[];
@@ -218,6 +182,7 @@ export type AppManagementSnapshot = {
         reason?: 'busy' | 'stale' | 'rejected';
     }[];
 };
+
 export type AppUiSnapshot = Readonly<{
     phase: 'starting' | 'ready' | 'closing' | 'failed';
     configuration?: AppConfigurationState;
@@ -225,15 +190,8 @@ export type AppUiSnapshot = Readonly<{
     exitIntent?: 'quit' | 'restart';
     management?: AppManagementSnapshot;
 }>;
-export type AppUiBridge = Readonly<{
-    inspect(): Promise<AppUiSnapshot>;
-    configure(configuration: AppConfiguration): Promise<AppUiSnapshot>;
-    manage(command: AppManagementCommand): Promise<AppUiSnapshot>;
-    quit(): Promise<void>;
-    restart(): Promise<void>;
-}>;
 
-function fields(
+export function validateAppManagementFields(
     value: unknown,
     required: readonly string[],
     optional: readonly string[] = [],
@@ -246,105 +204,33 @@ function fields(
         throw new Error('Invalid management message.');
 }
 
-export function parseAppUiRequest(value: unknown): AppUiRequest {
-    if (!isRecord(value)) throw new Error('Invalid management request.');
-    if (value.action === 'configure') {
-        fields(value, ['action', 'configuration']);
-        return Object.freeze({ action: 'configure', configuration: parseAppConfiguration(value.configuration) });
-    }
-    if (value.action === 'manage') {
-        fields(value, ['action', 'command']);
-        return { action: 'manage', command: parseAppManagementCommand(value.command) };
-    }
-    fields(value, ['action']);
-    if (value.action !== 'inspect' && value.action !== 'quit' && value.action !== 'restart')
-        throw new Error('Unsupported management action.');
-    return Object.freeze({ action: value.action });
-}
-
-export function parseAppManagementCommand(input: unknown): AppManagementCommand {
-    if (!isRecord(input)) throw new Error('Invalid management command.');
-    const id = (value: unknown) => {
-        validateIdentity(value, 'management identity');
-        return value;
-    };
-    const routes = (value: unknown) => {
-        if (!Array.isArray(value) || value.length < 1 || value.length > 256)
-            throw new Error('Select between 1 and 256 connections.');
-        const result = value.map(parseConnectionRoute);
-        if (new Set(result.map((route) => route.connectionId)).size !== result.length)
-            throw new Error('Duplicate connection.');
-        return result;
-    };
-    switch (input.kind) {
-        case 'restart':
-            fields(input, ['kind', 'route', 'scope']);
-            if (input.scope !== 'target' && input.scope !== 'official' && input.scope !== 'both')
-                throw new Error('Choose a restart scope.');
-            return { kind: input.kind, route: parseConnectionRoute(input.route), scope: input.scope };
-        case 'connection':
-            fields(input, ['kind', 'route']);
-            return { kind: input.kind, route: parseConnectionRoute(input.route) };
-        case 'close':
-            fields(input, ['kind', 'routes']);
-            return { kind: input.kind, routes: routes(input.routes) };
-        case 'transfer':
-            fields(input, ['kind', 'routes', 'registrationId']);
-            return { kind: input.kind, routes: routes(input.routes), registrationId: id(input.registrationId) };
-        case 'unregister':
-            fields(input, ['kind', 'registrationId']);
-            return { kind: input.kind, registrationId: id(input.registrationId) };
-        case 'operation-status':
-        case 'operation-cancel':
-            fields(input, ['kind', 'operationId']);
-            return { kind: input.kind, operationId: id(input.operationId) };
-        case 'operation-wait':
-            fields(input, ['kind', 'operationId', 'cursor']);
-            if (typeof input.cursor !== 'number' || !Number.isSafeInteger(input.cursor) || input.cursor < 0)
-                throw new Error('Invalid operation cursor.');
-            return { kind: input.kind, operationId: id(input.operationId), cursor: input.cursor };
-        case 'host-inspect':
-        case 'host-sync':
-            fields(input, ['kind', 'host']);
-            if (input.host !== 'codex' && input.host !== 'claude') throw new Error('Invalid host.');
-            return { kind: input.kind, host: input.host };
-        default:
-            throw new Error('Unsupported management command.');
-    }
-}
-
-export function formatAppElapsed(timestamp: unknown, now: number): string {
-    if (typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp < 0 || !Number.isFinite(now))
-        return 'Unavailable';
-    const seconds = Math.floor(Math.max(0, now - timestamp) / 1000);
-    return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
-        .map((part) => String(part).padStart(2, '0'))
-        .join(':');
-}
-
 function text(value: unknown): string {
     if (typeof value !== 'string' || !value || value.length > 8192 || /[\x00-\x1f]/.test(value))
         throw new Error('Invalid management text.');
     return value;
 }
+
 function count(value: unknown): number {
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
         throw new Error('Invalid management count.');
     return value;
 }
+
 function identities(value: Record<string, unknown>, required: string[], optional: string[] = []) {
     for (const key of required) validateIdentity(value[key], key);
     for (const key of optional) if (Object.hasOwn(value, key)) validateIdentity(value[key], key);
 }
+
 function collection(value: unknown, validate: (item: unknown) => void) {
     if (!Array.isArray(value)) throw new Error('Invalid management collection.');
     for (const item of value) validate(item);
 }
+
 function validateIsolation(isolation: unknown) {
     if (!isRecord(isolation)) throw new Error('Invalid isolation evidence.');
-    if (isolation.mode === 'none') fields(isolation, ['mode']);
+    if (isolation.mode === 'none') validateAppManagementFields(isolation, ['mode']);
     else {
-        fields(isolation, ['mode', 'path', 'cleanup', 'state'], ['nonempty']);
+        validateAppManagementFields(isolation, ['mode', 'path', 'cleanup', 'state'], ['nonempty']);
         if (
             isolation.mode !== 'data-dir' ||
             !['retain', 'delete-on-release'].includes(text(isolation.cleanup)) ||
@@ -356,8 +242,9 @@ function validateIsolation(isolation: unknown) {
             throw new Error('Invalid isolation evidence.');
     }
 }
+
 function validateOperation(item: unknown, details: readonly string[] = []) {
-    fields(
+    validateAppManagementFields(
         item,
         ['operationId', 'requestId', 'state', 'phase', 'elapsedMs', 'cursor'],
         ['registrationId', 'connectionId', 'sessionId', 'action', ...details],
@@ -372,20 +259,21 @@ function validateOperation(item: unknown, details: readonly string[] = []) {
     if (item.action !== undefined && !['start', 'restart', 'stop'].includes(text(item.action)))
         throw new Error('Invalid operation action.');
 }
+
 export function parseAppManagementSnapshot(value: unknown): AppManagementSnapshot {
-    fields(
+    validateAppManagementFields(
         value,
         ['registrations', 'connections', 'operations', 'hosts'],
         ['selected', 'outcomes', 'selectedOperation'],
     );
     collection(value.registrations, (item) => {
-        fields(item, ['registrationId', 'resources', 'jobs']);
+        validateAppManagementFields(item, ['registrationId', 'resources', 'jobs']);
         identities(item, ['registrationId']);
         count(item.resources);
         count(item.jobs);
     });
     collection(value.connections, (item) => {
-        fields(
+        validateAppManagementFields(
             item,
             ['connectionId', 'status', 'targetGeneration', 'officialGeneration'],
             [
@@ -416,7 +304,7 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
         if (!isRecord(operation)) throw new Error('Invalid selected operation.');
         if (operation.result !== undefined) {
             const result = operation.result;
-            fields(
+            validateAppManagementFields(
                 result,
                 [],
                 [
@@ -451,7 +339,7 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
         }
         if (operation.error !== undefined) {
             const error = operation.error;
-            fields(
+            validateAppManagementFields(
                 error,
                 ['kind'],
                 [
@@ -485,14 +373,18 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
         }
         if (operation.isolation !== undefined) validateIsolation(operation.isolation);
         if (operation.wait !== undefined) {
-            fields(operation.wait, ['cursor', 'complete', 'replayTruncated']);
+            validateAppManagementFields(operation.wait, ['cursor', 'complete', 'replayTruncated']);
             count(operation.wait.cursor);
             if (typeof operation.wait.complete !== 'boolean' || typeof operation.wait.replayTruncated !== 'boolean')
                 throw new Error('Invalid operation wait evidence.');
         }
     }
     collection(value.hosts, (item) => {
-        fields(item, ['host', 'state', 'activation'], ['candidate', 'reason', 'version', 'installations']);
+        validateAppManagementFields(
+            item,
+            ['host', 'state', 'activation'],
+            ['candidate', 'reason', 'version', 'installations'],
+        );
         if (
             !['codex', 'claude'].includes(text(item.host)) ||
             ![
@@ -519,7 +411,11 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
         for (const key of ['reason', 'version']) if (item[key] !== undefined) text(item[key]);
         if (item.installations !== undefined)
             collection(item.installations, (installation) => {
-                fields(installation, ['version', 'scope', 'enabled', 'pathResolved'], ['readOnlyReason']);
+                validateAppManagementFields(
+                    installation,
+                    ['version', 'scope', 'enabled', 'pathResolved'],
+                    ['readOnlyReason'],
+                );
                 text(installation.version);
                 text(installation.scope);
                 if (typeof installation.enabled !== 'boolean' || typeof installation.pathResolved !== 'boolean')
@@ -528,13 +424,17 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
             });
     });
     if (value.selected !== undefined) {
-        fields(value.selected, ['connectionId', 'sessionId', 'enabledTools', 'mcpArgs'], ['launch', 'isolation']);
+        validateAppManagementFields(
+            value.selected,
+            ['connectionId', 'sessionId', 'enabledTools', 'mcpArgs'],
+            ['launch', 'isolation'],
+        );
         identities(value.selected, ['connectionId', 'sessionId']);
         collection(value.selected.enabledTools, text);
         collection(value.selected.mcpArgs, text);
         if (value.selected.launch !== undefined) {
             const launch = value.selected.launch;
-            fields(launch, ['executable', 'arguments', 'environmentNames'], ['cwd', 'portPolicy']);
+            validateAppManagementFields(launch, ['executable', 'arguments', 'environmentNames'], ['cwd', 'portPolicy']);
             text(launch.executable);
             if (launch.cwd !== undefined) text(launch.cwd);
             collection(launch.environmentNames, text);
@@ -549,7 +449,7 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
     }
     if (value.outcomes !== undefined)
         collection(value.outcomes, (item) => {
-            fields(item, ['connectionId', 'state'], ['operationId', 'reason']);
+            validateAppManagementFields(item, ['connectionId', 'state'], ['operationId', 'reason']);
             identities(item, ['connectionId'], ['operationId']);
             if (!['accepted', 'transferred', 'failed'].includes(text(item.state)))
                 throw new Error('Invalid batch outcome.');
@@ -561,12 +461,12 @@ export function parseAppManagementSnapshot(value: unknown): AppManagementSnapsho
 }
 
 export function parseAppUiSnapshot(value: unknown): AppUiSnapshot {
-    fields(value, ['phase'], ['configuration', 'message', 'management', 'exitIntent']);
+    validateAppManagementFields(value, ['phase'], ['configuration', 'message', 'management', 'exitIntent']);
     if (value.phase !== 'starting' && value.phase !== 'ready' && value.phase !== 'closing' && value.phase !== 'failed')
         throw new Error('Invalid App management phase.');
     let configuration: AppConfigurationState | undefined;
     if (Object.hasOwn(value, 'configuration')) {
-        fields(value.configuration, ['desired', 'effective', 'restartRequired']);
+        validateAppManagementFields(value.configuration, ['desired', 'effective', 'restartRequired']);
         const desired = parseAppConfiguration(value.configuration.desired);
         const effective = parseAppConfiguration(value.configuration.effective);
         if (

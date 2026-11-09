@@ -33,7 +33,59 @@ const CONFIGURATION_MODEL_CONSUMERS = new Map<string, 'value' | 'type'>([
     ['src/interface/app-manager.ts', 'value'],
     ['src/interface/app-window.ts', 'type'],
     ['src/application/app-host-management.ts', 'type'],
-    ['src/domains/app-ui.ts', 'value'],
+    ['src/desktop/contracts/commands.ts', 'value'],
+    ['src/desktop/contracts/snapshots.ts', 'value'],
+]);
+
+const DESKTOP_CONTENT_DEPENDENCIES = new Map<string, { value: readonly string[]; type: readonly string[] }>([
+    [
+        'src/desktop/contracts/commands.ts',
+        {
+            value: [
+                'src/desktop/contracts/snapshots.ts',
+                'src/desktop/configuration/model.ts',
+                'src/shared/errors.ts',
+                'src/domains/control-contract.ts',
+            ],
+            type: ['src/domains/host-management.ts'],
+        },
+    ],
+    [
+        'src/desktop/contracts/snapshots.ts',
+        {
+            value: ['src/desktop/configuration/model.ts', 'src/shared/errors.ts', 'src/domains/control-contract.ts'],
+            type: ['src/domains/host-management.ts', 'src/gateway/targets/model/isolation.ts'],
+        },
+    ],
+    ['src/desktop/main/asset-policy.ts', { value: [], type: [] }],
+    ['src/desktop/renderer/elapsed.ts', { value: [], type: [] }],
+]);
+const DESKTOP_CONTENT_CONSUMERS = new Map<string, ReadonlyMap<string, 'value' | 'type'>>([
+    [
+        'src/desktop/contracts/commands.ts',
+        new Map([
+            ['src/interface/app-window.ts', 'value'],
+            ['src/interface/app-preload.ts', 'value'],
+            ['src/interface/app-manager.ts', 'type'],
+            ['src/interface/app-renderer.ts', 'type'],
+            ['src/application/app-management.ts', 'value'],
+            ['src/application/app-host-management.ts', 'type'],
+        ]),
+    ],
+    [
+        'src/desktop/contracts/snapshots.ts',
+        new Map([
+            ['src/desktop/contracts/commands.ts', 'value'],
+            ['src/interface/app-main.ts', 'type'],
+            ['src/interface/app-window.ts', 'value'],
+            ['src/interface/app-preload.ts', 'value'],
+            ['src/interface/app-manager.ts', 'value'],
+            ['src/application/app-management.ts', 'value'],
+            ['src/application/app-host-management.ts', 'type'],
+        ]),
+    ],
+    ['src/desktop/main/asset-policy.ts', new Map([['src/interface/app-window.ts', 'value']])],
+    ['src/desktop/renderer/elapsed.ts', new Map([['src/interface/app-manager.ts', 'value']])],
 ]);
 
 const HOST_INTENT_DEPENDENCIES = new Map<string, { value: readonly string[]; type: readonly string[] }>([
@@ -789,11 +841,25 @@ export function validateRuntimeSource(file: string, source: string) {
             (!specifier.startsWith('.') || file !== 'src/interface/app-main.ts')
         )
             errors.push(`${file}: only App Main may depend on the configuration store.`);
-        if (
-            desktop &&
-            !CONFIGURATION_DEPENDENCIES.get(file)?.includes(specifier.startsWith('.') ? resolved : specifier)
-        )
-            errors.push(`${file}: unapproved configuration dependency.`);
+        const desktopConsumer = DESKTOP_CONTENT_CONSUMERS.get(resolved);
+        if (desktopConsumer) {
+            const role = desktopConsumer.get(file);
+            if (!specifier.startsWith('.') || (role !== 'value' && !(role === 'type' && typeOnly)))
+                errors.push(`${file}: unapproved desktop content consumer or VALUE dependency.`);
+        }
+        if (desktop) {
+            const contentRole = DESKTOP_CONTENT_DEPENDENCIES.get(file);
+            if (contentRole) {
+                if (
+                    !specifier.startsWith('.') ||
+                    (!contentRole.value.includes(resolved) && !(typeOnly && contentRole.type.includes(resolved)))
+                )
+                    errors.push(`${file}: unapproved desktop content dependency.`);
+            } else if (
+                !CONFIGURATION_DEPENDENCIES.get(file)?.includes(specifier.startsWith('.') ? resolved : specifier)
+            )
+                errors.push(`${file}: unapproved configuration dependency.`);
+        }
         const pureRelative =
             /^src\/(?:domains|shared)\//.test(resolved) || (hostPayload && resolved.startsWith('src/host-plugins/'));
         const targetValue =

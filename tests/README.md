@@ -126,8 +126,10 @@ Linux/macOS product execution or acceptance route.
   HTTP before successful startup. `gateway/connections/construction-cleanup.test.ts`
   owns the three whole trusted cleanup capability, pending/late catalog acquisition
   and retained construction cleanup/retry cases.
-- `app-ui.test.ts` checks fixed local renderer resources and narrow management
-  actions/snapshots without exposing secrets or general filesystem/IPC authority.
+- [desktop/contracts/](desktop/contracts/README.md) retains both command and all five
+  snapshot cases without exposing secrets or general filesystem/IPC authority.
+  [desktop/main/](desktop/main/README.md) retains the complete fixed resource case;
+  [desktop/renderer/](desktop/renderer/README.md) retains the namespace elapsed case.
 - `app-management.test.ts` exercises the real Core admin closure with controlled
   native/official I/O: scoped restart, timestamps, stale/busy routes, independent
   transfer/Close outcomes, retained failure and original operation ownership.
@@ -574,10 +576,10 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select seventy-nine entries: `tests/*.test.ts`, the
+command and `pnpm test:coverage` select eighty-three entries: `tests/*.test.ts`, the
 forty-two explicit [tooling suites](tooling/README.md), three explicit
-[Host suites](host-plugins/README.md), thirty-one Gateway suites and two explicit
-[Desktop configuration suites](desktop/configuration/README.md). Gateway selection
+[Host suites](host-plugins/README.md), thirty-one Gateway suites and six explicit
+[Desktop suites](desktop/README.md). Gateway selection
 retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
 [connection suites](gateway/connections/README.md) and the eight explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
@@ -589,7 +591,8 @@ observer-cleanup and close-diagnostics. The six connection suites then append
 once as cleanup, connection-options, execution-detachment,
 registration-administration, roots-admission and scoped-restart. Upstream,
 catalog-refresh and upstream-lifetime follow in that order, followed once by Host
-user-intent, then Desktop model.test.ts and store.test.ts. Default commands do not launch
+user-intent, then the Desktop configuration model and store, contract commands
+and snapshots, asset admission and elapsed suites in that order. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

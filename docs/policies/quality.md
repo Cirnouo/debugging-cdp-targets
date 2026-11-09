@@ -142,7 +142,10 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/gateway/official/upstream-lifetime.test.ts`, then
 `tests/host-plugins/user-intent.test.ts`, followed by exactly
 `tests/desktop/configuration/model.test.ts` and
-`tests/desktop/configuration/store.test.ts`. These seventy-nine selectors
+`tests/desktop/configuration/store.test.ts`, then exactly
+`tests/desktop/contracts/commands.test.ts`, `tests/desktop/contracts/snapshots.test.ts`,
+`tests/desktop/main/asset-policy.test.ts` and `tests/desktop/renderer/elapsed.test.ts`.
+These eighty-three selectors
 include thirty-one Gateway suites and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions

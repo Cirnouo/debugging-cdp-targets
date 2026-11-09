@@ -115,7 +115,14 @@ const gatewayCases = [
     'tests/gateway/targets/structured-launch.test.ts',
     'tests/gateway/targets/target-lifecycle.test.ts',
 ];
-const desktopCases = ['tests/desktop/configuration/model.test.ts', 'tests/desktop/configuration/store.test.ts'];
+const desktopCases = [
+    'tests/desktop/configuration/model.test.ts',
+    'tests/desktop/configuration/store.test.ts',
+    'tests/desktop/contracts/commands.test.ts',
+    'tests/desktop/contracts/snapshots.test.ts',
+    'tests/desktop/main/asset-policy.test.ts',
+    'tests/desktop/renderer/elapsed.test.ts',
+];
 const hostCases = [
     'tests/host-plugins/payload-filesystem.test.ts',
     'tests/host-plugins/payload-integrity.test.ts',

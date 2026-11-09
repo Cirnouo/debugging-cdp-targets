@@ -181,6 +181,10 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     for (const input of [
         'src/desktop/configuration/model.ts',
         'src/desktop/configuration/store.ts',
+        'src/desktop/contracts/commands.ts',
+        'src/desktop/contracts/snapshots.ts',
+        'src/desktop/main/asset-policy.ts',
+        'src/desktop/renderer/elapsed.ts',
         'src/domains/app-configuration.ts',
         'src/adapters/app-configuration.ts',
     ])
