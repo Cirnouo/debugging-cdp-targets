@@ -59,3 +59,8 @@ complete verified source producer, protected creation and state-last publication
 These source-only operations remain outside App entry composition; default
 admission, installers and native acceptance are separate pending gates. There is
 no runtime compiler fallback.
+
+The removal loop uses the caller's identity check and error classifier for
+each bounded attempt. Windows build support uses it during explicit release
+of a completed build to remove its scratch root.
+[Owned directory removal](adapters/owned-directory-removal.ts)

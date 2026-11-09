@@ -39,7 +39,9 @@ at creation. The fixtures call cleanup after their writers finish and they
 restore their I/O guards. The path-based identity check and removal are separate
 operations. Cleanup retries `ENOTEMPTY` from removal up to twice with the
 fixture's original removal options. A final failure after retry preserves the
-earlier removal errors and the terminal cause.
+earlier removal errors and the terminal cause. The fixture supplies its
+identity check and error classifier to the adapter loop.
+[Owned directory removal](../../src/adapters/owned-directory-removal.ts)
 
 `deployment-advisory-lock.ts` verifies the complete original six-package loader
 closure in each actual process, then loads only the verified public vendor entry
