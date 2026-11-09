@@ -206,8 +206,11 @@ Linux/macOS product execution or acceptance route.
   canonical-profile argument cases; controlled profile/launch suites share
   `fixtures/target-host.ts`. All six target value suites retain 59 registrations.
 
-- `gateway-core.test.ts` covers independent clients, registration authorization, immutable
-    roots/launch snapshots, scoped restart and retained cleanup failure/retry.
+- `gateway/connections/` groups 26 original Core cases and one new pre-roots
+    snapshot case by cleanup, roots admission, scoped restart, execution detachment
+    and registration administration.
+    Their complete matrices, snapshots, callback bodies and cleanup share the one
+    managed fixture in `fixtures/gateway/core-runtime.ts`.
 - `client-context.test.ts`, `registrations.test.ts` and `gateway/official/execution.test.ts`
     exercise request availability, empty idle expiry and wire terminal races.
 - `host-management.test.ts` checks absent/corrupt/incompatible latest records,
@@ -452,7 +455,7 @@ Linux/macOS product execution or acceptance route.
 - `entry-runtime.test.ts` keeps ten actual Core ownership, independent connection
   and upstream lifetime cases. `gateway/connections/gateway-cleanup.test.ts` owns
   the seven whole Gateway shutdown, rollback, catalog and retained disposal cases.
-  Both share controlled I/O and status support in `fixtures/core-runtime.ts`,
+  Both share controlled I/O and status support in `fixtures/gateway/core-runtime.ts`,
   retaining every setup/status assertion and cleanup branch.
 - `mcp-bridge.test.ts` checks official catalog/result metadata, uncapped pagination,
   output validation and independent subprocess disposal. Actual Core/SDK HTTP
@@ -512,8 +515,10 @@ Linux/macOS product execution or acceptance route.
 - `gateway/official/` owns safe options/recipes, exact wire-terminal values and
     argument/environment and complete package-file contracts, preserving all original cases and matrices;
     see its [suite inventory](gateway/official/README.md).
-- `tool-catalog.test.ts` and `connection-options.test.ts` verify activation recipes,
-    variants and independent configuration.
+- `tool-catalog.test.ts` and `gateway/connections/connection-options.test.ts` verify activation recipes,
+    variants and independent configuration. The latter retains its whole HTTP/catalog
+    integration case and tests supplied workspace defaults, ordered aliases,
+    unrestricted-path facts and closed option rejection.
 - `operations.test.ts`, `mcp-lifecycle.test.ts` and `lifecycle-protocol.test.ts`
   cover asynchronous owner/identity/deduplication/cursor/cancel behavior,
   terminal result/error snapshots and actual SDK HTTP lifecycle validation.
@@ -561,16 +566,18 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select fifty entries: `tests/*.test.ts`, the
+command and `pnpm test:coverage` select fifty-six entries: `tests/*.test.ts`, the
 twenty-five explicit [tooling suites](tooling/README.md), two explicit
-[Host suites](host-plugins/README.md) and twenty-two Gateway suites. Gateway selection
-retains argument parsing, eleven [Target suites](gateway/targets/README.md), five
-[connection/directory suites](gateway/connections/README.md) and the five explicit
+[Host suites](host-plugins/README.md) and twenty-eight Gateway suites. Gateway selection
+retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
+[connection suites](gateway/connections/README.md) and the five explicit
 [Official suites](gateway/official/README.md). The original thirty selectors retain
 their order; options, execution, server-arguments and server-arguments-environment
 append once in that order, followed by package-files, security/official-inputs and
 quality/temporary-directory-alias, then target-lifecycle, lifecycle-rollback,
-observer-cleanup and close-diagnostics. Default commands do not launch
+observer-cleanup and close-diagnostics. The six connection suites then append
+once as cleanup, connection-options, execution-detachment,
+registration-administration, roots-admission and scoped-restart. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

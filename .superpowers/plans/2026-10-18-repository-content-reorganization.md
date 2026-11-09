@@ -95,8 +95,16 @@ expectations must not be replaced with the implementation's own generated data.
     with its Core transaction; registry may consume its exact exported TYPE with
     no runtime cycle or duplicated capability shape. Any temporary TYPE edges to
     current application service owners require exact reviewed roles/instructions.
-    Managed connection, admission, workspace and projection content remain future
-    obligations until their actual transactions/supplied inputs move coherently.
+    The coherent managed cut retains original state, generations, actual execution,
+    handler/lifecycle, authorization and transfer in managed-connection.ts. Whole
+    start admission, persistent callbacks, rollback and final directory retry move
+    together to start-admission.ts, receiving that same lifecycle at invocation.
+    Live status/configuration/catalog projection and administration inventory move
+    together to connection-view.ts, preserving guarded invocation-time Official defaults.
+    Both factories execute no providers at construction; no new await, getter,
+    wrapper, cache or snapshot is introduced. Workspace policy uses supplied inputs
+    and admission's pre-roots temporary-directory capture. These allocations leave
+    the remaining O5 and later plan obligations pending until separately completed.
 - Move the seven reviewed `entry-runtime.test.ts` final-cleanup cases and three
     `app-core-construction.test.ts` cases to the already inventoried Gateway
     gateway-cleanup/construction-cleanup suites. Share the unchanged controlled

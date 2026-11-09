@@ -18,7 +18,7 @@ its child environment snapshot remains a separate later boundary.
 execution.ts owns only one supplied wire id and once-only terminal latch. Preserve
 exact id type, single assignment, response/result-error XOR, close idempotence and
 no result archive. Actual slot accounting, originating facilities, wire transport,
-child exit and disposal stay with their current Core/bridge transaction owners.
+child exit and disposal stay with the managed connection and bridge transaction owners.
 Client cancellation detaches a response, never proves execution/child completion.
 
 release-evidence.ts validates unknown original-release and manifest evidence through
@@ -48,10 +48,11 @@ buildOfficialLaunchArguments, and windowsEnvironment=process.platform==='win32'
 at parameter3 of the latter, may read ambient state. Preserve invocation timing,
 original supplied-object getter/spread semantics and separate later child capture.
 No top-level/body/alias/computed reads, clock, network, SDK, native or child-process
-authority is granted. Pure/unknown owners, registry, connections and package-files
-cannot acquire this owner through any value or erased dependency form. Core's
-closed role and actual adapters consume it; complete child/catalog/wire/disposal
-transactions remain in their existing adapters.
+authority is granted. Managed connection, start admission and connection view
+consume it through their exact ../official/server-launch.ts edges. Actual adapters
+also consume it. Core, registry, pure or unknown owners, package-files and other
+connection roles cannot acquire it through any value or erased dependency form.
+Complete child/catalog/wire/disposal transactions stay with their existing adapters.
 
 Before changing a consumer of target launch/isolation contracts, read the
 [target model instructions](../targets/model/AGENTS.md) and

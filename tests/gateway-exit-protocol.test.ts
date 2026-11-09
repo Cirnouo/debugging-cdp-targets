@@ -6,7 +6,7 @@ import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import type { ConnectionStatus } from '../src/domains/control-contract.ts';
 import { parseControlRequest } from '../src/domains/control-contract.ts';
 import { isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
+import { createCoreFixture } from './fixtures/gateway/core-runtime.ts';
 
 class Application extends EventEmitter {
     exitCode: number | null = null;

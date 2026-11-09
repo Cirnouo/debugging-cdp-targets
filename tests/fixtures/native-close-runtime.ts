@@ -15,7 +15,7 @@ import type { ConnectionStatus, ControlRequest } from '../../src/domains/control
 import { parseControlRequest } from '../../src/domains/control-contract.ts';
 import type { DataIsolationEvidence } from '../../src/gateway/targets/model/isolation.ts';
 import { isRecord } from '../../src/shared/errors.ts';
-import { createCoreFixture } from './core-runtime.ts';
+import { createCoreFixture } from './gateway/core-runtime.ts';
 
 export function deferred() {
     let resolve = () => {};

@@ -22,8 +22,9 @@ ControlContext, Disposition, LaunchContext, LaunchOptions and TargetStatus from
 ../../domains/control-contract.ts. Keep those exact relative named/type bindings.
 Only the existing direct new Date().toISOString() exit timestamp is permitted;
 no other clock, process/env/argv, filesystem, network, SDK, native or kill authority.
-Core consumes only createTargetLifecycle and TargetLifecycleHost/TargetLifecycleRouter
-types; registry consumes only TargetExitEvent TYPE. Pure owners and adapters
+Core imports only TargetLifecycleHost TYPE. Managed connection imports the factory
+and host/router ports as TYPES. Start admission imports createTargetLifecycle and
+TargetLifecycleHost TYPE. Registry imports only TargetExitEvent TYPE. Pure owners and adapters
 cannot import this mutable lifecycle, including erased or computed forms.
 
 model/ remains pure. Launch/isolation and native argument rules consume supplied

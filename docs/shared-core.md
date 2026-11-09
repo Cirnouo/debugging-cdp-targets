@@ -5,13 +5,26 @@ transport-independent core and fixed official catalog. It attaches no client and
 launches no target. Catalog discovery owns a short-lived verified official child
 and router and disposes both before returning. The separately composed Electron
 App owns direct SDK HTTP and final cleanup; thin Plugins never launch a core.
-Core owns the complete managed-connection generation/execution object;
+Core retains substantive registration/registry/catalog and construction-cleanup
+composition. Its synchronous createManagedConnections factory owns the same
+state, generations, handler/lifecycle, execution/context, authorization and transfer in
+`src/gateway/connections/managed-connection.ts`;
 `src/gateway/registry.ts` owns route membership and retained cleanup joins over
 those same objects, with no runtime back edge or duplicated capability shape.
+The factory runs at the original port/host point without acquisition or catalog
+reads. Core supplies a synchronous live readCatalog provider at the original
+validation/status/requirements regions, never cached or captured across an await.
+The registry/managed cycle is erased TYPE-only. `connections/start-admission.ts`
+owns the whole start, persistent callbacks, rollback and final directory retry;
+the same lifecycle is supplied at invocation. `connections/connection-view.ts`
+owns live status/configuration/catalog projection and administration inventory,
+retaining invocation-time Official launch defaults at the original guarded branch.
+Both factories execute no providers at construction; neither adds an await,
+snapshot, cache or second state authority. Their ManagedConnection edges are TYPE-only.
 The complete `src/gateway/targets/target-lifecycle.ts` transaction composes the
 supplied target host/router capabilities, owns actual-exit callbacks and exposes
-explicit owner cleanup. Core and registry retain their generation and cleanup
-joins; Agent/MCP disconnect does not request that cleanup.
+explicit owner cleanup. Managed connection retains generation fences and registry
+retains cleanup joins. Agent/MCP disconnect does not request that cleanup.
 See [App runtime](app-runtime.md) for bootstrap, storage and request lifetime.
 
 ## Client and registration boundary

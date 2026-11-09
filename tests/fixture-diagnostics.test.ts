@@ -19,7 +19,7 @@ import { createOperationRegistry } from '../src/application/operations.ts';
 import type { LaunchOptions } from '../src/domains/control-contract.ts';
 import { createTargetLifecycle } from '../src/gateway/targets/target-lifecycle.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
+import { createCoreFixture } from './fixtures/gateway/core-runtime.ts';
 
 const entryId = '11111111-1111-4111-8111-111111111111';
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));

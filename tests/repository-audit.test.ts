@@ -120,21 +120,70 @@ test('target lifecycle exact capabilities keep the sole direct exit timestamp an
         assert.ok(validateRuntimeSource(file, 'const value = new Date().toISOString();').length, file);
 });
 
-test('target lifecycle exact capabilities fence Core registry and retired application grants', () => {
+test('target lifecycle exact capabilities fence Core, connection owners, registry and retired application grants', () => {
+    for (const source of [
+        "import { createTargetLifecycle } from './targets/target-lifecycle.ts';",
+        "import type { TargetLifecycleRouter } from './targets/target-lifecycle.ts';",
+    ]) {
+        const errors = validateRuntimeSource('src/gateway/core.ts', source);
+        assert.ok(errors.includes('src/gateway/core.ts: unapproved target lifecycle dependency or binding.'), source);
+    }
     for (const [file, source] of [
+        ['src/gateway/core.ts', "import type { TargetLifecycleHost } from './targets/target-lifecycle.ts';"],
         [
-            'src/gateway/core.ts',
-            "import { createTargetLifecycle, type TargetLifecycleHost, type TargetLifecycleRouter } from './targets/target-lifecycle.ts';",
+            'src/gateway/connections/managed-connection.ts',
+            "import type { createTargetLifecycle, TargetLifecycleHost, TargetLifecycleRouter } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            "import { createTargetLifecycle, type TargetLifecycleHost } from '../targets/target-lifecycle.ts';",
         ],
         ['src/gateway/registry.ts', "import type { TargetExitEvent } from './targets/target-lifecycle.ts';"],
         ['src/gateway/registry.ts', "import { type TargetExitEvent } from './targets/target-lifecycle.ts';"],
     ] as const)
         assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
-    for (const file of ['src/gateway/core.ts', 'src/gateway/registry.ts']) {
-        for (const { source } of connectionDependencyForms('../application/target-controller.ts'))
-            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
-        for (const { source } of connectionDependencyForms('./targets/target-lifecycle.ts'))
-            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const [file, target, retired] of [
+        ['src/gateway/core.ts', './targets/target-lifecycle.ts', '../application/target-controller.ts'],
+        ['src/gateway/registry.ts', './targets/target-lifecycle.ts', '../application/target-controller.ts'],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            '../targets/target-lifecycle.ts',
+            '../../application/target-controller.ts',
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            '../targets/target-lifecycle.ts',
+            '../../application/target-controller.ts',
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            '../targets/target-lifecycle.ts',
+            '../../application/target-controller.ts',
+        ],
+    ] as const)
+        for (const dependency of [retired, target])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const [file, source] of [
+        [
+            'src/gateway/connections/managed-connection.ts',
+            "import { createTargetLifecycle } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            "import type { TargetExitEvent } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            "import type { TargetLifecycleRouter } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            "import type { TargetLifecycleHost } from '../targets/target-lifecycle.ts';",
+        ],
+    ] as const) {
+        const errors = validateRuntimeSource(file, source);
+        assert.ok(errors.includes(`${file}: unapproved target lifecycle dependency or binding.`), source);
     }
     for (const source of [
         "import { TargetExitEvent } from './targets/target-lifecycle.ts';",
@@ -1321,8 +1370,17 @@ test('Core registry inverse edges reject mutable authority in every supported de
         ['src/host-plugins/unreviewed.ts', '../gateway'],
         ['src/gateway/connections/resource-owner.ts', '..'],
         ['src/gateway/connections/directory-lease.ts', '..'],
+        ['src/gateway/owned-tool-arguments.ts', '.'],
+        ['src/gateway/official/options.ts', '..'],
+        ['src/gateway/official/execution.ts', '..'],
     ] as const)
-        for (const owner of ['core', 'registry'])
+        for (const owner of [
+            'core',
+            'registry',
+            'connections/managed-connection',
+            'connections/start-admission',
+            'connections/connection-view',
+        ])
             for (const { source } of connectionDependencyForms(`${prefix}/${owner}.ts`)) {
                 const errors = validateRuntimeSource(file, source);
                 assert.ok(!errors.some((error) => error.includes('invalid source')), source);
@@ -1336,31 +1394,82 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
             'src/gateway/core.ts',
             [
                 'node:crypto',
-                'node:os',
-                'node:path',
                 '../adapters/cdp-router.ts',
                 '../adapters/chrome-profile.ts',
                 '../adapters/data-directory.ts',
-                '../adapters/fixture-diagnostics.ts',
                 '../adapters/mcp-bridge.ts',
-                './official/server-launch.ts',
-                '../adapters/port-reservation.ts',
-                '../adapters/target-host.ts',
                 '../adapters/tool-catalog.ts',
-                '../domains/control-contract.ts',
-                '../domains/request-failure.ts',
-                './connections/directory-lease.ts',
-                './diagnostics.ts',
-                './targets/model/isolation.ts',
-                './targets/model/launch-command.ts',
-                '../shared/constants.ts',
                 '../shared/errors.ts',
                 '../application/client-context.ts',
-                '../application/mcp-lifecycle.ts',
                 '../application/registrations.ts',
+                './connections/managed-connection.ts',
                 './registry.ts',
             ],
-            ['@modelcontextprotocol/client', './connections/resource-owner.ts', '../shared/client-context.ts'],
+            ['@modelcontextprotocol/client', '../domains/control-contract.ts', '../shared/client-context.ts'],
+        ],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            [
+                'node:crypto',
+                '../official/server-launch.ts',
+                '../../adapters/port-reservation.ts',
+                '../../adapters/target-host.ts',
+                '../../application/client-context.ts',
+                '../../application/mcp-lifecycle.ts',
+                '../../domains/control-contract.ts',
+                '../../domains/request-failure.ts',
+                '../../shared/errors.ts',
+                '../diagnostics.ts',
+                './connection-view.ts',
+                './start-admission.ts',
+            ],
+            [
+                '@modelcontextprotocol/client',
+                '../../adapters/chrome-profile.ts',
+                '../../adapters/data-directory.ts',
+                '../../adapters/mcp-bridge.ts',
+                '../../adapters/tool-catalog.ts',
+                '../../application/registrations.ts',
+                '../registry.ts',
+                './resource-owner.ts',
+                '../../shared/client-context.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
+            ],
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            [
+                'node:crypto',
+                'node:os',
+                'node:path',
+                '../../adapters/fixture-diagnostics.ts',
+                '../../adapters/mcp-bridge.ts',
+                '../official/server-launch.ts',
+                '../../application/client-context.ts',
+                '../../domains/control-contract.ts',
+                '../../shared/constants.ts',
+                '../../shared/errors.ts',
+                '../targets/model/isolation.ts',
+                '../targets/model/launch-command.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
+            ],
+            [
+                '../../adapters/chrome-profile.ts',
+                '../../adapters/data-directory.ts',
+                '../../application/mcp-lifecycle.ts',
+                '../../application/registrations.ts',
+                '../registry.ts',
+                './managed-connection.ts',
+                './resource-owner.ts',
+                './connection-view.ts',
+            ],
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            ['../official/server-launch.ts', '../../domains/control-contract.ts'],
+            ['../../adapters/tool-catalog.ts', '../registry.ts', './managed-connection.ts'],
         ],
         [
             'src/gateway/registry.ts',
@@ -1371,7 +1480,7 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 '../shared/errors.ts',
             ],
             [
-                './core.ts',
+                './connections/managed-connection.ts',
                 './connections/directory-lease.ts',
                 '../application/registrations.ts',
                 '../application/mcp-lifecycle.ts',
@@ -1407,18 +1516,36 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 source,
             );
     }
+    for (const { source } of connectionDependencyForms('./core.ts'))
+        assert.ok(validateRuntimeSource('src/gateway/registry.ts', source).length, source);
+    for (const dependency of [
+        '../core.ts',
+        '../../adapters/unknown.ts',
+        '../../interface/app-main.ts',
+        '../../application/operations.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/connections/managed-connection.ts', source).length, source);
 });
 
 test('Core registry ambient capabilities apply only to exact reviewed expressions and files', () => {
     for (const [file, source] of [
+        ['src/gateway/core.ts', 'const timestamp = now ?? Date.now;'],
         [
-            'src/gateway/core.ts',
-            'const ambient = { ...process.env }; const windows = process.platform === "win32"; const timestamp = now ?? Date.now;',
+            'src/gateway/connections/start-admission.ts',
+            'const ambient = { ...process.env }; const windows = process.platform === "win32";',
         ],
         ['src/gateway/registry.ts', 'process.stderr.write("Connection cleanup failed\\n");'],
     ] as const)
         assert.deepEqual(validateRuntimeSource(file, source), [], source);
-    for (const file of ['src/gateway/core.ts', 'src/gateway/registry.ts', 'src/gateway/unreviewed.ts']) {
+    for (const file of [
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
+        'src/gateway/connections/managed-connection.ts',
+        'src/gateway/connections/start-admission.ts',
+        'src/gateway/connections/connection-view.ts',
+        'src/gateway/unreviewed.ts',
+    ]) {
         for (const source of [
             'const state = process;',
             'const state = globalThis.process;',
@@ -1449,6 +1576,17 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
     assert.ok(validateRuntimeSource('src/gateway/core.ts', 'process.stderr.write("x");').length);
+    for (const source of ['const ambient = { ...process.env };', 'const windows = process.platform === "win32";'])
+        for (const file of [
+            'src/gateway/core.ts',
+            'src/gateway/connections/managed-connection.ts',
+            'src/gateway/connections/connection-view.ts',
+        ])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    assert.ok(
+        validateRuntimeSource('src/gateway/connections/managed-connection.ts', 'const timestamp = now ?? Date.now;')
+            .length,
+    );
     for (const source of [
         'const env = { ...process.env };',
         'const platform = process.platform;',
@@ -1461,6 +1599,121 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
         'const timestamp = Date.now;',
     ])
         assert.ok(validateRuntimeSource('src/gateway/unreviewed.ts', source).length, source);
+});
+
+test('managed connection role accepts its original client lifecycle provider', () => {
+    for (const { source } of connectionDependencyForms('../../application/client-context.ts'))
+        assert.deepEqual(validateRuntimeSource('src/gateway/connections/managed-connection.ts', source), [], source);
+});
+
+test('managed connection inverse edge rejects erased authority in unknown pure owners', () => {
+    const source = "import type { ManagedConnection } from './connections/managed-connection.ts';";
+    const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
+    assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+    assert.ok(errors.length, source);
+});
+
+test('pure workspace policy rejects JavaScript specifiers for managed connection owners', () => {
+    const file = 'src/gateway/connections/workspace-policy.ts';
+    for (const source of [
+        "import type { ManagedConnection } from './managed-connection.js';",
+        "import type { createStartAdmission } from './start-admission.js';",
+        "import type { createConnectionView } from './connection-view.js';",
+    ]) {
+        const errors = validateRuntimeSource(file, source);
+        assert.ok(errors.includes(`${file}: relative source dependencies must use an explicit .ts extension.`), source);
+    }
+});
+
+test('admission and view roles admit only their supplied service capabilities', () => {
+    for (const [file, dependency] of [
+        ['src/gateway/connections/start-admission.ts', '../../application/client-context.ts'],
+        ['src/gateway/connections/start-admission.ts', '../../adapters/mcp-bridge.ts'],
+        ['src/gateway/connections/connection-view.ts', '../official/server-launch.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+});
+
+test('admission and view inverse edges reject erased mutable authority in pure owners', () => {
+    for (const owner of ['start-admission', 'connection-view']) {
+        const source = `import type { Service } from './connections/${owner}.ts';`;
+        const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
+        assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+        assert.ok(errors.length, source);
+    }
+});
+
+test('managed and view roles cannot retain transferred admission capabilities', () => {
+    for (const file of ['src/gateway/connections/managed-connection.ts', 'src/gateway/connections/connection-view.ts'])
+        for (const dependency of [
+            'node:os',
+            'node:path',
+            '../../adapters/fixture-diagnostics.ts',
+            '../../shared/constants.ts',
+            '../targets/model/isolation.ts',
+            '../targets/model/launch-command.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const dependency of ['../../adapters/mcp-bridge.ts', './directory-lease.ts', './workspace-policy.ts'])
+        for (const { source, erased } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource('src/gateway/connections/managed-connection.ts', source);
+            if (erased) assert.deepEqual(errors, [], source);
+            else assert.ok(errors.length, source);
+        }
+    for (const file of ['src/gateway/connections/start-admission.ts', 'src/gateway/connections/connection-view.ts'])
+        for (const dependency of [
+            '../../adapters/port-reservation.ts',
+            '../../adapters/target-host.ts',
+            '../diagnostics.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+});
+
+test('workspace policy accepts supplied option parsing without gaining connection authority', async () => {
+    const file = 'src/gateway/connections/workspace-policy.ts';
+    for (const { source } of connectionDependencyForms('../official/options.ts'))
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
+    for (const dependency of [
+        '../core.ts',
+        '../registry.ts',
+        './managed-connection.ts',
+        './resource-owner.ts',
+        './directory-lease.ts',
+        '../diagnostics.ts',
+        '../../adapters/tool-catalog.ts',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        'node:os',
+        'node:fs',
+        'node:net',
+        'node:child_process',
+        '@modelcontextprotocol/client',
+    ])
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, `${file}: ${source}`);
+        }
+    for (const source of [
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+        'const value = (require as (name: string) => unknown)?.(moduleName);',
+        'const value = process.env;',
+        'const value = process.platform;',
+        'const value = globalThis.process;',
+        'const { env } = process;',
+        'const value = Date.now;',
+        'const value = new Date();',
+        'const value = performance.now();',
+        'const value = globalThis.globalThis["process"].env;',
+        'const value = globalThis[key];',
+        'fetch("http://localhost");',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
 });
 
 test('Official pure owners accept supplied shared rules and real adapter consumers', () => {
@@ -1695,6 +1948,7 @@ test('Official launch-input defaults cannot authorize ambient escapes or child t
 
 test('Official launch-input rights cannot leak through pure or unrelated owner dependencies', () => {
     for (const file of [
+        'src/gateway/core.ts',
         'src/gateway/official/options.ts',
         'src/gateway/official/execution.ts',
         'src/gateway/official/release-evidence.ts',
@@ -1708,15 +1962,23 @@ test('Official launch-input rights cannot leak through pure or unrelated owner d
         'src/host-plugins/unknown.ts',
         'src/gateway/connections/resource-owner.ts',
         'src/gateway/connections/directory-lease.ts',
+        'src/gateway/connections/workspace-policy.ts',
+        'src/gateway/connections/unknown.ts',
         'src/gateway/registry.ts',
+        'src/gateway/targets/target-lifecycle.ts',
     ]) {
         const relative = path.posix.relative(path.posix.dirname(file), 'src/gateway/official/server-launch.ts');
         const dependency = relative.startsWith('.') ? relative : `./${relative}`;
         for (const { source } of connectionDependencyForms(dependency))
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
-    for (const { source } of connectionDependencyForms('./official/server-launch.ts'))
-        assert.deepEqual(validateRuntimeSource('src/gateway/core.ts', source), [], source);
+    for (const file of [
+        'src/gateway/connections/managed-connection.ts',
+        'src/gateway/connections/start-admission.ts',
+        'src/gateway/connections/connection-view.ts',
+    ])
+        for (const { source } of connectionDependencyForms('../official/server-launch.ts'))
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
     for (const { source } of connectionDependencyForms('../gateway/official/server-launch.ts'))
         assert.deepEqual(validateRuntimeSource('src/adapters/example.ts', source), [], source);
 });

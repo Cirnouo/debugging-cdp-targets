@@ -6,14 +6,15 @@
 - `target-lifecycle.ts` exports createTargetLifecycle, TargetLifecycleHost,
     TargetLifecycleRouter, TargetExitEvent, TargetHealth and TargetLaunchContext.
     One closure owns attachment, admission, health coalescing, normal-Close reuse,
-    rollback, actual-exit callbacks and retirement. Its cleanup method is invoked
-    explicitly by Core/registry ownership, not an Agent/MCP disconnect.
+    rollback, actual-exit callbacks and retirement. Managed connection and registry
+    invoke its cleanup explicitly. Agent/MCP disconnect does not request cleanup.
 - `AGENTS.md` bounds that exact mutable role, keeps model/ and unknown files pure,
     and triggers the complete canonical lifecycle obligations before editing.
 
-The existing adapters acquire and verify actual targets. Core retains connection
-generations/execution, registry retains route membership and cleanup retries, and
-the lifecycle composes their supplied target capabilities without native I/O.
+The existing adapters acquire and verify actual targets. Start admission creates
+the lifecycle through supplied host/router capabilities. Managed connection
+retains connection generations and execution. Registry retains route membership
+and cleanup retries and consumes only the exit event TYPE.
 Domain `cdp-target.ts` still contains PortRange
 and the standalone candidate chooser. This slice does not complete target or
 port-lifetime reorganization.

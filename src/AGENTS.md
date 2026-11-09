@@ -10,7 +10,7 @@ application may use explicit adapters. Adapters may consume the delivered pure g
 rules, target models and pure Official options/execution/release evidence, the
 exact complete Official package-file proof and launch-input owner, or its
 exact diagnostics clock, and never depend on
-application/interface, either mutable Gateway service or the mutable target lifecycle.
+application/interface, any mutable Gateway service or the mutable target lifecycle.
 The pure Official owners contain no ambient defaults, package reads, live catalog
 or child/context lifetime authority. The exact gateway/official/server-launch.ts owns invocation-time environment/
 platform defaults, child snapshots and verified public-bin resolution; live catalog
@@ -23,8 +23,10 @@ its exact dependencies are node:crypto, node:fs/promises, node:path,
 process/environment/clock/network authority. Pure owners, including erased syntax,
 cannot depend on that effectful owner except the exact server-launch.ts consumer;
 unknown Official siblings remain pure. Launch capabilities are limited by the
-cumulative Official instructions, including erased syntax; pure owners, registry,
-connections and package-files cannot acquire launch authority.
+cumulative Official instructions, including erased syntax. Core, registry,
+pure owners, package-files and other connection roles cannot acquire launch authority.
+The exact managed connection, start admission and connection view consumers
+use server-launch.ts through their reviewed relative edges.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact
@@ -42,27 +44,57 @@ clock, filesystem, network, native or external-package access. Pure owners canno
 depend on either mutable role, including through erased syntax; unknown Gateway
 files remain pure. Before changing these lifetime owners, read their cumulative
 [connections instructions](gateway/connections/AGENTS.md).
-Only gateway/core.ts owns the existing managed-connection transaction and actual
-execution/context. Its exact application value providers are client-context.ts,
-mcp-lifecycle.ts and registrations.ts; its target factory and host/router types
-come from gateway/targets/target-lifecycle.ts. Its reviewed adapters
-remain cdp-router, chrome-profile, data-directory, fixture-diagnostics, mcp-bridge,
-port-reservation, target-host and tool-catalog; its node imports
-remain crypto, os and path. Core consumes the exact ./official/server-launch.ts
-owner in place of the retired Official adapter. SDK client, resource-owner and shared client-context
-are TYPE-only. Core retains its existing process.env spread, process.platform
-reads and supplied-now fallback to the Date.now reference; it gains no general
-ambient I/O, SDK value dependency or clock-call permission.
+Only gateway/core.ts owns registration/registry/catalog composition and trusted
+construction cleanup. Its value capabilities are crypto, the existing cdp-router,
+chrome-profile, data-directory, mcp-bridge and tool-catalog adapters, application
+client-context/registrations, shared errors and the registry/managed factory.
+SDK Tool, TargetLifecycleHost, request/diagnostic/client-context and the original moved
+RuntimeRouter are TYPE-only. Its sole ambient capability is the supplied-now
+fallback Date.now reference, never a clock call.
+Only gateway/connections/managed-connection.ts owns managed state, generation
+pointers, handler/lifecycle, actual execution/context, authorization and transfer.
+Its exact value providers are crypto, official/server-launch, port-reservation, target-host,
+application client-context/mcp-lifecycle, domain control-contract/request-failure,
+shared/errors, diagnostics and the start-admission/connection-view factories.
+SDK client, chrome-profile/data-directory/mcp-bridge/tool-catalog, the target lifecycle
+factory/host/router, registrations, registry, resource-owner, directory-lease, workspace-policy and shared
+client-context are TYPE-only. Its synchronous factory creates one original
+lifecycle/port/host composition, without acquisition or catalog reads.
+Only gateway/connections/start-admission.ts owns the whole start transaction,
+persistent callbacks, rollback and final directory retry. Its value providers are
+crypto/os/path, fixture-diagnostics, mcp-bridge, official/server-launch, application
+client-context, domain control-contract, shared constants/errors, target isolation/launch,
+createTargetLifecycle, directory-lease and workspace-policy. TargetLifecycleHost, chrome-profile,
+data-directory, lifecycle/registrations, registry, original managed types,
+resource-owner and connection-view are TYPE-only. It alone retains the existing
+process.env spread and process.platform comparisons. Pass the same lifecycle at
+start invocation; never add a getter, second instance, wrapper, await or snapshot.
+Only gateway/connections/connection-view.ts owns live status, selected configuration,
+guarded post-control catalog projection and administration inventory. Its value
+providers are only official/server-launch and domain control-contract. Tool-catalog,
+registry and original managed types are TYPE-only. Preserve the live bounded
+reader, original branches/order and invocation-time ambient defaults for unselected
+tool discovery. It gains no direct ambient, mutation, lifecycle or I/O capability.
+All three use supplied services and gain no Date fallback, clock call
+or general ambient I/O. View/admission factories execute no providers at construction.
+Core supplies the live synchronous readCatalog reader; use it only at the original
+validation, post-lifecycle status guard and optional invocation-requirements points,
+never captured across await or cached. The registry/managed cycle is erased only.
+The pure gateway/connections/workspace-policy.ts describes only supplied workspace
+arguments, negotiated-roots support and a required temporary directory through
+official/options.ts. Start admission captures that directory before awaiting roots;
+the calculation gains no ambient defaults, grants or connection authority.
 Only gateway/registry.ts owns route membership and the retained cleanup ledger:
 its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
 domains/control-contract and shared/errors. TYPE-only dependencies are the original
-Core ManagedConnection, connections/directory-lease, shared/client-context and the
-two exact application registrations/mcp-lifecycle ports and the target lifecycle's
+managed owner ManagedConnection, connections/directory-lease, shared/client-context and the
+two exact application registrations/mcp-lifecycle ports and the target lifecycle
 TargetExitEvent TYPE. Its
 sole ambient capability is the existing direct process.stderr.write diagnostic.
-Neither service grants permissions to siblings, pure owners, adapters or unknown
+None of these service roles grants permissions to siblings, pure owners, adapters or unknown
 Gateway files. Type imports, reexports, import() and require obey the same exact
-role boundaries. Before editing Core or registry, read the cumulative
+role boundaries. Before editing Core, registry, managed-connection, start-admission or
+connection-view, read the cumulative
 [Gateway instructions](gateway/AGENTS.md) and their application lifecycle trigger.
 The exact gateway/targets/target-lifecycle.ts owns its complete existing target
 attachment, admission, health, normal-Close reuse, rollback, actual-exit and
@@ -105,7 +137,7 @@ The accepted [isolation design](../docs/adr/0015-explicit-data-directory-isolati
 requires pure isolation/launch validation in gateway/targets/model/,
 directory filesystem evidence and claims in adapters, and connection-level lease
 lifetime/release barriers in gateway/connections/. Gateway registry owns route
-membership and retained cleanup/retry joins; Core retains explicit operation evidence. Target and official resources have independent generation owners alongside the
+membership and retained cleanup/retry joins; the managed owner retains explicit operation evidence. Target and official resources have independent generation owners alongside the
 logical connection/router owner. Public session identity changes after either side
 restarts and is distinct from those internal generations. Start requires explicit isolation; no fixed profile fallback
 or automatic path disclosure through Hooks/default summaries is permitted.

@@ -16,8 +16,11 @@
 - `AGENTS.md` preserves pure sibling rules, exact filesystem/default capabilities,
     original getter/order behavior and before-use lifecycle/launch triggers.
 
-Core and bridge retain their original default/capture/await timing; the launch
-owner introduces no combined preflight or new snapshot boundary. `adapters/file-evidence.ts` retains the descriptor-pinned
+Managed connection builds arguments for the connection's upstream. Start
+admission captures the child environment before roots, validates arguments and
+resolves the verified bin at the existing guard. Connection view invokes
+unselected defaults at the original discovery branch. The bridge retains its
+original launch boundaries. `adapters/file-evidence.ts` retains the descriptor-pinned
 regular-file reader shared with fingerprint verification. `tool-catalog.ts`,
 `mcp-bridge.ts` and the HTTP handler retain their actual catalog, child/disposal
 and originating continuation transactions until complete later ownership cuts.

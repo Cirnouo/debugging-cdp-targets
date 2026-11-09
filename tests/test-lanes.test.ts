@@ -66,10 +66,16 @@ const toolingCases = [
 ];
 
 const gatewayCases = [
+    'tests/gateway/connections/cleanup.test.ts',
+    'tests/gateway/connections/connection-options.test.ts',
     'tests/gateway/connections/construction-cleanup.test.ts',
     'tests/gateway/connections/directory-lifetime.test.ts',
     'tests/gateway/connections/directory-operation-evidence.test.ts',
+    'tests/gateway/connections/execution-detachment.test.ts',
     'tests/gateway/connections/gateway-cleanup.test.ts',
+    'tests/gateway/connections/registration-administration.test.ts',
+    'tests/gateway/connections/roots-admission.test.ts',
+    'tests/gateway/connections/scoped-restart.test.ts',
     'tests/gateway/official/execution.test.ts',
     'tests/gateway/official/options.test.ts',
     'tests/gateway/official/package-files.test.ts',

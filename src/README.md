@@ -10,11 +10,13 @@ The singleton App owns direct HTTP, management and native resources. The
     App composition and sandboxed UI.
 - `application/`: lifecycle/registration and App orchestration.
 - `domains/`: pure App/HTTP/lifecycle contracts and remaining port candidate rules.
-- `gateway/`: complete Core transaction and retained registry/cleanup ownership,
+- `gateway/`: Core registration/catalog composition and retained registry/cleanup ownership,
+    managed state/execution, whole start admission and live view services in connections/,
     pure explicit bearer/tool-argument extraction, target evidence/identity
     models, structured launch/isolation rules, complete supplied-capability target
     lifecycle in `targets/`, bounded clock-backed diagnostics
-    and complete resource-generation/directory-lease lifetime in `connections/`,
+    and complete resource-generation/directory-lease lifetime, managed connection,
+    start admission, live projection and supplied workspace policy in `connections/`,
     plus supplied Official options, wire-terminal values, release evidence and the
     complete filesystem package-file proof and bounded launch-input authority in `official/`.
 - `host-plugins/`: pure payload byte proof and own-endpoint overlays.
