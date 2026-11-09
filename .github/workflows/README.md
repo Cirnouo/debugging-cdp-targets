@@ -135,13 +135,8 @@ tests remain pending their later complete target-native deletion cut; they have
 no current CI execution or success-upload exception. Historical failed runs and
 dated observations remain historical evidence.
 
-Workflow configuration does not update the active main Ruleset. After genuine
-final-head Windows replacement success, a separately approved settings change
-must remove only Portable tests (ubuntu-latest), Portable tests (macos-latest),
-Real Chrome (ubuntu-24.04) and Real Chrome (macos-15), and add only the observed
-Real Chrome (windows-latest) context. Existing common/Windows/CodeQL requirements
-and all governance restrictions stay in place. Until that transition, the old
-requirements still block merge; aliases and administrative bypass are prohibited.
+The [remote enforcement policy](../../docs/policies/quality.md#remote-enforcement)
+lists the active main ruleset's required checks and governs changes to them.
 
 Release publication additionally requires an annotated tag whose peeled commit
 matches the event and checkout and is an ancestor of `origin/main`, agreeing

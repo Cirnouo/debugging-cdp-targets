@@ -50,7 +50,8 @@ build comparisons and reviewed installed original official catalog with normal
 stdio shutdown. It does not establish App-delivery/native acceptance.
 It launches no GUI and does not establish latest-24 Windows or browser
 acceptance. The existing canonical jobs retain exact Node 24.21.0 and their
-acceptance checks. The main Ruleset requirements remain unchanged.
+acceptance checks. See [Remote enforcement](#remote-enforcement) for the
+separate merge requirements.
 
 Optional `mise.toml` selects Node `24` and exact pnpm `12.4.2` for everyday work;
 it is not an exact reproducibility baseline. As documented by
@@ -465,27 +466,34 @@ dependencies. Node --check is used only for generated JavaScript.
 Plugin and standalone auditor ship self-contained JS;
 installation must not require TypeScript or project dependencies.
 
-The active main Ruleset requires PRs, up-to-date branches, linear history, no
-force pushes/deletion, and strict GitHub Actions checks: Supply chain security,
-Commit messages, Quality, Windows tests, and both Portable tests matrix checks.
-It also requires CodeQL (javascript-typescript), CodeQL (csharp), CodeQL (actions),
-Real Chrome (ubuntu-24.04) and Real Chrome (macos-15), for eleven checks total.
-It has no routine bypass actors. Single-maintainer PRs require zero additional
-approvals. Only squash merges are allowed. The required `PR_TITLE` + `BLANK`
+The active GitHub ruleset `24445278` protects `main`. It requires PRs,
+up-to-date branches and linear history, blocks force pushes and deletion,
+and has no bypass actors. It enforces eight required GitHub Actions checks
+in strict mode.
+
+- `Supply chain security`
+- `Commit messages`
+- `Quality`
+- `Windows tests`
+- `CodeQL (javascript-typescript)`
+- `CodeQL (csharp)`
+- `CodeQL (actions)`
+- `Real Chrome (windows-latest)`
+
+`Node compatibility (24.x)` runs as a separate CI job outside this required
+check set. Single-maintainer PRs require zero additional approvals.
+Only squash merges are allowed. The required `PR_TITLE` + `BLANK`
 default starts with the PR title and an empty body; the merge author curates the
 complete message and retains the generated PR number under the
 [commit policy](commits-and-scope.md).
 Actions runs after GitHub accepts a push; pre-push is the local pre-transfer gate.
 
-The configured CI now has six display names: Supply chain security, Commit
-messages, Quality, Node compatibility (24.x), Windows tests and
-Real Chrome (windows-latest). Removing retired jobs does not change the active
-Ruleset above. Only after genuine replacement success on the actual final head
-may a separately approved settings change remove the two Portable contexts and
-two POSIX Real Chrome contexts, add the observed Real Chrome (windows-latest),
-and retain the seven existing common/Windows/CodeQL required checks and all
-other governance restrictions. Until the authorized transition, old missing or
-failed requirements still block merge. Do not add aliases or use admin bypass.
+Workflow configuration and ruleset settings are managed separately. Changes to
+required checks need separate, explicit authorization. Before replacing a
+required check, verify that its replacement passes under its actual context
+name on the final head. Preserve all other governance restrictions and enforce
+the active required checks throughout the transition. Do not use status aliases
+or administrative bypass.
 
 Successful initial CodeQL scans returned no findings and confirmed native helper
 extraction; the former POSIX real Chrome jobs passed historically before their
