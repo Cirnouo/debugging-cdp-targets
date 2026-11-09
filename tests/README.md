@@ -299,6 +299,10 @@ Linux/macOS product execution or acceptance route.
   rejection/timeout/exit, intentional sampling/tab cancellation and preservation
   of capture results when native sampling or evidence writes fail.
 
+- `owned-directory-cleanup.test.ts` uses real temporary directories and `rmdir`
+  failures to check recovery from transient `ENOTEMPTY`, refusal to remove a
+  replacement directory and preservation of errors when retries fail.
+
 - `owned-native-fixtures.test.ts` injects readiness failures after each retained
   target/anchor launch, requires normal Close with actual exit, avoids duplicate
   successful controller cleanup and retains ownership for uncertain Close retry.
