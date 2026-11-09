@@ -4,9 +4,13 @@ Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
 
-The tiny Electron bootstrap assigns isolated temporary Chromium paths synchronously
-before any asynchronous initialization. Main owns singleton admission, winner-only
-data/configuration I/O, verified resource paths, trusted core closure and HTTP.
+The App supports Windows x64 and arm64 only. The tiny Electron bootstrap rejects
+other platform/architecture evidence synchronously before App paths, scratch
+storage, privileged schemes or controlled main import. Supported startup assigns
+isolated temporary Chromium paths synchronously before asynchronous initialization.
+Direct main invocation repeats that support guard before native or App resource acquisition.
+Main owns singleton admission, winner-only data/configuration I/O, verified
+resource paths, trusted core closure and HTTP.
 Normal Quit/Restart denies new requests, awaits actual startup settlement and
 retained construction cleanup, then closes transports/windows and exits. Cleanup
 failure preserves management UI and the OS lease for retry; never force exit.
@@ -17,7 +21,13 @@ never expose bearer readback, target creation or arbitrary channels. Validate
 unknown payloads and exact main-window/main-frame/fixed-URL sender identity before
 dispatch. No general filesystem, shell, process, URL navigation or unrestricted IPC.
 The renderer runs only fixed local assets, with context isolation, sandbox, no Node
-integration and restrictive CSP. Linux keeps a visible manager fallback.
+integration and restrictive CSP. Preserve the Windows manager fallback when no
+tray exists or activation was requested. Dormant Darwin tray-template and Linux
+visible-manager selectors in app-main.ts are scheduled for complete
+Windows-platform selector retirement, together with tests/app-main-lifecycle.test.ts,
+this instruction file and the source map, under the
+[Windows-only amendment](../../docs/adr/0017-singleton-desktop-app.md#accepted-windows-only-scope-amendment--2026-11-08).
+They establish no current platform support.
 
 MCP lives in the HTTP adapter, not the renderer. Every lifecycle request except
 register carries registrationBearer explicitly; official routing carries that

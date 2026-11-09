@@ -6,8 +6,8 @@ import path from 'node:path';
 import { mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/client';
-import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
-import { isRecord } from '../src/shared/errors.ts';
+import { openOfficialUpstream } from '../../../src/gateway/official/upstream.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 type Resource = { close(): Promise<void>; onExit(listener: () => void): void };
 
@@ -56,7 +56,7 @@ async function fixture(mode = 'resist') {
     return {
         directory,
         options: {
-            bin: fileURLToPath(new URL('./fixtures/official-child.ts', import.meta.url)),
+            bin: fileURLToPath(new URL('../../fixtures/official-child.ts', import.meta.url)),
             args: [directory, mode],
         },
         async cleanup() {
@@ -84,7 +84,7 @@ test('logical official close settles pending SDK calls before owned child exit a
             this.onclose = () => protocolCloses++;
         },
     );
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', child.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', child.options);
     observingProtocol.mock.restore();
     let close: Promise<void> | undefined;
     let exits = 0;
@@ -135,7 +135,7 @@ test('logical official close settles pending SDK calls before owned child exit a
 
 test('official process exit is observed while inherited stdio pipes remain open', async () => {
     const child = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', child.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', child.options);
     const originalEmit = ChildProcess.prototype.emit;
     const delayedClose =
         process.platform === 'win32'
@@ -181,7 +181,7 @@ test('stdio ending closes the protocol without fabricating an actual child exit'
             return Reflect.apply(originalEmit, this, [event, ...args]);
         },
     );
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', child.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', child.options);
     observing.mock.restore();
     let exits = 0;
     connection.onExit(() => exits++);
@@ -211,7 +211,7 @@ for (const phase of ['initialize', 'listing']) {
         const child = await fixture(phase);
         const controller = new AbortController();
         let resource: Resource | undefined;
-        const creating = createOfficialConnection('http://127.0.0.1:9222', {
+        const creating = openOfficialUpstream('http://127.0.0.1:9222', {
             ...child.options,
             signal: controller.signal,
             onAcquired: (value: Resource) => {
@@ -249,7 +249,7 @@ test('pre-aborted official acquisition never spawns a child', async () => {
     let acquired = false;
     try {
         await assert.rejects(
-            createOfficialConnection('http://127.0.0.1:9222', {
+            openOfficialUpstream('http://127.0.0.1:9222', {
                 ...child.options,
                 signal: controller.signal,
                 onAcquired: () => {
@@ -267,7 +267,7 @@ test('pre-aborted official acquisition never spawns a child', async () => {
 
 test('failed owned child signalling retains exit observation and permits explicit cleanup retry', async () => {
     const child = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', child.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', child.options);
     let exits = 0;
     connection.onExit(() => exits++);
     const signalling = mock.method(ChildProcess.prototype, 'kill', () => false);
@@ -291,7 +291,7 @@ test('failed owned child signalling retains exit observation and permits explici
 
 test('official close timeout retains the live child and only a later actual exit completes observation', async () => {
     const child = await fixture();
-    const connection = await createOfficialConnection('http://127.0.0.1:9222', child.options);
+    const connection = await openOfficialUpstream('http://127.0.0.1:9222', child.options);
     let exits = 0;
     let markExit: () => void = () => {};
     const exit = new Promise<void>((resolve) => {
@@ -333,7 +333,7 @@ test('failed initialize keeps owned reaping errors separate from the SDK logical
     const signalling = mock.method(ChildProcess.prototype, 'kill', () => false);
     try {
         await assert.rejects(
-            createOfficialConnection('http://127.0.0.1:9222', {
+            openOfficialUpstream('http://127.0.0.1:9222', {
                 ...child.options,
                 onAcquired: (value: Resource) => {
                     resource = value;

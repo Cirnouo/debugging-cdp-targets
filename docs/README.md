@@ -4,7 +4,8 @@
     privacy and troubleshooting for Plugin users.
 - `reference/` owns the sole domain glossary and current adopted Host metadata.
 - `architecture/` explains current Host Plugin management and synchronization.
-- `evidence/` owns dated Host research, CLI/Desktop acceptance and evidence limits.
+- [`evidence/`](evidence/README.md) owns dated Host research, CLI/Desktop
+    acceptance, directory cleanup incidents and evidence limits.
 - `shared-core.md` documents the transport-independent core, request contexts,
     registration ownership, immutable snapshots and definitive cleanup.
 - `app-runtime.md` documents singleton/storage/GUI ownership, HTTP authentication,

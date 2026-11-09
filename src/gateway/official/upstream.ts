@@ -19,20 +19,24 @@ import {
     serializeMessage,
 } from '@modelcontextprotocol/client';
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/core';
-import type { Diagnose } from '../domains/control-contract.ts';
-import { RequestFailure } from '../domains/request-failure.ts';
-import { measured } from '../gateway/diagnostics.ts';
-import { createOfficialExecution } from '../gateway/official/execution.ts';
-import { CLOSE_TIMEOUT_SECONDS } from '../shared/constants.ts';
-import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from './official-server.ts';
+import type { Diagnose } from '../../domains/control-contract.ts';
+import { RequestFailure } from '../../domains/request-failure.ts';
+import { CLOSE_TIMEOUT_SECONDS } from '../../shared/constants.ts';
+import { measured } from '../diagnostics.ts';
+import { createOfficialExecution } from './execution.ts';
+import {
+    buildOfficialLaunchArguments,
+    captureOfficialServerEnvironment,
+    resolveVerifiedOfficialServerBin,
+} from './server-launch.ts';
 
-export type OfficialConnectionResource = {
+export type OfficialUpstreamResource = {
     readonly processId?: number;
     close(): Promise<void>;
     onExit(listener: () => void): void;
 };
 
-export type OfficialConnection = OfficialConnectionResource & {
+export type OfficialUpstream = OfficialUpstreamResource & {
     readonly tools: Tool[];
     readonly toolCatalog?: Readonly<{ revision: number; state: 'current' | 'refreshing' | 'unavailable' }>;
     ensureToolCatalog?(): Promise<void>;
@@ -48,13 +52,13 @@ export type OfficialConnection = OfficialConnectionResource & {
 const STDIN_GRACE_MS = 2000;
 const TERM_GRACE_MS = 2000;
 
-export function interruptedOfficialCall(error: unknown, signal?: AbortSignal) {
+export function classifyOfficialCallInterruption(error: unknown, signal?: AbortSignal) {
     if (signal?.aborted) return 'upstream-cancelled';
     if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) return 'upstream-timeout';
     return undefined;
 }
 
-export async function createOfficialConnection(
+export async function openOfficialUpstream(
     browserUrl: string,
     options: {
         bin?: string;
@@ -66,24 +70,24 @@ export async function createOfficialConnection(
         signal?: AbortSignal;
         validateTools?: (tools: Tool[]) => void;
         diagnose?: Diagnose;
-        onAcquired?: (resource: OfficialConnectionResource) => void;
+        onAcquired?: (resource: OfficialUpstreamResource) => void;
         roots?: () => Promise<ListRootsResult>;
         elicitation?: {
             form: boolean;
             request: (params: ElicitRequestFormParams, signal: AbortSignal) => Promise<ElicitResult>;
         };
     } = {},
-): Promise<OfficialConnection> {
+): Promise<OfficialUpstream> {
     options.signal?.throwIfAborted();
-    const arguments_ = options.args ?? buildServerArguments(browserUrl);
-    const bin = options.bin ?? (await resolveServerBin());
+    const arguments_ = options.args ?? buildOfficialLaunchArguments(browserUrl);
+    const bin = options.bin ?? (await resolveVerifiedOfficialServerBin());
     options.signal?.throwIfAborted();
     const child = spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
         shell: false,
         windowsHide: true,
         cwd: options.cwd,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: snapshotOfficialEnvironment(options.environment),
+        env: captureOfficialServerEnvironment(options.environment),
     });
     const listeners = new Set<() => void>();
     let exited = false;
@@ -182,7 +186,7 @@ export async function createOfficialConnection(
             throw new Error('Official MCP child exit was not observed within 10 seconds of close.');
         }
     }
-    const resource: OfficialConnectionResource = {
+    const resource: OfficialUpstreamResource = {
         ...(child.pid === undefined ? {} : { processId: child.pid }),
         close() {
             closeProtocol();
@@ -401,7 +405,8 @@ export async function createOfficialConnection(
                         ),
                     );
                 } catch (error) {
-                    if (!signal?.aborted && interruptedOfficialCall(error) === 'upstream-timeout') await terminal;
+                    if (!signal?.aborted && classifyOfficialCallInterruption(error) === 'upstream-timeout')
+                        await terminal;
                     throw error;
                 } finally {
                     if (actual.settled || actual.id === undefined) {

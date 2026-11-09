@@ -28,6 +28,190 @@ function connectionDependencyForms(specifier: string) {
     ];
 }
 
+test('target lifecycle exact capabilities admit only named original dependencies', () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    for (const source of [
+        "import { randomUUID } from 'node:crypto';",
+        "import { emitFixtureEvent } from '../../adapters/fixture-diagnostics.ts';",
+        "import type { ControlContext, Disposition, LaunchContext, LaunchOptions, TargetStatus } from '../../domains/control-contract.ts';",
+        "import { createResourceOwner, type ResourceOwner } from '../connections/resource-owner.ts';",
+        "import { RetainedTargetError, type ManagedTarget } from './model/target-contract.ts';",
+        "import { DetailedError, errorCode, errorDetails, errorMessage } from '../../shared/errors.ts';",
+    ])
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+});
+
+for (const specifier of ['toString', 'constructor', '__proto__'])
+    for (const typeOnly of [false, true])
+        test(`target lifecycle prototype module name ${specifier} returns diagnostics for ${typeOnly ? 'type' : 'value'} imports`, () => {
+            const file = 'src/gateway/targets/target-lifecycle.ts';
+            const source = `import ${typeOnly ? 'type ' : ''}{ Value } from '${specifier}';`;
+            let errors: string[] = [];
+            assert.doesNotThrow(() => {
+                errors = validateRuntimeSource(file, source);
+            });
+            assert.ok(errors.includes(`${file}: unapproved target lifecycle dependency or binding.`), source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+        });
+
+test('target lifecycle exact capabilities deny dependency substitutions and all sixteen unbound forms', () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    for (const dependency of [
+        'node:crypto',
+        '../../adapters/fixture-diagnostics.ts',
+        '../../domains/control-contract.ts',
+        '../connections/resource-owner.ts',
+        './model/target-contract.ts',
+        '../../shared/errors.ts',
+        'node:fs',
+        'node:net',
+        'node:child_process',
+        '@modelcontextprotocol/client',
+        '../../adapters/target-host.ts',
+        '../../application/mcp-lifecycle.ts',
+        '../core.ts',
+        '../registry.ts',
+        '../connections/directory-lease.ts',
+        './model/isolation.ts',
+        './unknown.ts',
+        '../diagnostics.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, source);
+        }
+    for (const source of [
+        "import { randomBytes } from 'node:crypto';",
+        "import { randomUUID as uuid } from 'node:crypto';",
+        "import { LaunchOptions } from '../../domains/control-contract.ts';",
+        "import { ManagedTarget } from './model/target-contract.ts';",
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
+});
+
+test('target lifecycle exact capabilities keep the sole direct exit timestamp and deny ambient escalation', () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    assert.deepEqual(validateRuntimeSource(file, 'const exitedAt = new Date().toISOString();'), []);
+    for (const source of [
+        'const value = new Date();',
+        'const value = new Date(0).toISOString();',
+        'const value = new Date().toISOString;',
+        'const value = new Date()["toISOString"]();',
+        'const value = Date.now();',
+        'const value = Date;',
+        'const value = globalThis.Date.now;',
+        'const value = performance.now();',
+        'const value = process.env;',
+        'const value = process.argv;',
+        'const value = globalThis.process;',
+        'const value = globalThis[key];',
+        'fetch("http://localhost");',
+        'new WebSocket("ws://localhost");',
+        'process.kill(1, "SIGTERM");',
+        'child.kill("SIGTERM");',
+        'child.kill("SIGKILL");',
+        'const value = { [process.platform](): void {} };',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
+    for (const file of ['src/gateway/targets/unknown.ts', 'src/gateway/targets/model/unknown.ts'])
+        assert.ok(validateRuntimeSource(file, 'const value = new Date().toISOString();').length, file);
+});
+
+test('target lifecycle exact capabilities fence Core, connection owners, registry and retired application grants', () => {
+    for (const source of [
+        "import { createTargetLifecycle } from './targets/target-lifecycle.ts';",
+        "import type { TargetLifecycleRouter } from './targets/target-lifecycle.ts';",
+    ]) {
+        const errors = validateRuntimeSource('src/gateway/core.ts', source);
+        assert.ok(errors.includes('src/gateway/core.ts: unapproved target lifecycle dependency or binding.'), source);
+    }
+    for (const [file, source] of [
+        ['src/gateway/core.ts', "import type { TargetLifecycleHost } from './targets/target-lifecycle.ts';"],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            "import type { createTargetLifecycle, TargetLifecycleHost, TargetLifecycleRouter } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            "import { createTargetLifecycle, type TargetLifecycleHost } from '../targets/target-lifecycle.ts';",
+        ],
+        ['src/gateway/registry.ts', "import type { TargetExitEvent } from './targets/target-lifecycle.ts';"],
+        ['src/gateway/registry.ts', "import { type TargetExitEvent } from './targets/target-lifecycle.ts';"],
+    ] as const)
+        assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    for (const [file, target, retired] of [
+        ['src/gateway/core.ts', './targets/target-lifecycle.ts', '../application/target-controller.ts'],
+        ['src/gateway/registry.ts', './targets/target-lifecycle.ts', '../application/target-controller.ts'],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            '../targets/target-lifecycle.ts',
+            '../../application/target-controller.ts',
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            '../targets/target-lifecycle.ts',
+            '../../application/target-controller.ts',
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            '../targets/target-lifecycle.ts',
+            '../../application/target-controller.ts',
+        ],
+    ] as const)
+        for (const dependency of [retired, target])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const [file, source] of [
+        [
+            'src/gateway/connections/managed-connection.ts',
+            "import { createTargetLifecycle } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            "import type { TargetExitEvent } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            "import type { TargetLifecycleRouter } from '../targets/target-lifecycle.ts';",
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            "import type { TargetLifecycleHost } from '../targets/target-lifecycle.ts';",
+        ],
+    ] as const) {
+        const errors = validateRuntimeSource(file, source);
+        assert.ok(errors.includes(`${file}: unapproved target lifecycle dependency or binding.`), source);
+    }
+    for (const source of [
+        "import { TargetExitEvent } from './targets/target-lifecycle.ts';",
+        "import type { TargetLifecycleHost } from './targets/target-lifecycle.ts';",
+        "export type { TargetExitEvent } from './targets/target-lifecycle.ts';",
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/registry.ts', source).length, source);
+});
+
+test('target lifecycle exact capabilities reject inverse authority in all sixteen dependency forms', () => {
+    for (const [file, dependency] of [
+        ['src/gateway/unknown.ts', './targets/target-lifecycle.ts'],
+        ['src/gateway/targets/unknown.ts', './target-lifecycle.ts'],
+        ['src/gateway/targets/model/unknown.ts', '../target-lifecycle.ts'],
+        ['src/gateway/official/options.ts', '../targets/target-lifecycle.ts'],
+        ['src/gateway/connections/resource-owner.ts', '../targets/target-lifecycle.ts'],
+        ['src/domains/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+        ['src/shared/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+        ['src/adapters/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+        ['src/host-plugins/unknown.ts', '../gateway/targets/target-lifecycle.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, `${file}: ${source}`);
+        }
+});
+
 test('connection resource roles accept only their exact adapter and erased contract capabilities', () => {
     for (const [file, dependency, onlyType] of [
         ['src/gateway/connections/directory-lease.ts', '../../adapters/data-directory.ts', false],
@@ -715,10 +899,10 @@ test('runtime audit rejects force termination, persistent sessions, extra entry 
 
 const ownedOfficialBridge = `
 import { spawn } from 'node:child_process';
-import { resolveServerBin } from './official-server.ts';
+import { resolveVerifiedOfficialServerBin } from '../gateway/official/server-launch.ts';
 export async function createOfficialConnection(browserUrl: string, options: { bin?: string; args?: string[] } = {}) {
     const arguments_ = options.args ?? [];
-    const bin = options.bin ?? (await resolveServerBin());
+    const bin = options.bin ?? (await resolveVerifiedOfficialServerBin());
     const child = spawn(process.execPath, [bin, ...arguments_], { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     async function reapOwnedChild() {
         child.kill('SIGTERM');
@@ -728,19 +912,71 @@ export async function createOfficialConnection(browserUrl: string, options: { bi
 }
 `;
 
-test('runtime audit permits TERM and KILL only for the official bridge owned Server child', async () => {
-    assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', ownedOfficialBridge), []);
-    const maintained = await readFile(new URL('../src/adapters/mcp-bridge.ts', import.meta.url), 'utf8');
-    assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', maintained), []);
+const ownedOfficialUpstream = `
+import { spawn } from 'node:child_process';
+import { resolveVerifiedOfficialServerBin } from './server-launch.ts';
+import { CLOSE_TIMEOUT_SECONDS } from '../../shared/constants.ts';
+export async function openOfficialUpstream(
+    browserUrl: string,
+    options: { bin?: string; nodeExecutable?: string; args?: string[] } = {},
+) {
+    const arguments_ = options.args ?? [];
+    const bin = options.bin ?? (await resolveVerifiedOfficialServerBin());
+    const child = spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let closing: Promise<void> | undefined;
+    async function reapOwnedChild() {
+        const deadline = performance.now() + CLOSE_TIMEOUT_SECONDS * 1000;
+        child.kill('SIGTERM');
+        child.kill('SIGKILL');
+    }
+    const resource = {
+        close() {
+            if (!closing) {
+                closing = reapOwnedChild().finally(() => {
+                    closing = undefined;
+                });
+            }
+            return closing;
+        },
+    };
+    return resource;
+}
+`;
+test('Official upstream role accepts the owned child spawn, reaping clock and termination', () => {
+    assert.deepEqual(validateRuntimeSource('src/gateway/official/upstream.ts', ownedOfficialUpstream), []);
+});
+
+test('Official upstream role rejects an unrelated relative dependency', () => {
+    const errors = validateRuntimeSource('src/gateway/official/upstream.ts', "import './unreviewed.ts';");
+    assert.ok(errors.some((error) => error.includes('unapproved Official upstream dependency or binding')));
+});
+
+test('pure Official options cannot import upstream lifetime even as a type', () => {
+    const errors = validateRuntimeSource(
+        'src/gateway/official/options.ts',
+        "type Connection = import('./upstream.ts').OfficialUpstream;",
+    );
+    assert.ok(errors.some((error) => error.includes('pure owners cannot depend on Official upstream lifetime')));
+});
+
+test('retired official bridge path cannot authorize owned Server termination', () => {
+    const errors = validateRuntimeSource('src/adapters/mcp-bridge.ts', ownedOfficialBridge);
+    assert.ok(errors.some((error) => error.includes('termination API')));
+});
+
+test('runtime audit permits TERM and KILL only for the official upstream owned Server child', async () => {
+    assert.deepEqual(validateRuntimeSource('src/gateway/official/upstream.ts', ownedOfficialUpstream), []);
+    const maintained = await readFile(new URL('../src/gateway/official/upstream.ts', import.meta.url), 'utf8');
+    assert.deepEqual(validateRuntimeSource('src/gateway/official/upstream.ts', maintained), []);
 });
 
 test('official owned-child proof accepts only the explicit ordinary-Node construction seam', () => {
-    const injected = ownedOfficialBridge.replace(
-        'spawn(process.execPath,',
-        'spawn(options.nodeExecutable ?? process.execPath,',
-    );
-    assert.deepEqual(validateRuntimeSource('src/adapters/mcp-bridge.ts', injected), []);
+    assert.deepEqual(validateRuntimeSource('src/gateway/official/upstream.ts', ownedOfficialUpstream), []);
     for (const replacement of [
+        'process.execPath',
         'options.targetExecutable ?? process.execPath',
         'options.nodeExecutable || process.execPath',
         'options.nodeExecutable ?? targetPath',
@@ -748,22 +984,158 @@ test('official owned-child proof accepts only the explicit ordinary-Node constru
     ])
         assert.ok(
             validateRuntimeSource(
-                'src/adapters/mcp-bridge.ts',
-                ownedOfficialBridge.replace('spawn(process.execPath,', `spawn(${replacement},`),
+                'src/gateway/official/upstream.ts',
+                ownedOfficialUpstream.replace(
+                    'spawn(options.nodeExecutable ?? process.execPath,',
+                    `spawn(${replacement},`,
+                ),
             ).some((error) => error.includes('termination API')),
         );
     assert.ok(
         validateRuntimeSource(
-            'src/adapters/mcp-bridge.ts',
-            injected.replace("child.kill('SIGTERM');", "{ const options = target; child.kill('SIGTERM'); }"),
+            'src/gateway/official/upstream.ts',
+            ownedOfficialUpstream.replace(
+                "child.kill('SIGTERM');",
+                "{ const options = target; child.kill('SIGTERM'); }",
+            ),
         ).some((error) => error.includes('termination API')),
+    );
+});
+
+test('Official upstream rejects extra spawn calls and aliases outside its owned child initializer', () => {
+    const file = 'src/gateway/official/upstream.ts';
+    const outcomes = ["spawn('unowned-executable', ['--foreign']);", 'const launchAnything = spawn;'].map((source) =>
+        validateRuntimeSource(file, `${ownedOfficialUpstream}\n${source}`).some((error) =>
+            error.includes('unapproved Official upstream spawn reference'),
+        ),
+    );
+    assert.deepEqual(outcomes, [true, true]);
+});
+
+test('Official upstream rejects a spawn-wait clock inside an unrelated timer', () => {
+    const source = ownedOfficialUpstream.replace(
+        "child.kill('SIGTERM');",
+        `function probe() {
+            let timer;
+            timer = setTimeout(() => {}, Math.max(0, deadline - performance.now()));
+        }
+        child.kill('SIGTERM');`,
+    );
+    assert.ok(
+        validateRuntimeSource('src/gateway/official/upstream.ts', source).some((error) =>
+            error.includes('ambient clock'),
+        ),
+    );
+});
+
+test('Official upstream rejects early reaper aliases and duplicate or nested termination', () => {
+    const file = 'src/gateway/official/upstream.ts';
+    const cases = [
+        {
+            source: ownedOfficialUpstream.replace(
+                'return resource;',
+                'const prematureClose = reapOwnedChild; void prematureClose(); return resource;',
+            ),
+            diagnostic: 'unapproved Official upstream reaper reference',
+        },
+        {
+            source: ownedOfficialUpstream.replace(
+                "child.kill('SIGTERM');",
+                "child.kill('SIGTERM'); child.kill('SIGTERM');",
+            ),
+            diagnostic: 'termination API',
+        },
+        {
+            source: ownedOfficialUpstream.replace(
+                "child.kill('SIGKILL');",
+                "function forceNested() { child.kill('SIGKILL'); }",
+            ),
+            diagnostic: 'termination API',
+        },
+        {
+            source: ownedOfficialUpstream.replace(
+                'return resource;',
+                "const [sameChild] = [child]; const { kill } = sameChild; kill.call(sameChild, 'SIGKILL'); return resource;",
+            ),
+            diagnostic: 'termination API',
+        },
+    ];
+    assert.deepEqual(
+        cases.map(({ source, diagnostic }) =>
+            validateRuntimeSource(file, source).some((error) => error.includes(diagnostic)),
+        ),
+        [true, true, true, true],
+    );
+});
+
+test('Official upstream imports cannot be reexported through their Core and connection consumers', () => {
+    const cases = [
+        {
+            file: 'src/gateway/core.ts',
+            source: "import { openOfficialUpstream } from './official/upstream.ts'; export { openOfficialUpstream };",
+        },
+        {
+            file: 'src/gateway/connections/start-admission.ts',
+            source: "import { openOfficialUpstream } from '../official/upstream.ts'; export { openOfficialUpstream };",
+        },
+        {
+            file: 'src/gateway/connections/managed-connection.ts',
+            source: "import type { OfficialUpstream } from '../official/upstream.ts'; export type { OfficialUpstream };",
+        },
+    ];
+    assert.deepEqual(
+        cases.map(({ file, source }) =>
+            validateRuntimeSource(file, source).some((error) =>
+                error.includes('unapproved Official upstream reexport'),
+            ),
+        ),
+        [true, true, true],
+    );
+});
+
+test('Official upstream imports cannot be forwarded as default exports', () => {
+    const cases = [
+        [
+            'src/gateway/core.ts',
+            "import { openOfficialUpstream } from './official/upstream.ts'; export default openOfficialUpstream;",
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            "import { openOfficialUpstream } from '../official/upstream.ts'; export default (openOfficialUpstream as typeof openOfficialUpstream)!;",
+        ],
+    ] as const;
+    assert.deepEqual(
+        cases.map(([file, source]) =>
+            validateRuntimeSource(file, source).some((error) =>
+                error.includes('unapproved Official upstream reexport'),
+            ),
+        ),
+        [true, true],
+    );
+});
+
+test('Official upstream lifetime cannot be imported through alternate file path spellings', () => {
+    const file = 'src/adapters/unknown.ts';
+    const specifiers = [
+        '..\\gateway\\official\\upstream.ts',
+        '../gateway/official/%75pstream.ts',
+        '../gateway/official/upstream.ts?copy=.ts',
+        '../gateway/official/upstream.ts#copy.ts',
+    ];
+    assert.deepEqual(
+        specifiers.map((specifier) =>
+            validateRuntimeSource(file, 'import { openOfficialUpstream } from ' + JSON.stringify(specifier) + ';').some(
+                (error) => error.includes('relative source dependencies must use plain file paths'),
+            ),
+        ),
+        [true, true, true, true],
     );
 });
 
 test('owned Server reclamation cannot authorize arbitrary, Target or global process termination', () => {
     for (const file of ['src/adapters/target-host.ts', 'src/adapters/example.ts', 'src/adapters/platform-process.ts']) {
         assert.ok(
-            validateRuntimeSource(file, ownedOfficialBridge).some((error) => error.includes('termination API')),
+            validateRuntimeSource(file, ownedOfficialUpstream).some((error) => error.includes('termination API')),
             file,
         );
     }
@@ -776,7 +1148,7 @@ test('owned Server reclamation cannot authorize arbitrary, Target or global proc
         "process.kill(pid, 'SIGKILL');",
     ]) {
         assert.ok(
-            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+            validateRuntimeSource('src/gateway/official/upstream.ts', source).some((error) =>
                 error.includes('termination API'),
             ),
             source,
@@ -786,41 +1158,45 @@ test('owned Server reclamation cannot authorize arbitrary, Target or global proc
 
 test('official child termination allowance rejects dynamic signals and unproven or shadowed ownership', () => {
     for (const source of [
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", 'child.kill();'),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child.kill('SIGINT');"),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", 'child.kill(signal);'),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child.kill('SIGTERM', true);"),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "process.kill(pid, 'SIGTERM');"),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "target.child.kill('SIGKILL');"),
-        ownedOfficialBridge.replace("from 'node:child_process'", "from 'node:worker_threads'"),
-        ownedOfficialBridge.replace('{ spawn }', '{ spawn as anotherSpawn }'),
-        ownedOfficialBridge.replace(
-            'spawn(process.execPath, [bin, ...arguments_]',
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", 'child.kill();'),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "child.kill('SIGINT');"),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", 'child.kill(signal);'),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "child.kill('SIGTERM', true);"),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "process.kill(pid, 'SIGTERM');"),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "target.child.kill('SIGKILL');"),
+        ownedOfficialUpstream.replace("from 'node:child_process'", "from 'node:worker_threads'"),
+        ownedOfficialUpstream.replace('{ spawn }', '{ spawn as anotherSpawn }'),
+        ownedOfficialUpstream.replace(
+            'spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_]',
             'spawn(targetPath, [bin, ...arguments_]',
         ),
-        ownedOfficialBridge.replace('[bin, ...arguments_]', '[targetPath]'),
-        ownedOfficialBridge.replace('shell: false', 'shell: true'),
-        ownedOfficialBridge.replace('const child = spawn', 'let child = spawn'),
-        ownedOfficialBridge.replace(
-            "spawn(process.execPath, [bin, ...arguments_], { shell: false, stdio: ['pipe', 'pipe', 'pipe'] })",
+        ownedOfficialUpstream.replace('[bin, ...arguments_]', '[targetPath]'),
+        ownedOfficialUpstream.replace('shell: false', 'shell: true'),
+        ownedOfficialUpstream.replace('const child = spawn', 'let child = spawn'),
+        ownedOfficialUpstream.replace(
+            `spawn(options.nodeExecutable ?? process.execPath, [bin, ...arguments_], {
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
+    })`,
             'target',
         ),
-        ownedOfficialBridge.replace(
-            'return { close: reapOwnedChild };',
-            "child.kill('SIGKILL'); return { close: reapOwnedChild };",
-        ),
-        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function closeTarget()'),
-        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(child)'),
-        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(spawn)'),
-        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(process)'),
-        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(bin)'),
-        ownedOfficialBridge.replace('async function reapOwnedChild()', 'async function reapOwnedChild(arguments_)'),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child = target; child.kill('SIGTERM');"),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "child.kill = target.kill; child.kill('SIGTERM');"),
-        ownedOfficialBridge.replace("child.kill('SIGTERM');", "{ const child = target; child.kill('SIGTERM'); }"),
+        ownedOfficialUpstream.replace('return resource;', "child.kill('SIGKILL'); return resource;"),
+        ownedOfficialUpstream.replace('async function reapOwnedChild()', 'async function closeTarget()'),
+        ownedOfficialUpstream.replace('async function reapOwnedChild()', 'async function reapOwnedChild(child)'),
+        ownedOfficialUpstream.replace('async function reapOwnedChild()', 'async function reapOwnedChild(spawn)'),
+        ownedOfficialUpstream.replace('async function reapOwnedChild()', 'async function reapOwnedChild(process)'),
+        ownedOfficialUpstream.replace('async function reapOwnedChild()', 'async function reapOwnedChild(bin)'),
+        ownedOfficialUpstream.replace('async function reapOwnedChild()', 'async function reapOwnedChild(arguments_)'),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "child = target; child.kill('SIGTERM');"),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "child.kill = target.kill; child.kill('SIGTERM');"),
+        ownedOfficialUpstream.replace('options.bin ??', 'targetBin ??'),
+        ownedOfficialUpstream.replace('options.bin ??', 'options.targetBin ??'),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "const kill = child.kill; kill('SIGTERM');"),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "const { kill } = child; kill('SIGTERM');"),
+        ownedOfficialUpstream.replace("child.kill('SIGTERM');", "{ const child = target; child.kill('SIGTERM'); }"),
     ]) {
         assert.ok(
-            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+            validateRuntimeSource('src/gateway/official/upstream.ts', source).some((error) =>
                 error.includes('termination API'),
             ),
             source,
@@ -841,9 +1217,9 @@ for (const mutation of [
     'const alias = child; alias.kill = target.child.kill.bind(target.child);',
 ]) {
     test(`official child ownership proof rejects mutation: ${mutation}`, () => {
-        const source = ownedOfficialBridge.replace("child.kill('SIGTERM');", `${mutation}\nchild.kill('SIGTERM');`);
+        const source = ownedOfficialUpstream.replace("child.kill('SIGTERM');", `${mutation}\nchild.kill('SIGTERM');`);
         assert.ok(
-            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+            validateRuntimeSource('src/gateway/official/upstream.ts', source).some((error) =>
                 error.includes('termination API'),
             ),
             source,
@@ -853,15 +1229,177 @@ for (const mutation of [
 
 for (const override of ["['shell']: true", 'get shell() { return true; }', 'shell() { return true; }']) {
     test(`official child spawn proof rejects computed or method options: ${override}`, () => {
-        const source = ownedOfficialBridge.replace('shell: false, stdio:', `shell: false, ${override}, stdio:`);
+        const source = ownedOfficialUpstream.replace('shell: false,', `shell: false, ${override},`);
         assert.ok(
-            validateRuntimeSource('src/adapters/mcp-bridge.ts', source).some((error) =>
+            validateRuntimeSource('src/gateway/official/upstream.ts', source).some((error) =>
                 error.includes('termination API'),
             ),
             source,
         );
     });
 }
+
+test('Official upstream role accepts only its named dependencies and import kinds', () => {
+    const file = 'src/gateway/official/upstream.ts';
+    for (const [dependency, permitted] of [
+        ['node:child_process', 'import { spawn }'],
+        ['@modelcontextprotocol/client', 'import { Client, type Tool }'],
+        ['@modelcontextprotocol/core', 'import { CallToolResultSchema }'],
+        ['../../domains/control-contract.ts', 'import type { Diagnose }'],
+        ['../../domains/request-failure.ts', 'import { RequestFailure }'],
+        ['../diagnostics.ts', 'import { measured }'],
+        ['./execution.ts', 'import { createOfficialExecution }'],
+        ['./server-launch.ts', 'import { resolveVerifiedOfficialServerBin }'],
+        ['../../shared/constants.ts', 'import { CLOSE_TIMEOUT_SECONDS }'],
+    ] as const) {
+        const positive = `${permitted} from '${dependency}';`;
+        assert.deepEqual(validateRuntimeSource(file, positive), [], positive);
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) =>
+                    error.includes('unapproved Official upstream dependency or binding'),
+                ),
+                source,
+            );
+    }
+    for (const source of [
+        "import { spawn as anotherSpawn } from 'node:child_process';",
+        "import * as children from 'node:child_process';",
+        "import { spawn, execFile } from 'node:child_process';",
+        "import type { spawn } from 'node:child_process';",
+        "import { Tool } from '@modelcontextprotocol/client';",
+        "import type { Client } from '@modelcontextprotocol/client';",
+        "import { Diagnose } from '../../domains/control-contract.ts';",
+    ])
+        assert.ok(
+            validateRuntimeSource(file, source).some((error) =>
+                error.includes('unapproved Official upstream dependency or binding'),
+            ),
+            source,
+        );
+    for (const dependency of [
+        './unreviewed.ts',
+        './package-files.ts',
+        './release-evidence.ts',
+        '../core.ts',
+        '../registry.ts',
+        '../connections/resource-owner.ts',
+        '../../adapters/file-evidence.ts',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        'node:fs/promises',
+        'node:process',
+        'node:perf_hooks',
+        '@modelcontextprotocol/server',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(
+                validateRuntimeSource(file, source).some((error) =>
+                    error.includes('unapproved Official upstream dependency or binding'),
+                ),
+                source,
+            );
+});
+
+test('only the original Core and connection owners receive exact upstream imports', () => {
+    for (const [file, dependency, retired, permitted] of [
+        [
+            'src/gateway/core.ts',
+            './official/upstream.ts',
+            '../adapters/mcp-bridge.ts',
+            'import { openOfficialUpstream }',
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            '../official/upstream.ts',
+            '../../adapters/mcp-bridge.ts',
+            'import { openOfficialUpstream }',
+        ],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            '../official/upstream.ts',
+            '../../adapters/mcp-bridge.ts',
+            'import type { openOfficialUpstream, OfficialUpstream }',
+        ],
+    ] as const) {
+        assert.deepEqual(validateRuntimeSource(file, `${permitted} from '${dependency}';`), []);
+        for (const { source } of [...connectionDependencyForms(dependency), ...connectionDependencyForms(retired)])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+    for (const [file, dependency] of [
+        ['src/gateway/official/options.ts', './upstream.ts'],
+        ['src/gateway/official/execution.ts', './upstream.ts'],
+        ['src/gateway/official/release-evidence.ts', './upstream.ts'],
+        ['src/gateway/official/package-files.ts', './upstream.ts'],
+        ['src/gateway/official/server-launch.ts', './upstream.ts'],
+        ['src/gateway/official/unknown.ts', './upstream.ts'],
+        ['src/gateway/registry.ts', './official/upstream.ts'],
+        ['src/gateway/connections/connection-view.ts', '../official/upstream.ts'],
+        ['src/gateway/connections/directory-lease.ts', '../official/upstream.ts'],
+        ['src/gateway/connections/resource-owner.ts', '../official/upstream.ts'],
+        ['src/gateway/targets/model/unknown.ts', '../../official/upstream.ts'],
+        ['src/domains/unknown.ts', '../gateway/official/upstream.ts'],
+        ['src/shared/unknown.ts', '../gateway/official/upstream.ts'],
+        ['src/host-plugins/unknown.ts', '../gateway/official/upstream.ts'],
+        ['src/adapters/unknown.ts', '../gateway/official/upstream.ts'],
+        ['src/application/unknown.ts', '../gateway/official/upstream.ts'],
+        ['src/interface/unknown.ts', '../gateway/official/upstream.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(
+                errors.some((error) => error.includes('Official upstream')),
+                `${file}: ${source}`,
+            );
+        }
+});
+
+test('Official upstream ambient state is confined to its owned spawn and reaping budget', () => {
+    const file = 'src/gateway/official/upstream.ts';
+    for (const unexpected of [
+        'process.execPath',
+        'process.env',
+        'process.argv',
+        'Date.now()',
+        'performance.now()',
+        'performance["now"]()',
+        'globalThis.performance.now()',
+        '(performance as Performance).now()',
+        'performance.now(1)',
+    ]) {
+        for (const source of [
+            `const unexpected = ${unexpected};\n${ownedOfficialUpstream}`,
+            ownedOfficialUpstream.replace(
+                "child.kill('SIGTERM');",
+                `const unexpected = ${unexpected};\nchild.kill('SIGTERM');`,
+            ),
+        ])
+            assert.ok(
+                validateRuntimeSource(file, source).some(
+                    (error) => error.includes('ambient clock') || error.includes('process state'),
+                ),
+                source,
+            );
+    }
+    for (const source of [
+        `const performance = otherClock;\n${ownedOfficialUpstream}`,
+        ownedOfficialUpstream.replace('const deadline =', 'const budget ='),
+        ownedOfficialUpstream.replace('CLOSE_TIMEOUT_SECONDS * 1000', 'CLOSE_TIMEOUT_SECONDS * 100'),
+        ownedOfficialUpstream.replace(
+            "child.kill('SIGTERM');",
+            "const remainder = deadline - performance.now();\nchild.kill('SIGTERM');",
+        ),
+        ownedOfficialUpstream.replace(
+            "child.kill('SIGTERM');",
+            "async function probe() { if (!(await waitForExit(deadline - performance.now()))) return; }\nchild.kill('SIGTERM');",
+        ),
+    ])
+        assert.ok(
+            validateRuntimeSource(file, source).some((error) => error.includes('ambient clock')),
+            source,
+        );
+});
 
 test('AST audit accepts erasable TypeScript without erasing its dependency evidence', () => {
     assert.deepEqual(
@@ -1392,8 +1930,17 @@ test('Core registry inverse edges reject mutable authority in every supported de
         ['src/host-plugins/unreviewed.ts', '../gateway'],
         ['src/gateway/connections/resource-owner.ts', '..'],
         ['src/gateway/connections/directory-lease.ts', '..'],
+        ['src/gateway/owned-tool-arguments.ts', '.'],
+        ['src/gateway/official/options.ts', '..'],
+        ['src/gateway/official/execution.ts', '..'],
     ] as const)
-        for (const owner of ['core', 'registry'])
+        for (const owner of [
+            'core',
+            'registry',
+            'connections/managed-connection',
+            'connections/start-admission',
+            'connections/connection-view',
+        ])
             for (const { source } of connectionDependencyForms(`${prefix}/${owner}.ts`)) {
                 const errors = validateRuntimeSource(file, source);
                 assert.ok(!errors.some((error) => error.includes('invalid source')), source);
@@ -1407,32 +1954,79 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
             'src/gateway/core.ts',
             [
                 'node:crypto',
-                'node:os',
-                'node:path',
                 '../adapters/cdp-router.ts',
                 '../adapters/chrome-profile.ts',
                 '../adapters/data-directory.ts',
-                '../adapters/fixture-diagnostics.ts',
-                '../adapters/mcp-bridge.ts',
-                '../adapters/official-server.ts',
-                '../adapters/port-reservation.ts',
-                '../adapters/target-host.ts',
                 '../adapters/tool-catalog.ts',
-                '../domains/control-contract.ts',
-                '../domains/request-failure.ts',
-                './connections/directory-lease.ts',
-                './diagnostics.ts',
-                './targets/model/isolation.ts',
-                './targets/model/launch-command.ts',
-                '../shared/constants.ts',
                 '../shared/errors.ts',
                 '../application/client-context.ts',
-                '../application/mcp-lifecycle.ts',
                 '../application/registrations.ts',
-                '../application/target-controller.ts',
+                './connections/managed-connection.ts',
                 './registry.ts',
             ],
-            ['@modelcontextprotocol/client', './connections/resource-owner.ts', '../shared/client-context.ts'],
+            ['@modelcontextprotocol/client', '../domains/control-contract.ts', '../shared/client-context.ts'],
+        ],
+        [
+            'src/gateway/connections/managed-connection.ts',
+            [
+                'node:crypto',
+                '../official/server-launch.ts',
+                '../../adapters/port-reservation.ts',
+                '../../adapters/target-host.ts',
+                '../../application/client-context.ts',
+                '../../application/mcp-lifecycle.ts',
+                '../../domains/control-contract.ts',
+                '../../domains/request-failure.ts',
+                '../../shared/errors.ts',
+                '../diagnostics.ts',
+                './connection-view.ts',
+                './start-admission.ts',
+            ],
+            [
+                '@modelcontextprotocol/client',
+                '../../adapters/chrome-profile.ts',
+                '../../adapters/data-directory.ts',
+                '../../adapters/tool-catalog.ts',
+                '../../application/registrations.ts',
+                '../registry.ts',
+                './resource-owner.ts',
+                '../../shared/client-context.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
+            ],
+        ],
+        [
+            'src/gateway/connections/start-admission.ts',
+            [
+                'node:crypto',
+                'node:os',
+                'node:path',
+                '../../adapters/fixture-diagnostics.ts',
+                '../official/server-launch.ts',
+                '../../application/client-context.ts',
+                '../../domains/control-contract.ts',
+                '../../shared/constants.ts',
+                '../../shared/errors.ts',
+                '../targets/model/isolation.ts',
+                '../targets/model/launch-command.ts',
+                './directory-lease.ts',
+                './workspace-policy.ts',
+            ],
+            [
+                '../../adapters/chrome-profile.ts',
+                '../../adapters/data-directory.ts',
+                '../../application/mcp-lifecycle.ts',
+                '../../application/registrations.ts',
+                '../registry.ts',
+                './managed-connection.ts',
+                './resource-owner.ts',
+                './connection-view.ts',
+            ],
+        ],
+        [
+            'src/gateway/connections/connection-view.ts',
+            ['../official/server-launch.ts', '../../domains/control-contract.ts'],
+            ['../../adapters/tool-catalog.ts', '../registry.ts', './managed-connection.ts'],
         ],
         [
             'src/gateway/registry.ts',
@@ -1443,11 +2037,10 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 '../shared/errors.ts',
             ],
             [
-                './core.ts',
+                './connections/managed-connection.ts',
                 './connections/directory-lease.ts',
                 '../application/registrations.ts',
                 '../application/mcp-lifecycle.ts',
-                '../application/target-controller.ts',
                 '../shared/client-context.ts',
             ],
         ],
@@ -1480,18 +2073,36 @@ test('Core registry exact roles retain only their supplied dependency capabiliti
                 source,
             );
     }
+    for (const { source } of connectionDependencyForms('./core.ts'))
+        assert.ok(validateRuntimeSource('src/gateway/registry.ts', source).length, source);
+    for (const dependency of [
+        '../core.ts',
+        '../../adapters/unknown.ts',
+        '../../interface/app-main.ts',
+        '../../application/operations.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/connections/managed-connection.ts', source).length, source);
 });
 
 test('Core registry ambient capabilities apply only to exact reviewed expressions and files', () => {
     for (const [file, source] of [
+        ['src/gateway/core.ts', 'const timestamp = now ?? Date.now;'],
         [
-            'src/gateway/core.ts',
-            'const ambient = { ...process.env }; const windows = process.platform === "win32"; const timestamp = now ?? Date.now;',
+            'src/gateway/connections/start-admission.ts',
+            'const ambient = { ...process.env }; const windows = process.platform === "win32";',
         ],
         ['src/gateway/registry.ts', 'process.stderr.write("Connection cleanup failed\\n");'],
     ] as const)
         assert.deepEqual(validateRuntimeSource(file, source), [], source);
-    for (const file of ['src/gateway/core.ts', 'src/gateway/registry.ts', 'src/gateway/unreviewed.ts']) {
+    for (const file of [
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
+        'src/gateway/connections/managed-connection.ts',
+        'src/gateway/connections/start-admission.ts',
+        'src/gateway/connections/connection-view.ts',
+        'src/gateway/unreviewed.ts',
+    ]) {
         for (const source of [
             'const state = process;',
             'const state = globalThis.process;',
@@ -1522,6 +2133,17 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
     assert.ok(validateRuntimeSource('src/gateway/core.ts', 'process.stderr.write("x");').length);
+    for (const source of ['const ambient = { ...process.env };', 'const windows = process.platform === "win32";'])
+        for (const file of [
+            'src/gateway/core.ts',
+            'src/gateway/connections/managed-connection.ts',
+            'src/gateway/connections/connection-view.ts',
+        ])
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    assert.ok(
+        validateRuntimeSource('src/gateway/connections/managed-connection.ts', 'const timestamp = now ?? Date.now;')
+            .length,
+    );
     for (const source of [
         'const env = { ...process.env };',
         'const platform = process.platform;',
@@ -1534,6 +2156,120 @@ test('Core registry ambient capabilities apply only to exact reviewed expression
         'const timestamp = Date.now;',
     ])
         assert.ok(validateRuntimeSource('src/gateway/unreviewed.ts', source).length, source);
+});
+
+test('managed connection role accepts its original client lifecycle provider', () => {
+    for (const { source } of connectionDependencyForms('../../application/client-context.ts'))
+        assert.deepEqual(validateRuntimeSource('src/gateway/connections/managed-connection.ts', source), [], source);
+});
+
+test('managed connection inverse edge rejects erased authority in unknown pure owners', () => {
+    const source = "import type { ManagedConnection } from './connections/managed-connection.ts';";
+    const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
+    assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+    assert.ok(errors.length, source);
+});
+
+test('pure workspace policy rejects JavaScript specifiers for managed connection owners', () => {
+    const file = 'src/gateway/connections/workspace-policy.ts';
+    for (const source of [
+        "import type { ManagedConnection } from './managed-connection.js';",
+        "import type { createStartAdmission } from './start-admission.js';",
+        "import type { createConnectionView } from './connection-view.js';",
+    ]) {
+        const errors = validateRuntimeSource(file, source);
+        assert.ok(errors.includes(`${file}: relative source dependencies must use an explicit .ts extension.`), source);
+    }
+});
+
+test('admission and view roles admit only their supplied service capabilities', () => {
+    for (const [file, dependency] of [
+        ['src/gateway/connections/start-admission.ts', '../../application/client-context.ts'],
+        ['src/gateway/connections/connection-view.ts', '../official/server-launch.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+});
+
+test('admission and view inverse edges reject erased mutable authority in pure owners', () => {
+    for (const owner of ['start-admission', 'connection-view']) {
+        const source = `import type { Service } from './connections/${owner}.ts';`;
+        const errors = validateRuntimeSource('src/gateway/unreviewed.ts', source);
+        assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+        assert.ok(errors.length, source);
+    }
+});
+
+test('managed and view roles cannot retain transferred admission capabilities', () => {
+    for (const file of ['src/gateway/connections/managed-connection.ts', 'src/gateway/connections/connection-view.ts'])
+        for (const dependency of [
+            'node:os',
+            'node:path',
+            '../../adapters/fixture-diagnostics.ts',
+            '../../shared/constants.ts',
+            '../targets/model/isolation.ts',
+            '../targets/model/launch-command.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    for (const dependency of ['./directory-lease.ts', './workspace-policy.ts'])
+        for (const { source, erased } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource('src/gateway/connections/managed-connection.ts', source);
+            if (erased) assert.deepEqual(errors, [], source);
+            else assert.ok(errors.length, source);
+        }
+    for (const file of ['src/gateway/connections/start-admission.ts', 'src/gateway/connections/connection-view.ts'])
+        for (const dependency of [
+            '../../adapters/port-reservation.ts',
+            '../../adapters/target-host.ts',
+            '../diagnostics.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+});
+
+test('workspace policy accepts supplied option parsing without gaining connection authority', async () => {
+    const file = 'src/gateway/connections/workspace-policy.ts';
+    for (const { source } of connectionDependencyForms('../official/options.ts'))
+        assert.deepEqual(validateRuntimeSource(file, source), [], source);
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
+    for (const dependency of [
+        '../core.ts',
+        '../registry.ts',
+        './managed-connection.ts',
+        './resource-owner.ts',
+        './directory-lease.ts',
+        '../diagnostics.ts',
+        '../../adapters/tool-catalog.ts',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        'node:os',
+        'node:fs',
+        'node:net',
+        'node:child_process',
+        '@modelcontextprotocol/client',
+    ])
+        for (const { source } of connectionDependencyForms(dependency)) {
+            const errors = validateRuntimeSource(file, source);
+            assert.ok(!errors.some((error) => error.includes('invalid source')), source);
+            assert.ok(errors.length, `${file}: ${source}`);
+        }
+    for (const source of [
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+        'const value = (require as (name: string) => unknown)?.(moduleName);',
+        'const value = process.env;',
+        'const value = process.platform;',
+        'const value = globalThis.process;',
+        'const { env } = process;',
+        'const value = Date.now;',
+        'const value = new Date();',
+        'const value = performance.now();',
+        'const value = globalThis.globalThis["process"].env;',
+        'const value = globalThis[key];',
+        'fetch("http://localhost");',
+    ])
+        assert.ok(validateRuntimeSource(file, source).length, source);
 });
 
 test('Official pure owners accept supplied shared rules and real adapter consumers', () => {
@@ -1557,7 +2293,7 @@ test('Official pure owners reject I/O and mutable authorities through runtime an
         for (const dependency of [
             'node:fs',
             '@modelcontextprotocol/client',
-            '../../adapters/official-package.ts',
+            './package-files.ts',
             '../../application/client-context.ts',
             '../core.ts',
             '../registry.ts',
@@ -1589,4 +2325,216 @@ test('Official pure owners reject process environment clocks and ambient aliases
         ])
             assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
     }
+});
+
+test('target lifecycle exact capabilities accept the complete actual lifecycle source', async () => {
+    const file = 'src/gateway/targets/target-lifecycle.ts';
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
+});
+
+test('Official package-file role accepts only its five complete proof dependencies', () => {
+    for (const dependency of [
+        'node:crypto',
+        'node:fs/promises',
+        'node:path',
+        './release-evidence.ts',
+        '../../adapters/file-evidence.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource('src/gateway/official/package-files.ts', source), [], source);
+});
+
+test('Official package-file role rejects unrelated dependencies in runtime and erased forms', () => {
+    for (const dependency of [
+        'node:fs',
+        'node:net',
+        'node:process',
+        'node:child_process',
+        'node:perf_hooks',
+        '@modelcontextprotocol/client',
+        'ws',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        './server-launch.ts',
+        '../../adapters/target-host.ts',
+        '../../shared/errors.ts',
+        './options.ts',
+        '../core.ts',
+        '../registry.ts',
+        '../connections/resource-owner.ts',
+        '../connections/directory-lease.ts',
+        '../diagnostics.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/official/package-files.ts', source).length, source);
+});
+
+test('Official package-file rights cannot leak to pure or unknown owners through any dependency form', () => {
+    for (const file of [
+        'src/gateway/official/options.ts',
+        'src/gateway/official/execution.ts',
+        'src/gateway/official/release-evidence.ts',
+        'src/gateway/official/unknown.ts',
+        'src/gateway/unknown.ts',
+        'src/gateway/owned-tool-arguments.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/domains/unknown.ts',
+        'src/shared/unknown.ts',
+        'src/host-plugins/unknown.ts',
+        'src/gateway/connections/resource-owner.ts',
+        'src/gateway/connections/directory-lease.ts',
+        'src/gateway/core.ts',
+        'src/gateway/registry.ts',
+    ]) {
+        const relative = path.posix.relative(path.posix.dirname(file), 'src/gateway/official/package-files.ts');
+        const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+    for (const dependency of ['node:crypto', 'node:fs/promises', 'node:path', '../../adapters/file-evidence.ts'])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/official/unknown.ts', source).length, source);
+    for (const { source } of connectionDependencyForms('../gateway/official/package-files.ts'))
+        assert.deepEqual(validateRuntimeSource('src/adapters/example.ts', source), [], source);
+});
+
+test('Official package-file proof retains computed dependency and ambient state refusal', () => {
+    for (const source of [
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+        'const value = process.env;',
+        'const value = process.platform;',
+        'const { env } = process;',
+        'const value = globalThis.process;',
+        'const value = globalThis[key];',
+        'const ambient = globalThis.global;',
+        'const value = Date.now;',
+        'const value = new Date();',
+        'const value = performance.now();',
+        'fetch("http://localhost");',
+        'new WebSocket("ws://localhost");',
+        'type Value = { [process.platform](): void };',
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/official/package-files.ts', source).length, source);
+});
+
+test('Official package-file role accepts its complete actual proof source', async () => {
+    const file = 'src/gateway/official/package-files.ts';
+    assert.deepEqual(validateRuntimeSource(file, await readFile(new URL(`../${file}`, import.meta.url), 'utf8')), []);
+});
+
+test('Official launch-input role accepts only the exact named invocation defaults', () => {
+    for (const source of [
+        'export function captureOfficialServerEnvironment(environment = process.env) { return { ...environment }; }',
+        "export function buildOfficialLaunchArguments(browserUrl, environment = process.env, mcpArgs = [], windowsEnvironment = process.platform === 'win32') { return [browserUrl, environment, mcpArgs, windowsEnvironment]; }",
+    ])
+        assert.deepEqual(validateRuntimeSource('src/gateway/official/server-launch.ts', source), [], source);
+});
+
+test('Official launch-input role accepts only its five complete launch dependencies', () => {
+    for (const dependency of [
+        'node:path',
+        './options.ts',
+        './release-evidence.ts',
+        './package-files.ts',
+        '../../shared/errors.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.deepEqual(validateRuntimeSource('src/gateway/official/server-launch.ts', source), [], source);
+});
+
+test('Official launch-input role rejects unrelated dependencies in runtime and erased forms', () => {
+    for (const dependency of [
+        'node:crypto',
+        'node:fs/promises',
+        'node:net',
+        'node:process',
+        'node:child_process',
+        'node:perf_hooks',
+        '@modelcontextprotocol/client',
+        'ws',
+        '../../adapters/file-evidence.ts',
+        '../../adapters/mcp-bridge.ts',
+        '../../adapters/target-host.ts',
+        '../../application/client-context.ts',
+        '../../interface/app-main.ts',
+        '../core.ts',
+        '../registry.ts',
+        '../connections/resource-owner.ts',
+        '../connections/directory-lease.ts',
+        '../diagnostics.ts',
+        './unknown.ts',
+    ])
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource('src/gateway/official/server-launch.ts', source).length, source);
+});
+
+test('Official launch-input defaults cannot authorize ambient escapes or child termination', () => {
+    for (const source of [
+        'const environment = process.env;',
+        'function unknown(environment = process.env) { return environment; }',
+        'function captureOfficialServerEnvironment(other = process.env) { return other; }',
+        'function captureOfficialServerEnvironment(environment) { return process.env; }',
+        'function captureOfficialServerEnvironment(environment = process["env"]) { return environment; }',
+        'function captureOfficialServerEnvironment(environment = globalThis.process.env) { return environment; }',
+        'function captureOfficialServerEnvironment(environment = (process.env || {})) { return environment; }',
+        'function captureOfficialServerEnvironment(environment = process.env = {}) { return environment; }',
+        'function captureOfficialServerEnvironment(environment = process.platform) { return environment; }',
+        'function buildOfficialLaunchArguments(environment = process.env, other = process.platform === "win32") {}',
+        'function buildOfficialLaunchArguments(windowsEnvironment = process.platform === "linux") {}',
+        'function buildOfficialLaunchArguments(windowsEnvironment = process["platform"] === "win32") {}',
+        'function buildOfficialLaunchArguments(windowsEnvironment) { return process.platform === "win32"; }',
+        'const launch = (environment = process.env) => environment;',
+        'const { env } = process;',
+        'const value = globalThis[key];',
+        'const value = Date.now;',
+        'const value = performance.now();',
+        'fetch("http://localhost");',
+        'new WebSocket("ws://localhost");',
+        'const value = import(moduleName);',
+        'const value = require?.(moduleName);',
+        'child.kill("SIGTERM");',
+        'process.kill(123, "SIGTERM");',
+    ])
+        assert.ok(validateRuntimeSource('src/gateway/official/server-launch.ts', source).length, source);
+    const source = 'function captureOfficialServerEnvironment(environment = process.env) { return environment; }';
+    for (const file of ['src/gateway/official/unknown.ts', 'src/gateway/official/options.ts'])
+        assert.ok(validateRuntimeSource(file, source).length, file);
+});
+
+test('Official launch-input rights cannot leak through pure or unrelated owner dependencies', () => {
+    for (const file of [
+        'src/gateway/core.ts',
+        'src/gateway/official/options.ts',
+        'src/gateway/official/execution.ts',
+        'src/gateway/official/release-evidence.ts',
+        'src/gateway/official/package-files.ts',
+        'src/gateway/official/unknown.ts',
+        'src/gateway/unknown.ts',
+        'src/gateway/owned-tool-arguments.ts',
+        'src/gateway/targets/model/isolation.ts',
+        'src/domains/unknown.ts',
+        'src/shared/unknown.ts',
+        'src/host-plugins/unknown.ts',
+        'src/gateway/connections/resource-owner.ts',
+        'src/gateway/connections/directory-lease.ts',
+        'src/gateway/connections/workspace-policy.ts',
+        'src/gateway/connections/unknown.ts',
+        'src/gateway/registry.ts',
+        'src/gateway/targets/target-lifecycle.ts',
+    ]) {
+        const relative = path.posix.relative(path.posix.dirname(file), 'src/gateway/official/server-launch.ts');
+        const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+        for (const { source } of connectionDependencyForms(dependency))
+            assert.ok(validateRuntimeSource(file, source).length, `${file}: ${source}`);
+    }
+    for (const file of [
+        'src/gateway/connections/managed-connection.ts',
+        'src/gateway/connections/start-admission.ts',
+        'src/gateway/connections/connection-view.ts',
+    ])
+        for (const { source } of connectionDependencyForms('../official/server-launch.ts'))
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    for (const { source } of connectionDependencyForms('../gateway/official/server-launch.ts'))
+        assert.deepEqual(validateRuntimeSource('src/adapters/example.ts', source), [], source);
 });

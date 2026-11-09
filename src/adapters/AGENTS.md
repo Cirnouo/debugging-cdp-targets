@@ -11,9 +11,18 @@ read cumulative [Host instructions](../host-plugins/AGENTS.md),
 The native adapter retains complete command/receipt ownership and publication
 order; supplied intent validation and selected-file acquisition have those owners.
 
-Node child processes use shell:false. Portable target launches use windowsHide:false,
-detached:true and ignored stdio. Windows native support preserves normal GUI show
-state while suppressing auxiliary consoles; fixed helpers remain hidden.
+Target factories admit only Windows x64/arm64 before constructing native defaults
+or acquiring target resources. Supplied Windows identity is test evidence, not
+permission for ambient native I/O. Construct only needed native defaults; default
+launch, snapshot, profile and excluded-port operations independently require a
+supported actual Windows host. Fully supplied process/network ports remain usable
+on other test hosts. The retained Unix inspection/probe and portable spawn exports
+serve direct-model regressions pending their deletion cut; production constructors
+must never select them.
+
+Node child processes use shell:false. The retained portable spawn helper uses
+windowsHide:false, detached:true and ignored stdio. Windows native support preserves
+normal GUI show state while suppressing auxiliary consoles; fixed helpers remain hidden.
 Native Windows launch inspects manifest/AppCompat, handles native elevation errors,
 preserves full env/cwd/argv, and observes the actual app handle. A helper's exit
 is an observation failure, not evidence of app exit. One-shot ShellExecuteEx runas
@@ -26,7 +35,9 @@ from `unknown` before assigning process, endpoint, package or IPC types.
 
 OS evidence must independently confirm path, creation time, session/user,
 descendants, listener ownership, and loopback. Never signal unknown processes.
-Windows closes a normal window; Unix sends only SIGTERM after identity checks.
+Windows closes a normal window after identity checks. Supplied Windows identity
+validation uses Windows executable case/path and Chrome vendor semantics even on
+another test host; direct model callers retain their explicit or ambient evidence.
 When normal close requires elevation, use the authenticated one-shot close helper.
 Report native stage/error, request/exit/listener evidence and retry identity.
 An absent listener permits verified app cleanup; a foreign listener is distinct.

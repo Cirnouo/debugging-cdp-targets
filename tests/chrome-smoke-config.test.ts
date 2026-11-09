@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import { constants, existsSync, type Stats } from 'node:fs';
+import filesystem, { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -553,6 +554,103 @@ test('Windows keeps its Chrome default but rejects root-relative overrides and u
         /absolute/,
     );
     assert.throws(() => resolveChromeSmokeExecutable('freebsd', {}), /Unsupported/);
+});
+
+test('Windows Chrome preflight checks the configured regular file and refuses missing or nonregular paths', async (t) => {
+    const { requireChromeSmokeExecutable, resolveChromeSmokeExecutable } = await host();
+    const executable = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+    assert.equal(resolveChromeSmokeExecutable('win32', { DCT_SMOKE_CHROME_EXECUTABLE: executable }), executable);
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    assert.ok(platform);
+    const previous = process.env.DCT_SMOKE_CHROME_EXECUTABLE;
+    let regular = true;
+    let accessFailure: Error | undefined;
+    const calls: unknown[][] = [];
+    const epoch = new Date(0);
+    const entry: Stats = {
+        dev: 0,
+        ino: 0,
+        mode: 0,
+        nlink: 1,
+        uid: 0,
+        gid: 0,
+        rdev: 0,
+        size: 1,
+        blksize: 4096,
+        blocks: 1,
+        atimeMs: 0,
+        mtimeMs: 0,
+        ctimeMs: 0,
+        birthtimeMs: 0,
+        atime: epoch,
+        mtime: epoch,
+        ctime: epoch,
+        birthtime: epoch,
+        isFile: () => regular,
+        isDirectory: () => !regular,
+        isBlockDevice: () => false,
+        isCharacterDevice: () => false,
+        isSymbolicLink: () => false,
+        isFIFO: () => false,
+        isSocket: () => false,
+    };
+    const access = t.mock.method(
+        filesystem,
+        'access',
+        async (file: Parameters<typeof filesystem.access>[0], mode?: number) => {
+            calls.push(['access', file, mode]);
+            if (accessFailure) throw accessFailure;
+        },
+    );
+    const stat = t.mock.method(filesystem, 'stat', async (file: Parameters<typeof filesystem.stat>[0]) => {
+        calls.push(['stat', file]);
+        return entry;
+    });
+    try {
+        Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
+        process.env.DCT_SMOKE_CHROME_EXECUTABLE = executable;
+        syncBuiltinESMExports();
+        assert.equal(await requireChromeSmokeExecutable(), executable);
+        assert.deepEqual(calls, [
+            ['access', executable, constants.F_OK],
+            ['stat', executable],
+        ]);
+        calls.length = 0;
+        const missing = Object.assign(new Error('Synthetic missing configured Chrome.'), { code: 'ENOENT' });
+        accessFailure = missing;
+        await assert.rejects(requireChromeSmokeExecutable(), (error) => error === missing);
+        assert.deepEqual(calls, [['access', executable, constants.F_OK]]);
+        calls.length = 0;
+        accessFailure = undefined;
+        regular = false;
+        await assert.rejects(requireChromeSmokeExecutable(), /The Chrome executable must be a file\./);
+        assert.deepEqual(calls, [
+            ['access', executable, constants.F_OK],
+            ['stat', executable],
+        ]);
+    } finally {
+        access.mock.restore();
+        stat.mock.restore();
+        Object.defineProperty(process, 'platform', platform);
+        if (previous === undefined) delete process.env.DCT_SMOKE_CHROME_EXECUTABLE;
+        else process.env.DCT_SMOKE_CHROME_EXECUTABLE = previous;
+        syncBuiltinESMExports();
+    }
+});
+
+test('both real Chrome smokes require the configured executable before profile or target acquisition', async () => {
+    for (const fixture of ['official-server', 'entry-recovery']) {
+        const source = await readFile(new URL(`./smoke/${fixture}.ts`, import.meta.url), 'utf8');
+        const preflight = source.indexOf('const chrome = await requireChromeSmokeExecutable()');
+        const profile = source.indexOf('const folder = await realpath(await mkdtemp(');
+        const client = source.indexOf('const client = createFixtureGatewayClient(');
+        assert.ok(preflight >= 0, fixture);
+        assert.ok(profile > preflight, fixture);
+        assert.ok(client > preflight, fixture);
+        if (fixture === 'entry-recovery')
+            assert.ok(source.indexOf('const platform = createPlatformAdapter()') > preflight, fixture);
+        else assert.ok(source.indexOf('const monitor =') > preflight, fixture);
+    }
 });
 
 test('Chrome smoke launch preserves literal paths and isolates its temporary profile', async () => {

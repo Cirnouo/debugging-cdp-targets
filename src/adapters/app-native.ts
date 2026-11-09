@@ -1,6 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import { type AppNativeEvidence, parseAppNativeEvidence } from '../domains/app-release.ts';
 import { errorCode, isRecord } from '../shared/errors.ts';
 import { verifyAppReleaseTree } from './app-delivery.ts';
@@ -62,6 +63,8 @@ export async function verifyAppNativeInputs(input: AppNativeEvidence) {
 }
 
 export async function loadAppAdvisoryLock(evidence: AppNativeEvidence): Promise<AdvisoryLock> {
+    if (!supportsWindowsApp(process.platform, process.arch))
+        throw new Error('Unsupported App native loading; Windows x64 or arm64 is required.');
     await verifyAppNativeInputs(evidence);
     // Static original public package loading occurs only after every original source/prebuild/license verifies.
     const extension: unknown = require('fs-native-extensions');

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { after, mock, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
+import { inspect, promisify } from 'node:util';
 import { isRecord } from '../src/shared/errors.ts';
 import {
     ownedDeploymentPe,
@@ -100,6 +100,130 @@ test('fixed builder owns both real source sets, refuses concurrent build and rel
     assert.deepEqual(await fs.readdir(fixture.outputs), []);
 });
 
+for (const { childFailure, title } of [
+    { childFailure: false, title: 'fixed builder release retries a root ENOTEMPTY on the same scratch directory' },
+    { childFailure: true, title: 'fixed builder release preserves a child ENOTEMPTY without retrying scratch removal' },
+]) {
+    test(title, { skip: !fixedWindows }, async (t) => {
+        const fixture = await ownedWindowsDeploymentCompiler(t);
+        const support = await buildWindowsDeploymentSupport();
+        const remove = fs.rm;
+        let fault: unknown;
+        let attempts = 0;
+        let injectFault = false;
+        const setupRemoval = async () => {
+            const output = support.receipt.recipes[0]?.find((argument) => argument.startsWith('/out:'));
+            assert.ok(output);
+            const scratch = path.dirname(output.slice(5));
+            assert.equal(path.dirname(scratch), await fs.realpath(os.tmpdir()));
+            assert.match(path.basename(scratch), /^dct-deployment-support-[A-Za-z0-9_-]{6}$/);
+            assert.equal(await fs.realpath(scratch), scratch);
+            const identity = await fs.lstat(scratch, { bigint: true });
+            assert.ok(identity.isDirectory() && !identity.isSymbolicLink());
+            const verifyScratch = async (current: BigIntStats) => {
+                assert.ok(current.isDirectory() && !current.isSymbolicLink());
+                assert.equal(current.dev, identity.dev);
+                assert.equal(current.ino, identity.ino);
+                assert.equal(await fs.realpath(scratch), scratch);
+            };
+            const faultPath = childFailure ? path.join(scratch, 'retained-child') : scratch;
+            const removal = t.mock.method(fs, 'rm', async (...args: Parameters<typeof fs.rm>) => {
+                const [directory, options] = args;
+                assert.equal(directory, scratch);
+                assert.deepEqual(options, { recursive: true });
+                if (!injectFault) return remove(...args);
+                await verifyScratch(await fs.lstat(directory, { bigint: true }));
+                attempts++;
+                if (attempts === 2 && !childFailure) {
+                    await remove(directory, { recursive: true });
+                    return;
+                }
+                assert.equal(attempts, 1);
+                if (childFailure) {
+                    await fs.mkdir(faultPath);
+                    await fs.writeFile(path.join(faultPath, 'marker'), 'owned fixture data', { flag: 'wx' });
+                }
+                try {
+                    await fs.rmdir(faultPath);
+                } catch (error) {
+                    assert.ok(isRecord(error));
+                    assert.deepEqual([error.code, error.syscall, error.path], ['ENOTEMPTY', 'rmdir', faultPath]);
+                    fault = error;
+                    throw error;
+                }
+                assert.fail('Expected a real ENOTEMPTY from the owned directory.');
+            });
+            syncBuiltinESMExports();
+            return { scratch, verifyScratch, removal };
+        };
+        const { scratch, verifyScratch, removal } = await setupRemoval().catch(async (setupError: unknown) => {
+            try {
+                await support.release();
+            } catch (releaseError) {
+                throw new AggregateError(
+                    [setupError, releaseError],
+                    'Deployment release test setup and release failures.',
+                    {
+                        cause: setupError,
+                    },
+                );
+            }
+            throw setupError;
+        });
+        injectFault = true;
+
+        const failures: unknown[] = [];
+        try {
+            if (childFailure) {
+                await assert.rejects(
+                    () => support.release(),
+                    (error: unknown) => {
+                        assert.ok(error instanceof AggregateError);
+                        assert.equal(error.errors.length, 1);
+                        assert.equal(error.errors[0], fault);
+                        return true;
+                    },
+                );
+            } else {
+                await support.release();
+                await assert.rejects(fs.lstat(scratch), { code: 'ENOENT' });
+            }
+            assert.ok(fault);
+            assert.equal(attempts, childFailure ? 1 : 2);
+        } catch (error) {
+            failures.push(error);
+        }
+        removal.mock.restore();
+        syncBuiltinESMExports();
+
+        try {
+            assert.deepEqual(await fs.readdir(fixture.outputs), []);
+        } catch (error) {
+            failures.push(error);
+        }
+        if (childFailure || failures.length) {
+            try {
+                const remaining = await fs.lstat(scratch, { bigint: true }).catch((error: unknown) => {
+                    if (isRecord(error) && error.code === 'ENOENT') return undefined;
+                    throw error;
+                });
+                if (remaining) {
+                    await verifyScratch(remaining);
+                    await remove(scratch, { recursive: true });
+                }
+            } catch (error) {
+                failures.push(error);
+            }
+        }
+        if (failures.length > 1) {
+            throw new AggregateError(failures, 'Deployment release test and fixture cleanup failures.', {
+                cause: failures[0],
+            });
+        }
+        if (failures.length) throw failures[0];
+    });
+}
+
 test('unsupported build architecture rejects before compiler or source filesystem selection', {
     skip: !fixedWindows,
 }, async () => {
@@ -142,7 +266,35 @@ test('compiler input drift during the first controlled compilation rejects befor
         ]);
     });
     syncBuiltinESMExports();
-    await assert.rejects(buildWindowsDeploymentSupport(), /changed|Unsafe deployment build input/);
+    try {
+        await assert.rejects(buildWindowsDeploymentSupport(), /changed|Unsafe deployment build input/);
+    } catch (error) {
+        try {
+            const diagnostic = inspect(
+                { assertion: error, actual: isRecord(error) ? error.actual : undefined },
+                {
+                    showHidden: true,
+                    customInspect: false,
+                    getters: false,
+                    depth: 12,
+                    maxArrayLength: 64,
+                    maxStringLength: 16384,
+                    compact: false,
+                    breakLength: 120,
+                },
+            );
+            const maximum = 16384;
+            const truncated = '\n[diagnostic truncated at 16384 characters]';
+            t.diagnostic(
+                diagnostic.length > maximum
+                    ? `${diagnostic.slice(0, maximum - truncated.length)}${truncated}`
+                    : diagnostic,
+            );
+        } catch {
+            // Diagnostics must never replace the original assertion failure.
+        }
+        throw error;
+    }
     assert.equal(fixture.compiles(), 1);
     assert.deepEqual(await fs.readdir(fixture.outputs), []);
 });

@@ -73,7 +73,7 @@ expectations must not be replaced with the implementation's own generated data.
     `tests/fixtures/gateway/target-host.ts`; retain one implementation and list only
     that final gateway fixture leaf in the target inventory.
 - Connection-directory suites share real Core/DataDirectoryRegistry setup over
-    controlled ControllerHost, router and official boundaries, distinct from the
+    controlled TargetLifecycleHost, router and official boundaries, distinct from the
     O4 target-host fake. The bounded O5 cut may extract that setup to intermediate
     `tests/fixtures/connection-directory-runtime.ts`, keeping current
     `core-runtime.ts` in place. Export only `createDirectoryRuntimeFixture`,
@@ -95,8 +95,16 @@ expectations must not be replaced with the implementation's own generated data.
     with its Core transaction; registry may consume its exact exported TYPE with
     no runtime cycle or duplicated capability shape. Any temporary TYPE edges to
     current application service owners require exact reviewed roles/instructions.
-    Managed connection, admission, workspace and projection content remain future
-    obligations until their actual transactions/supplied inputs move coherently.
+    The coherent managed cut retains original state, generations, actual execution,
+    handler/lifecycle, authorization and transfer in managed-connection.ts. Whole
+    start admission, persistent callbacks, rollback and final directory retry move
+    together to start-admission.ts, receiving that same lifecycle at invocation.
+    Live status/configuration/catalog projection and administration inventory move
+    together to connection-view.ts, preserving guarded invocation-time Official defaults.
+    Both factories execute no providers at construction; no new await, getter,
+    wrapper, cache or snapshot is introduced. Workspace policy uses supplied inputs
+    and admission's pre-roots temporary-directory capture. These allocations leave
+    the remaining O5 and later plan obligations pending until separately completed.
 - Move the seven reviewed `entry-runtime.test.ts` final-cleanup cases and three
     `app-core-construction.test.ts` cases to the already inventoried Gateway
     gateway-cleanup/construction-cleanup suites. Share the unchanged controlled
@@ -236,6 +244,37 @@ only clock-backed `measured` moves to `src/gateway/diagnostics.ts`. The final
 `gateway/lifecycle-contract.ts` and complete symbol/caller migration above remain
 pending until the actual App UI and CDP domain consumers move coherently. This
 interim placement does not complete O4 or the whole Gateway target.
+
+The bounded O4 target lifecycle cut keeps the complete launch attachment,
+admission, health, normal-Close reuse, rollback, actual-exit and retirement
+transaction together in `gateway/targets/target-lifecycle.ts`. Its actual factory,
+host/router ports, exit event and explicit owner cleanup use lifecycle names;
+target acquisition/native I/O, Core and registry retain their distinct owners.
+Central target lifecycle coverage combines all seven former entry-lifecycle cases
+and the two former plugin-runtime Close/attachment cases in target-lifecycle;
+lifecycle-rollback retains all three rollback cases, observer-cleanup both cases,
+and close-diagnostics its complete operation-result case. These four suites own
+all fifteen original bodies; no separate close-and-attachment leaf is required.
+The pure interim contract and remaining target/native content cuts stay pending;
+this allocation does not complete O4 or the whole reorganization.
+
+The bounded O6 package-file cut owns complete filesystem proof in
+`gateway/official/package-files.ts` as `verifyOfficialPackageFiles`, with five exact
+dependencies and pure-sibling inverse guards. Its nine original mixed regressions
+are split into six runtime, two tooling security and one real TEMP alias case;
+seven explicit executed-title observations retain the complete child oracle.
+Both safe lanes explicitly select all three destinations. The subsequent bounded
+launch-input cut transfers the whole three-function owner to
+`gateway/official/server-launch.ts`: captureOfficialServerEnvironment,
+buildOfficialLaunchArguments and resolveVerifiedOfficialServerBin. Preserve actual
+default/capture/await order, exact five dependencies and original caller context.
+The actual-upstream cut keeps the full private catalog publisher, SDK wire and
+owned Server child/disposal transaction together in `gateway/official/upstream.ts`.
+It preserves the original four exported contracts at their actual callers with
+exact capability and owned-child audit coverage. Three complete suites retain the
+nineteen upstream, twenty-two refresh and nine lifetime registrations. Both safe
+lanes append those suites once. Reviewed catalog and MCP continuation retain their
+current owners and await separate cuts.
 
 ## Per-batch workflow and complete-task gates
 
@@ -407,7 +446,6 @@ src/gateway/mcp/lifecycle-tools.ts
 src/gateway/mcp/request-dispatch.ts
 src/gateway/official/AGENTS.md
 src/gateway/official/README.md
-src/gateway/official/actual-catalog.ts
 src/gateway/official/catalog-input.ts
 src/gateway/official/execution.ts
 src/gateway/official/options.ts
@@ -415,7 +453,7 @@ src/gateway/official/package-files.ts
 src/gateway/official/release-evidence.ts
 src/gateway/official/reviewed-catalog.ts
 src/gateway/official/server-launch.ts
-src/gateway/official/upstream-connection.ts
+src/gateway/official/upstream.ts
 src/gateway/operations.ts
 src/gateway/owned-tool-arguments.ts
 src/gateway/registrations.ts
@@ -689,18 +727,16 @@ tests/gateway/mcp/originating-facilities.test.ts
 tests/gateway/mcp/registration-lifecycle-schemas.test.ts
 tests/gateway/official/README.md
 tests/gateway/official/catalog-construction-cleanup.test.ts
-tests/gateway/official/catalog-pagination-output.test.ts
-tests/gateway/official/execution-accounting.test.ts
+tests/gateway/official/catalog-refresh.test.ts
 tests/gateway/official/execution.test.ts
-tests/gateway/official/official-catalog-refresh.test.ts
-tests/gateway/official/official-child-lifecycle.test.ts
 tests/gateway/official/options.test.ts
 tests/gateway/official/package-files.test.ts
 tests/gateway/official/reviewed-catalog.test.ts
 tests/gateway/official/server-arguments-environment.test.ts
 tests/gateway/official/server-arguments.test.ts
 tests/gateway/official/upstream-health.test.ts
-tests/gateway/official/upstream-protocol.test.ts
+tests/gateway/official/upstream-lifetime.test.ts
+tests/gateway/official/upstream.test.ts
 tests/gateway/operations.test.ts
 tests/gateway/owned-tool-arguments.test.ts
 tests/gateway/registrations.test.ts
@@ -709,9 +745,8 @@ tests/gateway/targets/chrome-launch.test.ts
 tests/gateway/targets/chrome-profile-argument.test.ts
 tests/gateway/targets/chrome-profile.test.ts
 tests/gateway/targets/chromium-features.test.ts
-tests/gateway/targets/close-and-attachment.test.ts
 tests/gateway/targets/close-diagnostics.test.ts
-tests/gateway/targets/controller-rollback.test.ts
+tests/gateway/targets/lifecycle-rollback.test.ts
 tests/gateway/targets/data-directory-claims.test.ts
 tests/gateway/targets/data-directory.test.ts
 tests/gateway/targets/data-isolation.test.ts

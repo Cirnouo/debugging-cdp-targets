@@ -20,15 +20,25 @@ The exact `gateway/connections/resource-owner.ts` retains resource generations a
 `directory-lease.ts` retains the connection-level lease across sessions, pending
 acquisition, successor holds and cleanup retries. These complete mutable algorithms
 use only their exact reviewed type/adapter capabilities; unknown Gateway files
-remain pure. The exact gateway/core.ts owns the full managed-connection transaction,
-generation fences and original execution/context; gateway/registry.ts owns route
+remain pure. The exact gateway/core.ts owns substantive registration/registry/catalog composition
+and trusted construction cleanup; gateway/connections/managed-connection.ts owns
+the state, handler/lifecycle, generation fences, execution/context and control/transfer;
+gateway/connections/start-admission.ts owns the whole start, persistent callbacks,
+rollback and final directory retry; connection-view.ts owns live status/configuration,
+guarded catalog projection and admin inventory. gateway/registry.ts owns route
 membership and retained cleanup/retry joins, including all seven collections and
-definitive cleanup barriers. It uses the original Core ManagedConnection TYPE and
-only the three reviewed application TYPE ports, without a runtime cycle or copied
-capability contract. Core uses the four existing application service providers.
-Target-controller and adapters retain actual acquisition/exit and I/O. Admission,
-managed connection, workspace policy and projection remain coherent Core content
-until their complete ownership cuts; no new await or snapshot is introduced.
+definitive cleanup barriers. It uses the original managed-owner ManagedConnection
+TYPE, the two reviewed application TYPE ports and the target lifecycle's
+TargetExitEvent TYPE. Registry and managed connection share only erased edges.
+The complete `gateway/targets/target-lifecycle.ts` owns attachment, admission,
+health, normal-Close reuse, rollback, actual-exit callbacks and retirement through
+supplied capabilities. Adapters retain actual acquisition, native observation and
+I/O. Start admission receives the same lifecycle at invocation. Admission and view
+execute no providers at construction. View preserves live reads and invokes
+unselected Official defaults at the original guarded branch.
+The pure `gateway/connections/workspace-policy.ts` owns the complete supplied
+workspace calculation; start admission retains its actual pre-roots temporary-directory
+capture and invokes it with three explicit inputs at the original construction point.
 Argument rules and `gateway/targets/model/` identity/resource contracts, launch/
 isolation values and native argument composition remain pure. Domains may depend
 only on the exact relative isolation.ts and launch-command.ts model owners in
@@ -45,13 +55,26 @@ current target host. Only `gateway/diagnostics.ts` reads its existing clock
 and depends on the pure current `domains/control-contract.ts` value/callback types.
 The complete lifecycle-contract move remains pending with its App UI/CDP domain
 consumers. `gateway/official/` owns supplied options/recipes/argument composition,
-wire-terminal values and strict release/manifest evidence. Existing adapters retain
-invocation-time ambient defaults, child environment/bin verification, complete
-package-file reads, actual catalog publication and upstream disposal. Core and
-bridge keep their original default/capture/await ordering; pure extraction grants
-no new ambient or mutable authority. The mixed package/TEMP suite and remaining
-Official/MCP transactions await their complete content cuts. Existing layer,
-pure-model and I/O rules remain in force for all current owners.
+wire-terminal values and strict release/manifest evidence. The exact
+`gateway/official/package-files.ts` owns the complete filesystem proof with only
+crypto, filesystem, path, release-evidence and regular-file-reader dependencies;
+pure siblings and unknown Gateway files cannot import it. The exact
+`gateway/official/server-launch.ts` owns the three complete invocation-time default,
+child environment capture and verified public-bin functions, consuming package
+proof under its five-dependency role. Its only ambient reads are the two named
+environment default RHS expressions and the argument builder's Windows platform
+default. Pure or unknown owners, Core, registry and package-file proof cannot acquire
+launch authority. Managed connection, start admission, connection view and the
+actual adapters use their exact launch edges, preserving the original
+default/capture/await ordering. The exact `gateway/official/upstream.ts` consumes
+launch inputs and owns complete actual catalog publication, SDK wire and Server
+child disposal for one generation. Its nine named dependencies and three exact
+Gateway consumers follow the Official instructions. Fixed reviewed definitions,
+managed execution accounting/original facilities and HTTP continuation retain
+separate owners. The package/input/TEMP tests have separate runtime, security and
+quality owners with an explicit seven-title alias-child oracle. Three central
+Official suites retain all original upstream, catalog refresh and lifetime cases
+in both safe lanes. Existing layer, pure-model and I/O rules govern these roles.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.

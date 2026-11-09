@@ -782,24 +782,71 @@ test('unsupported fresh selections fail before filesystem, subprocess or native 
     });
     syncBuiltinESMExports();
     try {
-        for (const platform of ['darwin', 'linux'] as const)
-            await assert.rejects(
-                app.stageFreshDesktopInstallation({
-                    root: 'unused',
-                    kind: 'portable',
-                    platform,
-                    architecture: 'x64',
-                    electronArchive: 'unused',
-                    nodeArchive: 'unused',
-                    output: 'unused',
-                }),
-                /other native cells remain pending/,
-            );
+        for (const platform of ['darwin', 'linux'] as const) {
+            const options = {
+                root: 'unused',
+                kind: 'portable',
+                platform: 'win32',
+                architecture: 'x64',
+                electronArchive: 'unused',
+                nodeArchive: 'unused',
+                output: 'unused',
+            } satisfies Parameters<typeof app.stageFreshDesktopInstallation>[0];
+            assert.equal(Reflect.set(options, 'platform', platform), true);
+            assert.equal(Reflect.get(options, 'platform'), platform);
+            await assert.rejects(app.stageFreshDesktopInstallation(options), /other native cells remain pending/);
+        }
         assert.equal(exec.mock.callCount(), 0);
         assert.equal(native.mock.callCount(), 0);
     } finally {
         native.mock.restore();
         exec.mock.restore();
+        syncBuiltinESMExports();
+    }
+});
+
+test('fresh arm64 staging retains its x64-only refusal before filesystem, subprocess or native loading', async () => {
+    const effects = { filesystem: 0, subprocess: 0, dlopen: 0 };
+    const spawn = Object.getOwnPropertyDescriptor(ChildProcess.prototype, 'spawn');
+    assert.ok(spawn);
+    const filesystem = () => {
+        effects.filesystem++;
+        throw new Error('Unexpected fresh arm64 filesystem effect.');
+    };
+    const subprocess = () => {
+        effects.subprocess++;
+        throw new Error('Unexpected fresh arm64 subprocess.');
+    };
+    const replacements = [
+        mock.method(fs, 'mkdtemp', filesystem),
+        mock.method(fs, 'realpath', filesystem),
+        mock.method(fs, 'lstat', filesystem),
+        mock.method(fs, 'open', filesystem),
+        mock.method(fs, 'mkdir', filesystem),
+        mock.method(fs, 'writeFile', filesystem),
+        mock.method(childProcess, 'execFile', subprocess),
+        mock.method(process, 'dlopen', () => {
+            effects.dlopen++;
+            throw new Error('Unexpected fresh arm64 native load.');
+        }),
+    ];
+    Object.defineProperty(ChildProcess.prototype, 'spawn', { ...spawn, value: subprocess });
+    syncBuiltinESMExports();
+    try {
+        const options = {
+            root: 'unused',
+            kind: 'portable',
+            platform: 'win32',
+            architecture: 'arm64',
+            electronArchive: 'unused',
+            nodeArchive: 'unused',
+            output: 'unused',
+        } satisfies Parameters<typeof app.stageFreshDesktopInstallation>[0];
+        await assert.rejects(app.stageFreshDesktopInstallation(options), /Windows x64 only/);
+        assert.deepEqual(effects, { filesystem: 0, subprocess: 0, dlopen: 0 });
+    } finally {
+        for (const replacement of replacements.reverse()) replacement.mock.restore();
+        Object.defineProperty(ChildProcess.prototype, 'spawn', spawn);
         syncBuiltinESMExports();
     }
 });

@@ -12,6 +12,7 @@ import {
     validateDeploymentNativeEntry,
     validateDeploymentUnixEntry,
 } from '../domains/app-deployment.ts';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import { errorCode, isRecord } from '../shared/errors.ts';
 import {
     encodeWindowsDeploymentCopyHeader,
@@ -289,6 +290,8 @@ async function openAuthority(directory: string, writing: boolean, support?: Wind
 
 /** Concrete enrolled-root admission. No caller source, helper, receipt or evidence input exists. */
 export async function openDeploymentNativeAuthority(directory: string, writing: boolean) {
+    if (!supportsWindowsApp(process.platform, process.arch))
+        throw new Error('Unsupported deployment native authority; Windows x64 or arm64 is required.');
     return openAuthority(directory, writing);
 }
 

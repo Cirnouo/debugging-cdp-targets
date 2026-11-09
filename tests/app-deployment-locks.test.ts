@@ -7,6 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadAppAdvisoryLock } from '../src/adapters/app-native.ts';
+import { supportsWindowsApp } from '../src/domains/app-distribution.ts';
 import { parseAppNativeEvidence } from '../src/domains/app-release.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
@@ -70,7 +71,7 @@ async function worker(directory: string, retain: (close: () => Promise<void>) =>
     };
 }
 
-test('two native processes share read-only use but independently exclude writer and deletion without inode replacement', {
+test('two vendor-native processes share read-only use but independently exclude writer and deletion without inode replacement', {
     timeout: 20000,
 }, async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'dct-deployment-lock-'));
@@ -122,7 +123,9 @@ test('two native processes share read-only use but independently exclude writer 
     if (failures.length > 1) throw new AggregateError(failures, 'Lock fixture test and cleanup failed.');
 });
 
-test('public native adapter rejects malformed lock modes and descriptors', async () => {
+test('public native adapter rejects malformed lock modes and descriptors', {
+    skip: !supportsWindowsApp(process.platform, process.arch),
+}, async () => {
     const lock = await loadAppAdvisoryLock(
         parseAppNativeEvidence(
             JSON.parse(await readFile(new URL('../tooling/app-native-release.json', import.meta.url), 'utf8')),

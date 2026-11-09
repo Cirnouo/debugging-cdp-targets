@@ -3,9 +3,14 @@ import { isRecord } from '../shared/errors.ts';
 export type AppDistribution = Readonly<{
     schemaVersion: 1;
     kind: 'installed' | 'portable';
-    platform: 'win32' | 'darwin' | 'linux';
+    platform: 'win32';
     architecture: 'x64' | 'arm64';
 }>;
+
+export function supportsWindowsApp(platform: string, architecture: string): boolean {
+    return platform === 'win32' && (architecture === 'x64' || architecture === 'arm64');
+}
+
 export function parseAppDistribution(
     value: unknown,
     native: { platform: string; architecture: string },
@@ -15,8 +20,9 @@ export function parseAppDistribution(
         Object.keys(value).length !== 4 ||
         value.schemaVersion !== 1 ||
         (value.kind !== 'installed' && value.kind !== 'portable') ||
-        (value.platform !== 'win32' && value.platform !== 'darwin' && value.platform !== 'linux') ||
+        typeof value.platform !== 'string' ||
         (value.architecture !== 'x64' && value.architecture !== 'arm64') ||
+        !supportsWindowsApp(value.platform, value.architecture) ||
         value.platform !== native.platform ||
         value.architecture !== native.architecture
     )
@@ -24,7 +30,7 @@ export function parseAppDistribution(
     return Object.freeze({
         schemaVersion: 1,
         kind: value.kind,
-        platform: value.platform,
+        platform: 'win32',
         architecture: value.architecture,
     });
 }

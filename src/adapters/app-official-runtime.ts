@@ -1,9 +1,9 @@
 import path from 'node:path';
 import { parseAppReleaseInputs } from '../domains/app-release.ts';
+import { verifyOfficialPackageFiles } from '../gateway/official/package-files.ts';
 import { parseOfficialReleaseEvidence } from '../gateway/official/release-evidence.ts';
 import { verifyAppReleaseTree } from './app-delivery.ts';
 import { readRegularFile } from './file-evidence.ts';
-import { verifyOfficialPackage } from './official-package.ts';
 
 /** Verify original delivered inputs before either catalog discovery or a connection can spawn. */
 export async function verifyAppOfficialRuntime(options: {
@@ -35,7 +35,7 @@ export async function verifyAppOfficialRuntime(options: {
         ),
     );
     const officialDirectory = path.join(options.resources, 'official-server');
-    await verifyOfficialPackage(officialDirectory, release);
+    await verifyOfficialPackageFiles(officialDirectory, release);
     return Object.freeze({
         nodeExecutable: path.join(nodeDirectory, options.platform === 'win32' ? 'node.exe' : 'bin/node'),
         bin: path.join(officialDirectory, release.bin),

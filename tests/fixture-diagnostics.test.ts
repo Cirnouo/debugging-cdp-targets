@@ -16,10 +16,10 @@ import {
 } from '../src/adapters/fixture-diagnostics.ts';
 import { createToolCatalog } from '../src/adapters/tool-catalog.ts';
 import { createOperationRegistry } from '../src/application/operations.ts';
-import { createTargetController } from '../src/application/target-controller.ts';
 import type { LaunchOptions } from '../src/domains/control-contract.ts';
+import { createTargetLifecycle } from '../src/gateway/targets/target-lifecycle.ts';
 import { DetailedError, isRecord } from '../src/shared/errors.ts';
-import { createCoreFixture } from './fixtures/core-runtime.ts';
+import { createCoreFixture } from './fixtures/gateway/core-runtime.ts';
 
 const entryId = '11111111-1111-4111-8111-111111111111';
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -364,7 +364,7 @@ const options: LaunchOptions = {
 };
 function targetFixture(failures: { ensure?: Error; close?: Error }) {
     const children: (EventEmitter & { exitCode: number | null; signalCode: string | null })[] = [];
-    const controller = createTargetController({
+    const controller = createTargetLifecycle({
         entryId,
         router: { setTarget: () => {}, clearTarget: () => {}, isBusy: () => false },
         server: {

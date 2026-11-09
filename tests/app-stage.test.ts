@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs, { readFile, rm, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
@@ -248,20 +249,112 @@ test('stage keeps its source-derived selection when actual output and its self-c
 test('non-Windows production stages fail closed before any external execution or output creation', async () => {
     const restore = archiveGuard(new Set());
     try {
-        for (const platform of ['darwin', 'linux'] as const)
-            await assert.rejects(
-                app.stageDesktopApp({
-                    root: 'unused',
-                    kind: 'portable',
-                    platform,
-                    architecture: 'x64',
-                    electronArchive: 'unused',
-                    nodeArchive: 'unused',
-                    output: 'unused',
-                }),
-                /other native cells remain pending/,
-            );
+        for (const platform of ['darwin', 'linux'] as const) {
+            const options = {
+                root: 'unused',
+                kind: 'portable',
+                platform: 'win32',
+                architecture: 'x64',
+                electronArchive: 'unused',
+                nodeArchive: 'unused',
+                output: 'unused',
+            } satisfies Parameters<typeof app.stageDesktopApp>[0];
+            assert.equal(Reflect.set(options, 'platform', platform), true);
+            assert.equal(Reflect.get(options, 'platform'), platform);
+            await assert.rejects(app.stageDesktopApp(options), /other native cells remain pending/);
+        }
     } finally {
         restore();
+    }
+});
+
+test('arm64 staging refuses missing runtime and license evidence before extraction or output', {
+    skip: process.platform !== 'win32',
+}, async (context) => {
+    for (const missing of ['runtime-and-licenses', 'runtime', 'licenses']) {
+        await context.test(missing, async () => {
+            const fixture = await stageFixture();
+            const restoreGuard = archiveGuard(new Set());
+            const effects = { scratch: 0, directories: 0, writes: 0, extraction: 0, dlopen: 0, state: 0 };
+            const replacements: { mock: { restore(): void } }[] = [];
+            try {
+                assert.ok(isRecord(fixture.metadata) && Array.isArray(fixture.metadata.archives));
+                const electron = fixture.metadata.archives.find(
+                    (entry: unknown) =>
+                        isRecord(entry) &&
+                        entry.kind === 'electron' &&
+                        entry.platform === 'win32' &&
+                        entry.architecture === 'arm64',
+                );
+                const node = fixture.metadata.archives.find(
+                    (entry: unknown) =>
+                        isRecord(entry) &&
+                        entry.kind === 'node' &&
+                        entry.platform === 'win32' &&
+                        entry.architecture === 'arm64',
+                );
+                assert.ok(isRecord(electron) && isRecord(node));
+                assert.equal(electron.licenses, undefined, 'Retained arm64 Electron source proof remains absent.');
+                assert.equal(node.runtimeFiles, undefined, 'Retained arm64 Node source proof remains absent.');
+                // Isolate each missing-proof gate using only the fixture's inert owned records.
+                // These records never authorize extraction or establish arm64 vendor evidence.
+                if (missing === 'runtime') electron.licenses = structuredClone(fixture.electron.licenses);
+                if (missing === 'licenses') node.runtimeFiles = structuredClone(fixture.node.runtimeFiles);
+                await writeFile(fixture.fixtureMetadata, JSON.stringify(fixture.metadata));
+                replacements.push(
+                    mock.method(fs, 'mkdtemp', () => {
+                        effects.scratch++;
+                        throw new Error('Scratch acquisition preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(fs, 'mkdir', () => {
+                        effects.directories++;
+                        throw new Error('Output creation preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(fs, 'writeFile', (...args: Parameters<typeof fs.writeFile>) => {
+                        effects.writes++;
+                        if (String(args[0]).replaceAll('\\', '/').endsWith('/.deployment/state.json')) effects.state++;
+                        throw new Error('Output write preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(childProcess, 'execFile', () => {
+                        effects.extraction++;
+                        throw new Error('Extraction preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(process, 'dlopen', () => {
+                        effects.dlopen++;
+                        throw new Error('Native load preceded missing-proof refusal.');
+                    }),
+                );
+                syncBuiltinESMExports();
+                await assert.rejects(
+                    app.stageDesktopApp({ ...fixture.options, architecture: 'arm64' }),
+                    /Native extraction evidence is unavailable/,
+                );
+                assert.deepEqual(effects, {
+                    scratch: 0,
+                    directories: 0,
+                    writes: 0,
+                    extraction: 0,
+                    dlopen: 0,
+                    state: 0,
+                });
+                await assert.rejects(fs.lstat(fixture.options.output), { code: 'ENOENT' });
+                await assert.rejects(fs.lstat(path.join(fixture.options.output, '.deployment/state.json')), {
+                    code: 'ENOENT',
+                });
+            } finally {
+                for (const replacement of replacements.reverse()) replacement.mock.restore();
+                syncBuiltinESMExports();
+                restoreGuard();
+                await fixture.cleanup();
+            }
+        });
     }
 });

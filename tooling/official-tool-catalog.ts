@@ -3,9 +3,9 @@ import { readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Tool } from '@modelcontextprotocol/client';
-import { createOfficialConnection } from '../src/adapters/mcp-bridge.ts';
-import { resolveServerBin } from '../src/adapters/official-server.ts';
 import { CATALOG_FLAGS } from '../src/gateway/official/options.ts';
+import { resolveVerifiedOfficialServerBin } from '../src/gateway/official/server-launch.ts';
+import { openOfficialUpstream } from '../src/gateway/official/upstream.ts';
 import { OFFICIAL_RELEASE } from './official-release.ts';
 
 type Entry = { name: string; requires: Record<string, boolean>; variants: Tool[] };
@@ -14,7 +14,7 @@ const evidencePath = new URL('./official-tool-catalog.json', import.meta.url);
 /** Only the verified public bin and MCP tools/list supply catalog evidence. No browser is launched. */
 export async function generateOfficialToolCatalog() {
     const directory = await realpath(fileURLToPath(new URL('../node_modules/chrome-devtools-mcp/', import.meta.url)));
-    const bin = await resolveServerBin({ directory, release: OFFICIAL_RELEASE, pnpmInstalled: true });
+    const bin = await resolveVerifiedOfficialServerBin({ directory, release: OFFICIAL_RELEASE, pnpmInstalled: true });
     const entries = new Map<string, Entry>();
     const profiles: { mcpArgs: string[]; sha256: string }[] = [];
     const base = Object.fromEntries(CATALOG_FLAGS.map((flag) => [flag, true]));
@@ -24,7 +24,7 @@ export async function generateOfficialToolCatalog() {
             '--no-usage-statistics',
             '--no-performance-crux',
         ];
-        const upstream = await createOfficialConnection('http://127.0.0.1:1', { bin, args: mcpArgs });
+        const upstream = await openOfficialUpstream('http://127.0.0.1:1', { bin, args: mcpArgs });
         try {
             const tools = upstream.tools.toSorted((a, b) => a.name.localeCompare(b.name));
             profiles.push({ mcpArgs, sha256: createHash('sha256').update(JSON.stringify(tools)).digest('hex') });

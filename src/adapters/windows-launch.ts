@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { supportsWindowsApp } from '../domains/app-distribution.ts';
 import type { LaunchContext } from '../domains/control-contract.ts';
 import type { LaunchDefinition } from '../gateway/targets/model/launch-command.ts';
 import type { ProcessTarget } from '../gateway/targets/model/target-contract.ts';
@@ -98,16 +99,20 @@ function nativeFailure(value: Record<string, unknown>) {
     };
     return error;
 }
-export function createWindowsLauncher({
-    spawn: launchHelper = (executable, args) =>
-        spawn(executable, args, {
-            shell: false,
-            windowsHide: true,
-            stdio: ['pipe', 'pipe', 'pipe'],
-        }),
-}: {
-    spawn?: HelperSpawn;
-} = {}) {
+export function createWindowsLauncher({ spawn: suppliedSpawn }: { spawn?: HelperSpawn } = {}) {
+    if (!suppliedSpawn && !supportsWindowsApp(process.platform, process.arch))
+        throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+    const launchHelper: HelperSpawn =
+        suppliedSpawn ??
+        ((executable, args) => {
+            if (!supportsWindowsApp(process.platform, process.arch))
+                throw new Error(`Unsupported Windows native host: ${process.platform}/${process.arch}.`);
+            return spawn(executable, args, {
+                shell: false,
+                windowsHide: true,
+                stdio: ['pipe', 'pipe', 'pipe'],
+            });
+        });
     const applications = new Map<string, NativeApplication>();
     const closeWaits = new WeakMap<ProcessTarget, Promise<Record<string, unknown>>>();
     const key = (target: ProcessTarget) =>

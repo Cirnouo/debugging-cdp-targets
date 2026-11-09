@@ -6,12 +6,12 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/client';
 import { verifyAppOfficialRuntime } from '../../src/adapters/app-official-runtime.ts';
-import { createOfficialConnection, interruptedOfficialCall } from '../../src/adapters/mcp-bridge.ts';
-import { buildServerArguments } from '../../src/adapters/official-server.ts';
 import { createPlatformAdapter, validateProcessIdentity } from '../../src/adapters/platform-process.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { waitForClient } from '../../src/application/client-context.ts';
 import type { ConnectionStatus } from '../../src/domains/control-contract.ts';
+import { buildOfficialLaunchArguments } from '../../src/gateway/official/server-launch.ts';
+import { classifyOfficialCallInterruption, openOfficialUpstream } from '../../src/gateway/official/upstream.ts';
 import { validateCdpIdentity } from '../../src/gateway/targets/model/cdp-identity.ts';
 import type { ApplicationLaunch } from '../../src/gateway/targets/model/launch-command.ts';
 import type { ProcessTarget } from '../../src/gateway/targets/model/target-contract.ts';
@@ -240,9 +240,9 @@ export async function runScreenshotLayersStudy(args: readonly string[], subject:
             },
         );
         const url = `http://127.0.0.1:${target.port}`;
-        const upstream = await createOfficialConnection(url, {
+        const upstream = await openOfficialUpstream(url, {
             ...official,
-            args: buildServerArguments(url, process.env, ['--workspace', directory]),
+            args: buildOfficialLaunchArguments(url, process.env, ['--workspace', directory]),
             onAcquired: (resource) =>
                 register(async () => {
                     await resource.close();
@@ -581,7 +581,7 @@ export async function runScreenshotLayersStudy(args: readonly string[], subject:
         await save();
         if ('error' in outcome) {
             const timeout =
-                interruptedOfficialCall(outcome.error) === 'upstream-timeout' ||
+                classifyOfficialCallInterruption(outcome.error) === 'upstream-timeout' ||
                 errorMessage(outcome.error).startsWith('MCP timeout:');
             if (!timeout) throw outcome.error;
             if (route.status) {
