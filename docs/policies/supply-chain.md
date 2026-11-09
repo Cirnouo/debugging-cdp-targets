@@ -20,22 +20,15 @@ Every local clone and linked worktree must complete this sequence from its root:
 Stop on any failure. A script-disabled installation is an intermediate audit
 step, not completed contributor setup. Repeat the checks when audited inputs
 change. Complete the per-worktree
-[Git hook initialization](quality.md#local-git-hook-initialization) afterward;
+[Git hook initialization](git-environment.md#local-git-hook-initialization) afterward;
 an installation's successful exit alone does not prove that hooks exist.
 With pinned pnpm 12.4.2, an unchanged frozen install can return through its fast
 path while deferred builds remain. The pending rebuild must succeed without
 enlarging the reviewed allowlist; do not assume that a second install ran scripts.
 
-Use pnpm 12.4.2 and the frozen lockfile. CI's Supply chain security job first
-validates and audits the repository lockfile using the committed standalone Node
-checker without project dependencies. It then installs with `--ignore-scripts`,
-verifies the installed graph and full audits, and checks the standalone build
-against its maintained source. Commit messages and Quality depend on its
-success. Windows tests, Real Chrome (windows-latest) and Node compatibility
-remain downstream of Quality. Ubuntu-hosted common checks do not establish
-Linux App support or native acceptance. No continue-on-error, always-run build,
-registry-error suppression, or audit repair is permitted. All third-party Actions
-must use reviewed full commit SHAs.
+Use pnpm 12.4.2 and the frozen lockfile. Registry failures block the gate.
+Preserve the audited inputs when a check fails. Before changing the CI security
+job or its downstream checks, read the [CI job order](continuous-integration.md#jobs-and-command-order).
 
 Explicit installation policy is a 1,440-minute release cooldown, strict
 enforcement, no missing-publish-date bypass, `trustLockfile: false`,
@@ -236,16 +229,9 @@ network access. This offline check belongs in verify:push. Generated code is
 checked for reproducibility, not manually formatted; maintained audit source
 remains subject to normal tests and unchanged coverage floors.
 
-Main's active Ruleset requires **Supply chain security** alongside the existing
-quality, governance and platform checks, with up-to-date PRs, linear history,
-and force-push/deletion disabled. Actions still runs after a push is received,
-not before transfer.
-
-CI repeats the full supply-chain-first verification every Monday at 01:17 UTC
-(09:17 Asia/Shanghai), even without a new commit. Dependabot alerts are enabled
-for the repository; updates remain human-reviewed. Do not enable automatic
-dependency PRs or refresh release evidence as an audit repair. New findings
-follow the same upgrade or bounded-exception policy as push and PR checks.
-Dependabot's graph coverage does not include the official Server's embedded
-libraries, and SHA-pinned Actions do not receive version-based Dependabot alerts.
-Review their upstream security advisories and full-SHA references separately.
+Keep dependency updates human-reviewed. Do not enable automatic dependency PRs
+or refresh release evidence as an audit repair. New findings follow the same
+upgrade or bounded-exception policy as push and PR checks. Dependabot's graph
+coverage does not include the official Server's embedded libraries. Before
+changing remote security checks, schedules or monitoring, read the
+[CI operation and monitoring policy](continuous-integration.md#required-checks-and-monitoring).

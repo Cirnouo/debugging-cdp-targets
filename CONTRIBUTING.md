@@ -24,7 +24,7 @@ exact pnpm 12.4.2. Keep an existing Node installation within that range;
 Node 24.21.0 is the exact CI and problem-reproduction baseline.
 
 Before creating a linked worktree on Windows, follow the
-[long-path initialization policy](docs/policies/quality.md#windows-worktree-long-path-initialization)
+[long-path initialization policy](docs/policies/git-environment.md#windows-worktree-long-path-initialization)
 in the existing clone and verify effective `core.longpaths=true`.
 
 Optional `mise.toml` selects Node `24` for everyday work and exact pnpm
@@ -54,16 +54,13 @@ the [supply-chain policy](docs/policies/supply-chain.md) if a check fails. Do no
 repair the lock automatically or bypass installation trust. The ordinary
 installation permits the reviewed build script; the pending rebuild completes
 scripts deferred by the script-disabled install, including root `prepare`.
-Then follow the
-[per-worktree hook policy](docs/policies/quality.md#local-git-hook-initialization):
-check `git config --show-origin --get core.hooksPath` and confirm that
-`.husky/_/pre-push` exists in this worktree. If trusted setup did not generate
-it, run `pnpm prepare` and check again, preserving existing Git configuration.
-The ignored `.husky/_` directory is not copied from another checkout; a manual
-`pnpm verify:push` result alone does not prove that the push hook will run.
+Before committing or pushing, read the per-worktree hook procedure. Check the
+effective `core.hooksPath` and generated `.husky/_/pre-push` in this checkout.
+Record actual hook invocation separately from a manual `pnpm verify:push` run.
+[Per-worktree hook initialization](docs/policies/git-environment.md#local-git-hook-initialization)
 
 Before an SSH push, follow the
-[SSH push initialization policy](docs/policies/quality.md#ssh-push-initialization)
+[SSH push initialization policy](docs/policies/git-environment.md#ssh-push-initialization)
 to configure and verify the fixed keepalive settings in this clone. Preserve
 existing SSH commands and identity/proxy options when adding them.
 
@@ -98,6 +95,9 @@ Start with [AGENTS.md](AGENTS.md), the nearest source AGENTS.md, and the policie
 relevant to your change. These files remain the authoritative contributor rules.
 See [source ownership](src/README.md), [tests](tests/README.md), and
 [tooling](tooling/README.md) for navigation.
+
+Before changing CI workflows, jobs, required checks, diagnostic uploads, scans
+or monitoring configuration, read the [CI policy](docs/policies/continuous-integration.md).
 
 Before adding a root README translation, follow the
 [root README language procedure](docs/policies/documentation.md#adding-a-root-readme-language).
@@ -173,7 +173,9 @@ current template. A failure blocks merge. Fix the reported errors in the PR titl
 or body; editing reruns the existing check. The template check runs after GitHub
 receives the submission and does not prevalidate the future curated squash body.
 
-The main Ruleset requires an up-to-date PR and successful required GitHub checks.
+The main ruleset requires an up-to-date PR and successful required GitHub checks.
+[Required checks and monitoring](docs/policies/continuous-integration.md#required-checks-and-monitoring)
+
 The maintainer reviews contributions and merges each PR as one logical squash
 commit; topic branches may contain multiple atomic commits. The required GitHub
 default is `PR_TITLE` + `BLANK`. Before merging, independently explain the

@@ -81,6 +81,9 @@ Before creating or editing a typed Bug or Feature Issue, read the matching
 Ordinary freeform Issues remain allowed and exempt; classification follows the
 form labels, never body shape or a required general label.
 
+Before changing CI workflows, jobs, required checks, diagnostic uploads, scans
+or monitoring configuration, read the [CI policy](docs/policies/continuous-integration.md).
+
 Before changing the root README, read and follow the
 [README content boundary](docs/policies/documentation.md#root-readme-content-boundary).
 
@@ -114,17 +117,18 @@ AGENTS.md files, the relevant [security policy](docs/policies/security.md),
 [verification policy](docs/policies/quality.md#verification) and accepted ADRs.
 
 Before creating a linked worktree on Windows, complete the
-[long-path initialization](docs/policies/quality.md#windows-worktree-long-path-initialization)
+[long-path initialization](docs/policies/git-environment.md#windows-worktree-long-path-initialization)
 in the existing clone and verify effective `core.longpaths=true`.
 
 When initializing each clone/worktree, and before installing dependencies,
 read and complete the
 [trusted installation sequence](docs/policies/supply-chain.md#installation-and-scan-order).
-After setup and before committing/pushing, read and verify the generated hook under the
-[local hook policy](docs/policies/quality.md#local-git-hook-initialization).
+After trusted installation and before committing or pushing, follow the
+[local hook policy](docs/policies/git-environment.md#local-git-hook-initialization)
+to verify the generated hook in the current checkout.
 Do not treat a manual verification run as proof that Git will run `pre-push`.
 Before starting an SSH push, read and complete the
-[SSH push initialization](docs/policies/quality.md#ssh-push-initialization).
+[SSH push initialization](docs/policies/git-environment.md#ssh-push-initialization).
 
 The official Server is a complete unchanged npm release delivered in the App.
 Never refresh release hashes automatically. Runtime only verifies and launches

@@ -699,15 +699,10 @@ native exit, so later metadata cannot mask a failure. Official failure leaves
 recovery not-run. A collector adopts only the current initialized not-run envelope
 with an empty stream, and the preload must carry the parent's UUID.
 
-CI uses the same ordering with a joined, dedicated
-`RUNNER_TEMP/dct-fixture-diagnostics` path. Its init step reports true only for
-successful valid initialization and otherwise false plus an empty ID, then ends
-that metadata step successfully. On failure it uploads only the five fixed safe
-files when initialization succeeded, for seven days with no hidden files or
-overwrite. No prior/refused collection becomes upload evidence. The failure
-summary runs even without valid initialization and then reports only the safe
-current-collection limitation. To index a failed invocation afterward, carry its
-captured ID to:
+Before changing CI collection, upload or failure summary behavior, read the
+[CI diagnostics policy](../../docs/policies/continuous-integration.md#real-chrome-and-failure-diagnostics).
+To index a failed local invocation, pass its captured collection ID to the
+summary command.
 
 ```powershell
 node tests/smoke/fixture-ci.ts summary "$fixtureDiagnosticsDirectory" "$collectionId"
