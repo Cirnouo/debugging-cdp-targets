@@ -110,9 +110,17 @@ Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.
 The existing semver/functions/parse.js exception remains limited to
 domains/software-version.ts; pure Gateway gains no external dependency exception.
-The delivered `host-plugins/` slice is also pure: it depends only on its own
-domain, existing domains and shared contracts. Application and adapters consume
-its payload proof directly; the remaining technical-layer owners stay in place.
+Host value owners remain pure; only `host-plugins/user-intent.ts` may parse
+supplied TOML through `smol-toml`, with the existing Host domain and errors.
+Only `host-plugins/native/user-intent-file.ts` acquires selected-file evidence
+through its exact local dependencies; unknown Host/native siblings remain pure.
+Before editing Host intent, its selected-file acquisition or their actual
+`adapters/native-host-plugins.ts` consumer, read cumulative
+[Host instructions](host-plugins/AGENTS.md) and
+[selected-file instructions](host-plugins/native/AGENTS.md), ADR 0017 and the
+[accepted singleton plan](../.superpowers/plans/2026-10-17-singleton-app-plan.md).
+Application and adapters consume payload proof directly; other technical-layer
+owners stay in place.
 
 Only interface/app-bootstrap.ts executes directly. Startup step zero rejects
 platform/architecture evidence outside Windows x64/arm64 before App paths, scratch

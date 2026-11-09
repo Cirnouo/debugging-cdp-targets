@@ -22,6 +22,37 @@ const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
     ['src/interface/app-manager.ts', ['react']],
 ]);
 
+const HOST_INTENT_DEPENDENCIES = new Map<string, { value: readonly string[]; type: readonly string[] }>([
+    [
+        'src/host-plugins/user-intent.ts',
+        {
+            value: ['smol-toml', 'src/domains/host-management.ts', 'src/shared/errors.ts'],
+            type: [],
+        },
+    ],
+    [
+        'src/host-plugins/native/user-intent-file.ts',
+        {
+            value: [
+                'node:fs/promises',
+                'node:path',
+                'src/shared/errors.ts',
+                'src/adapters/file-evidence.ts',
+                'src/host-plugins/user-intent.ts',
+            ],
+            type: ['src/domains/host-management.ts'],
+        },
+    ],
+]);
+
+const HOST_INTENT_CONSUMERS = new Map<string, readonly string[]>([
+    [
+        'src/host-plugins/user-intent.ts',
+        ['src/host-plugins/native/user-intent-file.ts', 'src/adapters/native-host-plugins.ts'],
+    ],
+    ['src/host-plugins/native/user-intent-file.ts', ['src/adapters/native-host-plugins.ts']],
+]);
+
 function visit(
     node: unknown,
     callback: (node: Node, parent?: Node, grandparent?: Node) => void,
@@ -567,6 +598,7 @@ export function validateRuntimeSource(file: string, source: string) {
         return [`${file}: invalid source: ${error instanceof Error ? error.message : String(error)}`];
     }
     const layer = file.split('/')[1];
+    const hostIntentRole = HOST_INTENT_DEPENDENCIES.get(path.posix.normalize(file));
     const hostPayload = layer === 'host-plugins';
     const domain = layer === 'domains' || hostPayload;
     const gateway = layer === 'gateway';
@@ -719,7 +751,16 @@ export function validateRuntimeSource(file: string, source: string) {
         }
         const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
         const versionParser = file === 'src/domains/software-version.ts' && specifier === 'semver/functions/parse.js';
-        const hostConfigParser = file === 'src/adapters/host-user-intent.ts' && specifier === 'smol-toml';
+        const hostConfigParser =
+            path.posix.normalize(file) === 'src/host-plugins/user-intent.ts' && specifier === 'smol-toml';
+        const hostIntentDependency = specifier.startsWith('.') ? resolved : specifier;
+        const permittedHostIntent =
+            hostIntentRole?.value.includes(hostIntentDependency) ||
+            (typeOnly && hostIntentRole?.type.includes(hostIntentDependency));
+        if (hostIntentRole && !permittedHostIntent) errors.push(`${file}: unapproved Host intent dependency.`);
+        const hostIntentConsumers = specifier.startsWith('.') ? HOST_INTENT_CONSUMERS.get(resolved) : undefined;
+        if (hostIntentConsumers && !hostIntentConsumers.includes(path.posix.normalize(file)))
+            errors.push(`${file}: unapproved Host intent consumer.`);
         const payloadComparison = file === 'src/host-plugins/payload-integrity.ts' && specifier === 'node:util';
         const pureRelative =
             /^src\/(?:domains|shared)\//.test(resolved) || (hostPayload && resolved.startsWith('src/host-plugins/'));
@@ -730,6 +771,7 @@ export function validateRuntimeSource(file: string, source: string) {
         if (
             domain &&
             !versionParser &&
+            !permittedHostIntent &&
             !payloadComparison &&
             (!specifier.startsWith('.') || (!pureRelative && !targetValue))
         ) {

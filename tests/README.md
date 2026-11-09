@@ -227,11 +227,10 @@ Linux/macOS product execution or acceptance route.
     independent partial failures and candidate-free URL sync of newer managed copies.
 - `native-host-plugins.test.ts` exercises the two actual command/output contracts
     through process I/O fixtures, safe scope/path resolution and hidden user pins.
-- `host-user-intent.test.ts` checks standard TOML forms, strict own intent,
-    duplicate/prototype rejection and preservation of unrelated configuration.
 - `host-plugins/` separates pure payload proof and real disposable-filesystem
     endpoint writes/readback, links and Claude's researched installed lease
-    directory; see its [suite inventory](host-plugins/README.md).
+    directory, plus supplied user-intent parsing/privacy and pinned refusal;
+    see its [suite inventory](host-plugins/README.md).
 - `managed-plugin-receipts.test.ts` checks persistent management metadata,
     secret-free round trips, corruption/future schemas, forged offsets, links and
     complete source hash revalidation across fresh manager instances.
@@ -573,8 +572,8 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select fifty-nine entries: `tests/*.test.ts`, the
-twenty-five explicit [tooling suites](tooling/README.md), two explicit
+command and `pnpm test:coverage` select sixty entries: `tests/*.test.ts`, the
+twenty-five explicit [tooling suites](tooling/README.md), three explicit
 [Host suites](host-plugins/README.md) and thirty-one Gateway suites. Gateway selection
 retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
 [connection suites](gateway/connections/README.md) and the eight explicit
@@ -585,7 +584,8 @@ quality/temporary-directory-alias, then target-lifecycle, lifecycle-rollback,
 observer-cleanup and close-diagnostics. The six connection suites then append
 once as cleanup, connection-options, execution-detachment,
 registration-administration, roots-admission and scoped-restart. Upstream,
-catalog-refresh and upstream-lifetime follow in that order. Default commands do not launch
+catalog-refresh and upstream-lifetime follow in that order, followed once by Host
+user-intent. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

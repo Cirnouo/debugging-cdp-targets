@@ -11,9 +11,10 @@ import {
     type StablePluginRecord,
 } from '../domains/host-management.ts';
 import { isSemVer } from '../domains/software-version.ts';
+import { readHostUserIntent } from '../host-plugins/native/user-intent-file.ts';
+import { assertNativeIntentTransition } from '../host-plugins/user-intent.ts';
 import { isRecord } from '../shared/errors.ts';
 import { readRegularFile } from './file-evidence.ts';
-import { assertNativeIntentTransition, readHostUserIntent } from './host-user-intent.ts';
 import type { NativeManagedReceipt } from './managed-plugin-receipts.ts';
 import { assertClaudePluginUnused, canonicalPluginRoot } from './verified-plugin-files.ts';
 
