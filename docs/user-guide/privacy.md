@@ -12,7 +12,7 @@ read back by status, administration or diagnostics. Host chats may retain tool
 context according to their own storage controls. Host disconnect does not clean
 App-owned resources; normally Quit the App when all managed work should close.
 Windows elevation uses an authenticated one-shot helper pipe; application data
-never appears in its command line. The Plugin does not log launch commands,
+never appears in its command line. The App does not log launch commands,
 page contents, cookies, network or console data, secrets, or tool calls.
 
 The official Server's usage statistics and CrUX lookups are disabled by default.
@@ -84,11 +84,11 @@ for binding and occupancy enforcement limits.
 ## Local debugging boundary
 
 CDP provides powerful access to the application being debugged. Both the
-Plugin's CDP transport and the target's debugging endpoint must listen on
+App's CDP router and the target's debugging endpoint must listen on
 loopback only. Never expose or tunnel these ports to a network. Loopback does
 not protect against malicious software running as your user.
 
-The Plugin launches and verifies its own targets and does not take over existing
+The App launches and verifies its own targets and does not take over existing
 applications. Close uses normal application shutdown, with no application force
 kill. See [workflow](workflow.md) for ownership and actual-exit behavior and
 [SECURITY.md](../../SECURITY.md) to report a suspected vulnerability privately.
@@ -101,7 +101,7 @@ verifies ordinary Node and original package bytes before catalog and connection
 spawns; no npm/npx or host PATH lookup supplies its runtime.
 Every published file is verified before each Server launch. Missing or changed
 files require restoring a verified App distribution, or rebuilding and reverifying
-the App stage in a prepared contributor checkout; see [App building and evidence](../app-runtime.md#building-and-evidence).
+the App stage in a prepared contributor checkout; see [App building and evidence](../architecture/deployment.md#building-and-evidence).
 Runtime does not fetch replacement packages. Only the official child's
 environment disables its automatic update check.
 
@@ -114,7 +114,7 @@ committed locks. Every published file is bound to maintained SHA-256 evidence.
 
 The release embeds vendor libraries outside its npm dependency graph: graph
 audits do not establish vulnerability coverage for those embedded libraries.
-Their original inventory and license notices are preserved. The Plugin does
+Their original inventory and license notices are preserved. The App does
 not perform a runtime vulnerability audit.
 
 Return to the [user guide](README.md).

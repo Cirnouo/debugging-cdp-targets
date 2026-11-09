@@ -164,4 +164,4 @@ The App uses public `@modelcontextprotocol/client`, `server` and `core` SDK
 public stdio interface. Host HTTP requests supply their own roots, form
 elicitation, progress and cancellation facilities. Catalog pages are walked
 without the SDK aggregate page cap; output schemas remain original. See the
-[HTTP cancellation boundary](../../docs/app-runtime.md#request-lifetime).
+[HTTP cancellation boundary](../../docs/reference/mcp-http.md#request-lifetime).

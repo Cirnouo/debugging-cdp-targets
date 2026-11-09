@@ -5,7 +5,7 @@ The shared core and minimal App/direct HTTP/thin-plugin cutover are implemented
 in source; richer management and native deployment remain separate acceptance
 work. The [Windows-only amendment](#accepted-windows-only-scope-amendment--2026-11-08)
 sets the current Windows 11 x64/arm64 installer and portable targets without
-qualifying either architecture. [App runtime](../app-runtime.md) documents the
+qualifying either architecture. [App runtime](../architecture/desktop-runtime.md) documents the
 current boundary and evidence limits. This decision and the
 [implementation plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md)
 govern the remaining work; historical decisions below retain their design context.
@@ -315,7 +315,7 @@ Windows arm64 still needs its actual source inventory, producer and native proof
 Both architectures retain their applicable native Electron load/lock and complete
 installer/portable acceptance gates. Cross-builds, unit tests and CI runner host
 OS do not establish native product support or acceptance. See the current
-[building and evidence limits](../app-runtime.md#building-and-evidence).
+[building and evidence limits](../architecture/deployment.md#building-and-evidence).
 
 Task 7a keeps strict enrolled-root metadata, immutable complete selection, two
 persistent installation lock inodes and pre-commit/indeterminate state outcomes;

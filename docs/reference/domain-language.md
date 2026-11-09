@@ -56,8 +56,8 @@
 ## Version and deployment terms
 
 [ADR 0017](../adr/0017-singleton-desktop-app.md) owns the design. The
-[App runtime](../app-runtime.md) states implemented behavior and separates local
-staging from pending installer/deployment acceptance.
+[App deployment](../architecture/deployment.md#building-and-evidence) distinguishes
+local staging from pending installer and deployment acceptance.
 
 - **App version**: independent strict SemVer in root package.json.version.
 - **Plugin version**: one strict SemVer owned by shared Skill metadata and matched

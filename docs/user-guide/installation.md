@@ -9,7 +9,7 @@ official Server. Version 0.1.0 remains unreleased. Native installers and default
 installation admission are not available yet; contributor-only x64 staging does
 not establish native acceptance or arm64 readiness. Read the
 [current App delivery limits](compatibility.md#current-app-delivery-limits) before
-using the [App build instructions](../app-runtime.md#building-and-evidence).
+using the [App build instructions](../architecture/deployment.md#building-and-evidence).
 The default App HTTP address is `http://127.0.0.1:27637/mcp`; host configuration
 must match the effective App port. Host disconnect does not close managed targets.
 See [compatibility](compatibility.md) for prerequisites and tested host versions.

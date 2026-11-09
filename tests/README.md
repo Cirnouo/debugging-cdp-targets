@@ -607,25 +607,20 @@ safe inventory, GUI and coverage contracts. Update both with package scripts
 and this map when selectors change. The safe lane explicitly selects all ten
 distribution suites, eight Official suites and nine security suites once each.
 
-The `Node compatibility (24.x)` CI job checks the newest available stable Node 24
-on `ubuntu-latest` with exact pnpm 12.4.2 after Quality succeeds. Normal frozen
-installation precedes its source/type/build regressions and
-`pnpm smoke:official --installed`. That explicit mode verifies the installed
-original official package, uses the current supported ordinary Node, lists its
-actual catalog and normally closes the SDK stdio child without launching a
-browser. The separate `--stage <verified-App-stage>` mode verifies App-delivered
-ordinary Node and original Server. Source/build checks or a historical job
-pass do not establish current App delivery, latest-24 Windows or GUI
-acceptance; record those executed scopes separately. See the
-[toolchain policy](../docs/policies/quality.md#toolchain-compatibility).
+The `Node compatibility (24.x)` job uses `pnpm smoke:official --installed` to
+verify the installed original official package, list its actual catalog and
+close its ordinary-Node SDK stdio child without launching a browser.
+[Latest-24 command order and scope](../docs/policies/continuous-integration.md#node-compatibility)
 
-The separate `Real Chrome (windows-latest)` job requires both actual official
-tools and connection recovery smokes after typecheck and configured-path
-preflight. It explicitly passes `--allow-gui` to both unchanged scripts, with
-new synthetic pages/profiles, normal Close and actual exit/deletion checks.
-Actual runner Chrome availability and Windows E2E remain unknown until a
-successful run on the tested commit. This fixture evidence does not establish
-App GUI, installer, default admission or Windows arm64 native acceptance.
+Use `pnpm smoke:official --stage <verified-App-stage>` for the separate verified
+App-delivered ordinary Node and original Server. Record executed installed,
+staged, Windows and GUI scopes separately. App/native delivery has its own
+acceptance evidence. [Toolchain policy](../docs/policies/quality.md#toolchain-compatibility)
+
+The required `Real Chrome (windows-latest)` job runs actual official tools and
+connection recovery. Record runner/browser results for the tested commit and
+keep the App GUI, installer, default admission and arm64 evidence separate.
+[Real Chrome and failure diagnostics](../docs/policies/continuous-integration.md#real-chrome-and-failure-diagnostics)
 
 For the historical bounded application experiment and its actual results, see
 [application screenshot validation](../docs/application-screenshot-validation.md).

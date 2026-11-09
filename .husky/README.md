@@ -12,5 +12,6 @@ This directory owns developer-side Git policy entry points.
 
 The ignored `_` directory must be generated separately in every clone or linked
 worktree after the [trusted installation sequence](../docs/policies/supply-chain.md#installation-and-scan-order).
-Follow the [local hook policy](../docs/policies/quality.md#local-git-hook-initialization)
-to verify the effective hook path and real `pre-push` entry before pushing.
+Before committing or pushing, read the local hook procedure and verify the
+effective hook path and generated `pre-push` entry for this checkout.
+[Local hook initialization](../docs/policies/git-environment.md#local-git-hook-initialization)

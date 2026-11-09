@@ -10,7 +10,7 @@ Version 0.1.0 is under development and has not been released.
 - Codex with Plugin support or Claude Code with native HTTP MCP support, plus
     the separately running App. The App includes verified ordinary Node and the
     complete original `chrome-devtools-mcp@1.11.0`; thin Plugins need no runtime
-    dependency installation. See [current build/platform limits](../app-runtime.md#building-and-evidence).
+    dependency installation. See [current build/platform limits](../architecture/deployment.md#building-and-evidence).
 - Internet access to obtain or update the Plugin. The installed Server can
     initialize its tool catalog offline; browser tools and visited pages may
     require network access.
@@ -29,8 +29,8 @@ Version 0.1.0 is under development and has not been released.
     this product's Windows 11 scope. See Microsoft's
     [process-creation attribute contract](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 
-The Plugin controls only applications it launches and verifies. It does not
-attach to already running browsers. Both the Plugin's CDP transport and the
+The App controls only applications it launches and verifies. It does not
+attach to already running browsers. Both the App's CDP router and the
 target debugging endpoint must listen on loopback only. See
 [configuration](configuration.md) for launch settings and
 [privacy](privacy.md) for the security boundary.
@@ -57,7 +57,7 @@ failure contracts. They do not qualify ordinary simultaneous state-document
 reading and publication on Windows: an uncoordinated reader can coincide with a
 failed or indeterminate update. Stronger live-update availability remains
 unverified. Neither coordinated fixture success nor this limitation enables
-default native admission. See [App building and evidence](../app-runtime.md#building-and-evidence).
+default native admission. See [App building and evidence](../architecture/deployment.md#building-and-evidence).
 
 Static App checks target Windows x64 and arm64 independently of the runner's OS.
 Retained Ubuntu common quality, security, tooling and original-vendor tests do not
@@ -100,7 +100,7 @@ remaining production effects. Full support proceeds; partial asks acceptance or
 none; unsupported informs and remains unlaunched; unknown continues research.
 A framework or one directory switch alone does not establish isolation.
 The verified application binding must be expressible in args/env with `{dataDir}`;
-cwd-only application isolation is a Plugin expression limitation.
+the App's binding does not support cwd-only application isolation.
 
 Regular Chrome 136+ rejects remote-debugging port/pipe for its default production
 directory even when free. None must stay unlaunched for that documented combination

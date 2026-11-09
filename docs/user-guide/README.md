@@ -21,8 +21,9 @@ These pages explain installation and operation in detail:
     Windows Chrome screenshot compatibility and scoped
     conditional application guidance.
 
-The [lifecycle protocol](../lifecycle-protocol.md) defines exact MCP selectors and
-delivery rules. [Domain language](../reference/domain-language.md) defines terms;
+The [lifecycle protocol](../reference/mcp-lifecycle.md) defines exact MCP selectors
+and delivery rules. [MCP HTTP](../reference/mcp-http.md) defines authentication
+and request lifetime. [Domain language](../reference/domain-language.md) defines terms;
 [validation evidence](../mcp-native-validation.md) records dated research and test
 boundaries. Contributor rules and architecture decisions remain in
 [repository documentation](../README.md).

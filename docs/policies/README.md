@@ -8,7 +8,11 @@ This directory owns enforceable repository-wide contributor policy.
     boundaries, standalone documentation and independent host metadata research.
 - `repository-organization.md` owns maintained content responsibilities, naming
     and structural changes across source, tests, tooling and documentation.
-- `quality.md` owns formatting, tests, coverage, hooks, CI, and verification.
+- [Git environment](git-environment.md) owns Windows worktree long paths, local
+    hook setup and behavior, and SSH initialization.
+- [Continuous integration](continuous-integration.md) owns workflows, job and
+    check contracts, diagnostics, permissions, required checks, schedules and monitoring.
+- [Quality](quality.md) owns formatting, toolchain, tests, coverage and local verification.
 - `releases.md` owns versioning, changelog, tagging, and release authorization.
 - `security.md` owns CDP, session, cache, privacy, and shutdown constraints.
 - `supply-chain.md` owns installation trust, complete dependency audits, and

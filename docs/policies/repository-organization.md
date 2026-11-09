@@ -188,8 +188,8 @@ originating client facilities, and preserve generation fences, operation result
 ownership and definitive cleanup barriers. Do not distribute those mutable facts
 among independently authoritative modules. Preserve the distinct purposes of a
 UI pending-job barrier and a host synchronization transaction instead of merging
-them because both report busy state. The existing [Core contract](../shared-core.md),
-[App contract](../app-runtime.md), [security policy](security.md) and accepted
+them because both report busy state. The existing [Core contract](../architecture/gateway-core.md),
+[App contract](../architecture/desktop-runtime.md), [security policy](security.md) and accepted
 [ADRs](../adr/README.md) remain their authorities.
 
 Technical organization inside a domain must reflect actual boundaries. Electron

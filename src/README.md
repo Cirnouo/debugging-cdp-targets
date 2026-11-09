@@ -4,7 +4,7 @@ Before implementing the singleton desktop App migration, read
 [ADR 0017](../docs/adr/0017-singleton-desktop-app.md) and the
 [accepted implementation plan](../.superpowers/plans/2026-10-17-singleton-app-plan.md).
 The singleton App owns direct HTTP, management and native resources. The
-[runtime contract](../docs/app-runtime.md) describes its startup and cleanup.
+[runtime contract](../docs/architecture/desktop-runtime.md#startup-storage-and-exit) describes its startup and cleanup.
 
 - `interface/`: Windows platform guard and synchronous Chromium isolation,
     App composition and sandboxed UI.

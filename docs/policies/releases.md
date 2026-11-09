@@ -42,7 +42,8 @@ Check both complete host payloads and Marketplace pointers independently, includ
 their generated and maintained versions, shared licenses, unchanged official
 release and host formats. A single source release contains both distributions.
 Only an authorized release may create an annotated v<version> tag or GitHub
-Release. Do not publish an npm package; runtime is bundled with the Plugin.
+Release. Do not publish an npm package. The App delivers runtime. Thin host
+Plugins contain metadata, artwork, documentation and the shared Skill.
 
 ## Changelog editing workflow
 
@@ -86,13 +87,19 @@ and complete installation acceptance from the actual distribution source.
 The tagged commit must already be merged into main. Enabling the workflow
 does not itself authorize the first 0.1.0 publication, which remains unreleased.
 
-The Release workflow calls the full CI at the tagged commit and publishes only
-after all retained common security, governance, quality and Node compatibility
-checks, Windows regressions and genuine Windows official/recovery Chrome checks
-succeed.
-It additionally verifies annotated-tag, checkout, event and remote tag identity,
-including the original pushed tag object, main ancestry and version/Changelog
-agreement. The workflow admits stable three-component tags and prerelease
+The Release workflow runs the full read-only CI on the tagged commit. Publication
+requires every reusable CI job to pass, including genuine Windows official and
+recovery Chrome acceptance.
+[Release workflow boundary](continuous-integration.md#release-and-issue-workflow-boundaries)
+
+The publisher verifies annotated-tag, checkout, event and remote tag identity,
+main ancestry, and version and Changelog agreement. The peeled tag commit must
+match the event and checkout and be an ancestor of `origin/main`. Match the
+original pushed tag object both locally and on GitHub, even if a replacement
+points to the same commit. Release API requests use the verified existing tag
+without `target_commitish`. Historical main commits therefore require no
+additional workflow-writing permission. The workflow admits stable
+three-component tags and prerelease
 candidates; the publisher strictly validates SemVer before release API operations.
 Core and numeric prerelease identifiers have no leading zeros. Build metadata,
 updated/deleted/forced tags and manual runs do not publish. Generic metadata audits
@@ -102,17 +109,19 @@ than pinning future development to 0.1.0.
 Release titles equal their tags. English notes display What's Changed using
 the corresponding Changelog entry's original categories and Markdown, followed
 by generated New Contributors when available and Full Changelog. Do not append
-the generated PR change list. Comparisons use the latest published stable/full
-release; without that baseline, use the current tag's commit history.
+the generated PR change list. GitHub renders its native Contributors footer
+from user mentions in the notes.
 
-Publication creates a draft first, resumes a matching draft on rerun and skips
+Publication creates a draft first, resumes a matching draft on rerun through
+paginated authenticated release listings, and skips
 an already-published matching release only after checking its expected prerelease
 classification and remote tag identity, without rewriting its notes. Draft updates
 set the intended classification, and returned draft and published records must
 match the tag, draft state and classification. Stable publication uses
 `prerelease: false` and `make_latest: legacy`; prereleases use `prerelease: true`
 and `make_latest: false`, preserving GitHub's latest stable release. API or
-validation failures stop publication and never trigger destructive cleanup.
+validation failures stop publication and leave drafts available for rerun.
+Preserve existing tags and releases on failure.
 Same-tag publication runs queue. Provide only GitHub's source ZIP/TAR.GZ;
 there are no additional assets, checksums or npm publications.
 
@@ -160,7 +169,7 @@ support, distribution or native acceptance target, including no Experimental
 support tier. Neither Windows architecture is newly qualified. Default admission
 remains unwired/disabled; contributor-only x64 fresh staging establishes no native
 or default-admission acceptance, and arm64 source/native proof gaps remain explicit
-in [App evidence](../app-runtime.md#building-and-evidence).
+in [App evidence](../architecture/deployment.md#building-and-evidence).
 Keep complete unchanged original official/npm/native package files and evidence,
 including all six original Node prebuild cells and upstream non-Windows files.
 CI runner host OS and cross-builds do not establish native product acceptance.

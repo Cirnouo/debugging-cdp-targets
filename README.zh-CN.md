@@ -45,7 +45,7 @@
 
 先启动 App，再安装下面任一宿主薄插件。原生安装器和默认安装准入尚不可用。
 贡献者构建目录仍受[当前交付限制](docs/user-guide/compatibility.md#current-app-delivery-limits)
-和 [App 构建说明](docs/app-runtime.md#building-and-evidence)约束。
+和 [App 构建说明](docs/architecture/deployment.md#building-and-evidence)约束。
 
 ### Codex
 

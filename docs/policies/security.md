@@ -5,7 +5,7 @@ non-Windows operating systems and unsupported architectures before native resour
 acquisition; bootstrap refuses before App data, owned scratch, native loading or
 main import, then requests normal Quit. Default installation admission stays
 unwired/disabled; support eligibility and controlled test capabilities do not
-establish native authority or qualification. See [App evidence](../app-runtime.md#building-and-evidence).
+establish native authority or qualification. See [App evidence](../architecture/deployment.md#building-and-evidence).
 
 One singleton App per OS user manages independent connections without a fixed count limit. One
 newly launched target belongs to each connection. Public registration, connection and session identities identify ownership and

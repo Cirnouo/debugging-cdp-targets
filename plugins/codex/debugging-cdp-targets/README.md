@@ -6,7 +6,7 @@ new local CDP targets and relays the unchanged official Chrome DevTools MCP
 Server. Version 0.1.0 is unreleased. Native installers remain under development;
 contributors can prepare a local Windows stage subject to the delivery limits
 below. See the
-[App build instructions](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/app-runtime.md).
+[App build instructions](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/architecture/deployment.md#building-and-evidence).
 
 The App and its managed targets require Windows 11 x64 or arm64. Linux and macOS
 are unsupported. Installer and portable targets remain unqualified; native

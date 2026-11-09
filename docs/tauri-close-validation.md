@@ -6,6 +6,9 @@ native application handle to exit. Window disappearance and accepted message
 delivery do not establish process exit. This record separates that window
 selection behavior from application subprocess and data-directory cleanup.
 
+See [Gateway Core](architecture/gateway-core.md#windows-normal-close-and-resource-completion)
+for the current Close and resource completion contract.
+
 The final 2026-10-12 Windows acceptance passed Tauri, Chrome, Electron and a
 second Chrome connection on one reusable gateway. Each normal Close produced
 actual native root exit, verified resource-group completion, whole-directory
@@ -14,6 +17,9 @@ gateway then exited normally with code 0. Earlier failed cleanup attempts remain
 recorded below, including three retained experiment directories.
 
 ## Window selection and application ownership
+
+This section records the window-selection method and implementation used in the
+October 12, 2026 Windows validation.
 
 The native helper enumerates top-level windows for the exact launched PID. An
 eligible window is visible and enabled, has no owner, has neither `WS_CHILD`
