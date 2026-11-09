@@ -171,8 +171,13 @@ for (const protocolError of [false, true]) {
                 connection.call('echo', { lateWire: 60, protocolError }),
                 (error) => interruptedOfficialCall(error) === 'upstream-timeout',
             );
-            const next = await connection.call('echo', { capabilities: true });
-            assert.ok(next.structuredContent);
+            await boundedSignal(
+                connection.call('echo', { capabilities: true }).then(
+                    (result) => assert.ok(isRecord(capabilitiesOf(result))),
+                    (error: unknown) => assert.equal(interruptedOfficialCall(error), 'upstream-timeout'),
+                ),
+                'Follow-up capability call did not reach its actual terminal.',
+            );
         } finally {
             await connection.close();
             await fixture.cleanup();
@@ -191,7 +196,13 @@ test('response racing its SDK deadline and explicit close never leaves a permane
         await connection.call('echo', { lateWire: 25 }).catch((error: unknown) => {
             assert.equal(interruptedOfficialCall(error), 'upstream-timeout');
         });
-        await connection.call('echo', { capabilities: true });
+        await boundedSignal(
+            connection.call('echo', { capabilities: true }).then(
+                (result) => assert.ok(isRecord(capabilitiesOf(result))),
+                (error: unknown) => assert.equal(interruptedOfficialCall(error), 'upstream-timeout'),
+            ),
+            'Follow-up capability call did not reach its actual terminal.',
+        );
         await connection.close();
         await assert.rejects(connection.call('echo', { capabilities: true }), /connected|closed/i);
         await assert.rejects(connection.call('echo', { capabilities: true }), /connected|closed/i);

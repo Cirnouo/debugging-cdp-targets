@@ -6,6 +6,7 @@ import {
     Client,
     type ClientCapabilities,
     isInputRequiredResult,
+    SdkHttpError,
     StreamableHTTPClientTransport,
     withInputRequired,
 } from '@modelcontextprotocol/client';
@@ -299,6 +300,169 @@ test('strict modern and sessionful legacy discover the same fixed tools through 
         }
         assert.ok(f.responses.some((response) => response.session));
         assert.ok(f.responses.some((response) => !response.session && response.body.includes('resultType')));
+    } finally {
+        await f.close();
+    }
+});
+
+test('modern envelope member overflow refuses before dispatch and preserves healthy traffic', async () => {
+    const f = await fixture();
+    try {
+        const client = await f.client();
+        await assert.rejects(
+            manual(client, 'echo', { _dct: ROUTE, rounds: 0, values: Array(10001).fill(null) }),
+            (error: unknown) => error instanceof SdkHttpError && error.status === 413,
+        );
+        assert.equal(f.invokes(), 0);
+        assert.equal(f.effects(), 0);
+        const result = await manual(client, 'echo', { _dct: ROUTE, rounds: 0, script: 'return 1;' });
+        assert.deepEqual(result.structuredContent, { answers: [] });
+        assert.equal(f.invokes(), 1);
+    } finally {
+        await f.close();
+    }
+});
+
+test('whole modern envelope budgets include metadata capabilities continuation replies and malformed batches', async () => {
+    const f = await fixture();
+    try {
+        const meta = {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {},
+            'io.modelcontextprotocol/clientInfo': { name: 'budget-fixture', version: '1' },
+        };
+        const body = {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name: 'echo', arguments: { _dct: ROUTE, rounds: 0 }, _meta: meta },
+        };
+        const wide = Array(10001).fill(null);
+        const deep = `${'['.repeat(10000)}0${']'.repeat(10000)}`;
+        for (const payload of [
+            JSON.stringify({ ...body, params: { ...body.params, _meta: { ...meta, private: wide } } }),
+            JSON.stringify({
+                ...body,
+                params: {
+                    ...body.params,
+                    _meta: { ...meta, 'io.modelcontextprotocol/clientCapabilities': { private: wide } },
+                },
+            }),
+            JSON.stringify({ ...body, params: { ...body.params, inputResponses: { private: wide } } }),
+            JSON.stringify([body, wide]),
+            deep,
+            `${JSON.stringify(body).slice(0, -1)},"private":"${'x'.repeat(1048576)}"}`,
+        ]) {
+            const response = await fetch(f.http.url, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    accept: 'application/json, text/event-stream',
+                    'mcp-protocol-version': '2026-07-28',
+                },
+                body: payload,
+            });
+            assert.equal(response.status, 413);
+            assert.doesNotMatch(await response.text(), /private|budget-fixture/);
+            assert.equal(response.headers.get('mcp-session-id'), null);
+        }
+        assert.equal(f.invokes(), 0);
+        assert.equal(f.calls.length, 0);
+        const client = await f.client();
+        const result = await manual(client, 'echo', {
+            _dct: ROUTE,
+            rounds: 0,
+            script: 'x'.repeat(500000),
+            files: Array(100).fill({ name: 'file' }),
+        });
+        assert.deepEqual(result.structuredContent, { answers: [] });
+        assert.equal(f.invokes(), 1);
+    } finally {
+        await f.close();
+    }
+});
+
+test('a refused oversized modern form reply leaves the same unconsumed original invocation resumable', async () => {
+    const f = await fixture();
+    try {
+        const client = await f.client(true, { elicitation: { form: {} } });
+        const args = { _dct: ROUTE, rounds: 1 };
+        const first = await manual(client, 'echo', args);
+        assert.ok(isInputRequiredResult(first));
+        assert.ok(first.inputRequests);
+        const [key] = Object.keys(first.inputRequests);
+        assert.ok(key);
+        await assert.rejects(
+            manual(client, 'echo', args, {
+                requestState: first.requestState,
+                inputResponses: {
+                    [key]: { action: 'accept', content: { answer: 'private', excess: Array(10001).fill(null) } },
+                },
+            }),
+            (error: unknown) => error instanceof SdkHttpError && error.status === 413,
+        );
+        assert.equal(f.invokes(), 1);
+        const result = await manual(client, 'echo', args, {
+            requestState: first.requestState,
+            inputResponses: { [key]: { action: 'accept', content: { answer: 'retained' } } },
+        });
+        assert.ok(!isInputRequiredResult(result));
+        assert.deepEqual(result.structuredContent, {
+            answers: [{ action: 'accept', content: { answer: 'retained' } }],
+        });
+        assert.equal(f.invokes(), 1);
+        assert.equal(f.effects(), 1);
+    } finally {
+        await f.close();
+    }
+});
+
+test('overlapping modern callers with colliding IDs retain independent results and subsequent legacy traffic', async () => {
+    const f = await fixture();
+    try {
+        const clients = await Promise.all([
+            f.client(true, { elicitation: { form: {} } }),
+            f.client(true, { elicitation: { form: {} } }),
+        ]);
+        const results = await Promise.all(
+            clients.map((client, index) =>
+                manual(
+                    client,
+                    'echo',
+                    { _dct: index ? { ...ROUTE, registrationBearer: PEER } : ROUTE, rounds: 1 },
+                    { _meta: { progressToken: 0 } },
+                ),
+            ),
+        );
+        for (const result of results) assert.ok(isInputRequiredResult(result));
+        assert.notEqual(results[0]?.requestState, results[1]?.requestState);
+        await f.drain();
+        const replies = f.wire.filter((event) => isRecord(event.message) && 'result' in event.message);
+        const first = replies.find((event) => event.client === 0)?.message;
+        const second = replies.find((event) => event.client === 1)?.message;
+        assert.ok(isRecord(first) && isRecord(second));
+        assert.equal(first.id, second.id);
+        for (const [index, client] of clients.entries()) {
+            const result = results[index];
+            assert.ok(result?.inputRequests);
+            const [key] = Object.keys(result.inputRequests);
+            assert.ok(key);
+            const completed = await manual(
+                client,
+                'echo',
+                { _dct: index ? { ...ROUTE, registrationBearer: PEER } : ROUTE, rounds: 1 },
+                {
+                    requestState: result.requestState,
+                    inputResponses: { [key]: { action: 'accept', content: { answer: String(index) } } },
+                },
+            );
+            assert.deepEqual(completed.structuredContent, {
+                answers: [{ action: 'accept', content: { answer: String(index) } }],
+            });
+        }
+        assert.equal(f.invokes(), 2);
+        const legacy = await f.client(false);
+        assert.equal((await legacy.listTools()).tools.length, 8);
     } finally {
         await f.close();
     }

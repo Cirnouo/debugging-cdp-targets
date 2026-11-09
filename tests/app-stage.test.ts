@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
+import childProcess from 'node:child_process';
 import { createHash } from 'node:crypto';
-import fs, { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import fs, { readFile, rm, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
-import os from 'node:os';
 import path from 'node:path';
 import { mock, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { verifyDeploymentPayload } from '../src/adapters/app-delivery.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import * as app from '../tooling/build-app.ts';
-import { guardAppArchiveExtraction as archiveGuard, storedAppZip as zip } from './fixtures/app-archive.ts';
+import { guardAppArchiveExtraction as archiveGuard } from './fixtures/app-archive.ts';
+import { stageFixture } from './fixtures/app-stage.ts';
 
 const hash = (bytes: string | Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
@@ -75,148 +75,6 @@ test('App source composition has literal canonical bytes, includes empty directo
         false,
     );
 });
-
-async function stageFixture() {
-    const root = fileURLToPath(new URL('..', import.meta.url));
-    // Start only the existing trusted build compiler before the strict process guard.
-    await app.generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
-    const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'dct-payload-stage-')));
-    const metadataName = path.join(root, 'tooling/app-release-inputs.json');
-    const fixtureMetadata = path.join(directory, 'release.json');
-    const electronArchive = path.join(directory, 'electron-owned.zip');
-    const nodeArchive = path.join(directory, 'node-owned.zip');
-    const output = path.join(directory, 'stage');
-    const scratch = path.join(directory, 'dct-app-stage-controlled');
-    const electronBytes = zip([
-        { name: 'electron.exe', content: 'inert Electron\n' },
-        { name: 'LICENSE', content: 'inert Electron license\n' },
-        { name: 'LICENSES.chromium.html', content: 'inert Chromium notices\n' },
-        { name: 'empty/', content: '' },
-        { name: 'resources/default_app.asar', content: 'inert archive\n' },
-    ]);
-    const nodeBytes = zip([
-        { name: 'node-v24.21.0-win-x64/node.exe', content: 'inert Node\n' },
-        { name: 'node-v24.21.0-win-x64/LICENSE', content: 'inert Node license\n' },
-        { name: 'node-v24.21.0-win-x64/unused-tool', content: 'not delivered\n' },
-    ]);
-    await writeFile(electronArchive, electronBytes);
-    await writeFile(nodeArchive, nodeBytes);
-    const metadata: unknown = JSON.parse(await readFile(metadataName, 'utf8'));
-    assert.ok(isRecord(metadata) && Array.isArray(metadata.archives));
-    const electron = metadata.archives.find(
-        (value: unknown) =>
-            isRecord(value) && value.kind === 'electron' && value.platform === 'win32' && value.architecture === 'x64',
-    );
-    const node = metadata.archives.find(
-        (value: unknown) =>
-            isRecord(value) && value.kind === 'node' && value.platform === 'win32' && value.architecture === 'x64',
-    );
-    assert.ok(isRecord(electron) && isRecord(node));
-    Object.assign(electron, {
-        bytes: electronBytes.length,
-        sha256: hash(electronBytes),
-        licenses: [
-            { path: 'LICENSE', bytes: 23, sha256: hash('inert Electron license\n') },
-            { path: 'LICENSES.chromium.html', bytes: 23, sha256: hash('inert Chromium notices\n') },
-        ],
-    });
-    Object.assign(node, {
-        bytes: nodeBytes.length,
-        sha256: hash(nodeBytes),
-        runtimeFiles: [
-            {
-                path: 'node-v24.21.0-win-x64/node.exe',
-                destination: 'node.exe',
-                bytes: 11,
-                sha256: hash('inert Node\n'),
-            },
-            {
-                path: 'node-v24.21.0-win-x64/LICENSE',
-                destination: 'LICENSE',
-                bytes: 19,
-                sha256: hash('inert Node license\n'),
-            },
-        ],
-    });
-    await writeFile(fixtureMetadata, JSON.stringify(metadata));
-    const originalOpen = fs.open;
-    const originalStat = fs.lstat;
-    const originalRead = fs.readFile;
-    let activeMetadata = fixtureMetadata;
-    let laterMetadata = '';
-    let metadataReads = 0;
-    const remap = (name: unknown) => (String(name) === metadataName ? activeMetadata : name);
-    const opened = mock.method(fs, 'open', (...args: Parameters<typeof fs.open>) => {
-        if (String(args[0]) === metadataName && ++metadataReads > 1 && laterMetadata) activeMetadata = laterMetadata;
-        return Reflect.apply(originalOpen, fs, [remap(args[0]), ...args.slice(1)]);
-    });
-    const named = mock.method(fs, 'lstat', (...args: Parameters<typeof fs.lstat>) =>
-        Reflect.apply(originalStat, fs, [remap(args[0]), ...args.slice(1)]),
-    );
-    const read = mock.method(fs, 'readFile', (...args: Parameters<typeof fs.readFile>) =>
-        Reflect.apply(originalRead, fs, [remap(args[0]), ...args.slice(1)]),
-    );
-    const temporary = mock.method(fs, 'mkdtemp', async (prefix: string) => {
-        assert.equal(prefix, path.join(os.tmpdir(), 'dct-app-stage-'));
-        await fs.mkdir(scratch);
-        return scratch;
-    });
-    syncBuiltinESMExports();
-    const allowed = new Set<string>();
-    for (const [archive, destination, bytes] of [
-        [electronArchive, path.join(scratch, 'electron'), electronBytes],
-        [nodeArchive, path.join(scratch, 'node'), nodeBytes],
-    ] as const)
-        allowed.add(
-            JSON.stringify([
-                'pwsh',
-                '-NoLogo',
-                '-NoProfile',
-                '-NonInteractive',
-                '-File',
-                path.join(root, 'tooling/extract-app-zip.ps1'),
-                '-Archive',
-                archive,
-                '-Destination',
-                destination,
-                '-ExpectedBytes',
-                String(bytes.length),
-                '-ExpectedSha256',
-                hash(bytes),
-            ]),
-        );
-    const restoreGuard = archiveGuard(allowed);
-    return {
-        options: {
-            root,
-            kind: 'portable' as const,
-            platform: 'win32' as const,
-            architecture: 'x64' as const,
-            electronArchive,
-            nodeArchive,
-            output,
-        },
-        electron,
-        node,
-        metadata,
-        fixtureMetadata,
-        async changeMetadataAfterInitialRead(value: unknown) {
-            laterMetadata = path.join(directory, 'later-release.json');
-            await writeFile(laterMetadata, JSON.stringify(value));
-        },
-        async cleanup() {
-            restoreGuard();
-            opened.mock.restore();
-            named.mock.restore();
-            read.mock.restore();
-            temporary.mock.restore();
-            syncBuiltinESMExports();
-            assert.equal(path.dirname(directory), await realpath(os.tmpdir()));
-            assert.ok(path.basename(directory).startsWith('dct-payload-stage-'));
-            await rm(directory, { recursive: true });
-        },
-    };
-}
 
 test('real stage owner composes pinned source extraction, generated licenses/native closure and complete original official files before full-tree agreement', {
     skip: process.platform !== 'win32',
@@ -391,20 +249,112 @@ test('stage keeps its source-derived selection when actual output and its self-c
 test('non-Windows production stages fail closed before any external execution or output creation', async () => {
     const restore = archiveGuard(new Set());
     try {
-        for (const platform of ['darwin', 'linux'] as const)
-            await assert.rejects(
-                app.stageDesktopApp({
-                    root: 'unused',
-                    kind: 'portable',
-                    platform,
-                    architecture: 'x64',
-                    electronArchive: 'unused',
-                    nodeArchive: 'unused',
-                    output: 'unused',
-                }),
-                /other native cells remain pending/,
-            );
+        for (const platform of ['darwin', 'linux'] as const) {
+            const options = {
+                root: 'unused',
+                kind: 'portable',
+                platform: 'win32',
+                architecture: 'x64',
+                electronArchive: 'unused',
+                nodeArchive: 'unused',
+                output: 'unused',
+            } satisfies Parameters<typeof app.stageDesktopApp>[0];
+            assert.equal(Reflect.set(options, 'platform', platform), true);
+            assert.equal(Reflect.get(options, 'platform'), platform);
+            await assert.rejects(app.stageDesktopApp(options), /other native cells remain pending/);
+        }
     } finally {
         restore();
+    }
+});
+
+test('arm64 staging refuses missing runtime and license evidence before extraction or output', {
+    skip: process.platform !== 'win32',
+}, async (context) => {
+    for (const missing of ['runtime-and-licenses', 'runtime', 'licenses']) {
+        await context.test(missing, async () => {
+            const fixture = await stageFixture();
+            const restoreGuard = archiveGuard(new Set());
+            const effects = { scratch: 0, directories: 0, writes: 0, extraction: 0, dlopen: 0, state: 0 };
+            const replacements: { mock: { restore(): void } }[] = [];
+            try {
+                assert.ok(isRecord(fixture.metadata) && Array.isArray(fixture.metadata.archives));
+                const electron = fixture.metadata.archives.find(
+                    (entry: unknown) =>
+                        isRecord(entry) &&
+                        entry.kind === 'electron' &&
+                        entry.platform === 'win32' &&
+                        entry.architecture === 'arm64',
+                );
+                const node = fixture.metadata.archives.find(
+                    (entry: unknown) =>
+                        isRecord(entry) &&
+                        entry.kind === 'node' &&
+                        entry.platform === 'win32' &&
+                        entry.architecture === 'arm64',
+                );
+                assert.ok(isRecord(electron) && isRecord(node));
+                assert.equal(electron.licenses, undefined, 'Retained arm64 Electron source proof remains absent.');
+                assert.equal(node.runtimeFiles, undefined, 'Retained arm64 Node source proof remains absent.');
+                // Isolate each missing-proof gate using only the fixture's inert owned records.
+                // These records never authorize extraction or establish arm64 vendor evidence.
+                if (missing === 'runtime') electron.licenses = structuredClone(fixture.electron.licenses);
+                if (missing === 'licenses') node.runtimeFiles = structuredClone(fixture.node.runtimeFiles);
+                await writeFile(fixture.fixtureMetadata, JSON.stringify(fixture.metadata));
+                replacements.push(
+                    mock.method(fs, 'mkdtemp', () => {
+                        effects.scratch++;
+                        throw new Error('Scratch acquisition preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(fs, 'mkdir', () => {
+                        effects.directories++;
+                        throw new Error('Output creation preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(fs, 'writeFile', (...args: Parameters<typeof fs.writeFile>) => {
+                        effects.writes++;
+                        if (String(args[0]).replaceAll('\\', '/').endsWith('/.deployment/state.json')) effects.state++;
+                        throw new Error('Output write preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(childProcess, 'execFile', () => {
+                        effects.extraction++;
+                        throw new Error('Extraction preceded missing-proof refusal.');
+                    }),
+                );
+                replacements.push(
+                    mock.method(process, 'dlopen', () => {
+                        effects.dlopen++;
+                        throw new Error('Native load preceded missing-proof refusal.');
+                    }),
+                );
+                syncBuiltinESMExports();
+                await assert.rejects(
+                    app.stageDesktopApp({ ...fixture.options, architecture: 'arm64' }),
+                    /Native extraction evidence is unavailable/,
+                );
+                assert.deepEqual(effects, {
+                    scratch: 0,
+                    directories: 0,
+                    writes: 0,
+                    extraction: 0,
+                    dlopen: 0,
+                    state: 0,
+                });
+                await assert.rejects(fs.lstat(fixture.options.output), { code: 'ENOENT' });
+                await assert.rejects(fs.lstat(path.join(fixture.options.output, '.deployment/state.json')), {
+                    code: 'ENOENT',
+                });
+            } finally {
+                for (const replacement of replacements.reverse()) replacement.mock.restore();
+                syncBuiltinESMExports();
+                restoreGuard();
+                await fixture.cleanup();
+            }
+        });
     }
 });

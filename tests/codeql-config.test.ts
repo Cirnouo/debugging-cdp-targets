@@ -65,6 +65,26 @@ test('CodeQL covers owned languages without executing a C# build', async () => {
         assert.ok(config['paths-ignore'].includes(generated));
 });
 
+test('CodeQL extracts the exact fixed query/create source sets while query has no mutating implementation', async () => {
+    const { steps } = await workflow();
+    const evidence = steps.find((step) => step.id === 'native-extraction');
+    assert.ok(evidence && typeof evidence.run === 'string');
+    assert.match(
+        evidence.run,
+        /@\('src\/adapters\/windows-native-process\.cs', 'src\/adapters\/windows-deployment-authority\.cs', 'src\/adapters\/windows-deployment-create\.cs'\)/,
+    );
+    assert.match(evidence.run, /\$nativeSource\.Count -ne 1/);
+    const query = await readFile(new URL('../src/adapters/windows-deployment-authority.cs', import.meta.url), 'utf8');
+    const create = await readFile(new URL('../src/adapters/windows-deployment-create.cs', import.meta.url), 'utf8');
+    assert.match(query, /class DctDeploymentQueryProgram/);
+    assert.match(query, /arguments\.Length != 0/);
+    assert.match(query, /DctDeploymentAuthority\.Inspect\(name\)/);
+    assert.doesNotMatch(query, /DctDeploymentCreate|CreateDirectoryW|SetFileInformationByHandle|CREATE_NEW/);
+    assert.match(create, /class DctDeploymentCreateProgram/);
+    assert.match(create, /DctDeploymentWire\.Mutation\(Console\.OpenStandardInput\(\)\)/);
+    assert.match(create, /DctDeploymentCreate\.Execute\(fields\[0\]/);
+});
+
 test('C# evidence step rejects archives without the native helper', {
     skip: process.platform !== 'win32',
 }, async () => {
@@ -80,11 +100,28 @@ test('C# evidence step rejects archives without the native helper', {
                 [
                     'C/repository/src/adapters/windows-native-process.cs',
                     'C/repository/src/adapters/windows-deployment-authority.cs',
+                    'C/repository/src/adapters/windows-deployment-create.cs',
                 ],
                 0,
             ],
             [['C/repository/src/adapters/windows-native-process.cs'], 1],
             [['C/repository/src/adapters/windows-deployment-authority.cs'], 1],
+            [
+                [
+                    'C/repository/src/adapters/windows-native-process.cs',
+                    'C/repository/src/adapters/windows-deployment-authority.cs',
+                    'C/repository/src/adapters/windows-deployment-create.cs',
+                    'C/duplicate/src/adapters/windows-deployment-create.cs',
+                ],
+                1,
+            ],
+            [
+                [
+                    'C/repository/src/adapters/windows-native-process.cs',
+                    'C/repository/src/adapters/windows-deployment-authority.cs',
+                ],
+                1,
+            ],
             [['C/repository/tests/fixtures/native-window.cs'], 1],
         ] as const) {
             const archiveFolder = path.join(folder, `source-${entries.length}-${entries[0]?.split('/').at(-1)}`);

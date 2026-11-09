@@ -20,3 +20,8 @@ test-results/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Fixed contributor build lifetime; never App-delivered or an existing-file fallback.
+/src/adapters/windows-deployment-query.exe
+/src/adapters/windows-deployment-create.exe
+/src/adapters/.windows-deployment-build.lock

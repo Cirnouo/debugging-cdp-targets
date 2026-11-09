@@ -10,7 +10,7 @@
     lifecycle at invocation and preserves original capture/acquisition order.
 - `connection-view.ts` exports createConnectionView: live status, selected
     configuration, guarded post-control catalog projection and admin inventory.
-    Unselected discovery retains current adapter defaults at its original branch.
+    Unselected discovery invokes current Official launch defaults at its original branch.
     Both factories execute no providers at construction and retain no cache.
 - `resource-owner.ts` exports createResourceOwner/ResourceOwner and OwnedResource.
     One owner retains a resource generation's acquisitions, abort/exit latch,
@@ -26,7 +26,9 @@
 
 Start admission creates the lifetime owners; the managed connection retains generation fences and
 original actual-execution context. gateway/registry.ts enrolls them and owns route
-membership and retained cleanup/retry joins. target-controller.ts owns launch and actual-exit observation.
+membership and retained cleanup/retry joins. The complete
+[target lifecycle](../targets/target-lifecycle.ts) composes launch attachment,
+actual-exit observation and explicit owner cleanup through supplied capabilities.
 Start admission captures the temporary directory before awaiting roots and supplies it to
 the pure workspace calculation at the original managed-connection construction point.
 The data-directory adapter still owns filesystem claims/identity/whole-directory

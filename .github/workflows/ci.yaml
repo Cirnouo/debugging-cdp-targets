@@ -13,12 +13,6 @@ on:
             - synchronize
             - edited
     workflow_dispatch:
-        inputs:
-            ubuntu-startup-study:
-                description: Run the bounded Ubuntu first-start file-logging study (six fresh runners)
-                type: boolean
-                required: false
-                default: false
     workflow_call:
     schedule:
         -   cron: '17 1 * * 1'
@@ -27,7 +21,7 @@ permissions:
     contents: read
 
 concurrency:
-    group: ${{ github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true && format('ci-startup-study-{0}-{1}', github.workflow, github.run_id) || format('ci-{0}-{1}', github.workflow, github.ref) }}
+    group: ${{ format('ci-{0}-{1}', github.workflow, github.ref) }}
     cancel-in-progress: true
 
 jobs:
@@ -190,49 +184,13 @@ jobs:
             -   name: Verify distribution
                 run: pnpm check:distribution
 
-    portable-tests:
-        name: Portable tests (${{ matrix.os }})
-        needs: quality
-        runs-on: ${{ matrix.os }}
-        strategy:
-            matrix:
-                os:
-                    - ubuntu-latest
-                    - macos-latest
-        steps:
-            -   name: Check out repository
-                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            -   name: Set up pnpm
-                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-                with:
-                    version: 12.4.2
-            -   name: Set up Node.js
-                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-                with:
-                    node-version: 24.21.0
-                    cache: pnpm
-            -   name: Install dependencies
-                run: pnpm install --frozen-lockfile
-            -   name: Check TypeScript types
-                run: pnpm typecheck
-            -   name: Run simulated CDP and policy tests
-                run: pnpm test
-
     real-chrome-tests:
-        name: Real Chrome (${{ matrix.os }})
+        name: Real Chrome (windows-latest)
         needs: quality
-        runs-on: ${{ matrix.os }}
+        runs-on: windows-latest
         timeout-minutes: 20
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    -   os: ubuntu-24.04
-                        chrome: /opt/google/chrome/chrome
-                    -   os: macos-15
-                        chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
         env:
-            DCT_SMOKE_CHROME_EXECUTABLE: ${{ matrix.chrome }}
+            DCT_SMOKE_CHROME_EXECUTABLE: 'C:/Program Files/Google/Chrome/Application/chrome.exe'
         steps:
             -   name: Check out repository
                 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -251,50 +209,55 @@ jobs:
                 run: pnpm typecheck
             -   name: Initialize current controlled Chrome collection
                 id: fixture-initialization
-                shell: bash
+                shell: pwsh
                 run: |
-                    set -euo pipefail
-                    collectionId=""
-                    if collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"; then
-                        printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
-                    else
-                        printf 'initialized=false\n' >> "$GITHUB_OUTPUT"
-                    fi
-                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
-            -   name: Verify Linux desktop Chrome prerequisites and run real acceptance
-                if: runner.os == 'Linux'
-                shell: bash
+                    $PSNativeCommandUseErrorActionPreference = $false
+                    $diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'
+                    $initializationOutput = node tests/smoke/fixture-ci.ts init "$diagnosticsDirectory"
+                    $initializationExitCode = $LASTEXITCODE
+                    $collectionId = ($initializationOutput -join "`n").Trim()
+                    $initialized = $initializationExitCode -eq 0 -and $collectionId -match '^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+                    if (-not $initialized) { $collectionId = '' }
+                    "initialized=$($initialized.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+                    "collection-id=$collectionId" >> $env:GITHUB_OUTPUT
+                    exit 0
+            -   name: Verify configured Windows Chrome prerequisite
+                shell: pwsh
                 run: |
-                    set -euo pipefail
-                    collectionId="${{ steps.fixture-initialization.outputs.collection-id }}"
-                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
-                    command -v lsof
-                    command -v getconf
-                    command -v Xvfb
-                    command -v xvfb-run
-                    command -v xauth
-                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
-                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
-                    xvfb-run -a node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
-            -   name: Verify macOS desktop Chrome prerequisites and run real acceptance
-                if: runner.os == 'macOS'
-                shell: bash
+                    $PSNativeCommandUseErrorActionPreference = $false
+                    node --input-type=module -e "import { requireChromeSmokeExecutable } from './tests/smoke/chrome-host.ts'; await requireChromeSmokeExecutable();"
+                    $preflightExitCode = $LASTEXITCODE
+                    if ($preflightExitCode -ne 0) { exit $preflightExitCode }
+            -   name: Run real Chrome official tools acceptance
+                shell: pwsh
+                env:
+                    DCT_FIXTURE_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
                 run: |
-                    set -euo pipefail
-                    collectionId="${{ steps.fixture-initialization.outputs.collection-id }}"
-                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
-                    command -v lsof
-                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    node tests/smoke/official-server.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
-                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" entry-recovery "$collectionId"; then :; fi
-                    node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
+                    $PSNativeCommandUseErrorActionPreference = $false
+                    $diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'
+                    $collectionId = $env:DCT_FIXTURE_COLLECTION_ID
+                    node tests/smoke/fixture-ci.ts stage "$diagnosticsDirectory" official-server "$collectionId"
+                    node tests/smoke/official-server.ts --allow-gui --diagnostics "$diagnosticsDirectory" --collection-id "$collectionId"
+                    $smokeExitCode = $LASTEXITCODE
+                    if ($smokeExitCode -ne 0) { exit $smokeExitCode }
+            -   name: Run real Chrome connection recovery acceptance
+                shell: pwsh
+                env:
+                    DCT_FIXTURE_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
+                run: |
+                    $PSNativeCommandUseErrorActionPreference = $false
+                    $diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'
+                    $collectionId = $env:DCT_FIXTURE_COLLECTION_ID
+                    node tests/smoke/fixture-ci.ts stage "$diagnosticsDirectory" entry-recovery "$collectionId"
+                    node tests/smoke/entry-recovery.ts --allow-gui --diagnostics "$diagnosticsDirectory" --collection-id "$collectionId"
+                    $smokeExitCode = $LASTEXITCODE
+                    if ($smokeExitCode -ne 0) { exit $smokeExitCode }
             -   name: Upload controlled Chrome failure diagnostics
                 id: fixture-artifact
                 if: failure() && steps.fixture-initialization.outputs.initialized == 'true'
                 uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
                 with:
-                    name: controlled-chrome-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+                    name: controlled-chrome-windows-latest-${{ github.run_id }}-${{ github.run_attempt }}
                     path: |
                         ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
                         ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
@@ -307,82 +270,10 @@ jobs:
                     if-no-files-found: warn
             -   name: Index controlled Chrome failure diagnostics
                 if: failure()
+                shell: pwsh
                 env:
+                    DCT_FIXTURE_COLLECTION_ID: ${{ steps.fixture-initialization.outputs.collection-id }}
                     DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
-                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "${{ steps.fixture-initialization.outputs.collection-id }}"
-
-    ubuntu-startup-study:
-        name: Ubuntu startup study (block ${{ matrix.block }}, file logging ${{ matrix.fileLogging }})
-        if: github.event_name == 'workflow_dispatch' && inputs['ubuntu-startup-study'] == true
-        needs: quality
-        runs-on: ubuntu-24.04
-        timeout-minutes: 20
-        strategy:
-            fail-fast: false
-            matrix:
-                block: [1, 2, 3]
-                fileLogging: ['on', 'off']
-        env:
-            DCT_SMOKE_CHROME_EXECUTABLE: /opt/google/chrome/chrome
-        steps:
-            -   name: Check out repository
-                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            -   name: Set up pnpm
-                uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-                with:
-                    version: 12.4.2
-            -   name: Set up Node.js
-                uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-                with:
-                    node-version: 24.21.0
-                    cache: pnpm
-            -   name: Install dependencies
-                run: pnpm install --frozen-lockfile
-            -   name: Check TypeScript types
-                run: pnpm typecheck
-            -   name: Initialize current controlled Chrome collection
-                id: fixture-initialization
-                shell: bash
                 run: |
-                    set -euo pipefail
-                    collectionId=""
-                    if collectionId="$(node tests/smoke/fixture-ci.ts init "$RUNNER_TEMP/dct-fixture-diagnostics")"; then
-                        printf 'initialized=true\n' >> "$GITHUB_OUTPUT"
-                    else
-                        printf 'initialized=false\n' >> "$GITHUB_OUTPUT"
-                    fi
-                    printf 'collection-id=%s\n' "$collectionId" >> "$GITHUB_OUTPUT"
-            -   name: Run one Ubuntu Chrome startup study sample
-                shell: bash
-                run: |
-                    set -euo pipefail
-                    collectionId="${{ steps.fixture-initialization.outputs.collection-id }}"
-                    test -x "$DCT_SMOKE_CHROME_EXECUTABLE"
-                    command -v lsof
-                    command -v getconf
-                    command -v Xvfb
-                    command -v xvfb-run
-                    command -v xauth
-                    if node tests/smoke/fixture-ci.ts stage "$RUNNER_TEMP/dct-fixture-diagnostics" official-server "$collectionId"; then :; fi
-                    xvfb-run -a node tests/smoke/official-server.ts --allow-gui --startup-study --chrome-file-logging "${{ matrix.fileLogging }}" --diagnostics "$RUNNER_TEMP/dct-fixture-diagnostics" --collection-id "$collectionId"
-            -   name: Upload Ubuntu startup study diagnostics
-                id: fixture-artifact
-                if: always() && steps.fixture-initialization.outputs.initialized == 'true'
-                uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-                with:
-                    name: ubuntu-startup-study-block-${{ matrix.block }}-logging-${{ matrix.fileLogging }}-${{ github.run_id }}-${{ github.run_attempt }}
-                    path: |
-                        ${{ runner.temp }}/dct-fixture-diagnostics/job-index.json
-                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.events.ndjson
-                        ${{ runner.temp }}/dct-fixture-diagnostics/official-server.summary.json
-                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.events.ndjson
-                        ${{ runner.temp }}/dct-fixture-diagnostics/entry-recovery.summary.json
-                    retention-days: 7
-                    include-hidden-files: false
-                    overwrite: false
-                    if-no-files-found: warn
-            -   name: Index Ubuntu startup study diagnostics
-                if: always() && steps.fixture-initialization.outputs.initialized == 'true'
-                env:
-                    DCT_FIXTURE_ARTIFACT_URL: ${{ steps.fixture-artifact.outputs.artifact-url }}
-                run: node tests/smoke/fixture-ci.ts summary "$RUNNER_TEMP/dct-fixture-diagnostics" "${{ steps.fixture-initialization.outputs.collection-id }}"
+                    $diagnosticsDirectory = Join-Path $env:RUNNER_TEMP 'dct-fixture-diagnostics'
+                    node tests/smoke/fixture-ci.ts summary "$diagnosticsDirectory" "$env:DCT_FIXTURE_COLLECTION_ID"

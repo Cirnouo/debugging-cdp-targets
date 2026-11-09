@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
-import { createTargetController, type TargetHealth } from '../src/application/target-controller.ts';
+import { createTargetLifecycle, type TargetHealth } from '../../../src/gateway/targets/target-lifecycle.ts';
 
 const sessionId = '11111111-1111-4111-8111-111111111111';
 
@@ -23,7 +23,7 @@ async function fixture() {
             };
         },
     });
-    const controller: ReturnType<typeof createTargetController> = createTargetController({
+    const controller: ReturnType<typeof createTargetLifecycle> = createTargetLifecycle({
         entryId: 'entry',
         router: { setTarget: () => {}, clearTarget: () => {}, isBusy: () => false },
         server: { ensure: async () => {}, close: async () => {} },
@@ -73,11 +73,11 @@ async function fixture() {
     };
 }
 
-test('failed Close and gateway disconnect retain observation until an actual exit releases the profile', async () => {
+test('failed Close and explicit lifecycle cleanup retain observation until actual exit releases the profile', async () => {
     const f = await fixture();
     await assert.rejects(f.controller.stop({ sessionId, disposition: 'Close' }), /did not close/);
     assert.equal(f.counts().disposed, 0);
-    assert.deepEqual(await f.controller.cleanupOnDisconnect(), { processId: 43, port: 9222 });
+    assert.deepEqual(await f.controller.cleanup(), { processId: 43, port: 9222 });
     assert.equal(f.counts().disposed, 0);
     assert.equal(f.counts().released, 0, 'A retained live process must still own its profile.');
     assert.equal(f.child.exitCode, null);
@@ -87,7 +87,7 @@ test('failed Close and gateway disconnect retain observation until an actual exi
     assert.equal(f.child.listenerCount('exit'), 0);
 });
 
-test('confirmed exit after observer loss releases the profile without closing an unknown process', async () => {
+test('confirmed exit after observation failure releases the profile without another Close request', async () => {
     const f = await fixture();
     f.child.emit('monitor-error');
     assert.equal(f.controller.status().reason, 'process-monitor-lost');

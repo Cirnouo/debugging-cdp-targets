@@ -73,7 +73,7 @@ expectations must not be replaced with the implementation's own generated data.
     `tests/fixtures/gateway/target-host.ts`; retain one implementation and list only
     that final gateway fixture leaf in the target inventory.
 - Connection-directory suites share real Core/DataDirectoryRegistry setup over
-    controlled ControllerHost, router and official boundaries, distinct from the
+    controlled TargetLifecycleHost, router and official boundaries, distinct from the
     O4 target-host fake. The bounded O5 cut may extract that setup to intermediate
     `tests/fixtures/connection-directory-runtime.ts`, keeping current
     `core-runtime.ts` in place. Export only `createDirectoryRuntimeFixture`,
@@ -100,7 +100,7 @@ expectations must not be replaced with the implementation's own generated data.
     start admission, persistent callbacks, rollback and final directory retry move
     together to start-admission.ts, receiving that same lifecycle at invocation.
     Live status/configuration/catalog projection and administration inventory move
-    together to connection-view.ts, preserving guarded current adapter defaults.
+    together to connection-view.ts, preserving guarded invocation-time Official defaults.
     Both factories execute no providers at construction; no new await, getter,
     wrapper, cache or snapshot is introduced. Workspace policy uses supplied inputs
     and admission's pre-roots temporary-directory capture. These allocations leave
@@ -244,6 +244,32 @@ only clock-backed `measured` moves to `src/gateway/diagnostics.ts`. The final
 `gateway/lifecycle-contract.ts` and complete symbol/caller migration above remain
 pending until the actual App UI and CDP domain consumers move coherently. This
 interim placement does not complete O4 or the whole Gateway target.
+
+The bounded O4 target lifecycle cut keeps the complete launch attachment,
+admission, health, normal-Close reuse, rollback, actual-exit and retirement
+transaction together in `gateway/targets/target-lifecycle.ts`. Its actual factory,
+host/router ports, exit event and explicit owner cleanup use lifecycle names;
+target acquisition/native I/O, Core and registry retain their distinct owners.
+Central target lifecycle coverage combines all seven former entry-lifecycle cases
+and the two former plugin-runtime Close/attachment cases in target-lifecycle;
+lifecycle-rollback retains all three rollback cases, observer-cleanup both cases,
+and close-diagnostics its complete operation-result case. These four suites own
+all fifteen original bodies; no separate close-and-attachment leaf is required.
+The pure interim contract and remaining target/native content cuts stay pending;
+this allocation does not complete O4 or the whole reorganization.
+
+The bounded O6 package-file cut owns complete filesystem proof in
+`gateway/official/package-files.ts` as `verifyOfficialPackageFiles`, with five exact
+dependencies and pure-sibling inverse guards. Its nine original mixed regressions
+are split into six runtime, two tooling security and one real TEMP alias case;
+seven explicit executed-title observations retain the complete child oracle.
+Both safe lanes explicitly select all three destinations. The subsequent bounded
+launch-input cut transfers the whole three-function owner to
+`gateway/official/server-launch.ts`: captureOfficialServerEnvironment,
+buildOfficialLaunchArguments and resolveVerifiedOfficialServerBin. Preserve actual
+default/capture/await order, exact five dependencies and original caller context.
+Live catalog/upstream, complete child/wire/disposal and MCP continuation remain
+unfinished with their current transaction owners.
 
 ## Per-batch workflow and complete-task gates
 
@@ -717,9 +743,8 @@ tests/gateway/targets/chrome-launch.test.ts
 tests/gateway/targets/chrome-profile-argument.test.ts
 tests/gateway/targets/chrome-profile.test.ts
 tests/gateway/targets/chromium-features.test.ts
-tests/gateway/targets/close-and-attachment.test.ts
 tests/gateway/targets/close-diagnostics.test.ts
-tests/gateway/targets/controller-rollback.test.ts
+tests/gateway/targets/lifecycle-rollback.test.ts
 tests/gateway/targets/data-directory-claims.test.ts
 tests/gateway/targets/data-directory.test.ts
 tests/gateway/targets/data-isolation.test.ts

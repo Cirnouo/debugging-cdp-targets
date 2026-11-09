@@ -17,13 +17,14 @@ the target to that list or silently remove a disable. See
 [the feature input contract](https://github.com/Cirnouo/debugging-cdp-targets/blob/main/docs/adr/0014-windows-chrome-screenshot-surface.md#feature-input-contract)
 for exact syntax and preserved valid parameter forms.
 
-`generic-cdp` and other platforms receive no screenshot preset. Only for an
-independently confirmed application argv carrier, a new isolated launch may use
-`--enable-features=CDPScreenshotNewSurface` before exact `--`: add it to one valid
-canonical enable list, or keep one bare occurrence. Preserve valid unrelated
-entries and report the same conflicts. A framework name proves no support;
-do not apply this recipe to an unverified WebView2 environment contract or change
-personal profiles/config. Verify fresh image pixels in the intended native state.
+Windows `generic-cdp` applications receive no screenshot preset. Only for an
+independently confirmed Windows application argv carrier, a new isolated launch
+may use `--enable-features=CDPScreenshotNewSurface` before exact `--`: add it to
+one valid canonical enable list, or keep one bare occurrence. Preserve valid
+unrelated entries and report the same conflicts. A framework name proves no
+support; do not apply this recipe to an unverified WebView2 environment contract
+or change personal profiles/config. Verify fresh image pixels in the intended
+native state.
 
 Restart keeps exact composed argv. To change it, use an existing Close choice or
 obtain the missing authorization through `replace-launch`, wait for normal Close,

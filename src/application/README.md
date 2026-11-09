@@ -24,17 +24,20 @@
   lifecycle mutations through idempotent asynchronous operations.
 - `operations.ts` owns memory-only requests, replayable bounded events, waits,
   explicit cancellation and immutable terminal results under their original owner.
-- `target-controller.ts` sequences launch, actual exit, live restart, disposition,
-  and session-owned cleanup without blocking exit behind lifecycle admission.
 - `AGENTS.md` defines transaction and rollback rules.
 
 [ADR 0015](../../docs/adr/0015-explicit-data-directory-isolation.md) adds
 connection-level directory ownership in [Gateway connections](../gateway/connections/README.md)
-alongside resource generations. [Gateway Core](../gateway/core.ts) composes registrations/catalog/cleanup;
-[managed connections](../gateway/connections/managed-connection.ts) enroll owners
-and retain original actual-execution context; [registry](../gateway/registry.ts)
-owns route membership and retained cleanup/retry joins; the lease spans
+alongside resource generations. [Gateway Core](../gateway/core.ts) composes
+registrations, catalog and construction cleanup. [Managed connection](../gateway/connections/managed-connection.ts)
+retains original actual-execution context. [Registry](../gateway/registry.ts) owns
+route membership, owner enrollment and retained cleanup/retry joins. The lease spans
 restart, tracks late acquisition and releases only after all app/resource users
 are gone. Explicit start metadata retains directory evidence through failed
 startup and cleanup retries. Metadata updates preserve terminal operation state,
 result and completion delivery; explicit configuration also exposes that evidence.
+
+The complete [target lifecycle](../gateway/targets/target-lifecycle.ts) sequences
+launch attachment, actual exit, restart, disposition and explicit owner cleanup
+through supplied capabilities. Its actual-exit callbacks bypass lifecycle admission.
+Managed connection retains generation fences. Registry retains route and cleanup authority.

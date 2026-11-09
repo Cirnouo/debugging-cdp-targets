@@ -18,9 +18,13 @@ The registry/managed cycle is erased TYPE-only. `connections/start-admission.ts`
 owns the whole start, persistent callbacks, rollback and final directory retry;
 the same lifecycle is supplied at invocation. `connections/connection-view.ts`
 owns live status/configuration/catalog projection and administration inventory,
-retaining current unselected adapter defaults at the original guarded branch.
+retaining invocation-time Official launch defaults at the original guarded branch.
 Both factories execute no providers at construction; neither adds an await,
 snapshot, cache or second state authority. Their ManagedConnection edges are TYPE-only.
+The complete `src/gateway/targets/target-lifecycle.ts` transaction composes the
+supplied target host/router capabilities, owns actual-exit callbacks and exposes
+explicit owner cleanup. Managed connection retains generation fences and registry
+retains cleanup joins. Agent/MCP disconnect does not request that cleanup.
 See [App runtime](app-runtime.md) for bootstrap, storage and request lifetime.
 
 ## Client and registration boundary
@@ -94,7 +98,7 @@ response. The original context remains associated with actual execution until a
 real outcome, and unavailable progress/elicitation never goes to a later client.
 Official successful results remain unchanged and have no second public archive.
 
-SDK 2.2.0 has no public option to disable its execution timer. The bridge uses the
+SDK 2.3.1 has no public option to disable its execution timer. The bridge uses the
 maximum safe Node timer, 2,147,483,647 milliseconds. That deadline can still send
 `notifications/cancelled` and remove SDK response handlers. A single matching wire
 identity ledger therefore remains occupied after SDK timeout until a real result,

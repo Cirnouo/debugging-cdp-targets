@@ -26,10 +26,14 @@ crypto/os/path access. The managed owner retains crypto; all timestamps are supp
 connection-view.ts owns live status/configuration/catalog projection and admin
 inventory. Preserve all guards, repeated controller/status reads, clones, private
 evidence branches and summary-before-principal/clocks/generation order. Its only
-value imports are official-server and control-contract, with tool-catalog, registry
-and original managed TYPEs. Unselected tool discovery computes current adapter
-defaults only at the original guarded branch; the view is live, not a pure mirror.
-Use only the exact parent-reviewed value/TYPE ports. readCatalog remains a live
+value imports are ../official/server-launch.ts and control-contract, with
+tool-catalog, registry and original managed TYPES. Unselected tool discovery
+computes current Official launch defaults at the original guarded branch.
+Only managed connection, admission and view consume the Official launch owner,
+each through its exact edge. Managed connection imports the target lifecycle
+factory and host/router ports as TYPES. Admission imports the factory and
+TargetLifecycleHost TYPE. Use only the exact parent-reviewed value/TYPE ports.
+readCatalog remains a live
 synchronous read at the original four regions, never a cache, setter or captured
 reference across await. View/admission factories invoke no providers at construction.
 Registry, admission and view consume original ManagedConnection through TYPE-only

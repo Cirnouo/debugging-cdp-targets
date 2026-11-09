@@ -8,18 +8,45 @@
   or a macOS libproc/JXA source candidate. No App startup/worker wiring or native
   acceptance is established. Both macOS architectures still require actual ABI,
   JXA loading, buffer and errno proof; helpers never request parent Close.
-- `app-deployment.ts` opens only already enrolled installation metadata and
-  holds exactly operation and use lock inodes. Normal open exposes read/shared
-  use; the separate trusted writer open can commit or acquire operation/deletion
-  after native validation. Its bounded canonical state store preserves removal
-  fences, changed-document refusal and pre-commit versus indeterminate outcomes.
-  It stages/removes no payload and remains outside App startup.
-- `app-deployment-native.ts` obtains actual account, ancestor, object and volume
-  evidence for Linux private/system roles and Windows/macOS source candidates.
-  Caller metadata or helper success alone never grants writer authority.
-- `windows-deployment-authority.cs` and `windows-deployment-authority.ps1` provide
-  fixed read-only handle/SID/DACL/local-NTFS evidence; no elevation or mutation
-  entry is included in this slice.
+- `app-deployment.ts` opens enrolled installation metadata and holds exactly
+  operation and use lock inodes. Normal open exposes read/shared use; the separate
+  trusted writer validates native authority before operation, commit or deletion.
+  Its bounded canonical state store preserves removal fences, changed-document
+  refusal and pre-commit versus indeterminate outcomes. It remains outside App startup.
+- Its explicit fresh contributor composition owns the concrete native build
+  lifetime and reopens readers with newly sampled facts. Normal Windows admission
+  fails closed while delivered query binaries remain pending; no runtime build
+  fallback, caller receipt, backend or authority registration exists.
+- `app-deployment-native.ts` refuses unsupported actual hosts before filesystem
+  or native query acquisition. Windows x64/arm64 normal admission still fails
+  closed without delivered query support. Its fixed Windows x64 current-account
+  fresh directory/no-replace operations belong to the explicit contributor builder.
+  Same-boundary Windows path collections use
+  bounded fresh batches; dedup never weakens managed-entry purpose predicates.
+  Fresh payload sweeps union all recorded entries and parent chains per boundary,
+  with a new complete permission sweep on each side of content verification.
+  Windows reader root/envelope and fixed-inode collections coalesce only within
+  their original boundaries; document reads and lease effects retain their order.
+  `windows-deployment-create.cs` is its separate build-only mutation entry,
+  reusing the read-only `windows-deployment-authority.cs` inspector/query entry.
+  Protected DACLs are supplied at creation; source handles and parent handles
+  remain held during no-replace rename. Its finite copy entry owns only payload
+  directory/file creation, write/flush/checked close/reopen/readback. Each file
+  boundary resamples the unchanged native permission predicates while holding
+  actual parent handles; Node retains content provenance and publication order. No existing ACL repair or elevation is
+  provided. Common ancestor DACL admission and actual native behavior remain
+  unaccepted; these sources do not enable default App admission. Dormant POSIX
+  authority helpers and their historical pure policies remain only until the
+  scheduled deployment deletion cut; the public factory cannot select them.
+- `windows-deployment-support.ts` owns the fixed Windows x64 compiler/source/
+  reference recipe, inert PE structure checks, actual output receipt, exclusive
+  materialization and finite invocation lifetime. It accepts no caller helper
+  path or receipt. `windows-deployment-protocol.ts` owns strict finite UTF-8 wire
+  framing and actual byte/count query packing; `windows-deployment-stream.ts`
+  drains both pipes during backpressured input and retains child/stdio terminal
+  ownership after failures. These build-only EXEs and C# inputs are excluded
+  from generated App delivery. Compilation, runtime/signing and native admission
+  remain separate gates.
 - `macos-deployment-authority.jxa` provides read-only descriptor/UID/ACL/local-APFS
   source evidence with exact returned masks. Controlled source checks do not
   establish native acceptance on either architecture. Filesystem IDs bound the
@@ -34,9 +61,12 @@
   synchronously before asynchronous bootstrap work, separate from configuration.
 - `app-configuration.ts` validates the whole migration chain before a backup and
   atomic settings replacement, keeping desired port separate from effective port.
-- `app-native.ts` verifies the complete original native loader closure before
-  loading its original public shared/exclusive advisory-lock API. Callers without
-  an explicit validated shared option retain exclusive behavior.
+- `app-native.ts` refuses unsupported actual hosts before native verification
+  or loading. Its independent input verifier stays host-neutral and checks the
+  complete original six-package source/prebuild/license closure, including all
+  original non-Windows files, without loading an addon. Supported Windows loading
+  retains the original public shared/exclusive advisory-lock API after verification.
+  Callers without an explicit validated shared option retain exclusive behavior.
 - `app-delivery.ts` verifies immutable archive and regular-file evidence without
   executing or repairing delivery inputs. Its separate payload verifier compares
   a complete canonical manifest and observed tree with independently expected
@@ -68,11 +98,11 @@
 - `tool-catalog.ts` exposes the fixed official catalog, parameter variants,
   complete reviewed Tool validation, actual connection enablement and configuration
   recipes/workspace sources.
-- `official-server.ts` captures invocation-time environment/platform argument defaults,
-    snapshots the child environment and verifies the explicit public Server bin.
-    Deterministic argument composition is supplied to `gateway/official/options.ts`;
-    its current default boundary remains here until the complete launch-owner cut.
-- `official-package.ts` verifies the complete official release tree and returns its original bytes.
+- `gateway/official/server-launch.ts` owns invocation-time environment/platform
+    defaults, child environment capture and explicit verified public-bin resolution;
+    adapters consume that exact owner without changing their preflight/spawn order.
+- Complete official package-file verification is owned by
+  `gateway/official/package-files.ts`; runtime and launch adapters consume that proof.
 - `file-evidence.ts` reads regular-file evidence through one descriptor, rejects
   path/metadata changes and closes the descriptor on success or failure.
 - `mcp-bridge.ts` connects the official Server through the public SDK Client,
@@ -81,13 +111,17 @@
   SDK listChanged drives uncapped serialized private reviewed snapshots, freshness,
   fail-closed admission and captured Tool output validation.
 - `mcp-http-server.ts` composes the public SDK Node Streamable HTTP transport,
-  validates loopback HTTP boundaries and routes strict modern requests beside
+  validates loopback HTTP/raw-body boundaries, parses once and applies the whole
+  JSON envelope budget before routing strict modern requests beside
   sessionful legacy connections through one shared Core.
 - `mcp-request-handler.ts` owns the common fixed declarations, authenticated
   dispatch using the pure `gateway/owned-tool-arguments.ts` parsers, modern roots
   preflight before lifecycle acceptance, bounded form continuation around one
   Core execution and active-request progress routing.
-- `target-host.ts` launches and verifies a newly created target. Its Chrome preset
+- `target-host.ts` admits Windows x64/arm64 before native defaults, port/profile
+  work or target acquisition, then launches and verifies a newly created target.
+  Fully supplied test ports avoid native launcher construction; supplied identity
+  cannot authorize ambient native launch or profile checks. Its Chrome preset
   adds `--disable-updater-scheduler` to suppress automatic updater startup in
   the debugging process and fixes Windows screenshots with one bare
   `CDPScreenshotNewSurface` feature before profile acquisition or spawn.
@@ -98,14 +132,19 @@
   rejects overlapping claims and retries authorized cleanup with identity checks.
 - `port-reservation.ts` reserves CDP ports synchronously for one gateway and
   checks owner identity before releasing a live-run claim.
-- `platform-process.ts` obtains OS identity/reservations and normal shutdown;
-  Linux root creation evidence preserves kernel start tick precision.
-  Darwin verifies mapped hard-link aliases against the installed executable's
-  device/inode, and failures retain bounded executable identity metadata.
-  Unix normal close validates the owned application identity and requests
-  shutdown; actual Node child exit completes the separate unbounded wait.
+- `platform-process.ts` admits Windows x64/arm64, obtains Windows identity and
+  excluded-port evidence, and requests normal shutdown with actual-exit receipts.
+  Supplied snapshot/Close/wait/range ports keep pure tests useful on other hosts;
+  default native queries independently require a supported actual Windows host.
+  Windows identity validation applies Windows path/case and Chrome vendor rules
+  to supplied evidence throughout launch, Close, verification and health.
+  Exported Unix inspection/probe models and the portable spawn helper remain
+  for direct-model regressions until their scheduled deletion; production
+  constructors no longer select them.
 - `windows-cdp-helper.ps1` supplies Windows process/listener evidence.
-- `windows-launch.ts` validates the native helper protocol and actual app events.
+- `windows-launch.ts` requires a supported actual Windows host before constructing
+  or using its default helper spawn, and validates the native helper protocol and
+  actual app events. An explicitly supplied spawn is a concrete test capability.
 - `windows-native-helper.ps1` orchestrates native launch/close, permission waiting
   and authenticated one-shot elevation with private structured data transfer.
 - `windows-native-process.cs` owns Win32 handles, permission/manifest evidence,
@@ -121,7 +160,7 @@ and generic application occupancy require the Agent's read-only prelaunch gate;
 the runtime does not guess their identity or a universal lock convention.
 
 The App uses public `@modelcontextprotocol/client`, `server` and `core` SDK
-2.2.0 and Node HTTP transport 2.1.0. The original official child retains its
+2.3.1 and Node HTTP transport 2.1.0. The original official child retains its
 public stdio interface. Host HTTP requests supply their own roots, form
 elicitation, progress and cancellation facilities. Catalog pages are walked
 without the SDK aggregate page cap; output schemas remain original. See the

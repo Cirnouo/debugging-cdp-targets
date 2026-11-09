@@ -31,6 +31,8 @@ function fixture({ busy = false, race = false, busyPorts = [] as number[] } = {}
         },
     };
     const host = createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         platformAdapter: platform,
         profileAvailable: async () => true,
         probe: async (port) => !busy && !busyPorts.includes(port),

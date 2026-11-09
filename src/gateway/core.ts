@@ -7,12 +7,12 @@ import { createOfficialConnection } from '../adapters/mcp-bridge.ts';
 import { loadOfficialToolCatalog } from '../adapters/tool-catalog.ts';
 import { createClientContext } from '../application/client-context.ts';
 import { createRegistrationRegistry } from '../application/registrations.ts';
-import type { ControllerHost } from '../application/target-controller.ts';
 import type { CoreControlHandler, CoreControlRequest, Diagnose } from '../domains/control-contract.ts';
 import type { ClientRequestContext } from '../shared/client-context.ts';
 import { DetailedError, errorMessage } from '../shared/errors.ts';
 import { createManagedConnections, type RuntimeRouter } from './connections/managed-connection.ts';
 import { createGatewayRegistry } from './registry.ts';
+import type { TargetLifecycleHost } from './targets/target-lifecycle.ts';
 
 export type GatewayDependencies = {
     onCleanupReady?: (capability: GatewayConstructionCleanup) => void;
@@ -20,7 +20,7 @@ export type GatewayDependencies = {
     dataDirectories?: DataDirectoryRegistry;
     profileAvailable?: typeof nativeProfileAvailable;
     createRouter?: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
-    createHost?: () => ControllerHost;
+    createHost?: () => TargetLifecycleHost;
     createConnection?: typeof createOfficialConnection;
     loadCatalog?: typeof loadOfficialToolCatalog;
     now?: () => number;

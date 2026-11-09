@@ -8,6 +8,18 @@ metadata:
 
 # Debugging CDP targets
 
+This workflow applies to the Windows desktop App and newly launched Windows
+CDP targets. Current targets are Windows 11 x64 and arm64. Before preparing a
+launch or acquiring directories/native resources, first establish the actual
+App/target platform from applicable launch context. Linux/macOS and other
+architectures are unsupported: report that limitation and leave the target
+unlaunched, without a fallback or another choice question. A tooling runner's OS
+alone is not evidence of the requested target platform; explicit Windows launch
+facts still require a supported Windows App and do not authorize native fallback
+on another OS. Native delivery and default installation admission remain
+unavailable until their separate gates are qualified; do not bypass an App refusal
+or substitute a script, proxy or existing application.
+
 Use the thin host Plugin to connect directly to the running desktop App at
 http://127.0.0.1:27637/mcp (or the explicitly synchronized effective port). The App
 starts without targets and owns resources independently of chats and HTTP sessions.
@@ -199,9 +211,8 @@ through `directory-choice` in this order:
 
 For another application, omit the Chrome-only option and keep the remaining order.
 The Chrome preset is an explicit isolation-directory choice at
-`%USERPROFILE%/.cache/chrome-devtools-mcp/chrome-profile` on Windows and
-`~/.cache/chrome-devtools-mcp/chrome-profile` on Linux/macOS. Resolve it to the
-actual absolute location. Never use it as an automatic default or in none mode.
+`%USERPROFILE%/.cache/chrome-devtools-mcp/chrome-profile` on Windows. Resolve it
+to the actual absolute location. Never use it as an automatic default or in none mode.
 If the selected preset already exists, pass an existing-directory selection;
 if absent, pass a named new selection with name `chrome-profile` and its absolute
 `chrome-devtools-mcp` parent. After explicit preset selection and the applicable

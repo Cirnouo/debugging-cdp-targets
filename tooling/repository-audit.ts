@@ -88,7 +88,11 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
                         specifier.local.name === name,
                 ),
         );
-    if (!imports('spawn', 'node:child_process') || !imports('resolveServerBin', './official-server.ts')) return allowed;
+    if (
+        !imports('spawn', 'node:child_process') ||
+        !imports('resolveVerifiedOfficialServerBin', '../gateway/official/server-launch.ts')
+    )
+        return allowed;
     const declaration = ast.program.body.find(
         (node) =>
             node.type === 'ExportNamedDeclaration' &&
@@ -113,7 +117,7 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
         fallback.type !== 'AwaitExpression' ||
         fallback.argument.type !== 'CallExpression' ||
         fallback.argument.callee.type !== 'Identifier' ||
-        fallback.argument.callee.name !== 'resolveServerBin' ||
+        fallback.argument.callee.name !== 'resolveVerifiedOfficialServerBin' ||
         fallback.argument.arguments.length !== 0
     )
         return allowed;
@@ -164,7 +168,7 @@ function ownedOfficialTermination(ast: ReturnType<typeof parse>): Set<Node> {
         return allowed;
     const expected = new Map([
         ['spawn', 1],
-        ['resolveServerBin', 1],
+        ['resolveVerifiedOfficialServerBin', 1],
         ['child', 1],
         ['bin', 1],
         ['process', 0],
@@ -287,8 +291,59 @@ export function validateRuntimeSource(file: string, source: string) {
     const admission = file === 'src/gateway/connections/start-admission.ts';
     const connectionView = file === 'src/gateway/connections/connection-view.ts';
     const gatewayService = core || registry || managed || admission || connectionView;
+    const officialPackageFiles = file === 'src/gateway/official/package-files.ts';
+    const officialLaunch = file === 'src/gateway/official/server-launch.ts';
+    const targetLifecycle = file === 'src/gateway/targets/target-lifecycle.ts';
     const reviewedAmbient = new Set<Node>();
     visit(ast, (node, parent, grandparent) => {
+        if (
+            targetLifecycle &&
+            node.type === 'NewExpression' &&
+            node.callee.type === 'Identifier' &&
+            node.callee.name === 'Date' &&
+            node.arguments.length === 0 &&
+            parent?.type === 'MemberExpression' &&
+            !parent.computed &&
+            parent.object === node &&
+            propertyName(parent.property) === 'toISOString' &&
+            grandparent?.type === 'CallExpression' &&
+            grandparent.callee === parent &&
+            grandparent.arguments.length === 0
+        )
+            reviewedAmbient.add(node.callee);
+        if (officialLaunch && node.type === 'FunctionDeclaration') {
+            const name = node.id?.name;
+            for (const [index, parameter] of node.params.entries()) {
+                if (parameter.type !== 'AssignmentPattern' || parameter.left.type !== 'Identifier') continue;
+                const value = parameter.right;
+                if (
+                    parameter.left.name === 'environment' &&
+                    ((name === 'captureOfficialServerEnvironment' && index === 0) ||
+                        (name === 'buildOfficialLaunchArguments' && index === 1)) &&
+                    value.type === 'MemberExpression' &&
+                    !value.computed &&
+                    value.object.type === 'Identifier' &&
+                    value.object.name === 'process' &&
+                    propertyName(value.property) === 'env'
+                )
+                    reviewedAmbient.add(value.object);
+                if (
+                    name === 'buildOfficialLaunchArguments' &&
+                    index === 3 &&
+                    parameter.left.name === 'windowsEnvironment' &&
+                    value.type === 'BinaryExpression' &&
+                    value.operator === '===' &&
+                    value.left.type === 'MemberExpression' &&
+                    !value.left.computed &&
+                    value.left.object.type === 'Identifier' &&
+                    value.left.object.name === 'process' &&
+                    propertyName(value.left.property) === 'platform' &&
+                    value.right.type === 'StringLiteral' &&
+                    value.right.value === 'win32'
+                )
+                    reviewedAmbient.add(value.left.object);
+            }
+        }
         if (
             (core || admission) &&
             node.type === 'MemberExpression' &&
@@ -344,9 +399,13 @@ export function validateRuntimeSource(file: string, source: string) {
     const pure = domain || layer === 'shared' || gateway;
     const entry = file === 'src/interface/app-bootstrap.ts';
     const ownedTerminations = file === 'src/adapters/mcp-bridge.ts' ? ownedOfficialTermination(ast) : new Set<Node>();
-    function dependency(specifier: unknown, typeOnly = false) {
+    function dependency(specifier: unknown, typeOnly = false, declaration?: Node) {
         if (typeof specifier !== 'string') {
             errors.push(`${file}: computed module dependencies are prohibited.`);
+            return;
+        }
+        if (specifier.startsWith('.') && !specifier.endsWith('.ts')) {
+            errors.push(`${file}: relative source dependencies must use an explicit .ts extension.`);
             return;
         }
         const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
@@ -376,15 +435,107 @@ export function validateRuntimeSource(file: string, source: string) {
             resolved === 'src/gateway/connections/managed-connection.ts' ||
             resolved === 'src/gateway/connections/start-admission.ts' ||
             resolved === 'src/gateway/connections/connection-view.ts';
+        const mutableTarget = resolved === 'src/gateway/targets/target-lifecycle.ts';
+        if (targetLifecycle || mutableTarget) {
+            const capabilities: Record<string, { values: readonly string[]; types: readonly string[] }> =
+                targetLifecycle
+                    ? {
+                          'node:crypto': { values: ['randomUUID'], types: [] },
+                          '../../adapters/fixture-diagnostics.ts': { values: ['emitFixtureEvent'], types: [] },
+                          '../../domains/control-contract.ts': {
+                              values: [],
+                              types: [
+                                  'ControlContext',
+                                  'Disposition',
+                                  'LaunchContext',
+                                  'LaunchOptions',
+                                  'TargetStatus',
+                              ],
+                          },
+                          '../connections/resource-owner.ts': {
+                              values: ['createResourceOwner'],
+                              types: ['ResourceOwner'],
+                          },
+                          './model/target-contract.ts': { values: ['RetainedTargetError'], types: ['ManagedTarget'] },
+                          '../../shared/errors.ts': {
+                              values: ['DetailedError', 'errorCode', 'errorDetails', 'errorMessage'],
+                              types: [],
+                          },
+                      }
+                    : core
+                      ? { './targets/target-lifecycle.ts': { values: [], types: ['TargetLifecycleHost'] } }
+                      : registry
+                        ? { './targets/target-lifecycle.ts': { values: [], types: ['TargetExitEvent'] } }
+                        : managed
+                          ? {
+                                '../targets/target-lifecycle.ts': {
+                                    values: [],
+                                    types: ['createTargetLifecycle', 'TargetLifecycleHost', 'TargetLifecycleRouter'],
+                                },
+                            }
+                          : admission
+                            ? {
+                                  '../targets/target-lifecycle.ts': {
+                                      values: ['createTargetLifecycle'],
+                                      types: ['TargetLifecycleHost'],
+                                  },
+                              }
+                            : {};
+            const permitted = Object.hasOwn(capabilities, specifier) ? capabilities[specifier] : undefined;
+            const exactBindings =
+                permitted &&
+                declaration?.type === 'ImportDeclaration' &&
+                declaration.specifiers.length > 0 &&
+                declaration.specifiers.every((binding) => {
+                    if (binding.type !== 'ImportSpecifier' || binding.imported.type !== 'Identifier') return false;
+                    const name = binding.imported.name;
+                    const erased = declaration.importKind === 'type' || binding.importKind === 'type';
+                    return binding.local.name === name && (erased ? permitted.types : permitted.values).includes(name);
+                });
+            if (!exactBindings) errors.push(`${file}: unapproved target lifecycle dependency or binding.`);
+        }
         if (pure && !gatewayService && mutableGateway)
             errors.push(`${file}: pure owners cannot depend on mutable Gateway services.`);
         if (layer === 'adapters' && mutableGateway)
             errors.push(`${file}: adapters cannot depend on mutable Gateway services.`);
-        if (pure && !connectionOwner && !gatewayService && mutableConnection)
+        if (pure && !connectionOwner && !gatewayService && !targetLifecycle && mutableConnection)
             errors.push(`${file}: pure owners cannot depend on mutable connection owners.`);
         if (layer === 'adapters' && mutableConnection)
             errors.push(`${file}: adapters cannot depend on mutable connection owners.`);
-        if (gatewayService) {
+        if (
+            officialPackageFiles &&
+            ![
+                'node:crypto',
+                'node:fs/promises',
+                'node:path',
+                './release-evidence.ts',
+                '../../adapters/file-evidence.ts',
+            ].includes(specifier)
+        )
+            errors.push(`${file}: unapproved Official package-file proof dependency.`);
+        if (
+            officialLaunch &&
+            ![
+                'node:path',
+                './options.ts',
+                './release-evidence.ts',
+                './package-files.ts',
+                '../../shared/errors.ts',
+            ].includes(specifier)
+        )
+            errors.push(`${file}: unapproved Official launch-input dependency.`);
+        if (
+            pure &&
+            !managed &&
+            !admission &&
+            !connectionView &&
+            !officialLaunch &&
+            resolved === 'src/gateway/official/server-launch.ts'
+        )
+            errors.push(`${file}: pure owners cannot depend on Official launch inputs.`);
+        if (pure && !officialPackageFiles && !officialLaunch && resolved === 'src/gateway/official/package-files.ts')
+            errors.push(`${file}: pure owners cannot depend on Official package files.`);
+        if (gatewayService && !mutableTarget) {
             const permittedValue = (
                 core
                     ? [
@@ -403,7 +554,6 @@ export function validateRuntimeSource(file: string, source: string) {
                     : managed
                       ? [
                             'node:crypto',
-                            '../../adapters/official-server.ts',
                             '../../adapters/port-reservation.ts',
                             '../../adapters/target-host.ts',
                             '../../application/client-context.ts',
@@ -412,6 +562,7 @@ export function validateRuntimeSource(file: string, source: string) {
                             '../../domains/request-failure.ts',
                             '../../shared/errors.ts',
                             '../diagnostics.ts',
+                            '../official/server-launch.ts',
                             './connection-view.ts',
                             './start-admission.ts',
                         ]
@@ -422,35 +573,31 @@ export function validateRuntimeSource(file: string, source: string) {
                               'node:path',
                               '../../adapters/fixture-diagnostics.ts',
                               '../../adapters/mcp-bridge.ts',
-                              '../../adapters/official-server.ts',
                               '../../application/client-context.ts',
-                              '../../application/target-controller.ts',
                               '../../domains/control-contract.ts',
                               '../../shared/constants.ts',
                               '../../shared/errors.ts',
+                              '../official/server-launch.ts',
                               '../targets/model/isolation.ts',
                               '../targets/model/launch-command.ts',
                               './directory-lease.ts',
                               './workspace-policy.ts',
                           ]
                         : connectionView
-                          ? ['../../adapters/official-server.ts', '../../domains/control-contract.ts']
-                          : [
-                                './connections/resource-owner.ts',
-                                '../adapters/fixture-diagnostics.ts',
-                                '../domains/control-contract.ts',
-                                '../shared/errors.ts',
-                            ]
+                          ? ['../../domains/control-contract.ts', '../official/server-launch.ts']
+                          : registry
+                            ? [
+                                  './connections/resource-owner.ts',
+                                  '../adapters/fixture-diagnostics.ts',
+                                  '../domains/control-contract.ts',
+                                  '../shared/errors.ts',
+                              ]
+                            : []
             ).includes(specifier);
             const permittedType =
                 typeOnly &&
                 (core
-                    ? [
-                          '@modelcontextprotocol/client',
-                          '../application/target-controller.ts',
-                          '../domains/control-contract.ts',
-                          '../shared/client-context.ts',
-                      ]
+                    ? ['@modelcontextprotocol/client', '../domains/control-contract.ts', '../shared/client-context.ts']
                     : managed
                       ? [
                             '@modelcontextprotocol/client',
@@ -458,7 +605,6 @@ export function validateRuntimeSource(file: string, source: string) {
                             '../../adapters/data-directory.ts',
                             '../../adapters/mcp-bridge.ts',
                             '../../adapters/tool-catalog.ts',
-                            '../../application/target-controller.ts',
                             '../../application/registrations.ts',
                             '../registry.ts',
                             './resource-owner.ts',
@@ -479,14 +625,15 @@ export function validateRuntimeSource(file: string, source: string) {
                           ]
                         : connectionView
                           ? ['../../adapters/tool-catalog.ts', '../registry.ts', './managed-connection.ts']
-                          : [
-                                './connections/managed-connection.ts',
-                                './connections/directory-lease.ts',
-                                '../application/registrations.ts',
-                                '../application/mcp-lifecycle.ts',
-                                '../application/target-controller.ts',
-                                '../shared/client-context.ts',
-                            ]
+                          : registry
+                            ? [
+                                  './connections/managed-connection.ts',
+                                  './connections/directory-lease.ts',
+                                  '../application/registrations.ts',
+                                  '../application/mcp-lifecycle.ts',
+                                  '../shared/client-context.ts',
+                              ]
+                            : []
                 ).includes(specifier);
             if (!permittedValue && !permittedType) errors.push(`${file}: unapproved Core or registry dependency.`);
         }
@@ -507,6 +654,9 @@ export function validateRuntimeSource(file: string, source: string) {
             gateway &&
             !connectionOwner &&
             !gatewayService &&
+            !targetLifecycle &&
+            !officialPackageFiles &&
+            !officialLaunch &&
             (!specifier.startsWith('.') || !/^src\/(?:gateway|domains|shared)\//.test(resolved))
         )
             errors.push(`${file}: gateway may depend only on gateway, domains and shared.`);
@@ -611,7 +761,7 @@ export function validateRuntimeSource(file: string, source: string) {
                           node.specifiers.every(
                               (specifier) => specifier.type === 'ExportSpecifier' && specifier.exportKind === 'type',
                           ));
-            dependency(node.source.value, typeOnly);
+            dependency(node.source.value, typeOnly, node);
         }
         if (node.type === 'ImportExpression')
             dependency(node.source.type === 'StringLiteral' ? node.source.value : undefined);

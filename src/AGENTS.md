@@ -7,14 +7,26 @@ owns core resources and direct HTTP; host plugins are thin.
 
 Dependencies flow interface → application → domains/Gateway/shared;
 application may use explicit adapters. Adapters may consume the delivered pure gateway argument
-rules, target models and pure Official options/execution/release evidence, or its
+rules, target models and pure Official options/execution/release evidence, the
+exact complete Official package-file proof and launch-input owner, or its
 exact diagnostics clock, and never depend on
-application/interface or any mutable Gateway service.
+application/interface, any mutable Gateway service or the mutable target lifecycle.
 The pure Official owners contain no ambient defaults, package reads, live catalog
-or child/context lifetime authority. Their actual environment default capture,
-child snapshot and verified bin resolution remain in adapters/official-server.ts.
-Before editing those pure owners, read their cumulative
+or child/context lifetime authority. The exact gateway/official/server-launch.ts owns invocation-time environment/
+platform defaults, child snapshots and verified public-bin resolution; live catalog
+and child/context lifetime remain in adapters.
+Before editing these Official owners, read their cumulative
 [Official instructions](gateway/official/AGENTS.md).
+Only gateway/official/package-files.ts owns complete filesystem package verification;
+its exact dependencies are node:crypto, node:fs/promises, node:path,
+./release-evidence.ts and ../../adapters/file-evidence.ts. It gains no ambient
+process/environment/clock/network authority. Pure owners, including erased syntax,
+cannot depend on that effectful owner except the exact server-launch.ts consumer;
+unknown Official siblings remain pure. Launch capabilities are limited by the
+cumulative Official instructions, including erased syntax. Core, registry,
+pure owners, package-files and other connection roles cannot acquire launch authority.
+The exact managed connection, start admission and connection view consumers
+use server-launch.ts through their reviewed relative edges.
 Pure Gateway rules may depend only on gateway/domains/shared through relative
 imports; domains/shared and pure Gateway owners must not import the clock,
 including through erased syntax. Domains may additionally consume only the exact
@@ -36,30 +48,30 @@ Only gateway/core.ts owns registration/registry/catalog composition and trusted
 construction cleanup. Its value capabilities are crypto, the existing cdp-router,
 chrome-profile, data-directory, mcp-bridge and tool-catalog adapters, application
 client-context/registrations, shared errors and the registry/managed factory.
-SDK Tool, ControllerHost, request/diagnostic/client-context and the original moved
+SDK Tool, TargetLifecycleHost, request/diagnostic/client-context and the original moved
 RuntimeRouter are TYPE-only. Its sole ambient capability is the supplied-now
 fallback Date.now reference, never a clock call.
 Only gateway/connections/managed-connection.ts owns managed state, generation
 pointers, handler/lifecycle, actual execution/context, authorization and transfer.
-Its exact value providers are crypto, official-server, port-reservation, target-host,
+Its exact value providers are crypto, official/server-launch, port-reservation, target-host,
 application client-context/mcp-lifecycle, domain control-contract/request-failure,
 shared/errors, diagnostics and the start-admission/connection-view factories.
-SDK client, chrome-profile/data-directory/mcp-bridge/tool-catalog, target-controller,
-registrations, registry, resource-owner, directory-lease, workspace-policy and shared
+SDK client, chrome-profile/data-directory/mcp-bridge/tool-catalog, the target lifecycle
+factory/host/router, registrations, registry, resource-owner, directory-lease, workspace-policy and shared
 client-context are TYPE-only. Its synchronous factory creates one original
 lifecycle/port/host composition, without acquisition or catalog reads.
 Only gateway/connections/start-admission.ts owns the whole start transaction,
 persistent callbacks, rollback and final directory retry. Its value providers are
-crypto/os/path, fixture-diagnostics, mcp-bridge, official-server, application
-client-context/target-controller, domain control-contract, shared constants/errors,
-target isolation/launch, directory-lease and workspace-policy. Chrome-profile,
+crypto/os/path, fixture-diagnostics, mcp-bridge, official/server-launch, application
+client-context, domain control-contract, shared constants/errors, target isolation/launch,
+createTargetLifecycle, directory-lease and workspace-policy. TargetLifecycleHost, chrome-profile,
 data-directory, lifecycle/registrations, registry, original managed types,
 resource-owner and connection-view are TYPE-only. It alone retains the existing
 process.env spread and process.platform comparisons. Pass the same lifecycle at
 start invocation; never add a getter, second instance, wrapper, await or snapshot.
 Only gateway/connections/connection-view.ts owns live status, selected configuration,
 guarded post-control catalog projection and administration inventory. Its value
-providers are only official-server and domain control-contract; tool-catalog,
+providers are only official/server-launch and domain control-contract. Tool-catalog,
 registry and original managed types are TYPE-only. Preserve the live bounded
 reader, original branches/order and invocation-time ambient defaults for unselected
 tool discovery. It gains no direct ambient, mutation, lifecycle or I/O capability.
@@ -76,13 +88,23 @@ Only gateway/registry.ts owns route membership and the retained cleanup ledger:
 its value dependencies are connections/resource-owner, adapters/fixture-diagnostics,
 domains/control-contract and shared/errors. TYPE-only dependencies are the original
 managed owner ManagedConnection, connections/directory-lease, shared/client-context and the
-three exact application registrations/mcp-lifecycle/target-controller ports. Its
+two exact application registrations/mcp-lifecycle ports and the target lifecycle
+TargetExitEvent TYPE. Its
 sole ambient capability is the existing direct process.stderr.write diagnostic.
 None of these service roles grants permissions to siblings, pure owners, adapters or unknown
 Gateway files. Type imports, reexports, import() and require obey the same exact
 role boundaries. Before editing Core, registry, managed-connection, start-admission or
 connection-view, read the cumulative
 [Gateway instructions](gateway/AGENTS.md) and their application lifecycle trigger.
+The exact gateway/targets/target-lifecycle.ts owns its complete existing target
+attachment, admission, health, normal-Close reuse, rollback, actual-exit and
+retirement transaction. Its named UUID, diagnostic producer, resource-owner,
+target/error values and control/resource/target TYPES are enumerated in the
+[target instructions](gateway/targets/AGENTS.md). Only its existing direct
+new Date().toISOString() exit timestamp is permitted. Pure owners and adapters
+cannot depend on this mutable lifecycle, including through erased syntax.
+Before editing it, read those target instructions and the canonical
+[application lifecycle obligations](application/AGENTS.md) cumulatively.
 Diagnostic value/callback types remain in the current domain contract; its
 complete relocation and other symbol/caller changes remain future work.
 The existing semver/functions/parse.js exception remains limited to
@@ -91,10 +113,14 @@ The delivered `host-plugins/` slice is also pure: it depends only on its own
 domain, existing domains and shared contracts. Application and adapters consume
 its payload proof directly; the remaining technical-layer owners stay in place.
 
-Only interface/app-bootstrap.ts executes directly. It synchronously redirects
-Chromium userData/sessionData to separate per-process temporary directories before
-any await or controlled main import. App main owns the OS-user lease, selected
-configuration and cleanup-gated normal exit. Never call Electron's singleton API.
+Only interface/app-bootstrap.ts executes directly. Startup step zero rejects
+platform/architecture evidence outside Windows x64/arm64 before App paths, scratch
+storage, privileged schemes or controlled main import. Supported startup then
+synchronously redirects Chromium userData/sessionData to separate per-process
+temporary directories before any await or controlled main import. Direct App main
+invocation repeats the pure support decision before native or resource acquisition.
+App main owns the OS-user lease, selected configuration and cleanup-gated normal
+exit. Never call Electron's singleton API.
 
 The official SDK HTTP adapter authenticates explicit registrationBearer on every
 owned tool request. Official _dct contains bearer, connectionId and sessionId;

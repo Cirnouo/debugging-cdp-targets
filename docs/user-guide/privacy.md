@@ -2,6 +2,9 @@
 
 ## Runtime state and network access
 
+The App and its managed targets are Windows-only; see
+[current applicability and delivery limits](compatibility.md#current-app-delivery-limits).
+
 Target identity, launch settings and operation events are held in memory.
 The App persists only validated configuration; its Chromium caches use separate
 per-process temporary roots. Registration bearers are returned once and never
@@ -27,9 +30,9 @@ isolation directory. It never selects the Chrome preset.
 
 Chrome's old location remains available only as an explicit isolation choice:
 
-| Storage | Windows | Linux/macOS |
-| --- | --- | --- |
-| Explicit Chrome preset isolation directory | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` | `~/.cache/chrome-devtools-mcp/chrome-profile` |
+| Storage | Windows |
+| --- | --- |
+| Explicit Chrome preset isolation directory | `%USERPROFILE%\.cache\chrome-devtools-mcp\chrome-profile` |
 
 The Agent resolves the actual absolute home and directory. Other choices may
 delegate a suitable location, reuse an existing empty/nonempty directory or create

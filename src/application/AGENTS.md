@@ -4,7 +4,8 @@ Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
 These complete lifecycle obligations also govern gateway/core.ts and
-gateway/registry.ts, gateway/connections/managed-connection.ts,
+gateway/registry.ts, gateway/targets/target-lifecycle.ts,
+gateway/connections/managed-connection.ts,
 gateway/connections/start-admission.ts and gateway/connections/connection-view.ts through their
 explicit before-editing instruction trigger.
 
@@ -18,7 +19,7 @@ actual-exit cleanup bypasses that admission gate and cannot wait behind blocked
 startup or official requests. Gate forwarding and cancel dependent work first,
 attempt disposal of every resource, then remove the exited connection/session.
 
-Each new target has an independent controller, router, upstream and connection
+Each new target has an independent lifecycle, router, upstream and connection
 UUID. Keep all connections in a gateway-local registry without a fixed limit or
 active-target fallback. Scope admission, exit subscriptions and
 cancellation per connection/session. Failed resource disposal belongs to an

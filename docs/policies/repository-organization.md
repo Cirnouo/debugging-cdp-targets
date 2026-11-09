@@ -27,14 +27,15 @@ gateway/connections/start-admission.ts owns the whole start, persistent callback
 rollback and final directory retry; connection-view.ts owns live status/configuration,
 guarded catalog projection and admin inventory. gateway/registry.ts owns route
 membership and retained cleanup/retry joins, including all seven collections and
-definitive cleanup barriers. It uses the original managed-owner ManagedConnection TYPE and
-only the three reviewed application TYPE ports, without a runtime cycle or copied
-capability contract. Core and managed ownership use only their exact reviewed value/TYPE ports;
-registry and managed have an erased-only type cycle, with no runtime back edge.
-Target-controller and adapters retain actual acquisition/exit and I/O. Admission
-receives the same lifecycle at invocation; both new factories execute no providers
-at construction. View preserves live reads and current unselected adapter defaults
-at the original guarded branch. No new await, wrapper, cache or snapshot is introduced.
+definitive cleanup barriers. It uses the original managed-owner ManagedConnection
+TYPE, the two reviewed application TYPE ports and the target lifecycle's
+TargetExitEvent TYPE. Registry and managed connection share only erased edges.
+The complete `gateway/targets/target-lifecycle.ts` owns attachment, admission,
+health, normal-Close reuse, rollback, actual-exit callbacks and retirement through
+supplied capabilities. Adapters retain actual acquisition, native observation and
+I/O. Start admission receives the same lifecycle at invocation. Admission and view
+execute no providers at construction. View preserves live reads and invokes
+unselected Official defaults at the original guarded branch.
 The pure `gateway/connections/workspace-policy.ts` owns the complete supplied
 workspace calculation; start admission retains its actual pre-roots temporary-directory
 capture and invokes it with three explicit inputs at the original construction point.
@@ -49,12 +50,21 @@ current target host. Only `gateway/diagnostics.ts` reads its existing clock
 and depends on the pure current `domains/control-contract.ts` value/callback types.
 The complete lifecycle-contract move remains pending with its App UI/CDP domain
 consumers. `gateway/official/` owns supplied options/recipes/argument composition,
-wire-terminal values and strict release/manifest evidence. Existing adapters retain
-invocation-time ambient defaults, child environment/bin verification, complete
-package-file reads, actual catalog publication and upstream disposal. The managed owner and
-bridge keep their original default/capture/await ordering; pure extraction grants
-no new ambient or mutable authority. The mixed package/TEMP suite and remaining
-Official/MCP transactions await their complete content cuts. Existing layer,
+wire-terminal values and strict release/manifest evidence. The exact
+`gateway/official/package-files.ts` owns the complete filesystem proof with only
+crypto, filesystem, path, release-evidence and regular-file-reader dependencies;
+pure siblings and unknown Gateway files cannot import it. The exact
+`gateway/official/server-launch.ts` owns the three complete invocation-time default,
+child environment capture and verified public-bin functions, consuming package
+proof under its five-dependency role. Its only ambient reads are the two named
+environment default RHS expressions and the argument builder's Windows platform
+default. Pure or unknown owners, Core, registry and package-file proof cannot acquire
+launch authority. Managed connection, start admission, connection view and the
+actual adapters use their exact launch edges, preserving the original
+default/capture/await ordering. Existing adapters retain actual catalog
+publication, child/wire and upstream disposal. The package/input/TEMP tests now have separate runtime, security and quality
+owners with an explicit seven-title alias-child oracle. Remaining Official/MCP
+transactions await their complete content cuts. Existing layer,
 pure-model and I/O rules remain in force for all current owners.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit

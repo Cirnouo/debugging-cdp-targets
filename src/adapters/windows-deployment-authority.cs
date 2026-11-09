@@ -106,3 +106,181 @@ public static class DctDeploymentAuthority
         }
     }
 }
+
+// Closed deployment wire format. This source contains no mutating dispatch or setter.
+public static class DctDeploymentWire
+{
+    private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
+    public static byte[] Exact(BinaryReader input, int length)
+    {
+        if (length < 0) throw new IOException("Invalid deployment length.");
+        byte[] bytes = input.ReadBytes(length);
+        if (bytes.Length != length) throw new EndOfStreamException("Short deployment input.");
+        return bytes;
+    }
+    public static string Text(BinaryReader input, int maximum)
+    {
+        uint length = input.ReadUInt32();
+        if (length > maximum) throw new IOException("Deployment field exceeds bound.");
+        return Utf8.GetString(Exact(input, (int)length));
+    }
+    public static void Text(BinaryWriter output, string value, int maximum)
+    {
+        byte[] bytes = Utf8.GetBytes(value);
+        if (bytes.Length > maximum) throw new IOException("Deployment field exceeds bound.");
+        output.Write((uint)bytes.Length); output.Write(bytes);
+    }
+    public static void Magic(BinaryReader input, string expected)
+    {
+        if (!String.Equals(Encoding.ASCII.GetString(Exact(input, 8)), expected, StringComparison.Ordinal))
+            throw new IOException("Invalid deployment magic.");
+    }
+    private static MemoryStream Bounded(Stream stream)
+    {
+        MemoryStream owned = new MemoryStream();
+        byte[] chunk = new byte[65536];
+        int used;
+        while ((used = stream.Read(chunk, 0, chunk.Length)) != 0)
+        {
+            if (owned.Length + used > 1048576) throw new IOException("Deployment request exceeds bound.");
+            owned.Write(chunk, 0, used);
+        }
+        owned.Position = 0;
+        return owned;
+    }
+    public static void PathName(string name)
+    {
+        if (name.Length > 32768 || name.Length < 3 || !((name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z')) || name[1] != ':' || name[2] != '\\' ||
+            name.IndexOfAny(new char[] { '\0', '\r', '\n', '/' }) >= 0 || name.IndexOf(':', 2) >= 0 ||
+            !String.Equals(Path.GetFullPath(name), name, StringComparison.Ordinal) ||
+            (name.Length > 3 && name.EndsWith("\\", StringComparison.Ordinal)) ||
+            name.Substring(3).Split('\\').Length > 64) throw new IOException("Invalid deployment path.");
+        // Exact raw facts framing: seven prefixes/account+owner/four IDs, booleans,
+        // filesystem, volume fields, DACL count and 128 bounded SID/mask/flags/type entries.
+        const int overhead = 7 * 4 + 2 * 184 + 4 * 20 + 3 + 4 + 32 + 2 * 4 + 4 + 128 * (4 + 184 + 3 * 4);
+        if (overhead + Utf8.GetByteCount(name) > 65536) throw new IOException("Native reply record cannot fit.");
+        if (name.Length > 3) foreach (string part in name.Substring(3).Split('\\'))
+        {
+            if (part.Length == 0 || part.EndsWith(".", StringComparison.Ordinal) || part.EndsWith(" ", StringComparison.Ordinal) ||
+                part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new IOException("Ambiguous Windows component.");
+            string stem = part.Split('.')[0].ToUpperInvariant();
+            if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
+                (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal)) && stem[3] >= '1' && stem[3] <= '9'))
+                throw new IOException("Reserved Windows component.");
+        }
+    }
+    public static string[] Query(Stream stream)
+    {
+        // Complete bounded request and exact EOF precede any native observation.
+        MemoryStream owned = Bounded(stream);
+        BinaryReader input = new BinaryReader(owned, Utf8);
+        Magic(input, "DCTQRY1\n");
+        uint count = input.ReadUInt32();
+        if (count < 1 || count > 128) throw new IOException("Invalid deployment query count.");
+        List<string> paths = new List<string>();
+        HashSet<string> unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (uint index = 0; index < count; index++)
+        {
+            string name = Text(input, 1048560);
+            PathName(name);
+            if (!unique.Add(name)) throw new IOException("Duplicate deployment query path.");
+            paths.Add(name);
+        }
+        if (owned.Position != owned.Length) throw new IOException("Trailing deployment query.");
+        return paths.ToArray();
+    }
+    private static void Identity(string value, bool nonzero)
+    {
+        ulong parsed;
+        if (!UInt64.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out parsed) ||
+            parsed.ToString(CultureInfo.InvariantCulture) != value || (nonzero && parsed == 0))
+            throw new IOException("Invalid deployment unsigned identity.");
+    }
+    private static void ChildName(string root, string relative)
+    {
+        string child = Path.Combine(root, relative);
+        PathName(child);
+        if (relative.Length == 0 || Utf8.GetByteCount(relative) > 8192 ||
+            !String.Equals(child, root + "\\" + relative, StringComparison.Ordinal) ||
+            !child.StartsWith(root + "\\", StringComparison.Ordinal)) throw new IOException("Invalid deployment child.");
+    }
+    public static string[] Mutation(Stream stream)
+    {
+        MemoryStream owned = Bounded(stream);
+        BinaryReader input = new BinaryReader(owned, Utf8);
+        Magic(input, "DCTMUT1\n");
+        if (input.ReadUInt32() != 8) throw new IOException("Invalid deployment mutation count.");
+        int[] maxima = new int[] { 16, 98304, 8192, 8192, 20, 20, 20, 20 };
+        string[] fields = new string[8];
+        for (int index = 0; index < fields.Length; index++)
+        {
+            fields[index] = Text(input, maxima[index]);
+            if (fields[index].IndexOfAny(new char[] { '\0', '\r', '\n' }) >= 0) throw new IOException("Invalid deployment mutation field.");
+        }
+        if (owned.Position != owned.Length) throw new IOException("Trailing deployment mutation.");
+        string operation = fields[0], root = fields[1];
+        PathName(root);
+        if (root.Length <= 3) throw new IOException("Mutation requires a child root.");
+        Identity(fields[4], false); Identity(fields[7], true);
+        if (operation == "create-root")
+        {
+            if (fields[2] != "" || fields[3] != "" || fields[5] != "" || fields[6] != "") throw new IOException("Invalid create-root placeholders.");
+        }
+        else if (operation == "create-directory" || operation == "publish")
+        {
+            ChildName(root, fields[2]); Identity(fields[5], true);
+            if (operation == "publish") { ChildName(root, fields[3]); Identity(fields[6], true); }
+            else if (fields[3] != "" || fields[6] != "") throw new IOException("Invalid directory placeholders.");
+        }
+        else throw new IOException("Unknown deployment mutation.");
+        return fields;
+    }
+    private static string Value(Dictionary<string, object> value, string key)
+    { return Convert.ToString(value[key], CultureInfo.InvariantCulture); }
+    public static void Facts(Stream stream, Dictionary<string, object>[] facts)
+    {
+        if (facts.Length < 1 || facts.Length > 128) throw new IOException("Invalid deployment facts count.");
+        MemoryStream owned = new MemoryStream();
+        BinaryWriter output = new BinaryWriter(owned, Utf8);
+        output.Write(Encoding.ASCII.GetBytes("DCTQRS1\n")); output.Write((uint)facts.Length);
+        foreach (Dictionary<string, object> value in facts)
+        {
+            long start = owned.Position;
+            Text(output, Value(value, "account"), 184); Text(output, Value(value, "owner"), 184);
+            Text(output, Value(value, "path"), 65536);
+            foreach (string key in new string[] { "device", "inode", "links", "size" }) Text(output, Value(value, key), 20);
+            output.Write((bool)value["directory"]); output.Write((bool)value["protected"]); output.Write((bool)value["reparse"]);
+            Text(output, Value(value, "filesystem"), 32); output.Write((uint)value["volumeFlags"]); output.Write((uint)value["driveType"]);
+            object[] entries = (object[])value["dacl"];
+            if (entries.Length > 128) throw new IOException("Deployment DACL exceeds bound.");
+            output.Write((uint)entries.Length);
+            foreach (object entry in entries)
+            {
+                Dictionary<string, object> ace = (Dictionary<string, object>)entry;
+                Text(output, Value(ace, "sid"), 184);
+                output.Write(UInt32.Parse(Value(ace, "mask"), CultureInfo.InvariantCulture));
+                output.Write((uint)(int)ace["flags"]); output.Write((uint)(int)ace["type"]);
+            }
+            if (owned.Position - start > 65536) throw new IOException("Deployment native record exceeds bound.");
+        }
+        if (owned.Length > 16777216) throw new IOException("Deployment native reply exceeds bound.");
+        output.Flush(); owned.Position = 0; owned.CopyTo(stream); stream.Flush();
+    }
+}
+
+public static class DctDeploymentQueryProgram
+{
+    public static int Main(string[] arguments)
+    {
+        try
+        {
+            if (arguments.Length != 0) throw new IOException("Query accepts no commands.");
+            string[] paths = DctDeploymentWire.Query(Console.OpenStandardInput());
+            List<Dictionary<string, object>> facts = new List<Dictionary<string, object>>();
+            foreach (string name in paths) facts.Add(DctDeploymentAuthority.Inspect(name));
+            DctDeploymentWire.Facts(Console.OpenStandardOutput(), facts.ToArray());
+            return 0;
+        }
+        catch (Exception error) { Console.Error.WriteLine(error.GetType().Name + ": " + error.Message); return 1; }
+    }
+}

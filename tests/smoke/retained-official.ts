@@ -8,9 +8,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { createOfficialConnection, type OfficialConnection } from '../../src/adapters/mcp-bridge.ts';
-import { verifyOfficialPackage } from '../../src/adapters/official-package.ts';
 import { createTargetHost } from '../../src/adapters/target-host.ts';
 import { createGatewayCore } from '../../src/gateway/core.ts';
+import { verifyOfficialPackageFiles } from '../../src/gateway/official/package-files.ts';
 import type { ManagedTarget } from '../../src/gateway/targets/model/target-contract.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 import { OFFICIAL_RELEASE } from '../../tooling/official-release.ts';
@@ -30,7 +30,7 @@ assert.ok(major === 24 && minor !== undefined && minor >= 21 && !process.version
 const officialDirectory = await realpath(
     fileURLToPath(new URL(`../../node_modules/${OFFICIAL_RELEASE.name}/`, import.meta.url)),
 );
-await verifyOfficialPackage(officialDirectory, OFFICIAL_RELEASE, { pnpmInstalled: true });
+await verifyOfficialPackageFiles(officialDirectory, OFFICIAL_RELEASE, { pnpmInstalled: true });
 const officialRuntime = Object.freeze({
     nodeExecutable: process.execPath,
     bin: path.join(officialDirectory, OFFICIAL_RELEASE.bin),

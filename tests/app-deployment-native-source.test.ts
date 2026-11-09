@@ -187,3 +187,26 @@ test('macOS actual volume mask requires every result field and rejects unknown o
     for (const volumeMask of [0x00120000, 0x00104000, 0x00024000, 0x00124001, 0x80124000])
         await assert.rejects(candidate({ volumeMask }), /Deployment native evidence is unavailable/);
 });
+
+test('finite Windows copy source preserves pinned change-time ABI, closed file-only dispatch and checked close boundaries', async () => {
+    const source = await readFile(new URL('../src/adapters/windows-deployment-create.cs', import.meta.url), 'utf8');
+    assert.match(source, /public static void Copy\(Stream/);
+    assert.match(source, /FinishCopyStreams\(FileStream stream, SHA256 hash, Exception primary\)/);
+    assert.doesNotMatch(source, /using \(FileStream stream = CopyStream/);
+    assert.match(source, /LayoutKind\.Explicit, Size = 40/);
+    assert.match(source, /\[FieldOffset\(16\)\] public long lastWrite/);
+    assert.match(source, /\[FieldOffset\(24\)\] public long change/);
+    assert.match(source, /GetFileInformationByHandleEx\(handle, 0,/);
+    assert.match(source, /lastWrite == after\.lastWrite && before\.change == after\.change/);
+    assert.match(source, /if \(!CloseHandle\(raw\)\)/);
+    assert.match(source, /CreateCopyFileW\(name, 0x40020080, 1, ref attributes, 1,/);
+    assert.match(source, /arguments\[0\] == "copy"/);
+    assert.match(
+        source,
+        /DctDeploymentCreate\.Copy\(Console\.OpenStandardInput\(\), Console\.OpenStandardOutput\(\)\)/,
+    );
+    assert.doesNotMatch(
+        source,
+        /Json|installation\.json|state\.json|selectedBuildId|Process\.Start|SetNamedSecurityInfo/,
+    );
+});

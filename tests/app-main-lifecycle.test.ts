@@ -11,6 +11,7 @@ import { isRecord } from '../src/shared/errors.ts';
 
 type State = {
     mode: string;
+    diagnostics: string[];
     catalogFails: boolean;
     cleanupFails: boolean;
     nativeEntered: Promise<void>;
@@ -37,6 +38,9 @@ type State = {
         hostStarts: number;
         settingsWrites: number;
         relaunches: number;
+        reads: number;
+        nativeLoads: number;
+        windows: number;
     };
 };
 type Harness = { state: State; run(): Promise<void> };
@@ -45,7 +49,7 @@ function harness(value: unknown): asserts value is Harness {
 }
 
 // Electron, storage and process adapters are I/O fixtures. Core construction/cleanup is the maintained real core.
-async function component() {
+async function component(native = { platform: 'win32', architecture: 'x64' }) {
     const root = fileURLToPath(new URL('..', import.meta.url));
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-app-main-component-'));
     const evidence = await readFile(path.join(root, 'tooling/app-native-release.json'), 'utf8');
@@ -53,8 +57,8 @@ async function component() {
 import { EventEmitter } from 'node:events';
 function deferred(){let release;const promise=new Promise(resolve=>{release=resolve});return{promise,release}}
 const native=deferred(),nativeEntered=deferred(),router=deferred(),routerEntered=deferred(),hosts=deferred(),settings=deferred();
-export const state={mode:'router-pending',catalogFails:false,cleanupFails:false,
- counts:{exits:0,locks:0,data:0,http:0,closes:0,windowDestroyed:0,activationClosed:0,cacheCleaned:0,unavailableOwnerDialogs:0,hostStarts:0,settingsWrites:0,relaunches:0},
+export const state={mode:'router-pending',diagnostics:[],catalogFails:false,cleanupFails:false,
+ counts:{exits:0,locks:0,data:0,http:0,closes:0,windowDestroyed:0,activationClosed:0,cacheCleaned:0,unavailableOwnerDialogs:0,hostStarts:0,settingsWrites:0,relaunches:0,reads:0,nativeLoads:0,windows:0},
  nativeEntered:nativeEntered.promise,routerEntered:routerEntered.promise,
  releaseNative:()=>native.release(),releaseRouter:()=>router.release(),releaseHosts:()=>hosts.release(),releaseSettings:()=>settings.release(),hosts,settings,
  configureManagement:()=>state.management.configure({...state.management.inspect().configuration.desired,port:28761}),
@@ -83,17 +87,22 @@ loadCatalog:async()=>{if(state.catalogFails)throw Error('Catalog failed');return
         'app-test-state': stateModule,
         '../gateway/core.ts': coreModule,
         '../application/app-host-management.ts': `import{state}from'app-test-state';export function createAppHostManagement(){return{snapshot:()=>[],assertConfigurable(){},configure(){},run:async()=>{state.counts.hostStarts++;if(state.counts.http===0)throw Error('Host sync before bind');if(state.mode==='host-pending')await state.hosts.promise},close:async()=>{if(state.mode==='host-pending')await state.hosts.promise}}}`,
-        '../adapters/app-native.ts': `import{state}from'app-test-state';export async function loadAppAdvisoryLock(){state.signalNative();if(state.mode==='native-pending')await state.native.promise;return()=>true}`,
+        '../adapters/app-native.ts': `import{state}from'app-test-state';export async function loadAppAdvisoryLock(){state.counts.nativeLoads++;state.signalNative();if(state.mode==='native-pending')await state.native.promise;return()=>true}`,
         '../adapters/app-singleton.ts': `import{state}from'app-test-state';export function acquireAppSingleton(){state.counts.locks++;return{ownsSingleton:state.mode!=='unavailable-owner',paths:{activation:'fixture-only'}}}`,
         '../adapters/app-activation.ts': `import{state}from'app-test-state';export async function activateExistingApp(){return false}export async function listenForAppActivation(){return{close:async()=>{state.counts.activationClosed++}}}`,
         '../adapters/app-storage.ts': `import{state}from'app-test-state';export function selectAppDataDirectory(){return'fixture-only'}export async function prepareAppDataDirectory(){state.counts.data++;return'fixture-only'}`,
         '../adapters/app-configuration.ts': `import{state}from'app-test-state';export async function openAppConfiguration(){const config={schemaVersion:2,port:27637,appearance:'system',hosts:{codex:{configRoot:null,executable:null,pluginRoot:null},claude:{configRoot:null,executable:null,pluginRoot:null}}};return{state:()=>({desired:config,effective:config,restartRequired:false}),save:async()=>{state.counts.settingsWrites++;if(state.mode==='settings-pending')await state.settings.promise}}}`,
         '../adapters/app-official-runtime.ts': `export async function verifyAppOfficialRuntime(){return{nodeExecutable:'fixture-only-node',bin:'fixture-only-public-bin'}}`,
-        '../adapters/file-evidence.ts': `export async function readRegularFile(file){return Buffer.from(file.endsWith('distribution.json')?JSON.stringify({schemaVersion:1,kind:'portable',platform:process.platform,architecture:process.arch}):${JSON.stringify(evidence)})}`,
+        '../adapters/file-evidence.ts': `import{state}from'app-test-state';export async function readRegularFile(file){state.counts.reads++;return Buffer.from(file.endsWith('distribution.json')?JSON.stringify({schemaVersion:1,kind:'portable',platform:process.platform,architecture:process.arch}):${JSON.stringify(evidence)})}`,
         '../adapters/mcp-http-server.ts': `import{state}from'app-test-state';export async function createMcpHttpServer(options){state.counts.http++;if(state.mode==='bind-failure')throw Error('Bind refused');state.accepting=options.accepting;return{close:async()=>{}}}`,
-        './app-window.ts': `import{state}from'app-test-state';export async function createManagementWindow(options){state.management=options;let destroyed=false;return{window:{isDestroyed:()=>destroyed,destroy(){destroyed=true;state.counts.windowDestroyed++},webContents:{reload(){}}},activate(){}}}`,
+        './app-window.ts': `import{state}from'app-test-state';export async function createManagementWindow(options){state.counts.windows++;state.management=options;let destroyed=false;return{window:{isDestroyed:()=>destroyed,destroy(){destroyed=true;state.counts.windowDestroyed++},webContents:{reload(){}}},activate(){}}}`,
     };
     try {
+        const diagnostic = path.join(directory, 'diagnostic.mjs');
+        await writeFile(
+            diagnostic,
+            `import{state}from'app-test-state';export function recordAppDiagnostic(message){state.diagnostics.push(message)}`,
+        );
         const bundled = await build({
             stdin: {
                 contents: `export{startDesktopApp}from${JSON.stringify(path.join(root, 'src/interface/app-main.ts'))};export{state}from'app-test-state';import{state}from'app-test-state';import{startDesktopApp}from${JSON.stringify(path.join(root, 'src/interface/app-main.ts'))};export const run=()=>startDesktopApp({appData:'fixture-only',chromium:{cleanup:async()=>{state.counts.cacheCleaned++}}});`,
@@ -104,6 +113,12 @@ loadCatalog:async()=>{if(state.catalogFails)throw Error('Catalog failed');return
             format: 'esm',
             target: 'node24',
             write: false,
+            define: {
+                'process.platform': JSON.stringify(native.platform),
+                'process.arch': JSON.stringify(native.architecture),
+                'process.stderr.write': 'recordAppDiagnostic',
+            },
+            inject: [diagnostic],
             banner: {
                 js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
             },
@@ -150,8 +165,49 @@ async function until(condition: () => boolean) {
     assert.ok(condition(), 'App component did not reach its bounded terminal state.');
 }
 
+test('direct App startup refuses unsupported platforms before native or owned resource acquisition', async () => {
+    for (const native of [
+        { platform: 'linux', architecture: 'x64' },
+        { platform: 'darwin', architecture: 'arm64' },
+        { platform: 'win32', architecture: 'ia32' },
+    ]) {
+        const f = await component(native);
+        try {
+            f.state.mode = 'immediate';
+            await f.run();
+            const counts = { ...f.state.counts };
+            assert.deepEqual(counts, {
+                exits: 1,
+                locks: 0,
+                data: 0,
+                http: 0,
+                closes: 0,
+                windowDestroyed: 0,
+                activationClosed: 0,
+                cacheCleaned: 0,
+                unavailableOwnerDialogs: 0,
+                hostStarts: 0,
+                settingsWrites: 0,
+                relaunches: 0,
+                reads: 0,
+                nativeLoads: 0,
+                windows: 0,
+            });
+            const diagnostic = f.state.diagnostics.join('');
+            assert.match(diagnostic, /Windows/);
+            assert.match(diagnostic, /x64/);
+            assert.match(diagnostic, /arm64/);
+            assert.ok(diagnostic.length > 0 && diagnostic.length <= 256);
+            assert.doesNotMatch(diagnostic, /fixture|dct-app-main-component|file:\/\//);
+        } finally {
+            if (f.state.counts.windows > 0) await f.state.quitManagement();
+            await f.close();
+        }
+    }
+});
+
 test('successful bind precedes independent host sync and Quit waits for owned native management settlement', async () => {
-    const f = await component();
+    const f = await component({ platform: 'win32', architecture: 'arm64' });
     try {
         f.state.mode = 'host-pending';
         await f.run();

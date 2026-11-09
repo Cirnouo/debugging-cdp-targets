@@ -1,7 +1,8 @@
 # Tooling
 
 - `app-release-inputs.json` records canonical Electron and ordinary Node archive
-  identities separately from npm signature evidence. File extraction and native
+  identities for exactly four Windows x64/arm64 archives, separately from npm
+  signature evidence. Original runtime-file/license extraction and native
   acceptance must be established for each distribution before delivery.
 - `app-native-release.json` records canonical registry tarball integrity and
   every original regular file in the native advisory-lock loading closure,
@@ -9,17 +10,47 @@
 - `distribution/build-plugin.ts` assembles thin Codex and Claude Code payloads from
   `packaging/` and root `LICENSE`, retaining complete assembly and read-only checks.
 - `build-app.ts` builds the synchronous bootstrap, main, sandboxed preload and
-  renderer, collects actual graph licenses and stages verified original native
+  renderer and collects actual graph licenses. Its read-only `--check` verifies
+  Windows x64 then arm64 bundle/input/license composition independently of the
+  runner OS, retaining installed/portable kind selection without archive extraction
+  or native staging. Static verification establishes no native acceptance.
+  Writing mode validates the actual host and stages verified original native
   archives without overwriting an existing stage. It composes the complete expected
   Windows payload from actual verified source producers, emits its canonical
   manifest, verifies the actual complete tree and returns root/selection with
   descriptive source provenance. `extract-app-zip.ps1` authenticates and inventories
   the same opened read-locked ZIP stream; unsafe paths, aliases and non-regular
-  entries refuse before extraction. Other platform source producers remain pending.
-  The exact helper/source-input inventory also includes the fixed read-only
-  Windows deployment authority C#/PowerShell and macOS JXA source. They are
-  repository-owned MIT inputs, with no new third-party runtime or notice.
-  Copying these sources does not enable deployment admission or enrollment.
+  entries refuse before extraction. Missing Node runtime or Electron license
+  evidence refuses before scratch or output creation; arm64 records still lack
+  that source proof. The generated App helper inventory retains the Windows
+  CDP/native helpers. macOS deployment JXA remains source-only pending its later
+  retirement and is excluded from both App delivery and generated provenance.
+  Windows deployment query/create C# and their fixed compiler-produced EXEs
+  belong to the contributor build lifetime in the native adapter, and are
+  excluded from generated App delivery. All remain repository-owned MIT inputs,
+  with no new third-party runtime or notice. Complete original native packages,
+  including non-Windows prebuilds and all licenses, remain unchanged in delivery.
+  Windows 11 x64 and arm64 installer/portable acceptance remains pending;
+  default App admission remains unwired and disabled. App and plugins remain
+  0.1.0 Unreleased.
+  Its separate `stageFreshDesktopInstallation` explicit contributor entry owns
+  the Windows x64 current-account source-to-protected-root transaction, two fixed
+  lease inodes, exact canonical manifest, no-replace build and state-last initial
+  publication followed by read admission. It internally invokes the real source
+  producer; caller manifests, digests and callbacks cannot replace it. All planned
+  paths and exact finite copy framing are preflighted before fresh root effects.
+  Payload creation uses one fixed copy child and two passes of each same opened
+  source file; the R1 self-manifest uses the captured producer buffer twice.
+  First source-root sampling is a consumer baseline, not a retained original
+  producer inode; same-account scratch prehistory remains a stated limitation.
+  Each of five payload checkpoints performs fresh permission sweeps before and
+  after the complete tree verifier. Child count follows the real count-and-byte
+  query packer at every boundary, plus ten fixed mutating/copy children; no
+  payload file or ancestor starts its own child. The fixed
+  mutation/query C# helpers are build-only MIT repository inputs, excluded
+  from generated App delivery and its runtime notices. Default CLI/research flat
+  staging remains the unpublished intermediate path. App/worker integration,
+  nested portable data, real native acceptance and installers remain pending.
 - `native-fixture-seal.ts` binds the test-only real-core HTTP fixture, two complete
   screenshot study subjects and original native assets to the same source inputs
   and complete App stage. `native-fixture-verification.ts` checks the closed
@@ -120,7 +151,8 @@ Generic security identities accept any legal prerelease/build. App versions are
 independent of the exact shared Skill and four peer Plugin manifest version group.
 
 Vendored notice evidence is build-only and adds no runtime dependency. For SDK
-2.2.0, every SDK input used by esbuild was independently compared with its original
+2.3.1 client/core/server and the retained Node adapter 2.1.0, every SDK input used
+by esbuild is bound to its original
 npm tarball after checking the registry SHA-512 integrity. The included source maps
 identify ajv 8.18.0, ajv-formats 3.0.1, content-type 1.0.5, fast-deep-equal 3.1.3,
 fast-uri 3.1.0 and json-schema-traverse 1.0.0. Their nonempty executable sources

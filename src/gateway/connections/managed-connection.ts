@@ -3,14 +3,12 @@ import type { CallToolResult, ListRootsResult } from '@modelcontextprotocol/clie
 import type { profileAvailable as nativeProfileAvailable } from '../../adapters/chrome-profile.ts';
 import type { DataDirectoryRegistry } from '../../adapters/data-directory.ts';
 import type { createOfficialConnection, OfficialConnection } from '../../adapters/mcp-bridge.ts';
-import { buildServerArguments } from '../../adapters/official-server.ts';
 import { createPortReservations } from '../../adapters/port-reservation.ts';
 import { createTargetHost } from '../../adapters/target-host.ts';
 import type { loadOfficialToolCatalog } from '../../adapters/tool-catalog.ts';
 import { waitForClient } from '../../application/client-context.ts';
 import { createLifecycleService } from '../../application/mcp-lifecycle.ts';
 import type { createRegistrationRegistry } from '../../application/registrations.ts';
-import type { ControllerHost, ControllerRouter, createTargetController } from '../../application/target-controller.ts';
 import type { Diagnose, Diagnostic } from '../../domains/control-contract.ts';
 import {
     type ControlContext,
@@ -22,15 +20,17 @@ import { RequestFailure } from '../../domains/request-failure.ts';
 import type { ClientRequestContext } from '../../shared/client-context.ts';
 import { isRecord } from '../../shared/errors.ts';
 import { measured } from '../diagnostics.ts';
+import { buildOfficialLaunchArguments } from '../official/server-launch.ts';
 import type { createGatewayRegistry } from '../registry.ts';
+import type { createTargetLifecycle, TargetLifecycleHost, TargetLifecycleRouter } from '../targets/target-lifecycle.ts';
 import { createConnectionView } from './connection-view.ts';
 import type { ConnectionDirectoryLease } from './directory-lease.ts';
 import type { ResourceOwner } from './resource-owner.ts';
 import { createStartAdmission } from './start-admission.ts';
 import type { describeWorkspacePolicy } from './workspace-policy.ts';
 
-export type RuntimeRouter = ControllerRouter & { url: string; close(): Promise<void> };
-type Controller = ReturnType<typeof createTargetController>;
+export type RuntimeRouter = TargetLifecycleRouter & { url: string; close(): Promise<void> };
+type Controller = ReturnType<typeof createTargetLifecycle>;
 export type ManagedConnection = {
     connectionId: string;
     sessionId: string;
@@ -76,7 +76,7 @@ export function createManagedConnections({
     dataDirectories: DataDirectoryRegistry;
     profileAvailable: typeof nativeProfileAvailable;
     createRouter: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
-    createHost: (() => ControllerHost) | undefined;
+    createHost: (() => TargetLifecycleHost) | undefined;
     createConnection: typeof createOfficialConnection;
     registrations: Pick<
         ReturnType<typeof createRegistrationRegistry>,
@@ -125,7 +125,11 @@ export function createManagedConnections({
         if (connection.officialOwner.retired) connection.officialOwner = newOwner(randomUUID(), connection.directory);
         const owner = connection.officialOwner;
         owner.assertOpen();
-        const args = buildServerArguments(connection.router.url, connection.officialEnvironment, connection.mcpArgs);
+        const args = buildOfficialLaunchArguments(
+            connection.router.url,
+            connection.officialEnvironment,
+            connection.mcpArgs,
+        );
         connection.mcpArgs = args.slice(1);
         const signal = context.signal ? AbortSignal.any([owner.signal, context.signal]) : owner.signal;
         const acquiring = createConnection(connection.router.url, {
@@ -248,7 +252,7 @@ export function createManagedConnections({
                     if (request.scope === 'official') {
                         delete connection.restartScope;
                         try {
-                            await connection.controller.cleanupOnDisconnect('rollback');
+                            await connection.controller.cleanup('rollback');
                         } catch {
                             /* Retained failed disposal remains owned for explicit cleanup retry. */
                         }

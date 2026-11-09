@@ -5,11 +5,9 @@ import type { profileAvailable as nativeProfileAvailable } from '../../adapters/
 import type { DataDirectoryRegistry } from '../../adapters/data-directory.ts';
 import { emitFixtureEvent } from '../../adapters/fixture-diagnostics.ts';
 import { createOfficialConnection } from '../../adapters/mcp-bridge.ts';
-import { buildServerArguments, resolveServerBin, snapshotOfficialEnvironment } from '../../adapters/official-server.ts';
 import { waitForClient } from '../../application/client-context.ts';
 import type { createLifecycleService } from '../../application/mcp-lifecycle.ts';
 import type { createRegistrationRegistry } from '../../application/registrations.ts';
-import { type ControllerHost, createTargetController } from '../../application/target-controller.ts';
 import {
     type ConnectionStatus,
     type ControlContext,
@@ -20,6 +18,11 @@ import {
 } from '../../domains/control-contract.ts';
 import { DEFAULT_BASE_PORT } from '../../shared/constants.ts';
 import { DetailedError, errorCode, errorDetails, errorMessage } from '../../shared/errors.ts';
+import {
+    buildOfficialLaunchArguments,
+    captureOfficialServerEnvironment,
+    resolveVerifiedOfficialServerBin,
+} from '../official/server-launch.ts';
 import type { createGatewayRegistry } from '../registry.ts';
 import { parseDataIsolation } from '../targets/model/isolation.ts';
 import {
@@ -27,13 +30,14 @@ import {
     prepareLaunchDefinition,
     validateDataIsolationBinding,
 } from '../targets/model/launch-command.ts';
+import { createTargetLifecycle, type TargetLifecycleHost } from '../targets/target-lifecycle.ts';
 import type { createConnectionView } from './connection-view.ts';
 import { createConnectionDirectoryLease } from './directory-lease.ts';
 import type { ManagedConnection, RuntimeRouter } from './managed-connection.ts';
 import type { ResourceOwner } from './resource-owner.ts';
 import { describeWorkspacePolicy } from './workspace-policy.ts';
 
-type Controller = ReturnType<typeof createTargetController>;
+type Controller = ReturnType<typeof createTargetLifecycle>;
 
 export function createStartAdmission({
     entryId,
@@ -58,7 +62,7 @@ export function createStartAdmission({
     profileAvailable: typeof nativeProfileAvailable;
     createRouter: (options?: { diagnose?: Diagnose }) => Promise<RuntimeRouter>;
     createConnection: typeof createOfficialConnection;
-    makeHost: () => ControllerHost;
+    makeHost: () => TargetLifecycleHost;
     registrations: Pick<ReturnType<typeof createRegistrationRegistry>, 'check'>;
     registry: Pick<
         ReturnType<typeof createGatewayRegistry>,
@@ -94,7 +98,7 @@ export function createStartAdmission({
             : registry.admissionSignal;
         options = structuredClone(options);
         const ambient = { ...process.env };
-        const officialEnvironment = snapshotOfficialEnvironment(ambient);
+        const officialEnvironment = captureOfficialServerEnvironment(ambient);
         const temporaryDirectory = os.tmpdir();
         options.preparedLaunch = prepareLaunchDefinition(
             options.launch,
@@ -122,7 +126,7 @@ export function createStartAdmission({
         }
         const connectionId = randomUUID();
         const sessionId = randomUUID();
-        const initialArgs = buildServerArguments('http://127.0.0.1:1', ambient, options.mcpArgs).slice(1);
+        const initialArgs = buildOfficialLaunchArguments('http://127.0.0.1:1', ambient, options.mcpArgs).slice(1);
         const directory = createConnectionDirectoryLease(
             dataDirectories,
             isolation,
@@ -146,7 +150,8 @@ export function createStartAdmission({
         try {
             context.onIdentity?.({ connectionId, sessionId });
             context.onPhase?.('validating-official-server');
-            if (createConnection === createOfficialConnection && !runtimeLocation) await resolveServerBin();
+            if (createConnection === createOfficialConnection && !runtimeLocation)
+                await resolveVerifiedOfficialServerBin();
             context.signal?.throwIfAborted();
             if (registry.closing) throw new Error('The gateway is closing.');
             context.onPhase?.('acquiring-data-directory');
@@ -180,7 +185,7 @@ export function createStartAdmission({
                 ),
                 activeCalls: 0,
                 quarantined: false,
-                controller: createTargetController({
+                controller: createTargetLifecycle({
                     entryId,
                     host,
                     router: {

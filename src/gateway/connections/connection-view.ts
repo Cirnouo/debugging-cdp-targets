@@ -1,6 +1,6 @@
-import { buildServerArguments } from '../../adapters/official-server.ts';
 import type { loadOfficialToolCatalog } from '../../adapters/tool-catalog.ts';
 import { type ConnectionStatus, connectionSummary, type GatewayStatus } from '../../domains/control-contract.ts';
+import { buildOfficialLaunchArguments } from '../official/server-launch.ts';
 import type { createGatewayRegistry } from '../registry.ts';
 import type { ManagedConnection } from './managed-connection.ts';
 
@@ -55,7 +55,7 @@ export function createConnectionView({
                 ...(request.toolNames
                     ? {
                           toolAvailability: fullCatalog.describe(
-                              buildServerArguments('http://127.0.0.1:1').slice(1),
+                              buildOfficialLaunchArguments('http://127.0.0.1:1').slice(1),
                               undefined,
                               request.toolNames,
                           ),

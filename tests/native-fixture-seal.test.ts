@@ -163,6 +163,13 @@ test('native seal rejects missing runtime boundaries, byte drift, extras, links 
 test('real research bundles consume only the sealed subjects and unchanged native closure without builder runtime imports', async () => {
     const repository = fileURLToPath(new URL('..', import.meta.url));
     const built = await generateNativeFixtureFiles(repository);
+    assert.equal(
+        built.inputs.some((input) =>
+            /cfWorkerProvider-|shimsBrowser\.mjs|shimsWorkerd\.mjs|validators[\\/]cfWorker\.mjs/.test(input),
+        ),
+        false,
+        'Optional browser/workerd SDK providers must stay outside the independent research graph.',
+    );
     assert.deepEqual(
         [...built.files.keys()].sort(),
         snapshot()
@@ -173,6 +180,8 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('tests/smoke/screenshot-timeout-study.ts'));
     assert.ok(built.inputs.includes('src/gateway/core.ts'));
     assert.ok(built.inputs.includes('src/gateway/registry.ts'));
+    assert.ok(built.inputs.includes('src/gateway/targets/target-lifecycle.ts'));
+    assert.equal(built.inputs.includes('src/application/target-controller.ts'), false);
     assert.equal(built.inputs.includes('src/application/plugin-runtime.ts'), false);
     assert.ok(built.inputs.includes('src/gateway/connections/resource-owner.ts'));
     assert.ok(built.inputs.includes('src/gateway/connections/directory-lease.ts'));
@@ -192,6 +201,10 @@ test('real research bundles consume only the sealed subjects and unchanged nativ
     assert.ok(built.inputs.includes('src/gateway/targets/model/launch-command.ts'));
     assert.ok(built.inputs.includes('src/shared/environment-key.ts'));
     assert.ok(built.inputs.includes('src/gateway/official/release-evidence.ts'));
+    assert.ok(built.inputs.includes('src/gateway/official/package-files.ts'));
+    assert.ok(built.inputs.includes('src/gateway/official/server-launch.ts'));
+    assert.equal(built.inputs.includes('src/adapters/official-package.ts'), false);
+    assert.equal(built.inputs.includes('src/adapters/official-server.ts'), false);
     assert.ok(built.inputs.includes('src/shared/payload-path.ts'));
     assert.equal(built.inputs.includes('src/domains/chrome-profile.ts'), false);
     assert.equal(built.inputs.includes('src/domains/chromium-features.ts'), false);

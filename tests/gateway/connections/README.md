@@ -30,7 +30,8 @@ with controlled host/router/official I/O. No real target or GUI is launched.
 Construction and Gateway cleanup share the real Core composition and controlled
 I/O in [core-runtime.ts](../../fixtures/gateway/core-runtime.ts), retaining setup/status
 assertions and cleanup branches. No fixture contains regression-case bodies.
-The six moved suites preserve all 32 original expanded cases and 127 static
-assert-call occurrences. Their managed fixture/bounded wait and original Core
-fixture exports live once in gateway/core-runtime.ts.
+The six suites contain 32 expanded cases, including 27 existing cases and five
+new cases. The 127 assertion calls in source include every original assertion.
+The managed fixture, bounded wait and original Core fixture exports share
+`gateway/core-runtime.ts`.
 Both default and coverage commands explicitly select all ten suites once.

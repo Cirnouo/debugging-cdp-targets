@@ -52,6 +52,11 @@ for (const observed of [false, true]) {
             },
         });
         const host = createTargetHost({
+            platform: 'win32',
+            architecture: 'x64',
+            spawn: async () => {
+                throw new Error('This Close-only fixture must not launch a target.');
+            },
             platformAdapter: {
                 reservedRanges: async () => [],
                 validateNewRoot: () => {},
@@ -413,6 +418,8 @@ function endpointHost(
     let clock = 0;
     const child = Object.assign(new EventEmitter(), { pid: 42, exitCode: null as number | null });
     return createTargetHost({
+        platform: 'win32',
+        architecture: 'x64',
         now: () => clock,
         sleep: async () => {
             clock += 20_000;
@@ -573,6 +580,8 @@ test('native process-close exceptions are observed before the generic normal-clo
     const failure = ioError('EPERM', 'kill');
     const platform = createPlatformAdapter({
         platform: 'win32',
+        architecture: 'x64',
+        reservedRanges: async () => [],
         snapshot: async () => ({
             root: {
                 exists: true,
@@ -586,6 +595,9 @@ test('native process-close exceptions are observed before the generic normal-clo
         }),
         requestWindowsClose: async () => {
             throw failure;
+        },
+        waitWindowsExit: async () => {
+            throw new Error('A rejected native Close cannot acquire an exit waiter.');
         },
     });
     const target = {
