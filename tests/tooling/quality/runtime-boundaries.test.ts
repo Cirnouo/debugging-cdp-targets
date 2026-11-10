@@ -587,15 +587,21 @@ test('gateway imports only public split SDK entry points', () => {
 
 test('only the verified App native loader may load its reviewed advisory module', () => {
     const source = "const extension = require('fs-native-extensions');";
-    assert.deepEqual(validateRuntimeSource('src/adapters/app-native.ts', source), []);
-    for (const file of ['src/interface/app-main.ts', 'src/adapters/platform-process.ts', 'src/domains/app-release.ts'])
+    const owner = 'src/platform/native/advisory-lock.ts';
+    assert.deepEqual(validateRuntimeSource(owner, source), []);
+    for (const file of [
+        'src/adapters/app-native.ts',
+        'src/interface/app-main.ts',
+        'src/adapters/platform-process.ts',
+        'src/domains/app-release.ts',
+    ])
         assert.ok(validateRuntimeSource(file, source).length);
-    assert.ok(validateRuntimeSource('src/adapters/app-native.ts', "require('unreviewed-native-addon');").length);
+    assert.ok(validateRuntimeSource(owner, "require('unreviewed-native-addon');").length);
 });
 
-test('Electron and React imports stay restricted to their explicit App interface surfaces', () => {
+test('Electron and React imports stay restricted to their explicit App surfaces', () => {
     const surfaces = [
-        ['src/interface/app-bootstrap.ts', 'electron'],
+        ['src/desktop/main/bootstrap.ts', 'electron'],
         ['src/interface/app-main.ts', 'electron'],
         ['src/interface/app-window.ts', 'electron'],
         ['src/interface/app-preload.ts', 'electron'],
@@ -610,6 +616,7 @@ test('Electron and React imports stay restricted to their explicit App interface
             'src/desktop/contracts/commands.ts',
             'src/desktop/contracts/snapshots.ts',
             'src/adapters/app-native.ts',
+            'src/interface/app-bootstrap.ts',
             'src/application/plugin-runtime.ts',
         ])
             assert.ok(validateRuntimeSource(outside, `import x from '${dependency}';`).length);
@@ -2776,5 +2783,486 @@ test('desktop content pure owners reject ambient and computed authority while al
             'const value = record.performance;',
         ])
             assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    }
+});
+
+function assertDesktopInstanceDenied(file: string, source: string) {
+    const errors = validateRuntimeSource(file, source);
+    assert.ok(!errors.some((error) => error.includes('invalid source')), `${file}: ${source}`);
+    assert.ok(errors.length, `${file}: ${source}`);
+}
+
+test('desktop instance roles admit the five exact outgoing capability sets', () => {
+    for (const [file, dependencies] of [
+        [
+            'src/desktop/instance/singleton.ts',
+            ['node:crypto', 'node:fs', 'node:os', 'node:path', '../../shared/errors.ts'],
+        ],
+        ['src/desktop/instance/activation.ts', ['node:fs/promises', 'node:net', '../../shared/errors.ts']],
+        ['src/desktop/instance/chromium-storage.ts', ['node:fs', 'node:fs/promises', 'node:os', 'node:path']],
+        [
+            'src/desktop/main/bootstrap.ts',
+            ['electron', '../instance/chromium-storage.ts', '../../domains/app-distribution.ts'],
+        ],
+        [
+            'src/platform/native/advisory-lock.ts',
+            [
+                'node:fs/promises',
+                'node:module',
+                'node:path',
+                '../../domains/app-distribution.ts',
+                '../../domains/app-release.ts',
+                '../../shared/errors.ts',
+                '../../adapters/app-delivery.ts',
+                '../../adapters/file-evidence.ts',
+                'fs-native-extensions',
+            ],
+        ],
+    ] as const)
+        for (const dependency of dependencies)
+            for (const { source } of connectionDependencyForms(dependency))
+                assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+});
+
+test('desktop instance roles retain normalized VALUE and TYPE consumer permissions', () => {
+    for (const [file, dependency, onlyType] of [
+        ['src/interface/app-main.ts', '../desktop/instance/singleton.ts', false],
+        ['src/interface/app-main.ts', '../desktop/instance/activation.ts', false],
+        ['src/interface/app-main.ts', '../desktop/instance/chromium-storage.ts', true],
+        ['src/desktop/main/bootstrap.ts', '../instance/chromium-storage.ts', false],
+        ['src/interface/app-main.ts', '../platform/native/advisory-lock.ts', false],
+        ['src/desktop/instance/singleton.ts', '../../platform/native/advisory-lock.ts', true],
+        ['src/adapters/app-deployment.ts', '../platform/native/advisory-lock.ts', true],
+    ] as const) {
+        for (const importer of [file, file.replace(/([^/]+)$/, 'nested/../$1')])
+            for (const specifier of [dependency, dependency.replace(/([^/]+)$/, 'nested/../$1')])
+                for (const { source, erased } of connectionDependencyForms(specifier)) {
+                    if (onlyType && !erased) assertDesktopInstanceDenied(importer, source);
+                    else assert.deepEqual(validateRuntimeSource(importer, source), [], `${importer}: ${source}`);
+                }
+        if (onlyType) {
+            assertDesktopInstanceDenied(file, `import { type Value, value } from '${dependency}';`);
+            assertDesktopInstanceDenied(file, `export { type Value, value } from '${dependency}';`);
+        }
+    }
+});
+
+test('desktop instance bootstrap rejects every Main dependency form outside its startup chain', () => {
+    const file = 'src/desktop/main/bootstrap.ts';
+    for (const dependency of ['../../interface/app-main.ts', '../../interface/nested/../app-main.ts'])
+        for (const { source } of connectionDependencyForms(dependency)) assertDesktopInstanceDenied(file, source);
+});
+
+test('desktop instance roles reject undeclared outgoing dependencies and malformed paths', () => {
+    for (const file of [
+        'src/desktop/instance/singleton.ts',
+        'src/desktop/instance/activation.ts',
+        'src/desktop/instance/chromium-storage.ts',
+        'src/desktop/main/bootstrap.ts',
+        'src/platform/native/advisory-lock.ts',
+    ])
+        for (const dependency of [
+            'node:child_process',
+            'node:http',
+            '@modelcontextprotocol/core',
+            'react',
+            '../../domains/unknown.ts',
+            '../../interface/app-window.ts',
+            '../../gateway/core.ts',
+            '../../gateway/connections/resource-owner.ts',
+            '../../gateway/official/upstream.ts',
+            '../../gateway/official/server-launch.ts',
+            '../../gateway/official/package-files.ts',
+        ])
+            for (const { source } of connectionDependencyForms(dependency)) assertDesktopInstanceDenied(file, source);
+
+    for (const [file, dependencies] of [
+        [
+            'src/desktop/instance/singleton.ts',
+            ['node:net', './activation.ts', '../../adapters/file-evidence.ts', 'fs-native-extensions'],
+        ],
+        [
+            'src/desktop/instance/activation.ts',
+            ['node:fs', 'node:os', './singleton.ts', '../../platform/native/advisory-lock.ts', 'electron'],
+        ],
+        [
+            'src/desktop/instance/chromium-storage.ts',
+            ['node:net', './activation.ts', '../../shared/errors.ts', '../../platform/native/advisory-lock.ts'],
+        ],
+        [
+            'src/desktop/main/bootstrap.ts',
+            [
+                'node:fs',
+                'fs-native-extensions',
+                '../instance/singleton.ts',
+                '../instance/chromium-storage',
+                '../instance/chromium-storage.js',
+                '../instance/chromium-storage.ts?value',
+                '../instance/chromium-storage.ts#value',
+                '../instance/%63hromium-storage.ts',
+                '../instance\\\\chromium-storage.ts',
+            ],
+        ],
+        [
+            'src/platform/native/advisory-lock.ts',
+            [
+                'node:fs',
+                'node:net',
+                'electron',
+                'unreviewed-native-addon',
+                '../../adapters/app-deployment.ts',
+                '../../interface/app-main.ts',
+                '../../desktop/instance/singleton.ts',
+                '../../desktop/instance/activation.ts',
+                '../../desktop/instance/chromium-storage.ts',
+                '../../desktop/main/bootstrap.ts',
+            ],
+        ],
+        [
+            'src/interface/app-main.ts',
+            [
+                '../platform/native/advisory-lock',
+                '../platform/native/advisory-lock.js',
+                '../platform/native/advisory-lock.ts?value',
+                '../platform/native/advisory-lock.ts#value',
+                '../platform/native/%61dvisory-lock.ts',
+                '../platform/native\\\\advisory-lock.ts',
+            ],
+        ],
+    ] as const)
+        for (const dependency of dependencies)
+            for (const { source } of connectionDependencyForms(dependency)) assertDesktopInstanceDenied(file, source);
+});
+
+test('desktop instance roles reject unknown inverse consumers in every dependency form', () => {
+    for (const file of [
+        'src/domains/unknown.ts',
+        'src/shared/unknown.ts',
+        'src/gateway/unknown.ts',
+        'src/host-plugins/unknown.ts',
+        'src/adapters/unknown.ts',
+        'src/adapters/app-native.ts',
+        'src/application/unknown.ts',
+        'src/interface/unknown.ts',
+        'src/interface/app-bootstrap.ts',
+        'src/desktop/configuration/store.ts',
+        'src/desktop/contracts/commands.ts',
+        'src/desktop/renderer/elapsed.ts',
+        'src/desktop/instance/unknown.ts',
+        'src/desktop/main/unknown.ts',
+        'src/platform/native/unknown.ts',
+    ])
+        for (const owner of [
+            'src/desktop/instance/singleton.ts',
+            'src/desktop/instance/activation.ts',
+            'src/desktop/instance/chromium-storage.ts',
+            'src/desktop/main/bootstrap.ts',
+            'src/platform/native/advisory-lock.ts',
+        ]) {
+            const relative = path.posix.relative(path.posix.dirname(file), owner);
+            const dependency = relative.startsWith('.') ? relative : `./${relative}`;
+            for (const specifier of [dependency, dependency.replace(/([^/]+)$/, 'nested/../$1')])
+                for (const { source } of connectionDependencyForms(specifier))
+                    assertDesktopInstanceDenied(file, source);
+        }
+    for (const [file, dependency] of [
+        ['src/interface/app-main.ts', '../desktop/main/bootstrap.ts'],
+        ['src/adapters/app-deployment.ts', '../desktop/instance/singleton.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency)) assertDesktopInstanceDenied(file, source);
+});
+
+test('desktop instance near names and prototype keys cannot gain exact owner or consumer roles', () => {
+    for (const name of ['unknown', 'toString', 'constructor', '__proto__']) {
+        for (const { source } of connectionDependencyForms('node:fs'))
+            assertDesktopInstanceDenied(`src/desktop/instance/nested/../${name}.ts`, source);
+        for (const { source } of connectionDependencyForms('../instance/chromium-storage.ts'))
+            assertDesktopInstanceDenied(`src/desktop/main/nested/../${name}.ts`, source);
+        for (const { source } of connectionDependencyForms('node:module'))
+            assertDesktopInstanceDenied(`src/platform/native/nested/../${name}.ts`, source);
+        for (const { source } of connectionDependencyForms('./advisory-lock.ts'))
+            assertDesktopInstanceDenied(`src/platform/native/nested/../${name}.ts`, source);
+    }
+    for (const [file, dependency] of [
+        ['src/desktop/instance/singleton-extra.ts', '../../platform/native/advisory-lock.ts'],
+        ['src/desktop/instance/activation-extra.ts', 'node:net'],
+        ['src/desktop/instance/chromium-storage-extra.ts', 'node:fs'],
+        ['src/desktop/main/bootstrap-extra.ts', '../../interface/app-main.ts'],
+        ['src/platform/native/advisory-lock-extra.ts', 'fs-native-extensions'],
+        ['src/interface/app-main-extra.ts', '../desktop/instance/chromium-storage.ts'],
+        ['src/adapters/app-deployment-extra.ts', '../platform/native/advisory-lock.ts'],
+        ['src/desktop/main/bootstrap.ts', '../instance/chromium-storage-extra.ts'],
+        ['src/desktop/main/bootstrap.ts', '../../interface/app-main-extra.ts'],
+        ['src/desktop/main/bootstrap.ts', 'chromium-storage.ts'],
+        ['src/platform/native/advisory-lock.ts', './nested/../constructor.ts'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency)) assertDesktopInstanceDenied(file, source);
+});
+
+test('desktop instance roles retire the old bootstrap entry and native package approvals', () => {
+    for (const [file, dependency] of [
+        ['src/interface/app-bootstrap.ts', 'electron'],
+        ['src/adapters/app-native.ts', 'fs-native-extensions'],
+    ] as const)
+        for (const { source } of connectionDependencyForms(dependency)) assertDesktopInstanceDenied(file, source);
+    assertDesktopInstanceDenied('src/interface/app-bootstrap.ts', '#!/usr/bin/env node\n');
+});
+
+test('desktop instance ambient reads stay in the original singleton and activation positions', () => {
+    const singleton = `
+function privateDirectory(directory: string) {
+    const entry = lstatSync(directory);
+    if (process.platform !== 'win32' && (entry.uid !== userInfo().uid || (entry.mode & 0o077) !== 0))
+        throw new Error('Singleton namespace is not private to the native account.');
+}
+export function acquireAppSingleton(options: { nativeAccountHome?: string }) {
+    const home = realpathSync(options.nativeAccountHome ?? userInfo().homedir);
+    const paths = appCoordinationPaths(home, process.platform);
+    privateDirectory(paths.directory);
+    const descriptor = openSync(paths.lockFile);
+    const opened = fstatSync(descriptor);
+    if (process.platform !== 'win32' && (opened.uid !== userInfo().uid || (opened.mode & 0o077) !== 0))
+        throw new Error('Singleton lock is not private to the native account.');
+}
+`;
+    const activation = `
+export async function listenForAppActivation(options: { ownsSingleton: boolean; endpoint: string }) {
+    if (options.ownsSingleton !== true) throw new Error('Only the singleton owner can create an activation listener.');
+    if (process.platform !== 'win32') {
+        try {
+            const previous = await lstat(options.endpoint);
+            if (!previous.isSocket()) throw new Error('Activation endpoint is not a socket.');
+            await unlink(options.endpoint);
+        } catch (error) {
+            if (errorCode(error) !== 'ENOENT') throw error;
+        }
+    }
+    await listen(options.endpoint);
+    if (process.platform !== 'win32') await chmod(options.endpoint, 0o600);
+}
+`;
+    for (const [file, source, wrongSources] of [
+        [
+            'src/desktop/instance/singleton.ts',
+            singleton,
+            [
+                singleton.replace('appCoordinationPaths(home, process.platform)', 'otherPaths(home, process.platform)'),
+                singleton.replace("process.platform !== 'win32'", "process.platform === 'win32'"),
+                singleton.replace('opened.uid !== userInfo().uid', 'opened.uid === userInfo().uid'),
+                singleton.replace('function privateDirectory', 'function unrelatedDirectory'),
+            ],
+        ],
+        [
+            'src/desktop/instance/activation.ts',
+            activation,
+            [
+                activation.replace("process.platform !== 'win32'", "process.platform !== 'linux'"),
+                activation.replace('await chmod(options.endpoint, 0o600)', 'await chmod(otherEndpoint, 0o600)'),
+                activation.replace('function listenForAppActivation', 'function unrelatedListener'),
+            ],
+        ],
+    ] as const) {
+        assert.deepEqual(validateRuntimeSource(file, source), [], file);
+        for (const wrong of wrongSources) assertDesktopInstanceDenied(file, wrong);
+        assertDesktopInstanceDenied(file, `${source}\nif (process.platform !== 'win32') unrelated();`);
+        assertDesktopInstanceDenied(file.replace('.ts', '-extra.ts'), source);
+    }
+});
+
+test('desktop instance bootstrap and native guards retain direct early platform evidence', () => {
+    const bootstrap = `
+import { app } from 'electron';
+import { supportsWindowsApp } from '../../domains/app-distribution.ts';
+
+if (!supportsWindowsApp(process.platform, process.arch)) {
+    process.stderr.write('The App supports Windows x64 and arm64 only.\\n');
+    app.quit();
+} else {
+    const appData = app.getPath('appData');
+    void import('../../interface/app-main.ts')
+        .then(({ startDesktopApp }) => startDesktopApp({ appData }))
+        .catch(() => {
+            process.stderr.write('App startup could not complete. Use normal Quit to retry owned cleanup.\\n');
+        });
+}
+`;
+    const native = `
+import { createRequire } from 'node:module';
+import { supportsWindowsApp } from '../../domains/app-distribution.ts';
+
+const require = createRequire(import.meta.url);
+
+export async function loadAppAdvisoryLock(evidence: unknown) {
+    if (!supportsWindowsApp(process.platform, process.arch))
+        throw new Error('Unsupported App native loading; Windows x64 or arm64 is required.');
+    await verifyAppNativeInputs(evidence);
+    const extension: unknown = require('fs-native-extensions');
+    return extension;
+}
+`;
+    for (const [file, source] of [
+        ['src/desktop/main/bootstrap.ts', bootstrap],
+        ['src/platform/native/advisory-lock.ts', native],
+    ] as const) {
+        assert.deepEqual(validateRuntimeSource(file, source), [], file);
+        const supportCheck = 'supportsWindowsApp(process.platform, process.arch)';
+        for (const wrongCheck of [
+            supportCheck,
+            '!supportsWindowsApp(process.arch, process.platform)',
+            '!supportsWindowsApp(process?.platform, process.arch)',
+            "!supportsWindowsApp(process['platform'], process.arch)",
+            '!otherSupportCheck(process.platform, process.arch)',
+        ])
+            assertDesktopInstanceDenied(file, source.replace(`!${supportCheck}`, wrongCheck));
+        assertDesktopInstanceDenied(file, `${source}\nconst supported = ${supportCheck};`);
+    }
+    const bootstrapFile = 'src/desktop/main/bootstrap.ts';
+    const refusal = "process.stderr.write('The App supports Windows x64 and arm64 only.\\n');";
+    const rejection =
+        "process.stderr.write('App startup could not complete. Use normal Quit to retry owned cleanup.\\n');";
+    for (const source of [
+        bootstrap.replace(refusal, "process.stderr.write('different output');"),
+        bootstrap.replace(refusal, 'process.stderr.write(message);'),
+        bootstrap.replace(refusal, refusal.replace(');', ', callback);')),
+        bootstrap.replace(refusal, refusal.replace('stderr.write', 'stdout.write')),
+        bootstrap.replace(refusal, refusal.replace('stderr.write', 'stderr.write?.')),
+        bootstrap.replace(rejection, refusal),
+        `${bootstrap}\n${refusal}`,
+        `${bootstrap}\n${rejection}`,
+        bootstrap.replace('if (!supportsWindowsApp', "app.getPath('appData');\nif (!supportsWindowsApp"),
+    ])
+        assertDesktopInstanceDenied(bootstrapFile, source);
+    const nativeFile = 'src/platform/native/advisory-lock.ts';
+    assertDesktopInstanceDenied(nativeFile, native.replace('function loadAppAdvisoryLock', 'function unrelatedLoader'));
+    const verification = '    await verifyAppNativeInputs(evidence);\n';
+    assertDesktopInstanceDenied(
+        nativeFile,
+        native
+            .replace(verification, '')
+            .replace('    if (!supportsWindowsApp', `${verification}    if (!supportsWindowsApp`),
+    );
+});
+
+test('desktop instance roles reject computed dependencies and other ambient capabilities', () => {
+    for (const file of [
+        'src/desktop/instance/singleton.ts',
+        'src/desktop/instance/activation.ts',
+        'src/desktop/instance/chromium-storage.ts',
+        'src/desktop/main/bootstrap.ts',
+        'src/platform/native/advisory-lock.ts',
+        'src/desktop/instance/unknown.ts',
+        'src/desktop/main/unknown.ts',
+        'src/platform/native/unknown.ts',
+    ]) {
+        for (const source of [
+            'const dependency = import(moduleName);',
+            'const dependency = require(moduleName);',
+            'const dependency = require?.(moduleName);',
+            'const dependency = (require as (name: string) => unknown)?.(moduleName);',
+            'const value = process.platform;',
+            'const value = process.arch;',
+            "process.platform = 'win32';",
+            'const { platform } = process;',
+            "const value = process['platform'];",
+            'const value = process?.platform;',
+            'const value = (process as { platform: string }).platform;',
+            'const ambient = globalThis.global; const value = ambient.process.platform;',
+            'const value = globalThis?.["process"]?.platform;',
+            'const value = globalThis[key];',
+            'const value = process.env;',
+            'const value = process.argv;',
+            'process.exit(1);',
+            'const value = Date.now();',
+            'const value = new Date();',
+            'const value = performance.now();',
+            'const { now } = performance;',
+            'const value = fetch(url);',
+            'const value = new WebSocket(url);',
+            'const value = new XMLHttpRequest();',
+            'interface RecordValue { [performance](): number; }',
+            'const record = { performance() { return process.env; } };',
+        ])
+            assertDesktopInstanceDenied(file, source);
+        for (const source of [
+            'interface RecordValue { performance(): number; Date(): number; process(): string; }',
+            'const record = { performance: 1, Date: 2, process: 3 };',
+            'const value = record.performance;',
+        ])
+            assert.deepEqual(validateRuntimeSource(file, source), [], `${file}: ${source}`);
+    }
+    for (const file of ['src/interface/app-main.ts', 'src/adapters/app-deployment.ts', 'src/interface/unknown.ts'])
+        for (const source of [
+            'const dependency = import(moduleName);',
+            'const dependency = require?.(moduleName);',
+            'const dependency = (require as (name: string) => unknown)?.(moduleName);',
+        ])
+            assertDesktopInstanceDenied(file, source);
+});
+
+test('desktop instance roles accept the complete maintained owners and source consumers', async () => {
+    for (const file of [
+        'src/desktop/instance/singleton.ts',
+        'src/desktop/instance/activation.ts',
+        'src/desktop/instance/chromium-storage.ts',
+        'src/desktop/main/bootstrap.ts',
+        'src/platform/native/advisory-lock.ts',
+        'src/interface/app-main.ts',
+        'src/adapters/app-deployment.ts',
+    ]) {
+        const source = await readFile(new URL(`../../../${file}`, import.meta.url), 'utf8');
+        assert.deepEqual(validateRuntimeSource(file, source), [], file);
+    }
+});
+
+test('desktop startup checks cannot borrow a shadowed, aliased or repeated support binding', async () => {
+    const loader = 'src/platform/native/advisory-lock.ts';
+    const bootstrap = 'src/desktop/main/bootstrap.ts';
+    const nativeSource = await readFile(new URL(`../../../${loader}`, import.meta.url), 'utf8');
+    const bootstrapSource = await readFile(new URL(`../../../${bootstrap}`, import.meta.url), 'utf8');
+    for (const [file, original, changed] of [
+        [
+            loader,
+            nativeSource,
+            nativeSource.replace(
+                'loadAppAdvisoryLock(evidence:',
+                'loadAppAdvisoryLock(supportsWindowsApp: (platform: string, arch: string) => boolean, evidence:',
+            ),
+        ],
+        [
+            bootstrap,
+            bootstrapSource,
+            bootstrapSource.replace('{ supportsWindowsApp }', '{ anotherCheck as supportsWindowsApp }'),
+        ],
+        [bootstrap, bootstrapSource, `${bootstrapSource}\nsupportsWindowsApp('win32', 'x64');`],
+        [
+            bootstrap,
+            bootstrapSource,
+            bootstrapSource.replace(
+                "import('../../interface/app-main.ts')",
+                "import('../../interface/app-main.ts', { with: { type: 'json' } })",
+            ),
+        ],
+    ] as const) {
+        assert.notEqual(changed, original, file);
+        assertDesktopInstanceDenied(file, changed);
+    }
+});
+
+test('desktop instance bootstrap admits only the original canonical Main import', async () => {
+    const file = 'src/desktop/main/bootstrap.ts';
+    const source = await readFile(new URL(`../../../${file}`, import.meta.url), 'utf8');
+    assert.deepEqual(validateRuntimeSource(file, source), [], file);
+
+    const mainPath = '../../interface/app-main.ts';
+    const loadMain = `import('${mainPath}')`;
+    const redirect = "    app.setPath('userData', chromium.userData);";
+    for (const [variant, changed] of [
+        ['extra import after the support guard', `${source}\nvoid ${loadMain};\n`],
+        ['extra import before storage redirect', source.replace(redirect, `    void ${loadMain};\n${redirect}`)],
+        ['dot segment', source.replace(mainPath, '../../interface/./app-main.ts')],
+        ['normalized nested path', source.replace(mainPath, '../../interface/nested/../app-main.ts')],
+    ] as const) {
+        assert.notEqual(changed, source, variant);
+        assertDesktopInstanceDenied(file, changed);
     }
 });

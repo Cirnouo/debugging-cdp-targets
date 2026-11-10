@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, lstatSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createAppChromiumStorage } from '../src/adapters/app-chromium-storage.ts';
+import { createAppChromiumStorage } from '../../../src/desktop/instance/chromium-storage.ts';
 
 test('synchronous Chromium storage uses unique existing roots independently for each App process', async () => {
     const first = createAppChromiumStorage();

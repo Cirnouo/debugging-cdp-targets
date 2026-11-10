@@ -120,6 +120,10 @@ const desktopCases = [
     'tests/desktop/configuration/store.test.ts',
     'tests/desktop/contracts/commands.test.ts',
     'tests/desktop/contracts/snapshots.test.ts',
+    'tests/desktop/instance/app-activation.test.ts',
+    'tests/desktop/instance/app-chromium-storage.test.ts',
+    'tests/desktop/instance/app-singleton.test.ts',
+    'tests/desktop/main/app-bootstrap.test.ts',
     'tests/desktop/main/asset-policy.test.ts',
     'tests/desktop/renderer/elapsed.test.ts',
 ];

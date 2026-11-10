@@ -1,11 +1,9 @@
 import path from 'node:path';
 import { parse } from '@babel/parser';
-import { isReferenced, type Node } from '@babel/types';
+import { isBinding, isReferenced, type Node } from '@babel/types';
 
 const APP_RUNTIME_IMPORTS = new Map<string, readonly string[]>([
-    ['src/adapters/app-native.ts', ['fs-native-extensions']],
     ['src/adapters/mcp-http-server.ts', ['@modelcontextprotocol/node']],
-    ['src/interface/app-bootstrap.ts', ['electron']],
     ['src/interface/app-main.ts', ['electron']],
     ['src/interface/app-window.ts', ['electron']],
     ['src/interface/app-preload.ts', ['electron']],
@@ -37,6 +35,14 @@ const CONFIGURATION_MODEL_CONSUMERS = new Map<string, 'value' | 'type'>([
     ['src/desktop/contracts/snapshots.ts', 'value'],
 ]);
 
+const APP_MAIN = 'src/interface/app-main.ts';
+const BOOTSTRAP = 'src/desktop/main/bootstrap.ts';
+const SINGLETON = 'src/desktop/instance/singleton.ts';
+const ACTIVATION = 'src/desktop/instance/activation.ts';
+const CHROMIUM_STORAGE = 'src/desktop/instance/chromium-storage.ts';
+const ADVISORY_LOCK = 'src/platform/native/advisory-lock.ts';
+const APP_DISTRIBUTION = 'src/domains/app-distribution.ts';
+
 const DESKTOP_CONTENT_DEPENDENCIES = new Map<string, { value: readonly string[]; type: readonly string[] }>([
     [
         'src/desktop/contracts/commands.ts',
@@ -59,6 +65,33 @@ const DESKTOP_CONTENT_DEPENDENCIES = new Map<string, { value: readonly string[];
     ],
     ['src/desktop/main/asset-policy.ts', { value: [], type: [] }],
     ['src/desktop/renderer/elapsed.ts', { value: [], type: [] }],
+    [
+        SINGLETON,
+        {
+            value: ['node:crypto', 'node:fs', 'node:os', 'node:path', 'src/shared/errors.ts'],
+            type: [ADVISORY_LOCK],
+        },
+    ],
+    [ACTIVATION, { value: ['node:fs/promises', 'node:net', 'src/shared/errors.ts'], type: [] }],
+    [CHROMIUM_STORAGE, { value: ['node:fs', 'node:fs/promises', 'node:os', 'node:path'], type: [] }],
+    [BOOTSTRAP, { value: ['electron', APP_DISTRIBUTION, CHROMIUM_STORAGE, APP_MAIN], type: [] }],
+    [
+        ADVISORY_LOCK,
+        {
+            value: [
+                'node:fs/promises',
+                'node:module',
+                'node:path',
+                APP_DISTRIBUTION,
+                'src/domains/app-release.ts',
+                'src/shared/errors.ts',
+                'src/adapters/app-delivery.ts',
+                'src/adapters/file-evidence.ts',
+                'fs-native-extensions',
+            ],
+            type: [],
+        },
+    ],
 ]);
 const DESKTOP_CONTENT_CONSUMERS = new Map<string, ReadonlyMap<string, 'value' | 'type'>>([
     [
@@ -86,6 +119,24 @@ const DESKTOP_CONTENT_CONSUMERS = new Map<string, ReadonlyMap<string, 'value' | 
     ],
     ['src/desktop/main/asset-policy.ts', new Map([['src/interface/app-window.ts', 'value']])],
     ['src/desktop/renderer/elapsed.ts', new Map([['src/interface/app-manager.ts', 'value']])],
+    [SINGLETON, new Map([[APP_MAIN, 'value']])],
+    [ACTIVATION, new Map([[APP_MAIN, 'value']])],
+    [
+        CHROMIUM_STORAGE,
+        new Map([
+            [APP_MAIN, 'type'],
+            [BOOTSTRAP, 'value'],
+        ]),
+    ],
+    [BOOTSTRAP, new Map()],
+    [
+        ADVISORY_LOCK,
+        new Map([
+            [APP_MAIN, 'value'],
+            [SINGLETON, 'type'],
+            ['src/adapters/app-deployment.ts', 'type'],
+        ]),
+    ],
 ]);
 
 const HOST_INTENT_DEPENDENCIES = new Map<string, { value: readonly string[]; type: readonly string[] }>([
@@ -232,6 +283,258 @@ function assignedValue(statement: Node | undefined, name: string) {
         assignment.left.name === name
         ? assignment.right
         : undefined;
+}
+
+function declaredValue(statement: Node | undefined, name: string) {
+    if (statement?.type !== 'VariableDeclaration' || statement.kind !== 'const' || statement.declarations.length !== 1)
+        return undefined;
+    const declaration = statement.declarations[0];
+    return declaration?.id.type === 'Identifier' && declaration.id.name === name ? declaration.init : undefined;
+}
+
+function directProperty(node: Node | null | undefined, name: string) {
+    return node?.type === 'MemberExpression' &&
+        !node.computed &&
+        node.property.type === 'Identifier' &&
+        node.property.name === name
+        ? node
+        : undefined;
+}
+
+function namedCall(node: Node | null | undefined, name: string) {
+    return node?.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === name
+        ? node
+        : undefined;
+}
+
+function processRead(node: Node | undefined, name: string) {
+    const object = directProperty(node, name)?.object;
+    return object?.type === 'Identifier' && object.name === 'process' ? object : undefined;
+}
+
+function windowsComparison(node: Node) {
+    return node.type === 'BinaryExpression' &&
+        node.operator === '!==' &&
+        node.right.type === 'StringLiteral' &&
+        node.right.value === 'win32'
+        ? processRead(node.left, 'platform')
+        : undefined;
+}
+
+function privateModeCheck(statement: Node | undefined, entry: string) {
+    if (statement?.type !== 'IfStatement' || statement.alternate || statement.consequent.type !== 'ThrowStatement')
+        return undefined;
+    const test = statement.test;
+    if (test.type !== 'LogicalExpression' || test.operator !== '&&') return undefined;
+    const permissions = test.right;
+    if (permissions.type !== 'LogicalExpression' || permissions.operator !== '||') return undefined;
+    const { left: uid, right: mode } = permissions;
+    if (
+        uid.type !== 'BinaryExpression' ||
+        uid.operator !== '!==' ||
+        mode.type !== 'BinaryExpression' ||
+        mode.operator !== '!==' ||
+        mode.right.type !== 'NumericLiteral' ||
+        mode.right.value !== 0
+    )
+        return undefined;
+    const uidEntry = directProperty(uid.left, 'uid')?.object;
+    const account = namedCall(directProperty(uid.right, 'uid')?.object, 'userInfo');
+    const mask = mode.left;
+    if (
+        uidEntry?.type !== 'Identifier' ||
+        uidEntry.name !== entry ||
+        account?.arguments.length !== 0 ||
+        mask.type !== 'BinaryExpression' ||
+        mask.operator !== '&' ||
+        mask.right.type !== 'NumericLiteral' ||
+        mask.right.value !== 0o077
+    )
+        return undefined;
+    const modeEntry = directProperty(mask.left, 'mode')?.object;
+    return modeEntry?.type === 'Identifier' && modeEntry.name === entry ? windowsComparison(test.left) : undefined;
+}
+
+function endpointCall(node: Node | undefined, name: string) {
+    const call = node?.type === 'AwaitExpression' ? namedCall(node.argument, name) : undefined;
+    const options = directProperty(call?.arguments[0], 'endpoint')?.object;
+    return options?.type === 'Identifier' && options.name === 'options' ? call : undefined;
+}
+
+function topLevelFunction(program: ReturnType<typeof parse>['program'], name: string) {
+    for (const statement of program.body) {
+        const declaration = statement.type === 'ExportNamedDeclaration' ? statement.declaration : statement;
+        if (declaration?.type === 'FunctionDeclaration' && declaration.id?.name === name) return declaration;
+    }
+    return undefined;
+}
+
+function instancePlatformReads(file: string, program: ReturnType<typeof parse>['program']) {
+    if (file === SINGLETON) {
+        const directory = privateModeCheck(topLevelFunction(program, 'privateDirectory')?.body.body.at(-1), 'entry');
+        const body = topLevelFunction(program, 'acquireAppSingleton')?.body.body ?? [];
+        const pathCall = namedCall(declaredValue(body[1], 'paths'), 'appCoordinationPaths');
+        const home = pathCall?.arguments[0];
+        const platform =
+            pathCall?.arguments.length === 2 &&
+            home?.type === 'Identifier' &&
+            home.name === 'home' &&
+            namedCall(declaredValue(body[0], 'home'), 'realpathSync')?.arguments.length === 1
+                ? processRead(pathCall.arguments[1], 'platform')
+                : undefined;
+        const retention = body.at(-1);
+        const lock = privateModeCheck(
+            retention?.type === 'TryStatement' ? retention.block.body.at(-3) : retention,
+            'opened',
+        );
+        return [directory, platform, lock];
+    }
+    const body = topLevelFunction(program, 'listenForAppActivation')?.body.body ?? [];
+    const beforeListen = body[1];
+    const cleanup =
+        beforeListen?.type === 'IfStatement' &&
+        !beforeListen.alternate &&
+        beforeListen.consequent.type === 'BlockStatement' &&
+        beforeListen.consequent.body.length === 1
+            ? beforeListen.consequent.body[0]
+            : undefined;
+    const [previous, , unlink] =
+        cleanup?.type === 'TryStatement' && cleanup.block.body.length === 3 ? cleanup.block.body : [];
+    const previousValue = declaredValue(previous, 'previous');
+    const before =
+        beforeListen?.type === 'IfStatement' &&
+        previousValue &&
+        endpointCall(previousValue, 'lstat')?.arguments.length === 1 &&
+        unlink?.type === 'ExpressionStatement' &&
+        endpointCall(unlink.expression, 'unlink')?.arguments.length === 1
+            ? windowsComparison(beforeListen.test)
+            : undefined;
+    const afterListen = body.at(body.at(-1)?.type === 'ReturnStatement' ? -2 : -1);
+    const chmod =
+        afterListen?.type === 'IfStatement' &&
+        !afterListen.alternate &&
+        afterListen.consequent.type === 'ExpressionStatement'
+            ? endpointCall(afterListen.consequent.expression, 'chmod')
+            : undefined;
+    const mode = chmod?.arguments[1];
+    const after =
+        afterListen?.type === 'IfStatement' &&
+        chmod?.arguments.length === 2 &&
+        mode?.type === 'NumericLiteral' &&
+        mode.value === 0o600
+            ? windowsComparison(afterListen.test)
+            : undefined;
+    return [before, after];
+}
+
+function bootstrapStderr(statement: Node | undefined, message: string) {
+    const call = statement?.type === 'ExpressionStatement' ? statement.expression : undefined;
+    if (
+        call?.type !== 'CallExpression' ||
+        call.arguments.length !== 1 ||
+        call.arguments[0]?.type !== 'StringLiteral' ||
+        call.arguments[0].value !== message
+    )
+        return undefined;
+    const stderr = directProperty(directProperty(call.callee, 'write')?.object, 'stderr')?.object;
+    return stderr?.type === 'Identifier' && stderr.name === 'process' ? stderr : undefined;
+}
+
+function earlyWindowsGuard(file: string, ast: ReturnType<typeof parse>) {
+    const statements = ast.program.body;
+    const guard =
+        file === BOOTSTRAP
+            ? statements.find((statement) => statement.type !== 'ImportDeclaration')
+            : topLevelFunction(ast.program, 'loadAppAdvisoryLock')?.body.body[0];
+    if (guard?.type !== 'IfStatement' || guard.test.type !== 'UnaryExpression' || guard.test.operator !== '!')
+        return undefined;
+    const check = namedCall(guard.test.argument, 'supportsWindowsApp');
+    if (check?.arguments.length !== 2) return undefined;
+    const platform = processRead(check.arguments[0], 'platform');
+    const arch = processRead(check.arguments[1], 'arch');
+    if (!platform || !arch) return undefined;
+
+    const imported = statements
+        .flatMap((statement) =>
+            statement.type === 'ImportDeclaration' &&
+            statement.importKind !== 'type' &&
+            statement.source.value.startsWith('.') &&
+            path.posix.join(path.posix.dirname(file), statement.source.value) === APP_DISTRIBUTION
+                ? statement.specifiers
+                : [],
+        )
+        .find(
+            (binding) =>
+                binding.type === 'ImportSpecifier' &&
+                binding.importKind !== 'type' &&
+                binding.imported.type === 'Identifier' &&
+                binding.imported.name === 'supportsWindowsApp' &&
+                binding.local.name === 'supportsWindowsApp',
+        );
+    if (!imported) return undefined;
+    let unreviewedBinding = false;
+    visit(ast, (node, parent, grandparent) => {
+        if (node.type !== 'Identifier' || !parent) return;
+        if (node.name === 'process' && isBinding(node, parent, grandparent)) unreviewedBinding = true;
+        if (
+            node.name === 'supportsWindowsApp' &&
+            node !== imported.local &&
+            node !== check.callee &&
+            (isBinding(node, parent, grandparent) || isReferenced(node, parent, grandparent))
+        )
+            unreviewedBinding = true;
+    });
+    if (unreviewedBinding) return undefined;
+    if (file === ADVISORY_LOCK)
+        return guard.consequent.type === 'ThrowStatement' && !guard.alternate
+            ? { reads: [platform, arch], mainImport: undefined }
+            : undefined;
+    if (
+        guard.consequent.type !== 'BlockStatement' ||
+        guard.consequent.body.length !== 2 ||
+        guard.alternate?.type !== 'BlockStatement'
+    )
+        return undefined;
+
+    const [refusal, quit] = guard.consequent.body;
+    const quitCall = quit?.type === 'ExpressionStatement' ? quit.expression : undefined;
+    const app =
+        quitCall?.type === 'CallExpression' && quitCall.arguments.length === 0
+            ? directProperty(quitCall.callee, 'quit')?.object
+            : undefined;
+    if (app?.type !== 'Identifier' || app.name !== 'app') return undefined;
+    const startup = guard.alternate.body.at(-1);
+    const detached = startup?.type === 'ExpressionStatement' ? startup.expression : undefined;
+    const observed =
+        detached?.type === 'UnaryExpression' && detached.operator === 'void' ? detached.argument : undefined;
+    const started =
+        observed?.type === 'CallExpression' && observed.arguments.length === 1
+            ? directProperty(observed.callee, 'catch')?.object
+            : undefined;
+    const main =
+        started?.type === 'CallExpression' && started.arguments.length === 1
+            ? directProperty(started.callee, 'then')?.object
+            : undefined;
+    const failure = observed?.type === 'CallExpression' ? observed.arguments[0] : undefined;
+    if (
+        main?.type !== 'ImportExpression' ||
+        main.source.type !== 'StringLiteral' ||
+        main.source.value !== '../../interface/app-main.ts' ||
+        main.options ||
+        main.phase ||
+        failure?.type !== 'ArrowFunctionExpression' ||
+        failure.params.length !== 0 ||
+        failure.body.type !== 'BlockStatement' ||
+        failure.body.body.length !== 1
+    )
+        return undefined;
+    const refused = bootstrapStderr(refusal, 'The App supports Windows x64 and arm64 only.\n');
+    const rejected = bootstrapStderr(
+        failure.body.body[0],
+        'App startup could not complete. Use normal Quit to retry owned cleanup.\n',
+    );
+    if (!refused || !rejected) return undefined;
+    return { reads: [platform, arch, refused, rejected], mainImport: main };
 }
 
 /** The upstream may reap only the child obtained from its own native spawn. */
@@ -663,9 +966,12 @@ export function validateRuntimeSource(file: string, source: string) {
     } catch (error) {
         return [`${file}: invalid source: ${error instanceof Error ? error.message : String(error)}`];
     }
+    const normalizedFile = path.posix.normalize(file);
     const layer = file.split('/')[1];
-    const desktop = layer === 'desktop';
-    const hostIntentRole = HOST_INTENT_DEPENDENCIES.get(path.posix.normalize(file));
+    const desktop = normalizedFile.startsWith('src/desktop/');
+    const platform = normalizedFile.startsWith('src/platform/');
+    const contentRole = DESKTOP_CONTENT_DEPENDENCIES.get(normalizedFile);
+    const hostIntentRole = HOST_INTENT_DEPENDENCIES.get(normalizedFile);
     const hostPayload = layer === 'host-plugins';
     const domain = layer === 'domains' || hostPayload;
     const gateway = layer === 'gateway';
@@ -684,6 +990,16 @@ export function validateRuntimeSource(file: string, source: string) {
     const officialUpstream = file === 'src/gateway/official/upstream.ts';
     const targetLifecycle = file === 'src/gateway/targets/target-lifecycle.ts';
     const reviewedAmbient = new Set<Node>();
+    const windowsGuard =
+        normalizedFile === BOOTSTRAP || normalizedFile === ADVISORY_LOCK
+            ? earlyWindowsGuard(normalizedFile, ast)
+            : undefined;
+    const bootstrapMainImport = windowsGuard?.mainImport;
+    const instanceReads =
+        normalizedFile === SINGLETON || normalizedFile === ACTIVATION
+            ? instancePlatformReads(normalizedFile, ast.program)
+            : windowsGuard?.reads;
+    for (const read of instanceReads ?? []) if (read) reviewedAmbient.add(read);
     visit(ast, (node, parent, grandparent) => {
         if (
             targetLifecycle &&
@@ -785,8 +1101,8 @@ export function validateRuntimeSource(file: string, source: string) {
         )
             reviewedAmbient.add(node.callee.object.object);
     });
-    const pure = domain || layer === 'shared' || gateway || desktop;
-    const entry = file === 'src/interface/app-bootstrap.ts';
+    const pure = domain || layer === 'shared' || gateway || desktop || platform || contentRole !== undefined;
+    const entry = normalizedFile === BOOTSTRAP;
     const reviewedReferences = new Set<Node>();
     const ownedTerminations = officialUpstream
         ? ownedOfficialTermination(ast, reviewedAmbient, reviewedReferences)
@@ -816,7 +1132,8 @@ export function validateRuntimeSource(file: string, source: string) {
             errors.push(`${file}: relative source dependencies must use an explicit .ts extension.`);
             return;
         }
-        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier));
+        const relative = specifier.startsWith('.');
+        const resolved = path.posix.join(path.posix.dirname(normalizedFile), specifier);
         const versionParser = file === 'src/domains/software-version.ts' && specifier === 'semver/functions/parse.js';
         const hostConfigParser =
             path.posix.normalize(file) === 'src/host-plugins/user-intent.ts' && specifier === 'smol-toml';
@@ -843,23 +1160,28 @@ export function validateRuntimeSource(file: string, source: string) {
             errors.push(`${file}: only App Main may depend on the configuration store.`);
         const desktopConsumer = DESKTOP_CONTENT_CONSUMERS.get(resolved);
         if (desktopConsumer) {
-            const role = desktopConsumer.get(file);
-            if (!specifier.startsWith('.') || (role !== 'value' && !(role === 'type' && typeOnly)))
+            const role = desktopConsumer.get(normalizedFile);
+            if (!relative || (role !== 'value' && !(role === 'type' && typeOnly)))
                 errors.push(`${file}: unapproved desktop content consumer or VALUE dependency.`);
         }
-        if (desktop) {
-            const contentRole = DESKTOP_CONTENT_DEPENDENCIES.get(file);
-            if (contentRole) {
-                if (
-                    !specifier.startsWith('.') ||
-                    (!contentRole.value.includes(resolved) && !(typeOnly && contentRole.type.includes(resolved)))
-                )
-                    errors.push(`${file}: unapproved desktop content dependency.`);
-            } else if (
-                !CONFIGURATION_DEPENDENCIES.get(file)?.includes(specifier.startsWith('.') ? resolved : specifier)
+        const bareContentDependency =
+            !relative &&
+            contentRole?.value.includes(specifier) &&
+            (specifier.startsWith('node:') || specifier === 'electron' || specifier === 'fs-native-extensions');
+        if (contentRole) {
+            const permittedRelative =
+                relative && (contentRole.value.includes(resolved) || (typeOnly && contentRole.type.includes(resolved)));
+            if (!bareContentDependency && !permittedRelative)
+                errors.push(`${file}: unapproved desktop content dependency.`);
+            if (
+                normalizedFile === BOOTSTRAP &&
+                resolved === APP_MAIN &&
+                (!bootstrapMainImport || declaration !== bootstrapMainImport)
             )
-                errors.push(`${file}: unapproved configuration dependency.`);
-        }
+                errors.push(`${file}: App bootstrap may import App Main only in its supported startup chain.`);
+        } else if (desktop && !CONFIGURATION_DEPENDENCIES.get(file)?.includes(relative ? resolved : specifier))
+            errors.push(`${file}: unapproved configuration dependency.`);
+        else if (platform) errors.push(`${file}: unapproved platform dependency.`);
         const pureRelative =
             /^src\/(?:domains|shared)\//.test(resolved) || (hostPayload && resolved.startsWith('src/host-plugins/'));
         const targetValue =
@@ -1131,6 +1453,7 @@ export function validateRuntimeSource(file: string, source: string) {
             !specifier.startsWith('node:') &&
             specifier !== 'ws' &&
             !APP_RUNTIME_IMPORTS.get(file)?.includes(specifier) &&
+            !bareContentDependency &&
             !versionParser &&
             !hostConfigParser &&
             ![
@@ -1236,7 +1559,7 @@ export function validateRuntimeSource(file: string, source: string) {
         )
             errors.push(`${file}: unapproved Official upstream reexport.`);
         if (node.type === 'ImportExpression')
-            dependency(node.source.type === 'StringLiteral' ? node.source.value : undefined);
+            dependency(node.source.type === 'StringLiteral' ? node.source.value : undefined, false, node);
         if (node.type === 'TSImportType') dependency(node.argument.value, true);
         if (node.type === 'TSImportEqualsDeclaration' && node.moduleReference.type === 'TSExternalModuleReference')
             dependency(
@@ -1259,7 +1582,6 @@ export function validateRuntimeSource(file: string, source: string) {
         )
             errors.push(`${file}: ${layer} cannot access process state.`);
         if (
-            !entry &&
             (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
             object?.type === 'Identifier' &&
             object.name === 'process' &&

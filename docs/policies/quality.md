@@ -144,9 +144,13 @@ targets; never download packages or launch user browsers in the default suite.
 `tests/desktop/configuration/model.test.ts` and
 `tests/desktop/configuration/store.test.ts`, then exactly
 `tests/desktop/contracts/commands.test.ts`, `tests/desktop/contracts/snapshots.test.ts`,
-`tests/desktop/main/asset-policy.test.ts` and `tests/desktop/renderer/elapsed.test.ts`.
-These eighty-three selectors
-include thirty-one Gateway suites and run files sequentially
+`tests/desktop/main/asset-policy.test.ts` and `tests/desktop/renderer/elapsed.test.ts`,
+then exactly `tests/desktop/instance/app-singleton.test.ts`,
+`tests/desktop/instance/app-activation.test.ts`,
+`tests/desktop/instance/app-chromium-storage.test.ts` and
+`tests/desktop/main/app-bootstrap.test.ts`.
+These eighty-seven selectors include one root glob and eighty-six explicit
+files. They cover 180 safe test files and run files sequentially
 with `--test-concurrency=1`. This default local lane does not launch
 GUI fixtures. Keep coverage floors at 52% lines, 71% branches, and 61% functions
 across production modules.

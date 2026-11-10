@@ -1,6 +1,6 @@
 import { app, protocol } from 'electron';
-import { createAppChromiumStorage } from '../adapters/app-chromium-storage.ts';
-import { supportsWindowsApp } from '../domains/app-distribution.ts';
+import { supportsWindowsApp } from '../../domains/app-distribution.ts';
+import { createAppChromiumStorage } from '../instance/chromium-storage.ts';
 
 // Refuse unsupported hosts before acquiring paths, scratch storage or main resources.
 if (!supportsWindowsApp(process.platform, process.arch)) {
@@ -18,7 +18,7 @@ if (!supportsWindowsApp(process.platform, process.arch)) {
 
     // Electron releases ready only after this entry import settles. Main retains the
     // startup promise and cleanup ownership; awaiting it here would block ready.
-    void import('./app-main.ts')
+    void import('../../interface/app-main.ts')
         .then(({ startDesktopApp }) => startDesktopApp({ appData, chromium }))
         .catch(() => {
             // Main's early normal-Quit handler remains responsible for acquired resources.

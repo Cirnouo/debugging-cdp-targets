@@ -9,9 +9,9 @@ import {
     parseDeploymentState,
     transitionDeploymentState,
 } from '../domains/app-deployment.ts';
+import type { AdvisoryLock } from '../platform/native/advisory-lock.ts';
 import { errorCode } from '../shared/errors.ts';
 import { createFreshDeploymentRoot, openDeploymentNativeAuthority } from './app-deployment-native.ts';
-import type { AdvisoryLock } from './app-singleton.ts';
 
 export type DeploymentLeaseKind = 'operation' | 'use' | 'deletion';
 export interface DeploymentLease {

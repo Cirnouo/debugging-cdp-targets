@@ -111,13 +111,10 @@ Linux/macOS product execution or acceptance route.
   unsigned identity precision, separate volume requests, ACL absence versus
   errors, pinned XNU actual volume-result masks/bounds, identity changes and
   descriptor closure. Request-only `ATTR_VOL_INFO` is excluded from actual results.
-- `app-singleton.test.ts`, `app-activation.test.ts` and `app-storage.test.ts`
-  cover the account-wide advisory lease, bounded activation-only channel,
-  installed/portable data selection and refusal to acquire data without ownership.
-- `app-chromium-storage.test.ts` checks separate synchronous Chromium storage
-  roots for independent App processes.
-- `app-bootstrap.test.ts` exercises entry import completion before ready-dependent
-  startup, synchronous path redirection and observed asynchronous startup failure.
+- [desktop/instance/](desktop/instance/README.md) covers the account-wide advisory
+  lease, bounded activation-only channel and separate synchronous Chromium roots.
+- `app-storage.test.ts` covers installed/portable data selection and refusal to
+  acquire data without singleton ownership.
 - [desktop/configuration/](desktop/configuration/README.md) preserves the complete
   six model and nine serialized-store cases covering
   validated migration chains, backup/atomic commit, invalid/future settings,
@@ -128,7 +125,8 @@ Linux/macOS product execution or acceptance route.
   and retained construction cleanup/retry cases.
 - [desktop/contracts/](desktop/contracts/README.md) retains both command and all five
   snapshot cases without exposing secrets or general filesystem/IPC authority.
-  [desktop/main/](desktop/main/README.md) retains the complete fixed resource case;
+  [desktop/main/](desktop/main/README.md) retains the complete fixed resource case
+  and the three bootstrap startup, failure and unsupported-host cases.
   [desktop/renderer/](desktop/renderer/README.md) retains the namespace elapsed case.
 - `app-management.test.ts` exercises the real Core admin closure with controlled
   native/official I/O: scoped restart, timestamps, stale/busy routes, independent
@@ -576,9 +574,10 @@ Linux/macOS product execution or acceptance route.
 - `AGENTS.md` sets test safety and evidence rules.
 
 Run `pnpm test` or a focused Node test for default regressions. The default
-command and `pnpm test:coverage` select eighty-three entries: `tests/*.test.ts`, the
-forty-two explicit [tooling suites](tooling/README.md), three explicit
-[Host suites](host-plugins/README.md), thirty-one Gateway suites and six explicit
+command and `pnpm test:coverage` select eighty-seven entries. The `tests/*.test.ts`
+glob selects ninety-four root files, and the eighty-six explicit entries select
+forty-two [tooling suites](tooling/README.md), three
+[Host suites](host-plugins/README.md), thirty-one Gateway suites and ten
 [Desktop suites](desktop/README.md). Gateway selection
 retains argument parsing, twelve [Target suites](gateway/targets/README.md), ten
 [connection suites](gateway/connections/README.md) and the eight explicit
@@ -592,7 +591,8 @@ once as cleanup, connection-options, execution-detachment,
 registration-administration, roots-admission and scoped-restart. Upstream,
 catalog-refresh and upstream-lifetime follow in that order, followed once by Host
 user-intent, then the Desktop configuration model and store, contract commands
-and snapshots, asset admission and elapsed suites in that order. Default commands do not launch
+and snapshots, asset admission and elapsed suites, then singleton, activation,
+Chromium storage and bootstrap once in that order. Default commands do not launch
 the interactive WinForms fixtures. `pnpm test:windows:interactive` also returns
 an explicit successful skip by default. Run
 `pnpm test:windows:interactive --allow-gui` from an interactive Windows desktop

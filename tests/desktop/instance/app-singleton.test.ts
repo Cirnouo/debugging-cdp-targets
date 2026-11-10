@@ -3,7 +3,7 @@ import { closeSync, existsSync, fstatSync, mkdtempSync, openSync, rmSync } from 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { acquireAppSingleton, appCoordinationPaths } from '../src/adapters/app-singleton.ts';
+import { acquireAppSingleton, appCoordinationPaths } from '../../../src/desktop/instance/singleton.ts';
 
 test('coordination namespace depends only on native account home across App data and executable roots', () => {
     const first = appCoordinationPaths('/native/account', 'linux');

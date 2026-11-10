@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { verifyAppReleaseTree, verifyDeploymentPayload } from '../src/adapters/app-delivery.ts';
 import { type DeploymentLease, openDeploymentInstallation } from '../src/adapters/app-deployment.ts';
 import { openDeploymentNativeAuthority } from '../src/adapters/app-deployment-native.ts';
-import { loadAppAdvisoryLock } from '../src/adapters/app-native.ts';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import { requireWindowsDeploymentQueryBinding } from '../src/adapters/windows-deployment-query.ts';
 import { parseAppNativeEvidence, parseAppReleaseInputs } from '../src/domains/app-release.ts';
+import { loadAppAdvisoryLock } from '../src/platform/native/advisory-lock.ts';
 
 // Executing-code/native-loading trust is intrinsic; capture every fixed locator before awaits.
 const moduleFile = fileURLToPath(import.meta.url);

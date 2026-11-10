@@ -1,9 +1,8 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { verifyAppNativeInputs } from '../../src/adapters/app-native.ts';
-import type { AdvisoryLock } from '../../src/adapters/app-singleton.ts';
 import { parseAppNativeEvidence } from '../../src/domains/app-release.ts';
+import { type AdvisoryLock, verifyAppNativeInputs } from '../../src/platform/native/advisory-lock.ts';
 import { isRecord } from '../../src/shared/errors.ts';
 
 /** Actual-host vendor/kernel regression port. This grants no App or deployment admission. */
@@ -16,7 +15,7 @@ export async function deploymentAdvisoryLock(): Promise<AdvisoryLock> {
     const vendor = verified.get('fs-native-extensions');
     if (!vendor || verified.size !== 6) throw new Error('Incomplete original vendor verification.');
     // Use exactly the production verifier's resolution context, under the actual host identity.
-    const require = createRequire(new URL('../../src/adapters/app-native.ts', import.meta.url));
+    const require = createRequire(new URL('../../src/platform/native/advisory-lock.ts', import.meta.url));
     const entry = require.resolve('fs-native-extensions');
     const canonical = await realpath(entry);
     const relative = path.relative(vendor.directory, canonical).split(path.sep).join('/');

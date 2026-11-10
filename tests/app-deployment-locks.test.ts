@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { loadAppAdvisoryLock } from '../src/adapters/app-native.ts';
 import { supportsWindowsApp } from '../src/domains/app-distribution.ts';
 import { parseAppNativeEvidence } from '../src/domains/app-release.ts';
+import { loadAppAdvisoryLock } from '../src/platform/native/advisory-lock.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 async function worker(directory: string, retain: (close: () => Promise<void>) => void) {

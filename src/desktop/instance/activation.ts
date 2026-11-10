@@ -1,6 +1,6 @@
 import { chmod, lstat, unlink } from 'node:fs/promises';
 import { connect, createServer } from 'node:net';
-import { errorCode } from '../shared/errors.ts';
+import { errorCode } from '../../shared/errors.ts';
 
 const ACTIVATION = 'activate-v1\n';
 const ACKNOWLEDGEMENT = 'activated-v1\n';

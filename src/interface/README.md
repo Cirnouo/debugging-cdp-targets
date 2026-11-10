@@ -10,8 +10,6 @@
   restart, Close/idle transfer, cached host management and desired/effective
   settings. Local clock ticks and summary refreshes invoke no host CLI.
   The window cannot start target applications.
-- `app-bootstrap.ts` synchronously redirects Chromium caches before dynamically
-  importing App composition; no asynchronous dependency precedes that redirect.
 - `app-main.ts` verifies delivered resources, obtains singleton ownership before
   selected data creation, starts the shared core and direct SDK HTTP, and keeps
   the manager available when startup or normal cleanup fails. Quit waits for
@@ -22,5 +20,10 @@
 Closed request/snapshot validation now belongs to [desktop/contracts/](../desktop/contracts/README.md),
 fixed resource admission to [desktop/main/asset-policy.ts](../desktop/main/asset-policy.ts)
 and supplied elapsed formatting to [desktop/renderer/elapsed.ts](../desktop/renderer/elapsed.ts).
+The [Desktop bootstrap](../desktop/main/README.md) admits Windows startup, redirects
+Chromium paths synchronously and dynamically imports Main. The
+[instance owners](../desktop/instance/README.md) provide singleton and activation
+operations plus the Chromium storage shape. The
+[native loader](../platform/native/README.md) provides verified advisory locking.
 Window acquisition/Buffer responses/sender authorization, Main startup/save/Quit
 and the manager's coherent polling/pending/settings session remain here.

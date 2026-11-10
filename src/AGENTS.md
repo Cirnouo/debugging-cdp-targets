@@ -152,14 +152,17 @@ Exact caller VALUE/TYPE roles follow those local owners and the auditor. Unknown
 Desktop siblings remain pure and dependencyless; no store, Node, Electron/React,
 SDK, native or ambient I/O permission follows from their directory names.
 
-Only interface/app-bootstrap.ts executes directly. Startup step zero rejects
-platform/architecture evidence outside Windows x64/arm64 before App paths, scratch
-storage, privileged schemes or controlled main import. Supported startup then
-synchronously redirects Chromium userData/sessionData to separate per-process
-temporary directories before any await or controlled main import. Direct App main
-invocation repeats the pure support decision before native or resource acquisition.
-App main owns the OS-user lease, selected configuration and cleanup-gated normal
-exit. Never call Electron's singleton API.
+Before editing singleton admission, activation, Chromium scratch, bootstrap or
+their callers, read ADR 0017, the accepted singleton plan above and the cumulative
+[Desktop instructions](desktop/AGENTS.md), then the applicable
+[instance](desktop/instance/AGENTS.md) or [bootstrap](desktop/main/AGENTS.md) owner.
+Before editing advisory-lock verification/loading, its type or its consumers,
+read the cumulative [platform](platform/AGENTS.md) and
+[native](platform/native/AGENTS.md) instructions.
+Only desktop/main/bootstrap.ts executes directly. Main repeats its Windows support
+guard before native or App resource acquisition and retains startup, selected
+configuration and cleanup-gated normal exit. The instance owner holds the OS-user
+advisory descriptor until actual exit. Never call Electron's singleton API.
 
 The official SDK HTTP adapter authenticates explicit registrationBearer on every
 owned tool request. Official _dct contains bearer, connectionId and sessionId;

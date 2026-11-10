@@ -13,7 +13,6 @@ import {
     type DeploymentLease,
     identifyDeploymentInstallation,
 } from '../src/adapters/app-deployment.ts';
-import { loadAppAdvisoryLock, verifyAppNativeInputs } from '../src/adapters/app-native.ts';
 import { readRegularFile } from '../src/adapters/file-evidence.ts';
 import {
     packWindowsDeploymentQueries,
@@ -42,6 +41,7 @@ import {
     type OfficialReleaseEvidence,
     parseOfficialReleaseEvidence,
 } from '../src/gateway/official/release-evidence.ts';
+import { loadAppAdvisoryLock, verifyAppNativeInputs } from '../src/platform/native/advisory-lock.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { isPortablePayloadRelativePath } from '../src/shared/payload-path.ts';
 import { collectBundledLicenses } from './licenses/bundled-notices.ts';
@@ -686,14 +686,17 @@ async function composeAppFiles(
         ['app-renderer', 'browser', 'iife', 'app-renderer.js'],
         ['deployment-worker', 'node', 'esm', 'deployment-worker.mjs'],
     ] as const) {
+        const entryFile = path.join(
+            root,
+            entry === 'app-bootstrap'
+                ? 'src/desktop/main/bootstrap.ts'
+                : entry === 'deployment-worker'
+                  ? 'tooling/deployment-worker.ts'
+                  : `src/interface/${entry}.ts`,
+        );
         const result = await build({
             absWorkingDir: root,
-            entryPoints: [
-                path.join(
-                    root,
-                    entry === 'deployment-worker' ? 'tooling/deployment-worker.ts' : `src/interface/${entry}.ts`,
-                ),
-            ],
+            entryPoints: [entryFile],
             outfile: path.join(root, output),
             bundle: true,
             platform,
@@ -718,10 +721,18 @@ async function composeAppFiles(
                 {
                     name: 'separate-synchronous-bootstrap',
                     setup(builder) {
-                        builder.onResolve({ filter: /^\.\/app-main\.ts$/ }, () => ({
-                            path: './app-main.mjs',
-                            external: true,
-                        }));
+                        if (entry !== 'app-bootstrap') return;
+                        builder.onResolve(
+                            { filter: /^\.\.\/\.\.\/interface\/app-main\.ts$/ },
+                            ({ importer, kind, namespace }) => {
+                                if (
+                                    kind === 'dynamic-import' &&
+                                    namespace === 'file' &&
+                                    path.normalize(importer) === entryFile
+                                )
+                                    return { path: './app-main.mjs', external: true };
+                            },
+                        );
                     },
                 },
             ],

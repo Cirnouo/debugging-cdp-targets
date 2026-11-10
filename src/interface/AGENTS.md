@@ -4,13 +4,14 @@ Before changing this layer's singleton App architecture, read
 [ADR 0017](../../docs/adr/0017-singleton-desktop-app.md). The direct HTTP App owns
 all resources; thin host plugins contain metadata, artwork and the shared Skill.
 
-The App supports Windows x64 and arm64 only. The tiny Electron bootstrap rejects
-other platform/architecture evidence synchronously before App paths, scratch
-storage, privileged schemes or controlled main import. Supported startup assigns
-isolated temporary Chromium paths synchronously before asynchronous initialization.
-Direct main invocation repeats that support guard before native or App resource acquisition.
-Main owns singleton admission, winner-only data/configuration I/O, verified
-resource paths, trusted core closure and HTTP.
+Before changing Main's startup or instance/native callers, read the accepted
+[singleton plan](../../.superpowers/plans/2026-10-17-singleton-app-plan.md) and the
+cumulative [Desktop](../desktop/AGENTS.md), [bootstrap](../desktop/main/AGENTS.md),
+[instance](../desktop/instance/AGENTS.md), [platform](../platform/AGENTS.md) and
+[native](../platform/native/AGENTS.md) instructions.
+Direct Main invocation repeats the Windows x64/arm64 support guard before native
+or App resource acquisition. Main composes singleton admission, winner-only
+data/configuration I/O, verified resource paths, trusted Core cleanup and HTTP.
 Normal Quit/Restart denies new requests, awaits actual startup settlement and
 retained construction cleanup, then closes transports/windows and exits. Cleanup
 failure preserves management UI and the OS lease for retry; never force exit.
