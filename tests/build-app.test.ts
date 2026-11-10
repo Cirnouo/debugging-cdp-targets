@@ -8,8 +8,8 @@ import { mock, test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
-import { verifyAppNativeInputs } from '../src/adapters/app-native.ts';
 import { parseAppNativeEvidence } from '../src/domains/app-release.ts';
+import { verifyAppNativeInputs } from '../src/platform/native/advisory-lock.ts';
 import { isRecord } from '../src/shared/errors.ts';
 import { generateAppFiles, readAppOfficialFiles } from '../tooling/build-app.ts';
 import { parseOfficialSmokeArguments } from '../tooling/smoke-official-catalog.ts';
@@ -54,6 +54,11 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         'src/desktop/contracts/commands.ts',
         'src/desktop/contracts/snapshots.ts',
         'src/desktop/main/asset-policy.ts',
+        'src/desktop/instance/singleton.ts',
+        'src/desktop/instance/activation.ts',
+        'src/desktop/instance/chromium-storage.ts',
+        'src/desktop/main/bootstrap.ts',
+        'src/platform/native/advisory-lock.ts',
         'src/desktop/renderer/elapsed.ts',
         'src/gateway/core.ts',
         'src/gateway/registry.ts',
@@ -106,6 +111,11 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
     );
     for (const oldInput of [
         'src/domains/app-ui.ts',
+        'src/adapters/app-singleton.ts',
+        'src/adapters/app-activation.ts',
+        'src/adapters/app-chromium-storage.ts',
+        'src/interface/app-bootstrap.ts',
+        'src/adapters/app-native.ts',
         'src/domains/app-configuration.ts',
         'src/adapters/app-configuration.ts',
         'src/adapters/host-user-intent.ts',
@@ -175,6 +185,13 @@ test('App build separates synchronous bootstrap and emits only sandboxed local r
         );
         assert.equal(checked.status, 0, `${name}: ${checked.stderr}`);
     }
+    assert.deepEqual(
+        [...files.keys()].filter((name) => /^(?:app-|deployment-worker).*\.(?:mjs|cjs|js)$/.test(name)).sort(),
+        ['app-bootstrap.mjs', 'app-main.mjs', 'app-preload.cjs', 'app-renderer.js', 'deployment-worker.mjs'],
+    );
+    const main = files.get('app-main.mjs')?.toString('utf8') ?? '';
+    assert.match(main, /async function loadAppAdvisoryLock\(/);
+    assert.match(main, /Invalid native advisory-lock result\./);
     const bootstrap = files.get('app-bootstrap.mjs')?.toString('utf8') ?? '';
     assert.match(bootstrap, /setPath\("userData"/);
     assert.match(bootstrap, /import\("\.\/app-main\.mjs"\)/);
@@ -267,7 +284,7 @@ open=()=>blocked('stage'),lstat=()=>blocked('stage'),rm=()=>blocked('write'),unl
 export const realpath=async value=>value;
 export async function readFile(file){state.reads.push(String(file));return '{"tools":[]}'};`,
         esbuild: `${stateImport}import path from'node:path';export async function build(options){
-const entry=path.basename(options.entryPoints[0]);if(entry==='app-bootstrap.ts')state.targets.push(state.distribution);
+const entry=path.basename(options.entryPoints[0]);if(entry==='bootstrap.ts')state.targets.push(state.distribution);
 state.bundles.push({target:state.distribution,entry});
 return{outputFiles:[{path:options.outfile,contents:Buffer.from('inert bundle')}],metafile:{inputs:{},outputs:{}}}}`,
         '../src/domains/app-distribution.ts': `${stateImport}
@@ -276,7 +293,7 @@ export function parseAppDistribution(value,native){const result=actual(value,nat
         '../src/adapters/file-evidence.ts': `${stateImport}import path from'node:path';
 export async function readRegularFile(file){state.reads.push(String(file));const name=path.basename(file);
 return Buffer.from(name==='package.json'?'{"version":"0.1.0"}':name==='app-native-release.json'?${JSON.stringify(nativeEvidence)}:'inert owned input')}`,
-        '../src/adapters/app-native.ts': `${stateImport}
+        '../src/platform/native/advisory-lock.ts': `${stateImport}
 export async function verifyAppNativeInputs(){state.nativeInputs++;return new Map()}
 export const loadAppAdvisoryLock=()=>blocked('dlopen');`,
         '../src/adapters/app-delivery.ts': `${stateImport}
@@ -399,7 +416,7 @@ test('static App check verifies Windows x64 and arm64 without native staging on 
                         result.state.bundles,
                         targets.flatMap((target) =>
                             [
-                                'app-bootstrap.ts',
+                                'bootstrap.ts',
                                 'app-main.ts',
                                 'app-preload.ts',
                                 'app-renderer.ts',
@@ -530,13 +547,31 @@ test('App delivery copies every official published file at its complete relative
 
 test('compile-free App composition includes an unbound ordinary worker with no delivered query or compiler runtime', async () => {
     const root = fileURLToPath(new URL('..', import.meta.url));
-    const files = await generateAppFiles({ root, kind: 'portable', platform: 'win32', architecture: 'x64' });
+    let actualInputs: readonly string[] = [];
+    const files = await generateAppFiles({
+        root,
+        kind: 'portable',
+        platform: 'win32',
+        architecture: 'x64',
+        onInputs: async (inputs) => {
+            actualInputs = inputs;
+        },
+    });
+    assert.ok(actualInputs.includes('tooling/deployment-worker.ts'));
+    assert.ok(actualInputs.includes('src/platform/native/advisory-lock.ts'));
+    assert.match(
+        await readFile(path.join(root, 'tooling/deployment-worker.ts'), 'utf8'),
+        /^import \{ loadAppAdvisoryLock \} from '\.\.\/src\/platform\/native\/advisory-lock\.ts';$/m,
+    );
     const worker = files.get('deployment-worker.mjs');
     assert.ok(worker && worker.length > 0);
-    assert.match(worker.toString('utf8'), /unbound/);
+    const workerSource = worker.toString('utf8');
+    assert.match(workerSource, /unbound/);
+    assert.match(workerSource, /async function loadAppAdvisoryLock\(/);
+    assert.match(workerSource, /Invalid native advisory-lock result\./);
     assert.equal(files.has('windows-deployment-query.exe'), false);
     assert.doesNotMatch(
-        worker.toString('utf8'),
-        /DctDeploymentCreateProgram|Framework64|dct-deployment-support-|createFreshDeploymentRoot|copyPayload|createGatewayCore/,
+        workerSource,
+        /DctDeploymentCreateProgram|Framework64|dct-deployment-support-|createFreshDeploymentRoot|copyPayload|createGatewayCore|from ["']electron["']/,
     );
 });

@@ -1,12 +1,13 @@
 import { realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { supportsWindowsApp } from '../domains/app-distribution.ts';
-import { type AppNativeEvidence, parseAppNativeEvidence } from '../domains/app-release.ts';
-import { errorCode, isRecord } from '../shared/errors.ts';
-import { verifyAppReleaseTree } from './app-delivery.ts';
-import type { AdvisoryLock } from './app-singleton.ts';
-import { readRegularFile } from './file-evidence.ts';
+import { verifyAppReleaseTree } from '../../adapters/app-delivery.ts';
+import { readRegularFile } from '../../adapters/file-evidence.ts';
+import { supportsWindowsApp } from '../../domains/app-distribution.ts';
+import { type AppNativeEvidence, parseAppNativeEvidence } from '../../domains/app-release.ts';
+import { errorCode, isRecord } from '../../shared/errors.ts';
+
+export type AdvisoryLock = (descriptor: number, options?: Readonly<{ shared: boolean }>) => boolean;
 
 const require = createRequire(import.meta.url);
 

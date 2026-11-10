@@ -4,7 +4,7 @@ import { connect } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { activateExistingApp, listenForAppActivation } from '../src/adapters/app-activation.ts';
+import { activateExistingApp, listenForAppActivation } from '../../../src/desktop/instance/activation.ts';
 
 test('singleton activation carries one fixed bounded request and acknowledgement only', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-activation-'));

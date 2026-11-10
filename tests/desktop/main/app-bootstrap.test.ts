@@ -7,12 +7,12 @@ import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
-import { isRecord } from '../src/shared/errors.ts';
+import { isRecord } from '../../../src/shared/errors.ts';
 
 // Model Electron's public entry-loader boundary: ready is released only after entry import settles.
 // Electron and storage are I/O replacements; the entry under test is the maintained bootstrap.
 async function loadBootstrap(failStartup = false, native?: { platform: string; architecture: string }) {
-    const root = fileURLToPath(new URL('..', import.meta.url));
+    const root = fileURLToPath(new URL('../../..', import.meta.url));
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dct-bootstrap-loader-'));
     const stateUrl = pathToFileURL(path.join(directory, 'state.mjs')).href;
     try {
@@ -22,11 +22,11 @@ async function loadBootstrap(failStartup = false, native?: { platform: string; a
         );
         const modules: Record<string, string> = {
             electron: `import{state}from${JSON.stringify(stateUrl)};export const app={getPath:()=>{state.events.push('appData');return'fixture'},setPath:name=>state.events.push(name),quit:()=>state.events.push('quit')};export const protocol={registerSchemesAsPrivileged:()=>state.events.push('protocol')};`,
-            '../adapters/app-chromium-storage.ts': `import{state}from${JSON.stringify(stateUrl)};export function createAppChromiumStorage(){state.events.push('storage');return{userData:'fixture-user',sessionData:'fixture-session'}}`,
-            './app-main.ts': `import{state}from${JSON.stringify(stateUrl)};state.events.push('main-evaluation');export async function startDesktopApp(){state.events.push('startup');await state.ready;${failStartup ? "throw Error('private-startup-detail')" : "state.events.push('startup-ready')"}}`,
+            '../instance/chromium-storage.ts': `import{state}from${JSON.stringify(stateUrl)};export function createAppChromiumStorage(){state.events.push('storage');return{userData:'fixture-user',sessionData:'fixture-session'}}`,
+            '../../interface/app-main.ts': `import{state}from${JSON.stringify(stateUrl)};state.events.push('main-evaluation');export async function startDesktopApp(){state.events.push('startup');await state.ready;${failStartup ? "throw Error('private-startup-detail')" : "state.events.push('startup-ready')"}}`,
         };
         const bundle = await build({
-            entryPoints: [path.join(root, 'src/interface/app-bootstrap.ts')],
+            entryPoints: [path.join(root, 'src/desktop/main/bootstrap.ts')],
             bundle: true,
             platform: 'node',
             format: 'esm',

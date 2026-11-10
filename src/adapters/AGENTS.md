@@ -8,6 +8,14 @@ The complete App configuration load/backup/serialized save owner is now
 [desktop/configuration/store.ts](../desktop/configuration/store.ts). Adapters retain
 regular-file evidence and other actual I/O; they gain no configuration-store edge.
 
+Before editing deployment's use of the advisory lock or the verification inputs
+that serve the loader, read the cumulative [platform](../platform/AGENTS.md) and
+[native](../platform/native/AGENTS.md) instructions. `app-deployment.ts` consumes
+only the AdvisoryLock TYPE; deployment keeps its separate installation leases.
+Before changing the selected data-root admission boundary in `app-storage.ts`,
+read the cumulative [Desktop](../desktop/AGENTS.md) and
+[instance](../desktop/instance/AGENTS.md) instructions.
+
 Before editing `native-host-plugins.ts` intent observations or native transitions,
 read cumulative [Host instructions](../host-plugins/AGENTS.md),
 [selected-file instructions](../host-plugins/native/AGENTS.md) and the
@@ -51,7 +59,7 @@ WebSocket frames. Each connection has its own target, port and upstream child.
 The gateway has independent routers and upstreams for all target connections.
 Lifecycle management uses direct SDK Streamable HTTP on exact loopback Host/Origin
 and /mcp boundaries, with no plugin CLI or administrative control pipe. The fixed
-activation-only singleton channel has no bearer, configuration or target commands.
+[activation-only singleton channel](../desktop/instance/AGENTS.md) carries only activation.
 Fixed full schemas combine reviewed official variants and add required _dct
 registrationBearer/connection/session routing. Strip the entire _dct before
 forwarding. Report actual tools/schema/configuration before calls, reject disabled

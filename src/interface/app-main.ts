@@ -1,11 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, dialog, Menu, nativeImage, Tray } from 'electron';
-import { activateExistingApp, listenForAppActivation } from '../adapters/app-activation.ts';
-import type { createAppChromiumStorage } from '../adapters/app-chromium-storage.ts';
-import { loadAppAdvisoryLock } from '../adapters/app-native.ts';
 import { verifyAppOfficialRuntime } from '../adapters/app-official-runtime.ts';
-import { acquireAppSingleton } from '../adapters/app-singleton.ts';
 import { prepareAppDataDirectory, selectAppDataDirectory } from '../adapters/app-storage.ts';
 import { readRegularFile } from '../adapters/file-evidence.ts';
 import { createMcpHttpServer } from '../adapters/mcp-http-server.ts';
@@ -14,9 +10,13 @@ import { createAppManagement } from '../application/app-management.ts';
 import type { AppConfiguration } from '../desktop/configuration/model.ts';
 import { openAppConfiguration } from '../desktop/configuration/store.ts';
 import type { AppUiSnapshot } from '../desktop/contracts/snapshots.ts';
+import { activateExistingApp, listenForAppActivation } from '../desktop/instance/activation.ts';
+import type { createAppChromiumStorage } from '../desktop/instance/chromium-storage.ts';
+import { acquireAppSingleton } from '../desktop/instance/singleton.ts';
 import { parseAppDistribution, supportsWindowsApp } from '../domains/app-distribution.ts';
 import { parseAppNativeEvidence } from '../domains/app-release.ts';
 import { createGatewayCore, type GatewayConstructionCleanup, type GatewayCore } from '../gateway/core.ts';
+import { loadAppAdvisoryLock } from '../platform/native/advisory-lock.ts';
 import { createManagementWindow } from './app-window.ts';
 
 declare const __DCT_APP_VERSION__: string;

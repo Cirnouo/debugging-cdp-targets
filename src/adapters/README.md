@@ -57,20 +57,10 @@
   source evidence with exact returned masks. Controlled source checks do not
   establish native acceptance on either architecture. Filesystem IDs bound the
   supported mechanism, not power-loss durability.
-- `app-singleton.ts` holds the advisory kernel lock descriptor for the App's
-  lifetime in a native-account namespace independent of selected data roots.
-- `app-activation.ts` provides only a bounded fixed activation frame and reply;
-  it carries no management requests, credentials or settings.
 - `app-storage.ts` selects separate installed and portable data roots and admits
-  their creation only after singleton ownership.
-- `app-chromium-storage.ts` creates per-process temporary Chromium roots
-  synchronously before asynchronous bootstrap work, separate from configuration.
-- `app-native.ts` refuses unsupported actual hosts before native verification
-  or loading. Its independent input verifier stays host-neutral and checks the
-  complete original six-package source/prebuild/license closure, including all
-  original non-Windows files, without loading an addon. Supported Windows loading
-  retains the original public shared/exclusive advisory-lock API after verification.
-  Callers without an explicit validated shared option retain exclusive behavior.
+  their creation only after [singleton ownership](../desktop/instance/README.md).
+  Deployment consumes the [native advisory-lock type](../platform/native/README.md)
+  for its separate installation leases.
 - `app-delivery.ts` verifies immutable archive and regular-file evidence without
   executing or repairing delivery inputs. Its separate payload verifier compares
   a complete canonical manifest and observed tree with independently expected

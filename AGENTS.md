@@ -37,6 +37,13 @@ supplied elapsed formatting, read those same authorities and the cumulative
 [Desktop instructions](src/desktop/AGENTS.md), then the corresponding
 [contracts](src/desktop/contracts/AGENTS.md), [asset](src/desktop/main/AGENTS.md)
 or [elapsed](src/desktop/renderer/AGENTS.md) owner before editing.
+Before changing singleton admission, activation, Chromium scratch, bootstrap or
+their callers, read those same authorities and the cumulative
+[Desktop instructions](src/desktop/AGENTS.md), then the applicable
+[instance](src/desktop/instance/AGENTS.md) or [bootstrap](src/desktop/main/AGENTS.md)
+instructions. Before changing advisory-lock verification/loading, its type or its
+consumers, read the cumulative [platform](src/platform/AGENTS.md) and
+[native](src/platform/native/AGENTS.md) instructions.
 The singleton App owns direct HTTP and native resources;
 host plugins contain only metadata, artwork, documentation and the shared Skill.
 

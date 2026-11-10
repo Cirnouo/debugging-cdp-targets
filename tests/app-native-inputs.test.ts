@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { verifyAppNativeInputs } from '../src/adapters/app-native.ts';
 import { parseAppNativeEvidence } from '../src/domains/app-release.ts';
+import { verifyAppNativeInputs } from '../src/platform/native/advisory-lock.ts';
 import { isRecord } from '../src/shared/errors.ts';
 
 test('native input verification checks original package closure without loading the binary addon', async () => {
@@ -37,7 +37,7 @@ import childProcess,{ChildProcess} from 'node:child_process';
 import filesystem from 'node:fs';
 import fs from 'node:fs/promises';
 import Module,{syncBuiltinESMExports} from 'node:module';
-import {loadAppAdvisoryLock} from ${JSON.stringify(new URL('../src/adapters/app-native.ts', import.meta.url).href)};
+import {loadAppAdvisoryLock} from ${JSON.stringify(new URL('../src/platform/native/advisory-lock.ts', import.meta.url).href)};
 import {parseAppNativeEvidence} from ${JSON.stringify(new URL('../src/domains/app-release.ts', import.meta.url).href)};
 // Valid reviewed evidence is read and parsed before blocking the verification boundary.
 const evidence=parseAppNativeEvidence(JSON.parse(await fs.readFile(new URL(${JSON.stringify(new URL('../tooling/app-native-release.json', import.meta.url).href)}),'utf8')));

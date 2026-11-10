@@ -6,13 +6,12 @@ Before implementing the singleton desktop App migration, read
 The singleton App owns direct HTTP, management and native resources. The
 [runtime contract](../docs/architecture/desktop-runtime.md#startup-storage-and-exit) describes its startup and cleanup.
 
-- `interface/`: Windows platform guard and synchronous Chromium isolation,
-    App composition and sandboxed UI.
+- `interface/`: App Main composition and lifecycle, and sandboxed UI.
 - `application/`: lifecycle/registration and App orchestration.
 - `domains/`: pure release/deployment/HTTP/lifecycle contracts and remaining port rules.
 - [desktop/](desktop/README.md): complete configuration model and serialized atomic store,
-    closed management contracts, fixed asset admission and supplied elapsed formatting;
-    Main, UI, singleton and selected data-root owners retain their current placement.
+    closed management contracts, process-instance resources, synchronous bootstrap,
+    fixed asset admission and supplied elapsed formatting.
 - `gateway/`: Core registration/catalog composition and retained registry/cleanup ownership,
     managed state/execution, whole start admission and live view services in connections/,
     pure explicit bearer/tool-argument extraction, target evidence/identity
@@ -27,12 +26,14 @@ The singleton App owns direct HTTP, management and native resources. The
     user-intent parsing/transition validation, plus selected-file evidence in `native/`.
 - `adapters/`: CDP transport, MCP HTTP composition and continuation, fixed reviewed
     tool declarations and native process/OS I/O.
+- [platform/](platform/README.md): verified native advisory-lock loading and its
+    shared capability type.
 - `shared/`: request facilities, cross-layer types and constants, and supplied
     portable payload-path syntax.
 - `AGENTS.md`: dependency, gateway transport, and transient identity constraints.
 
 `domains/app-distribution.ts` owns the pure Windows x64/arm64 support decision and
-strict distribution metadata matched to native identity. `interface/app-bootstrap.ts` refuses
+strict distribution metadata matched to native identity. `desktop/main/bootstrap.ts` refuses
 unsupported hosts before App paths, scratch, privileged schemes or controlled main
 import; supported Chromium isolation remains synchronous before asynchronous
 startup. `interface/app-main.ts` repeats the support guard before acquiring native

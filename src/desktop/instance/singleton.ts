@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, realpathSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import path from 'node:path';
-import { errorCode } from '../shared/errors.ts';
+import type { AdvisoryLock } from '../../platform/native/advisory-lock.ts';
+import { errorCode } from '../../shared/errors.ts';
 
 export type AppCoordinationPaths = Readonly<{ directory: string; lockFile: string; activation: string }>;
 export type AppSingletonAdmission = Readonly<{ ownsSingleton: boolean; paths: AppCoordinationPaths }>;
-export type AdvisoryLock = (descriptor: number, options?: Readonly<{ shared: boolean }>) => boolean;
 
 export function appCoordinationPaths(nativeAccountHome: string, platform: NodeJS.Platform): AppCoordinationPaths {
     const paths = platform === 'win32' ? path.win32 : path.posix;

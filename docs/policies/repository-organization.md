@@ -83,8 +83,8 @@ The model owns schema 2, real schema 1 migration, the general chain and desired/
 effective rules; the exact store alone gets its reviewed filesystem dependencies.
 Main alone consumes the store. Current manager/contracts VALUE and Main/window/Host
 TYPE model edges are explicit. Unknown desktop siblings gain no I/O. Main startup/
-save/Quit and Host jobs remain separate current owners, as do selected data roots,
-singleton/activation and sandboxed GUI. This bounded cut creates no future GUI tree.
+save/Quit and Host jobs remain separate current owners, as do selected data roots
+and sandboxed GUI.
 
 The complete former domain App UI family now belongs to four delivered Desktop
 owners: contracts/commands.ts owns closed channel/requests/commands/bridge and
@@ -97,8 +97,20 @@ only supplied-value formatting. Exact current caller VALUE/TYPE permissions rema
 closed in the auditor; unknown siblings stay pure and dependencyless. Window
 acquisition/Buffer/sender checks, Main startup/save/Quit, Host job/selection barriers
 and renderer session/settings state remain whole at their current owners. Four
-central Desktop suites retain all nine original cases. Other accepted Desktop
-configuration-data, instance, preload, Main lifecycle and renderer cuts remain pending.
+central Desktop suites retain all nine original cases.
+
+[Desktop instance](../../src/desktop/instance/README.md) owns the complete
+native-account singleton admission, bounded activation exchange and temporary
+Chromium storage transactions. [Desktop Main](../../src/desktop/main/README.md)
+contains the synchronous Windows-admitted bootstrap alongside the independent
+asset policy. Bootstrap redirects Chromium paths and registers the fixed scheme
+before its non-awaited dynamic import of current interface Main. The complete
+[native advisory-lock owner](../../src/platform/native/README.md) verifies the
+original input closure and holds the single shared lock TYPE. Main consumes its
+VALUE, while singleton and deployment consume the erased contract. The five
+owners retain their exact dependencies and reviewed ambient access. Four central
+suites preserve their eight original cases. Other accepted Desktop configuration-data,
+preload, Main lifecycle and renderer cuts remain pending.
 
 [Tooling governance](../../tooling/governance/README.md) separates supplied commit
 events and pure grammar from actual message execution and Git/history auditing.
